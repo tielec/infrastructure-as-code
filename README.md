@@ -52,15 +52,54 @@
 
 ### 3. 踏み台サーバーへの接続
 
+1. AWSコンソールにログイン
+2. EC2ダッシュボードに移動
+3. インスタンスを選択
+4. 「接続」ボタンをクリック
+5. 「EC2 Instance Connectを使用して接続する」を選択
+6. 「接続」ボタンをクリック
+
+これにより、ブラウザベースのターミナルが開き、インスタンスに直接接続できます。
+
+### 4. インフラストラクチャコードのセットアップ
+
+踏み台サーバーでは、Pulumiはrootユーザーの配下にインストールされています。rootユーザーに切り替えてPulumiを使用します：
+
 ```bash
-ssh -i bootstrap-environment-key.pem ec2-user@<BootstrapPublicIP>
+# rootユーザーに切り替え
+sudo su -
+
+# Pulumiのインストール
+curl -fsSL https://get.pulumi.com | sh
+
+# パスを設定
+echo 'export PATH=$PATH:$HOME/.pulumi/bin' >> ~/.bashrc
+source ~/.bashrc
+
+# Pulumiのバージョン確認
+pulumi version
+
+# SSHキーを作成（rootユーザーとして）
+ssh-keygen -t ed25519 -C "your_email@example.com"
+
+# 公開キーの表示（この内容をGitHubに登録）
+cat ~/.ssh/id_ed25519.pub
 ```
 
-### 4. Pulumiプロジェクトのセットアップ
+表示された公開キー全体をGitHubアカウントに追加します：
+1. GitHubにログイン
+2. 右上のプロフィールアイコン → Settings
+3. 左側メニューの「SSH and GPG keys」→「New SSH key」
+4. タイトルを入力（例: EC2 Bootstrap Instance Root）
+5. キータイプは「Authentication Key」を選択
+6. 表示された公開キー（`ssh-ed25519`で始まる行全体）を貼り付け
+7. 「Add SSH key」をクリック
+
+GitHub認証設定後：
 
 ```bash
-# リポジトリのクローン
-git clone https://github.com/tielec/infrastructure-as-code
+# リポジトリをクローン（rootユーザーとして）
+git clone git@github.com:tielec/infrastructure-as-code.git
 cd infrastructure-as-code
 
 # Pulumiの初期化
@@ -99,7 +138,7 @@ pulumi up
 ```
 infrastructure-as-code/
 ├── bootstrap/                # ブートストラップ環境用CloudFormationテンプレート
-│   └── bootstrap-template.yaml
+│   └── cfn-bootstrap-template.yaml
 ├── src/                      # Pulumiコード
 │   ├── index.ts              # メインエントリーポイント
 │   ├── network.ts            # VPC、サブネット等のネットワーク定義
@@ -139,11 +178,3 @@ Jenkinsのバージョンアップはブルーグリーンデプロイメント�
 - 本番環境では適切なセキュリティ設定を行ってください
 - AdministratorAccess権限は開発段階のみに使用し、本番環境では最小権限原則に従ってください
 - バックアップ戦略の実装を忘れずに行ってください
-
-## 貢献方法
-
-1. このリポジトリをフォーク
-2. 機能ブランチを作成 (`git checkout -b feature/amazing-feature`)
-3. 変更をコミット (`git commit -m 'Add some amazing feature'`)
-4. ブランチをプッシュ (`git push origin feature/amazing-feature`)
-5. プルリクエストを作成

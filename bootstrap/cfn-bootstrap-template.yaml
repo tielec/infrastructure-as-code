@@ -1,5 +1,5 @@
 AWSTemplateFormatVersion: '2010-09-09'
-Description: 'Minimal Bootstrap EC2 Instance for Pulumi Management'
+Description: 'Minimal Bootstrap EC2 Instance'
 
 Parameters:
   KeyName:
@@ -150,12 +150,6 @@ Resources:
           # Install Node.js
           curl -sL https://rpm.nodesource.com/setup_16.x | bash -
           yum install -y nodejs
-
-          # Install Pulumi
-          curl -fsSL https://get.pulumi.com | sh
-          echo 'export PATH=$PATH:/root/.pulumi/bin' >> /root/.bashrc
-          echo 'export PATH=$PATH:/home/ec2-user/.pulumi/bin' >> /home/ec2-user/.bashrc
-          chown -R ec2-user:ec2-user /home/ec2-user/.pulumi
           
           # Install AWS CLI v2
           curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
@@ -163,7 +157,7 @@ Resources:
           ./aws/install
           
           # Bootstrap complete message
-          echo "Bootstrap complete! You can now SSH into this instance and use Pulumi to manage your AWS resources."
+          echo "Bootstrap complete! You can now SSH into this instance."
       Tags:
         - Key: Name
           Value: Bootstrap-Instance
