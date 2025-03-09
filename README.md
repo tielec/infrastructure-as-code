@@ -63,7 +63,7 @@
 
 ### 4. インフラストラクチャコードのセットアップ
 
-踏み台サーバーでは、Pulumiはrootユーザーの配下にインストールされています。rootユーザーに切り替えてPulumiを使用します：
+踏み台サーバーではPulumiが正しくインストールされていないため、新たにインストールする必要があります。
 
 ```bash
 # rootユーザーに切り替え
@@ -78,7 +78,41 @@ source ~/.bashrc
 
 # Pulumiのバージョン確認
 pulumi version
+```
 
+### 5. Pulumiアカウントへのログイン
+
+Pulumiを使用するには、アカウント認証が必要です：
+
+```bash
+# Pulumiアカウントにログイン
+pulumi login
+```
+
+以下のようなプロンプトが表示されます：
+```
+Manage your Pulumi stacks by logging in.
+Run `pulumi login --help` for alternative login options.
+Enter your access token from https://app.pulumi.com/account/tokens
+    or hit <ENTER> to log in using your browser
+```
+
+アクセストークンを入力する場合：
+1. ブラウザで https://app.pulumi.com/account/tokens にアクセス
+2. 「NEW ACCESS TOKEN」をクリックしてトークンを作成
+3. トークン名を入力（例：「Bootstrap Environment」）
+4. 作成されたトークンをコピーして、プロンプトに貼り付け
+
+ログインに成功すると、以下のようなメッセージが表示されます：
+```
+Welcome to Pulumi!
+...
+Logged in to pulumi.com as username (https://app.pulumi.com/username)
+```
+
+### 6. GitHubリポジトリのセットアップ
+
+```bash
 # SSHキーを作成（rootユーザーとして）
 ssh-keygen -t ed25519 -C "your_email@example.com"
 
@@ -103,7 +137,6 @@ git clone git@github.com:tielec/infrastructure-as-code.git
 cd infrastructure-as-code
 
 # Pulumiの初期化
-pulumi login
 pulumi stack init dev
 
 # 依存関係のインストール
