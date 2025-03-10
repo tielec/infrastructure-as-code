@@ -42,7 +42,7 @@
     - スタック名: bootstrap-environment
     - パラメータ
         - `KeyName`: 先ほど作成したEC2キーペア名（例：`bootstrap-environment-key`）
-        - `InstanceType`: インスタンスタイプ（デフォルト: t3.micro）
+        - `InstanceType`: インスタンスタイプ（デフォルト: t3.medium）
         - `AllowedIP`: SSHアクセスを許可するIPアドレス範囲（セキュリティのため自分のIPアドレスに制限することを推奨）
 
 3. スタックが作成完了したら、出力タブから以下の情報を確認：
@@ -146,12 +146,21 @@ npm install
 npx tsc
 ```
 
-### 5. Jenkinsインフラのデプロイ
+### 7. AWS認証情報の設定
+
+PulumiがAWS APIにアクセスするために必要な認証情報を設定します：
 
 ```bash
-# 設定の確認
-pulumi config
+# 実行権限を付与
+chmod +x scripts/aws-credentials.sh
 
+# スクリプトを実行して認証情報を環境変数に設定
+source scripts/aws-credentials.sh
+```
+
+### 8. Jenkinsインフラのデプロイ
+
+```bash
 # プレビュー
 pulumi preview
 
@@ -165,47 +174,53 @@ pulumi up
 
 - VPC、サブネット、ルートテーブル、セキュリティグループなどのネットワークリソース
 - Jenkinsマスターサーバー用のEC2インスタンス（ブルー/グリーン環境）
+- Jenkinsエージェント用のEC2 SpotFleet（自動スケーリング対応）
 - Jenkinsデータ永続化のためのEFSファイルシステム
 - ブルーグリーンデプロイ用のALB（Application Load Balancer）
 - Jenkins関連リソースのIAMロールとポリシー
 
-## ディレクトリ構造
+### ディレクトリ構造
 
 ```
 infrastructure-as-code/
-├── bootstrap/                # ブートストラップ環境用CloudFormationテンプレート
-│   └── cfn-bootstrap-template.yaml
-├── src/                      # Pulumiコード
-│   ├── index.ts              # メインエントリーポイント
-│   ├── network.ts            # VPC、サブネット等のネットワーク定義
-│   ├── security.ts           # セキュリティグループ、IAMポリシー
-│   ├── storage.ts            # EFS設定
-│   ├── load-balancer.ts      # ALB設定（ブルーグリーン対応）
-│   ├── jenkins.ts            # Jenkinsインスタンス設定
-│   └── utils/                # ユーティリティ関数
-├── scripts/                  # 運用スクリプト
-│   └── blue-green-switch.sh  # ブルーグリーン切り替えスクリプト
-├── Pulumi.yaml               # Pulumiプロジェクト設定
-├── package.json              # npm依存関係
-└── README.md                 # このファイル
+├─bootstrap/                  # 初期セットアップ用スクリプト
+├─scripts/                    # 設定スクリプト
+│  └─jenkins/
+│     ├─groovy/               # Jenkins初期化用Groovyスクリプト
+│     │  ├─basic-settings.groovy
+│     │  ├─disable-cli.groovy
+│     │  └─recovery-mode.groovy
+│     └─shell/                # EC2インスタンス設定用シェルスクリプト
+│        ├─agent-setup.sh     # エージェント設定スクリプト
+│        ├─agent-template.sh  # エージェント最小限設定スクリプト
+│        ├─efs-mount.sh       # EFSマウント設定スクリプト
+│        ├─jenkins-setup.sh   # Jenkinsセットアップ基本スクリプト
+│        ├─jenkins-startup.sh # Jenkins起動確認スクリプト
+│        ├─normal-mode-setup.sh
+│        └─recovery-mode-setup.sh
+└─src/                        # Pulumiソースコード
+   ├─index.ts                 # メインエントリポイント
+   ├─network.ts               # ネットワークリソース定義
+   ├─security.ts              # セキュリティグループ定義
+   ├─jenkins-controller.ts               # Jenkinsマスターインスタンス定義
+   ├─jenkins-agent.ts         # Jenkinsエージェント定義
+   └─load-balancer.ts         # ロードバランサー定義
 ```
 
-## Jenkinsのバージョンアップ方法
+### 主な機能
 
-Jenkinsのバージョンアップはブルーグリーンデプロイメントを使用して行います：
+- **ブルー/グリーンデプロイメント**: Jenkinsの更新を無停止で行えるデュアル環境
+- **自動スケーリングエージェント**: EC2 SpotFleetによるコスト効率の高いJenkinsエージェント
+- **リカバリーモード**: 管理者アカウントロックアウト時などの緊急アクセス用モード
+- **データ永続性**: EFSによるJenkinsデータの永続化と高可用性の確保
+- **モジュール化された設計**: 保守性と再利用性を高めるスクリプト分離パターン
+- **最新版Jenkins対応**: 常に最新バージョンのJenkinsを使用可能
 
-1. 新しいバージョンのJenkinsを「グリーン」環境としてデプロイ
-2. グリーン環境のテストと検証
-3. スクリプトを使用してトラフィックを「ブルー」から「グリーン」に切り替え
-
-```bash
-# ブルーグリーン切り替えの実行
-./scripts/blue-green-switch.sh dev
-```
 
 ## トラブルシューティング
 
 - **Pulumiデプロイエラー**: `pulumi logs`でエラー詳細を確認
+- **AWS認証エラー**: `source scripts/aws-credentials.sh`を実行して認証情報を更新
 - **Jenkinsへのアクセス問題**: セキュリティグループの設定を確認
 - **EFSマウント問題**: マウントターゲットの可用性を確認
 
@@ -214,3 +229,4 @@ Jenkinsのバージョンアップはブルーグリーンデプロイメント�
 - 本番環境では適切なセキュリティ設定を行ってください
 - AdministratorAccess権限は開発段階のみに使用し、本番環境では最小権限原則に従ってください
 - バックアップ戦略の実装を忘れずに行ってください
+- AWS認証情報は定期的に更新が必要です。セッションが切れた場合は`source scripts/aws-credentials.sh`を実行してください
