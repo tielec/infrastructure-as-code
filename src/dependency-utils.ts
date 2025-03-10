@@ -6,12 +6,14 @@ export function dependsOn<T extends pulumi.Resource>(
     dependencies: pulumi.Resource[] | undefined
 ): T {
     if (dependencies && dependencies.length > 0) {
-        (<any>resource).__logicalName = resource.__logicalName;
-        resource.urn.apply(urn => { /* 空の適用で依存関係を確立 */ });
-        
-        // それぞれの依存リソースについて明示的な依存関係を追加
+        // 依存関係を確立するために、Pulumi の内部的な依存グラフを使用する
         for (const dependency of dependencies) {
-            resource.urn.apply(_ => dependency.urn.apply(_ => { /* 依存性を確立 */ }));
+            resource.urn.apply(_ => {
+                return dependency.urn.apply(_ => {
+                    // ここでは何もしない。単に依存関係を作成するだけ
+                    return undefined;
+                });
+            });
         }
     }
     return resource;
