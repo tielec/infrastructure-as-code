@@ -63,7 +63,7 @@ export function createJenkinsAgentFleet(input: JenkinsAgentInput) {
             spotOptions: {
                 maxPrice: spotPrice,
                 spotInstanceType: "persistent",
-                instanceInterruptionBehavior: "terminate",
+                instanceInterruptionBehaviour: "terminate",
             },
         },
         iamInstanceProfile: {
