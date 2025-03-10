@@ -62,8 +62,7 @@ export function createJenkinsAgentFleet(input: JenkinsAgentInput) {
             marketType: "spot",
             spotOptions: {
                 maxPrice: spotPrice,
-                spotInstanceType: "persistent",
-                instanceInterruptionBehaviour: "terminate",
+                spotInstanceType: "persistent"
             },
         },
         iamInstanceProfile: {
@@ -151,7 +150,6 @@ export function createJenkinsAgentFleet(input: JenkinsAgentInput) {
         spotPrice: spotPrice,
         targetCapacity: 0, // 初期容量は0（Jenkinsから必要に応じて起動）
         allocationStrategy: "capacityOptimized",
-        instanceInterruptionBehavior: "terminate",
         replaceUnhealthyInstances: true,
         launchTemplateConfigs: fleetLaunchTemplateConfigs,
         tagSpecifications: [{
