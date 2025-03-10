@@ -33,7 +33,7 @@ export function createJenkinsAgentFleet(input: JenkinsAgentInput) {
     const maxTargetCapacity = input.maxTargetCapacity || config.getNumber("maxTargetCapacity") || 10;
     const spotPrice = input.spotPrice || config.get("spotPrice") || "0.10";
     
-    // デフォルトはAmazon Linux 2023
+    // デフォルトはAmazon Linux 2023 - 警告修正のためにec2.getAmiを使用
     const agentAmi = input.agentAmi || config.get("agentAmi") || aws.ec2.getAmi({
         mostRecent: true,
         owners: ["amazon"],
@@ -122,7 +122,7 @@ export function createJenkinsAgentFleet(input: JenkinsAgentInput) {
         // launchTemplateConfigsでなく、launchSpecificationsを使用
         launchSpecifications: input.subnetIds.map(subnetId => ({
             instanceType: "t3.medium",
-            imageId: agentAmi,
+            ami: agentAmi,
             iamInstanceProfile: {
                 arn: input.instanceProfileArn,
             },
@@ -135,7 +135,7 @@ export function createJenkinsAgentFleet(input: JenkinsAgentInput) {
             },
         })).concat(input.subnetIds.map(subnetId => ({
             instanceType: "t3.large",
-            imageId: agentAmi,
+            ami: agentAmi,
             iamInstanceProfile: {
                 arn: input.instanceProfileArn,
             },
@@ -148,7 +148,7 @@ export function createJenkinsAgentFleet(input: JenkinsAgentInput) {
             },
         }))).concat(input.subnetIds.map(subnetId => ({
             instanceType: "m5.large",
-            imageId: agentAmi,
+            ami: agentAmi,
             iamInstanceProfile: {
                 arn: input.instanceProfileArn,
             },
