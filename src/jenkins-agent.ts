@@ -34,7 +34,7 @@ export function createJenkinsAgentFleet(input: JenkinsAgentInput) {
     const spotPrice = input.spotPrice || config.get("spotPrice") || "0.10";
     
     // デフォルトはAmazon Linux 2023
-    const agentAmi = input.agentAmi || config.get("agentAmi") || aws.getAmi({
+    const agentAmi = input.agentAmi || config.get("agentAmi") || aws.ec2.getAmi({
         mostRecent: true,
         owners: ["amazon"],
         filters: [{
@@ -146,7 +146,7 @@ export function createJenkinsAgentFleet(input: JenkinsAgentInput) {
         instanceInterruptionBehavior: "terminate", // APIには必要だが型定義にない
         replaceUnhealthyInstances: true,
         launchTemplateConfigs: fleetLaunchTemplateConfigs,
-        // SpotFleetRequestではtagSpecificationsではなくtagsを使用
+        // tagSpecificationsではなくtagsを使用
         tags: {
             Name: `${input.projectName}-fleet-${input.environment}`,
             Environment: input.environment,

@@ -52,7 +52,7 @@ export function createJenkinsInstance(input: JenkinsInstanceInput) {
     userDataBase = userDataBase.replace(/\${color}/g, input.color);
     
     // 最新のAmazon Linux 2023 AMIを取得
-    const ami = pulumi.output(aws.getAmi({
+    const ami = pulumi.output(aws.ec2.getAmi({
         mostRecent: true,
         owners: ["amazon"],
         filters: [{
