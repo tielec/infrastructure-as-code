@@ -74,8 +74,8 @@ export function createJenkinsAgentFleet(input: JenkinsAgentInput) {
             ebs: {
                 volumeSize: 30,
                 volumeType: "gp3",
-                deleteOnTermination: true,
-                encrypted: true,
+                deleteOnTermination: "true", // 文字列に変更
+                encrypted: "true",           // 文字列に変更
             },
         }],
         metadataOptions: {
@@ -112,29 +112,29 @@ export function createJenkinsAgentFleet(input: JenkinsAgentInput) {
     });
 
     // スポットフリートの設定
-    const fleetLaunchTemplateConfig = {
+    const fleetLaunchTemplateConfigs = [{
         launchTemplateSpecification: {
             launchTemplateId: launchTemplate.id,
-            version: launchTemplate.latestVersion,
+            version: launchTemplate.latestVersion.apply(v => v.toString()), // 文字列に変換
         },
         overrides: [
             // t3.medium on both subnets
-            ...input.subnetIds.map((subnetId, index) => ({
+            ...input.subnetIds.map(subnetId => ({
                 instanceType: "t3.medium",
                 subnetId: subnetId,
             })),
             // t3.large on both subnets
-            ...input.subnetIds.map((subnetId, index) => ({
+            ...input.subnetIds.map(subnetId => ({
                 instanceType: "t3.large",
                 subnetId: subnetId,
             })),
             // m5.large on both subnets
-            ...input.subnetIds.map((subnetId, index) => ({
+            ...input.subnetIds.map(subnetId => ({
                 instanceType: "m5.large",
                 subnetId: subnetId,
             })),
         ],
-    };
+    }];
 
     // SNSトピック
     const spotFleetSnsTopic = new aws.sns.Topic(`${input.projectName}-spot-fleet-alerts`, {
@@ -153,7 +153,7 @@ export function createJenkinsAgentFleet(input: JenkinsAgentInput) {
         allocationStrategy: "capacityOptimized",
         instanceInterruptionBehavior: "terminate",
         replaceUnhealthyInstances: true,
-        launchTemplateConfigs: [fleetLaunchTemplateConfig],
+        launchTemplateConfigs: fleetLaunchTemplateConfigs,
         tagSpecifications: [{
             resourceType: "spot-fleet-request",
             tags: {
@@ -175,7 +175,7 @@ export function createJenkinsAgentFleet(input: JenkinsAgentInput) {
 export function ensureAgentScriptFile() {
     const scriptDir = path.resolve(__dirname, '../scripts/jenkins/shell');
     const scriptPath = path.resolve(scriptDir, 'agent-setup.sh');
-    const templatePath = path.resolve(scriptDir, 'agent-template.sh');
+    const templatePath = path.resolve(scriptDir, 'agent-setup-template.sh');
     
     // スクリプトファイルがすでに存在する場合はなにもしない
     if (fs.existsSync(scriptPath)) {

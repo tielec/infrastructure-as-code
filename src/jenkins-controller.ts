@@ -34,7 +34,7 @@ export function createJenkinsInstance(input: JenkinsInstanceInput) {
     const instanceType = input.instanceType || config.get("instanceType") || "t3.medium";
     const keyName = input.keyName || config.get("keyName");
     // Jenkinsバージョンは指定しない（常に最新）
-const jenkinsVersion = input.jenkinsVersion || config.get("jenkinsVersion") || "latest";
+    const jenkinsVersion = input.jenkinsVersion || config.get("jenkinsVersion") || "latest";
     const recoveryMode = input.recoveryMode !== undefined ? input.recoveryMode : false;
     
     // スクリプトファイルの読み込み
@@ -46,11 +46,10 @@ const jenkinsVersion = input.jenkinsVersion || config.get("jenkinsVersion") || "
     let userDataBase = loadScript('../scripts/jenkins/shell/jenkins-setup.sh');
     const startupScript = loadScript('../scripts/jenkins/shell/jenkins-startup.sh');
     
-    // 変数置換
-    userDataBase = userDataBase.replace(/\${color}/g, input.color);
     // バージョンが「latest」の場合は空文字に置き換え（バージョン指定なし）
-const versionString = jenkinsVersion === "latest" ? "" : `-${jenkinsVersion}`;
-userDataBase = userDataBase.replace(/\${jenkinsVersion}/g, versionString);
+    const versionString = jenkinsVersion === "latest" ? "" : `-${jenkinsVersion}`;
+    userDataBase = userDataBase.replace(/\${jenkinsVersion}/g, versionString);
+    userDataBase = userDataBase.replace(/\${color}/g, input.color);
     
     // 最新のAmazon Linux 2023 AMIを取得
     const ami = pulumi.output(aws.getAmi({
@@ -200,9 +199,10 @@ export function createJenkinsEfs(projectName: string, environment: string, vpcId
             Environment: environment,
             ManagedBy: "pulumi",
         },
-        lifecyclePolicy: {
+        // lifecyclePolicyに修正
+        lifecyclePolicies: [{
             transitionToIa: "AFTER_30_DAYS",
-        },
+        }],
     });
 
     // サブネットごとにマウントターゲットを作成
