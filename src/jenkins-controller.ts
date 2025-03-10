@@ -54,7 +54,7 @@ export function createJenkinsInstance(input: JenkinsInstanceInput, dependencies?
     userDataBase = userDataBase.replace(/\${color}/g, input.color);
     
     // リカバリーモードまたは通常モードの設定
-    let configModeScript: string;
+    let configModeScript;
     if (recoveryMode) {
         configModeScript = loadScript('../scripts/jenkins/shell/recovery-mode-setup.sh');
         configModeScript = configModeScript.replace(/\${recoveryModeGroovy}/g, recoveryModeGroovy);
@@ -152,31 +152,6 @@ export function createJenkinsInstance(input: JenkinsInstanceInput, dependencies?
 
     // 依存関係を設定
     jenkinsInstanceProfile = dependsOn(jenkinsInstanceProfile, [jenkinsRole, ...rolePolicyAttachments]);
-
-    // EFSマウント部分（条件付き）
-    let efsMount = '';
-    if (input.efsFileSystemId) {
-        // スクリプトの読み込み
-        const efsMountTemplate = loadScript('../scripts/jenkins/shell/efs-mount.sh');
-        
-        // 文字列置換を使用して変数を置換する（pulumi.interpolateを使わない）
-        const region = aws.getRegion().then(region => region.name);
-        
-        // この方法ではスクリプト内の${efsFileSystemId}を直接置換できる
-        efsMount = pulumi.all([input.efsFileSystemId, region]).apply(
-            ([efsId, regionName]) => {
-                return efsMountTemplate
-                    .replace(/\${efsFileSystemId}/g, efsId)
-                    .replace(/\${AWS_REGION}/g, regionName);
-            }
-        );
-    }
-
-    // 最終的なUserDataの組み立て - 文字列結合を使用
-    const userData = pulumi.all([userDataBase, efsMount, configModeScript, startupScript])
-        .apply(([base, efs, config, startup]) => {
-            return `${base}\n${efs}\n${config}\n${startup}`;
-        });
 
     // EC2インスタンスの作成
     let jenkinsInstance = new aws.ec2.Instance(`${input.projectName}-jenkins-${input.color}`, {
