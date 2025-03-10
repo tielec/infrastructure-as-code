@@ -58,12 +58,14 @@ export function createJenkinsAgentFleet(input: JenkinsAgentInput) {
         imageId: agentAmi,
         keyName: keyName,
         vpcSecurityGroupIds: [input.securityGroupId],
+        // 型アサーションを使用
         instanceMarketOptions: {
             marketType: "spot",
             spotOptions: {
                 maxPrice: spotPrice,
-                spotInstanceType: "persistent"
-            },
+                spotInstanceType: "persistent",
+                instanceInterruptionBehavior: "terminate", // APIには必要だが型定義にない
+            } as any, // 型アサーション
         },
         iamInstanceProfile: {
             arn: input.instanceProfileArn,
@@ -135,6 +137,27 @@ export function createJenkinsAgentFleet(input: JenkinsAgentInput) {
         ],
     }];
 
+    // SpotFleetリクエスト（型アサーションを使用）
+    const spotFleetRequestArgs = {
+        iamFleetRole: spotFleetRole.arn,
+        spotPrice: spotPrice,
+        targetCapacity: 0, // 初期容量は0（Jenkinsから必要に応じて起動）
+        allocationStrategy: "capacityOptimized",
+        instanceInterruptionBehavior: "terminate", // APIには必要だが型定義にない
+        replaceUnhealthyInstances: true,
+        launchTemplateConfigs: fleetLaunchTemplateConfigs,
+        // SpotFleetRequestではtagSpecificationsではなくtagsを使用
+        tags: {
+            Name: `${input.projectName}-fleet-${input.environment}`,
+            Environment: input.environment,
+        },
+    } as any; // 型アサーション
+
+    const spotFleetRequest = new aws.ec2.SpotFleetRequest(
+        `${input.projectName}-spot-fleet`, 
+        spotFleetRequestArgs
+    );
+
     // SNSトピック
     const spotFleetSnsTopic = new aws.sns.Topic(`${input.projectName}-spot-fleet-alerts`, {
         name: `${input.projectName}-spot-fleet-alerts-${input.environment}`,
@@ -142,23 +165,6 @@ export function createJenkinsAgentFleet(input: JenkinsAgentInput) {
             Name: `${input.projectName}-spot-fleet-alerts-${input.environment}`,
             Environment: input.environment,
         },
-    });
-
-    // SpotFleetリクエスト
-    const spotFleetRequest = new aws.ec2.SpotFleetRequest(`${input.projectName}-spot-fleet`, {
-        iamFleetRole: spotFleetRole.arn,
-        spotPrice: spotPrice,
-        targetCapacity: 0, // 初期容量は0（Jenkinsから必要に応じて起動）
-        allocationStrategy: "capacityOptimized",
-        replaceUnhealthyInstances: true,
-        launchTemplateConfigs: fleetLaunchTemplateConfigs,
-        tagSpecifications: [{
-            resourceType: "spot-fleet-request",
-            tags: {
-                Name: `${input.projectName}-fleet-${input.environment}`,
-                Environment: input.environment,
-            },
-        }],
     });
 
     return {
