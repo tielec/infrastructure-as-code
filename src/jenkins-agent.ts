@@ -123,9 +123,7 @@ export function createJenkinsAgentFleet(input: JenkinsAgentInput) {
         launchSpecifications: input.subnetIds.map(subnetId => ({
             instanceType: "t3.medium",
             ami: agentAmi,
-            iamInstanceProfile: {
-                arn: input.instanceProfileArn,
-            },
+            iamInstanceProfile: input.instanceProfileArn,
             keyName: keyName,
             vpcSecurityGroupIds: [input.securityGroupId],
             subnetId: subnetId,
@@ -136,9 +134,7 @@ export function createJenkinsAgentFleet(input: JenkinsAgentInput) {
         })).concat(input.subnetIds.map(subnetId => ({
             instanceType: "t3.large",
             ami: agentAmi,
-            iamInstanceProfile: {
-                arn: input.instanceProfileArn,
-            },
+            iamInstanceProfile: input.instanceProfileArn,
             keyName: keyName,
             vpcSecurityGroupIds: [input.securityGroupId],
             subnetId: subnetId,
@@ -149,9 +145,7 @@ export function createJenkinsAgentFleet(input: JenkinsAgentInput) {
         }))).concat(input.subnetIds.map(subnetId => ({
             instanceType: "m5.large",
             ami: agentAmi,
-            iamInstanceProfile: {
-                arn: input.instanceProfileArn,
-            },
+            iamInstanceProfile: input.instanceProfileArn,
             keyName: keyName,
             vpcSecurityGroupIds: [input.securityGroupId],
             subnetId: subnetId,
