@@ -10,11 +10,10 @@ Parameters:
   InstanceType:
     Description: EC2 instance type
     Type: String
-    Default: t3.micro
+    Default: t3.medium
     AllowedValues:
-      - t3.micro
-      - t3.small
       - t3.medium
+      - t3.large
     ConstraintDescription: Must be a valid EC2 instance type.
 
   AllowedIP:

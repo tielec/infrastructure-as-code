@@ -141,6 +141,9 @@ pulumi stack init dev
 
 # 依存関係のインストール
 npm install
+
+# TypeScriptをコンパイル
+npx tsc
 ```
 
 ### 5. Jenkinsインフラのデプロイ

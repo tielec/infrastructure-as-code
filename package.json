@@ -1,8 +1,8 @@
 {
     "name": "infrastructure-as-code",
     "version": "1.0.0",
-    "description": "CI/CD infrastructure with blue-green deployment capability",
-    "main": "src/index.js",
+    "description": "Jenkins CI/CD infrastructure with blue-green deployment capability",
+    "main": "bin/index.js",
     "scripts": {
         "build": "tsc",
         "test": "echo \"No tests specified\" && exit 0"
