@@ -53,6 +53,43 @@ export function createJenkinsInstance(input: JenkinsInstanceInput, dependencies?
     userDataBase = userDataBase.replace(/\${jenkinsVersion}/g, versionString);
     userDataBase = userDataBase.replace(/\${color}/g, input.color);
     
+    // リカバリーモードまたは通常モードの設定
+    let configModeScript: string;
+    if (recoveryMode) {
+        configModeScript = loadScript('../scripts/jenkins/shell/recovery-mode-setup.sh');
+        configModeScript = configModeScript.replace(/\${recoveryModeGroovy}/g, recoveryModeGroovy);
+    } else {
+        configModeScript = loadScript('../scripts/jenkins/shell/normal-mode-setup.sh');
+        configModeScript = configModeScript
+            .replace(/\${disableCliGroovy}/g, disableCliGroovy)
+            .replace(/\${basicSettingsGroovy}/g, basicSettingsGroovy);
+    }
+
+    // EFSマウント部分（条件付き）
+    let efsMount: pulumi.Output<string> = pulumi.output('');
+    if (input.efsFileSystemId) {
+        // スクリプトの読み込み
+        const efsMountTemplate = loadScript('../scripts/jenkins/shell/efs-mount.sh');
+        
+        // リージョンを取得
+        const regionPromise = aws.getRegion();
+        
+        // 文字列置換を使用して変数を置換する
+        efsMount = pulumi.all([input.efsFileSystemId, regionPromise.then(r => r.name)]).apply(
+            ([efsId, regionName]) => {
+                return efsMountTemplate
+                    .replace(/\${efsFileSystemId}/g, efsId)
+                    .replace(/\${AWS_REGION}/g, regionName);
+            }
+        );
+    }
+
+    // 最終的なUserDataの組み立て - 文字列結合を使用
+    const userData = pulumi.all([userDataBase, efsMount, configModeScript, startupScript])
+        .apply(([base, efs, config, startup]) => {
+            return `${base}\n${efs}\n${config}\n${startup}`;
+        });
+
     // 最新のAmazon Linux 2023 AMIを取得
     const ami = pulumi.output(aws.ec2.getAmi({
         mostRecent: true,
