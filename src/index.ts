@@ -19,29 +19,49 @@ ensureAgentScriptFile();
 // ネットワークインフラ構築
 const network = createNetworkInfrastructure(projectName, environment);
 
-// セキュリティグループ
-const securityGroups = createSecurityGroups(projectName, environment, network.vpc.id);
+// 依存関係のあるネットワークリソースを整理
+const networkDependencies = [
+    network.vpc,
+    ...network.publicSubnets,
+    ...network.privateSubnets,
+    network.igw,
+    ...Object.values(network.routeTables || {}),
+    ...network.natGateways,
+];
 
-// ロードバランサー設定
+// セキュリティグループ（ネットワークリソースの作成完了後に作成する）
+const securityGroups = createSecurityGroups(
+    projectName, 
+    environment, 
+    network.vpc.id, 
+    networkDependencies
+);
+
+// ロードバランサー設定（VPCとセキュリティグループが作成された後に作成）
 const loadBalancer = createLoadBalancer(
     projectName, 
     environment, 
     network.vpc.id, 
     network.publicSubnets.map(subnet => subnet.id), 
-    securityGroups.albSecurityGroup.id
+    securityGroups.albSecurityGroup.id,
+    [...networkDependencies, securityGroups.albSecurityGroup]
 );
 
-// EFSファイルシステム作成
+// EFSファイルシステム作成（VPCとセキュリティグループが作成された後に作成）
 const jenkinsEfs = createJenkinsEfs(
     projectName,
     environment,
     network.vpc.id,
     securityGroups.jenkinsSecurityGroup.id,
-    [network.privateSubnetA.id, network.privateSubnetB.id]
+    [network.privateSubnetA.id, network.privateSubnetB.id],
+    [...networkDependencies, securityGroups.jenkinsSecurityGroup, securityGroups.efsSecurityGroup]
 );
 
-// Blueインスタンス（アクティブ環境）
-const blueJenkins = createJenkinsInstance({
+// EFSマウントターゲットを配列で取得
+const efsMountTargets = jenkinsEfs.mountTargets;
+
+// Blueインスタンス（アクティブ環境）- 依存リソースがすべて作成された後に作成
+const blueJenkinsInstance = createJenkinsInstance({
     projectName: projectName,
     environment: environment,
     vpcId: network.vpc.id,
@@ -53,12 +73,17 @@ const blueJenkins = createJenkinsInstance({
     jenkinsVersion: jenkinsVersion,
     recoveryMode: recoveryMode,
     color: "blue"
-});
+}, [
+    ...efsMountTargets,                 // EFSマウントターゲットへの依存
+    securityGroups.jenkinsSecurityGroup, // セキュリティグループへの依存
+    loadBalancer.blueTargetGroup,        // ターゲットグループへの依存
+    jenkinsEfs.jenkinsAccessPoint        // EFSアクセスポイントへの依存
+]);
 
 // 必要に応じてGreenインスタンス（スタンバイ環境）も作成可能
 // コメントアウトを解除して使用
 /*
-const greenJenkins = createJenkinsInstance({
+const greenJenkinsInstance = createJenkinsInstance({
     projectName: projectName,
     environment: environment,
     vpcId: network.vpc.id,
@@ -70,21 +95,28 @@ const greenJenkins = createJenkinsInstance({
     jenkinsVersion: jenkinsVersion,
     recoveryMode: true,  // 必要に応じてリカバリーモードを有効化
     color: "green"
-});
+}, [
+    ...efsMountTargets,                  // EFSマウントターゲットへの依存
+    securityGroups.jenkinsSecurityGroup, // セキュリティグループへの依存
+    loadBalancer.greenTargetGroup,       // ターゲットグループへの依存
+    jenkinsEfs.jenkinsAccessPoint        // EFSアクセスポイントへの依存
+]);
 */
 
-// Jenkinsエージェント用のスポットフリート設定
+// Jenkinsエージェント用のスポットフリート設定 - すべての依存リソースが作成された後に作成
 const jenkinsAgents = createJenkinsAgentFleet({
     projectName: projectName,
     environment: environment,
     vpcId: network.vpc.id,
     subnetIds: [network.privateSubnetA.id, network.privateSubnetB.id],
     securityGroupId: securityGroups.jenkinsAgentSecurityGroup.id,
-    instanceProfileArn: pulumi.interpolate`arn:aws:iam::${aws.getCallerIdentity().then((id: aws.GetCallerIdentityResult) => id.accountId)}:instance-profile/${projectName}-agent-profile-${environment}`,
     keyName: config.get("keyName"),
     maxTargetCapacity: config.getNumber("maxTargetCapacity") || 10,
     spotPrice: config.get("spotPrice") || "0.10"
-});
+}, [
+    ...networkDependencies,
+    securityGroups.jenkinsAgentSecurityGroup
+]);
 
 // エクスポート
 export const vpcId = network.vpc.id;
@@ -94,7 +126,9 @@ export const jenkinsSecurityGroupId = securityGroups.jenkinsSecurityGroup.id;
 export const jenkinsAgentSecurityGroupId = securityGroups.jenkinsAgentSecurityGroup.id;
 export const albDnsName = loadBalancer.albDnsName;
 export const jenkinsEfsId = jenkinsEfs.efsFileSystem.id;
-export const jenkinsInstanceId = blueJenkins.jenkinsInstance.id;
+export const jenkinsInstanceId = blueJenkinsInstance.jenkinsInstance.id;
 export const activeEnvironment = loadBalancer.activeEnvironmentParam.value;
-export const spotFleetRequestId = jenkinsAgents.spotFleetRequest.id;
+export const agentRoleArn = jenkinsAgents.agentRole?.arn;
+export const agentProfileArn = jenkinsAgents.agentProfile?.arn;
+export const spotFleetRequestId = jenkinsAgents.spotFleetRequest?.id;
 export const agentLaunchTemplateId = jenkinsAgents.launchTemplate.id;

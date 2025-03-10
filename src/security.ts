@@ -1,9 +1,14 @@
 import * as pulumi from "@pulumi/pulumi";
 import * as aws from "@pulumi/aws";
 
-export function createSecurityGroups(projectName: string, environment: string, vpcId: pulumi.Input<string>) {
+export function createSecurityGroups(
+    projectName: string, 
+    environment: string, 
+    vpcId: pulumi.Input<string>,
+    dependencies?: pulumi.Resource[]
+) {
     // ALB用セキュリティグループ
-    const albSecurityGroup = new aws.ec2.SecurityGroup(`${projectName}-alb-sg`, {
+    const albSecurityGroupArgs: aws.ec2.SecurityGroupArgs = {
         vpcId: vpcId,
         description: "Security group for Jenkins ALB",
         ingress: [
@@ -35,7 +40,17 @@ export function createSecurityGroups(projectName: string, environment: string, v
             Name: `${projectName}-alb-sg-${environment}`,
             Environment: environment,
         },
-    });
+    };
+
+    // 依存関係がある場合は設定
+    if (dependencies && dependencies.length > 0) {
+        albSecurityGroupArgs.dependsOn = dependencies;
+    }
+
+    const albSecurityGroup = new aws.ec2.SecurityGroup(
+        `${projectName}-alb-sg`, 
+        albSecurityGroupArgs
+    );
 
     // Jenkins マスター用セキュリティグループ
     const jenkinsSecurityGroup = new aws.ec2.SecurityGroup(`${projectName}-jenkins-sg`, {
@@ -79,6 +94,7 @@ export function createSecurityGroups(projectName: string, environment: string, v
             Name: `${projectName}-jenkins-master-sg-${environment}`,
             Environment: environment,
         },
+        dependsOn: [albSecurityGroup],
     });
 
     // Jenkinsエージェント用セキュリティグループ
@@ -115,11 +131,41 @@ export function createSecurityGroups(projectName: string, environment: string, v
             Name: `${projectName}-jenkins-agent-sg-${environment}`,
             Environment: environment,
         },
+        dependsOn: [jenkinsSecurityGroup],
+    });
+
+    // EFS用セキュリティグループ
+    const efsSecurityGroup = new aws.ec2.SecurityGroup(`${projectName}-efs-sg`, {
+        vpcId: vpcId,
+        description: "Security group for Jenkins EFS",
+        ingress: [
+            // NFS（2049ポート）を許可
+            {
+                protocol: "tcp",
+                fromPort: 2049,
+                toPort: 2049,
+                securityGroups: [jenkinsSecurityGroup.id, jenkinsAgentSecurityGroup.id],
+                description: "NFS access from Jenkins instances and agents",
+            },
+        ],
+        egress: [{
+            protocol: "-1",
+            fromPort: 0,
+            toPort: 0,
+            cidrBlocks: ["0.0.0.0/0"],
+            description: "Allow all outbound traffic",
+        }],
+        tags: {
+            Name: `${projectName}-efs-sg-${environment}`,
+            Environment: environment,
+        },
+        dependsOn: [jenkinsSecurityGroup, jenkinsAgentSecurityGroup],
     });
 
     return {
         albSecurityGroup,
         jenkinsSecurityGroup,
         jenkinsAgentSecurityGroup,
+        efsSecurityGroup,
     };
 }

@@ -6,14 +6,15 @@ export function createLoadBalancer(
     environment: string, 
     vpcId: pulumi.Input<string>,
     publicSubnets: pulumi.Input<string>[],
-    securityGroupId: pulumi.Input<string>
+    securityGroupId: pulumi.Input<string>,
+    dependencies?: pulumi.Resource[]
 ) {
     // より短い名前の生成（最大25文字で、7文字のランダム部分を追加して32文字以内に収める）
     const shortProjectName = projectName.length > 10 ? projectName.substring(0, 10) : projectName;
     const shortEnvName = environment.length > 3 ? environment.substring(0, 3) : environment;
     
     // Application Load Balancer
-    const alb = new aws.lb.LoadBalancer(`${shortProjectName}-alb`, {
+    const albArgs: aws.lb.LoadBalancerArgs = {
         internal: false,
         loadBalancerType: "application",
         securityGroups: [securityGroupId],
@@ -24,7 +25,17 @@ export function createLoadBalancer(
             Environment: environment,
             ManagedBy: "pulumi",
         },
-    });
+    };
+
+    // 依存関係がある場合は設定
+    if (dependencies && dependencies.length > 0) {
+        albArgs.dependsOn = dependencies;
+    }
+
+    const alb = new aws.lb.LoadBalancer(
+        `${shortProjectName}-alb`, 
+        albArgs
+    );
 
     // Blue環境のターゲットグループ - 名前を短くする
     const blueTargetGroup = new aws.lb.TargetGroup(`${shortProjectName}-blue-tg`, {
@@ -48,6 +59,7 @@ export function createLoadBalancer(
             Environment: environment,
             Color: "blue",
         },
+        dependsOn: dependencies,
     });
 
     // Green環境のターゲットグループ - 名前を短くする
@@ -72,6 +84,7 @@ export function createLoadBalancer(
             Environment: environment,
             Color: "green",
         },
+        dependsOn: dependencies,
     });
 
     // HTTPリスナー（HTTPSにリダイレクト）
@@ -87,6 +100,7 @@ export function createLoadBalancer(
                 statusCode: "HTTP_301",
             },
         }],
+        dependsOn: [alb],
     });
 
     // HTTPSリスナー
@@ -108,6 +122,7 @@ export function createLoadBalancer(
                 type: "forward",
                 targetGroupArn: blueTargetGroup.arn, // デフォルトでBlue環境にトラフィックを送信
             }],
+            dependsOn: [alb, blueTargetGroup],
         });
     } else {
         // 証明書が設定されていない場合は一時的にHTTPリスナーでBlue環境に転送
@@ -121,6 +136,7 @@ export function createLoadBalancer(
                 type: "forward",
                 targetGroupArn: blueTargetGroup.arn,
             }],
+            dependsOn: [alb, blueTargetGroup],
         });
     }
 

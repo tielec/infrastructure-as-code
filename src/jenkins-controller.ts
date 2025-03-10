@@ -161,36 +161,19 @@ export function createJenkinsInstance(input: JenkinsInstanceInput) {
     };
 }
 
-export function createJenkinsEfs(projectName: string, environment: string, vpcId: pulumi.Input<string>, securityGroupId: pulumi.Input<string>, subnetIds: pulumi.Input<string>[]) {
-    // EFSセキュリティグループ
-    const efsSecurityGroup = new aws.ec2.SecurityGroup(`${projectName}-efs-sg`, {
-        vpcId: vpcId,
-        description: "Security group for Jenkins EFS",
-        ingress: [
-            // NFS（2049ポート）を許可
-            {
-                protocol: "tcp",
-                fromPort: 2049,
-                toPort: 2049,
-                securityGroups: [securityGroupId],
-                description: "NFS access from Jenkins instances",
-            },
-        ],
-        egress: [{
-            protocol: "-1",
-            fromPort: 0,
-            toPort: 0,
-            cidrBlocks: ["0.0.0.0/0"],
-            description: "Allow all outbound traffic",
-        }],
-        tags: {
-            Name: `${projectName}-efs-sg-${environment}`,
-            Environment: environment,
-        },
-    });
+export function createJenkinsEfs(
+    projectName: string, 
+    environment: string, 
+    vpcId: pulumi.Input<string>, 
+    securityGroupId: pulumi.Input<string>, 
+    subnetIds: pulumi.Input<string>[],
+    dependencies?: pulumi.Resource[]
+) {
+    // EFSセキュリティグループ - 既に定義済みのため、ここでは使用するだけ
+    const efsSecurityGroupId = securityGroupId;
 
     // EFSファイルシステム
-    const efsFileSystem = new aws.efs.FileSystem(`${projectName}-efs`, {
+    const efsFileSystemArgs: aws.efs.FileSystemArgs = {
         encrypted: true,
         performanceMode: "generalPurpose",
         throughputMode: "bursting",
@@ -199,18 +182,28 @@ export function createJenkinsEfs(projectName: string, environment: string, vpcId
             Environment: environment,
             ManagedBy: "pulumi",
         },
-        // lifecyclePolicyに修正
         lifecyclePolicies: [{
             transitionToIa: "AFTER_30_DAYS",
         }],
-    });
+    };
+
+    // 依存関係がある場合は追加
+    if (dependencies && dependencies.length > 0) {
+        efsFileSystemArgs.dependsOn = dependencies;
+    }
+
+    const efsFileSystem = new aws.efs.FileSystem(
+        `${projectName}-efs`,
+        efsFileSystemArgs
+    );
 
     // サブネットごとにマウントターゲットを作成
     const mountTargets = subnetIds.map((subnetId, index) => {
         return new aws.efs.MountTarget(`${projectName}-efs-mt-${index}`, {
             fileSystemId: efsFileSystem.id,
             subnetId: subnetId,
-            securityGroups: [efsSecurityGroup.id],
+            securityGroups: [efsSecurityGroupId],
+            dependsOn: [efsFileSystem, ...dependencies || []],
         });
     });
 
@@ -233,11 +226,11 @@ export function createJenkinsEfs(projectName: string, environment: string, vpcId
             Name: `${projectName}-jenkins-ap-${environment}`,
             Environment: environment,
         },
+        dependsOn: [efsFileSystem],
     });
 
     return {
         efsFileSystem,
-        efsSecurityGroup,
         mountTargets,
         jenkinsAccessPoint,
     };

@@ -9,11 +9,12 @@ interface JenkinsAgentInput {
     vpcId: pulumi.Input<string>;
     subnetIds: pulumi.Input<string>[];
     securityGroupId: pulumi.Input<string>;
-    instanceProfileArn: pulumi.Input<string>;
     keyName?: string;
     agentAmi?: string;
     maxTargetCapacity?: number;
     spotPrice?: string;
+    // 既存のIAMロールを渡すオプションを残しておく（オプショナル）
+    agentRoleArn?: pulumi.Input<string>;
 }
 
 // スクリプトファイルの読み込み関数
@@ -27,7 +28,7 @@ function loadScript(scriptPath: string): string {
 }
 
 // SpotFleetでJenkinsエージェントを作成する関数
-export function createJenkinsAgentFleet(input: JenkinsAgentInput) {
+export function createJenkinsAgentFleet(input: JenkinsAgentInput, dependencies?: pulumi.Resource[]) {
     const config = new pulumi.Config();
     const keyName = input.keyName || config.get("keyName");
     const maxTargetCapacity = input.maxTargetCapacity || config.getNumber("maxTargetCapacity") || 10;
@@ -43,6 +44,62 @@ export function createJenkinsAgentFleet(input: JenkinsAgentInput) {
         }],
     }).then(ami => ami.id);
 
+    // エージェント用のIAMロールとインスタンスプロファイルを作成
+    // 既存のロールが指定されていない場合のみ作成
+    let agentRole: aws.iam.Role;
+    let agentPolicyAttachments: aws.iam.RolePolicyAttachment[];
+    let agentProfile: aws.iam.InstanceProfile;
+    let instanceProfileArn: pulumi.Output<string>;
+
+    if (input.agentRoleArn) {
+        // 既存のロールを使用する場合
+        instanceProfileArn = pulumi.output(input.agentRoleArn);
+    } else {
+        // 新規にロールとプロファイルを作成
+        agentRole = new aws.iam.Role(`${input.projectName}-agent-role`, {
+            assumeRolePolicy: JSON.stringify({
+                Version: "2012-10-17",
+                Statement: [{
+                    Action: "sts:AssumeRole",
+                    Effect: "Allow",
+                    Principal: {
+                        Service: "ec2.amazonaws.com",
+                    },
+                }],
+            }),
+            tags: {
+                Name: `${input.projectName}-agent-role-${input.environment}`,
+                Environment: input.environment,
+            },
+            dependsOn: dependencies,
+        });
+
+        // 必要なポリシーをアタッチ
+        agentPolicyAttachments = [
+            new aws.iam.RolePolicyAttachment(`${input.projectName}-agent-ssm-policy`, {
+                role: agentRole.name,
+                policyArn: "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore",
+                dependsOn: [agentRole],
+            }),
+            new aws.iam.RolePolicyAttachment(`${input.projectName}-agent-efs-policy`, {
+                role: agentRole.name,
+                policyArn: "arn:aws:iam::aws:policy/AmazonElasticFileSystemClientReadWriteAccess",
+                dependsOn: [agentRole],
+            }),
+        ];
+
+        agentProfile = new aws.iam.InstanceProfile(`${input.projectName}-agent-profile`, {
+            role: agentRole.name,
+            tags: {
+                Name: `${input.projectName}-agent-profile-${input.environment}`,
+                Environment: input.environment,
+            },
+            dependsOn: [...agentPolicyAttachments, agentRole],
+        });
+
+        instanceProfileArn = agentProfile.arn;
+    }
+
     // エージェントセットアップスクリプトの読み込み
     let userDataScript;
     try {
@@ -53,7 +110,7 @@ export function createJenkinsAgentFleet(input: JenkinsAgentInput) {
     }
 
     // Launch Template
-    const launchTemplate = new aws.ec2.LaunchTemplate(`${input.projectName}-agent-lt`, {
+    const launchTemplateArgs: aws.ec2.LaunchTemplateArgs = {
         name: `${input.projectName}-agent-lt-${input.environment}`,
         imageId: agentAmi,
         keyName: keyName,
@@ -68,7 +125,7 @@ export function createJenkinsAgentFleet(input: JenkinsAgentInput) {
             } as any, // 型アサーション
         },
         iamInstanceProfile: {
-            arn: input.instanceProfileArn,
+            arn: instanceProfileArn,
         },
         blockDeviceMappings: [{
             deviceName: "/dev/xvda",
@@ -92,7 +149,21 @@ export function createJenkinsAgentFleet(input: JenkinsAgentInput) {
             },
         }],
         userData: pulumi.output(Buffer.from(userDataScript).toString("base64")),
-    });
+    };
+
+    // 依存関係がある場合は追加
+    const fullDependencies = [...(dependencies || [])];
+    if (agentProfile) {
+        fullDependencies.push(agentProfile);
+    }
+    if (fullDependencies.length > 0) {
+        launchTemplateArgs.dependsOn = fullDependencies;
+    }
+
+    const launchTemplate = new aws.ec2.LaunchTemplate(
+        `${input.projectName}-agent-lt`, 
+        launchTemplateArgs
+    );
 
     // SpotFleet用IAMロール
     const spotFleetRole = new aws.iam.Role(`${input.projectName}-spotfleet-role`, {
@@ -110,71 +181,73 @@ export function createJenkinsAgentFleet(input: JenkinsAgentInput) {
         managedPolicyArns: [
             "arn:aws:iam::aws:policy/service-role/AmazonEC2SpotFleetTaggingRole",
         ],
+        dependsOn: fullDependencies,
     });
 
-    // SpotFleetリクエスト - API構造に合わせて修正
-    const spotFleetRequest = new aws.ec2.SpotFleetRequest(`${input.projectName}-spot-fleet`, {
-        iamFleetRole: spotFleetRole.arn,
-        spotPrice: spotPrice,
-        targetCapacity: 0, // 初期容量は0（Jenkinsから必要に応じて起動）
-        allocationStrategy: "capacityOptimized",
-        replaceUnhealthyInstances: true,
-        // launchTemplateConfigsでなく、launchSpecificationsを使用
-        launchSpecifications: input.subnetIds.map(subnetId => ({
-            instanceType: "t3.medium",
-            ami: agentAmi,
-            iamInstanceProfile: input.instanceProfileArn,
-            keyName: keyName,
-            vpcSecurityGroupIds: [input.securityGroupId],
-            subnetId: subnetId,
+    // SpotFleetリクエスト設定
+    try {
+        // SpotFleetリクエスト - launchSpecifications を使用
+        const spotFleetRequestArgs: aws.ec2.SpotFleetRequestArgs = {
+            iamFleetRole: spotFleetRole.arn,
+            spotPrice: spotPrice,
+            targetCapacity: 0, // 初期容量は0（Jenkinsから必要に応じて起動）
+            allocationStrategy: "capacityOptimized",
+            replaceUnhealthyInstances: true,
+            launchSpecifications: input.subnetIds.map(subnetId => ({
+                instanceType: "t3.medium",
+                ami: agentAmi,
+                iamInstanceProfile: instanceProfileArn,
+                keyName: keyName,
+                vpcSecurityGroupIds: [input.securityGroupId],
+                subnetId: subnetId,
+                tags: {
+                    Name: `${input.projectName}-agent-${input.environment}`,
+                    Environment: input.environment,
+                },
+            })),
             tags: {
-                Name: `${input.projectName}-agent-${input.environment}`,
+                Name: `${input.projectName}-fleet-${input.environment}`,
                 Environment: input.environment,
             },
-        })).concat(input.subnetIds.map(subnetId => ({
-            instanceType: "t3.large",
-            ami: agentAmi,
-            iamInstanceProfile: input.instanceProfileArn,
-            keyName: keyName,
-            vpcSecurityGroupIds: [input.securityGroupId],
-            subnetId: subnetId,
-            tags: {
-                Name: `${input.projectName}-agent-${input.environment}`,
-                Environment: input.environment,
-            },
-        }))).concat(input.subnetIds.map(subnetId => ({
-            instanceType: "m5.large",
-            ami: agentAmi,
-            iamInstanceProfile: input.instanceProfileArn,
-            keyName: keyName,
-            vpcSecurityGroupIds: [input.securityGroupId],
-            subnetId: subnetId,
-            tags: {
-                Name: `${input.projectName}-agent-${input.environment}`,
-                Environment: input.environment,
-            },
-        }))),
-        tags: {
-            Name: `${input.projectName}-fleet-${input.environment}`,
-            Environment: input.environment,
-        },
-    });
+        };
 
-    // SNSトピック
-    const spotFleetSnsTopic = new aws.sns.Topic(`${input.projectName}-spot-fleet-alerts`, {
-        name: `${input.projectName}-spot-fleet-alerts-${input.environment}`,
-        tags: {
-            Name: `${input.projectName}-spot-fleet-alerts-${input.environment}`,
-            Environment: input.environment,
-        },
-    });
+        // 依存関係の追加
+        spotFleetRequestArgs.dependsOn = [...fullDependencies, launchTemplate, spotFleetRole];
 
-    return {
-        launchTemplate,
-        spotFleetRole,
-        spotFleetRequest,
-        spotFleetSnsTopic,
-    };
+        const spotFleetRequest = new aws.ec2.SpotFleetRequest(
+            `${input.projectName}-spot-fleet`, 
+            spotFleetRequestArgs
+        );
+
+        // SNSトピック
+        const spotFleetSnsTopic = new aws.sns.Topic(`${input.projectName}-spot-fleet-alerts`, {
+            name: `${input.projectName}-spot-fleet-alerts-${input.environment}`,
+            tags: {
+                Name: `${input.projectName}-spot-fleet-alerts-${input.environment}`,
+                Environment: input.environment,
+            },
+            dependsOn: fullDependencies,
+        });
+
+        return {
+            agentRole,
+            agentProfile,
+            launchTemplate,
+            spotFleetRole,
+            spotFleetRequest,
+            spotFleetSnsTopic,
+        };
+    } catch (error) {
+        console.error("Error creating SpotFleetRequest:", error);
+        // エラーが発生してもLaunchTemplateとロールは返す
+        return {
+            agentRole,
+            agentProfile,
+            launchTemplate,
+            spotFleetRole,
+            spotFleetSnsTopic: null,
+        };
+    }
 }
 
 // エージェント設定用のスクリプトファイルが存在しない場合に作成するヘルパー関数
