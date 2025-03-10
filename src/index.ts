@@ -1,4 +1,5 @@
 import * as pulumi from "@pulumi/pulumi";
+import * as aws from "@pulumi/aws";
 import { createNetworkInfrastructure } from "./network";
 import { createSecurityGroups } from "./security";
 import { createLoadBalancer } from "./load-balancer";
@@ -79,7 +80,7 @@ const jenkinsAgents = createJenkinsAgentFleet({
     vpcId: network.vpc.id,
     subnetIds: [network.privateSubnetA.id, network.privateSubnetB.id],
     securityGroupId: securityGroups.jenkinsAgentSecurityGroup.id,
-    instanceProfileArn: pulumi.interpolate`arn:aws:iam::${aws.getCallerIdentity().then(id => id.accountId)}:instance-profile/${projectName}-agent-profile-${environment}`,
+    instanceProfileArn: pulumi.interpolate`arn:aws:iam::${aws.getCallerIdentity().then((id: aws.GetCallerIdentityResult) => id.accountId)}:instance-profile/${projectName}-agent-profile-${environment}`,
     keyName: config.get("keyName"),
     maxTargetCapacity: config.getNumber("maxTargetCapacity") || 10,
     spotPrice: config.get("spotPrice") || "0.10"
