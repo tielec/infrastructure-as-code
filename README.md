@@ -151,9 +151,6 @@ npx tsc
 PulumiがAWS APIにアクセスするために必要な認証情報を設定します：
 
 ```bash
-# 実行権限を付与
-chmod +x scripts/aws-credentials.sh
-
 # スクリプトを実行して認証情報を環境変数に設定
 source scripts/aws-credentials.sh
 ```
@@ -202,7 +199,7 @@ infrastructure-as-code/
    ├─index.ts                 # メインエントリポイント
    ├─network.ts               # ネットワークリソース定義
    ├─security.ts              # セキュリティグループ定義
-   ├─jenkins-controller.ts               # Jenkinsマスターインスタンス定義
+   ├─jenkins-controller.ts    # Jenkinsマスターインスタンス定義
    ├─jenkins-agent.ts         # Jenkinsエージェント定義
    └─load-balancer.ts         # ロードバランサー定義
 ```

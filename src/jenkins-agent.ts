@@ -112,51 +112,59 @@ export function createJenkinsAgentFleet(input: JenkinsAgentInput) {
         ],
     });
 
-    // スポットフリートの設定
-    const fleetLaunchTemplateConfigs = [{
-        launchTemplateSpecification: {
-            launchTemplateId: launchTemplate.id,
-            version: launchTemplate.latestVersion.apply(v => v.toString()), // 文字列に変換
-        },
-        overrides: [
-            // t3.medium on both subnets
-            ...input.subnetIds.map(subnetId => ({
-                instanceType: "t3.medium",
-                subnetId: subnetId,
-            })),
-            // t3.large on both subnets
-            ...input.subnetIds.map(subnetId => ({
-                instanceType: "t3.large",
-                subnetId: subnetId,
-            })),
-            // m5.large on both subnets
-            ...input.subnetIds.map(subnetId => ({
-                instanceType: "m5.large",
-                subnetId: subnetId,
-            })),
-        ],
-    }];
-
-    // SpotFleetリクエスト（型アサーションを使用）
-    const spotFleetRequestArgs = {
+    // SpotFleetリクエスト - API構造に合わせて修正
+    const spotFleetRequest = new aws.ec2.SpotFleetRequest(`${input.projectName}-spot-fleet`, {
         iamFleetRole: spotFleetRole.arn,
         spotPrice: spotPrice,
         targetCapacity: 0, // 初期容量は0（Jenkinsから必要に応じて起動）
         allocationStrategy: "capacityOptimized",
-        instanceInterruptionBehavior: "terminate", // APIには必要だが型定義にない
         replaceUnhealthyInstances: true,
-        launchTemplateConfigs: fleetLaunchTemplateConfigs,
-        // tagSpecificationsではなくtagsを使用
+        // launchTemplateConfigsでなく、launchSpecificationsを使用
+        launchSpecifications: input.subnetIds.map(subnetId => ({
+            instanceType: "t3.medium",
+            imageId: agentAmi,
+            iamInstanceProfile: {
+                arn: input.instanceProfileArn,
+            },
+            keyName: keyName,
+            vpcSecurityGroupIds: [input.securityGroupId],
+            subnetId: subnetId,
+            tags: {
+                Name: `${input.projectName}-agent-${input.environment}`,
+                Environment: input.environment,
+            },
+        })).concat(input.subnetIds.map(subnetId => ({
+            instanceType: "t3.large",
+            imageId: agentAmi,
+            iamInstanceProfile: {
+                arn: input.instanceProfileArn,
+            },
+            keyName: keyName,
+            vpcSecurityGroupIds: [input.securityGroupId],
+            subnetId: subnetId,
+            tags: {
+                Name: `${input.projectName}-agent-${input.environment}`,
+                Environment: input.environment,
+            },
+        }))).concat(input.subnetIds.map(subnetId => ({
+            instanceType: "m5.large",
+            imageId: agentAmi,
+            iamInstanceProfile: {
+                arn: input.instanceProfileArn,
+            },
+            keyName: keyName,
+            vpcSecurityGroupIds: [input.securityGroupId],
+            subnetId: subnetId,
+            tags: {
+                Name: `${input.projectName}-agent-${input.environment}`,
+                Environment: input.environment,
+            },
+        }))),
         tags: {
             Name: `${input.projectName}-fleet-${input.environment}`,
             Environment: input.environment,
         },
-    } as any; // 型アサーション
-
-    const spotFleetRequest = new aws.ec2.SpotFleetRequest(
-        `${input.projectName}-spot-fleet`, 
-        spotFleetRequestArgs
-    );
+    });
 
     // SNSトピック
     const spotFleetSnsTopic = new aws.sns.Topic(`${input.projectName}-spot-fleet-alerts`, {
