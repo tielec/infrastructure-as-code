@@ -8,8 +8,12 @@ export function createLoadBalancer(
     publicSubnets: pulumi.Input<string>[],
     securityGroupId: pulumi.Input<string>
 ) {
+    // より短い名前の生成（最大25文字で、7文字のランダム部分を追加して32文字以内に収める）
+    const shortProjectName = projectName.length > 10 ? projectName.substring(0, 10) : projectName;
+    const shortEnvName = environment.length > 3 ? environment.substring(0, 3) : environment;
+    
     // Application Load Balancer
-    const alb = new aws.lb.LoadBalancer(`${projectName}-jenkins-alb`, {
+    const alb = new aws.lb.LoadBalancer(`${shortProjectName}-alb`, {
         internal: false,
         loadBalancerType: "application",
         securityGroups: [securityGroupId],
@@ -22,8 +26,8 @@ export function createLoadBalancer(
         },
     });
 
-    // Blue環境のターゲットグループ
-    const blueTargetGroup = new aws.lb.TargetGroup(`${projectName}-jenkins-blue-tg`, {
+    // Blue環境のターゲットグループ - 名前を短くする
+    const blueTargetGroup = new aws.lb.TargetGroup(`${shortProjectName}-blue-tg`, {
         port: 8080,
         protocol: "HTTP",
         vpcId: vpcId,
@@ -46,8 +50,8 @@ export function createLoadBalancer(
         },
     });
 
-    // Green環境のターゲットグループ
-    const greenTargetGroup = new aws.lb.TargetGroup(`${projectName}-jenkins-green-tg`, {
+    // Green環境のターゲットグループ - 名前を短くする
+    const greenTargetGroup = new aws.lb.TargetGroup(`${shortProjectName}-green-tg`, {
         port: 8080,
         protocol: "HTTP",
         vpcId: vpcId,
@@ -71,7 +75,7 @@ export function createLoadBalancer(
     });
 
     // HTTPリスナー（HTTPSにリダイレクト）
-    const httpListener = new aws.lb.Listener(`${projectName}-jenkins-http-listener`, {
+    const httpListener = new aws.lb.Listener(`${shortProjectName}-http`, {
         loadBalancerArn: alb.arn,
         port: 80,
         protocol: "HTTP",
@@ -94,7 +98,7 @@ export function createLoadBalancer(
     
     if (certificateArn) {
         // ACM証明書が設定されている場合はHTTPSリスナーを作成
-        httpsListener = new aws.lb.Listener(`${projectName}-jenkins-https-listener`, {
+        httpsListener = new aws.lb.Listener(`${shortProjectName}-https`, {
             loadBalancerArn: alb.arn,
             port: 443,
             protocol: "HTTPS",
@@ -109,7 +113,7 @@ export function createLoadBalancer(
         // 証明書が設定されていない場合は一時的にHTTPリスナーでBlue環境に転送
         // 注: 本番環境ではHTTPSを推奨
         console.log("Warning: No SSL certificate provided. Creating HTTP listener for testing only.");
-        httpsListener = new aws.lb.Listener(`${projectName}-jenkins-http-forward-listener`, {
+        httpsListener = new aws.lb.Listener(`${shortProjectName}-http-fwd`, {
             loadBalancerArn: alb.arn,
             port: 8080,
             protocol: "HTTP",
@@ -121,7 +125,7 @@ export function createLoadBalancer(
     }
 
     // ブルーグリーン切り替え用のパラメータストア
-    const activeEnvironmentParam = new aws.ssm.Parameter(`${projectName}-active-environment`, {
+    const activeEnvironmentParam = new aws.ssm.Parameter(`${shortProjectName}-active-env`, {
         name: `/${projectName}/${environment}/jenkins/active-environment`,
         type: "String",
         value: "blue", // 初期値はblue
