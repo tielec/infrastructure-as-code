@@ -182,6 +182,12 @@ export function createNetworkInfrastructure(projectName: string, environment: st
         natGatewayId: natGatewayB.id,
     });
 
+    // 全てのルートテーブルを配列に集める
+    const routeTables = [publicRouteTable, privateRouteTableA, privateRouteTableB];
+    
+    // NATゲートウェイを配列に集める
+    const natGateways = [natGatewayA, natGatewayB];
+
     return {
         vpc,
         igw,
@@ -196,5 +202,8 @@ export function createNetworkInfrastructure(projectName: string, environment: st
         privateRouteTableB,
         natGatewayA,
         natGatewayB,
+        // 追加した配列を返す
+        routeTables,
+        natGateways
     };
 }

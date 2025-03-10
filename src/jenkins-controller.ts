@@ -2,6 +2,7 @@ import * as pulumi from "@pulumi/pulumi";
 import * as aws from "@pulumi/aws";
 import * as fs from "fs";
 import * as path from "path";
+import { dependsOn } from "./dependency-utils";
 
 interface JenkinsInstanceInput {
     projectName: string;
@@ -29,7 +30,8 @@ function loadScript(scriptPath: string): string {
     }
 }
 
-export function createJenkinsInstance(input: JenkinsInstanceInput) {
+// 依存関係を考慮してJenkinsインスタンスを作成する
+export function createJenkinsInstance(input: JenkinsInstanceInput, dependencies?: pulumi.Resource[]) {
     const config = new pulumi.Config();
     const instanceType = input.instanceType || config.get("instanceType") || "t3.medium";
     const keyName = input.keyName || config.get("keyName");
@@ -62,7 +64,7 @@ export function createJenkinsInstance(input: JenkinsInstanceInput) {
     }));
 
     // IAMロール作成（Jenkins用）
-    const jenkinsRole = new aws.iam.Role(`${input.projectName}-jenkins-role-${input.color}`, {
+    let jenkinsRole = new aws.iam.Role(`${input.projectName}-jenkins-role-${input.color}`, {
         assumeRolePolicy: JSON.stringify({
             Version: "2012-10-17",
             Statement: [{
@@ -80,26 +82,39 @@ export function createJenkinsInstance(input: JenkinsInstanceInput) {
         },
     });
 
+    // 依存関係を設定
+    if (dependencies && dependencies.length > 0) {
+        jenkinsRole = dependsOn(jenkinsRole, dependencies);
+    }
+
     // マネージドポリシーのアタッチ
+    const ssmPolicy = new aws.iam.RolePolicyAttachment(`${input.projectName}-jenkins-ssm-policy-${input.color}`, {
+        role: jenkinsRole.name,
+        policyArn: "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore",
+    });
+    
+    const efsPolicy = new aws.iam.RolePolicyAttachment(`${input.projectName}-jenkins-efs-policy-${input.color}`, {
+        role: jenkinsRole.name,
+        policyArn: "arn:aws:iam::aws:policy/AmazonElasticFileSystemClientReadWriteAccess",
+    });
+
+    // 依存関係を設定
     const rolePolicyAttachments = [
-        new aws.iam.RolePolicyAttachment(`${input.projectName}-jenkins-ssm-policy-${input.color}`, {
-            role: jenkinsRole.name,
-            policyArn: "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore",
-        }),
-        new aws.iam.RolePolicyAttachment(`${input.projectName}-jenkins-efs-policy-${input.color}`, {
-            role: jenkinsRole.name,
-            policyArn: "arn:aws:iam::aws:policy/AmazonElasticFileSystemClientReadWriteAccess",
-        }),
+        dependsOn(ssmPolicy, [jenkinsRole]),
+        dependsOn(efsPolicy, [jenkinsRole]),
     ];
 
     // Jenkins用インスタンスプロファイル
-    const jenkinsInstanceProfile = new aws.iam.InstanceProfile(`${input.projectName}-jenkins-profile-${input.color}`, {
+    let jenkinsInstanceProfile = new aws.iam.InstanceProfile(`${input.projectName}-jenkins-profile-${input.color}`, {
         role: jenkinsRole.name,
         tags: {
             Environment: input.environment,
             Color: input.color,
         },
     });
+
+    // 依存関係を設定
+    jenkinsInstanceProfile = dependsOn(jenkinsInstanceProfile, [jenkinsRole, ...rolePolicyAttachments]);
 
     // EFSマウント部分（条件付き）
     let efsMount = '';
@@ -124,7 +139,7 @@ export function createJenkinsInstance(input: JenkinsInstanceInput) {
     const userData = pulumi.interpolate`${userDataBase}${efsMount}${configModeScript}${startupScript}`;
 
     // EC2インスタンスの作成
-    const jenkinsInstance = new aws.ec2.Instance(`${input.projectName}-jenkins-${input.color}`, {
+    let jenkinsInstance = new aws.ec2.Instance(`${input.projectName}-jenkins-${input.color}`, {
         ami: ami.id,
         instanceType: instanceType,
         subnetId: input.subnetId,
@@ -146,6 +161,13 @@ export function createJenkinsInstance(input: JenkinsInstanceInput) {
         },
     });
 
+    // 依存関係を設定
+    if (dependencies && dependencies.length > 0) {
+        jenkinsInstance = dependsOn(jenkinsInstance, [...dependencies, jenkinsInstanceProfile]);
+    } else {
+        jenkinsInstance = dependsOn(jenkinsInstance, [jenkinsInstanceProfile]);
+    }
+
     // ターゲットグループへの登録
     const targetGroupAttachment = new aws.lb.TargetGroupAttachment(`${input.projectName}-jenkins-tg-attachment-${input.color}`, {
         targetGroupArn: input.targetGroupArn,
@@ -161,6 +183,7 @@ export function createJenkinsInstance(input: JenkinsInstanceInput) {
     };
 }
 
+// EFSファイルシステムを作成する関数
 export function createJenkinsEfs(
     projectName: string, 
     environment: string, 
@@ -173,7 +196,7 @@ export function createJenkinsEfs(
     const efsSecurityGroupId = securityGroupId;
 
     // EFSファイルシステム
-    const efsFileSystemArgs: aws.efs.FileSystemArgs = {
+    let efsFileSystem = new aws.efs.FileSystem(`${projectName}-efs`, {
         encrypted: true,
         performanceMode: "generalPurpose",
         throughputMode: "bursting",
@@ -185,30 +208,30 @@ export function createJenkinsEfs(
         lifecyclePolicies: [{
             transitionToIa: "AFTER_30_DAYS",
         }],
-    };
+    });
 
-    // 依存関係がある場合は追加
+    // 依存関係を設定
     if (dependencies && dependencies.length > 0) {
-        efsFileSystemArgs.dependsOn = dependencies;
+        efsFileSystem = dependsOn(efsFileSystem, dependencies);
     }
-
-    const efsFileSystem = new aws.efs.FileSystem(
-        `${projectName}-efs`,
-        efsFileSystemArgs
-    );
 
     // サブネットごとにマウントターゲットを作成
     const mountTargets = subnetIds.map((subnetId, index) => {
-        return new aws.efs.MountTarget(`${projectName}-efs-mt-${index}`, {
+        const mountTarget = new aws.efs.MountTarget(`${projectName}-efs-mt-${index}`, {
             fileSystemId: efsFileSystem.id,
             subnetId: subnetId,
             securityGroups: [efsSecurityGroupId],
-            dependsOn: [efsFileSystem, ...dependencies || []],
         });
+        
+        // 依存関係を設定
+        if (dependencies && dependencies.length > 0) {
+            return dependsOn(mountTarget, [efsFileSystem, ...dependencies]);
+        }
+        return dependsOn(mountTarget, [efsFileSystem]);
     });
 
     // EFSアクセスポイント
-    const jenkinsAccessPoint = new aws.efs.AccessPoint(`${projectName}-jenkins-ap`, {
+    let jenkinsAccessPoint = new aws.efs.AccessPoint(`${projectName}-jenkins-ap`, {
         fileSystemId: efsFileSystem.id,
         posixUser: {
             gid: 994,  // Jenkinsのgid
@@ -226,8 +249,10 @@ export function createJenkinsEfs(
             Name: `${projectName}-jenkins-ap-${environment}`,
             Environment: environment,
         },
-        dependsOn: [efsFileSystem],
     });
+    
+    // 依存関係を設定
+    jenkinsAccessPoint = dependsOn(jenkinsAccessPoint, [efsFileSystem]);
 
     return {
         efsFileSystem,

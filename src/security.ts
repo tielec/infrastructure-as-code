@@ -1,5 +1,6 @@
 import * as pulumi from "@pulumi/pulumi";
 import * as aws from "@pulumi/aws";
+import { dependsOn } from "./dependency-utils";
 
 export function createSecurityGroups(
     projectName: string, 
@@ -8,7 +9,7 @@ export function createSecurityGroups(
     dependencies?: pulumi.Resource[]
 ) {
     // ALB用セキュリティグループ
-    const albSecurityGroupArgs: aws.ec2.SecurityGroupArgs = {
+    let albSecurityGroup = new aws.ec2.SecurityGroup(`${projectName}-alb-sg`, {
         vpcId: vpcId,
         description: "Security group for Jenkins ALB",
         ingress: [
@@ -40,20 +41,15 @@ export function createSecurityGroups(
             Name: `${projectName}-alb-sg-${environment}`,
             Environment: environment,
         },
-    };
+    });
 
-    // 依存関係がある場合は設定
+    // 依存関係がある場合は別途設定
     if (dependencies && dependencies.length > 0) {
-        albSecurityGroupArgs.dependsOn = dependencies;
+        albSecurityGroup = dependsOn(albSecurityGroup, dependencies);
     }
 
-    const albSecurityGroup = new aws.ec2.SecurityGroup(
-        `${projectName}-alb-sg`, 
-        albSecurityGroupArgs
-    );
-
     // Jenkins マスター用セキュリティグループ
-    const jenkinsSecurityGroup = new aws.ec2.SecurityGroup(`${projectName}-jenkins-sg`, {
+    let jenkinsSecurityGroup = new aws.ec2.SecurityGroup(`${projectName}-jenkins-sg`, {
         vpcId: vpcId,
         description: "Security group for Jenkins master instances",
         ingress: [
@@ -94,11 +90,13 @@ export function createSecurityGroups(
             Name: `${projectName}-jenkins-master-sg-${environment}`,
             Environment: environment,
         },
-        dependsOn: [albSecurityGroup],
     });
 
+    // 依存関係を設定
+    jenkinsSecurityGroup = dependsOn(jenkinsSecurityGroup, [albSecurityGroup, ...(dependencies || [])]);
+
     // Jenkinsエージェント用セキュリティグループ
-    const jenkinsAgentSecurityGroup = new aws.ec2.SecurityGroup(`${projectName}-jenkins-agent-sg`, {
+    let jenkinsAgentSecurityGroup = new aws.ec2.SecurityGroup(`${projectName}-jenkins-agent-sg`, {
         vpcId: vpcId,
         description: "Security group for Jenkins agent instances",
         ingress: [
@@ -131,11 +129,13 @@ export function createSecurityGroups(
             Name: `${projectName}-jenkins-agent-sg-${environment}`,
             Environment: environment,
         },
-        dependsOn: [jenkinsSecurityGroup],
     });
 
+    // 依存関係を設定
+    jenkinsAgentSecurityGroup = dependsOn(jenkinsAgentSecurityGroup, [jenkinsSecurityGroup, ...(dependencies || [])]);
+
     // EFS用セキュリティグループ
-    const efsSecurityGroup = new aws.ec2.SecurityGroup(`${projectName}-efs-sg`, {
+    let efsSecurityGroup = new aws.ec2.SecurityGroup(`${projectName}-efs-sg`, {
         vpcId: vpcId,
         description: "Security group for Jenkins EFS",
         ingress: [
@@ -159,8 +159,10 @@ export function createSecurityGroups(
             Name: `${projectName}-efs-sg-${environment}`,
             Environment: environment,
         },
-        dependsOn: [jenkinsSecurityGroup, jenkinsAgentSecurityGroup],
     });
+
+    // 依存関係を設定
+    efsSecurityGroup = dependsOn(efsSecurityGroup, [jenkinsSecurityGroup, jenkinsAgentSecurityGroup, ...(dependencies || [])]);
 
     return {
         albSecurityGroup,

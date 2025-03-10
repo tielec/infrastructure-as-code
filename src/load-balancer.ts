@@ -1,5 +1,6 @@
 import * as pulumi from "@pulumi/pulumi";
 import * as aws from "@pulumi/aws";
+import { dependsOn } from "./dependency-utils";
 
 export function createLoadBalancer(
     projectName: string, 
@@ -14,31 +15,29 @@ export function createLoadBalancer(
     const shortEnvName = environment.length > 3 ? environment.substring(0, 3) : environment;
     
     // Application Load Balancer
-    const albArgs: aws.lb.LoadBalancerArgs = {
-        internal: false,
-        loadBalancerType: "application",
-        securityGroups: [securityGroupId],
-        subnets: publicSubnets,
-        enableDeletionProtection: environment === "prod",
-        tags: {
-            Name: `${projectName}-jenkins-alb-${environment}`,
-            Environment: environment,
-            ManagedBy: "pulumi",
-        },
-    };
+    let alb = new aws.lb.LoadBalancer(
+        `${shortProjectName}-alb`, 
+        {
+            internal: false,
+            loadBalancerType: "application",
+            securityGroups: [securityGroupId],
+            subnets: publicSubnets,
+            enableDeletionProtection: environment === "prod",
+            tags: {
+                Name: `${projectName}-jenkins-alb-${environment}`,
+                Environment: environment,
+                ManagedBy: "pulumi",
+            },
+        }
+    );
 
     // 依存関係がある場合は設定
     if (dependencies && dependencies.length > 0) {
-        albArgs.dependsOn = dependencies;
+        alb = dependsOn(alb, dependencies);
     }
 
-    const alb = new aws.lb.LoadBalancer(
-        `${shortProjectName}-alb`, 
-        albArgs
-    );
-
     // Blue環境のターゲットグループ - 名前を短くする
-    const blueTargetGroup = new aws.lb.TargetGroup(`${shortProjectName}-blue-tg`, {
+    let blueTargetGroup = new aws.lb.TargetGroup(`${shortProjectName}-blue-tg`, {
         port: 8080,
         protocol: "HTTP",
         vpcId: vpcId,
@@ -59,11 +58,15 @@ export function createLoadBalancer(
             Environment: environment,
             Color: "blue",
         },
-        dependsOn: dependencies,
     });
 
+    // 依存関係を設定
+    if (dependencies && dependencies.length > 0) {
+        blueTargetGroup = dependsOn(blueTargetGroup, dependencies);
+    }
+
     // Green環境のターゲットグループ - 名前を短くする
-    const greenTargetGroup = new aws.lb.TargetGroup(`${shortProjectName}-green-tg`, {
+    let greenTargetGroup = new aws.lb.TargetGroup(`${shortProjectName}-green-tg`, {
         port: 8080,
         protocol: "HTTP",
         vpcId: vpcId,
@@ -84,11 +87,15 @@ export function createLoadBalancer(
             Environment: environment,
             Color: "green",
         },
-        dependsOn: dependencies,
     });
 
+    // 依存関係を設定
+    if (dependencies && dependencies.length > 0) {
+        greenTargetGroup = dependsOn(greenTargetGroup, dependencies);
+    }
+
     // HTTPリスナー（HTTPSにリダイレクト）
-    const httpListener = new aws.lb.Listener(`${shortProjectName}-http`, {
+    let httpListener = new aws.lb.Listener(`${shortProjectName}-http`, {
         loadBalancerArn: alb.arn,
         port: 80,
         protocol: "HTTP",
@@ -100,8 +107,10 @@ export function createLoadBalancer(
                 statusCode: "HTTP_301",
             },
         }],
-        dependsOn: [alb],
     });
+
+    // 依存関係を設定
+    httpListener = dependsOn(httpListener, [alb]);
 
     // HTTPSリスナー
     let httpsListener;
@@ -122,8 +131,10 @@ export function createLoadBalancer(
                 type: "forward",
                 targetGroupArn: blueTargetGroup.arn, // デフォルトでBlue環境にトラフィックを送信
             }],
-            dependsOn: [alb, blueTargetGroup],
         });
+
+        // 依存関係を設定
+        httpsListener = dependsOn(httpsListener, [alb, blueTargetGroup]);
     } else {
         // 証明書が設定されていない場合は一時的にHTTPリスナーでBlue環境に転送
         // 注: 本番環境ではHTTPSを推奨
@@ -136,8 +147,10 @@ export function createLoadBalancer(
                 type: "forward",
                 targetGroupArn: blueTargetGroup.arn,
             }],
-            dependsOn: [alb, blueTargetGroup],
         });
+
+        // 依存関係を設定
+        httpsListener = dependsOn(httpsListener, [alb, blueTargetGroup]);
     }
 
     // ブルーグリーン切り替え用のパラメータストア

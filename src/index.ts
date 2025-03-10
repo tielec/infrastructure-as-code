@@ -5,6 +5,7 @@ import { createSecurityGroups } from "./security";
 import { createLoadBalancer } from "./load-balancer";
 import { createJenkinsInstance, createJenkinsEfs } from "./jenkins-controller";
 import { createJenkinsAgentFleet, ensureAgentScriptFile } from "./jenkins-agent";
+import { dependsOn } from "./dependency-utils";
 
 // 共通設定
 const config = new pulumi.Config();
@@ -25,7 +26,7 @@ const networkDependencies = [
     ...network.publicSubnets,
     ...network.privateSubnets,
     network.igw,
-    ...Object.values(network.routeTables || {}),
+    ...network.routeTables,
     ...network.natGateways,
 ];
 
@@ -73,11 +74,14 @@ const blueJenkinsInstance = createJenkinsInstance({
     jenkinsVersion: jenkinsVersion,
     recoveryMode: recoveryMode,
     color: "blue"
-}, [
-    ...efsMountTargets,                 // EFSマウントターゲットへの依存
-    securityGroups.jenkinsSecurityGroup, // セキュリティグループへの依存
-    loadBalancer.blueTargetGroup,        // ターゲットグループへの依存
-    jenkinsEfs.jenkinsAccessPoint        // EFSアクセスポイントへの依存
+});
+
+// 明示的に依存関係を設定（各リソースに対して）
+dependsOn(blueJenkinsInstance.jenkinsInstance, [
+    ...efsMountTargets,
+    securityGroups.jenkinsSecurityGroup,
+    loadBalancer.blueTargetGroup,
+    jenkinsEfs.jenkinsAccessPoint
 ]);
 
 // 必要に応じてGreenインスタンス（スタンバイ環境）も作成可能
@@ -95,11 +99,14 @@ const greenJenkinsInstance = createJenkinsInstance({
     jenkinsVersion: jenkinsVersion,
     recoveryMode: true,  // 必要に応じてリカバリーモードを有効化
     color: "green"
-}, [
-    ...efsMountTargets,                  // EFSマウントターゲットへの依存
-    securityGroups.jenkinsSecurityGroup, // セキュリティグループへの依存
-    loadBalancer.greenTargetGroup,       // ターゲットグループへの依存
-    jenkinsEfs.jenkinsAccessPoint        // EFSアクセスポイントへの依存
+});
+
+// 明示的に依存関係を設定（各リソースに対して）
+dependsOn(greenJenkinsInstance.jenkinsInstance, [
+    ...efsMountTargets,
+    securityGroups.jenkinsSecurityGroup,
+    loadBalancer.greenTargetGroup,
+    jenkinsEfs.jenkinsAccessPoint
 ]);
 */
 
@@ -113,10 +120,22 @@ const jenkinsAgents = createJenkinsAgentFleet({
     keyName: config.get("keyName"),
     maxTargetCapacity: config.getNumber("maxTargetCapacity") || 10,
     spotPrice: config.get("spotPrice") || "0.10"
-}, [
-    ...networkDependencies,
-    securityGroups.jenkinsAgentSecurityGroup
-]);
+});
+
+// 明示的に依存関係を設定
+if (jenkinsAgents.agentRole) {
+    dependsOn(jenkinsAgents.agentRole, [
+        ...networkDependencies,
+        securityGroups.jenkinsAgentSecurityGroup
+    ]);
+}
+
+if (jenkinsAgents.spotFleetRequest) {
+    dependsOn(jenkinsAgents.spotFleetRequest, [
+        jenkinsAgents.launchTemplate,
+        jenkinsAgents.spotFleetRole
+    ]);
+}
 
 // エクスポート
 export const vpcId = network.vpc.id;

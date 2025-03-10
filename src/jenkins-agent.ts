@@ -2,6 +2,7 @@ import * as pulumi from "@pulumi/pulumi";
 import * as aws from "@pulumi/aws";
 import * as fs from "fs";
 import * as path from "path";
+import { dependsOn } from "./dependency-utils";
 
 interface JenkinsAgentInput {
     projectName: string;
@@ -46,9 +47,9 @@ export function createJenkinsAgentFleet(input: JenkinsAgentInput, dependencies?:
 
     // エージェント用のIAMロールとインスタンスプロファイルを作成
     // 既存のロールが指定されていない場合のみ作成
-    let agentRole: aws.iam.Role;
-    let agentPolicyAttachments: aws.iam.RolePolicyAttachment[];
-    let agentProfile: aws.iam.InstanceProfile;
+    let agentRole: aws.iam.Role | undefined;
+    let agentPolicyAttachments: aws.iam.RolePolicyAttachment[] = [];
+    let agentProfile: aws.iam.InstanceProfile | undefined;
     let instanceProfileArn: pulumi.Output<string>;
 
     if (input.agentRoleArn) {
@@ -71,31 +72,45 @@ export function createJenkinsAgentFleet(input: JenkinsAgentInput, dependencies?:
                 Name: `${input.projectName}-agent-role-${input.environment}`,
                 Environment: input.environment,
             },
-            dependsOn: dependencies,
         });
 
-        // 必要なポリシーをアタッチ
-        agentPolicyAttachments = [
-            new aws.iam.RolePolicyAttachment(`${input.projectName}-agent-ssm-policy`, {
-                role: agentRole.name,
-                policyArn: "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore",
-                dependsOn: [agentRole],
-            }),
-            new aws.iam.RolePolicyAttachment(`${input.projectName}-agent-efs-policy`, {
-                role: agentRole.name,
-                policyArn: "arn:aws:iam::aws:policy/AmazonElasticFileSystemClientReadWriteAccess",
-                dependsOn: [agentRole],
-            }),
-        ];
+        // 依存関係を別途設定
+        if (dependencies && dependencies.length > 0 && agentRole) {
+            agentRole = dependsOn(agentRole, dependencies);
+        }
 
+        // 必要なポリシーをアタッチ
+        const ssmPolicy = new aws.iam.RolePolicyAttachment(`${input.projectName}-agent-ssm-policy`, {
+            role: agentRole.name,
+            policyArn: "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore",
+        });
+        
+        const efsPolicy = new aws.iam.RolePolicyAttachment(`${input.projectName}-agent-efs-policy`, {
+            role: agentRole.name,
+            policyArn: "arn:aws:iam::aws:policy/AmazonElasticFileSystemClientReadWriteAccess",
+        });
+
+        // 依存関係を設定
+        if (agentRole) {
+            agentPolicyAttachments = [
+                dependsOn(ssmPolicy, [agentRole]),
+                dependsOn(efsPolicy, [agentRole])
+            ];
+        }
+
+        // インスタンスプロファイル
         agentProfile = new aws.iam.InstanceProfile(`${input.projectName}-agent-profile`, {
             role: agentRole.name,
             tags: {
                 Name: `${input.projectName}-agent-profile-${input.environment}`,
                 Environment: input.environment,
             },
-            dependsOn: [...agentPolicyAttachments, agentRole],
         });
+        
+        // 依存関係を設定
+        if (agentProfile && agentPolicyAttachments.length > 0 && agentRole) {
+            agentProfile = dependsOn(agentProfile, [...agentPolicyAttachments, agentRole]);
+        }
 
         instanceProfileArn = agentProfile.arn;
     }
@@ -151,22 +166,23 @@ export function createJenkinsAgentFleet(input: JenkinsAgentInput, dependencies?:
         userData: pulumi.output(Buffer.from(userDataScript).toString("base64")),
     };
 
-    // 依存関係がある場合は追加
+    // Launch Templateの作成
+    let launchTemplate = new aws.ec2.LaunchTemplate(
+        `${input.projectName}-agent-lt`, 
+        launchTemplateArgs
+    );
+
+    // 依存関係を設定
     const fullDependencies = [...(dependencies || [])];
     if (agentProfile) {
         fullDependencies.push(agentProfile);
     }
     if (fullDependencies.length > 0) {
-        launchTemplateArgs.dependsOn = fullDependencies;
+        launchTemplate = dependsOn(launchTemplate, fullDependencies);
     }
 
-    const launchTemplate = new aws.ec2.LaunchTemplate(
-        `${input.projectName}-agent-lt`, 
-        launchTemplateArgs
-    );
-
     // SpotFleet用IAMロール
-    const spotFleetRole = new aws.iam.Role(`${input.projectName}-spotfleet-role`, {
+    let spotFleetRole = new aws.iam.Role(`${input.projectName}-spotfleet-role`, {
         name: `${input.projectName}-spotfleet-role-${input.environment}`,
         assumeRolePolicy: JSON.stringify({
             Version: "2012-10-17",
@@ -181,8 +197,12 @@ export function createJenkinsAgentFleet(input: JenkinsAgentInput, dependencies?:
         managedPolicyArns: [
             "arn:aws:iam::aws:policy/service-role/AmazonEC2SpotFleetTaggingRole",
         ],
-        dependsOn: fullDependencies,
     });
+
+    // 依存関係を設定
+    if (fullDependencies.length > 0) {
+        spotFleetRole = dependsOn(spotFleetRole, fullDependencies);
+    }
 
     // SpotFleetリクエスト設定
     try {
@@ -211,23 +231,28 @@ export function createJenkinsAgentFleet(input: JenkinsAgentInput, dependencies?:
             },
         };
 
-        // 依存関係の追加
-        spotFleetRequestArgs.dependsOn = [...fullDependencies, launchTemplate, spotFleetRole];
-
-        const spotFleetRequest = new aws.ec2.SpotFleetRequest(
+        // SpotFleetリクエストの作成
+        let spotFleetRequest = new aws.ec2.SpotFleetRequest(
             `${input.projectName}-spot-fleet`, 
             spotFleetRequestArgs
         );
 
+        // 依存関係を設定
+        spotFleetRequest = dependsOn(spotFleetRequest, [...fullDependencies, launchTemplate, spotFleetRole]);
+
         // SNSトピック
-        const spotFleetSnsTopic = new aws.sns.Topic(`${input.projectName}-spot-fleet-alerts`, {
+        let spotFleetSnsTopic = new aws.sns.Topic(`${input.projectName}-spot-fleet-alerts`, {
             name: `${input.projectName}-spot-fleet-alerts-${input.environment}`,
             tags: {
                 Name: `${input.projectName}-spot-fleet-alerts-${input.environment}`,
                 Environment: input.environment,
             },
-            dependsOn: fullDependencies,
         });
+
+        // 依存関係を設定
+        if (fullDependencies.length > 0) {
+            spotFleetSnsTopic = dependsOn(spotFleetSnsTopic, fullDependencies);
+        }
 
         return {
             agentRole,
