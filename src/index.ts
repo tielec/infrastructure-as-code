@@ -79,7 +79,7 @@ const jenkinsAgents = createJenkinsAgentFleet({
     vpcId: network.vpc.id,
     subnetIds: [network.privateSubnetA.id, network.privateSubnetB.id],
     securityGroupId: securityGroups.jenkinsAgentSecurityGroup.id,
-    instanceProfileArn: pulumi.interpolate`${projectName}-agent-profile-${environment}`, // IAMプロファイルのARN
+    instanceProfileArn: pulumi.interpolate`arn:aws:iam::${aws.getCallerIdentity().then(id => id.accountId)}:instance-profile/${projectName}-agent-profile-${environment}`,
     keyName: config.get("keyName"),
     maxTargetCapacity: config.getNumber("maxTargetCapacity") || 10,
     spotPrice: config.get("spotPrice") || "0.10"
