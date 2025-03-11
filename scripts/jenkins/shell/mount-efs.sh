@@ -1,5 +1,5 @@
 #!/bin/bash
-# EFSマウントスクリプト - 改善版
+# EFSマウント用スクリプト - 改善版
 
 # エラーハンドリングを設定
 set -e
@@ -12,21 +12,15 @@ log() {
 log "EFSマウント処理を開始します"
 
 # マウントポイントの作成
-MOUNT_POINT="/mnt/efs"
+MOUNT_POINT="/var/lib/jenkins"
 log "マウントポイントの作成: $MOUNT_POINT"
 mkdir -p $MOUNT_POINT
 chmod 755 $MOUNT_POINT
 
-# EFSファイルシステムIDとリージョンを設定
-EFS_ID="${efsFileSystemId}"
-AWS_REGION="${AWS_REGION}"
+# AWS リージョンを取得
+AWS_REGION=$(curl -s http://169.254.169.254/latest/meta-data/placement/region)
 
-# リージョンが空の場合はメタデータから取得
-if [ -z "$AWS_REGION" ]; then
-  AWS_REGION=$(curl -s http://169.254.169.254/latest/meta-data/placement/region)
-fi
-
-log "EFS ID: $EFS_ID, リージョン: $AWS_REGION"
+log "EFS ID: $EFS_FILE_SYSTEM_ID, リージョン: $AWS_REGION"
 
 # 既存のEFSエントリを/etc/fstabから削除
 log "/etc/fstabから既存のEFSエントリを削除"
@@ -35,7 +29,7 @@ sed -i '/fs-/d' /etc/fstab
 
 # 接続テスト
 log "EFSエンドポイントへの接続テスト"
-EFS_DNS="$EFS_ID.efs.$AWS_REGION.amazonaws.com"
+EFS_DNS="$EFS_FILE_SYSTEM_ID.efs.$AWS_REGION.amazonaws.com"
 if ping -c 2 $EFS_DNS > /dev/null 2>&1; then
   log "EFSエンドポイントに到達できます: $EFS_DNS"
 else
@@ -45,8 +39,14 @@ else
 fi
 
 # EFSマウントエントリを/etc/fstabに追加
-log "fstabにNFSマウントエントリを追加"
-echo "$EFS_DNS:/ $MOUNT_POINT nfs4 nfsvers=4.1,rsize=1048576,wsize=1048576,hard,timeo=600,retrans=2,noresvport 0 0" >> /etc/fstab
+# EFSアクセスポイントオプションの設定
+ACCESS_POINT_OPTIONS=""
+if [ -n "$EFS_ACCESS_POINT_ID" ]; then
+  ACCESS_POINT_OPTIONS=",accesspoint=$EFS_ACCESS_POINT_ID"
+fi
+
+log "fstabにEFSマウントエントリを追加"
+echo "$EFS_FILE_SYSTEM_ID:/ $MOUNT_POINT efs _netdev,tls,iam$ACCESS_POINT_OPTIONS 0 0" >> /etc/fstab
 
 # fstabの内容を表示
 log "/etc/fstabの内容:"
@@ -86,29 +86,9 @@ done
 
 log "EFSマウント成功"
 
-# Jenkinsのホームディレクトリを作成
-JENKINS_DATA_DIR="$MOUNT_POINT/jenkins-home"
-log "Jenkinsデータディレクトリを作成: $JENKINS_DATA_DIR"
-mkdir -p $JENKINS_DATA_DIR
-chown -R 994:994 $JENKINS_DATA_DIR
-chmod 755 $JENKINS_DATA_DIR
-
-# Jenkinsホームディレクトリへのシンボリックリンク
-JENKINS_HOME="/var/lib/jenkins"
-log "Jenkinsホームディレクトリへのシンボリックリンクを設定: $JENKINS_HOME -> $JENKINS_DATA_DIR"
-
-# 既存のディレクトリ/リンクを処理
-if [ -L "$JENKINS_HOME" ]; then
-  log "既存のシンボリックリンクを削除"
-  rm -f "$JENKINS_HOME"
-elif [ -d "$JENKINS_HOME" ]; then
-  BACKUP_DIR="${JENKINS_HOME}.bak.$(date +%Y%m%d%H%M%S)"
-  log "既存のディレクトリをバックアップ: $JENKINS_HOME -> $BACKUP_DIR"
-  mv "$JENKINS_HOME" "$BACKUP_DIR"
-fi
-
-# シンボリックリンクを作成
-ln -sf "$JENKINS_DATA_DIR" "$JENKINS_HOME"
-log "シンボリックリンクの作成完了"
+# 所有者の設定
+log "Jenkinsユーザーに所有権を設定"
+chown -R jenkins:jenkins $MOUNT_POINT
+chmod 755 $MOUNT_POINT
 
 log "EFSマウント処理が完了しました"
