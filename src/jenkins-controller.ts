@@ -31,16 +31,22 @@ function loadScript(scriptPath: string): string {
 }
 
 // ユーザーデータテンプレートを準備して変数を置換する関数
-function prepareUserData(templatePath: string, variables: Record<string, string>): string {
-    let template = loadScript(templatePath);
+// 引数の型を修正して pulumi.Input や pulumi.Output も受け入れるようにする
+function prepareUserData(templatePath: string, variables: Record<string, pulumi.Input<string> | string>): pulumi.Output<string> {
+    const template = loadScript(templatePath);
     
-    // テンプレート内の変数を置換
-    Object.entries(variables).forEach(([key, value]) => {
-        const regex = new RegExp(`\\$\\{${key}\\}`, 'g');
-        template = template.replace(regex, value || '');
+    // 全ての変数をOutputにまとめる
+    return pulumi.all(Object.entries(variables).map(([key, value]) => {
+        return pulumi.output(value).apply(resolvedValue => ({ key, value: resolvedValue || '' }));
+    })).apply(resolvedVars => {
+        // 変数の置換処理
+        let result = template;
+        for (const { key, value } of resolvedVars) {
+            const regex = new RegExp(`\\$\\{${key}\\}`, 'g');
+            result = result.replace(regex, value);
+        }
+        return result;
     });
-    
-    return template;
 }
 
 // SSMパラメータを作成する関数
@@ -407,11 +413,11 @@ export function createJenkinsInstance(input: JenkinsInstanceInput, dependencies?
         JENKINS_VERSION: jenkinsVersion,
         JENKINS_COLOR: input.color,
         JENKINS_MODE: recoveryMode ? "recovery" : "normal",
-        EFS_ID: input.efsFileSystemId ? pulumi.output(input.efsFileSystemId).apply(id => id || '') : '',
+        EFS_ID: input.efsFileSystemId || '',
     };
 
     // 別ファイルからユーザーデータスクリプトを読み込み、変数を置換
-    const userDataScript = prepareUserData('../scripts/jenkins/shell/controller-user-data.sh', userDataVariables);
+    const userDataContent = prepareUserData('../scripts/jenkins/shell/controller-user-data.sh', userDataVariables);
 
     // 最新のAmazon Linux 2023 AMIを取得
     const ami = pulumi.output(aws.ec2.getAmi({
@@ -515,6 +521,11 @@ export function createJenkinsInstance(input: JenkinsInstanceInput, dependencies?
     // 依存関係を設定
     jenkinsInstanceProfile = dependsOn(jenkinsInstanceProfile, [jenkinsRole, ...rolePolicyAttachments]);
 
+    // ユーザーデータをBase64エンコード
+    const userData = userDataContent.apply(script => 
+        Buffer.from(script).toString("base64")
+    );
+
     // EC2インスタンスの作成
     let jenkinsInstance = new aws.ec2.Instance(`${input.projectName}-jenkins-${input.color}`, {
         ami: ami.id,
@@ -523,7 +534,7 @@ export function createJenkinsInstance(input: JenkinsInstanceInput, dependencies?
         vpcSecurityGroupIds: [input.securityGroupId],
         keyName: keyName,
         iamInstanceProfile: jenkinsInstanceProfile.name,
-        userData: pulumi.output(Buffer.from(userDataScript).toString("base64")),
+        userData: userData,
         rootBlockDevice: {
             volumeSize: 50,
             volumeType: "gp3",
@@ -574,6 +585,9 @@ export function createJenkinsEfs(
     subnetIds: pulumi.Input<string>[],
     dependencies?: pulumi.Resource[]
 ) {
+    // 内容は変更なし
+    // ...
+
     // EFSセキュリティグループ - 既に定義済みのため、ここでは使用するだけ
     const efsSecurityGroupId = securityGroupId;
 
