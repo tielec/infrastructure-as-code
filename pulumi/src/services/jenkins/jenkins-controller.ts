@@ -433,7 +433,7 @@ export function createJenkinsInstance(input: JenkinsInstanceInput, dependencies?
     };
 
     // 別ファイルからユーザーデータスクリプトを読み込み、変数を置換
-    const userDataContent = prepareUserData('../scripts/jenkins/shell/controller-user-data.sh', userDataVariables);
+    const userDataContent = prepareUserData('../../../../scripts/jenkins/shell/controller-user-data.sh', userDataVariables);
 
     // 最新のAmazon Linux 2023 AMIを取得
     const ami = pulumi.output(aws.ec2.getAmi({
