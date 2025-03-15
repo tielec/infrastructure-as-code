@@ -86,8 +86,14 @@ echo "EFSマウント成功"
 JENKINS_DATA_DIR="$MOUNT_POINT/jenkins-home"
 echo "Jenkinsデータディレクトリを作成: $JENKINS_DATA_DIR"
 mkdir -p $JENKINS_DATA_DIR
-chown -R 994:994 $JENKINS_DATA_DIR
-chmod 755 $JENKINS_DATA_DIR
+
+# UID/GIDを正しく取得する（通常は994:994がJenkins）
+JENKINS_UID=$(id -u jenkins 2>/dev/null || echo 994)
+JENKINS_GID=$(getent group jenkins 2>/dev/null | cut -d: -f3 || echo 994)
+
+# 所有権とパーミッションを適切に設定
+chown -R $JENKINS_UID:$JENKINS_GID $JENKINS_DATA_DIR
+chmod -R 755 $JENKINS_DATA_DIR
 
 # Jenkinsホームディレクトリへのシンボリックリンク
 JENKINS_HOME="/var/lib/jenkins"
