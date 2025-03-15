@@ -8,24 +8,11 @@
   gather_facts: yes
   
   vars:
-    # プロジェクト全体の設定
-    project_name: jenkins-infra
+    # 固定の値を使用する
+    project_name: "jenkins-infra"
     env_name: "{{ env | default('dev') }}"
-    aws_region_name: "{{ aws_region | default('ap-northeast-1') }}"
+    aws_region_name: "ap-northeast-1"
     pulumi_path: "{{ playbook_dir }}/../../pulumi"
-    
-    # 各段階の実行フラグ - コマンドラインから上書き可能
-    run_network: "{{ run_network | default(true) }}"
-    run_security: "{{ run_security | default(false) }}"
-    run_storage: "{{ run_storage | default(false) }}"
-    run_loadbalancer: "{{ run_loadbalancer | default(false) }}"
-    run_controller: "{{ run_controller | default(false) }}"
-    run_agent: "{{ run_agent | default(false) }}"
-    run_application: "{{ run_application | default(false) }}"
-    
-    # Jenkins設定
-    jenkins_version: "{{ jenkins_version | default('latest') }}"
-    recovery_mode: "{{ recovery_mode | default(false) }}"
     
   tasks:
     - name: Display pipeline information
@@ -37,14 +24,7 @@
           Environment: {{ env_name }}
           AWS Region: {{ aws_region_name }}
           
-          Execution Plan:
-          - Network: {{ run_network }}
-          - Security: {{ run_security }}
-          - Storage: {{ run_storage }}
-          - Load Balancer: {{ run_loadbalancer }}
-          - Jenkins Controller: {{ run_controller }}
-          - Jenkins Agent: {{ run_agent }}
-          - Jenkins Application: {{ run_application }}
+          Executing network deployment...
     
     - name: Check Ansible version
       ansible.builtin.debug:
@@ -85,59 +65,6 @@
     # ネットワークインフラのデプロイ
     - name: Deploy Network Infrastructure
       ansible.builtin.include_tasks: deploy_jenkins_network.yml
-      vars:
-        environment: "{{ env_name }}"
-        aws_region: "{{ aws_region_name }}"
-      when: run_network | bool
-    
-    # 以下はコメントアウト - 段階的に実装していく
-    # セキュリティグループのデプロイ
-    # - name: Deploy Security Groups
-    #   ansible.builtin.include_tasks: deploy_jenkins_security.yml
-    #   vars:
-    #     environment: "{{ env_name }}"
-    #     aws_region: "{{ aws_region_name }}"
-    #   when: run_security | bool and network_deployed | default(false) | bool
-    
-    # ストレージ（EFS）のデプロイ
-    # - name: Deploy Storage (EFS)
-    #   ansible.builtin.include_tasks: deploy_jenkins_storage.yml
-    #   vars:
-    #     environment: "{{ env_name }}"
-    #     aws_region: "{{ aws_region_name }}"
-    #   when: run_storage | bool and security_deployed | default(false) | bool
-    
-    # ロードバランサーのデプロイ
-    # - name: Deploy Load Balancer
-    #   ansible.builtin.include_tasks: deploy_jenkins_loadbalancer.yml
-    #   vars:
-    #     environment: "{{ env_name }}"
-    #     aws_region: "{{ aws_region_name }}"
-    #   when: run_loadbalancer | bool and security_deployed | default(false) | bool
-    
-    # Jenkinsコントローラーのデプロイ
-    # - name: Deploy Jenkins Controller
-    #   ansible.builtin.include_tasks: deploy_jenkins_controller.yml
-    #   vars:
-    #     environment: "{{ env_name }}"
-    #     aws_region: "{{ aws_region_name }}"
-    #   when: run_controller | bool and storage_deployed | default(false) | bool and loadbalancer_deployed | default(false) | bool
-    
-    # Jenkinsエージェントのデプロイ
-    # - name: Deploy Jenkins Agent
-    #   ansible.builtin.include_tasks: deploy_jenkins_agent.yml
-    #   vars:
-    #     environment: "{{ env_name }}"
-    #     aws_region: "{{ aws_region_name }}"
-    #   when: run_agent | bool and controller_deployed | default(false) | bool
-    
-    # Jenkinsアプリケーション設定のデプロイ
-    # - name: Deploy Jenkins Application Configuration
-    #   ansible.builtin.include_tasks: deploy_jenkins_application.yml
-    #   vars:
-    #     environment: "{{ env_name }}"
-    #     aws_region: "{{ aws_region_name }}"
-    #   when: run_application | bool and controller_deployed | default(false) | bool
     
     # デプロイメント結果サマリー
     - name: Deployment Summary
@@ -146,13 +73,11 @@
           Jenkins Infrastructure Deployment Summary
           =======================================
           Network: {{ network_deployed | default(false) }}
-          # Security: {{ security_deployed | default(false) }}
-          # Storage: {{ storage_deployed | default(false) }}
-          # Load Balancer: {{ loadbalancer_deployed | default(false) }}
-          # Jenkins Controller: {{ controller_deployed | default(false) }}
-          # Jenkins Agent: {{ agent_deployed | default(false) }}
-          # Jenkins Application: {{ application_deployed | default(false) }}
           
-          # Access Information:
-          # Jenkins URL: http://{{ jenkins_url | default('Not available yet') }}
-          # SSH Access: ssh -i <your-key.pem> ec2-user@{{ jenkins_ip | default('Not available yet') }}
+          # 今後追加予定:
+          # Security: (Not deployed yet)
+          # Storage: (Not deployed yet)
+          # Load Balancer: (Not deployed yet)
+          # Jenkins Controller: (Not deployed yet)
+          # Jenkins Agent: (Not deployed yet)
+          # Jenkins Application: (Not deployed yet)

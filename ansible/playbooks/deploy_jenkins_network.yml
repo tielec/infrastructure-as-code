@@ -17,7 +17,7 @@
     - name: Check if Pulumi stack exists
       ansible.builtin.shell: |
         cd {{ pulumi_path }}/network
-        pulumi stack ls | grep {{ environment }} || echo "stack_not_found"
+        pulumi stack ls | grep {{ env_name }} || echo "stack_not_found"
       register: stack_select_result
       changed_when: false
       failed_when: false
@@ -25,7 +25,7 @@
     - name: Initialize Pulumi stack if not exists
       ansible.builtin.shell: |
         cd {{ pulumi_path }}/network
-        pulumi stack init {{ environment }}
+        pulumi stack init {{ env_name }}
       when: "'stack_not_found' in stack_select_result.stdout"
     
     - name: Install npm dependencies if needed
@@ -38,8 +38,8 @@
     - name: Create or update Pulumi config for environment
       ansible.builtin.shell: |
         cd {{ pulumi_path }}/network
-        pulumi stack select {{ environment }}
-        pulumi config set aws:region {{ aws_region }}
+        pulumi stack select {{ env_name }}
+        pulumi config set aws:region {{ aws_region_name }}
         pulumi config set jenkins-network:projectName {{ project_name }}
       register: pulumi_config_result
       changed_when: pulumi_config_result.rc == 0
