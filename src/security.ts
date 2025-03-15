@@ -29,6 +29,14 @@ export function createSecurityGroups(
                 cidrBlocks: ["0.0.0.0/0"],
                 description: "HTTPS access",
             },
+            // Jenkins HTTP
+            {
+                protocol: "tcp",
+                fromPort: 8080,
+                toPort: 8080,
+                cidrBlocks: ["0.0.0.0/0"], // または適切に制限
+                description: "Jenkins HTTP access",
+            },
         ],
         egress: [{
             protocol: "-1",

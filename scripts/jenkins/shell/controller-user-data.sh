@@ -5,7 +5,7 @@ exec > >(tee /var/log/user-data.log|logger -t user-data -s 2>/dev/console) 2>&1
 
 # システムの更新とSSMエージェントのインストール
 dnf update -y
-dnf install -y amazon-ssm-agent aws-cli
+dnf install -y amazon-ssm-agent aws-cli jq
 
 # SSMエージェントの起動
 systemctl enable amazon-ssm-agent
@@ -26,77 +26,155 @@ echo "DEBUG: JENKINS_VERSION=${JENKINS_VERSION}"
 echo "DEBUG: JENKINS_MODE=${JENKINS_MODE}"
 echo "DEBUG: EFS_ID=${EFS_ID}"
 
+# リージョンとインスタンスIDが取得できない場合のエラー処理
+if [ -z "$REGION" ]; then
+  echo "ERROR: Failed to detect region from metadata service"
+  # AZ情報からリージョンを推測してみる
+  AZ=$(curl -s -H "X-aws-ec2-metadata-token: $TOKEN" http://169.254.169.254/latest/meta-data/placement/availability-zone)
+  if [ -n "$AZ" ]; then
+    # AZ名からリージョン名を抽出（例：us-east-1aからus-east-1を抽出）
+    REGION=${AZ%?}
+    echo "Extracted region $REGION from AZ $AZ"
+  else
+    # 環境変数で設定されているかチェック
+    if [ -n "$AWS_REGION" ]; then
+      REGION=$AWS_REGION
+      echo "Using AWS_REGION environment variable: $REGION"
+    else
+      # 最終手段としてデフォルト値を設定
+      REGION="us-east-1"
+      echo "Using default region: $REGION"
+    fi
+  fi
+fi
+
 if [ -z "$INSTANCE_ID" ]; then
   echo "ERROR: Failed to detect instance ID from metadata service"
   echo "Cannot proceed with SSM commands without instance ID"
   exit 1
 fi
 
-# SSMドキュメントを実行
-echo "Running Jenkins installation via SSM Documents"
+# SSMコマンドを実行し、完了を待機する関数
+execute_ssm_command_and_wait() {
+  local document_name=$1
+  local comment=$2
+  local additional_params=$3
+
+  echo "Running $document_name..."
+  
+  # SSMコマンドを実行
+  local cmd_json=$(aws ssm send-command \
+    --region "$REGION" \
+    --document-name "$document_name" \
+    --targets "Key=instanceids,Values=$INSTANCE_ID" \
+    --parameters "ProjectName=${PROJECT_NAME},Environment=${ENVIRONMENT}$additional_params" \
+    --comment "$comment" \
+    --max-concurrency 1 \
+    --max-errors 0 \
+    --output json)
+  
+  # コマンドIDを抽出
+  local cmd_id=$(echo "$cmd_json" | jq -r '.Command.CommandId')
+  
+  if [ -z "$cmd_id" ] || [ "$cmd_id" == "null" ]; then
+    echo "ERROR: Failed to execute $document_name. Command ID not returned."
+    return 1
+  fi
+  
+  echo "Command ID: $cmd_id - Waiting for completion..."
+  
+  # コマンドの完了を待機
+  local status="Pending"
+  local max_wait=600  # 10分タイムアウト
+  local wait_interval=10
+  local elapsed=0
+  
+  while [ "$status" == "Pending" ] || [ "$status" == "InProgress" ]; do
+    sleep $wait_interval
+    elapsed=$((elapsed + wait_interval))
+    
+    # コマンドの状態を確認
+    local cmd_status_json=$(aws ssm get-command-invocation \
+      --region "$REGION" \
+      --command-id "$cmd_id" \
+      --instance-id "$INSTANCE_ID" \
+      --output json 2>/dev/null || echo '{"Status":"Failed"}')
+    
+    status=$(echo "$cmd_status_json" | jq -r '.Status')
+    
+    echo "Status: $status - Elapsed time: $elapsed seconds"
+    
+    # タイムアウトチェック
+    if [ $elapsed -ge $max_wait ]; then
+      echo "ERROR: Timed out waiting for $document_name to complete"
+      return 1
+    fi
+  done
+  
+  # 実行結果の確認
+  if [ "$status" != "Success" ]; then
+    echo "ERROR: $document_name failed with status: $status"
+    # エラー出力を表示
+    echo "Command output:"
+    echo "$cmd_status_json" | jq -r '.StandardOutputContent'
+    echo "Error output:"
+    echo "$cmd_status_json" | jq -r '.StandardErrorContent'
+    return 1
+  fi
+  
+  echo "$document_name completed successfully"
+  return 0
+}
+
+# SSMドキュメントを順番に実行
+echo "Starting Jenkins installation via SSM Documents"
 
 # 1. Jenkins Install
-echo "Running Jenkins install document"
-aws ssm send-command \
-  --region "$REGION" \
-  --document-name "${PROJECT_NAME}-jenkins-install-${JENKINS_COLOR}-${ENVIRONMENT}" \
-  --targets "Key=instanceids,Values=$INSTANCE_ID" \
-  --parameters "ProjectName=${PROJECT_NAME},Environment=${ENVIRONMENT},JenkinsVersion=${JENKINS_VERSION},JenkinsColor=${JENKINS_COLOR}" \
-  --comment "Installing Jenkins" \
-  --max-concurrency 1 \
-  --max-errors 0 || echo "Warning: Failed to run install document"
+execute_ssm_command_and_wait \
+  "${PROJECT_NAME}-jenkins-install-${JENKINS_COLOR}-${ENVIRONMENT}" \
+  "Installing Jenkins" \
+  ",JenkinsVersion=${JENKINS_VERSION},JenkinsColor=${JENKINS_COLOR}"
 
-# 実行結果を確認（5秒待機）
-sleep 5
+if [ $? -ne 0 ]; then
+  echo "Jenkins installation failed, exiting"
+  exit 1
+fi
 
 # 2. EFS Mount (if EFS ID is provided)
 if [ -n "${EFS_ID}" ]; then
-  echo "Running EFS mount document"
-  aws ssm send-command \
-    --region "$REGION" \
-    --document-name "${PROJECT_NAME}-jenkins-mount-efs-${JENKINS_COLOR}-${ENVIRONMENT}" \
-    --targets "Key=instanceids,Values=$INSTANCE_ID" \
-    --parameters "ProjectName=${PROJECT_NAME},Environment=${ENVIRONMENT},EfsId=${EFS_ID},Region=$REGION" \
-    --comment "Mounting EFS" \
-    --max-concurrency 1 \
-    --max-errors 0 || echo "Warning: Failed to run EFS mount document"
+  execute_ssm_command_and_wait \
+    "${PROJECT_NAME}-jenkins-mount-efs-${JENKINS_COLOR}-${ENVIRONMENT}" \
+    "Mounting EFS" \
+    ",EfsId=${EFS_ID},Region=$REGION"
   
-  # 実行結果を確認（5秒待機）
-  sleep 5
+  if [ $? -ne 0 ]; then
+    echo "EFS mount failed, exiting"
+    exit 1
+  fi
 else
   echo "No EFS specified, skipping EFS mount"
 fi
 
 # 3. Jenkins Configure
-echo "Running Jenkins configure document"
-aws ssm send-command \
-  --region "$REGION" \
-  --document-name "${PROJECT_NAME}-jenkins-configure-${JENKINS_COLOR}-${ENVIRONMENT}" \
-  --targets "Key=instanceids,Values=$INSTANCE_ID" \
-  --parameters "ProjectName=${PROJECT_NAME},Environment=${ENVIRONMENT},JenkinsMode=${JENKINS_MODE},JenkinsColor=${JENKINS_COLOR}" \
-  --comment "Configuring Jenkins" \
-  --max-concurrency 1 \
-  --max-errors 0 || echo "Warning: Failed to run configure document"
+execute_ssm_command_and_wait \
+  "${PROJECT_NAME}-jenkins-configure-${JENKINS_COLOR}-${ENVIRONMENT}" \
+  "Configuring Jenkins" \
+  ",JenkinsMode=${JENKINS_MODE},JenkinsColor=${JENKINS_COLOR}"
 
-# 実行結果を確認（5秒待機）
-sleep 5
+if [ $? -ne 0 ]; then
+  echo "Jenkins configuration failed, exiting"
+  exit 1
+fi
 
 # 4. Jenkins Startup
-echo "Running Jenkins startup document"
-aws ssm send-command \
-  --region "$REGION" \
-  --document-name "${PROJECT_NAME}-jenkins-startup-${JENKINS_COLOR}-${ENVIRONMENT}" \
-  --targets "Key=instanceids,Values=$INSTANCE_ID" \
-  --parameters "ProjectName=${PROJECT_NAME},Environment=${ENVIRONMENT},JenkinsColor=${JENKINS_COLOR}" \
-  --comment "Starting Jenkins" \
-  --max-concurrency 1 \
-  --max-errors 0 || echo "Warning: Failed to run startup document"
+execute_ssm_command_and_wait \
+  "${PROJECT_NAME}-jenkins-startup-${JENKINS_COLOR}-${ENVIRONMENT}" \
+  "Starting Jenkins" \
+  ",JenkinsColor=${JENKINS_COLOR}"
 
-echo "Jenkins setup initiated through SSM"
-
-# 失敗した場合にエラーログを残す
 if [ $? -ne 0 ]; then
-  echo "ERROR: One or more SSM commands failed. Check the AWS SSM console for details."
-  # SSMエージェントのステータスを確認
-  systemctl status amazon-ssm-agent || true
+  echo "Jenkins startup failed, exiting"
+  exit 1
 fi
+
+echo "Jenkins setup completed successfully through SSM"
