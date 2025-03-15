@@ -49,7 +49,7 @@ function prepareUserData(templatePath: string, variables: Record<string, pulumi.
     });
 }
 
-// SSMパラメータを作成する関数
+// SSMパラメータを作成する関数 - Advanced ティア対応
 function createSSMParameter(
     name: string,
     value: string,
@@ -59,10 +59,18 @@ function createSSMParameter(
     dependencies?: pulumi.Resource[]
 ): aws.ssm.Parameter {
     const paramType = secure ? "SecureString" : "String";
+    
+    // 値のサイズが4000バイトを超える場合はAdvancedティアを使用
+    // 余裕を持って4000バイトで判定（4096ギリギリだとリスクがある）
+    const tier = value.length > 4000 ? "Advanced" : "Standard";
+    
+    console.log(`Creating Parameter /${projectName}/${environment}/jenkins/${name} with tier: ${tier}`);
+    
     const param = new aws.ssm.Parameter(`${projectName}-${name}`, {
         name: `/${projectName}/${environment}/jenkins/${name}`,
         type: paramType,
         value: value,
+        tier: tier,  // サイズに基づいて自動的にティアを決定
         overwrite: true,
         tags: {
             Environment: environment,
