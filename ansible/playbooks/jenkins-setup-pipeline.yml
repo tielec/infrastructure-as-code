@@ -14,6 +14,9 @@
     aws_region_name: "ap-northeast-1"
     pulumi_path: "{{ playbook_dir }}/../../pulumi"
     
+    # 各段階の実行フラグ - コマンドラインから上書き可能
+    run_security: "{{ run_security | default(true) }}"
+    
   tasks:
     - name: Display pipeline information
       ansible.builtin.debug:
@@ -24,7 +27,9 @@
           Environment: {{ env_name }}
           AWS Region: {{ aws_region_name }}
           
-          Executing network deployment...
+          Execution Plan:
+          - Network: Always run first
+          - Security: {{ run_security }}
     
     - name: Check Ansible version
       ansible.builtin.debug:
@@ -66,6 +71,37 @@
     - name: Deploy Network Infrastructure
       ansible.builtin.include_tasks: deploy_jenkins_network.yml
     
+    # セキュリティグループのデプロイ
+    - name: Deploy Security Groups
+      ansible.builtin.include_tasks: deploy_jenkins_security.yml
+      when: run_security | bool and network_deployed | default(false) | bool
+    
+    # 以下はコメントアウト - 段階的に実装していく
+    # ストレージ（EFS）のデプロイ
+    # - name: Deploy Storage (EFS)
+    #   ansible.builtin.include_tasks: deploy_jenkins_storage.yml
+    #   when: security_deployed | default(false) | bool
+    
+    # ロードバランサーのデプロイ
+    # - name: Deploy Load Balancer
+    #   ansible.builtin.include_tasks: deploy_jenkins_loadbalancer.yml
+    #   when: security_deployed | default(false) | bool
+    
+    # Jenkinsコントローラーのデプロイ
+    # - name: Deploy Jenkins Controller
+    #   ansible.builtin.include_tasks: deploy_jenkins_controller.yml
+    #   when: storage_deployed | default(false) | bool and loadbalancer_deployed | default(false) | bool
+    
+    # Jenkinsエージェントのデプロイ
+    # - name: Deploy Jenkins Agent
+    #   ansible.builtin.include_tasks: deploy_jenkins_agent.yml
+    #   when: controller_deployed | default(false) | bool
+    
+    # Jenkinsアプリケーション設定のデプロイ
+    # - name: Deploy Jenkins Application Configuration
+    #   ansible.builtin.include_tasks: deploy_jenkins_application.yml
+    #   when: controller_deployed | default(false) | bool
+    
     # デプロイメント結果サマリー
     - name: Deployment Summary
       ansible.builtin.debug:
@@ -73,9 +109,9 @@
           Jenkins Infrastructure Deployment Summary
           =======================================
           Network: {{ network_deployed | default(false) }}
+          Security: {{ security_deployed | default(false) }}
           
           # 今後追加予定:
-          # Security: (Not deployed yet)
           # Storage: (Not deployed yet)
           # Load Balancer: (Not deployed yet)
           # Jenkins Controller: (Not deployed yet)

@@ -1,0 +1,146 @@
+---
+# deploy_jenkins_security.yml
+# Jenkinsインフラのセキュリティグループをデプロイ
+
+- name: Deploy Security Groups with Pulumi
+  block:
+    - name: Check if Pulumi security module exists
+      ansible.builtin.stat:
+        path: "{{ pulumi_path }}/security"
+      register: pulumi_security_dir
+      
+    - name: Fail if Pulumi security module doesn't exist
+      ansible.builtin.fail:
+        msg: "Pulumi security module not found at {{ pulumi_path }}/security. Please ensure the repository is properly cloned."
+      when: not pulumi_security_dir.stat.exists
+    
+    - name: Check if AWS credentials are configured
+      ansible.builtin.shell: aws sts get-caller-identity
+      register: aws_cred_check
+      changed_when: false
+      ignore_errors: true
+      
+    - name: Display AWS credentials status
+      ansible.builtin.debug:
+        msg: "AWS credentials: {{ 'Configured correctly' if aws_cred_check.rc == 0 else 'Not configured or invalid' }}"
+    
+    - name: Configure AWS credentials if not already set
+      ansible.builtin.shell: |
+        source /root/infrastructure-as-code/scripts/aws-credentials.sh
+      args:
+        executable: /bin/bash
+      when: aws_cred_check.rc != 0
+      
+    - name: Check if Pulumi stack exists
+      ansible.builtin.shell: |
+        cd {{ pulumi_path }}/security
+        pulumi stack ls | grep {{ env_name }} || echo "stack_not_found"
+      register: stack_select_result
+      changed_when: false
+      failed_when: false
+      environment:
+        AWS_REGION: "{{ aws_region_name }}"
+      
+    - name: Initialize Pulumi stack if not exists
+      ansible.builtin.shell: |
+        cd {{ pulumi_path }}/security
+        pulumi stack init {{ env_name }}
+      when: "'stack_not_found' in stack_select_result.stdout"
+      environment:
+        AWS_REGION: "{{ aws_region_name }}"
+    
+    - name: Install npm dependencies if needed
+      ansible.builtin.shell: |
+        cd {{ pulumi_path }}/security
+        npm install
+      args:
+        creates: "{{ pulumi_path }}/security/node_modules"
+      
+    - name: Create or update Pulumi config for environment
+      ansible.builtin.shell: |
+        cd {{ pulumi_path }}/security
+        pulumi stack select {{ env_name }}
+        pulumi config set aws:region {{ aws_region_name }}
+        pulumi config set jenkins-security:projectName {{ project_name }}
+      register: pulumi_config_result
+      changed_when: pulumi_config_result.rc == 0
+      environment:
+        AWS_REGION: "{{ aws_region_name }}"
+    
+    - name: Verify VPC ID exists from network stack
+      ansible.builtin.shell: |
+        cd {{ pulumi_path }}/network
+        pulumi stack output vpcId
+      register: vpc_id_check
+      changed_when: false
+      failed_when: vpc_id_check.rc != 0
+      environment:
+        AWS_REGION: "{{ aws_region_name }}"
+        
+    - name: Display VPC ID
+      ansible.builtin.debug:
+        msg: "Using VPC ID: {{ vpc_id_check.stdout | trim }}"
+    
+    - name: Preview Pulumi deployment
+      ansible.builtin.shell: |
+        cd {{ pulumi_path }}/security
+        pulumi preview
+      register: pulumi_preview_result
+      changed_when: false
+      environment:
+        AWS_REGION: "{{ aws_region_name }}"
+      
+    - name: Display Pulumi preview
+      ansible.builtin.debug:
+        msg: "{{ pulumi_preview_result.stdout_lines }}"
+      
+    - name: Deploy security stack with Pulumi
+      ansible.builtin.shell: |
+        cd {{ pulumi_path }}/security
+        pulumi up --yes
+      register: pulumi_up_result
+      changed_when: "'No changes required' not in pulumi_up_result.stdout"
+      environment:
+        AWS_REGION: "{{ aws_region_name }}"
+    
+    - name: Extract security group IDs from Pulumi output
+      ansible.builtin.shell: |
+        cd {{ pulumi_path }}/security
+        pulumi stack output albSecurityGroupId
+        pulumi stack output jenkinsSecurityGroupId
+        pulumi stack output jenkinsAgentSecurityGroupId
+        pulumi stack output efsSecurityGroupId
+      register: sg_ids_result
+      changed_when: false
+      environment:
+        AWS_REGION: "{{ aws_region_name }}"
+      
+    - name: Set security facts for use in other playbooks
+      ansible.builtin.set_fact:
+        alb_sg_id: "{{ sg_ids_result.stdout_lines[0] | trim }}"
+        jenkins_sg_id: "{{ sg_ids_result.stdout_lines[1] | trim }}"
+        jenkins_agent_sg_id: "{{ sg_ids_result.stdout_lines[2] | trim }}"
+        efs_sg_id: "{{ sg_ids_result.stdout_lines[3] | trim }}"
+        security_deployed: true
+      
+    - name: Summary of security groups deployment
+      ansible.builtin.debug:
+        msg: |
+          Security Groups Deployed Successfully:
+          ALB Security Group ID: {{ alb_sg_id }}
+          Jenkins Security Group ID: {{ jenkins_sg_id }}
+          Jenkins Agent Security Group ID: {{ jenkins_agent_sg_id }}
+          EFS Security Group ID: {{ efs_sg_id }}
+  
+  rescue:
+    - name: Set security deployment status on failure
+      ansible.builtin.set_fact:
+        security_deployed: false
+      
+    - name: Display error
+      ansible.builtin.debug:
+        msg: "Failed to deploy security groups. See error details above."
+      
+    - name: Fail the playbook
+      ansible.builtin.fail:
+        msg: "Security groups deployment failed."
