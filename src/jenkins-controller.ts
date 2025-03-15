@@ -92,6 +92,7 @@ function createJenkinsControllerSSMResources(
     const disableCliGroovy = loadScript('../scripts/jenkins/groovy/disable-cli.groovy');
     const basicSettingsGroovy = loadScript('../scripts/jenkins/groovy/basic-settings.groovy');
     const recoveryModeGroovy = loadScript('../scripts/jenkins/groovy/recovery-mode.groovy');
+    const installPluginsGroovy = loadScript('../scripts/jenkins/groovy/install-plugins.groovy');
     
     // シェルスクリプトの読み込み
     const installScript = loadScript('../scripts/jenkins/shell/controller-install.sh');
@@ -108,7 +109,8 @@ function createJenkinsControllerSSMResources(
         activeEnv: createSSMParameter("active-environment", color, projectName, environment, false, dependencies),
         disableCliGroovy: createSSMParameter("groovy/disable-cli", disableCliGroovy, projectName, environment, false, dependencies),
         basicSettingsGroovy: createSSMParameter("groovy/basic-settings", basicSettingsGroovy, projectName, environment, false, dependencies),
-        recoveryModeGroovy: createSSMParameter("groovy/recovery-mode", recoveryModeGroovy, projectName, environment, false, dependencies)
+        recoveryModeGroovy: createSSMParameter("groovy/recovery-mode", recoveryModeGroovy, projectName, environment, false, dependencies),
+        installPluginsGroovy: createSSMParameter("groovy/install-plugins", installPluginsGroovy, projectName, environment, false, dependencies)
     };
 
     // SSMドキュメントの作成

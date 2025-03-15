@@ -70,6 +70,11 @@ echo "基本設定Groovyスクリプトの取得"
 BASIC_SETTINGS_GROOVY=$(aws ssm get-parameter --name "${PARAMETER_PATH}/groovy/basic-settings" --with-decryption --query "Parameter.Value" --output text)
 echo "$BASIC_SETTINGS_GROOVY" > $GROOVY_DIR/basic-settings.groovy
 
+# プラグインインストールスクリプト取得
+echo "プラグインインストールGroovyスクリプトの取得"
+INSTALL_PLUGINS_GROOVY=$(aws ssm get-parameter --name "${PARAMETER_PATH}/groovy/install-plugins" --with-decryption --query "Parameter.Value" --output text)
+echo "$INSTALL_PLUGINS_GROOVY" > $GROOVY_DIR/install-plugins.groovy
+
 # リカバリーモードスクリプト取得（条件付き）
 if [ "$JENKINS_MODE" = "recovery" ]; then
   echo "リカバリーモードGroovyスクリプトの取得"
