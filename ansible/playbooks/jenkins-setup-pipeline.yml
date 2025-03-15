@@ -14,9 +14,6 @@
     aws_region_name: "ap-northeast-1"
     pulumi_path: "{{ playbook_dir }}/../../pulumi"
     
-    # 各段階の実行フラグ - コマンドラインから上書き可能
-    run_security: "{{ run_security | default(true) }}"
-    
   tasks:
     - name: Display pipeline information
       ansible.builtin.debug:
@@ -70,12 +67,12 @@
     # ネットワークインフラのデプロイ
     - name: Deploy Network Infrastructure
       ansible.builtin.include_tasks: deploy_jenkins_network.yml
-    
-    # セキュリティグループのデプロイ
+      
+    # ネットワークデプロイが成功したらセキュリティグループをデプロイ
     - name: Deploy Security Groups
       ansible.builtin.include_tasks: deploy_jenkins_security.yml
-      when: run_security | bool and network_deployed | default(false) | bool
-    
+      when: network_deployed is defined and network_deployed
+
     # 以下はコメントアウト - 段階的に実装していく
     # ストレージ（EFS）のデプロイ
     # - name: Deploy Storage (EFS)
