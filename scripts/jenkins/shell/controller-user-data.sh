@@ -26,28 +26,6 @@ echo "DEBUG: JENKINS_VERSION=${JENKINS_VERSION}"
 echo "DEBUG: JENKINS_MODE=${JENKINS_MODE}"
 echo "DEBUG: EFS_ID=${EFS_ID}"
 
-# リージョンとインスタンスIDが取得できない場合のエラー処理
-if [ -z "$REGION" ]; then
-  echo "ERROR: Failed to detect region from metadata service"
-  # AZ情報からリージョンを推測してみる
-  AZ=$(curl -s -H "X-aws-ec2-metadata-token: $TOKEN" http://169.254.169.254/latest/meta-data/placement/availability-zone)
-  if [ -n "$AZ" ]; then
-    # AZ名からリージョン名を抽出（例：us-east-1aからus-east-1を抽出）
-    REGION=${AZ%?}
-    echo "Extracted region $REGION from AZ $AZ"
-  else
-    # 環境変数で設定されているかチェック
-    if [ -n "$AWS_REGION" ]; then
-      REGION=$AWS_REGION
-      echo "Using AWS_REGION environment variable: $REGION"
-    else
-      # 最終手段としてデフォルト値を設定
-      REGION="us-east-1"
-      echo "Using default region: $REGION"
-    fi
-  fi
-fi
-
 if [ -z "$INSTANCE_ID" ]; then
   echo "ERROR: Failed to detect instance ID from metadata service"
   echo "Cannot proceed with SSM commands without instance ID"
@@ -129,18 +107,7 @@ execute_ssm_command_and_wait() {
 # SSMドキュメントを順番に実行
 echo "Starting Jenkins installation via SSM Documents"
 
-# 1. Jenkins Install
-execute_ssm_command_and_wait \
-  "${PROJECT_NAME}-jenkins-install-${JENKINS_COLOR}-${ENVIRONMENT}" \
-  "Installing Jenkins" \
-  ",JenkinsVersion=${JENKINS_VERSION},JenkinsColor=${JENKINS_COLOR}"
-
-if [ $? -ne 0 ]; then
-  echo "Jenkins installation failed, exiting"
-  exit 1
-fi
-
-# 2. EFS Mount (if EFS ID is provided)
+# 1. EFS Mount (最初に実行)
 if [ -n "${EFS_ID}" ]; then
   execute_ssm_command_and_wait \
     "${PROJECT_NAME}-jenkins-mount-efs-${JENKINS_COLOR}-${ENVIRONMENT}" \
@@ -153,6 +120,17 @@ if [ -n "${EFS_ID}" ]; then
   fi
 else
   echo "No EFS specified, skipping EFS mount"
+fi
+
+# 2. Jenkins Install
+execute_ssm_command_and_wait \
+  "${PROJECT_NAME}-jenkins-install-${JENKINS_COLOR}-${ENVIRONMENT}" \
+  "Installing Jenkins" \
+  ",JenkinsVersion=${JENKINS_VERSION},JenkinsColor=${JENKINS_COLOR}"
+
+if [ $? -ne 0 ]; then
+  echo "Jenkins installation failed, exiting"
+  exit 1
 fi
 
 # 3. Jenkins Configure
