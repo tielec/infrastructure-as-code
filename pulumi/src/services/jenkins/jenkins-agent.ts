@@ -282,9 +282,9 @@ export function createJenkinsAgentFleet(input: JenkinsAgentInput, dependencies?:
 
 // エージェント設定用のスクリプトファイルが存在しない場合に作成するヘルパー関数
 export function ensureAgentScriptFile() {
-    const scriptDir = path.resolve(__dirname, '../scripts/jenkins/shell');
+    const scriptDir = path.resolve(__dirname, '../../../../scripts/jenkins/shell');
     const scriptPath = path.resolve(scriptDir, 'agent-setup.sh');
-    const templatePath = path.resolve(scriptDir, 'agent-setup-template.sh');
+    const templatePath = path.resolve(scriptDir, 'agent-template.sh');
     
     // スクリプトファイルがすでに存在する場合はなにもしない
     if (fs.existsSync(scriptPath)) {
