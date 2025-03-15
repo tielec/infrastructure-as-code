@@ -30,65 +30,388 @@ function loadScript(scriptPath: string): string {
     }
 }
 
-// 依存関係を考慮してJenkinsインスタンスを作成する
-export function createJenkinsInstance(input: JenkinsInstanceInput, dependencies?: pulumi.Resource[]) {
-    const config = new pulumi.Config();
-    const instanceType = input.instanceType || config.get("instanceType") || "t3.medium";
-    const keyName = input.keyName || config.get("keyName");
-    // Jenkinsバージョンは指定しない（常に最新）
-    const jenkinsVersion = input.jenkinsVersion || config.get("jenkinsVersion") || "latest";
-    const recoveryMode = input.recoveryMode !== undefined ? input.recoveryMode : false;
+// ユーザーデータテンプレートを準備して変数を置換する関数
+function prepareUserData(templatePath: string, variables: Record<string, string>): string {
+    let template = loadScript(templatePath);
     
-    // スクリプトファイルの読み込み
+    // テンプレート内の変数を置換
+    Object.entries(variables).forEach(([key, value]) => {
+        const regex = new RegExp(`\\$\\{${key}\\}`, 'g');
+        template = template.replace(regex, value || '');
+    });
+    
+    return template;
+}
+
+// SSMパラメータを作成する関数
+function createSSMParameter(
+    name: string,
+    value: string,
+    projectName: string,
+    environment: string,
+    secure: boolean = false,
+    dependencies?: pulumi.Resource[]
+): aws.ssm.Parameter {
+    const paramType = secure ? "SecureString" : "String";
+    const param = new aws.ssm.Parameter(`${projectName}-${name}`, {
+        name: `/${projectName}/${environment}/jenkins/${name}`,
+        type: paramType,
+        value: value,
+        overwrite: true,
+        tags: {
+            Environment: environment,
+            ManagedBy: "pulumi",
+        },
+    });
+
+    if (dependencies && dependencies.length > 0) {
+        return dependsOn(param, dependencies);
+    }
+    return param;
+}
+
+// Jenkinsコントローラー設定に必要なSSMパラメータとドキュメントを作成
+function createJenkinsControllerSSMResources(
+    projectName: string, 
+    environment: string,
+    jenkinsVersion: string,
+    color: string,
+    recoveryMode: boolean,
+    dependencies?: pulumi.Resource[]
+): {
+    parameters: Record<string, aws.ssm.Parameter>,
+    documents: Record<string, aws.ssm.Document>
+} {
+    // Groovyスクリプトの読み込み
     const disableCliGroovy = loadScript('../scripts/jenkins/groovy/disable-cli.groovy');
     const basicSettingsGroovy = loadScript('../scripts/jenkins/groovy/basic-settings.groovy');
     const recoveryModeGroovy = loadScript('../scripts/jenkins/groovy/recovery-mode.groovy');
     
     // シェルスクリプトの読み込み
-    let userDataBase = loadScript('../scripts/jenkins/shell/jenkins-setup.sh');
-    const startupScript = loadScript('../scripts/jenkins/shell/jenkins-startup.sh');
-    
-    // バージョンが「latest」の場合は空文字に置き換え（バージョン指定なし）
-    const versionString = jenkinsVersion === "latest" ? "" : `-${jenkinsVersion}`;
-    userDataBase = userDataBase.replace(/\${jenkinsVersion}/g, versionString);
-    userDataBase = userDataBase.replace(/\${color}/g, input.color);
-    
-    // リカバリーモードまたは通常モードの設定
-    let configModeScript;
-    if (recoveryMode) {
-        configModeScript = loadScript('../scripts/jenkins/shell/recovery-mode-setup.sh');
-        configModeScript = configModeScript.replace(/\${recoveryModeGroovy}/g, recoveryModeGroovy);
-    } else {
-        configModeScript = loadScript('../scripts/jenkins/shell/normal-mode-setup.sh');
-        configModeScript = configModeScript
-            .replace(/\${disableCliGroovy}/g, disableCliGroovy)
-            .replace(/\${basicSettingsGroovy}/g, basicSettingsGroovy);
-    }
+    const installScript = loadScript('../scripts/jenkins/shell/controller-install.sh');
+    const efsMountScript = loadScript('../scripts/jenkins/shell/controller-mount-efs.sh');
+    const configureScript = loadScript('../scripts/jenkins/shell/controller-configure.sh');
+    const startupScript = loadScript('../scripts/jenkins/shell/controller-startup.sh');
+    const updateScript = loadScript('../scripts/jenkins/shell/controller-update.sh');
 
-    // EFSマウント部分（条件付き）
-    let efsMount: pulumi.Output<string> = pulumi.output('');
-    if (input.efsFileSystemId) {
-        // スクリプトの読み込み
-        const efsMountTemplate = loadScript('../scripts/jenkins/shell/efs-mount.sh');
-        
-        // リージョンを取得
-        const regionPromise = aws.getRegion();
-        
-        // 文字列置換を使用して変数を置換する
-        efsMount = pulumi.all([input.efsFileSystemId, regionPromise.then(r => r.name)]).apply(
-            ([efsId, regionName]) => {
-                return efsMountTemplate
-                    .replace(/\${efsFileSystemId}/g, efsId)
-                    .replace(/\${AWS_REGION}/g, regionName);
-            }
-        );
-    }
+    // パラメータの作成
+    const parameters: Record<string, aws.ssm.Parameter> = {
+        version: createSSMParameter("version", jenkinsVersion, projectName, environment, false, dependencies),
+        color: createSSMParameter("color", color, projectName, environment, false, dependencies),
+        mode: createSSMParameter("mode", recoveryMode ? "recovery" : "normal", projectName, environment, false, dependencies),
+        activeEnv: createSSMParameter("active-environment", color, projectName, environment, false, dependencies),
+        disableCliGroovy: createSSMParameter("groovy/disable-cli", disableCliGroovy, projectName, environment, false, dependencies),
+        basicSettingsGroovy: createSSMParameter("groovy/basic-settings", basicSettingsGroovy, projectName, environment, false, dependencies),
+        recoveryModeGroovy: createSSMParameter("groovy/recovery-mode", recoveryModeGroovy, projectName, environment, false, dependencies)
+    };
 
-    // 最終的なUserDataの組み立て - 文字列結合を使用
-    const userData = pulumi.all([userDataBase, efsMount, configModeScript, startupScript])
-        .apply(([base, efs, config, startup]) => {
-            return `${base}\n${efs}\n${config}\n${startup}`;
+    // SSMドキュメントの作成
+    const installDocument = new aws.ssm.Document(`${projectName}-jenkins-install-${color}`, {
+        name: `${projectName}-jenkins-install-${color}-${environment}`,
+        documentType: "Command",
+        content: JSON.stringify({
+            schemaVersion: "2.2",
+            description: "Jenkins Controller installation",
+            parameters: {
+                ProjectName: {
+                    type: "String",
+                    default: projectName,
+                    description: "Project name"
+                },
+                Environment: {
+                    type: "String",
+                    default: environment,
+                    description: "Environment name"
+                },
+                JenkinsVersion: {
+                    type: "String",
+                    default: jenkinsVersion,
+                    description: "Jenkins version to install"
+                },
+                JenkinsColor: {
+                    type: "String",
+                    default: color,
+                    description: "Jenkins environment color (blue/green)"
+                }
+            },
+            mainSteps: [
+                {
+                    action: "aws:runShellScript",
+                    name: "installJenkins",
+                    inputs: {
+                        runCommand: [
+                            "#!/bin/bash",
+                            "export PROJECT_NAME={{ProjectName}}",
+                            "export ENVIRONMENT={{Environment}}",
+                            "export JENKINS_VERSION={{JenkinsVersion}}",
+                            "export JENKINS_COLOR={{JenkinsColor}}",
+                            installScript
+                        ]
+                    }
+                }
+            ]
+        }),
+        tags: {
+            Environment: environment,
+            Color: color,
+        },
+    });
+
+    const mountEfsDocument = new aws.ssm.Document(`${projectName}-jenkins-mount-efs-${color}`, {
+        name: `${projectName}-jenkins-mount-efs-${color}-${environment}`,
+        documentType: "Command",
+        content: JSON.stringify({
+            schemaVersion: "2.2",
+            description: "Mount EFS for Jenkins",
+            parameters: {
+                ProjectName: {
+                    type: "String",
+                    default: projectName,
+                    description: "Project name"
+                },
+                Environment: {
+                    type: "String",
+                    default: environment,
+                    description: "Environment name"
+                },
+                EfsId: {
+                    type: "String",
+                    description: "EFS File System ID"
+                },
+                Region: {
+                    type: "String",
+                    default: "{{global:REGION}}",
+                    description: "AWS Region"
+                }
+            },
+            mainSteps: [
+                {
+                    action: "aws:runShellScript",
+                    name: "mountEfs",
+                    inputs: {
+                        runCommand: [
+                            "#!/bin/bash",
+                            "export PROJECT_NAME={{ProjectName}}",
+                            "export ENVIRONMENT={{Environment}}",
+                            "export EFS_ID={{EfsId}}",
+                            "export AWS_REGION={{Region}}",
+                            efsMountScript
+                        ]
+                    }
+                }
+            ]
+        }),
+        tags: {
+            Environment: environment,
+            Color: color,
+        },
+    });
+
+    const configureDocument = new aws.ssm.Document(`${projectName}-jenkins-configure-${color}`, {
+        name: `${projectName}-jenkins-configure-${color}-${environment}`,
+        documentType: "Command",
+        content: JSON.stringify({
+            schemaVersion: "2.2",
+            description: "Configure Jenkins controller",
+            parameters: {
+                ProjectName: {
+                    type: "String",
+                    default: projectName,
+                    description: "Project name"
+                },
+                Environment: {
+                    type: "String",
+                    default: environment,
+                    description: "Environment name"
+                },
+                JenkinsMode: {
+                    type: "String",
+                    default: recoveryMode ? "recovery" : "normal",
+                    description: "Jenkins mode (normal/recovery)"
+                },
+                JenkinsColor: {
+                    type: "String",
+                    default: color,
+                    description: "Jenkins environment color (blue/green)"
+                }
+            },
+            mainSteps: [
+                {
+                    action: "aws:runShellScript",
+                    name: "configureJenkins",
+                    inputs: {
+                        runCommand: [
+                            "#!/bin/bash",
+                            "export PROJECT_NAME={{ProjectName}}",
+                            "export ENVIRONMENT={{Environment}}",
+                            "export JENKINS_MODE={{JenkinsMode}}",
+                            "export JENKINS_COLOR={{JenkinsColor}}",
+                            configureScript
+                        ]
+                    }
+                }
+            ]
+        }),
+        tags: {
+            Environment: environment,
+            Color: color,
+        },
+    });
+
+    const startupDocument = new aws.ssm.Document(`${projectName}-jenkins-startup-${color}`, {
+        name: `${projectName}-jenkins-startup-${color}-${environment}`,
+        documentType: "Command",
+        content: JSON.stringify({
+            schemaVersion: "2.2",
+            description: "Start Jenkins controller service",
+            parameters: {
+                ProjectName: {
+                    type: "String",
+                    default: projectName,
+                    description: "Project name"
+                },
+                Environment: {
+                    type: "String",
+                    default: environment,
+                    description: "Environment name"
+                },
+                JenkinsColor: {
+                    type: "String",
+                    default: color,
+                    description: "Jenkins environment color (blue/green)"
+                }
+            },
+            mainSteps: [
+                {
+                    action: "aws:runShellScript",
+                    name: "startJenkins",
+                    inputs: {
+                        runCommand: [
+                            "#!/bin/bash",
+                            "export PROJECT_NAME={{ProjectName}}",
+                            "export ENVIRONMENT={{Environment}}",
+                            "export JENKINS_COLOR={{JenkinsColor}}",
+                            startupScript
+                        ]
+                    }
+                }
+            ]
+        }),
+        tags: {
+            Environment: environment,
+            Color: color,
+        },
+    });
+
+    const updateDocument = new aws.ssm.Document(`${projectName}-jenkins-update-${color}`, {
+        name: `${projectName}-jenkins-update-${color}-${environment}`,
+        documentType: "Command",
+        content: JSON.stringify({
+            schemaVersion: "2.2",
+            description: "Update Jenkins controller",
+            parameters: {
+                ProjectName: {
+                    type: "String",
+                    default: projectName,
+                    description: "Project name"
+                },
+                Environment: {
+                    type: "String",
+                    default: environment,
+                    description: "Environment name"
+                },
+                JenkinsVersion: {
+                    type: "String",
+                    default: "latest",
+                    description: "Jenkins version to update to"
+                },
+                RestartJenkins: {
+                    type: "String",
+                    default: "false",
+                    allowedValues: ["true", "false"],
+                    description: "Whether to restart Jenkins after update"
+                }
+            },
+            mainSteps: [
+                {
+                    action: "aws:runShellScript",
+                    name: "updateJenkins",
+                    inputs: {
+                        runCommand: [
+                            "#!/bin/bash",
+                            "export PROJECT_NAME={{ProjectName}}",
+                            "export ENVIRONMENT={{Environment}}",
+                            "export JENKINS_VERSION={{JenkinsVersion}}",
+                            "export RESTART_JENKINS={{RestartJenkins}}",
+                            updateScript
+                        ]
+                    }
+                }
+            ]
+        }),
+        tags: {
+            Environment: environment,
+            Color: color,
+        },
+    });
+
+    // 依存関係の設定
+    const docs: Record<string, aws.ssm.Document> = {
+        install: installDocument,
+        mountEfs: mountEfsDocument,
+        configure: configureDocument,
+        startup: startupDocument,
+        update: updateDocument
+    };
+
+    // 依存関係を設定
+    if (dependencies && dependencies.length > 0) {
+        Object.keys(docs).forEach(key => {
+            docs[key] = dependsOn(docs[key], dependencies);
         });
+    }
+
+    // パラメータ間の依存関係を設定
+    Object.keys(docs).forEach(key => {
+        docs[key] = dependsOn(docs[key], Object.values(parameters));
+    });
+
+    return {
+        parameters,
+        documents: docs
+    };
+}
+
+// 依存関係を考慮してJenkinsインスタンスを作成する
+export function createJenkinsInstance(input: JenkinsInstanceInput, dependencies?: pulumi.Resource[]) {
+    const config = new pulumi.Config();
+    const instanceType = input.instanceType || config.get("instanceType") || "t3.medium";
+    const keyName = input.keyName || config.get("keyName");
+    const jenkinsVersion = input.jenkinsVersion || config.get("jenkinsVersion") || "latest";
+    const recoveryMode = input.recoveryMode !== undefined ? input.recoveryMode : false;
+    
+    // SSMリソースを作成
+    const ssmResources = createJenkinsControllerSSMResources(
+        input.projectName,
+        input.environment,
+        jenkinsVersion,
+        input.color,
+        recoveryMode,
+        dependencies
+    );
+
+    // ユーザーデータの変数を設定
+    const userDataVariables = {
+        PROJECT_NAME: input.projectName,
+        ENVIRONMENT: input.environment,
+        JENKINS_VERSION: jenkinsVersion,
+        JENKINS_COLOR: input.color,
+        JENKINS_MODE: recoveryMode ? "recovery" : "normal",
+        EFS_ID: input.efsFileSystemId ? pulumi.output(input.efsFileSystemId).apply(id => id || '') : '',
+    };
+
+    // 別ファイルからユーザーデータスクリプトを読み込み、変数を置換
+    const userDataScript = prepareUserData('../scripts/jenkins/shell/controller-user-data.sh', userDataVariables);
 
     // 最新のAmazon Linux 2023 AMIを取得
     const ami = pulumi.output(aws.ec2.getAmi({
@@ -100,7 +423,7 @@ export function createJenkinsInstance(input: JenkinsInstanceInput, dependencies?
         }],
     }));
 
-    // IAMロール作成（Jenkins用）
+    // IAMロール作成（Jenkins用）- SSM権限を追加
     let jenkinsRole = new aws.iam.Role(`${input.projectName}-jenkins-role-${input.color}`, {
         assumeRolePolicy: JSON.stringify({
             Version: "2012-10-17",
@@ -135,10 +458,49 @@ export function createJenkinsInstance(input: JenkinsInstanceInput, dependencies?
         policyArn: "arn:aws:iam::aws:policy/AmazonElasticFileSystemClientReadWriteAccess",
     });
 
+    // SSM関連ポリシー（ドキュメント実行とパラメータ読み取り用）
+    const ssmCustomPolicy = new aws.iam.Policy(`${input.projectName}-jenkins-ssm-custom-policy-${input.color}`, {
+        description: "Custom policy for Jenkins instance to use SSM documents and parameters",
+        policy: JSON.stringify({
+            Version: "2012-10-17",
+            Statement: [
+                {
+                    Effect: "Allow",
+                    Action: [
+                        "ssm:GetParameter",
+                        "ssm:GetParameters",
+                        "ssm:GetParametersByPath",
+                        "ssm:SendCommand",
+                        "ssm:ListCommands",
+                        "ssm:ListCommandInvocations",
+                        "ssm:GetCommandInvocation",
+                        "ssm:DescribeInstanceInformation"
+                    ],
+                    Resource: "*"
+                },
+                {
+                    Effect: "Allow",
+                    Action: [
+                        "ssm:PutParameter"
+                    ],
+                    Resource: [
+                        `arn:aws:ssm:*:*:parameter/${input.projectName}/${input.environment}/jenkins/status/*`
+                    ]
+                }
+            ]
+        }),
+    });
+
+    const ssmCustomPolicyAttachment = new aws.iam.RolePolicyAttachment(`${input.projectName}-jenkins-ssm-custom-policy-attachment-${input.color}`, {
+        role: jenkinsRole.name,
+        policyArn: ssmCustomPolicy.arn,
+    });
+
     // 依存関係を設定
     const rolePolicyAttachments = [
         dependsOn(ssmPolicy, [jenkinsRole]),
         dependsOn(efsPolicy, [jenkinsRole]),
+        dependsOn(ssmCustomPolicyAttachment, [jenkinsRole, ssmCustomPolicy])
     ];
 
     // Jenkins用インスタンスプロファイル
@@ -161,7 +523,7 @@ export function createJenkinsInstance(input: JenkinsInstanceInput, dependencies?
         vpcSecurityGroupIds: [input.securityGroupId],
         keyName: keyName,
         iamInstanceProfile: jenkinsInstanceProfile.name,
-        userData: userData,
+        userData: pulumi.output(Buffer.from(userDataScript).toString("base64")),
         rootBlockDevice: {
             volumeSize: 50,
             volumeType: "gp3",
@@ -176,12 +538,15 @@ export function createJenkinsInstance(input: JenkinsInstanceInput, dependencies?
         },
     });
 
-    // 依存関係を設定
-    if (dependencies && dependencies.length > 0) {
-        jenkinsInstance = dependsOn(jenkinsInstance, [...dependencies, jenkinsInstanceProfile]);
-    } else {
-        jenkinsInstance = dependsOn(jenkinsInstance, [jenkinsInstanceProfile]);
-    }
+    // 依存関係を設定（SSMリソースへの依存を追加）
+    const allDependencies = [
+        ...(dependencies || []), 
+        jenkinsInstanceProfile,
+        ...Object.values(ssmResources.parameters),
+        ...Object.values(ssmResources.documents)
+    ];
+    
+    jenkinsInstance = dependsOn(jenkinsInstance, allDependencies);
 
     // ターゲットグループへの登録
     const targetGroupAttachment = new aws.lb.TargetGroupAttachment(`${input.projectName}-jenkins-tg-attachment-${input.color}`, {
@@ -195,10 +560,12 @@ export function createJenkinsInstance(input: JenkinsInstanceInput, dependencies?
         jenkinsRole,
         instanceProfile: jenkinsInstanceProfile,
         targetGroupAttachment,
+        ssmParameters: ssmResources.parameters,
+        ssmDocuments: ssmResources.documents,
     };
 }
 
-// EFSファイルシステムを作成する関数
+// EFSファイルシステムを作成する関数 (変更なし)
 export function createJenkinsEfs(
     projectName: string, 
     environment: string, 

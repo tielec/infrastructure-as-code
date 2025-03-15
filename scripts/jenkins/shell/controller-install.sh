@@ -1,9 +1,16 @@
 #!/bin/bash
+# Jenkinsコントローラーインストールスクリプト
+# SSM用に最適化されたバージョン
+
 # エラーハンドリングとログ設定
 set -e
-exec > >(tee /var/log/user-data.log|logger -t user-data -s 2>/dev/console) 2>&1
+exec > >(tee /var/log/jenkins-install.log|logger -t jenkins-install -s 2>/dev/console) 2>&1
 set -x
-echo "Starting Jenkins installation script for ${color} environment"
+
+# 環境変数
+JENKINS_COLOR="${JENKINS_COLOR:-blue}"
+JENKINS_VERSION="${JENKINS_VERSION:-latest}"
+echo "Starting Jenkins installation script for ${JENKINS_COLOR} environment"
 
 # システムのアップデートと必要なパッケージのインストール
 dnf update -y
@@ -30,7 +37,13 @@ chown -R jenkins:jenkins /mnt/efs/jenkins
 # Jenkinsのインストール
 wget -O /etc/yum.repos.d/jenkins.repo https://pkg.jenkins.io/redhat-stable/jenkins.repo
 rpm --import https://pkg.jenkins.io/redhat-stable/jenkins.io-2023.key
-dnf install -y jenkins
+
+# バージョン指定がある場合
+if [ "${JENKINS_VERSION}" != "latest" ]; then
+  dnf install -y jenkins-${JENKINS_VERSION}
+else
+  dnf install -y jenkins
+fi
 
 # Jenkinsサービス定義
 cat > /etc/systemd/system/jenkins.service << 'EOF'
@@ -63,3 +76,11 @@ WantedBy=multi-user.target
 EOF
 
 chmod 600 /etc/systemd/system/jenkins.service
+
+# SSMエージェントのインストール確認
+if ! systemctl is-active amazon-ssm-agent > /dev/null; then
+  echo "SSM Agent is not running. Starting it..."
+  systemctl start amazon-ssm-agent
+fi
+
+echo "Jenkins controller installation completed."
