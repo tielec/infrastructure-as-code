@@ -1,16 +1,14 @@
 /**
- * environments/dev/index.ts
- * 
  * 開発環境用のエントリーポイント。
  * Jenkins関連のリソースをすべて構築します。
  */
 import * as pulumi from "@pulumi/pulumi";
 import * as aws from "@pulumi/aws";
-import { createNetworkInfrastructure } from "../../common/network";
-import { createSecurityGroups } from "../../services/jenkins/security";
-import { createLoadBalancer } from "../../services/jenkins/load-balancer";
-import { createJenkinsInstance, createJenkinsEfs } from "../../services/jenkins/jenkins-controller";
-import { createJenkinsAgentFleet, ensureAgentScriptFile } from "../../services/jenkins/jenkins-agent";
+import { createNetworkInfrastructure } from "./network";
+import { createSecurityGroups } from "./security";
+import { createLoadBalancer } from "./load-balancer";
+import { createJenkinsInstance, createJenkinsEfs } from "./jenkins-controller";
+import { createJenkinsAgentFleet, ensureAgentScriptFile } from "./jenkins-agent";
 import { dependsOn } from "../../common/dependency-utils";
 
 // 共通設定

@@ -1,6 +1,4 @@
 /**
- * services/jenkins/jenkins-controller.ts
- * 
  * Jenkinsコントローラー用のAWSリソース（EC2インスタンス、EFS、SSMリソースなど）を
  * 作成するためのモジュール。Blue/Greenデプロイメント戦略をサポートしています。
  */

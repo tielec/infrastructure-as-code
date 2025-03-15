@@ -1,6 +1,4 @@
 /**
- * services/jenkins/security.ts
- * 
  * Jenkins サービス専用のセキュリティグループを作成するモジュール。
  * ALB、Jenkinsコントローラー、エージェント、EFSのセキュリティグループを設定します。
  */

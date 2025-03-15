@@ -1,6 +1,4 @@
 /**
- * services/jenkins/jenkins-agent.ts
- * 
  * Jenkinsエージェント用のAWSリソース（SpotFleet、LaunchTemplate、IAMロールなど）を
  * 作成するためのモジュール。
  */

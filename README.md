@@ -190,21 +190,18 @@ infrastructure-as-code/
 │  │  tsconfig.json
 │  │
 │  ├─config/                  # Pulumi設定ファイル
-│  └─src/                     # Pulumiソースコード
+│  └─src/
 │      ├─common/              # 共通モジュール
 │      │      dependency-utils.ts
-│      │      network.ts
-│      │
-│      ├─environments/        # 環境固有のエントリーポイント
-│      │  └─dev/
-│      │          index.ts
 │      │
 │      └─services/            # サービス固有のモジュール
 │          └─jenkins/
-│                  jenkins-agent.ts
-│                  jenkins-controller.ts
-│                  load-balancer.ts
-│                  security.ts
+│                  index.ts           # Jenkinsインフラのメインエントリーポイント
+│                  network.ts         # Jenkins用ネットワーク設定
+│                  security.ts        # Jenkins用セキュリティグループ設定
+│                  load-balancer.ts   # Jenkins用ロードバランサー設定
+│                  jenkins-controller.ts  # Jenkinsコントローラー設定
+│                  jenkins-agent.ts   # Jenkinsエージェント設定
 │
 └─scripts/                    # 設定スクリプト
     │  aws-credentials.sh
@@ -233,14 +230,14 @@ infrastructure-as-code/
 - **自動スケーリングエージェント**: EC2 SpotFleetによるコスト効率の高いJenkinsエージェント
 - **リカバリーモード**: 管理者アカウントロックアウト時などの緊急アクセス用モード
 - **データ永続性**: EFSによるJenkinsデータの永続化と高可用性の確保
-- **モジュール化された設計**: サービスと環境を分離した再利用しやすい構造
+- **モジュール化された設計**: 関連コードをJenkinsサービスディレクトリに集約した明確な構造
 - **最新版Jenkins対応**: 常に最新バージョンのJenkinsを使用可能
 
 ### アーキテクチャの特徴
 
-- **共通モジュール**: ネットワークなど複数のサービスで共有するインフラリソース
-- **サービス固有モジュール**: Jenkins専用のリソース定義（コントローラー、エージェント、ロードバランサーなど）
-- **環境分離**: 開発、ステージング、本番などの環境を簡単に追加できる構造
+- **共通ユーティリティ**: 依存関係管理などの共通機能を提供するユーティリティモジュール
+- **サービス中心の設計**: Jenkinsに関連するすべてのコードを一箇所に集約
+- **シンプルな依存関係**: サービス内の相互参照がシンプルで理解しやすい構造
 
 ## トラブルシューティング
 
@@ -263,15 +260,12 @@ infrastructure-as-code/
 1. 新しいサービスの追加:
 ```
 services/
-  ├─jenkins/
-  ├─database/
-  └─api-service/
+  ├─jenkins/      # 現在のJenkinsサービス
+  ├─database/     # 将来追加可能なデータベースサービス
+  └─api-service/  # 将来追加可能なAPIサービス
 ```
 
-2. 新しい環境の追加:
+2. 既存のコンポーネントを再利用:
 ```
-environments/
-  ├─dev/
-  ├─staging/
-  └─production/
+services/jenkins/index.ts  # 新しいサービスでも同様のパターンでエントリーポイントを作成
 ```
