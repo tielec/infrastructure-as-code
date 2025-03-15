@@ -112,7 +112,7 @@ function createJenkinsControllerSSMResources(
     const configureScript = loadScript('../../../../scripts/jenkins/shell/controller-configure.sh');
     const startupScript = loadScript('../../../../scripts/jenkins/shell/controller-startup.sh');
     const updateScript = loadScript('../../../../scripts/jenkins/shell/controller-update.sh');
-    const installPluginsScript = loadScript('../../../../scripts/jenkins/shell/controller-install-plugins.sh');
+    //const installPluginsScript = loadScript('../../../../scripts/jenkins/shell/controller-install-plugins.sh');
 
 
     // パラメータの作成
@@ -124,7 +124,7 @@ function createJenkinsControllerSSMResources(
         disableCliGroovy: createSSMParameter("groovy/disable-cli", disableCliGroovy, projectName, environment, false, dependencies),
         basicSettingsGroovy: createSSMParameter("groovy/basic-settings", basicSettingsGroovy, projectName, environment, false, dependencies),
         recoveryModeGroovy: createSSMParameter("groovy/recovery-mode", recoveryModeGroovy, projectName, environment, false, dependencies),
-        installPluginsScript: createSSMParameter("scripts/install-plugins", installPluginsScript, projectName, environment, false, dependencies)
+        //installPluginsScript: createSSMParameter("scripts/install-plugins", installPluginsScript, projectName, environment, false, dependencies)
     };
 
     // SSMドキュメントの作成
