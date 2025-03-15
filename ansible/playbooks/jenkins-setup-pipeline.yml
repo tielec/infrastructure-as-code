@@ -23,10 +23,6 @@
           Project: {{ project_name }}
           Environment: {{ env_name }}
           AWS Region: {{ aws_region_name }}
-          
-          Execution Plan:
-          - Network: Always run first
-          - Security: {{ run_security }}
     
     - name: Check Ansible version
       ansible.builtin.debug:
