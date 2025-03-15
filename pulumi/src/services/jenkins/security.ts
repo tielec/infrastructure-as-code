@@ -1,6 +1,12 @@
+/**
+ * services/jenkins/security.ts
+ * 
+ * Jenkins サービス専用のセキュリティグループを作成するモジュール。
+ * ALB、Jenkinsコントローラー、エージェント、EFSのセキュリティグループを設定します。
+ */
 import * as pulumi from "@pulumi/pulumi";
 import * as aws from "@pulumi/aws";
-import { dependsOn } from "./dependency-utils";
+import { dependsOn } from "../../common/dependency-utils";
 
 export function createSecurityGroups(
     projectName: string, 
@@ -34,7 +40,7 @@ export function createSecurityGroups(
                 protocol: "tcp",
                 fromPort: 8080,
                 toPort: 8080,
-                cidrBlocks: ["0.0.0.0/0"], // または適切に制限
+                cidrBlocks: ["0.0.0.0/0"],
                 description: "Jenkins HTTP access",
             },
         ],

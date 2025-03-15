@@ -1,8 +1,15 @@
+/**
+ * services/jenkins/jenkins-controller.ts
+ * 
+ * Jenkinsコントローラー用のAWSリソース（EC2インスタンス、EFS、SSMリソースなど）を
+ * 作成するためのモジュール。Blue/Greenデプロイメント戦略をサポートしています。
+ */
+
 import * as pulumi from "@pulumi/pulumi";
 import * as aws from "@pulumi/aws";
 import * as fs from "fs";
 import * as path from "path";
-import { dependsOn } from "./dependency-utils";
+import { dependsOn } from "../../common/dependency-utils";
 
 interface JenkinsInstanceInput {
     projectName: string;
@@ -97,17 +104,18 @@ function createJenkinsControllerSSMResources(
     documents: Record<string, aws.ssm.Document>
 } {
     // Groovyスクリプトの読み込み
-    const disableCliGroovy = loadScript('../scripts/jenkins/groovy/disable-cli.groovy');
-    const basicSettingsGroovy = loadScript('../scripts/jenkins/groovy/basic-settings.groovy');
-    const recoveryModeGroovy = loadScript('../scripts/jenkins/groovy/recovery-mode.groovy');
-    const installPluginsGroovy = loadScript('../scripts/jenkins/groovy/install-plugins.groovy');
+    const disableCliGroovy = loadScript('../../../../scripts/jenkins/groovy/disable-cli.groovy');
+    const basicSettingsGroovy = loadScript('../../../../scripts/jenkins/groovy/basic-settings.groovy');
+    const recoveryModeGroovy = loadScript('../../../../scripts/jenkins/groovy/recovery-mode.groovy');
     
     // シェルスクリプトの読み込み
-    const installScript = loadScript('../scripts/jenkins/shell/controller-install.sh');
-    const efsMountScript = loadScript('../scripts/jenkins/shell/controller-mount-efs.sh');
-    const configureScript = loadScript('../scripts/jenkins/shell/controller-configure.sh');
-    const startupScript = loadScript('../scripts/jenkins/shell/controller-startup.sh');
-    const updateScript = loadScript('../scripts/jenkins/shell/controller-update.sh');
+    const installScript = loadScript('../../../../scripts/jenkins/shell/controller-install.sh');
+    const efsMountScript = loadScript('../../../../scripts/jenkins/shell/controller-mount-efs.sh');
+    const configureScript = loadScript('../../../../scripts/jenkins/shell/controller-configure.sh');
+    const startupScript = loadScript('../../../../scripts/jenkins/shell/controller-startup.sh');
+    const updateScript = loadScript('../../../../scripts/jenkins/shell/controller-update.sh');
+    const installPluginsScript = loadScript('../../../../scripts/jenkins/shell/controller-install-plugins.sh');
+
 
     // パラメータの作成
     const parameters: Record<string, aws.ssm.Parameter> = {
@@ -118,7 +126,7 @@ function createJenkinsControllerSSMResources(
         disableCliGroovy: createSSMParameter("groovy/disable-cli", disableCliGroovy, projectName, environment, false, dependencies),
         basicSettingsGroovy: createSSMParameter("groovy/basic-settings", basicSettingsGroovy, projectName, environment, false, dependencies),
         recoveryModeGroovy: createSSMParameter("groovy/recovery-mode", recoveryModeGroovy, projectName, environment, false, dependencies),
-        installPluginsGroovy: createSSMParameter("groovy/install-plugins", installPluginsGroovy, projectName, environment, false, dependencies)
+        installPluginsScript: createSSMParameter("scripts/install-plugins", installPluginsScript, projectName, environment, false, dependencies)
     };
 
     // SSMドキュメントの作成
@@ -586,7 +594,7 @@ export function createJenkinsInstance(input: JenkinsInstanceInput, dependencies?
     };
 }
 
-// EFSファイルシステムを作成する関数 (変更なし)
+// EFSファイルシステムを作成する関数
 export function createJenkinsEfs(
     projectName: string, 
     environment: string, 
@@ -595,9 +603,6 @@ export function createJenkinsEfs(
     subnetIds: pulumi.Input<string>[],
     dependencies?: pulumi.Resource[]
 ) {
-    // 内容は変更なし
-    // ...
-
     // EFSセキュリティグループ - 既に定義済みのため、ここでは使用するだけ
     const efsSecurityGroupId = securityGroupId;
 

@@ -1,6 +1,6 @@
 # Jenkins CI/CD インフラストラクチャ構築
 
-このリポジトリは、AWSクラウド上にJenkinsベースのCI/CD環境をPulumiを使って構築するためのコードを管理します。ブルーグリーンデプロイに対応したJenkinsマスター環境を実現し、効率的なCI/CDパイプラインを提供します。
+このリポジトリは、AWSクラウド上にJenkinsベースのCI/CD環境をPulumiを使って構築するためのコードを管理します。ブルーグリーンデプロイに対応したJenkinsコントローラー環境を実現し、効率的なCI/CDパイプラインを提供します。
 
 ## 前提条件
 
@@ -158,6 +158,7 @@ source scripts/aws-credentials.sh
 ### 8. Jenkinsインフラのデプロイ
 
 ```bash
+cd pulumi
 # プレビュー
 pulumi preview
 
@@ -170,7 +171,7 @@ pulumi up
 このリポジトリは以下のAWSリソースを設定します：
 
 - VPC、サブネット、ルートテーブル、セキュリティグループなどのネットワークリソース
-- Jenkinsマスターサーバー用のEC2インスタンス（ブルー/グリーン環境）
+- Jenkinsコントローラー用のEC2インスタンス（ブルー/グリーン環境）
 - Jenkinsエージェント用のEC2 SpotFleet（自動スケーリング対応）
 - Jenkinsデータ永続化のためのEFSファイルシステム
 - ブルーグリーンデプロイ用のALB（Application Load Balancer）
@@ -181,27 +182,49 @@ pulumi up
 ```
 infrastructure-as-code/
 ├─bootstrap/                  # 初期セットアップ用スクリプト
-├─scripts/                    # 設定スクリプト
-│  └─jenkins/
-│     ├─groovy/               # Jenkins初期化用Groovyスクリプト
-│     │  ├─basic-settings.groovy
-│     │  ├─disable-cli.groovy
-│     │  └─recovery-mode.groovy
-│     └─shell/                # EC2インスタンス設定用シェルスクリプト
-│        ├─agent-setup.sh     # エージェント設定スクリプト
-│        ├─agent-template.sh  # エージェント最小限設定スクリプト
-│        ├─efs-mount.sh       # EFSマウント設定スクリプト
-│        ├─jenkins-setup.sh   # Jenkinsセットアップ基本スクリプト
-│        ├─jenkins-startup.sh # Jenkins起動確認スクリプト
-│        ├─normal-mode-setup.sh
-│        └─recovery-mode-setup.sh
-└─src/                        # Pulumiソースコード
-   ├─index.ts                 # メインエントリポイント
-   ├─network.ts               # ネットワークリソース定義
-   ├─security.ts              # セキュリティグループ定義
-   ├─jenkins-controller.ts    # Jenkinsマスターインスタンス定義
-   ├─jenkins-agent.ts         # Jenkinsエージェント定義
-   └─load-balancer.ts         # ロードバランサー定義
+│      cfn-bootstrap-template.yaml
+│
+├─pulumi/                     # Pulumiプロジェクト
+│  │  package.json
+│  │  Pulumi.yaml
+│  │  tsconfig.json
+│  │
+│  ├─config/                  # Pulumi設定ファイル
+│  └─src/                     # Pulumiソースコード
+│      ├─common/              # 共通モジュール
+│      │      dependency-utils.ts
+│      │      network.ts
+│      │
+│      ├─environments/        # 環境固有のエントリーポイント
+│      │  └─dev/
+│      │          index.ts
+│      │
+│      └─services/            # サービス固有のモジュール
+│          └─jenkins/
+│                  jenkins-agent.ts
+│                  jenkins-controller.ts
+│                  load-balancer.ts
+│                  security.ts
+│
+└─scripts/                    # 設定スクリプト
+    │  aws-credentials.sh
+    │
+    └─jenkins/
+        ├─groovy/             # Jenkins初期化用Groovyスクリプト
+        │      basic-settings.groovy
+        │      disable-cli.groovy
+        │      install-plugins.groovy
+        │      recovery-mode.groovy
+        │
+        └─shell/              # EC2インスタンス設定用シェルスクリプト
+               agent-setup.sh
+               agent-template.sh
+               controller-configure.sh
+               controller-install.sh
+               controller-mount-efs.sh
+               controller-startup.sh
+               controller-update.sh
+               controller-user-data.sh
 ```
 
 ### 主な機能
@@ -210,9 +233,14 @@ infrastructure-as-code/
 - **自動スケーリングエージェント**: EC2 SpotFleetによるコスト効率の高いJenkinsエージェント
 - **リカバリーモード**: 管理者アカウントロックアウト時などの緊急アクセス用モード
 - **データ永続性**: EFSによるJenkinsデータの永続化と高可用性の確保
-- **モジュール化された設計**: 保守性と再利用性を高めるスクリプト分離パターン
+- **モジュール化された設計**: サービスと環境を分離した再利用しやすい構造
 - **最新版Jenkins対応**: 常に最新バージョンのJenkinsを使用可能
 
+### アーキテクチャの特徴
+
+- **共通モジュール**: ネットワークなど複数のサービスで共有するインフラリソース
+- **サービス固有モジュール**: Jenkins専用のリソース定義（コントローラー、エージェント、ロードバランサーなど）
+- **環境分離**: 開発、ステージング、本番などの環境を簡単に追加できる構造
 
 ## トラブルシューティング
 
@@ -227,3 +255,23 @@ infrastructure-as-code/
 - AdministratorAccess権限は開発段階のみに使用し、本番環境では最小権限原則に従ってください
 - バックアップ戦略の実装を忘れずに行ってください
 - AWS認証情報は定期的に更新が必要です。セッションが切れた場合は`source scripts/aws-credentials.sh`を実行してください
+
+## 拡張方法
+
+リポジトリ構造は以下のように拡張可能です：
+
+1. 新しいサービスの追加:
+```
+services/
+  ├─jenkins/
+  ├─database/
+  └─api-service/
+```
+
+2. 新しい環境の追加:
+```
+environments/
+  ├─dev/
+  ├─staging/
+  └─production/
+```

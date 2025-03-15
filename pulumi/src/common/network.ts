@@ -1,3 +1,9 @@
+/**
+ * common/network.ts
+ * 複数のサービスで共有するネットワークインフラ構築のための共通モジュール。
+ * VPC、サブネット、インターネットゲートウェイ、NATゲートウェイなどを設定します。
+ */
+
 import * as pulumi from "@pulumi/pulumi";
 import * as aws from "@pulumi/aws";
 

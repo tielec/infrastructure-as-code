@@ -1,8 +1,14 @@
+/**
+ * services/jenkins/jenkins-agent.ts
+ * 
+ * Jenkinsエージェント用のAWSリソース（SpotFleet、LaunchTemplate、IAMロールなど）を
+ * 作成するためのモジュール。
+ */
 import * as pulumi from "@pulumi/pulumi";
 import * as aws from "@pulumi/aws";
 import * as fs from "fs";
 import * as path from "path";
-import { dependsOn } from "./dependency-utils";
+import { dependsOn } from "../../common/dependency-utils";
 
 interface JenkinsAgentInput {
     projectName: string;
@@ -118,11 +124,12 @@ export function createJenkinsAgentFleet(input: JenkinsAgentInput, dependencies?:
     // エージェントセットアップスクリプトの読み込み
     let userDataScript;
     try {
-        userDataScript = loadScript('../scripts/jenkins/shell/agent-setup.sh');
+        userDataScript = loadScript('../../../../scripts/jenkins/shell/agent-setup.sh');
     } catch (error) {
         console.error("Error loading agent setup script:", error);
         throw new Error(`エージェントセットアップスクリプトが見つかりません。scripts/jenkins/shell/agent-setup.shを作成してください。`);
     }
+
 
     // Launch Template
     const launchTemplateArgs: aws.ec2.LaunchTemplateArgs = {
