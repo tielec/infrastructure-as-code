@@ -8,10 +8,11 @@
   gather_facts: yes
   
   vars:
-    # 固定の値を使用する
-    project_name: "jenkins-infra"
+    # 環境名はコマンドラインから指定可能
     env_name: "{{ env | default('dev') }}"
-    aws_region_name: "ap-northeast-1"
+    # 共通設定から参照
+    project_name: "{{ infra.project_name }}"
+    aws_region_name: "{{ infra.aws.default_region }}"
     pulumi_path: "{{ playbook_dir }}/../../pulumi"
     
   tasks:
@@ -23,6 +24,10 @@
           Project: {{ project_name }}
           Environment: {{ env_name }}
           AWS Region: {{ aws_region_name }}
+          
+          Pulumi Projects:
+          - Network: {{ infra.pulumi.network_project }}
+          - Security: {{ infra.pulumi.security_project }}
     
     - name: Check Ansible version
       ansible.builtin.debug:
@@ -43,58 +48,27 @@
       ansible.builtin.debug:
         msg: "WARNING: AWS credentials not configured or not working properly"
       when: aws_identity.rc != 0
-      
-    - name: Check Pulumi installation
-      ansible.builtin.shell: pulumi version
-      register: pulumi_version
-      changed_when: false
-      ignore_errors: yes
-      
-    - name: Display Pulumi version
-      ansible.builtin.debug:
-        msg: "Pulumi version: {{ pulumi_version.stdout }}"
-      when: pulumi_version.rc == 0
-      
-    - name: Warning about Pulumi installation
-      ansible.builtin.debug:
-        msg: "WARNING: Pulumi not installed or not in PATH"
-      when: pulumi_version.rc != 0
     
     # ネットワークインフラのデプロイ
     - name: Deploy Network Infrastructure
-      ansible.builtin.include_tasks: deploy_jenkins_network.yml
+      ansible.builtin.include_tasks: 
+        file: deploy_jenkins_network.yml
+        apply:
+          vars:
+            # 共通変数を渡す
+            network_project_name: "{{ infra.pulumi.network_project }}"
       
     # ネットワークデプロイが成功したらセキュリティグループをデプロイ
     - name: Deploy Security Groups
-      ansible.builtin.include_tasks: deploy_jenkins_security.yml
+      ansible.builtin.include_tasks: 
+        file: deploy_jenkins_security.yml
+        apply:
+          vars:
+            # 共通変数を渡す
+            security_project_name: "{{ infra.pulumi.security_project }}"
+            network_project_name: "{{ infra.pulumi.network_project }}"
       when: network_deployed is defined and network_deployed
 
-    # 以下はコメントアウト - 段階的に実装していく
-    # ストレージ（EFS）のデプロイ
-    # - name: Deploy Storage (EFS)
-    #   ansible.builtin.include_tasks: deploy_jenkins_storage.yml
-    #   when: security_deployed | default(false) | bool
-    
-    # ロードバランサーのデプロイ
-    # - name: Deploy Load Balancer
-    #   ansible.builtin.include_tasks: deploy_jenkins_loadbalancer.yml
-    #   when: security_deployed | default(false) | bool
-    
-    # Jenkinsコントローラーのデプロイ
-    # - name: Deploy Jenkins Controller
-    #   ansible.builtin.include_tasks: deploy_jenkins_controller.yml
-    #   when: storage_deployed | default(false) | bool and loadbalancer_deployed | default(false) | bool
-    
-    # Jenkinsエージェントのデプロイ
-    # - name: Deploy Jenkins Agent
-    #   ansible.builtin.include_tasks: deploy_jenkins_agent.yml
-    #   when: controller_deployed | default(false) | bool
-    
-    # Jenkinsアプリケーション設定のデプロイ
-    # - name: Deploy Jenkins Application Configuration
-    #   ansible.builtin.include_tasks: deploy_jenkins_application.yml
-    #   when: controller_deployed | default(false) | bool
-    
     # デプロイメント結果サマリー
     - name: Deployment Summary
       ansible.builtin.debug:

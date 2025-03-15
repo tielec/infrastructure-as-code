@@ -11,9 +11,12 @@ import * as aws from "@pulumi/aws";
 const config = new pulumi.Config();
 const projectName = config.get("projectName") || "jenkins-infra";
 const environment = pulumi.getStack();
+// ネットワークスタック名を設定から取得（デフォルト値も設定）
+const networkStackName = config.get("networkStackName") || "jenkins-network";
 
 // 既存のネットワークスタックから値を取得
-const networkStack = new pulumi.StackReference(`${pulumi.getOrganization()}/${projectName}-network/${environment}`);
+// 修正: 動的に構築するが、設定からスタック名を取得
+const networkStack = new pulumi.StackReference(`${pulumi.getOrganization()}/${networkStackName}/${environment}`);
 const vpcId = networkStack.getOutput("vpcId");
 
 // ALB用セキュリティグループ

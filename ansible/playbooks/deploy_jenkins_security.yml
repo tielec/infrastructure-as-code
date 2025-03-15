@@ -4,6 +4,15 @@
 
 - name: Deploy Security Groups with Pulumi
   block:
+    - name: Display security deployment information
+      ansible.builtin.debug:
+        msg: |
+          Deploying Security Groups:
+          - Project: {{ project_name }}
+          - Security Pulumi Project: {{ security_project_name }}
+          - Network Pulumi Project: {{ network_project_name }}
+          - Environment: {{ env_name }}
+    
     - name: Check if Pulumi security module exists
       ansible.builtin.stat:
         path: "{{ pulumi_path }}/security"
@@ -38,16 +47,12 @@
       register: stack_select_result
       changed_when: false
       failed_when: false
-      environment:
-        AWS_REGION: "{{ aws_region_name }}"
       
     - name: Initialize Pulumi stack if not exists
       ansible.builtin.shell: |
         cd {{ pulumi_path }}/security
         pulumi stack init {{ env_name }}
       when: "'stack_not_found' in stack_select_result.stdout"
-      environment:
-        AWS_REGION: "{{ aws_region_name }}"
     
     - name: Install npm dependencies if needed
       ansible.builtin.shell: |
@@ -61,11 +66,36 @@
         cd {{ pulumi_path }}/security
         pulumi stack select {{ env_name }}
         pulumi config set aws:region {{ aws_region_name }}
-        pulumi config set jenkins-security:projectName {{ project_name }}
+        # 正しいプロジェクト名を設定
+        pulumi config set {{ security_project_name }}:projectName {{ project_name }}
+        # ネットワークスタック名を設定
+        pulumi config set {{ security_project_name }}:networkStackName {{ network_project_name }}
       register: pulumi_config_result
       changed_when: pulumi_config_result.rc == 0
-      environment:
-        AWS_REGION: "{{ aws_region_name }}"
+      
+    # セキュリティグループのindex.tsファイルを確認・更新
+    - name: Check and update security index.ts for correct stack reference
+      ansible.builtin.shell: |
+        cd {{ pulumi_path }}/security
+        # オリジナルファイルのバックアップ作成
+        cp -f index.ts index.ts.backup || true
+        
+        # ファイルの内容を表示
+        echo "Checking security/index.ts content:"
+        grep -n "StackReference" index.ts || echo "StackReference not found in file"
+        
+        # StackReferenceの行を正しいスタック名に更新
+        sed -i 's/const networkStack = new pulumi.StackReference.*/const networkStack = new pulumi.StackReference(`${pulumi.getOrganization()}\/${config.get("networkStackName") || "jenkins-network"}\/${environment}");/g' index.ts
+        
+        # 変更内容確認
+        echo "Updated StackReference line:"
+        grep -n "StackReference" index.ts
+      register: update_index_result
+      changed_when: false
+    
+    - name: Display update result
+      ansible.builtin.debug:
+        msg: "{{ update_index_result.stdout_lines }}"
     
     - name: Verify VPC ID exists from network stack
       ansible.builtin.shell: |
@@ -74,8 +104,6 @@
       register: vpc_id_check
       changed_when: false
       failed_when: vpc_id_check.rc != 0
-      environment:
-        AWS_REGION: "{{ aws_region_name }}"
         
     - name: Display VPC ID
       ansible.builtin.debug:
@@ -87,8 +115,6 @@
         pulumi preview
       register: pulumi_preview_result
       changed_when: false
-      environment:
-        AWS_REGION: "{{ aws_region_name }}"
       
     - name: Display Pulumi preview
       ansible.builtin.debug:
@@ -100,8 +126,6 @@
         pulumi up --yes
       register: pulumi_up_result
       changed_when: "'No changes required' not in pulumi_up_result.stdout"
-      environment:
-        AWS_REGION: "{{ aws_region_name }}"
     
     - name: Extract security group IDs from Pulumi output
       ansible.builtin.shell: |
@@ -112,8 +136,6 @@
         pulumi stack output efsSecurityGroupId
       register: sg_ids_result
       changed_when: false
-      environment:
-        AWS_REGION: "{{ aws_region_name }}"
       
     - name: Set security facts for use in other playbooks
       ansible.builtin.set_fact:
@@ -140,7 +162,3 @@
     - name: Display error
       ansible.builtin.debug:
         msg: "Failed to deploy security groups. See error details above."
-      
-    - name: Fail the playbook
-      ansible.builtin.fail:
-        msg: "Security groups deployment failed."

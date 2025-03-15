@@ -4,6 +4,15 @@
 
 - name: Deploy Network Infrastructure with Pulumi
   block:
+    - name: Display network deployment information
+      ansible.builtin.debug:
+        msg: |
+          Deploying Network Infrastructure:
+          - Project: {{ project_name }}
+          - Network Pulumi Project: {{ network_project_name }}
+          - Environment: {{ env_name }}
+          - VPC CIDR: {{ infra.aws.vpc_cidr }}
+    
     - name: Check if Pulumi network module exists
       ansible.builtin.stat:
         path: "{{ pulumi_path }}/network"
@@ -57,7 +66,9 @@
         cd {{ pulumi_path }}/network
         pulumi stack select {{ env_name }}
         pulumi config set aws:region {{ aws_region_name }}
-        pulumi config set jenkins-network:projectName {{ project_name }}
+        # 正しいプロジェクト名を設定
+        pulumi config set {{ network_project_name }}:projectName {{ project_name }}
+        pulumi config set {{ network_project_name }}:vpcCidr {{ infra.aws.vpc_cidr }}
       register: pulumi_config_result
       changed_when: pulumi_config_result.rc == 0
     
@@ -100,11 +111,14 @@
         public_subnet_ids: "{{ subnet_ids_result.stdout_lines[0] | trim }}"
         private_subnet_ids: "{{ subnet_ids_result.stdout_lines[1] | trim }}"
         network_deployed: true
+        # スタック参照情報も保存
+        network_stack_name: "{{ network_project_name }}"
       
     - name: Summary of network deployment
       ansible.builtin.debug:
         msg: |
           Network Infrastructure Deployed Successfully:
+          Stack Name: {{ network_project_name }}
           VPC ID: {{ vpc_id }}
           Public Subnet IDs: {{ public_subnet_ids }}
           Private Subnet IDs: {{ private_subnet_ids }}
