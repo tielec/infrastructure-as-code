@@ -94,33 +94,32 @@ export function createLoadBalancer(
         greenTargetGroup = dependsOn(greenTargetGroup, dependencies);
     }
 
-    // HTTPリスナー（HTTPSにリダイレクト）
-    let httpListener = new aws.lb.Listener(`${shortProjectName}-http`, {
-        loadBalancerArn: alb.arn,
-        port: 80,
-        protocol: "HTTP",
-        defaultActions: [{
-            type: "redirect",
-            redirect: {
-                port: "443",
-                protocol: "HTTPS",
-                statusCode: "HTTP_301",
-            },
-        }],
-    });
-
-    // 依存関係を設定
-    httpListener = dependsOn(httpListener, [alb]);
-
-    // HTTPSリスナー
-    let httpsListener;
-    
     // 実際の環境ではいずれACM証明書を使用する想定
     const config = new pulumi.Config();
     const certificateArn = config.get("certificateArn");
     
+    // リスナーの設定
+    let httpListener, httpsListener, httpDirectListener;
+    
     if (certificateArn) {
-        // ACM証明書が設定されている場合はHTTPSリスナーを作成
+        // SSL証明書が設定されている場合
+        
+        // HTTPリスナー（HTTPSにリダイレクト）
+        httpListener = new aws.lb.Listener(`${shortProjectName}-http`, {
+            loadBalancerArn: alb.arn,
+            port: 80,
+            protocol: "HTTP",
+            defaultActions: [{
+                type: "redirect",
+                redirect: {
+                    port: "443",
+                    protocol: "HTTPS",
+                    statusCode: "HTTP_301",
+                },
+            }],
+        });
+
+        // HTTPSリスナー
         httpsListener = new aws.lb.Listener(`${shortProjectName}-https`, {
             loadBalancerArn: alb.arn,
             port: 443,
@@ -132,14 +131,23 @@ export function createLoadBalancer(
                 targetGroupArn: blueTargetGroup.arn, // デフォルトでBlue環境にトラフィックを送信
             }],
         });
-
-        // 依存関係を設定
-        httpsListener = dependsOn(httpsListener, [alb, blueTargetGroup]);
     } else {
-        // 証明書が設定されていない場合は一時的にHTTPリスナーでBlue環境に転送
-        // 注: 本番環境ではHTTPSを推奨
-        console.log("Warning: No SSL certificate provided. Creating HTTP listener for testing only.");
-        httpsListener = new aws.lb.Listener(`${shortProjectName}-http-fwd`, {
+        // 証明書が設定されていない場合は直接HTTPでBlue環境に転送
+        console.log("Warning: No SSL certificate provided. Creating HTTP listeners for testing only.");
+        
+        // ポート80のHTTPリスナー（直接転送）
+        httpListener = new aws.lb.Listener(`${shortProjectName}-http`, {
+            loadBalancerArn: alb.arn,
+            port: 80,
+            protocol: "HTTP",
+            defaultActions: [{
+                type: "forward",
+                targetGroupArn: blueTargetGroup.arn,
+            }],
+        });
+        
+        // バックアップとして8080ポートも設定（既存のもの）
+        httpDirectListener = new aws.lb.Listener(`${shortProjectName}-http-8080`, {
             loadBalancerArn: alb.arn,
             port: 8080,
             protocol: "HTTP",
@@ -148,9 +156,15 @@ export function createLoadBalancer(
                 targetGroupArn: blueTargetGroup.arn,
             }],
         });
+    }
 
-        // 依存関係を設定
+    // 依存関係を設定
+    httpListener = dependsOn(httpListener, [alb, blueTargetGroup]);
+    if (httpsListener) {
         httpsListener = dependsOn(httpsListener, [alb, blueTargetGroup]);
+    }
+    if (httpDirectListener) {
+        httpDirectListener = dependsOn(httpDirectListener, [alb, blueTargetGroup]);
     }
 
     // ブルーグリーン切り替え用のパラメータストア
@@ -171,6 +185,7 @@ export function createLoadBalancer(
         greenTargetGroup,
         httpListener,
         httpsListener,
+        httpDirectListener,
         activeEnvironmentParam,
         albDnsName: alb.dnsName,
     };
