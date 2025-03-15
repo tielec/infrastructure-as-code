@@ -53,7 +53,7 @@ const jenkinsEfs = createJenkinsEfs(
     projectName,
     environment,
     network.vpc.id,
-    securityGroups.jenkinsSecurityGroup.id,
+    securityGroups.efsSecurityGroup.id,  // Jenkinsではなく、EFS用のセキュリティグループを使用
     [network.privateSubnetA.id, network.privateSubnetB.id],
     [...networkDependencies, securityGroups.jenkinsSecurityGroup, securityGroups.efsSecurityGroup]
 );
