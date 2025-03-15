@@ -1,0 +1,106 @@
+---
+# deploy_jenkins_network.yml
+# Jenkinsインフラのネットワークリソース（VPC、サブネット等）をデプロイ
+
+- name: Deploy Network Infrastructure with Pulumi
+  block:
+    - name: Check if Pulumi network module exists
+      ansible.builtin.stat:
+        path: "{{ pulumi_path }}/network"
+      register: pulumi_network_dir
+      
+    - name: Fail if Pulumi network module doesn't exist
+      ansible.builtin.fail:
+        msg: "Pulumi network module not found at {{ pulumi_path }}/network. Please ensure the repository is properly cloned."
+      when: not pulumi_network_dir.stat.exists
+    
+    - name: Check if Pulumi stack exists
+      ansible.builtin.shell: |
+        cd {{ pulumi_path }}/network
+        pulumi stack ls | grep {{ environment }} || echo "stack_not_found"
+      register: stack_select_result
+      changed_when: false
+      failed_when: false
+      
+    - name: Initialize Pulumi stack if not exists
+      ansible.builtin.shell: |
+        cd {{ pulumi_path }}/network
+        pulumi stack init {{ environment }}
+      when: "'stack_not_found' in stack_select_result.stdout"
+    
+    - name: Install npm dependencies if needed
+      ansible.builtin.shell: |
+        cd {{ pulumi_path }}/network
+        npm install
+      args:
+        creates: "{{ pulumi_path }}/network/node_modules"
+      
+    - name: Create or update Pulumi config for environment
+      ansible.builtin.shell: |
+        cd {{ pulumi_path }}/network
+        pulumi stack select {{ environment }}
+        pulumi config set aws:region {{ aws_region }}
+        pulumi config set jenkins-network:projectName {{ project_name }}
+      register: pulumi_config_result
+      changed_when: pulumi_config_result.rc == 0
+    
+    - name: Preview Pulumi deployment
+      ansible.builtin.shell: |
+        cd {{ pulumi_path }}/network
+        pulumi preview
+      register: pulumi_preview_result
+      changed_when: false
+      
+    - name: Display Pulumi preview
+      ansible.builtin.debug:
+        msg: "{{ pulumi_preview_result.stdout_lines }}"
+      
+    - name: Deploy network stack with Pulumi
+      ansible.builtin.shell: |
+        cd {{ pulumi_path }}/network
+        pulumi up --yes
+      register: pulumi_up_result
+      changed_when: "'No changes required' not in pulumi_up_result.stdout"
+    
+    - name: Extract VPC ID from Pulumi output
+      ansible.builtin.shell: |
+        cd {{ pulumi_path }}/network
+        pulumi stack output vpcId
+      register: vpc_id_result
+      changed_when: false
+      
+    - name: Extract subnet IDs from Pulumi output
+      ansible.builtin.shell: |
+        cd {{ pulumi_path }}/network
+        pulumi stack output publicSubnetIds
+        pulumi stack output privateSubnetIds
+      register: subnet_ids_result
+      changed_when: false
+      
+    - name: Set network facts for use in other playbooks
+      ansible.builtin.set_fact:
+        vpc_id: "{{ vpc_id_result.stdout | trim }}"
+        public_subnet_ids: "{{ subnet_ids_result.stdout_lines[0] | trim }}"
+        private_subnet_ids: "{{ subnet_ids_result.stdout_lines[1] | trim }}"
+        network_deployed: true
+      
+    - name: Summary of network deployment
+      ansible.builtin.debug:
+        msg: |
+          Network Infrastructure Deployed Successfully:
+          VPC ID: {{ vpc_id }}
+          Public Subnet IDs: {{ public_subnet_ids }}
+          Private Subnet IDs: {{ private_subnet_ids }}
+  
+  rescue:
+    - name: Set network deployment status on failure
+      ansible.builtin.set_fact:
+        network_deployed: false
+      
+    - name: Display error
+      ansible.builtin.debug:
+        msg: "Failed to deploy network infrastructure. See error details above."
+      
+    - name: Fail the playbook
+      ansible.builtin.fail:
+        msg: "Network deployment failed."

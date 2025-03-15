@@ -1,0 +1,137 @@
+---
+# jenkins-setup-pipeline.yml
+# Jenkins環境構築の全体フローを管理するプレイブック
+
+- name: Jenkins Infrastructure Setup Pipeline
+  hosts: localhost
+  connection: local
+  gather_facts: yes
+  
+  vars:
+    # プロジェクト全体の設定
+    project_name: jenkins-infra
+    environment: "{{ env | default('dev') }}"
+    aws_region: "{{ aws_region | default('ap-northeast-1') }}"
+    pulumi_path: "{{ playbook_dir }}/../../pulumi"
+    
+    # 各段階の実行フラグ - コマンドラインから上書き可能
+    run_network: "{{ run_network | default(true) }}"
+    run_security: "{{ run_security | default(false) }}"
+    run_storage: "{{ run_storage | default(false) }}"
+    run_loadbalancer: "{{ run_loadbalancer | default(false) }}"
+    run_controller: "{{ run_controller | default(false) }}"
+    run_agent: "{{ run_agent | default(false) }}"
+    run_application: "{{ run_application | default(false) }}"
+    
+    # Jenkins設定
+    jenkins_version: "{{ jenkins_version | default('latest') }}"
+    recovery_mode: "{{ recovery_mode | default(false) }}"
+    
+  tasks:
+    - name: Display pipeline information
+      ansible.builtin.debug:
+        msg: |
+          Jenkins Infrastructure Setup Pipeline
+          ==================================
+          Project: {{ project_name }}
+          Environment: {{ environment }}
+          AWS Region: {{ aws_region }}
+          
+          Execution Plan:
+          - Network: {{ run_network }}
+          - Security: {{ run_security }}
+          - Storage: {{ run_storage }}
+          - Load Balancer: {{ run_loadbalancer }}
+          - Jenkins Controller: {{ run_controller }}
+          - Jenkins Agent: {{ run_agent }}
+          - Jenkins Application: {{ run_application }}
+    
+    - name: Check Ansible version
+      ansible.builtin.debug:
+        msg: "Ansible version: {{ ansible_version.full }}"
+    
+    - name: Check AWS credentials
+      ansible.builtin.shell: aws sts get-caller-identity
+      register: aws_identity
+      changed_when: false
+      ignore_errors: yes
+      
+    - name: Display AWS identity
+      ansible.builtin.debug:
+        msg: "AWS Identity: {{ aws_identity.stdout }}"
+      when: aws_identity.rc == 0
+      
+    - name: Warning about AWS credentials
+      ansible.builtin.debug:
+        msg: "WARNING: AWS credentials not configured or not working properly"
+      when: aws_identity.rc != 0
+      
+    - name: Check Pulumi installation
+      ansible.builtin.shell: pulumi version
+      register: pulumi_version
+      changed_when: false
+      ignore_errors: yes
+      
+    - name: Display Pulumi version
+      ansible.builtin.debug:
+        msg: "Pulumi version: {{ pulumi_version.stdout }}"
+      when: pulumi_version.rc == 0
+      
+    - name: Warning about Pulumi installation
+      ansible.builtin.debug:
+        msg: "WARNING: Pulumi not installed or not in PATH"
+      when: pulumi_version.rc != 0
+    
+    # ネットワークインフラのデプロイ
+    - name: Deploy Network Infrastructure
+      ansible.builtin.include_tasks: deploy_jenkins_network.yml
+      when: run_network | bool
+    
+    # 以下はコメントアウト - 段階的に実装していく
+    # セキュリティグループのデプロイ
+    # - name: Deploy Security Groups
+    #   ansible.builtin.include_tasks: deploy_jenkins_security.yml
+    #   when: run_security | bool and network_deployed | default(false) | bool
+    
+    # ストレージ（EFS）のデプロイ
+    # - name: Deploy Storage (EFS)
+    #   ansible.builtin.include_tasks: deploy_jenkins_storage.yml
+    #   when: run_storage | bool and security_deployed | default(false) | bool
+    
+    # ロードバランサーのデプロイ
+    # - name: Deploy Load Balancer
+    #   ansible.builtin.include_tasks: deploy_jenkins_loadbalancer.yml
+    #   when: run_loadbalancer | bool and security_deployed | default(false) | bool
+    
+    # Jenkinsコントローラーのデプロイ
+    # - name: Deploy Jenkins Controller
+    #   ansible.builtin.include_tasks: deploy_jenkins_controller.yml
+    #   when: run_controller | bool and storage_deployed | default(false) | bool and loadbalancer_deployed | default(false) | bool
+    
+    # Jenkinsエージェントのデプロイ
+    # - name: Deploy Jenkins Agent
+    #   ansible.builtin.include_tasks: deploy_jenkins_agent.yml
+    #   when: run_agent | bool and controller_deployed | default(false) | bool
+    
+    # Jenkinsアプリケーション設定のデプロイ
+    # - name: Deploy Jenkins Application Configuration
+    #   ansible.builtin.include_tasks: deploy_jenkins_application.yml
+    #   when: run_application | bool and controller_deployed | default(false) | bool
+    
+    # デプロイメント結果サマリー
+    - name: Deployment Summary
+      ansible.builtin.debug:
+        msg: |
+          Jenkins Infrastructure Deployment Summary
+          =======================================
+          Network: {{ network_deployed | default(false) }}
+          # Security: {{ security_deployed | default(false) }}
+          # Storage: {{ storage_deployed | default(false) }}
+          # Load Balancer: {{ loadbalancer_deployed | default(false) }}
+          # Jenkins Controller: {{ controller_deployed | default(false) }}
+          # Jenkins Agent: {{ agent_deployed | default(false) }}
+          # Jenkins Application: {{ application_deployed | default(false) }}
+          
+          # Access Information:
+          # Jenkins URL: http://{{ jenkins_url | default('Not available yet') }}
+          # SSH Access: ssh -i <your-key.pem> ec2-user@{{ jenkins_ip | default('Not available yet') }}
