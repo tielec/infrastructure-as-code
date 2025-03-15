@@ -156,14 +156,32 @@ PulumiがAWS APIにアクセスするために必要な認証情報を設定し�
 source scripts/aws-credentials.sh
 ```
 
-### 8. Jenkinsインフラの段階的デプロイ
+### 8. Ansibleの設定確認とパラメータの更新
 
-Ansibleを使用してJenkinsインフラを段階的にデプロイします：
+Ansible設定とパラメータを確認する手順です：
 
 ```bash
 # リポジトリのディレクトリに移動
 cd infrastructure-as-code
 
+# ansible.cfg の設定を確認
+cat ansible/ansible.cfg
+
+# 共有パラメータファイルを確認
+cat ansible/inventory/group_vars/all.yml
+
+# 設定ファイルとパラメータに問題がないことを確認するための実行
+cd ansible/playbooks
+ansible-playbook jenkins-setup-pipeline.yml -e "env=dev" --check
+```
+
+`--check`オプションを使うと、実際のデプロイを行わずにプレイブックの実行可能性を確認できます。
+
+### 9. Jenkinsインフラの段階的デプロイ
+
+確認ができたら、実際のデプロイを行います：
+
+```bash
 # 全体のデプロイパイプラインを実行（初期構築）
 cd ansible/playbooks
 ansible-playbook jenkins-setup-pipeline.yml -e "env=dev"
@@ -200,11 +218,11 @@ ansible-playbook deploy_jenkins_security.yml -e "env=dev"
 ```
 jenkins-infra/
 ├─ansible/                     # Ansible設定ファイル
-│  ├─ansible.cfg
+│  ├─ansible.cfg               # Ansible設定
 │  ├─inventory/
 │  │  ├─hosts
 │  │  └─group_vars/
-│  │      └─all.yml
+│  │      └─all.yml            # 共通変数定義ファイル
 │  ├─playbooks/                # 各種プレイブック
 │  │  ├─jenkins-setup-pipeline.yml  # メインパイプライン
 │  │  ├─deploy_jenkins_network.yml
@@ -280,6 +298,21 @@ jenkins-infra/
 - **AWS認証エラー**: `source scripts/aws-credentials.sh`を実行して認証情報を更新
 - **Jenkinsへのアクセス問題**: セキュリティグループの設定を確認
 - **EFSマウント問題**: マウントターゲットの可用性を確認
+
+## 共有パラメータの確認と修正
+
+共有パラメータファイル（`all.yml`）が適切に設定されていることを確認してください。パラメータを変更する場合は以下の手順で行います：
+
+```bash
+# パラメータファイルを編集
+vi ansible/inventory/group_vars/all.yml
+
+# エディタで必要な変更を行った後、構文をチェック
+ansible-playbook ansible/playbooks/jenkins-setup-pipeline.yml -e "env=dev" --syntax-check
+
+# 変更を適用（コミットする前にチェックモードで実行）
+ansible-playbook ansible/playbooks/jenkins-setup-pipeline.yml -e "env=dev" --check
+```
 
 ## 注意事項
 
