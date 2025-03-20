@@ -159,13 +159,12 @@ Resources:
           
           # Install Ansible
           pip3 install ansible
-          
           # Install Pulumi          
-          mkdir -p /home/ec2-user/.pulumi/bin
-          curl -fsSL https://get.pulumi.com | tar -xzC /home/ec2-user/.pulumi/bin --strip-components=1
+          curl -fsSL https://get.pulumi.com | sh
+          mkdir -p /home/ec2-user/.pulumi
+          cp -r /root/.pulumi/* /home/ec2-user/.pulumi/
           chown -R ec2-user:ec2-user /home/ec2-user/.pulumi
-
-          # Set PATH for all users
+          ln -s /home/ec2-user/.pulumi/bin/pulumi /usr/local/bin/pulumi    # Set PATH for all users
           echo 'export PATH=$PATH:$HOME/.pulumi/bin' >> /etc/profile
           echo 'export PATH=$PATH:$HOME/.pulumi/bin' >> /root/.bashrc
           echo 'export PATH=$PATH:$HOME/.pulumi/bin' >> /home/ec2-user/.bashrc
