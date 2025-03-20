@@ -1,0 +1,16 @@
+# Pulumiスタックの出力を取得するヘルパータスク
+
+- name: Get stack outputs
+  ansible.builtin.shell: |
+    cd {{ pulumi_project_path }}
+    {{ pulumi_commands.stack_output }} {{ output_name | default('') }}
+  register: stack_output_result
+  changed_when: false
+  when: not ansible_check_mode
+
+- name: Set mock outputs (check mode)
+  ansible.builtin.set_fact:
+    stack_output_result:
+      stdout: "{{ mock_output | default('mock-output-for-check-mode') }}"
+      rc: 0
+  when: ansible_check_mode

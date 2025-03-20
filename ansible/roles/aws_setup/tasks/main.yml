@@ -1,0 +1,30 @@
+# AWS認証情報のセットアップと確認
+
+- name: Check AWS credentials
+  ansible.builtin.shell: aws sts get-caller-identity
+  register: aws_cred_check
+  changed_when: false
+  ignore_errors: true
+
+- name: Display AWS credentials status
+  ansible.builtin.debug:
+    msg: "AWS credentials: {{ 'Configured correctly' if aws_cred_check.rc == 0 else 'Not configured or invalid' }}"
+
+- name: Configure AWS credentials if not already set
+  ansible.builtin.shell: |
+    source {{ aws_credentials_script_path }}
+  args:
+    executable: /bin/bash
+  when: aws_cred_check.rc != 0
+
+- name: Verify AWS credentials after configuration
+  ansible.builtin.shell: aws sts get-caller-identity
+  register: aws_cred_verify
+  changed_when: false
+  failed_when: aws_cred_verify.rc != 0
+  when: aws_cred_check.rc != 0
+
+- name: Create AWS variables template for Pulumi commands
+  ansible.builtin.set_fact:
+    aws_env_vars: "export $(aws configure export-credentials --format env | xargs) &&"
+  when: aws_cred_check.rc == 0 or aws_cred_verify.rc == 0

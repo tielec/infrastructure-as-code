@@ -1,5 +1,5 @@
 ---
-# jenkins-setup-pipeline.yml
+# jenkins_setup_pipeline.yml
 # Jenkins環境構築の全体フローを管理するプレイブック
 
 - name: Jenkins Infrastructure Setup Pipeline
@@ -16,6 +16,10 @@
     aws_region_name: "ap-northeast-1"
     # Pulumiプロジェクトパス
     pulumi_path: "{{ playbook_dir }}/../../pulumi"
+    
+  roles:
+    - aws_setup
+    - pulumi_helper
     
   tasks:
     - name: Display pipeline information
@@ -56,22 +60,6 @@
           Project name: {{ infra.project_name | default('Not defined in all.yml') }}
           AWS Region: {{ infra.aws.default_region | default('Not defined in all.yml') }}
       when: all_yml_check.stat.exists
-    
-    - name: Check AWS credentials
-      ansible.builtin.shell: aws sts get-caller-identity
-      register: aws_identity
-      changed_when: false
-      ignore_errors: yes
-      
-    - name: Display AWS identity
-      ansible.builtin.debug:
-        msg: "AWS Identity: {{ aws_identity.stdout }}"
-      when: aws_identity.rc == 0
-      
-    - name: Warning about AWS credentials
-      ansible.builtin.debug:
-        msg: "WARNING: AWS credentials not configured or not working properly"
-      when: aws_identity.rc != 0
     
     # ネットワークインフラのデプロイ (明示的に変数を渡す)
     - name: Deploy Network Infrastructure

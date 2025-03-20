@@ -1,0 +1,14 @@
+# Pulumiプロジェクト操作の共通ヘルパータスク
+
+- name: Ensure AWS credentials are properly set
+  ansible.builtin.include_role:
+    name: aws_setup
+
+- name: Set Pulumi standard tasks
+  ansible.builtin.set_fact:
+    pulumi_commands:
+      preview: "{{ aws_env_vars }} pulumi preview"
+      up: "{{ aws_env_vars }} pulumi up --yes"
+      destroy: "{{ aws_env_vars }} pulumi destroy --yes"
+      refresh: "{{ aws_env_vars }} pulumi refresh --yes"
+      stack_output: "{{ aws_env_vars }} pulumi stack output"

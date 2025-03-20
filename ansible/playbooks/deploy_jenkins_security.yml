@@ -19,66 +19,24 @@
           - Network Pulumi Project: {{ network_project_name }}
           - Environment: {{ env_name }}
     
-    - name: Check if Pulumi security module exists
-      ansible.builtin.stat:
-        path: "{{ pulumi_path }}/security"
-      register: pulumi_security_dir
-      
-    - name: Fail if Pulumi security module doesn't exist
-      ansible.builtin.fail:
-        msg: "Pulumi security module not found at {{ pulumi_path }}/security. Please ensure the repository is properly cloned."
-      when: not pulumi_security_dir.stat.exists
+    # Pulumiヘルパータスクを呼び出す
+    - name: Initialize security stack
+      ansible.builtin.include_role:
+        name: pulumi_helper
+        tasks_from: init_stack
+      vars:
+        pulumi_project_path: "{{ pulumi_path }}/security"
+        stack_name: "{{ env_name }}"
     
-    - name: Check if AWS credentials are configured
-      ansible.builtin.shell: aws sts get-caller-identity
-      register: aws_cred_check
-      changed_when: false
-      ignore_errors: true
-      
-    - name: Display AWS credentials status
-      ansible.builtin.debug:
-        msg: "AWS credentials: {{ 'Configured correctly' if aws_cred_check.rc == 0 else 'Not configured or invalid' }}"
-    
-    - name: Configure AWS credentials if not already set
-      ansible.builtin.shell: |
-        source /root/infrastructure-as-code/scripts/aws-credentials.sh
-      args:
-        executable: /bin/bash
-      when: aws_cred_check.rc != 0
-      
-    - name: Check if Pulumi stack exists
+    - name: Configure security stack
       ansible.builtin.shell: |
         cd {{ pulumi_path }}/security
-        pulumi stack ls | grep {{ env_name }} || echo "stack_not_found"
-      register: stack_select_result
-      changed_when: false
-      failed_when: false
-      
-    - name: Initialize Pulumi stack if not exists
-      ansible.builtin.shell: |
-        cd {{ pulumi_path }}/security
-        pulumi stack init {{ env_name }}
-      when: "'stack_not_found' in stack_select_result.stdout"
-    
-    - name: Install npm dependencies if needed
-      ansible.builtin.shell: |
-        cd {{ pulumi_path }}/security
-        npm install
-      args:
-        creates: "{{ pulumi_path }}/security/node_modules"
-      
-    - name: Create or update Pulumi config for environment
-      ansible.builtin.shell: |
-        cd {{ pulumi_path }}/security
-        pulumi stack select {{ env_name }}
-        pulumi config set aws:region {{ aws_region_name }}
-        # 正しいプロジェクト名を設定
-        pulumi config set {{ security_project_name }}:projectName {{ project_name }}
-        # ネットワークスタック名を設定
-        pulumi config set {{ security_project_name }}:networkStackName {{ network_project_name }}
+        {{ aws_env_vars }} pulumi config set aws:region {{ aws_region_name }}
+        {{ aws_env_vars }} pulumi config set {{ security_project_name }}:projectName {{ project_name }}
+        {{ aws_env_vars }} pulumi config set {{ security_project_name }}:networkStackName {{ network_project_name }}
       register: pulumi_config_result
       changed_when: pulumi_config_result.rc == 0
-      
+    
     # セキュリティグループのindex.tsファイルを確認
     - name: Check security/index.ts for StackReference
       ansible.builtin.shell: |
@@ -93,77 +51,91 @@
       ansible.builtin.debug:
         msg: "{{ stackref_check_result.stdout_lines }}"
     
-    - name: Verify VPC ID exists from network stack (skip in check mode)
-      ansible.builtin.shell: |
-        cd {{ pulumi_path }}/network
-        pulumi stack output vpcId || echo "mock-vpc-id-for-check-mode"
-      register: vpc_id_check
-      changed_when: false
-      failed_when: vpc_id_check.rc != 0 and not ansible_check_mode
-      when: not ansible_check_mode
-      
-    - name: Mock VPC ID verification (check mode)
-      ansible.builtin.set_fact:
-        vpc_id_check:
-          stdout: "mock-vpc-id-for-check-mode"
-          rc: 0
-      when: ansible_check_mode
-        
+    # VPC IDの確認
+    - name: Get VPC ID from network stack
+      ansible.builtin.include_role:
+        name: pulumi_helper
+        tasks_from: get_outputs
+      vars:
+        pulumi_project_path: "{{ pulumi_path }}/network"
+        output_name: "vpcId"
+        mock_output: "mock-vpc-id-for-check-mode"
+    
     - name: Display VPC ID
       ansible.builtin.debug:
-        msg: "Using VPC ID: {{ vpc_id_check.stdout | trim }}"
+        msg: "Using VPC ID: {{ stack_output_result.stdout | trim }}"
     
-    - name: Preview Pulumi deployment
-      ansible.builtin.shell: |
-        cd {{ pulumi_path }}/security
-        pulumi preview
-      register: pulumi_preview_result
-      changed_when: false
-      
-    - name: Display Pulumi preview
-      ansible.builtin.debug:
-        msg: "{{ pulumi_preview_result.stdout_lines }}"
-      
-    - name: Deploy security stack with Pulumi
-      ansible.builtin.shell: |
-        cd {{ pulumi_path }}/security
-        pulumi up --yes
-      register: pulumi_up_result
-      changed_when: "'No changes required' not in pulumi_up_result.stdout"
-      when: not ansible_check_mode
+    # Pulumiプレビュー
+    - name: Preview security deployment
+      ansible.builtin.include_role:
+        name: pulumi_helper
+        tasks_from: preview
+      vars:
+        pulumi_project_path: "{{ pulumi_path }}/security"
     
-    - name: Mock deploy security stack (check mode)
-      ansible.builtin.debug:
-        msg: "Would deploy security stack with Pulumi (check mode active)"
-      when: ansible_check_mode
+    # Pulumiデプロイ
+    - name: Deploy security stack
+      ansible.builtin.include_role:
+        name: pulumi_helper
+        tasks_from: deploy
+      vars:
+        pulumi_project_path: "{{ pulumi_path }}/security"
     
-    - name: Extract security group IDs from Pulumi output
-      ansible.builtin.shell: |
-        cd {{ pulumi_path }}/security
-        pulumi stack output albSecurityGroupId || echo "mock-alb-sg-id"
-        pulumi stack output jenkinsSecurityGroupId || echo "mock-jenkins-sg-id"
-        pulumi stack output jenkinsAgentSecurityGroupId || echo "mock-agent-sg-id"
-        pulumi stack output efsSecurityGroupId || echo "mock-efs-sg-id"
-      register: sg_ids_result
-      changed_when: false
-      when: not ansible_check_mode
-      
-    - name: Mock security group IDs extraction (check mode)
+    # セキュリティグループIDの取得
+    - name: Get ALB security group ID
+      ansible.builtin.include_role:
+        name: pulumi_helper
+        tasks_from: get_outputs
+      vars:
+        pulumi_project_path: "{{ pulumi_path }}/security"
+        output_name: "albSecurityGroupId"
+        mock_output: "mock-alb-sg-id"
+    
+    - name: Set ALB security group ID
       ansible.builtin.set_fact:
-        sg_ids_result:
-          stdout_lines: 
-            - "mock-alb-sg-id"
-            - "mock-jenkins-sg-id"
-            - "mock-agent-sg-id"
-            - "mock-efs-sg-id"
-      when: ansible_check_mode
-      
+        alb_sg_id: "{{ stack_output_result.stdout | trim }}"
+    
+    - name: Get Jenkins security group ID
+      ansible.builtin.include_role:
+        name: pulumi_helper
+        tasks_from: get_outputs
+      vars:
+        pulumi_project_path: "{{ pulumi_path }}/security"
+        output_name: "jenkinsSecurityGroupId"
+        mock_output: "mock-jenkins-sg-id"
+    
+    - name: Set Jenkins security group ID
+      ansible.builtin.set_fact:
+        jenkins_sg_id: "{{ stack_output_result.stdout | trim }}"
+    
+    - name: Get Jenkins agent security group ID
+      ansible.builtin.include_role:
+        name: pulumi_helper
+        tasks_from: get_outputs
+      vars:
+        pulumi_project_path: "{{ pulumi_path }}/security"
+        output_name: "jenkinsAgentSecurityGroupId"
+        mock_output: "mock-agent-sg-id"
+    
+    - name: Set Jenkins agent security group ID
+      ansible.builtin.set_fact:
+        jenkins_agent_sg_id: "{{ stack_output_result.stdout | trim }}"
+    
+    - name: Get EFS security group ID
+      ansible.builtin.include_role:
+        name: pulumi_helper
+        tasks_from: get_outputs
+      vars:
+        pulumi_project_path: "{{ pulumi_path }}/security"
+        output_name: "efsSecurityGroupId"
+        mock_output: "mock-efs-sg-id"
+    
+    - name: Set EFS security group ID
+      ansible.builtin.set_fact:
+        efs_sg_id: "{{ stack_output_result.stdout | trim }}"
+    
     - name: Set security facts for use in other playbooks
       ansible.builtin.set_fact:
-        alb_sg_id: "{{ sg_ids_result.stdout_lines[0] | trim }}"
-        jenkins_sg_id: "{{ sg_ids_result.stdout_lines[1] | trim }}"
-        jenkins_agent_sg_id: "{{ sg_ids_result.stdout_lines[2] | trim }}"
-        efs_sg_id: "{{ sg_ids_result.stdout_lines[3] | trim }}"
         security_deployed: true
       
     - name: Summary of security groups deployment

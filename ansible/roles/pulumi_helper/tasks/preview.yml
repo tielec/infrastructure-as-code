@@ -1,0 +1,12 @@
+# Pulumiのプレビュー実行ヘルパータスク
+
+- name: Preview Pulumi deployment
+  ansible.builtin.shell: |
+    cd {{ pulumi_project_path }}
+    {{ pulumi_commands.preview }}
+  register: pulumi_preview_result
+  changed_when: false
+  
+- name: Display Pulumi preview
+  ansible.builtin.debug:
+    msg: "{{ pulumi_preview_result.stdout_lines }}"

@@ -1,0 +1,14 @@
+# Pulumiのデプロイ実行ヘルパータスク
+
+- name: Deploy with Pulumi
+  ansible.builtin.shell: |
+    cd {{ pulumi_project_path }}
+    {{ pulumi_commands.up }}
+  register: pulumi_up_result
+  changed_when: "'No changes required' not in pulumi_up_result.stdout"
+  when: not ansible_check_mode
+  
+- name: Mock deploy (check mode)
+  ansible.builtin.debug:
+    msg: "Would deploy stack with Pulumi (check mode active)"
+  when: ansible_check_mode

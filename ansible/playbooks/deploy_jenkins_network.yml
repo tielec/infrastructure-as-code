@@ -19,125 +19,82 @@
           - Environment: {{ env_name }}
           - VPC CIDR: {{ vpc_cidr | default('10.0.0.0/16') }}
     
-    - name: Check if Pulumi network module exists
-      ansible.builtin.stat:
-        path: "{{ pulumi_path }}/network"
-      register: pulumi_network_dir
-      
-    - name: Fail if Pulumi network module doesn't exist
-      ansible.builtin.fail:
-        msg: "Pulumi network module not found at {{ pulumi_path }}/network. Please ensure the repository is properly cloned."
-      when: not pulumi_network_dir.stat.exists
-
-    - name: Check if AWS credentials are configured
-      ansible.builtin.shell: aws sts get-caller-identity
-      register: aws_cred_check
-      changed_when: false
-      ignore_errors: true
-      
-    - name: Display AWS credentials status
-      ansible.builtin.debug:
-        msg: "AWS credentials: {{ 'Configured correctly' if aws_cred_check.rc == 0 else 'Not configured or invalid' }}"
+    # Pulumiヘルパータスクを呼び出す
+    - name: Initialize network stack
+      ansible.builtin.include_role:
+        name: pulumi_helper
+        tasks_from: init_stack
+      vars:
+        pulumi_project_path: "{{ pulumi_path }}/network"
+        stack_name: "{{ env_name }}"
     
-    - name: Configure AWS credentials if not already set
-      ansible.builtin.shell: |
-        source /root/infrastructure-as-code/scripts/aws-credentials.sh
-      args:
-        executable: /bin/bash
-      when: aws_cred_check.rc != 0
-
-    - name: Check if Pulumi stack exists
+    - name: Configure network stack
       ansible.builtin.shell: |
         cd {{ pulumi_path }}/network
-        pulumi stack ls | grep {{ env_name }} || echo "stack_not_found"
-      register: stack_select_result
-      changed_when: false
-      failed_when: false
-      
-    - name: Initialize Pulumi stack if not exists
-      ansible.builtin.shell: |
-        cd {{ pulumi_path }}/network
-        pulumi stack init {{ env_name }}
-      when: "'stack_not_found' in stack_select_result.stdout"
-    
-    - name: Install npm dependencies if needed
-      ansible.builtin.shell: |
-        cd {{ pulumi_path }}/network
-        npm install
-      args:
-        creates: "{{ pulumi_path }}/network/node_modules"
-      
-    - name: Create or update Pulumi config for environment
-      ansible.builtin.shell: |
-        cd {{ pulumi_path }}/network
-        pulumi stack select {{ env_name }}
-        pulumi config set aws:region {{ aws_region_name }}
-        # 正しいプロジェクト名を設定
-        pulumi config set {{ network_project_name }}:projectName {{ project_name }}
-        pulumi config set {{ network_project_name }}:vpcCidr {{ vpc_cidr | default('10.0.0.0/16') }}
+        {{ aws_env_vars }} pulumi config set aws:region {{ aws_region_name }}
+        {{ aws_env_vars }} pulumi config set {{ network_project_name }}:projectName {{ project_name }}
+        {{ aws_env_vars }} pulumi config set {{ network_project_name }}:vpcCidr {{ vpc_cidr | default('10.0.0.0/16') }}
       register: pulumi_config_result
       changed_when: pulumi_config_result.rc == 0
     
-    - name: Preview Pulumi deployment
-      ansible.builtin.shell: |
-        cd {{ pulumi_path }}/network
-        pulumi preview
-      register: pulumi_preview_result
-      changed_when: false
-      
-    - name: Display Pulumi preview
-      ansible.builtin.debug:
-        msg: "{{ pulumi_preview_result.stdout_lines }}"
-      
-    - name: Deploy network stack with Pulumi
-      ansible.builtin.shell: |
-        cd {{ pulumi_path }}/network
-        pulumi up --yes
-      register: pulumi_up_result
-      changed_when: "'No changes required' not in pulumi_up_result.stdout"
-      when: not ansible_check_mode
+    # Pulumiプレビュー
+    - name: Preview network deployment
+      ansible.builtin.include_role:
+        name: pulumi_helper
+        tasks_from: preview
+      vars:
+        pulumi_project_path: "{{ pulumi_path }}/network"
     
-    - name: Mock deploy network stack (check mode)
-      ansible.builtin.debug:
-        msg: "Would deploy network stack with Pulumi (check mode active)"
-      when: ansible_check_mode
+    # Pulumiデプロイ
+    - name: Deploy network stack
+      ansible.builtin.include_role:
+        name: pulumi_helper
+        tasks_from: deploy
+      vars:
+        pulumi_project_path: "{{ pulumi_path }}/network"
     
-    - name: Extract VPC ID from Pulumi output
-      ansible.builtin.shell: |
-        cd {{ pulumi_path }}/network
-        pulumi stack output vpcId || echo "mock-vpc-id-for-check-mode"
-      register: vpc_id_result
-      changed_when: false
-      when: not ansible_check_mode
-      
-    - name: Mock VPC ID extraction (check mode)
+    # スタック出力の取得
+    - name: Get VPC ID from stack outputs
+      ansible.builtin.include_role:
+        name: pulumi_helper
+        tasks_from: get_outputs
+      vars:
+        pulumi_project_path: "{{ pulumi_path }}/network"
+        output_name: "vpcId"
+        mock_output: "mock-vpc-id-for-check-mode"
+    
+    - name: Set VPC ID
       ansible.builtin.set_fact:
-        vpc_id_result:
-          stdout: "mock-vpc-id-for-check-mode"
-      when: ansible_check_mode
-      
-    - name: Extract subnet IDs from Pulumi output
-      ansible.builtin.shell: |
-        cd {{ pulumi_path }}/network
-        pulumi stack output publicSubnetIds || echo "['mock-public-subnet-1','mock-public-subnet-2']"
-        pulumi stack output privateSubnetIds || echo "['mock-private-subnet-1','mock-private-subnet-2']"
-      register: subnet_ids_result
-      changed_when: false
-      when: not ansible_check_mode
-      
-    - name: Mock subnet IDs extraction (check mode)
+        vpc_id: "{{ stack_output_result.stdout | trim }}"
+    
+    - name: Get public subnet IDs
+      ansible.builtin.include_role:
+        name: pulumi_helper
+        tasks_from: get_outputs
+      vars:
+        pulumi_project_path: "{{ pulumi_path }}/network"
+        output_name: "publicSubnetIds"
+        mock_output: "['mock-public-subnet-1','mock-public-subnet-2']"
+    
+    - name: Set public subnet IDs
       ansible.builtin.set_fact:
-        subnet_ids_result:
-          stdout_lines: 
-            - "['mock-public-subnet-1','mock-public-subnet-2']"
-            - "['mock-private-subnet-1','mock-private-subnet-2']"
-      when: ansible_check_mode
-      
+        public_subnet_ids: "{{ stack_output_result.stdout | trim }}"
+    
+    - name: Get private subnet IDs
+      ansible.builtin.include_role:
+        name: pulumi_helper
+        tasks_from: get_outputs
+      vars:
+        pulumi_project_path: "{{ pulumi_path }}/network"
+        output_name: "privateSubnetIds"
+        mock_output: "['mock-private-subnet-1','mock-private-subnet-2']"
+    
+    - name: Set private subnet IDs
+      ansible.builtin.set_fact:
+        private_subnet_ids: "{{ stack_output_result.stdout | trim }}"
+    
     - name: Set network facts for use in other playbooks
       ansible.builtin.set_fact:
-        vpc_id: "{{ vpc_id_result.stdout | trim }}"
-        public_subnet_ids: "{{ subnet_ids_result.stdout_lines[0] | trim }}"
-        private_subnet_ids: "{{ subnet_ids_result.stdout_lines[1] | trim }}"
         network_deployed: true
         # スタック参照情報も保存
         network_stack_name: "{{ network_project_name }}"
