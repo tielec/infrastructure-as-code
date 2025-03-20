@@ -1,0 +1,34 @@
+# スタックの初期化とセットアップのヘルパータスク
+
+- name: Check if project directory exists
+  ansible.builtin.stat:
+    path: "{{ pulumi_project_path }}"
+  register: project_dir
+  failed_when: not project_dir.stat.exists
+  
+- name: Check if Pulumi stack exists
+  ansible.builtin.shell: |
+    cd {{ pulumi_project_path }}
+    {{ aws_env_vars }} pulumi stack ls | grep {{ stack_name }} || echo "stack_not_found"
+  register: stack_select_result
+  changed_when: false
+  failed_when: false
+  
+- name: Initialize Pulumi stack if not exists
+  ansible.builtin.shell: |
+    cd {{ pulumi_project_path }}
+    {{ aws_env_vars }} pulumi stack init {{ stack_name }}
+  when: "'stack_not_found' in stack_select_result.stdout"
+  
+- name: Install npm dependencies if needed
+  ansible.builtin.shell: |
+    cd {{ pulumi_project_path }}
+    npm install
+  args:
+    creates: "{{ pulumi_project_path }}/node_modules"
+    
+- name: Select stack
+  ansible.builtin.shell: |
+    cd {{ pulumi_project_path }}
+    {{ aws_env_vars }} pulumi stack select {{ stack_name }}
+  changed_when: false
