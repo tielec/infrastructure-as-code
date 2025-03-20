@@ -160,9 +160,12 @@ Resources:
           # Install Ansible
           pip3 install ansible
           
-          # Install Pulumi
-          curl -fsSL https://get.pulumi.com | sh
-          
+          # Install Pulumi - directly download specific version tarball to ec2-user home
+          PULUMI_VERSION="3.157.0"
+          mkdir -p /home/ec2-user/.pulumi/bin
+          curl -fsSL "https://get.pulumi.com/releases/sdk/pulumi-v${PULUMI_VERSION}-linux-x64.tar.gz" | tar -xzC /home/ec2-user/.pulumi/bin --strip-components=1
+          chown -R ec2-user:ec2-user /home/ec2-user/.pulumi
+                    
           # Set PATH for all users
           echo 'export PATH=$PATH:$HOME/.pulumi/bin' >> /etc/profile
           echo 'export PATH=$PATH:$HOME/.pulumi/bin' >> /root/.bashrc
@@ -178,7 +181,7 @@ Resources:
           echo "Pip: $(pip3 --version)"
           echo "AWS CLI: $(aws --version)"
           echo "Ansible: $(ansible --version | head -n 1)"
-          echo "Pulumi: $(if [ -f $HOME/.pulumi/bin/pulumi ]; then $HOME/.pulumi/bin/pulumi version; else echo "Not found"; fi)"
+          echo "Pulumi: $(which pulumi > /dev/null && pulumi version || echo "Not found")"
           echo "======================="
           EOF
           
@@ -204,6 +207,11 @@ Resources:
              ssh-keygen -t ed25519 -C "your_email@example.com"
              cat ~/.ssh/id_ed25519.pub
           4. Clone your repository and start working!
+          
+          If Pulumi shows as "Not found", try the following:
+          - Run "source ~/.bashrc" to update your path
+          - Run "export PATH=$PATH:$HOME/.pulumi/bin" manually
+          - Use the full path: "$HOME/.pulumi/bin/pulumi"
           
           See the project README.md for detailed instructions.
           EOF
