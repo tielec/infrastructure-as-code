@@ -1,5 +1,5 @@
 AWSTemplateFormatVersion: '2010-09-09'
-Description: 'Minimal Bootstrap EC2 Instance'
+Description: 'Bootstrap EC2 Instance with Ansible and Pulumi pre-installed'
 
 Parameters:
   KeyName:
@@ -143,20 +143,80 @@ Resources:
       UserData:
         Fn::Base64: !Sub |
           #!/bin/bash -xe
-          yum update -y
-          yum install -y git jq
-
-          # Install Node.js
-          curl -sL https://rpm.nodesource.com/setup_16.x | bash -
-          yum install -y nodejs
           
+          # Update and install basic packages
+          yum update -y
+          yum install -y git jq python3 python3-pip unzip
+
           # Install AWS CLI v2
           curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
           unzip awscliv2.zip
           ./aws/install
           
+          # Install Node.js
+          curl -sL https://rpm.nodesource.com/setup_16.x | bash -
+          yum install -y nodejs
+          
+          # Install Ansible
+          pip3 install ansible
+          
+          # Install Pulumi
+          curl -fsSL https://get.pulumi.com | sh
+          
+          # Set PATH for all users
+          echo 'export PATH=$PATH:$HOME/.pulumi/bin' >> /etc/profile
+          echo 'export PATH=$PATH:$HOME/.pulumi/bin' >> /root/.bashrc
+          echo 'export PATH=$PATH:$HOME/.pulumi/bin' >> /home/ec2-user/.bashrc
+          
+          # Create installation verification script
+          cat > /home/ec2-user/verify-installation.sh << 'EOF'
+          #!/bin/bash
+          echo "=== Installed Tools ==="
+          echo "Node.js: $(node --version)"
+          echo "npm: $(npm --version)"
+          echo "Python: $(python3 --version)"
+          echo "Pip: $(pip3 --version)"
+          echo "AWS CLI: $(aws --version)"
+          echo "Ansible: $(ansible --version | head -n 1)"
+          echo "Pulumi: $(if [ -f $HOME/.pulumi/bin/pulumi ]; then $HOME/.pulumi/bin/pulumi version; else echo "Not found"; fi)"
+          echo "======================="
+          EOF
+          
+          chmod +x /home/ec2-user/verify-installation.sh
+          chown ec2-user:ec2-user /home/ec2-user/verify-installation.sh
+          
+          # Create README file with instructions
+          cat > /home/ec2-user/README.txt << 'EOF'
+          === Bootstrap Environment Setup Complete ===
+          
+          Your EC2 bootstrap instance has been configured with the following tools:
+          - AWS CLI v2
+          - Node.js 16.x
+          - Python 3
+          - Ansible
+          - Pulumi
+          - Git
+          
+          Next steps:
+          1. Run "./verify-installation.sh" to check installed tools
+          2. Setup Pulumi: "pulumi login"
+          3. Setup Git SSH keys for repository access: 
+             ssh-keygen -t ed25519 -C "your_email@example.com"
+             cat ~/.ssh/id_ed25519.pub
+          4. Clone your repository and start working!
+          
+          See the project README.md for detailed instructions.
+          EOF
+          
+          chown ec2-user:ec2-user /home/ec2-user/README.txt
+          
+          # Create a welcome message
+          echo "cat /home/ec2-user/README.txt" >> /home/ec2-user/.bashrc
+          echo "echo ''" >> /home/ec2-user/.bashrc
+          
           # Bootstrap complete message
-          echo "Bootstrap complete! You can now SSH into this instance."
+          echo "Bootstrap complete! Ansible and Pulumi are now installed."
+
       Tags:
         - Key: Name
           Value: Bootstrap-Instance
