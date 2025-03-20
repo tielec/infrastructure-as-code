@@ -79,11 +79,11 @@
         file: deploy_jenkins_network.yml
         apply:
           vars:
-            # 共通変数を明示的に渡す
+            # 変数名をリネームして自己参照を避ける
             network_project_name: "jenkins-network"
-            project_name: "{{ project_name }}"
-            env_name: "{{ env_name }}"
-            aws_region_name: "{{ aws_region_name }}"
+            project_name_value: "{{ project_name }}"  # 別名で渡す
+            env_name_value: "{{ env_name }}"
+            aws_region_name_value: "{{ aws_region_name }}"
       when: run_network | default(true) | bool
       
     # ネットワークデプロイが成功したらセキュリティグループをデプロイ
@@ -92,12 +92,12 @@
         file: deploy_jenkins_security.yml
         apply:
           vars:
-            # 共通変数を明示的に渡す
+            # 変数名をリネームして自己参照を避ける
             security_project_name: "jenkins-security"
             network_project_name: "jenkins-network"
-            project_name: "{{ project_name }}"
-            env_name: "{{ env_name }}"
-            aws_region_name: "{{ aws_region_name }}"
+            project_name_value: "{{ project_name }}"  # 別名で渡す
+            env_name_value: "{{ env_name }}"
+            aws_region_name_value: "{{ aws_region_name }}"
       when: 
         - network_deployed is defined and network_deployed
         - run_security | default(true) | bool

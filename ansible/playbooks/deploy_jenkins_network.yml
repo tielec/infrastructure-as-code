@@ -2,6 +2,12 @@
 # deploy_jenkins_network.yml
 # Jenkinsインフラのネットワークリソース（VPC、サブネット等）をデプロイ
 
+- name: Set local variables for network deployment
+  ansible.builtin.set_fact:
+    project_name: "{{ project_name_value }}"
+    env_name: "{{ env_name_value }}"
+    aws_region_name: "{{ aws_region_name_value }}"
+
 - name: Deploy Network Infrastructure with Pulumi
   block:
     - name: Display network deployment information

@@ -2,6 +2,12 @@
 # deploy_jenkins_security.yml
 # Jenkinsインフラのセキュリティグループをデプロイ
 
+- name: Set local variables for security deployment
+  ansible.builtin.set_fact:
+    project_name: "{{ project_name_value }}"
+    env_name: "{{ env_name_value }}"
+    aws_region_name: "{{ aws_region_name_value }}"
+
 - name: Deploy Security Groups with Pulumi
   block:
     - name: Display security deployment information
