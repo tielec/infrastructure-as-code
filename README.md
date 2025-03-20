@@ -7,6 +7,8 @@
 - AWSアカウント
 - 有効なEC2キーペア
 - CloudFormationスタックをデプロイする権限
+- Ansible (バージョン2.9以上)
+- Pulumi CLI
 
 ## セットアップ手順
 
@@ -33,7 +35,7 @@
 
 ### 2. ブートストラップ環境の構築
 
-次に、Pulumiを実行するための踏み台サーバーをCloudFormationで構築します。このテンプレートはAnsible、Pulumi、その他必要なツールを自動的にインストールします。
+次に、Pulumiを実行するための踏み台サーバーをCloudFormationで構築します。
 
 1. AWSコンソールのCloudFormationから以下のテンプレートをアップロード：
     - `bootstrap/cfn-bootstrap-template.yaml`
@@ -52,41 +54,45 @@
 
 ### 3. 踏み台サーバーへの接続
 
-1. 以下のコマンドで踏み台サーバーにSSH接続します：
-   ```bash
-   ssh -i bootstrap-environment-key.pem ec2-user@<BootstrapPublicIP>
-   ```
+1. AWSコンソールにログイン
+2. EC2ダッシュボードに移動
+3. インスタンスを選択
+4. 「接続」ボタンをクリック
+5. 「EC2 Instance Connectを使用して接続する」を選択
+6. 「接続」ボタンをクリック
 
-   または
+これにより、ブラウザベースのターミナルが開き、インスタンスに直接接続できます。
 
-2. AWSコンソールからEC2インスタンスに接続する方法：
-   - AWSコンソールにログイン
-   - EC2ダッシュボードに移動
-   - インスタンスを選択
-   - 「接続」ボタンをクリック
-   - 「EC2 Instance Connectを使用して接続する」を選択
-   - 「接続」ボタンをクリック
+### 4. Ansible と Pulumi のセットアップ
 
-接続すると、自動的にインストールされたツールの概要と次のステップを示すREADMEが表示されます。
-
-### 4. インストール検証と初期設定
-
-踏み台サーバーには以下のツールが自動的にインストールされています：
-- AWS CLI v2
-- Node.js 16.x
-- Python 3 と pip3
-- Ansible
-- Pulumi
-- Git
-
-最初にインストールが正常に完了したことを確認します：
+踏み台サーバーに必要なツールをインストールします。
 
 ```bash
-# インストールされたツールを確認
-./verify-installation.sh
+# rootユーザーに切り替え
+sudo su -
+
+# 必要なパッケージをインストール
+yum update -y
+yum install -y python3 python3-pip git
+
+# Ansible のインストール
+pip3 install ansible
+
+# Pulumi のインストール
+curl -fsSL https://get.pulumi.com | sh
+
+# パスを設定
+echo 'export PATH=$PATH:$HOME/.pulumi/bin' >> ~/.bashrc
+source ~/.bashrc
+
+# バージョン確認
+ansible --version
+pulumi version
 ```
 
-次に、Pulumiアカウントにログインします：
+### 5. Pulumiアカウントへのログイン
+
+Pulumiを使用するには、アカウント認証が必要です：
 
 ```bash
 # Pulumiアカウントにログイン
@@ -114,10 +120,10 @@ Welcome to Pulumi!
 Logged in to pulumi.com as username (https://app.pulumi.com/username)
 ```
 
-### 5. GitHubリポジトリのセットアップ
+### 6. GitHubリポジトリのセットアップ
 
 ```bash
-# SSHキーを作成
+# SSHキーを作成（rootユーザーとして）
 ssh-keygen -t ed25519 -C "your_email@example.com"
 
 # 公開キーの表示（この内容をGitHubに登録）
@@ -128,7 +134,7 @@ cat ~/.ssh/id_ed25519.pub
 1. GitHubにログイン
 2. 右上のプロフィールアイコン → Settings
 3. 左側メニューの「SSH and GPG keys」→「New SSH key」
-4. タイトルを入力（例: EC2 Bootstrap Instance）
+4. タイトルを入力（例: EC2 Bootstrap Instance Root）
 5. キータイプは「Authentication Key」を選択
 6. 表示された公開キー（`ssh-ed25519`で始まる行全体）を貼り付け
 7. 「Add SSH key」をクリック
@@ -136,12 +142,12 @@ cat ~/.ssh/id_ed25519.pub
 GitHub認証設定後：
 
 ```bash
-# リポジトリをクローン
+# リポジトリをクローン（rootユーザーとして）
 git clone git@github.com:tielec/infrastructure-as-code.git
 cd infrastructure-as-code
 ```
 
-### 6. AWS認証情報の設定
+### 7. AWS認証情報の設定
 
 PulumiがAWS APIにアクセスするために必要な認証情報を設定します：
 
@@ -150,7 +156,7 @@ PulumiがAWS APIにアクセスするために必要な認証情報を設定し�
 source scripts/aws-credentials.sh
 ```
 
-### 7. Ansibleの設定確認とパラメータの更新
+### 8. Ansibleの設定確認とパラメータの更新
 
 Ansible設定とパラメータを確認する手順です：
 
@@ -171,7 +177,7 @@ ansible-playbook jenkins-setup-pipeline.yml -e "env=dev" --check
 
 `--check`オプションを使うと、実際のデプロイを行わずにプレイブックの実行可能性を確認できます。
 
-### 8. Jenkinsインフラの段階的デプロイ
+### 9. Jenkinsインフラの段階的デプロイ
 
 確認ができたら、実際のデプロイを行います：
 
