@@ -15,7 +15,6 @@ const environment = pulumi.getStack();
 const networkStackName = config.get("networkStackName") || "jenkins-network";
 
 // 既存のネットワークスタックから値を取得
-// 修正: 動的に構築するが、設定からスタック名を取得
 const networkStack = new pulumi.StackReference(`${pulumi.getOrganization()}/${networkStackName}/${environment}`);
 const vpcId = networkStack.getOutput("vpcId");
 

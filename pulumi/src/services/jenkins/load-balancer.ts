@@ -1,6 +1,4 @@
 /**
- * services/jenkins/load-balancer.ts
- * 
  * Jenkins サービス用のApplication Load Balancerを作成するモジュール。
  * Blue/Greenデプロイメント戦略をサポートしています。
  */

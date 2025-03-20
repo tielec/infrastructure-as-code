@@ -79,29 +79,19 @@
       register: pulumi_config_result
       changed_when: pulumi_config_result.rc == 0
       
-    # セキュリティグループのindex.tsファイルを確認・更新
-    - name: Check and update security index.ts for correct stack reference
+    # セキュリティグループのindex.tsファイルを確認
+    - name: Check security/index.ts for StackReference
       ansible.builtin.shell: |
         cd {{ pulumi_path }}/security
-        # オリジナルファイルのバックアップ作成
-        cp -f index.ts index.ts.backup || true
-        
         # ファイルの内容を表示
         echo "Checking security/index.ts content:"
         grep -n "StackReference" index.ts || echo "StackReference not found in file"
-        
-        # StackReferenceの行を正しいスタック名に更新
-        sed -i 's/const networkStack = new pulumi.StackReference.*/const networkStack = new pulumi.StackReference(`${pulumi.getOrganization()}\/${config.get("networkStackName") || "jenkins-network"}\/${environment}");/g' index.ts
-        
-        # 変更内容確認
-        echo "Updated StackReference line:"
-        grep -n "StackReference" index.ts
-      register: update_index_result
+      register: stackref_check_result
       changed_when: false
     
-    - name: Display update result
+    - name: Display StackReference check result
       ansible.builtin.debug:
-        msg: "{{ update_index_result.stdout_lines }}"
+        msg: "{{ stackref_check_result.stdout_lines }}"
     
     - name: Verify VPC ID exists from network stack (skip in check mode)
       ansible.builtin.shell: |
