@@ -66,6 +66,7 @@
           Pulumi Projects:
           - Network: jenkins-network
           - Security: jenkins-security
+          - Storage: jenkins-storage
     
     - name: Check Ansible version
       ansible.builtin.debug:
@@ -121,6 +122,24 @@
       when: 
         - network_deployed is defined and network_deployed
         - run_security | default(true) | bool
+        
+    # セキュリティグループデプロイが成功したらストレージ（EFS）をデプロイ
+    - name: Deploy Storage Infrastructure (EFS)
+      ansible.builtin.include_tasks: 
+        file: deploy_jenkins_storage.yml
+        apply:
+          vars:
+            # 変数名をリネームして自己参照を避ける
+            storage_project_name: "jenkins-storage"
+            network_project_name: "jenkins-network"
+            security_project_name: "jenkins-security"
+            project_name_value: "{{ project_name }}"  # 別名で渡す
+            env_name_value: "{{ env_name }}"
+            aws_region_name_value: "{{ aws_region_name }}"
+      when: 
+        - network_deployed is defined and network_deployed
+        - security_deployed is defined and security_deployed
+        - run_storage | default(true) | bool
 
     # デプロイメント結果サマリー
     - name: Deployment Summary
@@ -130,9 +149,9 @@
           =======================================
           Network: {{ network_deployed | default(false) }}
           Security: {{ security_deployed | default(false) }}
+          Storage (EFS): {{ storage_deployed | default(false) }}
           
           # 今後追加予定:
-          # Storage: (Not deployed yet)
           # Load Balancer: (Not deployed yet)
           # Jenkins Controller: (Not deployed yet)
           # Jenkins Agent: (Not deployed yet)
