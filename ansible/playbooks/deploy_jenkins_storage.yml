@@ -1,3 +1,4 @@
+---
 # deploy_jenkins_storage.yml
 # Jenkinsインフラのストレージリソース（EFS）をデプロイ
 
@@ -7,21 +8,38 @@
   gather_facts: no
   
   vars:
-    # 既定値を設定して、引数として渡されなかった場合のフォールバック
-    project_name_value: "{{ project_name_value | default('jenkins-infra') }}"
-    env_name_value: "{{ env_name_value | default(env) | default('dev') }}"
-    aws_region_name_value: "{{ aws_region_name_value | default('ap-northeast-1') }}"
-    storage_project_name: "{{ storage_project_name | default('jenkins-storage') }}"
-    network_project_name: "{{ network_project_name | default('jenkins-network') }}"
-    security_project_name: "{{ security_project_name | default('jenkins-security') }}"
-    pulumi_path: "{{ pulumi_path | default(playbook_dir ~ '/../../pulumi') }}"
+    # 既定値を直接指定 - 再帰的な参照を避ける
+    project_name: "{{ lookup('env', 'PROJECT_NAME') | default('jenkins-infra') }}"
+    env_name: "{{ lookup('env', 'ENV_NAME') | default(env) | default('dev') }}"
+    aws_region_name: "{{ lookup('env', 'AWS_REGION_NAME') | default('ap-northeast-1') }}"
+    storage_project_name: "jenkins-storage"
+    network_project_name: "jenkins-network"
+    security_project_name: "jenkins-security"
+    pulumi_path: "{{ playbook_dir }}/../../pulumi"
   
   tasks:
-    - name: Set local variables for storage deployment
+    # 明示的に渡された値がある場合は上書き
+    - name: Override variables with explicitly provided values
       ansible.builtin.set_fact:
-        project_name: "{{ project_name_value }}"
-        env_name: "{{ env_name_value }}"
-        aws_region_name: "{{ aws_region_name_value }}"
+        project_name: "{{ project_name_value | default(project_name) }}"
+        env_name: "{{ env_name_value | default(env_name) }}"
+        aws_region_name: "{{ aws_region_name_value | default(aws_region_name) }}"
+        storage_project_name: "{{ storage_project_name_value | default(storage_project_name) }}"
+        network_project_name: "{{ network_project_name_value | default(network_project_name) }}"
+        security_project_name: "{{ security_project_name_value | default(security_project_name) }}"
+        pulumi_path: "{{ pulumi_path_value | default(pulumi_path) }}"
+      when: project_name_value is defined or env_name_value is defined or aws_region_name_value is defined or storage_project_name_value is defined or network_project_name_value is defined or security_project_name_value is defined or pulumi_path_value is defined
+
+    - name: Display variables to be used
+      ansible.builtin.debug:
+        msg: |
+          Using the following values:
+          - project_name: {{ project_name }}
+          - env_name: {{ env_name }}
+          - aws_region_name: {{ aws_region_name }}
+          - storage_project_name: {{ storage_project_name }}
+          - network_project_name: {{ network_project_name }}
+          - security_project_name: {{ security_project_name }}
 
     - name: Ensure aws-env.sh has execute permissions
       ansible.builtin.file:
