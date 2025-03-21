@@ -10,14 +10,22 @@
   vars:
     # 環境名はコマンドラインから指定可能
     env_name: "{{ env | default('dev') }}"
-    # ベースとなるプロジェクト名 - all.ymlから取得せず直接定義
-    project_name: "jenkins-infra"
-    # リージョン設定
-    aws_region_name: "ap-northeast-1"
     # Pulumiプロジェクトパス
     pulumi_path: "{{ playbook_dir }}/../../pulumi"
     # スクリプトディレクトリ
     scripts_dir: "{{ playbook_dir }}/../../scripts"
+  
+  pre_tasks:
+    # all.yml から変数を読み込む
+    - name: Include group_vars/all.yml
+      ansible.builtin.include_vars:
+        file: "{{ playbook_dir }}/../inventory/group_vars/all.yml"
+        
+    # 必要な変数を設定
+    - name: Set required variables from all.yml
+      ansible.builtin.set_fact:
+        project_name: "{{ infra.project_name }}"
+        aws_region_name: "{{ infra.aws.default_region }}"
     
   roles:
     - aws_setup
@@ -64,61 +72,28 @@
           AWS Region: {{ aws_region_name }}
           
           Pulumi Projects:
-          - Network: jenkins-network
-          - Security: jenkins-security
-          - Storage: jenkins-storage
+          - Network: {{ infra.pulumi.network_project }}
+          - Security: {{ infra.pulumi.security_project }}
+          - Storage: {{ infra.pulumi.storage_project }}
     
     - name: Check Ansible version
       ansible.builtin.debug:
         msg: "Ansible version: {{ ansible_version.full }}"
     
-    - name: Check if group_vars/all.yml exists
-      ansible.builtin.stat:
-        path: "{{ playbook_dir }}/../inventory/group_vars/all.yml"
-      register: all_yml_check
-    
-    - name: Report group_vars/all.yml status
-      ansible.builtin.debug:
-        msg: "group_vars/all.yml file {{ 'exists' if all_yml_check.stat.exists else 'does not exist' }}"
-    
-    - name: Include group_vars/all.yml if exists
-      ansible.builtin.include_vars:
-        file: "{{ playbook_dir }}/../inventory/group_vars/all.yml"
-      when: all_yml_check.stat.exists
-      
-    - name: Display project information after including all.yml
-      ansible.builtin.debug:
-        msg: |
-          Project information after including all.yml:
-          Project name: {{ infra.project_name | default('Not defined in all.yml') }}
-          AWS Region: {{ infra.aws.default_region | default('Not defined in all.yml') }}
-      when: all_yml_check.stat.exists
-    
-    # ネットワークインフラのデプロイ (明示的に変数を渡す)
+    # ネットワークインフラのデプロイ
     - name: Deploy Network Infrastructure
       ansible.builtin.include_tasks: 
         file: deploy_jenkins_network.yml
-        apply:
-          vars:
-            # 変数名をリネームして自己参照を避ける
-            network_project_name: "jenkins-network"
-            project_name_value: "{{ project_name }}"  # 別名で渡す
-            env_name_value: "{{ env_name }}"
-            aws_region_name_value: "{{ aws_region_name }}"
+      vars:
+        env: "{{ env_name }}"  # 環境名を直接渡す
       when: run_network | default(true) | bool
       
     # ネットワークデプロイが成功したらセキュリティグループをデプロイ
     - name: Deploy Security Groups
       ansible.builtin.include_tasks: 
         file: deploy_jenkins_security.yml
-        apply:
-          vars:
-            # 変数名をリネームして自己参照を避ける
-            security_project_name: "jenkins-security"
-            network_project_name: "jenkins-network"
-            project_name_value: "{{ project_name }}"  # 別名で渡す
-            env_name_value: "{{ env_name }}"
-            aws_region_name_value: "{{ aws_region_name }}"
+      vars:
+        env: "{{ env_name }}"  # 環境名を直接渡す
       when: 
         - network_deployed is defined and network_deployed
         - run_security | default(true) | bool
@@ -127,20 +102,13 @@
     - name: Deploy Storage Infrastructure (EFS)
       ansible.builtin.include_tasks: 
         file: deploy_jenkins_storage.yml
-        apply:
-          vars:
-            # 変数名をリネームして自己参照を避ける
-            storage_project_name: "jenkins-storage"
-            network_project_name: "jenkins-network"
-            security_project_name: "jenkins-security"
-            project_name_value: "{{ project_name }}"  # 別名で渡す
-            env_name_value: "{{ env_name }}"
-            aws_region_name_value: "{{ aws_region_name }}"
+      vars:
+        env: "{{ env_name }}"  # 環境名を直接渡す
       when: 
         - network_deployed is defined and network_deployed
         - security_deployed is defined and security_deployed
         - run_storage | default(true) | bool
-
+        
     # デプロイメント結果サマリー
     - name: Deployment Summary
       ansible.builtin.debug:
