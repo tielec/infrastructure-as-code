@@ -197,6 +197,16 @@
         group: ec2-user
         mode: '0644'
         
+    # スクリプトに実行権限を付与するタスク - CI/CDパイプライン実行時の権限問題を防止するため
+    - name: Set execute permissions on all shell scripts
+      ansible.builtin.file:
+        path: "{{ item }}"
+        mode: '0755'
+        state: file
+      with_fileglob:
+        - "{{ playbook_dir }}/../scripts/**/*.sh"
+        - "{{ playbook_dir }}/../scripts/*.sh"
+      
     - name: Display completion message
       ansible.builtin.debug:
         msg: "Bootstrap environment setup completed successfully!"
