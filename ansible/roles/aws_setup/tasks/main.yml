@@ -26,5 +26,9 @@
 
 - name: Create AWS variables template for Pulumi commands
   ansible.builtin.set_fact:
-    aws_env_vars: "export $(aws configure export-credentials --format env | xargs) &&"
+    aws_env_vars: >
+      AWS_ACCESS_KEY_ID=$(aws configure get aws_access_key_id) 
+      AWS_SECRET_ACCESS_KEY=$(aws configure get aws_secret_access_key) 
+      AWS_SESSION_TOKEN=$(aws configure get aws_session_token 2>/dev/null || echo "") 
+      && export AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY AWS_SESSION_TOKEN &&
   when: aws_cred_check.rc == 0 or aws_cred_verify.rc == 0
