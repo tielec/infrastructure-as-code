@@ -19,7 +19,7 @@ REPO_ROOT="$(dirname "$SCRIPT_DIR")"
 cd "$REPO_ROOT"
 
 # Ansibleプレイブックの格納場所
-ANSIBLE_DIR="$REPO_ROOT/bootstrap/ansible"
+ANSIBLE_DIR="$REPO_ROOT/ansible"
 PLAYBOOK_PATH="$ANSIBLE_DIR/bootstrap-setup.yml"
 
 # プレイブックの存在確認

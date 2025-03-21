@@ -33,7 +33,7 @@
 
 ### 2. ブートストラップ環境の構築
 
-次に、Pulumiを実行するための踏み台サーバーをCloudFormationで構築します。このテンプレートはAnsible、Pulumi、その他必要なツールを自動的にインストールします。
+基本的なツールをインストールしたEC2踏み台サーバーをCloudFormationで構築します。
 
 1. AWSコンソールのCloudFormationから以下のテンプレートをアップロード：
     - `bootstrap/cfn-bootstrap-template.yaml`
@@ -50,130 +50,50 @@
     - `VPCID`: 作成されたVPC ID
     - `PublicSubnetID`: パブリックサブネットID
 
-### 3. 踏み台サーバーへの接続
+### 3. 踏み台サーバーへの接続とセットアップ
 
 1. 以下のコマンドで踏み台サーバーにSSH接続します：
    ```bash
    ssh -i bootstrap-environment-key.pem ec2-user@<BootstrapPublicIP>
    ```
 
-   または
+2. 接続すると、簡易セットアップガイドが表示されます。以下の2ステップでセットアップが完了します：
 
-2. AWSコンソールからEC2インスタンスに接続する方法：
-   - AWSコンソールにログイン
-   - EC2ダッシュボードに移動
-   - インスタンスを選択
-   - 「接続」ボタンをクリック
-   - 「EC2 Instance Connectを使用して接続する」を選択
-   - 「接続」ボタンをクリック
+   ```bash
+   # 1. リポジトリをクローン
+   git clone <リポジトリURL>
+   cd infrastructure-as-code
+   
+   # 2. ブートストラップセットアップスクリプトを実行
+   chmod +x ./scripts/setup-bootstrap.sh
+   ./scripts/setup-bootstrap.sh
+   ```
 
-接続すると、自動的にインストールされたツールの概要と次のステップを示すREADMEが表示されます。
+   このスクリプトは以下の処理を自動的に行います：
+   - GitHubアクセス用のSSHキー生成（必要な場合）
+   - Node.js, AWS CLI, Pulumi, Dockerなどの必要なツールのインストール
+   - AWS認証情報の設定
+   - Pulumiの初期設定
 
-### 4. インストール検証と初期設定
+### 4. インストール検証と最終設定
 
-踏み台サーバーには以下のツールが自動的にインストールされています：
-- AWS CLI v2
-- Node.js 16.x
-- Python 3 と pip3
-- Ansible
-- Pulumi
-- Git
-
-最初にインストールが正常に完了したことを確認します：
+セットアップ完了後、以下のコマンドでインストールを検証できます：
 
 ```bash
 # インストールされたツールを確認
 ./verify-installation.sh
 ```
 
-検証が完了したら、Pulumiアカウントにログインします：
+Pulumiアカウントにログインします（セットアップスクリプト実行中に完了していない場合）：
 
 ```bash
 # Pulumiアカウントにログイン
-pulumi login
+sudo pulumi login
 ```
 
-以下のようなプロンプトが表示されます：
-```
-Manage your Pulumi stacks by logging in.
-Run `pulumi login --help` for alternative login options.
-Enter your access token from https://app.pulumi.com/account/tokens
-    or hit <ENTER> to log in using your browser
-```
+### 5. Jenkinsインフラの段階的デプロイ
 
-アクセストークンを入力する場合：
-1. ブラウザで https://app.pulumi.com/account/tokens にアクセス
-2. 「NEW ACCESS TOKEN」をクリックしてトークンを作成
-3. トークン名を入力（例：「Bootstrap Environment」）
-4. 作成されたトークンをコピーして、プロンプトに貼り付け
-
-ログインに成功すると、以下のようなメッセージが表示されます：
-```
-Welcome to Pulumi!
-...
-Logged in to pulumi.com as username (https://app.pulumi.com/username)
-```
-
-### 5. GitHubリポジトリのセットアップ
-
-```bash
-# SSHキーを作成
-ssh-keygen -t ed25519 -C "your_email@example.com"
-
-# 公開キーの表示（この内容をGitHubに登録）
-cat ~/.ssh/id_ed25519.pub
-```
-
-表示された公開キー全体をGitHubアカウントに追加します：
-1. GitHubにログイン
-2. 右上のプロフィールアイコン → Settings
-3. 左側メニューの「SSH and GPG keys」→「New SSH key」
-4. タイトルを入力（例: EC2 Bootstrap Instance）
-5. キータイプは「Authentication Key」を選択
-6. 表示された公開キー（`ssh-ed25519`で始まる行全体）を貼り付け
-7. 「Add SSH key」をクリック
-
-GitHub認証設定後：
-
-```bash
-# リポジトリをクローン
-git clone git@github.com:tielec/infrastructure-as-code.git
-cd infrastructure-as-code
-```
-
-### 6. AWS認証情報の設定
-
-PulumiがAWS APIにアクセスするために必要な認証情報を設定します：
-
-```bash
-# スクリプトを実行して認証情報を環境変数に設定
-source scripts/aws-credentials.sh
-```
-
-### 7. Ansibleの設定確認とパラメータの更新
-
-Ansible設定とパラメータを確認する手順です：
-
-```bash
-# リポジトリのディレクトリに移動
-cd infrastructure-as-code
-
-# ansible.cfg の設定を確認
-cat ansible/ansible.cfg
-
-# 共有パラメータファイルを確認
-cat ansible/inventory/group_vars/all.yml
-
-# 設定ファイルとパラメータに問題がないことを確認するための実行
-cd ansible
-ansible-playbook playbooks/jenkins_setup_pipeline.yml -e "env=dev" --check
-```
-
-`--check`オプションを使うと、実際のデプロイを行わずにプレイブックの実行可能性を確認できます。
-
-### 8. Jenkinsインフラの段階的デプロイ
-
-確認ができたら、実際のデプロイを行います：
+環境が準備できたら、以下のコマンドでインフラを段階的にデプロイします：
 
 ```bash
 # 全体のデプロイパイプラインを実行（初期構築）
@@ -265,9 +185,9 @@ infrastructure-as-code/
 │              └─security.ts
 │
 └─scripts/                    # 設定スクリプト
-    │  aws-credentials.sh
-    │
-    └─jenkins/
+    ├─aws-credentials.sh      # AWS認証情報設定
+    ├─setup-bootstrap.sh      # ブートストラップ環境セットアップスクリプト
+    └─jenkins/                # Jenkins関連スクリプト
         ├─groovy/             # Jenkins初期化用Groovyスクリプト
         │  ├─basic-settings.groovy
         │  ├─disable-cli.groovy
@@ -293,12 +213,6 @@ infrastructure-as-code/
 - **自動スケーリングエージェント**: EC2 SpotFleetによるコスト効率の高いJenkinsエージェント
 - **リカバリーモード**: 管理者アカウントロックアウト時などの緊急アクセス用モード
 - **データ永続性**: EFSによるJenkinsデータの永続化と高可用性の確保
-
-### アーキテクチャの特徴
-
-- **レイヤー分離**: ネットワーク、セキュリティ、ストレージなどのレイヤーを分離
-- **Ansible + Pulumi連携**: Ansibleでオーケストレーション、Pulumiでインフラ構築
-- **依存関係管理**: 各スタック間の依存関係を明示的に制御
 
 ## トラブルシューティング
 
