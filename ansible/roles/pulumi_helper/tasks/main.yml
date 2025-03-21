@@ -4,11 +4,82 @@
   ansible.builtin.include_role:
     name: aws_setup
 
+- name: Check if Pulumi is installed
+  ansible.builtin.stat:
+    path: "/usr/local/bin/pulumi"
+  register: pulumi_check
+  failed_when: false
+
+- name: Check root Pulumi installation
+  ansible.builtin.stat:
+    path: "/root/.pulumi/bin/pulumi"
+  register: pulumi_root_check
+  failed_when: false
+  when: not pulumi_check.stat.exists
+
+- name: Ensure Pulumi is available
+  ansible.builtin.fail:
+    msg: "Pulumi is not installed. Please run bootstrap setup first."
+  when: not pulumi_check.stat.exists and not pulumi_root_check.stat.exists
+
+- name: Set Pulumi path
+  ansible.builtin.set_fact:
+    pulumi_bin_path: "{{ '/usr/local/bin/pulumi' if pulumi_check.stat.exists else '/root/.pulumi/bin/pulumi' }}"
+
+- name: Check Pulumi login status
+  ansible.builtin.command: "{{ pulumi_bin_path }} whoami"
+  register: pulumi_login_check
+  changed_when: false
+  failed_when: false
+  ignore_errors: true
+  
+- name: Display Pulumi login status
+  ansible.builtin.debug:
+    msg: "Pulumi login status: {{ 'Logged in as ' + pulumi_login_check.stdout if pulumi_login_check.rc == 0 else 'Not logged in' }}"
+
+- name: Check for PULUMI_ACCESS_TOKEN in environment
+  ansible.builtin.set_fact:
+    pulumi_token_set: "{{ lookup('env', 'PULUMI_ACCESS_TOKEN') | length > 0 }}"
+
+- name: Login to Pulumi using access token from environment
+  ansible.builtin.command: "{{ pulumi_bin_path }} login"
+  environment:
+    PULUMI_ACCESS_TOKEN: "{{ lookup('env', 'PULUMI_ACCESS_TOKEN') }}"
+  when: 
+    - pulumi_token_set 
+    - pulumi_login_check.rc != 0
+  register: pulumi_login_result
+  changed_when: pulumi_login_result.rc == 0
+
+- name: Warn about Pulumi login requirement
+  ansible.builtin.debug:
+    msg: >
+      WARNING: Pulumi is not logged in and no PULUMI_ACCESS_TOKEN environment variable was found.
+      Please set the PULUMI_ACCESS_TOKEN environment variable before running this playbook:
+      export PULUMI_ACCESS_TOKEN="pul-YOUR_ACCESS_TOKEN"
+  when: 
+    - not pulumi_token_set 
+    - pulumi_login_check.rc != 0
+
+- name: Verify Pulumi login after attempts
+  ansible.builtin.command: "{{ pulumi_bin_path }} whoami"
+  register: pulumi_verify_login
+  failed_when: 
+    - pulumi_token_set 
+    - pulumi_verify_login.rc != 0
+  changed_when: false
+  when: pulumi_token_set
+  
+- name: Display Pulumi login verification
+  ansible.builtin.debug:
+    msg: "Pulumi login verified: {{ pulumi_verify_login.stdout if pulumi_verify_login.rc == 0 else 'Failed to verify login' }}"
+  when: pulumi_token_set
+
 - name: Set Pulumi standard tasks
   ansible.builtin.set_fact:
     pulumi_commands:
-      preview: "{{ aws_env_vars }} pulumi preview"
-      up: "{{ aws_env_vars }} pulumi up --yes"
-      destroy: "{{ aws_env_vars }} pulumi destroy --yes"
-      refresh: "{{ aws_env_vars }} pulumi refresh --yes"
-      stack_output: "{{ aws_env_vars }} pulumi stack output"
+      preview: "{{ aws_env_vars }} {{ pulumi_bin_path }} preview"
+      up: "{{ aws_env_vars }} {{ pulumi_bin_path }} up --yes"
+      destroy: "{{ aws_env_vars }} {{ pulumi_bin_path }} destroy --yes"
+      refresh: "{{ aws_env_vars }} {{ pulumi_bin_path }} refresh --yes"
+      stack_output: "{{ aws_env_vars }} {{ pulumi_bin_path }} stack output"

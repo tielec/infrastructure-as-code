@@ -19,8 +19,8 @@ REPO_ROOT="$(dirname "$SCRIPT_DIR")"
 cd "$REPO_ROOT"
 
 # Ansibleプレイブックの格納場所
-ANSIBLE_DIR="$REPO_ROOT/ansible"
-PLAYBOOK_PATH="$ANSIBLE_DIR/playbooks/bootstrap-setup.yml"
+ANSIBLE_DIR="$REPO_ROOT/bootstrap/ansible"
+PLAYBOOK_PATH="$ANSIBLE_DIR/bootstrap-setup.yml"
 
 # プレイブックの存在確認
 if [ ! -f "$PLAYBOOK_PATH" ]; then
@@ -84,24 +84,11 @@ echo -e "${YELLOW}ansible-playbook の場所: $ANSIBLE_PLAYBOOK_PATH${NC}"
 sudo $ANSIBLE_PLAYBOOK_PATH "$PLAYBOOK_PATH" -v
 
 # Pulumi初期設定の案内
-echo -e "\n${YELLOW}Pulumiの初期設定を行います...${NC}"
-echo -e "Pulumiアカウントへのログインが必要です。以下のいずれかを選択してください:"
-echo -e "1. Pulumiクラウドアカウントにログイン（推奨）"
-echo -e "2. ローカルバックエンドを使用"
-
-read -p "選択してください [1/2]: " pulumi_choice
-
-if [ "$pulumi_choice" = "1" ]; then
-  echo -e "\n${YELLOW}Pulumiクラウドアカウントにログインします...${NC}"
-  echo -e "ブラウザでPulumiアカウントにログインし、アクセストークンを取得するよう求められます。"
-  pulumi login
-elif [ "$pulumi_choice" = "2" ]; then
-  echo -e "\n${YELLOW}Pulumiローカルバックエンドを設定します...${NC}"
-  pulumi login --local
-else
-  echo -e "\n${YELLOW}選択が不正です。Pulumiのセットアップをスキップします。${NC}"
-  echo -e "後で 'pulumi login' コマンドを実行して手動でセットアップしてください。"
-fi
+echo -e "\n${YELLOW}Pulumiの設定について${NC}"
+echo -e "${YELLOW}Pulumi認証はAnsible実行時に必要です。${NC}"
+echo -e "${YELLOW}デプロイ前に以下の環境変数を設定してください：${NC}"
+echo -e "${GREEN}export PULUMI_ACCESS_TOKEN=\"pul-YOUR_ACCESS_TOKEN\"${NC}"
+echo -e "${YELLOW}この環境変数が設定されていると、Ansible実行時に自動的にPulumiログインが行われます。${NC}"
 
 # AWS認証情報の設定
 echo -e "\n${YELLOW}AWS認証情報を設定します...${NC}"
