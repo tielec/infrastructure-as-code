@@ -429,12 +429,14 @@ const targetGroupAttachment = new aws.lb.TargetGroupAttachment(
     }
 );
 
-// エクスポート
+// エクスポート箇所を以下のように修正
 export const jenkinsInstanceId = jenkinsInstance.id;
 export const jenkinsPrivateIp = jenkinsInstance.privateIp;
-export const jenkinsInstanceProfile = jenkinsInstanceProfile.name;
+// 変数名を変更
+export const instanceProfileName = jenkinsInstanceProfile.name;
 export const jenkinsRoleArn = jenkinsRole.arn;
-export const jenkinsColor = jenkinsColor;
+// 変数名を変更
+export const deployedJenkinsColor = jenkinsColor;
 export const recoveryModeEnabled = recoveryMode;
 
 // SSM Documents ARN
