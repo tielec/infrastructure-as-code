@@ -1,0 +1,309 @@
+---
+# コントローラーデプロイタスク
+
+- name: Display controller deployment information
+  ansible.builtin.debug:
+    msg: |
+      Deploying Jenkins Controller Infrastructure:
+      - Project: {{ project_name }}
+      - Controller Pulumi Project: {{ controller_project_name }}
+      - Network Pulumi Project: {{ network_project_name }}
+      - Security Pulumi Project: {{ security_project_name }}
+      - Storage Pulumi Project: {{ storage_project_name }}
+      - LoadBalancer Pulumi Project: {{ loadbalancer_project_name }}
+      - Environment: {{ env_name }}
+      - Jenkins Version: {{ jenkins_version }}
+      - Jenkins Color: {{ jenkins_color }}
+      - Recovery Mode: {{ recovery_mode }}
+
+# ファイル権限設定
+- name: Ensure aws-env.sh has execute permissions
+  ansible.builtin.file:
+    path: "{{ scripts_dir }}/aws-env.sh"
+    mode: '0755'
+  register: aws_env_script_permission
+  
+- name: Report permission update
+  ansible.builtin.debug:
+    msg: "aws-env.sh スクリプトに実行権限を付与しました"
+  when: aws_env_script_permission.changed
+
+# Pulumiデプロイ
+- name: Deploy Controller Infrastructure with Pulumi
+  block:
+    # Pulumiヘルパータスクを呼び出す
+    - name: Initialize controller stack
+      ansible.builtin.include_role:
+        name: pulumi_helper
+        tasks_from: init_stack
+      vars:
+        pulumi_project_path: "{{ pulumi_path }}/controller"
+        stack_name: "{{ env_name }}"
+    
+    - name: Configure controller stack
+      ansible.builtin.shell: |
+        cd {{ pulumi_path }}/controller
+        source {{ scripts_dir }}/aws-env.sh 
+        eval $({{ scripts_dir }}/aws-env.sh)
+        
+        sudo -E /root/.pulumi/bin/pulumi config set aws:region {{ aws_region_name }}
+        sudo -E /root/.pulumi/bin/pulumi config set {{ controller_project_name }}:projectName {{ project_name }}
+        sudo -E /root/.pulumi/bin/pulumi config set {{ controller_project_name }}:networkStackName {{ network_project_name }}
+        sudo -E /root/.pulumi/bin/pulumi config set {{ controller_project_name }}:securityStackName {{ security_project_name }}
+        sudo -E /root/.pulumi/bin/pulumi config set {{ controller_project_name }}:storageStackName {{ storage_project_name }}
+        sudo -E /root/.pulumi/bin/pulumi config set {{ controller_project_name }}:loadbalancerStackName {{ loadbalancer_project_name }}
+        sudo -E /root/.pulumi/bin/pulumi config set {{ controller_project_name }}:jenkinsVersion {{ jenkins_version }}
+        sudo -E /root/.pulumi/bin/pulumi config set {{ controller_project_name }}:jenkinsColor {{ jenkins_color }}
+        sudo -E /root/.pulumi/bin/pulumi config set {{ controller_project_name }}:recoveryMode {{ recovery_mode | string | lower }}
+        sudo -E /root/.pulumi/bin/pulumi config set {{ controller_project_name }}:instanceType {{ instance_type }}
+        {% if key_name is defined and key_name != "" %}
+        sudo -E /root/.pulumi/bin/pulumi config set {{ controller_project_name }}:keyName {{ key_name }}
+        {% endif %}
+      register: pulumi_config_result
+      changed_when: pulumi_config_result.rc == 0
+    
+    # 依存関係の確認: 必要なスタックが全てデプロイ済みであることを確認
+    - name: Check network stack outputs
+      ansible.builtin.include_role:
+        name: pulumi_helper
+        tasks_from: get_outputs
+      vars:
+        pulumi_project_path: "{{ pulumi_path }}/network"
+        output_name: "vpcId"
+        mock_output: "mock-vpc-id-for-check-mode"
+    
+    - name: Set network VPC ID
+      ansible.builtin.set_fact:
+        network_vpc_id: "{{ stack_output_result.stdout | trim }}"
+    
+    - name: Check security stack outputs
+      ansible.builtin.include_role:
+        name: pulumi_helper
+        tasks_from: get_outputs
+      vars:
+        pulumi_project_path: "{{ pulumi_path }}/security"
+        output_name: "jenkinsSecurityGroupId"
+        mock_output: "mock-jenkins-sg-id"
+    
+    - name: Set Jenkins security group ID
+      ansible.builtin.set_fact:
+        jenkins_sg_id: "{{ stack_output_result.stdout | trim }}"
+    
+    - name: Check storage stack outputs
+      ansible.builtin.include_role:
+        name: pulumi_helper
+        tasks_from: get_outputs
+      vars:
+        pulumi_project_path: "{{ pulumi_path }}/storage"
+        output_name: "efsFileSystemId"
+        mock_output: "mock-efs-id"
+    
+    - name: Set EFS file system ID
+      ansible.builtin.set_fact:
+        efs_file_system_id: "{{ stack_output_result.stdout | trim }}"
+    
+    - name: Check loadbalancer stack outputs
+      ansible.builtin.include_role:
+        name: pulumi_helper
+        tasks_from: get_outputs
+      vars:
+        pulumi_project_path: "{{ pulumi_path }}/loadbalancer"
+        output_name: "blueTargetGroupArn"
+        mock_output: "mock-blue-tg-arn"
+    
+    - name: Set Blue target group ARN
+      ansible.builtin.set_fact:
+        blue_target_group_arn: "{{ stack_output_result.stdout | trim }}"
+    
+    - name: Display dependency validation
+      ansible.builtin.debug:
+        msg: |
+          Dependency validation:
+          VPC ID from network stack: {{ network_vpc_id }}
+          Jenkins Security Group ID from security stack: {{ jenkins_sg_id }}
+          EFS File System ID from storage stack: {{ efs_file_system_id }}
+          Blue Target Group ARN from loadbalancer stack: {{ blue_target_group_arn }}
+    
+    # Pulumiプレビュー
+    - name: Preview controller deployment
+      ansible.builtin.include_role:
+        name: pulumi_helper
+        tasks_from: preview
+      vars:
+        pulumi_project_path: "{{ pulumi_path }}/controller"
+    
+    # Pulumiデプロイ
+    - name: Deploy controller stack
+      ansible.builtin.include_role:
+        name: pulumi_helper
+        tasks_from: deploy
+      vars:
+        pulumi_project_path: "{{ pulumi_path }}/controller"
+    
+    # デプロイ後に少し待機してスタックが完全に更新されるのを待つ
+    - name: Wait for stack outputs to be available
+      ansible.builtin.pause:
+        seconds: 10
+      when: not ansible_check_mode
+    
+    # Jenkinsインスタンス情報の取得
+    - name: Get Jenkins instance ID
+      ansible.builtin.include_role:
+        name: pulumi_helper
+        tasks_from: get_outputs
+      vars:
+        pulumi_project_path: "{{ pulumi_path }}/controller"
+        output_name: "jenkinsInstanceId"
+        mock_output: "mock-jenkins-instance-id"
+    
+    - name: Set Jenkins instance ID
+      ansible.builtin.set_fact:
+        jenkins_instance_id: "{{ stack_output_result.stdout | trim }}"
+    
+    # SSMドキュメント情報の取得
+    - name: Get Jenkins SSM document ARN
+      ansible.builtin.include_role:
+        name: pulumi_helper
+        tasks_from: get_outputs
+      vars:
+        pulumi_project_path: "{{ pulumi_path }}/controller"
+        output_name: "ssmDocumentsArn"
+        mock_output: "mock-ssm-documents-arn"
+    
+    - name: Set Jenkins SSM document ARN
+      ansible.builtin.set_fact:
+        jenkins_ssm_documents_arn: "{{ stack_output_result.stdout | trim }}"
+    
+    - name: Set controller facts for use in other playbooks
+      ansible.builtin.set_fact:
+        controller_deployed: true
+        # スタック参照情報も保存
+        controller_stack_name: "{{ controller_project_name }}"
+      
+    - name: Summary of controller deployment
+      ansible.builtin.debug:
+        msg: |
+          Jenkins Controller Infrastructure Deployed Successfully:
+          - Instance ID: {{ jenkins_instance_id }}
+          - Jenkins Color: {{ jenkins_color }}
+          - Recovery Mode: {{ recovery_mode }}
+          - SSM Documents Available
+  
+  rescue:
+    - name: Set controller deployment status on failure
+      ansible.builtin.set_fact:
+        controller_deployed: false
+      
+    - name: Display error
+      ansible.builtin.debug:
+        msg: "Failed to deploy controller infrastructure. See error details above."
+      
+    - name: Fail the playbook
+      ansible.builtin.fail:
+        msg: "Controller deployment failed."
+
+# インスタンスデプロイ後のセットアップ処理
+- name: Wait for SSM agent to be operational
+  ansible.builtin.pause:
+    seconds: 30
+  when: not ansible_check_mode
+
+- name: Execute SSM commands to setup Jenkins
+  block:
+    - name: Run EFS mount SSM document
+      ansible.builtin.shell: |
+        cd {{ pulumi_path }}/controller
+        source {{ scripts_dir }}/aws-env.sh
+        eval $({{ scripts_dir }}/aws-env.sh)
+        
+        aws ssm send-command \
+          --region {{ aws_region_name }} \
+          --document-name "{{ project_name }}-jenkins-mount-efs-{{ jenkins_color }}-{{ env_name }}" \
+          --targets "Key=instanceids,Values={{ jenkins_instance_id }}" \
+          --parameters "ProjectName={{ project_name }},Environment={{ env_name }},EfsId={{ efs_file_system_id }},Region={{ aws_region_name }}" \
+          --comment "Mounting EFS" \
+          --output json
+      register: ssm_mount_result
+      changed_when: true
+      when: not ansible_check_mode
+      
+    - name: Wait for EFS mount to complete
+      ansible.builtin.pause:
+        seconds: 30
+      when: not ansible_check_mode
+      
+    - name: Run Jenkins install SSM document
+      ansible.builtin.shell: |
+        cd {{ pulumi_path }}/controller
+        source {{ scripts_dir }}/aws-env.sh
+        eval $({{ scripts_dir }}/aws-env.sh)
+        
+        aws ssm send-command \
+          --region {{ aws_region_name }} \
+          --document-name "{{ project_name }}-jenkins-install-{{ jenkins_color }}-{{ env_name }}" \
+          --targets "Key=instanceids,Values={{ jenkins_instance_id }}" \
+          --parameters "ProjectName={{ project_name }},Environment={{ env_name }},JenkinsVersion={{ jenkins_version }},JenkinsColor={{ jenkins_color }}" \
+          --comment "Installing Jenkins" \
+          --output json
+      register: ssm_install_result
+      changed_when: true
+      when: not ansible_check_mode
+      
+    - name: Wait for Jenkins install to complete
+      ansible.builtin.pause:
+        seconds: 30
+      when: not ansible_check_mode
+      
+    - name: Run Jenkins configure SSM document
+      ansible.builtin.shell: |
+        cd {{ pulumi_path }}/controller
+        source {{ scripts_dir }}/aws-env.sh
+        eval $({{ scripts_dir }}/aws-env.sh)
+        
+        aws ssm send-command \
+          --region {{ aws_region_name }} \
+          --document-name "{{ project_name }}-jenkins-configure-{{ jenkins_color }}-{{ env_name }}" \
+          --targets "Key=instanceids,Values={{ jenkins_instance_id }}" \
+          --parameters "ProjectName={{ project_name }},Environment={{ env_name }},JenkinsMode={{ recovery_mode | ternary('recovery', 'normal') }},JenkinsColor={{ jenkins_color }}" \
+          --comment "Configuring Jenkins" \
+          --output json
+      register: ssm_configure_result
+      changed_when: true
+      when: not ansible_check_mode
+      
+    - name: Wait for Jenkins configuration to complete
+      ansible.builtin.pause:
+        seconds: 30
+      when: not ansible_check_mode
+      
+    - name: Run Jenkins startup SSM document
+      ansible.builtin.shell: |
+        cd {{ pulumi_path }}/controller
+        source {{ scripts_dir }}/aws-env.sh
+        eval $({{ scripts_dir }}/aws-env.sh)
+        
+        aws ssm send-command \
+          --region {{ aws_region_name }} \
+          --document-name "{{ project_name }}-jenkins-startup-{{ jenkins_color }}-{{ env_name }}" \
+          --targets "Key=instanceids,Values={{ jenkins_instance_id }}" \
+          --parameters "ProjectName={{ project_name }},Environment={{ env_name }},JenkinsColor={{ jenkins_color }}" \
+          --comment "Starting Jenkins" \
+          --output json
+      register: ssm_startup_result
+      changed_when: true
+      when: not ansible_check_mode
+      
+    - name: Display SSM execution status
+      ansible.builtin.debug:
+        msg: "Jenkins setup sequence executed via SSM commands"
+      when: not ansible_check_mode
+  
+  # これらの処理はチェックモードでは実行しない
+  when: 
+    - not ansible_check_mode
+    - jenkins_instance_id is defined and jenkins_instance_id != "mock-jenkins-instance-id"
+  
+  rescue:
+    - name: Display SSM execution error
+      ansible.builtin.debug:
+        msg: "Failed to execute Jenkins setup via SSM. Check AWS console for details."

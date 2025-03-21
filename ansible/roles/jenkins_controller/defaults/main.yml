@@ -1,0 +1,17 @@
+# コントローラーロールのデフォルト変数
+
+# パスがプレイブックからの相対パスになるよう修正
+scripts_dir: "{{ playbook_dir }}/../../scripts"
+pulumi_path: "{{ playbook_dir }}/../../pulumi"
+
+# 環境名のデフォルト値
+env_name: "dev"
+
+# インスタンス設定のデフォルト値
+instance_type: "t3.medium"
+key_name: ""  # プレイブック変数またはall.ymlから取得
+
+# Jenkinsバージョン設定
+jenkins_version: "latest"
+jenkins_color: "blue"  # 初期デプロイはblue環境
+recovery_mode: false   # 通常モードでデプロイ
