@@ -197,14 +197,21 @@
         group: ec2-user
         mode: '0644'
         
-    # スクリプトに実行権限を付与するタスク - CI/CDパイプライン実行時の権限問題を防止するため
-
+    # スクリプトに実行権限を付与するタスク
     - name: Set execute permissions on all shell scripts
       ansible.builtin.shell: |
-        find {{ playbook_dir }}/../scripts -name "*.sh" -exec chmod +x {} \;
-        find {{ playbook_dir }}/../scripts/jenkins -name "*.sh" -exec chmod +x {} \;
-        find {{ playbook_dir }}/../scripts/jenkins/shell -name "*.sh" -exec chmod +x {} \;
-      changed_when: true
+        # プロジェクトルートディレクトリを特定
+        PROJECT_ROOT="{{ playbook_dir }}/.."
+        echo "Setting execute permissions on shell scripts in $PROJECT_ROOT/scripts"
+        
+        # すべてのshファイルに実行権限を付与
+        find $PROJECT_ROOT/scripts -type f -name "*.sh" -exec chmod +x {} \;
+        
+        # シェルスクリプトの数を数えて表示 (デバッグ用)
+        NUM_SCRIPTS=$(find $PROJECT_ROOT/scripts -type f -name "*.sh" | wc -l)
+        echo "Execute permissions set on $NUM_SCRIPTS shell scripts"
+      register: script_permissions
+      changed_when: script_permissions.rc == 0
 
     - name: Display completion message
       ansible.builtin.debug:
