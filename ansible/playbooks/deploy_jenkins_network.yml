@@ -24,11 +24,13 @@
     - name: Display network deployment information
       ansible.builtin.debug:
         msg: |
-          Deploying Network Infrastructure:
-          - Project: {{ project_name }}
-          - Network Pulumi Project: {{ network_project_name }}
-          - Environment: {{ env_name }}
-          - VPC CIDR: {{ vpc_cidr | default('10.0.0.0/16') }}
+          ===============================================
+               ネットワークインフラデプロイ
+          ===============================================
+          プロジェクト: {{ project_name }}
+          環境: {{ env_name }}
+          リージョン: {{ aws_region_name }}
+          VPC CIDR: {{ vpc_cidr | default('10.0.0.0/16') }}
     
     # Pulumiヘルパータスクを呼び出す
     - name: Initialize network stack
@@ -42,11 +44,18 @@
     - name: Configure network stack
       ansible.builtin.shell: |
         cd {{ pulumi_path }}/network
+        
+        echo "==== AWS環境変数設定 ===="
         source {{ playbook_dir }}/../../scripts/aws-env.sh 
         eval $({{ playbook_dir }}/../../scripts/aws-env.sh)
         
+        echo "==== AWSリージョン設定 ===="
         sudo -E /root/.pulumi/bin/pulumi config set aws:region {{ aws_region_name }}
+        
+        echo "==== プロジェクト名設定 ===="
         sudo -E /root/.pulumi/bin/pulumi config set {{ network_project_name }}:projectName {{ project_name }}
+        
+        echo "==== VPC CIDR設定 ===="
         sudo -E /root/.pulumi/bin/pulumi config set {{ network_project_name }}:vpcCidr {{ vpc_cidr | default('10.0.0.0/16') }}
       register: pulumi_config_result
       changed_when: pulumi_config_result.rc == 0
@@ -78,13 +87,16 @@
     - name: Get VPC ID from stack outputs
       ansible.builtin.shell: |
         cd {{ pulumi_path }}/network
+        echo "==== VPC ID取得開始 ===="
         source {{ playbook_dir }}/../../scripts/aws-env.sh 
         eval $({{ playbook_dir }}/../../scripts/aws-env.sh)
         
         # スタック出力を確認
+        echo "==== スタック出力確認 ===="
         sudo -E /root/.pulumi/bin/pulumi stack output || echo "No outputs available yet"
         
         # VPC IDの取得を試みる (存在しなければモック値を使用)
+        echo "==== VPC ID取得 ===="
         sudo -E /root/.pulumi/bin/pulumi stack output vpcId 2>/dev/null || echo "mock-vpc-id-for-empty-output"
       register: vpc_id_result
       changed_when: false
@@ -102,9 +114,11 @@
     - name: Get public subnet IDs
       ansible.builtin.shell: |
         cd {{ pulumi_path }}/network
+        echo "==== Public Subnet IDs取得開始 ===="
         source {{ playbook_dir }}/../../scripts/aws-env.sh 
         eval $({{ playbook_dir }}/../../scripts/aws-env.sh)
         
+        echo "==== Public Subnet IDs取得 ===="
         sudo -E /root/.pulumi/bin/pulumi stack output publicSubnetIds 2>/dev/null || 
           echo "['mock-public-subnet-1','mock-public-subnet-2']"
       register: public_subnets_result
@@ -119,9 +133,11 @@
     - name: Get private subnet IDs
       ansible.builtin.shell: |
         cd {{ pulumi_path }}/network
+        echo "==== Private Subnet IDs取得開始 ===="
         source {{ playbook_dir }}/../../scripts/aws-env.sh 
         eval $({{ playbook_dir }}/../../scripts/aws-env.sh)
         
+        echo "==== Private Subnet IDs取得 ===="
         sudo -E /root/.pulumi/bin/pulumi stack output privateSubnetIds 2>/dev/null || 
           echo "['mock-private-subnet-1','mock-private-subnet-2']"
       register: private_subnets_result
@@ -141,8 +157,9 @@
     - name: Summary of network deployment
       ansible.builtin.debug:
         msg: |
-          Network Infrastructure Deployed Successfully:
-          Stack Name: {{ network_project_name }}
+          ===============================================
+               ネットワークインフラデプロイ完了
+          ===============================================
           VPC ID: {{ vpc_id }}
           Public Subnet IDs: {{ public_subnet_ids }}
           Private Subnet IDs: {{ private_subnet_ids }}
@@ -154,8 +171,12 @@
       
     - name: Display error
       ansible.builtin.debug:
-        msg: "Failed to deploy network infrastructure. See error details above."
+        msg: |
+          ===============================================
+                   ネットワークデプロイ失敗
+          ===============================================
+          エラーの詳細は上記のログを確認してください。
       
     - name: Fail the playbook
       ansible.builtin.fail:
-        msg: "Network deployment failed."
+        msg: "ネットワークデプロイに失敗しました。"

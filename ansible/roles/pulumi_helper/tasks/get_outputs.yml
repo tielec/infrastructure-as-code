@@ -1,30 +1,74 @@
 # Pulumiスタックの出力を取得するヘルパータスク
 
+- name: Create stack output script
+  ansible.builtin.copy:
+    dest: "/tmp/pulumi_scripts/get_output.sh"
+    content: |
+      #!/bin/bash
+      # Pulumi スタック出力取得スクリプト
+      set -e
+      
+      echo "========================================"
+      echo "      スタック出力取得開始             "
+      echo "========================================"
+      echo "プロジェクトパス: {{ pulumi_project_path }}"
+      echo "出力名: {{ output_name | default('all') }}"
+      
+      cd {{ pulumi_project_path }}
+      
+      echo "========================================"
+      echo "      AWS 環境変数設定                 "
+      echo "========================================"
+      source {{ playbook_dir }}/../../scripts/aws-env.sh
+      
+      echo "========================================"
+      echo "      スタック出力確認                 "
+      echo "========================================"
+      # まずスタック出力が利用可能か確認
+      if sudo -E /root/.pulumi/bin/pulumi stack output &>/dev/null; then
+        echo "スタック出力が利用可能です"
+        
+        if [ -n "{{ output_name | default('') }}" ]; then
+          echo "========================================"
+          echo "      指定された出力の取得: {{ output_name }}"
+          echo "========================================"
+          sudo -E /root/.pulumi/bin/pulumi stack output {{ output_name | default('') }} 2>/dev/null || 
+            echo "{{ mock_output | default('mock-output-for-missing-value') }}"
+        else
+          echo "========================================"
+          echo "      全ての出力の取得                 "
+          echo "========================================"
+          sudo -E /root/.pulumi/bin/pulumi stack output
+        fi
+      else
+        echo "スタック出力は利用できません。モック値を使用します。"
+        echo "{{ mock_output | default('mock-output-for-check-mode') }}"
+      fi
+    mode: '0755'
+  when: not ansible_check_mode
+
 - name: Get stack outputs
-  ansible.builtin.shell: |
-    cd {{ pulumi_project_path }}
-    # まずスタック出力が利用可能か確認
-    {{ pulumi_commands.stack_output }} &>/dev/null
-    if [ $? -eq 0 ]; then
-      # 出力が存在する場合、特定の出力値を取得
-      {{ pulumi_commands.stack_output }} {{ output_name | default('') }} 2>/dev/null || 
-        echo "{{ mock_output | default('mock-output-for-missing-value') }}"
-    else
-      # 出力が存在しない場合はモック値を返す
-      echo "{{ mock_output | default('mock-output-for-check-mode') }}"
-    fi
+  ansible.builtin.shell: /tmp/pulumi_scripts/get_output.sh
   register: stack_output_result
   changed_when: false
   when: not ansible_check_mode
   ignore_errors: true
 
+- name: Display stack output summary
+  ansible.builtin.debug:
+    msg: 
+      - "スタック出力取得結果:"
+      - "出力名: {{ output_name | default('全て') }}"
+      - "結果: {{ stack_output_result.stdout | regex_replace('^.*\n', '') if stack_output_result is defined else 'N/A' }}"
+  when: not ansible_check_mode and stack_output_result is defined
+
 - name: Display stack output debug info (verbose mode)
   ansible.builtin.debug:
     msg: |
-      Attempted to get output: {{ output_name | default('all') }}
-      Result: {{ 'Success' if stack_output_result.rc | default(0) == 0 else 'Failed' }}
-      Output: {{ stack_output_result.stdout | default('None') }}
-  when: not ansible_check_mode and ansible_verbosity > 1
+      詳細出力情報:
+      {{ stack_output_result.stdout_lines | join('\n') }}
+    verbosity: 2
+  when: not ansible_check_mode and stack_output_result is defined and ansible_verbosity > 1
 
 - name: Set mock outputs (check mode)
   ansible.builtin.set_fact:

@@ -24,11 +24,13 @@
     - name: Display security deployment information
       ansible.builtin.debug:
         msg: |
-          Deploying Security Groups:
-          - Project: {{ project_name }}
-          - Security Pulumi Project: {{ security_project_name }}
-          - Network Pulumi Project: {{ network_project_name }}
-          - Environment: {{ env_name }}
+          ===============================================
+                セキュリティグループデプロイ
+          ===============================================
+          プロジェクト: {{ project_name }}
+          セキュリティPulumiプロジェクト: {{ security_project_name }}
+          ネットワークPulumiプロジェクト: {{ network_project_name }}
+          環境: {{ env_name }}
     
     # Pulumiヘルパータスクを呼び出す
     - name: Initialize security stack
@@ -42,11 +44,17 @@
     - name: Configure security stack
       ansible.builtin.shell: |
         cd {{ pulumi_path }}/security
+        echo "==== AWS環境変数設定 ===="
         source {{ playbook_dir }}/../../scripts/aws-env.sh 
         eval $({{ playbook_dir }}/../../scripts/aws-env.sh)
         
+        echo "==== AWSリージョン設定 ===="
         sudo -E /root/.pulumi/bin/pulumi config set aws:region {{ aws_region_name }}
+        
+        echo "==== プロジェクト名設定 ===="
         sudo -E /root/.pulumi/bin/pulumi config set {{ security_project_name }}:projectName {{ project_name }}
+        
+        echo "==== ネットワークスタック名設定 ===="
         sudo -E /root/.pulumi/bin/pulumi config set {{ security_project_name }}:networkStackName {{ network_project_name }}
       register: pulumi_config_result
       changed_when: pulumi_config_result.rc == 0
@@ -56,7 +64,7 @@
       ansible.builtin.shell: |
         cd {{ pulumi_path }}/security
         # ファイルの内容を表示
-        echo "Checking security/index.ts content:"
+        echo "==== index.tsファイル内のStackReference確認 ===="
         grep -n "StackReference" index.ts || echo "StackReference not found in file"
       register: stackref_check_result
       changed_when: false
@@ -69,6 +77,7 @@
     - name: Check if index.ts needs fixing for StackReference format
       ansible.builtin.shell: |
         cd {{ pulumi_path }}/security
+        echo "==== StackReferenceのエスケープ確認 ===="
         grep -q "\\\\/" index.ts && echo "needs_fix" || echo "ok"
       register: stackref_format_check
       changed_when: false
@@ -98,7 +107,7 @@
     
     - name: Display VPC ID
       ansible.builtin.debug:
-        msg: "Using VPC ID: {{ stack_output_result.stdout | trim }}"
+        msg: "VPC ID: {{ stack_output_result.stdout | trim }}"
     
     # Pulumiプレビュー
     - name: Preview security deployment
@@ -176,7 +185,9 @@
     - name: Summary of security groups deployment
       ansible.builtin.debug:
         msg: |
-          Security Groups Deployed Successfully:
+          ===============================================
+                セキュリティグループデプロイ完了
+          ===============================================
           ALB Security Group ID: {{ alb_sg_id }}
           Jenkins Security Group ID: {{ jenkins_sg_id }}
           Jenkins Agent Security Group ID: {{ jenkins_agent_sg_id }}
@@ -189,4 +200,8 @@
       
     - name: Display error
       ansible.builtin.debug:
-        msg: "Failed to deploy security groups. See error details above."
+        msg: |
+          ===============================================
+                セキュリティグループデプロイ失敗
+          ===============================================
+          エラーの詳細は上記のログを確認してください。

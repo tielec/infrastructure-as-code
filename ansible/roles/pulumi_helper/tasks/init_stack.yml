@@ -6,35 +6,126 @@
   register: project_dir
   failed_when: not project_dir.stat.exists
   
+- name: Create temporary scripts directory
+  ansible.builtin.file:
+    path: "/tmp/pulumi_scripts"
+    state: directory
+    mode: '0755'
+    
+- name: Create stack check script
+  ansible.builtin.copy:
+    dest: "/tmp/pulumi_scripts/check_stack.sh"
+    content: |
+      #!/bin/bash
+      set -e
+      
+      echo "==== スタック確認の開始 ===="
+      echo "プロジェクトパス: {{ pulumi_project_path }}"
+      echo "スタック名: {{ stack_name }}"
+      
+      cd {{ pulumi_project_path }}
+      
+      echo "==== AWS 環境変数の設定 ===="
+      source {{ playbook_dir }}/../../scripts/aws-env.sh
+      
+      echo "==== スタック一覧の確認 ===="
+      sudo -E /root/.pulumi/bin/pulumi stack ls | grep {{ stack_name }} || echo "stack_not_found"
+      
+      echo "==== スタック確認の完了 ===="
+    mode: '0755'
+
 - name: Check if Pulumi stack exists
-  ansible.builtin.shell: |
-    cd {{ pulumi_project_path }}
-    source {{ playbook_dir }}/../../scripts/aws-env.sh 
-    eval $({{ playbook_dir }}/../../scripts/aws-env.sh)
-    sudo -E /root/.pulumi/bin/pulumi stack ls | grep {{ stack_name }} || echo "stack_not_found"
+  ansible.builtin.shell: "/tmp/pulumi_scripts/check_stack.sh"
   register: stack_select_result
   changed_when: false
   failed_when: false
   
-- name: Initialize Pulumi stack if not exists
-  ansible.builtin.shell: |
-    cd {{ pulumi_project_path }}
-    source {{ playbook_dir }}/../../scripts/aws-env.sh 
-    eval $({{ playbook_dir }}/../../scripts/aws-env.sh)
-    sudo -E /root/.pulumi/bin/pulumi stack init {{ stack_name }}
+- name: Display stack check results
+  ansible.builtin.debug:
+    msg: "{{ stack_select_result.stdout_lines }}"
+    verbosity: 1
+
+- name: Create stack initialization script
+  ansible.builtin.copy:
+    dest: "/tmp/pulumi_scripts/init_stack.sh"
+    content: |
+      #!/bin/bash
+      set -e
+      
+      echo "==== スタック初期化の開始 ===="
+      echo "プロジェクトパス: {{ pulumi_project_path }}"
+      echo "スタック名: {{ stack_name }}"
+      
+      cd {{ pulumi_project_path }}
+      
+      echo "==== AWS 環境変数の設定 ===="
+      source {{ playbook_dir }}/../../scripts/aws-env.sh
+
+      echo "==== スタックの初期化 ===="
+      sudo -E /root/.pulumi/bin/pulumi stack init {{ stack_name }}
+      
+      echo "==== スタック初期化の完了 ===="
+    mode: '0755'
   when: "'stack_not_found' in stack_select_result.stdout"
   
+- name: Initialize Pulumi stack if not exists
+  ansible.builtin.shell: "/tmp/pulumi_scripts/init_stack.sh"
+  when: "'stack_not_found' in stack_select_result.stdout"
+  register: stack_init_result
+  
+- name: Display stack initialization results
+  ansible.builtin.debug:
+    msg: "{{ stack_init_result.stdout_lines }}"
+    verbosity: 1
+  when: stack_init_result is defined
+
 - name: Install npm dependencies if needed
   ansible.builtin.shell: |
     cd {{ pulumi_project_path }}
+    echo "==== NPM依存関係のインストール開始 ===="
     npm install
+    echo "==== NPM依存関係のインストール完了 ===="
   args:
     creates: "{{ pulumi_project_path }}/node_modules"
+  register: npm_install_result
+  
+- name: Display npm installation results
+  ansible.builtin.debug:
+    msg: "{{ npm_install_result.stdout_lines }}"
+    verbosity: 1
+  when: npm_install_result is changed
+
+- name: Create stack selection script
+  ansible.builtin.copy:
+    dest: "/tmp/pulumi_scripts/select_stack.sh"
+    content: |
+      #!/bin/bash
+      set -e
+      
+      echo "==== スタック選択の開始 ===="
+      echo "プロジェクトパス: {{ pulumi_project_path }}"
+      echo "スタック名: {{ stack_name }}"
+      
+      cd {{ pulumi_project_path }}
+      
+      echo "==== AWS 環境変数の設定 ===="
+      source {{ playbook_dir }}/../../scripts/aws-env.sh
+
+      echo "==== スタックの選択 ===="
+      sudo -E /root/.pulumi/bin/pulumi stack select {{ stack_name }}
+      
+      echo "==== 選択されたスタック ===="
+      sudo -E /root/.pulumi/bin/pulumi stack
+      
+      echo "==== スタック選択の完了 ===="
+    mode: '0755'
     
 - name: Select stack
-  ansible.builtin.shell: |
-    cd {{ pulumi_project_path }}
-    source {{ playbook_dir }}/../../scripts/aws-env.sh 
-    eval $({{ playbook_dir }}/../../scripts/aws-env.sh)
-    sudo -E /root/.pulumi/bin/pulumi stack select {{ stack_name }}
+  ansible.builtin.shell: "/tmp/pulumi_scripts/select_stack.sh"
   changed_when: false
+  register: stack_select_output
+  
+- name: Display stack selection results
+  ansible.builtin.debug:
+    msg: "{{ stack_select_output.stdout_lines }}"
+    verbosity: 1

@@ -1,6 +1,6 @@
 # AWS認証情報のセットアップと確認
 
-- name: Check scripts directory permissions
+- name: Check AWS credential scripts permissions
   ansible.builtin.stat:
     path: "{{ item }}"
   register: script_stats
@@ -24,22 +24,63 @@
   loop: "{{ script_permission_updates.results }}"
   when: item.changed | default(false)
 
+- name: Create AWS credentials check script
+  ansible.builtin.copy:
+    dest: "/tmp/check_aws_creds.sh"
+    content: |
+      #!/bin/bash
+      echo "==== AWS認証情報チェックの開始 ===="
+      
+      # AWS認証情報の確認
+      echo "AWS認証情報を確認しています..."
+      if aws sts get-caller-identity &>/dev/null; then
+        echo "認証情報は正常に設定されています。"
+        aws sts get-caller-identity
+        exit 0
+      else
+        echo "認証情報が見つからないか、無効です。"
+        exit 1
+      fi
+    mode: '0755'
+
 - name: Check AWS credentials
-  ansible.builtin.shell: aws sts get-caller-identity
+  ansible.builtin.shell: /tmp/check_aws_creds.sh
   register: aws_cred_check
   changed_when: false
   ignore_errors: true
 
 - name: Display AWS credentials status
   ansible.builtin.debug:
-    msg: "AWS credentials: {{ 'Configured correctly' if aws_cred_check.rc == 0 else 'Not configured or invalid' }}"
+    msg: "AWS認証情報ステータス: {{ 'OK' if aws_cred_check.rc == 0 else '設定が必要' }}"
+
+- name: Create AWS credentials setup script
+  ansible.builtin.copy:
+    dest: "/tmp/setup_aws_creds.sh"
+    content: |
+      #!/bin/bash
+      echo "==== AWS認証情報設定の開始 ===="
+      
+      echo "認証情報スクリプトを実行しています..."
+      source {{ aws_credentials_script_path }}
+      
+      echo "設定された認証情報を確認しています..."
+      aws sts get-caller-identity
+      
+      echo "==== AWS認証情報設定の完了 ===="
+    mode: '0755'
+  when: aws_cred_check.rc != 0
 
 - name: Configure AWS credentials if not already set
-  ansible.builtin.shell: |
-    source {{ aws_credentials_script_path }}
+  ansible.builtin.shell: /tmp/setup_aws_creds.sh
   args:
     executable: /bin/bash
+  register: aws_cred_setup
   when: aws_cred_check.rc != 0
+
+- name: Display AWS credentials setup results
+  ansible.builtin.debug:
+    msg: "{{ aws_cred_setup.stdout_lines }}"
+  when: aws_cred_check.rc != 0 and aws_cred_setup is defined
 
 - name: Verify AWS credentials after configuration
   ansible.builtin.shell: aws sts get-caller-identity
@@ -47,6 +88,11 @@
   changed_when: false
   failed_when: aws_cred_verify.rc != 0
   when: aws_cred_check.rc != 0
+
+- name: Display new AWS credentials status
+  ansible.builtin.debug:
+    msg: "AWS認証情報が正常に設定されました"
+  when: aws_cred_check.rc != 0 and aws_cred_verify.rc == 0
 
 - name: Create AWS variables template for Pulumi commands
   ansible.builtin.set_fact:
