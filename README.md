@@ -66,6 +66,7 @@
    cd infrastructure-as-code
    
    # 2. ブートストラップセットアップスクリプトを実行
+   chmod +x ./scripts/setup-bootstrap.sh
    ./scripts/setup-bootstrap.sh
    ```
 
@@ -137,10 +138,19 @@ infrastructure-as-code/
 │  │  ├─jenkins_setup_pipeline.yml  # メインパイプライン
 │  │  ├─deploy_jenkins_network.yml
 │  │  ├─deploy_jenkins_security.yml
-│  │  └─...
+│  │  ├─deploy_jenkins_storage.yml
+│  │  ├─deploy_jenkins_loadbalancer.yml
+│  │  ├─deploy_jenkins_controller.yml
+│  │  ├─deploy_jenkins_agent.yml
+│  │  └─deploy_jenkins_application.yml
 │  └─roles/                    # 共通ロール
 │      ├─aws_setup/           # AWS環境設定ロール
-│      └─pulumi_helper/       # Pulumiヘルパーロール（認証処理含む）
+│      │  ├─defaults/
+│      │  ├─tasks/
+│      │  └─vars/
+│      └─pulumi_helper/       # Pulumiヘルパーロール
+│          ├─defaults/
+│          └─tasks/
 │
 ├─bootstrap/                  # 初期セットアップ用
 │  ├─cfn-bootstrap-template.yaml  # 簡略化されたCloudFormationテンプレート
@@ -148,16 +158,50 @@ infrastructure-as-code/
 │      └─bootstrap-setup.yml  # ブートストラップ環境のセットアップ用プレイブック
 │
 ├─pulumi/                     # Pulumiプロジェクト
+│  ├─package.json             # ルートパッケージ設定
+│  ├─Pulumi.yaml              # ルートプロジェクト設定
+│  ├─tsconfig.json            # TypeScript設定
+│  ├─config/                  # 設定ディレクトリ
 │  ├─network/                 # ネットワークスタック
+│  │  ├─index.ts
+│  │  ├─Pulumi.yaml
+│  │  └─package.json
 │  ├─security/                # セキュリティスタック
-│  └─...
+│  │  ├─index.ts
+│  │  ├─Pulumi.yaml
+│  │  ├─package.json
+│  │  └─tsconfig.json
+│  └─src/                     # ソースコード
+│      ├─common/              # 共通ユーティリティ
+│      │  └─dependency-utils.ts
+│      └─services/            # サービス別モジュール
+│          └─jenkins/         # Jenkins関連モジュール
+│              ├─index.ts
+│              ├─jenkins-agent.ts
+│              ├─jenkins-controller.ts
+│              ├─load-balancer.ts
+│              ├─network.ts
+│              └─security.ts
 │
 └─scripts/                    # 設定スクリプト
     ├─aws-credentials.sh      # AWS認証情報設定
     ├─setup-bootstrap.sh      # ブートストラップ環境セットアップスクリプト
     └─jenkins/                # Jenkins関連スクリプト
         ├─groovy/             # Jenkins初期化用Groovyスクリプト
+        │  ├─basic-settings.groovy
+        │  ├─disable-cli.groovy
+        │  ├─install-plugins.groovy
+        │  └─recovery-mode.groovy
+        │
         └─shell/              # EC2インスタンス設定用シェルスクリプト
+           ├─agent-setup.sh
+           ├─agent-template.sh
+           ├─controller-configure.sh
+           ├─controller-install.sh
+           ├─controller-mount-efs.sh
+           ├─controller-startup.sh
+           ├─controller-update.sh
+           └─controller-user-data.sh
 ```
 
 ### 主な機能
