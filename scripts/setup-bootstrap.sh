@@ -70,7 +70,18 @@ fi
 
 # Ansibleプレイブックを実行
 echo -e "\n${YELLOW}Ansibleプレイブックを実行して環境をセットアップします...${NC}"
-sudo ansible-playbook "$PLAYBOOK_PATH" -v
+
+# ansible-playbookのパスを取得
+ANSIBLE_PLAYBOOK_PATH=$(which ansible-playbook)
+if [ -z "$ANSIBLE_PLAYBOOK_PATH" ]; then
+  echo -e "${YELLOW}ERROR: ansible-playbook コマンドが見つかりません。${NC}"
+  exit 1
+fi
+
+echo -e "${YELLOW}ansible-playbook の場所: $ANSIBLE_PLAYBOOK_PATH${NC}"
+
+# 絶対パスで ansible-playbook を実行
+sudo $ANSIBLE_PLAYBOOK_PATH "$PLAYBOOK_PATH" -v
 
 # Pulumi初期設定の案内
 echo -e "\n${YELLOW}Pulumiの初期設定を行います...${NC}"
