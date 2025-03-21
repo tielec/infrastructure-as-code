@@ -45,6 +45,10 @@
     msg: "{{ stack_select_result.stdout_lines }}"
     verbosity: 1
 
+- name: Set stack init needed
+  ansible.builtin.set_fact:
+    stack_init_needed: "{{ 'stack_not_found' in stack_select_result.stdout }}"
+
 - name: Create stack initialization script
   ansible.builtin.copy:
     dest: "/tmp/pulumi_scripts/init_stack.sh"
@@ -66,18 +70,18 @@
       
       echo "==== スタック初期化の完了 ===="
     mode: '0755'
-  when: "'stack_not_found' in stack_select_result.stdout"
+  when: stack_init_needed
   
 - name: Initialize Pulumi stack if not exists
   ansible.builtin.shell: "/tmp/pulumi_scripts/init_stack.sh"
-  when: "'stack_not_found' in stack_select_result.stdout"
   register: stack_init_result
+  when: stack_init_needed
   
 - name: Display stack initialization results
   ansible.builtin.debug:
-    msg: "{{ stack_init_result.stdout_lines }}"
+    msg: "{{ stack_init_result.stdout_lines | default([]) }}"
     verbosity: 1
-  when: stack_init_result is defined
+  when: stack_init_result is defined and stack_init_result.stdout_lines is defined
 
 - name: Install npm dependencies if needed
   ansible.builtin.shell: |
@@ -91,9 +95,9 @@
   
 - name: Display npm installation results
   ansible.builtin.debug:
-    msg: "{{ npm_install_result.stdout_lines }}"
+    msg: "{{ npm_install_result.stdout_lines | default([]) }}"
     verbosity: 1
-  when: npm_install_result is changed
+  when: npm_install_result is changed and npm_install_result.stdout_lines is defined
 
 - name: Create stack selection script
   ansible.builtin.copy:
@@ -127,5 +131,6 @@
   
 - name: Display stack selection results
   ansible.builtin.debug:
-    msg: "{{ stack_select_output.stdout_lines }}"
+    msg: "{{ stack_select_output.stdout_lines | default([]) }}"
     verbosity: 1
+  when: stack_select_output.stdout_lines is defined
