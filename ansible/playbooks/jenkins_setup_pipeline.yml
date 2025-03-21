@@ -106,7 +106,17 @@
         - network_deployed is defined and network_deployed
         - security_deployed is defined and security_deployed
         - run_storage | default(true) | bool
-        
+
+    # ロードバランサーをデプロイ（ストレージの後に実行）
+    - name: Deploy LoadBalancer Infrastructure
+      ansible.builtin.include_role:
+        name: jenkins_loadbalancer
+      when: 
+        - network_deployed is defined and network_deployed
+        - security_deployed is defined and security_deployed
+        - storage_deployed is defined and storage_deployed
+        - run_loadbalancer | default(true) | bool        
+
     # デプロイメント結果サマリー
     - name: Deployment Summary
       ansible.builtin.debug:

@@ -1,0 +1,174 @@
+---
+# ロードバランサーデプロイタスク
+
+- name: Display loadbalancer deployment information
+  ansible.builtin.debug:
+    msg: |
+      Deploying LoadBalancer Infrastructure:
+      - Project: {{ project_name }}
+      - LoadBalancer Pulumi Project: {{ loadbalancer_project_name }}
+      - Network Pulumi Project: {{ network_project_name }}
+      - Security Pulumi Project: {{ security_project_name }}
+      - Environment: {{ env_name }}
+
+# ファイル権限設定
+- name: Ensure aws-env.sh has execute permissions
+  ansible.builtin.file:
+    path: "{{ scripts_dir }}/aws-env.sh"
+    mode: '0755'
+  register: aws_env_script_permission
+  
+- name: Report permission update
+  ansible.builtin.debug:
+    msg: "aws-env.sh スクリプトに実行権限を付与しました"
+  when: aws_env_script_permission.changed
+
+# Pulumiデプロイ
+- name: Deploy LoadBalancer Infrastructure with Pulumi
+  block:
+    # Pulumiヘルパータスクを呼び出す
+    - name: Initialize loadbalancer stack
+      ansible.builtin.include_role:
+        name: pulumi_helper
+        tasks_from: init_stack
+      vars:
+        pulumi_project_path: "{{ pulumi_path }}/loadbalancer"
+        stack_name: "{{ env_name }}"
+    
+    - name: Configure loadbalancer stack
+      ansible.builtin.shell: |
+        cd {{ pulumi_path }}/loadbalancer
+        source {{ scripts_dir }}/aws-env.sh 
+        eval $({{ scripts_dir }}/aws-env.sh)
+        
+        sudo -E /root/.pulumi/bin/pulumi config set aws:region {{ aws_region_name }}
+        sudo -E /root/.pulumi/bin/pulumi config set {{ loadbalancer_project_name }}:projectName {{ project_name }}
+        sudo -E /root/.pulumi/bin/pulumi config set {{ loadbalancer_project_name }}:networkStackName {{ network_project_name }}
+        sudo -E /root/.pulumi/bin/pulumi config set {{ loadbalancer_project_name }}:securityStackName {{ security_project_name }}
+      register: pulumi_config_result
+      changed_when: pulumi_config_result.rc == 0
+    
+    # 依存関係の確認: NetworkとSecurityがデプロイ済みであることを確認
+    - name: Check network stack outputs
+      ansible.builtin.include_role:
+        name: pulumi_helper
+        tasks_from: get_outputs
+      vars:
+        pulumi_project_path: "{{ pulumi_path }}/network"
+        output_name: "vpcId"
+        mock_output: "mock-vpc-id-for-check-mode"
+    
+    - name: Set network VPC ID
+      ansible.builtin.set_fact:
+        network_vpc_id: "{{ stack_output_result.stdout | trim }}"
+    
+    - name: Check security stack outputs
+      ansible.builtin.include_role:
+        name: pulumi_helper
+        tasks_from: get_outputs
+      vars:
+        pulumi_project_path: "{{ pulumi_path }}/security"
+        output_name: "albSecurityGroupId"
+        mock_output: "mock-alb-sg-id"
+    
+    - name: Set ALB security group ID
+      ansible.builtin.set_fact:
+        alb_sg_id: "{{ stack_output_result.stdout | trim }}"
+    
+    - name: Display dependency validation
+      ansible.builtin.debug:
+        msg: |
+          Dependency validation:
+          VPC ID from network stack: {{ network_vpc_id }}
+          ALB Security Group ID from security stack: {{ alb_sg_id }}
+    
+    # Pulumiプレビュー
+    - name: Preview loadbalancer deployment
+      ansible.builtin.include_role:
+        name: pulumi_helper
+        tasks_from: preview
+      vars:
+        pulumi_project_path: "{{ pulumi_path }}/loadbalancer"
+    
+    # Pulumiデプロイ
+    - name: Deploy loadbalancer stack
+      ansible.builtin.include_role:
+        name: pulumi_helper
+        tasks_from: deploy
+      vars:
+        pulumi_project_path: "{{ pulumi_path }}/loadbalancer"
+    
+    # デプロイ後に少し待機してスタックが完全に更新されるのを待つ
+    - name: Wait for stack outputs to be available
+      ansible.builtin.pause:
+        seconds: 10
+      when: not ansible_check_mode
+    
+    # ALB DNSの取得
+    - name: Get ALB DNS name
+      ansible.builtin.include_role:
+        name: pulumi_helper
+        tasks_from: get_outputs
+      vars:
+        pulumi_project_path: "{{ pulumi_path }}/loadbalancer"
+        output_name: "albDnsName"
+        mock_output: "mock-alb-dns-name"
+    
+    - name: Set ALB DNS name
+      ansible.builtin.set_fact:
+        alb_dns_name: "{{ stack_output_result.stdout | trim }}"
+    
+    # Blue ターゲットグループARN
+    - name: Get Blue target group ARN
+      ansible.builtin.include_role:
+        name: pulumi_helper
+        tasks_from: get_outputs
+      vars:
+        pulumi_project_path: "{{ pulumi_path }}/loadbalancer"
+        output_name: "blueTargetGroupArn"
+        mock_output: "mock-blue-tg-arn"
+    
+    - name: Set Blue target group ARN
+      ansible.builtin.set_fact:
+        blue_target_group_arn: "{{ stack_output_result.stdout | trim }}"
+    
+    # Green ターゲットグループARN
+    - name: Get Green target group ARN
+      ansible.builtin.include_role:
+        name: pulumi_helper
+        tasks_from: get_outputs
+      vars:
+        pulumi_project_path: "{{ pulumi_path }}/loadbalancer"
+        output_name: "greenTargetGroupArn"
+        mock_output: "mock-green-tg-arn"
+    
+    - name: Set Green target group ARN
+      ansible.builtin.set_fact:
+        green_target_group_arn: "{{ stack_output_result.stdout | trim }}"
+    
+    - name: Set loadbalancer facts for use in other playbooks
+      ansible.builtin.set_fact:
+        loadbalancer_deployed: true
+        # スタック参照情報も保存
+        loadbalancer_stack_name: "{{ loadbalancer_project_name }}"
+      
+    - name: Summary of loadbalancer deployment
+      ansible.builtin.debug:
+        msg: |
+          LoadBalancer Infrastructure Deployed Successfully:
+          - ALB DNS Name: {{ alb_dns_name }}
+          - Blue Target Group ARN: {{ blue_target_group_arn }}
+          - Green Target Group ARN: {{ green_target_group_arn }}
+  
+  rescue:
+    - name: Set loadbalancer deployment status on failure
+      ansible.builtin.set_fact:
+        loadbalancer_deployed: false
+      
+    - name: Display error
+      ansible.builtin.debug:
+        msg: "Failed to deploy loadbalancer infrastructure. See error details above."
+      
+    - name: Fail the playbook
+      ansible.builtin.fail:
+        msg: "LoadBalancer deployment failed."
