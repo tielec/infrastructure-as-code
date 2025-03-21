@@ -1,8 +1,8 @@
 /**
- * pulumi/network/index.ts
+ * pulumi/security/index.ts
  * 
- * Jenkinsインフラのネットワークリソースを構築するPulumiスクリプト
- * VPC、サブネット、ルートテーブル、IGW、NATゲートウェイなどを作成
+ * Jenkinsインフラのセキュリティグループを構築するPulumiスクリプト
+ * ALB、Jenkinsコントローラー、エージェント、EFSのセキュリティグループを作成
  */
 import * as pulumi from "@pulumi/pulumi";
 import * as aws from "@pulumi/aws";
@@ -10,198 +10,167 @@ import * as aws from "@pulumi/aws";
 // コンフィグから設定を取得
 const config = new pulumi.Config();
 const projectName = config.get("projectName") || "jenkins-infra";
-const vpcCidr = config.get("vpcCidr") || "10.0.0.0/16";
 const environment = pulumi.getStack();
+// ネットワークスタック名を設定から取得（デフォルト値も設定）
+const networkStackName = config.get("networkStackName") || "jenkins-network";
 
-// VPC作成
-const vpc = new aws.ec2.Vpc(`${projectName}-vpc`, {
-    cidrBlock: vpcCidr,
-    enableDnsHostnames: true,
-    enableDnsSupport: true,
+// 既存のネットワークスタックから値を取得
+// 修正: 正しいStackReferenceの形式を使用
+const networkStack = new pulumi.StackReference(`${pulumi.getOrganization()}/${networkStackName}/${environment}`);
+const vpcId = networkStack.getOutput("vpcId");
+
+// ALB用セキュリティグループ
+const albSecurityGroup = new aws.ec2.SecurityGroup(`${projectName}-alb-sg`, {
+    vpcId: vpcId,
+    description: "Security group for Jenkins ALB",
+    ingress: [
+        // HTTP
+        {
+            protocol: "tcp",
+            fromPort: 80,
+            toPort: 80,
+            cidrBlocks: ["0.0.0.0/0"],
+            description: "HTTP access",
+        },
+        // HTTPS
+        {
+            protocol: "tcp",
+            fromPort: 443,
+            toPort: 443,
+            cidrBlocks: ["0.0.0.0/0"],
+            description: "HTTPS access",
+        },
+        // Jenkins HTTP
+        {
+            protocol: "tcp",
+            fromPort: 8080,
+            toPort: 8080,
+            cidrBlocks: ["0.0.0.0/0"],
+            description: "Jenkins HTTP access",
+        },
+    ],
+    egress: [{
+        protocol: "-1",
+        fromPort: 0,
+        toPort: 0,
+        cidrBlocks: ["0.0.0.0/0"],
+        description: "Allow all outbound traffic",
+    }],
     tags: {
-        Name: `${projectName}-vpc-${environment}`,
-        Environment: environment,
-        ManagedBy: "pulumi",
-    },
-});
-
-// インターネットゲートウェイ
-const igw = new aws.ec2.InternetGateway(`${projectName}-igw`, {
-    vpcId: vpc.id,
-    tags: {
-        Name: `${projectName}-igw-${environment}`,
-        Environment: environment,
-    },
-});
-
-// アベイラビリティゾーン情報の取得
-const azs = pulumi.output(aws.getAvailabilityZones({}));
-
-// パブリックサブネットA
-const publicSubnetA = new aws.ec2.Subnet(`${projectName}-public-subnet-a`, {
-    vpcId: vpc.id,
-    cidrBlock: "10.0.0.0/24",
-    availabilityZone: azs.names[0],
-    mapPublicIpOnLaunch: true,
-    tags: {
-        Name: `${projectName}-public-subnet-a-${environment}`,
-        Environment: environment,
-        Type: "public",
-    },
-});
-
-// パブリックサブネットB
-const publicSubnetB = new aws.ec2.Subnet(`${projectName}-public-subnet-b`, {
-    vpcId: vpc.id,
-    cidrBlock: "10.0.2.0/24",
-    availabilityZone: azs.names[1],
-    mapPublicIpOnLaunch: true,
-    tags: {
-        Name: `${projectName}-public-subnet-b-${environment}`,
-        Environment: environment,
-        Type: "public",
-    },
-});
-
-// プライベートサブネットA
-const privateSubnetA = new aws.ec2.Subnet(`${projectName}-private-subnet-a`, {
-    vpcId: vpc.id,
-    cidrBlock: "10.0.1.0/24",
-    availabilityZone: azs.names[0],
-    tags: {
-        Name: `${projectName}-private-subnet-a-${environment}`,
-        Environment: environment,
-        Type: "private",
-    },
-});
-
-// プライベートサブネットB
-const privateSubnetB = new aws.ec2.Subnet(`${projectName}-private-subnet-b`, {
-    vpcId: vpc.id,
-    cidrBlock: "10.0.3.0/24",
-    availabilityZone: azs.names[1],
-    tags: {
-        Name: `${projectName}-private-subnet-b-${environment}`,
-        Environment: environment,
-        Type: "private",
-    },
-});
-
-// パブリックルートテーブル
-const publicRouteTable = new aws.ec2.RouteTable(`${projectName}-public-rt`, {
-    vpcId: vpc.id,
-    tags: {
-        Name: `${projectName}-public-rt-${environment}`,
+        Name: `${projectName}-alb-sg-${environment}`,
         Environment: environment,
     },
 });
 
-// パブリックルート（インターネットゲートウェイ向け）
-const publicRoute = new aws.ec2.Route(`${projectName}-public-route`, {
-    routeTableId: publicRouteTable.id,
-    destinationCidrBlock: "0.0.0.0/0",
-    gatewayId: igw.id,
-});
-
-// パブリックサブネットAとルートテーブルの関連付け
-const publicRtAssociationA = new aws.ec2.RouteTableAssociation(`${projectName}-public-rta-a`, {
-    subnetId: publicSubnetA.id,
-    routeTableId: publicRouteTable.id,
-});
-
-// パブリックサブネットBとルートテーブルの関連付け
-const publicRtAssociationB = new aws.ec2.RouteTableAssociation(`${projectName}-public-rta-b`, {
-    subnetId: publicSubnetB.id,
-    routeTableId: publicRouteTable.id,
-});
-
-// プライベートルートテーブルA
-const privateRouteTableA = new aws.ec2.RouteTable(`${projectName}-private-rt-a`, {
-    vpcId: vpc.id,
+// Jenkins マスター用セキュリティグループ
+const jenkinsSecurityGroup = new aws.ec2.SecurityGroup(`${projectName}-jenkins-sg`, {
+    vpcId: vpcId,
+    description: "Security group for Jenkins master instances",
+    ingress: [
+        // Jenkins Web UI（ALBからのみ許可）
+        {
+            protocol: "tcp",
+            fromPort: 8080,
+            toPort: 8080,
+            securityGroups: [albSecurityGroup.id],
+            description: "Jenkins Web UI access from ALB",
+        },
+        // SSH アクセス
+        {
+            protocol: "tcp",
+            fromPort: 22,
+            toPort: 22,
+            cidrBlocks: ["0.0.0.0/0"],  // 本番環境では制限すべき
+            description: "SSH access",
+        },
+        // JNLP（Jenkinsエージェント接続用）
+        {
+            protocol: "tcp",
+            fromPort: 50000,
+            toPort: 50000,
+            cidrBlocks: ["10.0.0.0/16"],
+            description: "Jenkins agent JNLP connection",
+        },
+    ],
+    // すべてのアウトバウンドトラフィックを許可
+    egress: [{
+        protocol: "-1",
+        fromPort: 0,
+        toPort: 0,
+        cidrBlocks: ["0.0.0.0/0"],
+        description: "Allow all outbound traffic",
+    }],
     tags: {
-        Name: `${projectName}-private-rt-a-${environment}`,
+        Name: `${projectName}-jenkins-master-sg-${environment}`,
         Environment: environment,
     },
 });
 
-// プライベートルートテーブルB
-const privateRouteTableB = new aws.ec2.RouteTable(`${projectName}-private-rt-b`, {
-    vpcId: vpc.id,
+// Jenkinsエージェント用セキュリティグループ
+const jenkinsAgentSecurityGroup = new aws.ec2.SecurityGroup(`${projectName}-jenkins-agent-sg`, {
+    vpcId: vpcId,
+    description: "Security group for Jenkins agent instances",
+    ingress: [
+        // SSHアクセス（Jenkinsマスターからのみ）
+        {
+            protocol: "tcp",
+            fromPort: 22,
+            toPort: 22,
+            securityGroups: [jenkinsSecurityGroup.id],
+            description: "SSH access from Jenkins master",
+        },
+        // Jenkins JNLPエージェント接続（Jenkinsマスターからのみ）
+        {
+            protocol: "tcp",
+            fromPort: 0,
+            toPort: 65535,
+            securityGroups: [jenkinsSecurityGroup.id],
+            description: "JNLP agent connection from Jenkins master",
+        },
+    ],
+    // すべてのアウトバウンドトラフィックを許可
+    egress: [{
+        protocol: "-1",
+        fromPort: 0,
+        toPort: 0,
+        cidrBlocks: ["0.0.0.0/0"],
+        description: "Allow all outbound traffic",
+    }],
     tags: {
-        Name: `${projectName}-private-rt-b-${environment}`,
+        Name: `${projectName}-jenkins-agent-sg-${environment}`,
         Environment: environment,
     },
 });
 
-// プライベートサブネットAとルートテーブルの関連付け
-const privateRtAssociationA = new aws.ec2.RouteTableAssociation(`${projectName}-private-rta-a`, {
-    subnetId: privateSubnetA.id,
-    routeTableId: privateRouteTableA.id,
-});
-
-// プライベートサブネットBとルートテーブルの関連付け
-const privateRtAssociationB = new aws.ec2.RouteTableAssociation(`${projectName}-private-rta-b`, {
-    subnetId: privateSubnetB.id,
-    routeTableId: privateRouteTableB.id,
-});
-
-// NATゲートウェイのEIPを作成
-const natGatewayEipA = new aws.ec2.Eip(`${projectName}-nat-eip-a`, {
-    vpc: true,
+// EFS用セキュリティグループ
+const efsSecurityGroup = new aws.ec2.SecurityGroup(`${projectName}-efs-sg`, {
+    vpcId: vpcId,
+    description: "Security group for Jenkins EFS",
+    ingress: [
+        // NFS（2049ポート）を許可
+        {
+            protocol: "tcp",
+            fromPort: 2049,
+            toPort: 2049,
+            securityGroups: [jenkinsSecurityGroup.id, jenkinsAgentSecurityGroup.id],
+            description: "NFS access from Jenkins instances and agents",
+        },
+    ],
+    egress: [{
+        protocol: "-1",
+        fromPort: 0,
+        toPort: 0,
+        cidrBlocks: ["0.0.0.0/0"],
+        description: "Allow all outbound traffic",
+    }],
     tags: {
-        Name: `${projectName}-nat-eip-a-${environment}`,
+        Name: `${projectName}-efs-sg-${environment}`,
         Environment: environment,
     },
-});
-
-const natGatewayA = new aws.ec2.NatGateway(`${projectName}-nat-a`, {
-    allocationId: natGatewayEipA.id,
-    subnetId: publicSubnetA.id,
-    tags: {
-        Name: `${projectName}-nat-a-${environment}`,
-        Environment: environment,
-    },
-});
-
-const privateRouteToNatA = new aws.ec2.Route(`${projectName}-private-route-a`, {
-    routeTableId: privateRouteTableA.id,
-    destinationCidrBlock: "0.0.0.0/0",
-    natGatewayId: natGatewayA.id,
-});
-
-// 高可用性のための2つ目のNATゲートウェイ
-const natGatewayEipB = new aws.ec2.Eip(`${projectName}-nat-eip-b`, {
-    vpc: true,
-    tags: {
-        Name: `${projectName}-nat-eip-b-${environment}`,
-        Environment: environment,
-    },
-});
-
-const natGatewayB = new aws.ec2.NatGateway(`${projectName}-nat-b`, {
-    allocationId: natGatewayEipB.id,
-    subnetId: publicSubnetB.id,
-    tags: {
-        Name: `${projectName}-nat-b-${environment}`,
-        Environment: environment,
-    },
-});
-
-const privateRouteToNatB = new aws.ec2.Route(`${projectName}-private-route-b`, {
-    routeTableId: privateRouteTableB.id,
-    destinationCidrBlock: "0.0.0.0/0",
-    natGatewayId: natGatewayB.id,
 });
 
 // エクスポート
-export const vpcId = vpc.id;
-export const publicSubnetIds = [publicSubnetA.id, publicSubnetB.id];
-export const privateSubnetIds = [privateSubnetA.id, privateSubnetB.id];
-export const publicSubnetAId = publicSubnetA.id;
-export const publicSubnetBId = publicSubnetB.id;
-export const privateSubnetAId = privateSubnetA.id;
-export const privateSubnetBId = privateSubnetB.id;
-export const natGatewayIds = [natGatewayA.id, natGatewayB.id];
-export const internetGatewayId = igw.id;
-export const publicRouteTableId = publicRouteTable.id;
-export const privateRouteTableIds = [privateRouteTableA.id, privateRouteTableB.id];
+export const albSecurityGroupId = albSecurityGroup.id;
+export const jenkinsSecurityGroupId = jenkinsSecurityGroup.id;
+export const jenkinsAgentSecurityGroupId = jenkinsAgentSecurityGroup.id;
+export const efsSecurityGroupId = efsSecurityGroup.id;

@@ -8,6 +8,17 @@
     env_name: "{{ env_name_value }}"
     aws_region_name: "{{ aws_region_name_value }}"
 
+- name: Ensure aws-env.sh has execute permissions
+  ansible.builtin.file:
+    path: "{{ playbook_dir }}/../../scripts/aws-env.sh"
+    mode: '0755'
+  register: aws_env_script_permission
+  
+- name: Report permission update
+  ansible.builtin.debug:
+    msg: "aws-env.sh スクリプトに実行権限を付与しました"
+  when: aws_env_script_permission.changed
+
 - name: Deploy Network Infrastructure with Pulumi
   block:
     - name: Display network deployment information

@@ -5,6 +5,7 @@ set -e
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
+RED='\033[0;31m'
 NC='\033[0m' # No Color
 
 echo -e "${BLUE}=============================================${NC}"
@@ -17,6 +18,47 @@ REPO_ROOT="$(dirname "$SCRIPT_DIR")"
 
 # リポジトリルートディレクトリに移動
 cd "$REPO_ROOT"
+
+# スクリプトの実行権限確認と修正
+echo -e "${YELLOW}スクリプトファイルの実行権限を確認しています...${NC}"
+SCRIPT_COUNT=0
+FIXED_COUNT=0
+
+check_script_permissions() {
+  local dir=$1
+  local pattern=$2
+  
+  if [ ! -d "$dir" ]; then
+    echo -e "${RED}ディレクトリが見つかりません: $dir${NC}"
+    return
+  fi
+  
+  for script in $(find "$dir" -type f -name "$pattern"); do
+    SCRIPT_COUNT=$((SCRIPT_COUNT+1))
+    
+    if [ ! -x "$script" ]; then
+      echo -e "実行権限を付与: $script"
+      chmod +x "$script"
+      FIXED_COUNT=$((FIXED_COUNT+1))
+    fi
+  done
+}
+
+# スクリプトディレクトリ内のすべてのshファイルをチェック
+check_script_permissions "$REPO_ROOT/scripts" "*.sh"
+
+# Ansibleディレクトリ内のスクリプトをチェック
+if [ -d "$REPO_ROOT/ansible/scripts" ]; then
+  check_script_permissions "$REPO_ROOT/ansible/scripts" "*.sh"
+fi
+
+echo -e "${GREEN}スクリプトファイル実行権限の確認が完了しました。${NC}"
+echo -e "${GREEN}検査したスクリプト数: $SCRIPT_COUNT${NC}"
+if [ $FIXED_COUNT -gt 0 ]; then
+  echo -e "${YELLOW}実行権限を付与したファイル数: $FIXED_COUNT${NC}"
+else
+  echo -e "${GREEN}すべてのスクリプトファイルに実行権限が付与されています。${NC}"
+fi
 
 # Ansibleプレイブックの格納場所
 ANSIBLE_DIR="$REPO_ROOT/ansible"

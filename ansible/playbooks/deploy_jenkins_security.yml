@@ -8,6 +8,17 @@
     env_name: "{{ env_name_value }}"
     aws_region_name: "{{ aws_region_name_value }}"
 
+- name: Ensure aws-env.sh has execute permissions
+  ansible.builtin.file:
+    path: "{{ playbook_dir }}/../../scripts/aws-env.sh"
+    mode: '0755'
+  register: aws_env_script_permission
+  
+- name: Report permission update
+  ansible.builtin.debug:
+    msg: "aws-env.sh スクリプトに実行権限を付与しました"
+  when: aws_env_script_permission.changed
+
 - name: Deploy Security Groups with Pulumi
   block:
     - name: Display security deployment information
@@ -31,9 +42,12 @@
     - name: Configure security stack
       ansible.builtin.shell: |
         cd {{ pulumi_path }}/security
-        {{ aws_env_vars }} pulumi config set aws:region {{ aws_region_name }}
-        {{ aws_env_vars }} pulumi config set {{ security_project_name }}:projectName {{ project_name }}
-        {{ aws_env_vars }} pulumi config set {{ security_project_name }}:networkStackName {{ network_project_name }}
+        source {{ playbook_dir }}/../../scripts/aws-env.sh 
+        eval $({{ playbook_dir }}/../../scripts/aws-env.sh)
+        
+        sudo -E /root/.pulumi/bin/pulumi config set aws:region {{ aws_region_name }}
+        sudo -E /root/.pulumi/bin/pulumi config set {{ security_project_name }}:projectName {{ project_name }}
+        sudo -E /root/.pulumi/bin/pulumi config set {{ security_project_name }}:networkStackName {{ network_project_name }}
       register: pulumi_config_result
       changed_when: pulumi_config_result.rc == 0
     
@@ -50,6 +64,27 @@
     - name: Display StackReference check result
       ansible.builtin.debug:
         msg: "{{ stackref_check_result.stdout_lines }}"
+    
+    # エスケープが必要な場合はセキュリティスタックのindex.tsを修正
+    - name: Check if index.ts needs fixing for StackReference format
+      ansible.builtin.shell: |
+        cd {{ pulumi_path }}/security
+        grep -q "\\\\/" index.ts && echo "needs_fix" || echo "ok"
+      register: stackref_format_check
+      changed_when: false
+    
+    - name: Fix StackReference format in security/index.ts if needed
+      ansible.builtin.replace:
+        path: "{{ pulumi_path }}/security/index.ts"
+        regexp: 'pulumi\.getOrganization\(\)\\\\/\$\{networkStackName\}\\\\/\$\{environment\}'
+        replace: 'pulumi.getOrganization()}/${networkStackName}/${environment'
+      when: stackref_format_check.stdout == "needs_fix"
+      register: stackref_fix
+    
+    - name: Report StackReference fix
+      ansible.builtin.debug:
+        msg: "security/index.ts の StackReference 形式を修正しました"
+      when: stackref_fix.changed | default(false)
     
     # VPC IDの確認
     - name: Get VPC ID from network stack

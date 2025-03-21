@@ -1,5 +1,29 @@
 # AWS認証情報のセットアップと確認
 
+- name: Check scripts directory permissions
+  ansible.builtin.stat:
+    path: "{{ item }}"
+  register: script_stats
+  loop:
+    - "{{ playbook_dir }}/../../scripts/aws-env.sh"
+    - "{{ playbook_dir }}/../../scripts/aws-credentials.sh"
+    - "{{ playbook_dir }}/../../scripts/check-aws-creds.sh"
+
+- name: Ensure AWS scripts have execute permissions
+  ansible.builtin.file:
+    path: "{{ item.item }}"
+    mode: '0755'
+    state: file
+  loop: "{{ script_stats.results }}"
+  when: item.stat.exists and not item.stat.executable
+  register: script_permission_updates
+
+- name: Display script permission updates
+  ansible.builtin.debug:
+    msg: "実行権限を付与しました: {{ item.item }}"
+  loop: "{{ script_permission_updates.results }}"
+  when: item.changed | default(false)
+
 - name: Check AWS credentials
   ansible.builtin.shell: aws sts get-caller-identity
   register: aws_cred_check

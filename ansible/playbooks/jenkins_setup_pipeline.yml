@@ -16,12 +16,44 @@
     aws_region_name: "ap-northeast-1"
     # Pulumiプロジェクトパス
     pulumi_path: "{{ playbook_dir }}/../../pulumi"
+    # スクリプトディレクトリ
+    scripts_dir: "{{ playbook_dir }}/../../scripts"
     
   roles:
     - aws_setup
     - pulumi_helper
     
   tasks:
+    - name: Check scripts directory exists
+      ansible.builtin.stat:
+        path: "{{ scripts_dir }}"
+      register: scripts_dir_stat
+      
+    - name: Fail if scripts directory doesn't exist
+      ansible.builtin.fail:
+        msg: "Scripts directory doesn't exist: {{ scripts_dir }}"
+      when: not scripts_dir_stat.stat.exists
+    
+    - name: Ensure all shell scripts have proper execute permissions
+      ansible.builtin.find:
+        paths: "{{ scripts_dir }}"
+        patterns: "*.sh"
+        recurse: yes
+      register: script_files
+      
+    - name: Set execute permissions on shell scripts
+      ansible.builtin.file:
+        path: "{{ item.path }}"
+        mode: "0755"
+      loop: "{{ script_files.files }}"
+      register: script_perm_updates
+      
+    - name: Display scripts that needed permission updates
+      ansible.builtin.debug:
+        msg: "実行権限を付与: {{ item.path }}"
+      loop: "{{ script_perm_updates.results }}"
+      when: item.changed | default(false)
+    
     - name: Display pipeline information
       ansible.builtin.debug:
         msg: |
