@@ -20,7 +20,7 @@ cd "$REPO_ROOT"
 
 # Ansibleプレイブックの格納場所
 ANSIBLE_DIR="$REPO_ROOT/ansible"
-PLAYBOOK_PATH="$ANSIBLE_DIR/bootstrap-setup.yml"
+PLAYBOOK_PATH="$ANSIBLE_DIR/playbooks/bootstrap-setup.yml"
 
 # プレイブックの存在確認
 if [ ! -f "$PLAYBOOK_PATH" ]; then
