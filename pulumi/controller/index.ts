@@ -387,6 +387,10 @@ TOKEN=$(curl -s -X PUT "http://169.254.169.254/latest/api/token" -H "X-aws-ec2-m
 INSTANCE_ID=$(curl -s -H "X-aws-ec2-metadata-token: $TOKEN" http://169.254.169.254/latest/meta-data/instance-id)
 echo "Instance ID: $INSTANCE_ID - SSM Agent started successfully"
 
+# GitリポジトリのクローンとSSMドキュメントの順次実行
+cd /root
+git clone https://github.com/tielec/infrastructure-as-code.git
+
 # 基本的な環境変数を設定（Ansibleから使用される場合のため）
 echo "PROJECT_NAME=${projectName}" > /etc/environment
 echo "ENVIRONMENT=${environment}" >> /etc/environment
