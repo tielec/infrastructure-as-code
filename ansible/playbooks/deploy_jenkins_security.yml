@@ -51,6 +51,41 @@
       register: pulumi_config_result
       changed_when: pulumi_config_result.rc == 0
     
+    # セキュリティグループのindex.tsファイルを確認
+    - name: Check security/index.ts for StackReference
+      ansible.builtin.shell: |
+        cd {{ pulumi_path }}/security
+        # ファイルの内容を表示
+        echo "Checking security/index.ts content:"
+        grep -n "StackReference" index.ts || echo "StackReference not found in file"
+      register: stackref_check_result
+      changed_when: false
+    
+    - name: Display StackReference check result
+      ansible.builtin.debug:
+        msg: "{{ stackref_check_result.stdout_lines }}"
+    
+    # エスケープが必要な場合はセキュリティスタックのindex.tsを修正
+    - name: Check if index.ts needs fixing for StackReference format
+      ansible.builtin.shell: |
+        cd {{ pulumi_path }}/security
+        grep -q "\\\\/" index.ts && echo "needs_fix" || echo "ok"
+      register: stackref_format_check
+      changed_when: false
+    
+    - name: Fix StackReference format in security/index.ts if needed
+      ansible.builtin.replace:
+        path: "{{ pulumi_path }}/security/index.ts"
+        regexp: 'pulumi\.getOrganization\(\)\\\\/\$\{networkStackName\}\\\\/\$\{environment\}'
+        replace: 'pulumi.getOrganization()}/${networkStackName}/${environment'
+      when: stackref_format_check.stdout == "needs_fix"
+      register: stackref_fix
+    
+    - name: Report StackReference fix
+      ansible.builtin.debug:
+        msg: "security/index.ts の StackReference 形式を修正しました"
+      when: stackref_fix.changed | default(false)
+    
     # VPC IDの確認
     - name: Get VPC ID from network stack
       ansible.builtin.include_role:
