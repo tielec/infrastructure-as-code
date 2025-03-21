@@ -31,15 +31,12 @@
     - name: Configure network stack
       ansible.builtin.shell: |
         cd {{ pulumi_path }}/network
-        AWS_ACCESS_KEY_ID=$(aws configure get aws_access_key_id)
-        AWS_SECRET_ACCESS_KEY=$(aws configure get aws_secret_access_key)
-        AWS_SESSION_TOKEN=$(aws configure get aws_session_token)
+        source {{ playbook_dir }}/../../scripts/aws-env.sh 
+        eval $({{ playbook_dir }}/../../scripts/aws-env.sh)
         
-        export AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY AWS_SESSION_TOKEN
-        
-        sudo /root/.pulumi/bin/pulumi config set aws:region {{ aws_region_name }}
-        sudo /root/.pulumi/bin/pulumi config set {{ network_project_name }}:projectName {{ project_name }}
-        sudo /root/.pulumi/bin/pulumi config set {{ network_project_name }}:vpcCidr {{ vpc_cidr | default('10.0.0.0/16') }}
+        sudo -E /root/.pulumi/bin/pulumi config set aws:region {{ aws_region_name }}
+        sudo -E /root/.pulumi/bin/pulumi config set {{ network_project_name }}:projectName {{ project_name }}
+        sudo -E /root/.pulumi/bin/pulumi config set {{ network_project_name }}:vpcCidr {{ vpc_cidr | default('10.0.0.0/16') }}
       register: pulumi_config_result
       changed_when: pulumi_config_result.rc == 0
 

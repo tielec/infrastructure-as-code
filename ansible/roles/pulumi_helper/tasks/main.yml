@@ -78,8 +78,8 @@
 - name: Set Pulumi standard tasks
   ansible.builtin.set_fact:
     pulumi_commands:
-      preview: "{{ aws_env_vars }} sudo /root/.pulumi/bin/pulumi preview"
-      up: "{{ aws_env_vars }} sudo /root/.pulumi/bin/pulumi up --yes"
-      destroy: "{{ aws_env_vars }} sudo /root/.pulumi/bin/pulumi destroy --yes"
-      refresh: "{{ aws_env_vars }} sudo /root/.pulumi/bin/pulumi refresh --yes"
-      stack_output: "{{ aws_env_vars }} sudo /root/.pulumi/bin/pulumi stack output"
+      preview: "source {{ playbook_dir }}/../../scripts/aws-env.sh && eval $({{ playbook_dir }}/../../scripts/aws-env.sh) && sudo -E /root/.pulumi/bin/pulumi preview"
+      up: "source {{ playbook_dir }}/../../scripts/aws-env.sh && eval $({{ playbook_dir }}/../../scripts/aws-env.sh) && sudo -E /root/.pulumi/bin/pulumi up --yes"
+      destroy: "source {{ playbook_dir }}/../../scripts/aws-env.sh && eval $({{ playbook_dir }}/../../scripts/aws-env.sh) && sudo -E /root/.pulumi/bin/pulumi destroy --yes"
+      refresh: "source {{ playbook_dir }}/../../scripts/aws-env.sh && eval $({{ playbook_dir }}/../../scripts/aws-env.sh) && sudo -E /root/.pulumi/bin/pulumi refresh --yes"
+      stack_output: "source {{ playbook_dir }}/../../scripts/aws-env.sh && eval $({{ playbook_dir }}/../../scripts/aws-env.sh) && sudo -E /root/.pulumi/bin/pulumi stack output"
