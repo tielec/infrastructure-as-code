@@ -12,6 +12,7 @@
     nodejs_version: "16.x"
     user_home: "/home/ec2-user"
     aws_credentials_script_path: "{{ playbook_dir }}/../scripts/aws-credentials.sh"
+    aws_env_script_path: "{{ playbook_dir }}/../scripts/aws-env.sh"
   
   tasks:
     - name: Display start message
@@ -196,7 +197,7 @@
         owner: ec2-user
         group: ec2-user
         mode: '0644'
-        
+
     # スクリプトに実行権限を付与するタスク
     - name: Set execute permissions on all shell scripts
       ansible.builtin.shell: |
@@ -213,6 +214,79 @@
       register: script_permissions
       changed_when: script_permissions.rc == 0
 
+    # AWS認証スクリプトの実行権限を確認
+    - name: Verify AWS scripts permissions
+      ansible.builtin.file:
+        path: "{{ item }}"
+        mode: '0755'
+        state: file
+      with_items:
+        - "{{ aws_credentials_script_path }}"
+        - "{{ aws_env_script_path }}"
+      when: 
+        - item is defined
+        - item is not none
+        - item | length > 0
+        - item is exists
+      
+    # AWS認証スクリプトのテスト実行
+    - name: Test AWS credential scripts
+      ansible.builtin.shell: |
+        if [ -f "{{ aws_env_script_path }}" ]; then
+          echo "Testing aws-env.sh script..."
+          {{ aws_env_script_path }} > /dev/null
+          if [ $? -eq 0 ]; then
+            echo "aws-env.sh script executed successfully"
+          else
+            echo "WARNING: aws-env.sh script execution failed!"
+          fi
+        fi
+        
+        if [ -f "{{ aws_credentials_script_path }}" ]; then
+          echo "Testing aws-credentials.sh script..."
+          # 実際に実行せず、シンタックスチェックのみ
+          bash -n "{{ aws_credentials_script_path }}"
+          if [ $? -eq 0 ]; then
+            echo "aws-credentials.sh script syntax check passed"
+          else
+            echo "WARNING: aws-credentials.sh script has syntax errors!"
+          fi
+        fi
+      register: aws_scripts_test
+      changed_when: false
+      failed_when: false
+      
+    - name: Display AWS scripts test results
+      ansible.builtin.debug:
+        msg: "{{ aws_scripts_test.stdout_lines }}"
+
+    # Pulumiヘルパーのセットアップ
+    - name: Create Pulumi helper script
+      ansible.builtin.copy:
+        dest: "{{ user_home }}/setup-pulumi.sh"
+        content: |
+          #!/bin/bash
+          # Pulumi setup helper
+          echo "=== Setting up Pulumi access ==="
+          
+          # Check if PULUMI_ACCESS_TOKEN is set
+          if [ -z "$PULUMI_ACCESS_TOKEN" ]; then
+            echo "Warning: PULUMI_ACCESS_TOKEN environment variable is not set"
+            echo "Please set it with: export PULUMI_ACCESS_TOKEN=\"pul-YOUR_ACCESS_TOKEN\""
+            echo "You can get a token from https://app.pulumi.com/account/tokens"
+          else
+            echo "Logging in to Pulumi with access token..."
+            pulumi login
+            if [ $? -eq 0 ]; then
+              echo "Pulumi login successful"
+            else
+              echo "Pulumi login failed. Please check your access token."
+            fi
+          fi
+        owner: ec2-user
+        group: ec2-user
+        mode: '0755'
+    
     - name: Display completion message
       ansible.builtin.debug:
         msg: "Bootstrap environment setup completed successfully!"
