@@ -9,12 +9,7 @@
   
   vars:
     # 環境名はコマンドラインから指定可能
-    env_name: "{{ env | default('dev') }}"
-    # Pulumiプロジェクトパス
-    pulumi_path: "{{ playbook_dir }}/../../pulumi"
-    # スクリプトディレクトリ
-    scripts_dir: "{{ playbook_dir }}/../../scripts"
-  
+    env_name: "{{ env | default('dev') }}"  
   pre_tasks:
     # all.yml から変数を読み込む
     - name: Include group_vars/all.yml
@@ -26,6 +21,10 @@
       ansible.builtin.set_fact:
         project_name: "{{ infra.project_name }}"
         aws_region_name: "{{ infra.aws.default_region }}"
+        network_project_name: "{{ infra.pulumi.network_project }}"
+        security_project_name: "{{ infra.pulumi.security_project }}"
+        storage_project_name: "{{ infra.pulumi.storage_project }}"
+        loadbalancer_project_name: "{{ infra.pulumi.loadbalancer_project }}"
     
   roles:
     - aws_setup
@@ -72,9 +71,10 @@
           AWS Region: {{ aws_region_name }}
           
           Pulumi Projects:
-          - Network: {{ infra.pulumi.network_project }}
-          - Security: {{ infra.pulumi.security_project }}
-          - Storage: {{ infra.pulumi.storage_project }}
+          - Network: {{ network_project_name }}
+          - Security: {{ security_project_name }}
+          - Storage: {{ storage_project_name }}
+          - LoadBalancer: {{ loadbalancer_project_name }}
     
     - name: Check Ansible version
       ansible.builtin.debug:
@@ -82,28 +82,22 @@
     
     # ネットワークインフラのデプロイ
     - name: Deploy Network Infrastructure
-      ansible.builtin.include_tasks: 
-        file: deploy_jenkins_network.yml
-      vars:
-        env: "{{ env_name }}"  # 環境名を直接渡す
+      ansible.builtin.include_role:
+        name: jenkins_network
       when: run_network | default(true) | bool
       
     # ネットワークデプロイが成功したらセキュリティグループをデプロイ
     - name: Deploy Security Groups
-      ansible.builtin.include_tasks: 
-        file: deploy_jenkins_security.yml
-      vars:
-        env: "{{ env_name }}"  # 環境名を直接渡す
+      ansible.builtin.include_role:
+        name: jenkins_security
       when: 
         - network_deployed is defined and network_deployed
         - run_security | default(true) | bool
         
     # セキュリティグループデプロイが成功したらストレージ（EFS）をデプロイ
     - name: Deploy Storage Infrastructure (EFS)
-      ansible.builtin.include_tasks: 
-        file: deploy_jenkins_storage.yml
-      vars:
-        env: "{{ env_name }}"  # 環境名を直接渡す
+      ansible.builtin.include_role:
+        name: jenkins_storage
       when: 
         - network_deployed is defined and network_deployed
         - security_deployed is defined and security_deployed
