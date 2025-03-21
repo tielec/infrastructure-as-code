@@ -1,10 +1,6 @@
-# ネットワークロールのデフォルト変数
-
-# スクリプトディレクトリ
-scripts_dir: "{{ playbook_dir }}/../../../scripts"
-
-# Pulumiプロジェクトパス
-pulumi_path: "{{ playbook_dir }}/../../../pulumi"
+# パスがプレイブックからの相対パスになるよう修正
+scripts_dir: "{{ playbook_dir }}/../../scripts"
+pulumi_path: "{{ playbook_dir }}/../../pulumi"
 
 # 環境名のデフォルト値
 env_name: "dev"
