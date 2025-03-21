@@ -29,6 +29,7 @@
   register: aws_cred_check
   changed_when: false
   ignore_errors: true
+  no_log: false  # 出力は認証情報を含まないため表示可能
 
 - name: Display AWS credentials status
   ansible.builtin.debug:
@@ -36,10 +37,11 @@
 
 - name: Configure AWS credentials if not already set
   ansible.builtin.shell: |
-    source {{ aws_credentials_script_path }}
+    source {{ aws_credentials_script_path }} > /dev/null
   args:
     executable: /bin/bash
   when: aws_cred_check.rc != 0
+  no_log: true  # 認証情報が含まれる可能性があるため非表示
 
 - name: Verify AWS credentials after configuration
   ansible.builtin.shell: aws sts get-caller-identity
