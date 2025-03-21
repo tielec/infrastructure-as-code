@@ -1,5 +1,5 @@
 AWSTemplateFormatVersion: '2010-09-09'
-Description: 'Bootstrap EC2 Instance with Ansible and Pulumi pre-installed'
+Description: 'Bootstrap EC2 Instance with minimal setup (Git and Ansible only)'
 
 Parameters:
   KeyName:
@@ -144,79 +144,40 @@ Resources:
         Fn::Base64: !Sub |
           #!/bin/bash -xe
           
-          # Update and install basic packages
+          # 最小限の更新とパッケージのインストール
           yum update -y
-          yum install -y git jq python3 python3-pip unzip
-
-          # Install AWS CLI v2
-          curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
-          unzip awscliv2.zip
-          ./aws/install
+          yum install -y git python3 python3-pip jq
           
-          # Install Node.js
-          curl -sL https://rpm.nodesource.com/setup_16.x | bash -
-          yum install -y nodejs
-          
-          # Install Ansible
+          # Ansibleのインストール
           pip3 install ansible
-          # Install Pulumi          
-          curl -fsSL https://get.pulumi.com | sh
-          mkdir -p /home/ec2-user/.pulumi
-          cp -r .pulumi/* /home/ec2-user/.pulumi/
-          chown -R ec2-user:ec2-user /home/ec2-user/.pulumi
-          ln -s /home/ec2-user/.pulumi/bin/pulumi /usr/local/bin/pulumi    # Set PATH for all users
-          echo 'export PATH=$PATH:$HOME/.pulumi/bin' >> /etc/profile
-          echo 'export PATH=$PATH:$HOME/.pulumi/bin' >> /root/.bashrc
-          echo 'export PATH=$PATH:$HOME/.pulumi/bin' >> /home/ec2-user/.bashrc
           
-          # Create installation verification script
-          cat > /home/ec2-user/verify-installation.sh << 'EOF'
-          #!/bin/bash
-          echo "=== Installed Tools ==="
-          echo "Node.js: $(node --version)"
-          echo "npm: $(npm --version)"
-          echo "Python: $(python3 --version)"
-          echo "Pip: $(pip3 --version)"
-          echo "AWS CLI: $(aws --version)"
-          echo "Ansible: $(ansible --version | head -n 1)"
-          echo "Pulumi: $(if [ -f $HOME/.pulumi/bin/pulumi ]; then $HOME/.pulumi/bin/pulumi version; else echo "Not found"; fi)"
-          echo "======================="
+          # SSMエージェントの確認（すでにインストール済みかもしれませんが念のため）
+          yum install -y amazon-ssm-agent
+          systemctl enable amazon-ssm-agent
+          systemctl start amazon-ssm-agent
+          
+          # スタートアップガイドの作成
+          cat > /home/ec2-user/SETUP_GUIDE.txt << 'EOF'
+          === Bootstrap Environment Setup Guide ===
+          
+          This EC2 instance has been configured with the minimum required tools.
+          To complete the setup, follow these two simple steps:
+          
+          1. Clone your Git repository:
+             git clone <YOUR_REPOSITORY_URL> && cd <YOUR_REPOSITORY_DIRECTORY>
+          
+          2. Run the bootstrap setup script:
+             ./scripts/setup-bootstrap.sh
+          
+          That's it! The setup script will install all necessary tools and configure your environment.
           EOF
           
-          chmod +x /home/ec2-user/verify-installation.sh
-          chown ec2-user:ec2-user /home/ec2-user/verify-installation.sh
+          chown ec2-user:ec2-user /home/ec2-user/SETUP_GUIDE.txt
           
-          # Create README file with instructions
-          cat > /home/ec2-user/README.txt << 'EOF'
-          === Bootstrap Environment Setup Complete ===
+          # セットアップガイドを表示するように設定
+          echo "cat /home/ec2-user/SETUP_GUIDE.txt" >> /home/ec2-user/.bashrc
           
-          Your EC2 bootstrap instance has been configured with the following tools:
-          - AWS CLI v2
-          - Node.js 16.x
-          - Python 3
-          - Ansible
-          - Pulumi
-          - Git
-          
-          Next steps:
-          1. Run "./verify-installation.sh" to check installed tools
-          2. Setup Pulumi: "pulumi login"
-          3. Setup Git SSH keys for repository access: 
-             ssh-keygen -t ed25519 -C "your_email@example.com"
-             cat ~/.ssh/id_ed25519.pub
-          4. Clone your repository and start working!
-          
-          See the project README.md for detailed instructions.
-          EOF
-          
-          chown ec2-user:ec2-user /home/ec2-user/README.txt
-          
-          # Create a welcome message
-          echo "cat /home/ec2-user/README.txt" >> /home/ec2-user/.bashrc
-          echo "echo ''" >> /home/ec2-user/.bashrc
-          
-          # Bootstrap complete message
-          echo "Bootstrap complete! Ansible and Pulumi are now installed."
+          echo "Bootstrap minimal setup complete!"
 
       Tags:
         - Key: Name

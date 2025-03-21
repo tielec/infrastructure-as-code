@@ -1,0 +1,202 @@
+---
+# bootstrap-setup.yml
+# Jenkinsインフラをデプロイするためのブートストラップ環境の設定
+
+- name: Bootstrap Environment Setup
+  hosts: localhost
+  connection: local
+  gather_facts: yes
+  # ansible.cfgでbecomeが設定されているため、ここでの指定は不要
+  
+  vars:
+    nodejs_version: "16.x"
+    user_home: "/home/ec2-user"
+    aws_credentials_script_path: "{{ playbook_dir }}/../scripts/aws-credentials.sh"
+  
+  tasks:
+    - name: Display start message
+      ansible.builtin.debug:
+        msg: "Starting Bootstrap Environment Setup"
+        
+    # AWS CLI v2のインストール
+    - name: Check if AWS CLI v2 is installed
+      ansible.builtin.shell: aws --version
+      register: aws_cli_check
+      changed_when: false
+      failed_when: false
+      
+    - name: Install AWS CLI v2
+      when: aws_cli_check.rc != 0 or 'aws-cli/2' not in aws_cli_check.stdout
+      block:
+        - name: Download AWS CLI v2 installer
+          ansible.builtin.get_url:
+            url: "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip"
+            dest: "/tmp/awscliv2.zip"
+            mode: '0644'
+          
+        - name: Unzip AWS CLI v2 installer
+          ansible.builtin.unarchive:
+            src: "/tmp/awscliv2.zip"
+            dest: "/tmp"
+            remote_src: yes
+            
+        - name: Install AWS CLI v2
+          ansible.builtin.command: /tmp/aws/install
+          args:
+            creates: /usr/local/bin/aws
+            
+        - name: Clean up AWS CLI v2 installation files
+          ansible.builtin.file:
+            path: "{{ item }}"
+            state: absent
+          loop:
+            - "/tmp/awscliv2.zip"
+            - "/tmp/aws"
+            
+    # Node.jsのインストール
+    - name: Check if Node.js is installed
+      ansible.builtin.shell: node --version
+      register: node_check
+      changed_when: false
+      failed_when: false
+      
+    - name: Install Node.js {{ nodejs_version }}
+      when: node_check.rc != 0
+      block:
+        - name: Configure Node.js repository
+          ansible.builtin.shell: |
+            curl -sL https://rpm.nodesource.com/setup_{{ nodejs_version }} | bash -
+          args:
+            warn: false
+            
+        - name: Install Node.js packages
+          ansible.builtin.yum:
+            name: nodejs
+            state: present
+            
+    # Pulumiのインストール (rootとして使用)
+    - name: Check if Pulumi is installed
+      ansible.builtin.stat:
+        path: "/usr/local/bin/pulumi"
+      register: pulumi_check
+      
+    - name: Install Pulumi
+      when: not pulumi_check.stat.exists
+      block:
+        - name: Download Pulumi
+          ansible.builtin.get_url:
+            url: https://get.pulumi.com
+            dest: /tmp/pulumi-installer.sh
+            mode: '0755'
+            
+        - name: Execute Pulumi installer
+          ansible.builtin.shell: /tmp/pulumi-installer.sh
+          args:
+            creates: "/root/.pulumi/bin/pulumi"
+            
+        - name: Create Pulumi symbolic link
+          ansible.builtin.file:
+            src: "/root/.pulumi/bin/pulumi"
+            dest: "/usr/local/bin/pulumi"
+            state: link
+            
+        - name: Add Pulumi to PATH for all users
+          ansible.builtin.lineinfile:
+            path: "/etc/profile.d/pulumi.sh"
+            line: "export PATH=$PATH:/root/.pulumi/bin"
+            create: yes
+            mode: '0644'
+            
+    # インストール検証スクリプトの作成
+    - name: Create installation verification script
+      ansible.builtin.copy:
+        dest: "{{ user_home }}/verify-installation.sh"
+        content: |
+          #!/bin/bash
+          echo "=== Installed Tools ==="
+          echo "Node.js: $(node --version 2>/dev/null || echo 'Not installed')"
+          echo "npm: $(npm --version 2>/dev/null || echo 'Not installed')"
+          echo "Python: $(python3 --version 2>/dev/null || echo 'Not installed')"
+          echo "Pip: $(pip3 --version 2>/dev/null || echo 'Not installed')"
+          echo "AWS CLI: $(aws --version 2>/dev/null || echo 'Not installed')"
+          echo "Ansible: $(ansible --version 2>/dev/null | head -n 1 || echo 'Not installed')"
+          echo "Pulumi: $(pulumi version 2>/dev/null || echo 'Not installed')"
+          echo "Git: $(git --version 2>/dev/null || echo 'Not installed')"
+          echo "======================="
+        owner: ec2-user
+        group: ec2-user
+        mode: '0755'
+        
+    # AWS認証情報スクリプトの周知
+    - name: Check AWS credentials script
+      ansible.builtin.stat:
+        path: "{{ aws_credentials_script_path }}"
+      register: aws_cred_script
+      
+    - name: Create AWS credentials setup helper
+      when: aws_cred_script.stat.exists
+      ansible.builtin.copy:
+        dest: "{{ user_home }}/setup-aws-credentials.sh"
+        content: |
+          #!/bin/bash
+          echo "Setting up AWS credentials from IAM role..."
+          source {{ aws_credentials_script_path }}
+          echo "AWS credentials configured. Testing with 'aws sts get-caller-identity':"
+          aws sts get-caller-identity
+        owner: ec2-user
+        group: ec2-user
+        mode: '0755'
+        
+    # Docker のインストール（Jenkinsエージェントで必要）
+    - name: Install Docker
+      ansible.builtin.yum:
+        name: docker
+        state: present
+        
+    - name: Start and enable Docker service
+      ansible.builtin.systemd:
+        name: docker
+        state: started
+        enabled: yes
+        
+    - name: Add ec2-user to docker group
+      ansible.builtin.user:
+        name: ec2-user
+        groups: docker
+        append: yes
+        
+    # README.txtの作成（セットアップ手順）
+    - name: Create detailed README file
+      ansible.builtin.copy:
+        dest: "{{ user_home }}/README.txt"
+        content: |
+          === Bootstrap Environment Setup Complete ===
+          
+          Your EC2 bootstrap instance has been configured with the following tools:
+          - AWS CLI v2
+          - Node.js {{ nodejs_version }}
+          - Python 3 and pip3
+          - Ansible
+          - Pulumi
+          - Git
+          - Docker
+          
+          Next steps:
+          1. Run "./verify-installation.sh" to check installed tools
+          2. Setup Pulumi: "sudo pulumi login"
+          3. Setup AWS credentials: "source ./setup-aws-credentials.sh"
+          4. Setup Git SSH keys for repository access: 
+             ssh-keygen -t ed25519 -C "your_email@example.com"
+             cat ~/.ssh/id_ed25519.pub
+             
+          5. After adding the SSH key to GitHub, you can clone your repository
+             and start working with the Jenkins Infrastructure as Code.
+          
+          For more details, refer to the project documentation.
+        owner: ec2-user
+        group: ec2-user
+        mode: '0644'
+        
+    - name: Display completion message
+      ansible.builtin.debug:
+        msg: "Bootstrap environment setup completed successfully!"
