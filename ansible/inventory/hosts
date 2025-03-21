@@ -1,0 +1,32 @@
+# インベントリファイル
+
+# ローカル実行用
+[local]
+localhost ansible_connection=local
+
+# 環境別グループ
+[dev]
+# 開発環境のホストはここに追加
+
+[staging]
+# ステージング環境のホストはここに追加
+
+[prod]
+# 本番環境のホストはここに追加
+
+# 機能別グループ
+[jenkins_controllers]
+# Jenkinsコントローラーホストはここに追加
+
+[jenkins_agents]
+# Jenkinsエージェントホストはここに追加
+
+# 環境ごとに異なるグループ変数を使用できるよう設定
+[dev:vars]
+env_name=dev
+
+[staging:vars]
+env_name=staging
+
+[prod:vars]
+env_name=prod

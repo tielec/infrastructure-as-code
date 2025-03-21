@@ -1,0 +1,3 @@
+# AWSセットアップのデフォルト変数
+aws_credentials_script_path: "/root/infrastructure-as-code/scripts/aws-credentials.sh"
+aws_region: "ap-northeast-1"

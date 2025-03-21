@@ -1,3 +1,9 @@
+/**
+ * common/dependency-utils.ts
+ * 
+ * Pulumiリソース間の依存関係を明示的に設定するためのユーティリティ関数。
+ * 暗黙的な依存関係だけでは不十分な場合に使用します。
+ */
 import * as pulumi from "@pulumi/pulumi";
 
 // 依存関係を正しく指定するためのヘルパー関数

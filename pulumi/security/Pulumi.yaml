@@ -1,0 +1,3 @@
+name: jenkins-security
+runtime: nodejs
+description: Jenkins Security Groups Infrastructure

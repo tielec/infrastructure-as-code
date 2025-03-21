@@ -1,8 +1,12 @@
+/**
+ * Jenkinsエージェント用のAWSリソース（SpotFleet、LaunchTemplate、IAMロールなど）を
+ * 作成するためのモジュール。
+ */
 import * as pulumi from "@pulumi/pulumi";
 import * as aws from "@pulumi/aws";
 import * as fs from "fs";
 import * as path from "path";
-import { dependsOn } from "./dependency-utils";
+import { dependsOn } from "../../common/dependency-utils";
 
 interface JenkinsAgentInput {
     projectName: string;
@@ -118,11 +122,12 @@ export function createJenkinsAgentFleet(input: JenkinsAgentInput, dependencies?:
     // エージェントセットアップスクリプトの読み込み
     let userDataScript;
     try {
-        userDataScript = loadScript('../scripts/jenkins/shell/agent-setup.sh');
+        userDataScript = loadScript('../../../../scripts/jenkins/shell/agent-setup.sh');
     } catch (error) {
         console.error("Error loading agent setup script:", error);
         throw new Error(`エージェントセットアップスクリプトが見つかりません。scripts/jenkins/shell/agent-setup.shを作成してください。`);
     }
+
 
     // Launch Template
     const launchTemplateArgs: aws.ec2.LaunchTemplateArgs = {
@@ -277,9 +282,9 @@ export function createJenkinsAgentFleet(input: JenkinsAgentInput, dependencies?:
 
 // エージェント設定用のスクリプトファイルが存在しない場合に作成するヘルパー関数
 export function ensureAgentScriptFile() {
-    const scriptDir = path.resolve(__dirname, '../scripts/jenkins/shell');
+    const scriptDir = path.resolve(__dirname, '../../../../scripts/jenkins/shell');
     const scriptPath = path.resolve(scriptDir, 'agent-setup.sh');
-    const templatePath = path.resolve(scriptDir, 'agent-setup-template.sh');
+    const templatePath = path.resolve(scriptDir, 'agent-template.sh');
     
     // スクリプトファイルがすでに存在する場合はなにもしない
     if (fs.existsSync(scriptPath)) {

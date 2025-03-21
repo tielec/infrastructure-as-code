@@ -1,19 +1,18 @@
 {
     "compilerOptions": {
-        "target": "ES2018",
+        "strict": true,
+        "outDir": "bin",
+        "target": "es2016",
         "module": "commonjs",
         "moduleResolution": "node",
-        "outDir": "bin",
         "sourceMap": true,
-        "stripInternal": true,
         "experimentalDecorators": true,
         "pretty": true,
         "noFallthroughCasesInSwitch": true,
         "noImplicitReturns": true,
-        "forceConsistentCasingInFileNames": true,
-        "strict": true
+        "forceConsistentCasingInFileNames": true
     },
-    "include": [
-        "src/**/*"
+    "files": [
+        "index.ts"
     ]
 }

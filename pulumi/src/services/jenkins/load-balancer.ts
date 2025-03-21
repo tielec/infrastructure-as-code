@@ -1,6 +1,10 @@
+/**
+ * Jenkins サービス用のApplication Load Balancerを作成するモジュール。
+ * Blue/Greenデプロイメント戦略をサポートしています。
+ */
 import * as pulumi from "@pulumi/pulumi";
 import * as aws from "@pulumi/aws";
-import { dependsOn } from "./dependency-utils";
+import { dependsOn } from "../../common/dependency-utils";
 
 export function createLoadBalancer(
     projectName: string, 
