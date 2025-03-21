@@ -6,6 +6,16 @@
   connection: local
   gather_facts: no
   
+  vars:
+    # 既定値を設定して、引数として渡されなかった場合のフォールバック
+    project_name_value: "{{ project_name_value | default('jenkins-infra') }}"
+    env_name_value: "{{ env_name_value | default(env) | default('dev') }}"
+    aws_region_name_value: "{{ aws_region_name_value | default('ap-northeast-1') }}"
+    storage_project_name: "{{ storage_project_name | default('jenkins-storage') }}"
+    network_project_name: "{{ network_project_name | default('jenkins-network') }}"
+    security_project_name: "{{ security_project_name | default('jenkins-security') }}"
+    pulumi_path: "{{ pulumi_path | default(playbook_dir ~ '/../../pulumi') }}"
+  
   tasks:
     - name: Set local variables for storage deployment
       ansible.builtin.set_fact:
