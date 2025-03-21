@@ -93,6 +93,7 @@ export const efsFileSystemArn = efsFileSystem.arn;
 export const efsFileSystemDnsName = pulumi.interpolate`${efsFileSystem.id}.efs.${aws.config.region}.amazonaws.com`;
 export const jenkinsAccessPointId = jenkinsAccessPoint.id;
 export const jenkinsAccessPointArn = jenkinsAccessPoint.arn;
-export const mountTargetIds = pulumi.all(mountTargets).apply(targets => 
-    targets.map(target => target.id)
-);
+
+// マウントターゲットIDのエクスポート - 型定義を追加
+export const mountTargetA = mountTargets.apply((targets: aws.efs.MountTarget[]) => targets[0].id);
+export const mountTargetB = mountTargets.apply((targets: aws.efs.MountTarget[]) => targets[1].id);
