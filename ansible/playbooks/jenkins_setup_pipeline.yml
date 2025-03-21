@@ -125,11 +125,17 @@
         
     # セキュリティグループデプロイが成功したらストレージ（EFS）をデプロイ
     - name: Deploy Storage Infrastructure (EFS)
-      ansible.builtin.command: 
-        cmd: "ansible-playbook {{ playbook_dir }}/deploy_jenkins_storage.yml -e 'env={{ env_name }} project_name_value={{ project_name }} env_name_value={{ env_name }} aws_region_name_value={{ aws_region_name }} storage_project_name=jenkins-storage network_project_name=jenkins-network security_project_name=jenkins-security pulumi_path={{ pulumi_path }}'"
-      register: storage_playbook_result
-      changed_when: "'changed=' in storage_playbook_result.stdout and 'changed=0' not in storage_playbook_result.stdout"
-      failed_when: storage_playbook_result.rc != 0
+      ansible.builtin.include_tasks: 
+        file: deploy_jenkins_storage.yml
+        apply:
+          vars:
+            # 変数名をリネームして自己参照を避ける
+            storage_project_name: "jenkins-storage"
+            network_project_name: "jenkins-network"
+            security_project_name: "jenkins-security"
+            project_name_value: "{{ project_name }}"  # 別名で渡す
+            env_name_value: "{{ env_name }}"
+            aws_region_name_value: "{{ aws_region_name }}"
       when: 
         - network_deployed is defined and network_deployed
         - security_deployed is defined and security_deployed
