@@ -8,8 +8,28 @@
       - Project: {{ project_name }}
       - Config Pulumi Project: {{ config_project_name }}
       - Environment: {{ env_name }}
-      - Jenkins Instance ID: {{ jenkins_instance_id }}
+      - Jenkins Instance ID: {{ jenkins_instance_id | default('未設定') }}
       - Jenkins Color: {{ jenkins_color }}
+
+# コントローラースタックからJenkinsインスタンスIDを取得（未設定の場合）
+- name: Get Jenkins instance ID from controller stack
+  ansible.builtin.include_role:
+    name: pulumi_helper
+    tasks_from: get_outputs
+  vars:
+    pulumi_project_path: "{{ pulumi_path }}/controller"
+    output_name: "jenkinsInstanceId"
+    mock_output: "mock-jenkins-instance-id"
+  when: jenkins_instance_id is not defined or jenkins_instance_id == ""
+
+- name: Set Jenkins instance ID from controller stack
+  ansible.builtin.set_fact:
+    jenkins_instance_id: "{{ stack_output_result.stdout | trim }}"
+  when: jenkins_instance_id is not defined or jenkins_instance_id == ""
+
+- name: Display Jenkins instance ID
+  ansible.builtin.debug:
+    msg: "Using Jenkins Instance ID: {{ jenkins_instance_id }}"
 
 # ファイル権限設定
 - name: Ensure aws-env.sh has execute permissions
@@ -101,6 +121,22 @@
     - name: Fail the playbook
       ansible.builtin.fail:
         msg: "Jenkins configuration deployment failed."
+
+# EFSファイルシステムIDの取得（未設定の場合）
+- name: Get EFS file system ID from storage stack
+  ansible.builtin.include_role:
+    name: pulumi_helper
+    tasks_from: get_outputs
+  vars:
+    pulumi_project_path: "{{ pulumi_path }}/storage"
+    output_name: "efsFileSystemId"
+    mock_output: "mock-efs-id"
+  when: efs_file_system_id is not defined or efs_file_system_id == ""
+
+- name: Set EFS file system ID from storage stack
+  ansible.builtin.set_fact:
+    efs_file_system_id: "{{ stack_output_result.stdout | trim }}"
+  when: efs_file_system_id is not defined or efs_file_system_id == ""
 
 # インスタンスの設定処理
 - name: Wait for SSM agent to be operational
