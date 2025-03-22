@@ -29,7 +29,9 @@
         security_project_name: "{{ infra.pulumi.security_project }}"
         storage_project_name: "{{ infra.pulumi.storage_project }}"
         loadbalancer_project_name: "{{ infra.pulumi.loadbalancer_project }}"
-    
+        controller_project_name: "{{ infra.pulumi.controller_project }}"
+        config_project_name: "{{ infra.pulumi.config_project }}"
+
   roles:
     - aws_setup
     - pulumi_helper
