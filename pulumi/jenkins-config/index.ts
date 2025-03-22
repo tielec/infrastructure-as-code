@@ -49,7 +49,7 @@ const jenkinsModeParam = new aws.ssm.Parameter(`${projectName}-jenkins-mode`, {
 const disableCliGroovyParam = new aws.ssm.Parameter(`${projectName}-jenkins-disable-cli-groovy`, {
     name: `/${projectName}/${environment}/jenkins/groovy/disable-cli`,
     type: "String",
-    value: loadScript('../scripts/jenkins/groovy/disable-cli.groovy'),
+    value: loadScript('../../scripts/jenkins/groovy/disable-cli.groovy'),
     description: "Jenkins Groovy script to disable CLI",
     tier: "Standard",
     tags: {
@@ -60,7 +60,7 @@ const disableCliGroovyParam = new aws.ssm.Parameter(`${projectName}-jenkins-disa
 const basicSettingsGroovyParam = new aws.ssm.Parameter(`${projectName}-jenkins-basic-settings-groovy`, {
     name: `/${projectName}/${environment}/jenkins/groovy/basic-settings`,
     type: "String",
-    value: loadScript('../scripts/jenkins/groovy/basic-settings.groovy'),
+    value: loadScript('../../scripts/jenkins/groovy/basic-settings.groovy'),
     description: "Jenkins Groovy script for basic settings",
     tier: "Standard",
     tags: {
@@ -71,7 +71,7 @@ const basicSettingsGroovyParam = new aws.ssm.Parameter(`${projectName}-jenkins-b
 const recoveryModeGroovyParam = new aws.ssm.Parameter(`${projectName}-jenkins-recovery-mode-groovy`, {
     name: `/${projectName}/${environment}/jenkins/groovy/recovery-mode`,
     type: "String",
-    value: loadScript('../scripts/jenkins/groovy/recovery-mode.groovy'),
+    value: loadScript('../../scripts/jenkins/groovy/recovery-mode.groovy'),
     description: "Jenkins Groovy script for recovery mode",
     tier: "Standard",
     tags: {
