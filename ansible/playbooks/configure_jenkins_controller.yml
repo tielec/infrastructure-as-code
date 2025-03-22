@@ -1,0 +1,71 @@
+---
+# configure_jenkins_controller.yml
+# Jenkinsコントローラーの設定タスクを実行
+
+- name: Configure Jenkins Controller
+  hosts: localhost
+  connection: local
+  gather_facts: yes
+  
+  vars:
+    # コマンドラインから環境名を受け取る
+    env_name: "{{ env | default('dev') }}"
+    jenkins_instance_id: "{{ instance_id | default('') }}"
+  
+  pre_tasks:
+    # all.yml から変数を読み込む
+    - name: Include group_vars/all.yml
+      ansible.builtin.include_vars:
+        file: "{{ playbook_dir }}/../inventory/group_vars/all.yml"
+        
+    # 必要な変数を設定
+    - name: Set required variables from all.yml
+      ansible.builtin.set_fact:
+        project_name: "{{ infra.project_name }}"
+        aws_region_name: "{{ infra.aws.default_region }}"
+        network_project_name: "{{ infra.pulumi.network_project }}"
+        security_project_name: "{{ infra.pulumi.security_project }}"
+        storage_project_name: "{{ infra.pulumi.storage_project }}"
+        loadbalancer_project_name: "{{ infra.pulumi.loadbalancer_project }}"
+        controller_project_name: "{{ infra.pulumi.controller_project }}"
+        config_project_name: "{{ infra.pulumi.config_project }}"
+        jenkins_version: "{{ version | default(jenkins.version) }}"
+        jenkins_color: "{{ color | default(jenkins.color) }}"
+        recovery_mode: "{{ recovery | default(jenkins.recovery_mode) }}"
+        git_repo: "{{ git_repo | default(jenkins.git.repo) }}"
+        git_branch: "{{ git_branch | default(jenkins.git.branch) }}"
+
+
+
+    # インスタンスIDが指定されていない場合は、コントローラースタックから取得
+    - name: Get Jenkins instance ID from controller stack
+      ansible.builtin.include_role:
+        name: pulumi_helper
+        tasks_from: get_outputs
+      vars:
+        pulumi_project_path: "{{ pulumi_path }}/controller"
+        output_name: "jenkinsInstanceId"
+        mock_output: "mock-jenkins-instance-id"
+      when: jenkins_instance_id == ""
+    
+    - name: Set Jenkins instance ID from stack
+      ansible.builtin.set_fact:
+        jenkins_instance_id: "{{ stack_output_result.stdout | trim }}"
+      when: jenkins_instance_id == ""
+    
+    # EFSファイルシステムIDを取得
+    - name: Get EFS file system ID
+      ansible.builtin.include_role:
+        name: pulumi_helper
+        tasks_from: get_outputs
+      vars:
+        pulumi_project_path: "{{ pulumi_path }}/storage"
+        output_name: "efsFileSystemId"
+        mock_output: "mock-efs-id"
+    
+    - name: Set EFS file system ID
+      ansible.builtin.set_fact:
+        efs_file_system_id: "{{ stack_output_result.stdout | trim }}"
+  
+  roles:
+    - jenkins_config

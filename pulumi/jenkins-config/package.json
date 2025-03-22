@@ -1,7 +1,7 @@
 {
-    "name": "jenkins-controller",
+    "name": "jenkins-config",
     "version": "1.0.0",
-    "description": "Jenkins Controller Infrastructure",
+    "description": "Jenkins Configuration Resources",
     "main": "index.ts",
     "scripts": {
         "build": "tsc",

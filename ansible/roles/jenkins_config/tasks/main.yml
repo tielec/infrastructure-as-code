@@ -1,0 +1,5 @@
+# jenkins_config ロールのメインタスク
+# このファイルはロールのエントリーポイントとなります
+
+- name: Include setup tasks
+  ansible.builtin.include_tasks: setup.yml

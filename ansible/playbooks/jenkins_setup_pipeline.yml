@@ -117,6 +117,28 @@
         - storage_deployed is defined and storage_deployed
         - run_loadbalancer | default(true) | bool        
 
+    # Jenkinsコントローラーをデプロイ
+    - name: Deploy Jenkins Controller
+      ansible.builtin.include_role:
+        name: jenkins_controller
+      when: 
+        - network_deployed is defined and network_deployed
+        - security_deployed is defined and security_deployed
+        - storage_deployed is defined and storage_deployed
+        - loadbalancer_deployed is defined and loadbalancer_deployed
+        - run_controller | default(true) | bool
+
+    # Jenkinsコントローラーの設定
+    - name: Configure Jenkins Controller
+      ansible.builtin.include_playbook:
+        playbook: configure_jenkins_controller.yml
+        args:
+          env: "{{ env_name }}"
+          instance_id: "{{ jenkins_instance_id }}"
+      when: 
+        - controller_deployed is defined and controller_deployed
+        - run_config | default(true) | bool
+
     # デプロイメント結果サマリー
     - name: Deployment Summary
       ansible.builtin.debug:
