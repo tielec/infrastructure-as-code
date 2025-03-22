@@ -35,37 +35,5 @@
         git_repo: "{{ git_repo | default(jenkins.git.repo) }}"
         git_branch: "{{ git_branch | default(jenkins.git.branch) }}"
 
-
-
-    # インスタンスIDが指定されていない場合は、コントローラースタックから取得
-    - name: Get Jenkins instance ID from controller stack
-      ansible.builtin.include_role:
-        name: pulumi_helper
-        tasks_from: get_outputs
-      vars:
-        pulumi_project_path: "{{ pulumi_path }}/controller"
-        output_name: "jenkinsInstanceId"
-        mock_output: "mock-jenkins-instance-id"
-      when: jenkins_instance_id == ""
-    
-    - name: Set Jenkins instance ID from stack
-      ansible.builtin.set_fact:
-        jenkins_instance_id: "{{ stack_output_result.stdout | trim }}"
-      when: jenkins_instance_id == ""
-    
-    # EFSファイルシステムIDを取得
-    - name: Get EFS file system ID
-      ansible.builtin.include_role:
-        name: pulumi_helper
-        tasks_from: get_outputs
-      vars:
-        pulumi_project_path: "{{ pulumi_path }}/storage"
-        output_name: "efsFileSystemId"
-        mock_output: "mock-efs-id"
-    
-    - name: Set EFS file system ID
-      ansible.builtin.set_fact:
-        efs_file_system_id: "{{ stack_output_result.stdout | trim }}"
-  
   roles:
     - jenkins_config
