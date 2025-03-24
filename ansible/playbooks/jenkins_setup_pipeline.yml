@@ -30,6 +30,7 @@
         storage_project_name: "{{ infra.pulumi.storage_project }}"
         loadbalancer_project_name: "{{ infra.pulumi.loadbalancer_project }}"
         controller_project_name: "{{ infra.pulumi.controller_project }}"
+        agent_project_name: "{{ infra.pulumi.agent_project }}"
         config_project_name: "{{ infra.pulumi.config_project }}"
 
   roles:
@@ -86,6 +87,8 @@
           - Security: {{ security_project_name }}
           - Storage: {{ storage_project_name }}
           - LoadBalancer: {{ loadbalancer_project_name }}
+          - Controller: {{ controller_project_name }}
+          - Agent: {{ agent_project_name }}
     
     - name: Check Ansible version
       ansible.builtin.debug:
@@ -189,16 +192,16 @@
         agent_deployed: "{{ agent_deploy_result is defined and agent_deploy_result.rc is not defined }}"
       when: agent_deploy_result is defined
 
-# デプロイ結果のサマリーセクションも更新
-- name: Deployment Summary
-  ansible.builtin.debug:
-    msg: |
-      Jenkins Infrastructure Deployment Summary
-      =======================================
-      Network: {{ network_deployed | default(false) }}
-      Security: {{ security_deployed | default(false) }}
-      Storage (EFS): {{ storage_deployed | default(false) }}
-      Load Balancer: {{ loadbalancer_deployed | default(false) }}
-      Controller: {{ controller_deployed | default(false) }}
-      Configuration: {{ config_deployed | default(false) }}
-      Agent: {{ agent_deployed | default(false) }}
+    # デプロイメント結果サマリー
+    - name: Deployment Summary
+      ansible.builtin.debug:
+        msg: |
+          Jenkins Infrastructure Deployment Summary
+          =======================================
+          Network: {{ network_deployed | default(false) }}
+          Security: {{ security_deployed | default(false) }}
+          Storage (EFS): {{ storage_deployed | default(false) }}
+          Load Balancer: {{ loadbalancer_deployed | default(false) }}
+          Controller: {{ controller_deployed | default(false) }}
+          Configuration: {{ config_deployed | default(false) }}
+          Agent: {{ agent_deployed | default(false) }}
