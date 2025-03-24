@@ -14,9 +14,6 @@ const config = new pulumi.Config();
 const projectName = config.get("projectName") || "jenkins-infra";
 const environment = pulumi.getStack();
 
-// バージョン管理のためのタイムスタンプ（ドキュメント名に含める）
-const timestamp = new Date().toISOString().slice(0, 16).replace(/[-:]/g, "");
-
 // スクリプトファイルの読み込み関数
 function loadScript(scriptPath: string): string {
     try {
@@ -82,8 +79,8 @@ const recoveryModeGroovyParam = new aws.ssm.Parameter(`${projectName}-jenkins-re
     },
 });
 
-// SSMドキュメント（Gitリポジトリ更新用）- 修正版
-const jenkinsUpdateRepoDocument = new aws.ssm.Document(`${projectName}-jenkins-update-repo-${timestamp}`, {
+// SSMドキュメント（Gitリポジトリ更新用）- ログ出力対応版
+const jenkinsUpdateRepoDocument = new aws.ssm.Document(`${projectName}-jenkins-update-repo`, {
     name: `${projectName}-jenkins-update-repo-${environment}`,
     documentType: "Command",
     content: JSON.stringify({
@@ -155,12 +152,11 @@ const jenkinsUpdateRepoDocument = new aws.ssm.Document(`${projectName}-jenkins-u
     }),
     tags: {
         Environment: environment,
-        Version: timestamp
     },
 });
 
 // SSMドキュメント（インストール用）- ログ出力対応版
-const jenkinsInstallDocument = new aws.ssm.Document(`${projectName}-jenkins-install-${timestamp}`, {
+const jenkinsInstallDocument = new aws.ssm.Document(`${projectName}-jenkins-install`, {
     name: `${projectName}-jenkins-install-${environment}`,
     documentType: "Command",
     content: JSON.stringify({
@@ -219,12 +215,11 @@ const jenkinsInstallDocument = new aws.ssm.Document(`${projectName}-jenkins-inst
     }),
     tags: {
         Environment: environment,
-        Version: timestamp
     },
 });
 
 // SSMドキュメント（EFSマウント用）- ログ出力対応版
-const jenkinsMountEfsDocument = new aws.ssm.Document(`${projectName}-jenkins-mount-efs-${timestamp}`, {
+const jenkinsMountEfsDocument = new aws.ssm.Document(`${projectName}-jenkins-mount-efs`, {
     name: `${projectName}-jenkins-mount-efs-${environment}`,
     documentType: "Command",
     content: JSON.stringify({
@@ -282,12 +277,11 @@ const jenkinsMountEfsDocument = new aws.ssm.Document(`${projectName}-jenkins-mou
     }),
     tags: {
         Environment: environment,
-        Version: timestamp
     },
 });
 
 // SSMドキュメント（設定用）- ログ出力対応版
-const jenkinsConfigureDocument = new aws.ssm.Document(`${projectName}-jenkins-configure-${timestamp}`, {
+const jenkinsConfigureDocument = new aws.ssm.Document(`${projectName}-jenkins-configure`, {
     name: `${projectName}-jenkins-configure-${environment}`,
     documentType: "Command",
     content: JSON.stringify({
@@ -348,12 +342,11 @@ const jenkinsConfigureDocument = new aws.ssm.Document(`${projectName}-jenkins-co
     }),
     tags: {
         Environment: environment,
-        Version: timestamp
     },
 });
 
 // SSMドキュメント（起動用）- ログ出力対応版
-const jenkinsStartupDocument = new aws.ssm.Document(`${projectName}-jenkins-startup-${timestamp}`, {
+const jenkinsStartupDocument = new aws.ssm.Document(`${projectName}-jenkins-startup`, {
     name: `${projectName}-jenkins-startup-${environment}`,
     documentType: "Command",
     content: JSON.stringify({
@@ -407,7 +400,6 @@ const jenkinsStartupDocument = new aws.ssm.Document(`${projectName}-jenkins-star
     }),
     tags: {
         Environment: environment,
-        Version: timestamp
     },
 });
 

@@ -1,6 +1,7 @@
 ---
 # Jenkins設定タスク
 
+# 設定開始前に既存のSSMドキュメントをクリーンアップ
 - name: Display jenkins configuration information
   ansible.builtin.debug:
     msg: |
@@ -10,6 +11,25 @@
       - Environment: {{ env_name }}
       - Jenkins Instance ID: {{ jenkins_instance_id | default('未設定') }}
       - Jenkins Color: {{ jenkins_color }}
+
+# 既存のSSMドキュメントを削除
+- name: Destroy existing SSM documents with Pulumi
+  ansible.builtin.include_role:
+    name: pulumi_helper
+    tasks_from: destroy
+  vars:
+    pulumi_project_path: "{{ pulumi_path }}/jenkins-config"
+    target_resources:
+      - "aws:ssm/document:Document {{ project_name }}-jenkins-update-repo"
+      - "aws:ssm/document:Document {{ project_name }}-jenkins-install"
+      - "aws:ssm/document:Document {{ project_name }}-jenkins-mount-efs"
+      - "aws:ssm/document:Document {{ project_name }}-jenkins-configure"
+      - "aws:ssm/document:Document {{ project_name }}-jenkins-startup"
+
+# プレビュー用のタスクを実行する前に少し待機
+- name: Wait for SSM documents to be fully deleted
+  ansible.builtin.pause:
+    seconds: 5
 
 # コントローラースタックからJenkinsインスタンスIDを取得（未設定の場合）
 - name: Get Jenkins instance ID from controller stack
