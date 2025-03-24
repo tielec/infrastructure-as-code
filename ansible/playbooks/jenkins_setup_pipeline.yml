@@ -134,6 +134,18 @@
         - storage_deployed is defined and storage_deployed
         - loadbalancer_deployed is defined and loadbalancer_deployed
         - run_controller | default(true) | bool
+      register: controller_deploy_result
+      
+    # controller_deployedを明示的に設定
+    - name: Set controller deployment status
+      ansible.builtin.set_fact:
+        controller_deployed: "{{ controller_deploy_result is defined and controller_deploy_result.rc is not defined }}"
+      when: controller_deploy_result is defined
+        
+    # 設定ステータスをデバッグ表示
+    - name: Debug controller deployment status
+      ansible.builtin.debug:
+        msg: "Controller deployment status: {{ controller_deployed | default(false) }}"
 
     # Jenkinsコントローラーの設定
     - name: Configure Jenkins Controller
@@ -142,21 +154,51 @@
       vars:
         jenkins_instance_id: "{{ jenkins_instance_id | default('') }}"
       when: 
-        - controller_deployed is defined and controller_deployed
+        - controller_deployed | default(false) | bool
         - run_config | default(true) | bool
-
-    # デプロイメント結果サマリー
-    - name: Deployment Summary
+      register: config_deploy_result
+      
+    # config_deployedを明示的に設定
+    - name: Set config deployment status
+      ansible.builtin.set_fact:
+        config_deployed: "{{ config_deploy_result is defined and config_deploy_result.rc is not defined }}"
+      when: config_deploy_result is defined
+        
+    # 設定ステータスをデバッグ表示
+    - name: Debug config deployment status
       ansible.builtin.debug:
-        msg: |
-          Jenkins Infrastructure Deployment Summary
-          =======================================
-          Network: {{ network_deployed | default(false) }}
-          Security: {{ security_deployed | default(false) }}
-          Storage (EFS): {{ storage_deployed | default(false) }}
-          
-          # 今後追加予定:
-          # Load Balancer: (Not deployed yet)
-          # Jenkins Controller: (Not deployed yet)
-          # Jenkins Agent: (Not deployed yet)
-          # Jenkins Application: (Not deployed yet)
+        msg: "Config deployment status: {{ config_deployed | default(false) }}"
+
+    # Jenkinsエージェントをデプロイ
+    - name: Deploy Jenkins Agent
+      ansible.builtin.include_role:
+        name: jenkins_agent
+      vars:
+        min_capacity: "{{ agent_min_capacity | default(0) }}"
+        max_capacity: "{{ agent_max_capacity | default(10) }}"
+        spot_price: "{{ agent_spot_price | default('0.10') }}"
+        instance_type: "{{ agent_instance_type | default('t3.medium') }}"
+      when: 
+        - controller_deployed | default(false) | bool
+        - run_agent | default(true) | bool
+      register: agent_deploy_result
+      
+    # agent_deployedを明示的に設定
+    - name: Set agent deployment status
+      ansible.builtin.set_fact:
+        agent_deployed: "{{ agent_deploy_result is defined and agent_deploy_result.rc is not defined }}"
+      when: agent_deploy_result is defined
+
+# デプロイ結果のサマリーセクションも更新
+- name: Deployment Summary
+  ansible.builtin.debug:
+    msg: |
+      Jenkins Infrastructure Deployment Summary
+      =======================================
+      Network: {{ network_deployed | default(false) }}
+      Security: {{ security_deployed | default(false) }}
+      Storage (EFS): {{ storage_deployed | default(false) }}
+      Load Balancer: {{ loadbalancer_deployed | default(false) }}
+      Controller: {{ controller_deployed | default(false) }}
+      Configuration: {{ config_deployed | default(false) }}
+      Agent: {{ agent_deployed | default(false) }}

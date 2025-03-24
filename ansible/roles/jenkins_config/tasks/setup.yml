@@ -45,6 +45,13 @@
 - name: Set Jenkins instance ID from controller stack
   ansible.builtin.set_fact:
     jenkins_instance_id: "{{ stack_output_result.stdout | trim }}"
+  when: 
+    - jenkins_instance_id is not defined or jenkins_instance_id == ""
+    - stack_output_result is defined and stack_output_result.stdout is defined
+
+- name: Verify Jenkins instance ID
+  ansible.builtin.fail:
+    msg: "Unable to determine Jenkins instance ID. Please specify jenkins_instance_id or ensure controller is deployed."
   when: jenkins_instance_id is not defined or jenkins_instance_id == ""
 
 - name: Display Jenkins instance ID
@@ -641,6 +648,11 @@
         msg: "Attempting to continue with deployment despite Jenkins startup issue."
   when: not ansible_check_mode and jenkins_configure_complete | default(false)
 
+# 設定完了を示す変数設定
+- name: Set config deployment status
+  ansible.builtin.set_fact:
+    config_deployed: true
+
 # 設定結果のサマリー表示
 - name: Display Jenkins setup completion status
   ansible.builtin.debug:
@@ -651,3 +663,4 @@
       - Jenkins Installation: {{ jenkins_install_complete | default(false) | ternary('Success', 'Not run or Failed') }}
       - Jenkins Configuration: {{ jenkins_configure_complete | default(false) | ternary('Success', 'Not run or Failed') }}
       - Jenkins Startup: {{ jenkins_startup_complete | default(false) | ternary('Success', 'Not run or Failed') }}
+      - Configuration Deployment: {{ config_deployed | default(false) | ternary('Success', 'Failed') }}

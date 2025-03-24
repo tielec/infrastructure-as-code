@@ -1,0 +1,36 @@
+---
+# deploy_jenkins_agent.yml
+# Jenkinsインフラのエージェントリソース（SpotFleet、LaunchTemplate等）をデプロイ
+
+- name: Deploy Jenkins Agent Infrastructure
+  hosts: localhost
+  connection: local
+  gather_facts: yes
+  
+  vars:
+    # コマンドラインから環境名を受け取る
+    env_name: "{{ env | default('dev') }}"
+    # エージェント設定
+    instance_type: "{{ instance_type | default('t3.medium') }}"
+    min_capacity: "{{ min_capacity | default(0) }}"
+    max_capacity: "{{ max_capacity | default(10) }}"
+    spot_price: "{{ spot_price | default('0.10') }}"
+    key_name: "{{ key_name | default('') }}"
+  
+  pre_tasks:
+    # all.yml から変数を読み込む
+    - name: Include group_vars/all.yml
+      ansible.builtin.include_vars:
+        file: "{{ playbook_dir }}/../inventory/group_vars/all.yml"
+        
+    # 必要な変数を設定
+    - name: Set required variables from all.yml
+      ansible.builtin.set_fact:
+        project_name: "{{ infra.project_name }}"
+        aws_region_name: "{{ infra.aws.default_region }}"
+        network_project_name: "{{ infra.pulumi.network_project }}"
+        security_project_name: "{{ infra.pulumi.security_project }}"
+        agent_project_name: "{{ infra.pulumi.agent_project }}"
+  
+  roles:
+    - jenkins_agent

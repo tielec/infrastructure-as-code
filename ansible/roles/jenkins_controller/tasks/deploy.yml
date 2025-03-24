@@ -170,7 +170,7 @@
     - name: Set controller facts for use in other playbooks
       ansible.builtin.set_fact:
         controller_deployed: true
-        # スタック参照情報も保存
+        jenkins_instance_id: "{{ jenkins_instance_id }}"
         controller_stack_name: "{{ controller_project_name }}"
       
     - name: Summary of controller deployment

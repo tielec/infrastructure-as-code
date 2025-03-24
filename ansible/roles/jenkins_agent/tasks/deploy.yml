@@ -1,0 +1,203 @@
+---
+# エージェントデプロイタスク
+
+- name: Display agent deployment information
+  ansible.builtin.debug:
+    msg: |
+      Deploying Jenkins Agent Infrastructure:
+      - Project: {{ project_name }}
+      - Agent Pulumi Project: {{ agent_project_name }}
+      - Network Pulumi Project: {{ network_project_name }}
+      - Security Pulumi Project: {{ security_project_name }}
+      - Environment: {{ env_name }}
+      - Instance Type: {{ instance_type }}
+      - Min Capacity: {{ min_capacity }}
+      - Max Capacity: {{ max_capacity }}
+      - Spot Price: {{ spot_price }}
+
+# ファイル権限設定
+- name: Ensure aws-env.sh has execute permissions
+  ansible.builtin.file:
+    path: "{{ scripts_dir }}/aws-env.sh"
+    mode: '0755'
+  register: aws_env_script_permission
+  no_log: true  # 詳細なログを抑制
+  
+- name: Report permission update
+  ansible.builtin.debug:
+    msg: "aws-env.sh スクリプトに実行権限を付与しました"
+  when: aws_env_script_permission.changed
+
+# エージェントセットアップスクリプトの確認
+- name: Ensure agent-setup.sh has execute permissions
+  ansible.builtin.file:
+    path: "{{ scripts_dir }}/jenkins/shell/agent-setup.sh"
+    mode: '0755'
+  register: agent_setup_script_permission
+  no_log: true  # 詳細なログを抑制
+  failed_when: false  # スクリプトが存在しない場合もエラーにしない
+  
+- name: Report agent script permission update
+  ansible.builtin.debug:
+    msg: "agent-setup.sh スクリプトに実行権限を付与しました"
+  when: agent_setup_script_permission is defined and agent_setup_script_permission.changed
+
+# Pulumiデプロイ
+- name: Deploy Agent Infrastructure with Pulumi
+  block:
+    # Pulumiヘルパータスクを呼び出す
+    - name: Initialize agent stack
+      ansible.builtin.include_role:
+        name: pulumi_helper
+        tasks_from: init_stack
+      vars:
+        pulumi_project_path: "{{ pulumi_path }}/agent"
+        stack_name: "{{ env_name }}"
+    
+    - name: Configure agent stack
+      ansible.builtin.shell: |
+        cd {{ pulumi_path }}/agent
+        source {{ scripts_dir }}/aws-env.sh 
+        eval $({{ scripts_dir }}/aws-env.sh)
+        
+        sudo -E /root/.pulumi/bin/pulumi config set aws:region {{ aws_region_name }}
+        sudo -E /root/.pulumi/bin/pulumi config set {{ agent_project_name }}:projectName {{ project_name }}
+        sudo -E /root/.pulumi/bin/pulumi config set {{ agent_project_name }}:networkStackName {{ network_project_name }}
+        sudo -E /root/.pulumi/bin/pulumi config set {{ agent_project_name }}:securityStackName {{ security_project_name }}
+        sudo -E /root/.pulumi/bin/pulumi config set {{ agent_project_name }}:instanceType {{ instance_type }}
+        sudo -E /root/.pulumi/bin/pulumi config set {{ agent_project_name }}:minTargetCapacity {{ min_capacity }}
+        sudo -E /root/.pulumi/bin/pulumi config set {{ agent_project_name }}:maxTargetCapacity {{ max_capacity }}
+        sudo -E /root/.pulumi/bin/pulumi config set {{ agent_project_name }}:spotPrice {{ spot_price }}
+        {% if key_name is defined and key_name != "" %}
+        sudo -E /root/.pulumi/bin/pulumi config set {{ agent_project_name }}:keyName {{ key_name }}
+        {% endif %}
+      register: pulumi_config_result
+      changed_when: pulumi_config_result.rc == 0
+    
+    # 依存関係の確認: 必要なスタックが全てデプロイ済みであることを確認
+    - name: Check network stack outputs
+      ansible.builtin.include_role:
+        name: pulumi_helper
+        tasks_from: get_outputs
+      vars:
+        pulumi_project_path: "{{ pulumi_path }}/network"
+        output_name: "vpcId"
+        mock_output: "mock-vpc-id-for-check-mode"
+    
+    - name: Set network VPC ID
+      ansible.builtin.set_fact:
+        network_vpc_id: "{{ stack_output_result.stdout | trim }}"
+    
+    - name: Check security stack outputs
+      ansible.builtin.include_role:
+        name: pulumi_helper
+        tasks_from: get_outputs
+      vars:
+        pulumi_project_path: "{{ pulumi_path }}/security"
+        output_name: "jenkinsAgentSecurityGroupId"
+        mock_output: "mock-agent-sg-id"
+    
+    - name: Set Jenkins agent security group ID
+      ansible.builtin.set_fact:
+        jenkins_agent_sg_id: "{{ stack_output_result.stdout | trim }}"
+    
+    - name: Display dependency validation
+      ansible.builtin.debug:
+        msg: |
+          Dependency validation:
+          VPC ID from network stack: {{ network_vpc_id }}
+          Agent Security Group ID from security stack: {{ jenkins_agent_sg_id }}
+    
+    # Pulumiプレビュー
+    - name: Preview agent deployment
+      ansible.builtin.include_role:
+        name: pulumi_helper
+        tasks_from: preview
+      vars:
+        pulumi_project_path: "{{ pulumi_path }}/agent"
+    
+    # Pulumiデプロイ
+    - name: Deploy agent stack
+      ansible.builtin.include_role:
+        name: pulumi_helper
+        tasks_from: deploy
+      vars:
+        pulumi_project_path: "{{ pulumi_path }}/agent"
+    
+    # デプロイ後に少し待機してスタックが完全に更新されるのを待つ
+    - name: Wait for stack outputs to be available
+      ansible.builtin.pause:
+        seconds: 10
+      when: not ansible_check_mode
+    
+    # Spot Fleetリクエスト情報の取得
+    - name: Get agent Spot Fleet request ID
+      ansible.builtin.include_role:
+        name: pulumi_helper
+        tasks_from: get_outputs
+      vars:
+        pulumi_project_path: "{{ pulumi_path }}/agent"
+        output_name: "spotFleetRequestId"
+        mock_output: "mock-spot-fleet-request-id"
+    
+    - name: Set Spot Fleet request ID
+      ansible.builtin.set_fact:
+        spot_fleet_request_id: "{{ stack_output_result.stdout | trim }}"
+    
+    - name: Get agent launch template ID
+      ansible.builtin.include_role:
+        name: pulumi_helper
+        tasks_from: get_outputs
+      vars:
+        pulumi_project_path: "{{ pulumi_path }}/agent"
+        output_name: "launchTemplateId"
+        mock_output: "mock-launch-template-id"
+    
+    - name: Set launch template ID
+      ansible.builtin.set_fact:
+        launch_template_id: "{{ stack_output_result.stdout | trim }}"
+    
+    # SSMパラメータに保存されたSpotFleet IDを取得する
+    - name: Verify SpotFleet ID was stored in SSM parameter
+      ansible.builtin.shell: |
+        aws ssm get-parameter \
+          --name "/{{ project_name }}/{{ env_name }}/jenkins/agent/spotFleetRequestId" \
+          --region {{ aws_region_name }} \
+          --query "Parameter.Value" \
+          --output text
+      register: fleet_id_param
+      changed_when: false
+      failed_when: false
+      
+    - name: Display SSM parameter value
+      ansible.builtin.debug:
+        msg: "SSMパラメータに保存されたSpotFleet ID: {{ fleet_id_param.stdout | default('取得失敗') }}"
+    
+    - name: Set agent facts for use in other playbooks
+      ansible.builtin.set_fact:
+        agent_deployed: true
+        # スタック参照情報も保存
+        agent_stack_name: "{{ agent_project_name }}"
+      
+    - name: Summary of agent deployment
+      ansible.builtin.debug:
+        msg: |
+          Jenkins Agent Infrastructure Deployed Successfully:
+          - Spot Fleet Request ID: {{ spot_fleet_request_id }}
+          - Launch Template ID: {{ launch_template_id }}
+          - Min Capacity: {{ min_capacity }}
+          - Max Capacity: {{ max_capacity }}
+          - SSM Parameter Status: {{ 'Success' if fleet_id_param.rc == 0 else 'Failed' }}
+  
+  rescue:
+    - name: Set agent deployment status on failure
+      ansible.builtin.set_fact:
+        agent_deployed: false
+      
+    - name: Display error
+      ansible.builtin.debug:
+        msg: "Failed to deploy agent infrastructure. See error details above."
+      
+    - name: Fail the playbook
+      ansible.builtin.fail:
+        msg: "Agent deployment failed."
