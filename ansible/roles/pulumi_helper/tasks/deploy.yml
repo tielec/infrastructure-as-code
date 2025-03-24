@@ -1,13 +1,32 @@
 # Pulumiのデプロイ実行ヘルパータスク
 
 - name: Deploy with Pulumi
-  ansible.builtin.shell: |
-    cd {{ pulumi_project_path }}
-    {{ pulumi_commands.up }}
-  register: pulumi_up_result
-  changed_when: "'No changes required' not in pulumi_up_result.stdout"
-  when: not ansible_check_mode
-  
+  block:
+    - name: Run Pulumi up command
+      ansible.builtin.shell: |
+        cd {{ pulumi_project_path }}
+        {{ pulumi_commands.up }}
+      register: pulumi_up_result
+      changed_when: "'No changes required' not in pulumi_up_result.stdout"
+      when: not ansible_check_mode
+      
+    - name: Display Pulumi deployment results
+      ansible.builtin.debug:
+        msg: "{{ pulumi_up_result.stdout_lines }}"
+      when: not ansible_check_mode and ansible_verbosity > 0
+      
+    - name: Set deployment status on success
+      ansible.builtin.set_fact:
+        pulumi_deployment_succeeded: true
+  rescue:
+    - name: Display error message on deployment failure
+      ansible.builtin.debug:
+        msg: "Failed to deploy Pulumi stack. Check error message above."
+    
+    - name: Set deployment status on failure
+      ansible.builtin.set_fact:
+        pulumi_deployment_failed: true
+        
 - name: Mock deploy (check mode)
   ansible.builtin.debug:
     msg: "Would deploy stack with Pulumi (check mode active)"

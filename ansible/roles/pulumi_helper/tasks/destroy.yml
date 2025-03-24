@@ -1,0 +1,29 @@
+# Pulumiスタックを削除するヘルパータスク
+
+- name: Destroy Pulumi stack
+  block:
+    - name: Run Pulumi destroy command
+      ansible.builtin.shell: |
+        cd {{ pulumi_project_path }}
+        {{ pulumi_commands.destroy }}
+      register: pulumi_destroy_result
+      changed_when: "'No resources to destroy' not in pulumi_destroy_result.stdout"
+      when: not ansible_check_mode
+  
+    - name: Display Pulumi destroy results
+      ansible.builtin.debug:
+        msg: "{{ pulumi_destroy_result.stdout_lines }}"
+      when: not ansible_check_mode and ansible_verbosity > 0
+  rescue:
+    - name: Display error message on destruction failure
+      ansible.builtin.debug:
+        msg: "Failed to destroy Pulumi stack. Check error message above."
+    
+    - name: Set destroy status on failure
+      ansible.builtin.set_fact:
+        pulumi_destroy_failed: true
+        
+- name: Mock destroy (check mode)
+  ansible.builtin.debug:
+    msg: "Would destroy stack with Pulumi (check mode active)"
+  when: ansible_check_mode
