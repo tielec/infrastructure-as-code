@@ -23,15 +23,6 @@
 - name: Report AWS script permissions update
   ansible.builtin.debug:
     msg: "aws-env.sh スクリプトに実行権限を付与しました"
-  when: aws_env_script_perm.changed | default(false)  ansible.builtin.file:
-    path: "{{ playbook_dir }}/../../scripts/aws-env.sh"
-    mode: '0755'
-  register: aws_env_script_perm
-  failed_when: false
-
-- name: Report AWS script permissions update
-  ansible.builtin.debug:
-    msg: "aws-env.sh スクリプトに実行権限を付与しました"
   when: aws_env_script_perm.changed | default(false)
 
 - name: Ensure AWS credentials are properly set
