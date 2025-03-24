@@ -41,18 +41,20 @@
       ansible.builtin.stat:
         path: "{{ scripts_dir }}"
       register: scripts_dir_stat
+      no_log: true  # 詳細な出力を抑制
       
     - name: Fail if scripts directory doesn't exist
       ansible.builtin.fail:
         msg: "Scripts directory doesn't exist: {{ scripts_dir }}"
       when: not scripts_dir_stat.stat.exists
-    
+      
     - name: Ensure all shell scripts have proper execute permissions
       ansible.builtin.find:
         paths: "{{ scripts_dir }}"
         patterns: "*.sh"
         recurse: yes
       register: script_files
+      no_log: true  # ファイル一覧の詳細出力を抑制
       
     - name: Set execute permissions on shell scripts
       ansible.builtin.file:
@@ -60,13 +62,16 @@
         mode: "0755"
       loop: "{{ script_files.files }}"
       register: script_perm_updates
+      no_log: true  # 詳細な出力を抑制
       
     - name: Display scripts that needed permission updates
       ansible.builtin.debug:
-        msg: "実行権限を付与: {{ item.path }}"
+        msg: "実行権限を付与: {{ item.path | basename }}"
       loop: "{{ script_perm_updates.results }}"
       when: item.changed | default(false)
-    
+      loop_control:
+        label: "{{ item.path | basename }}"  # ファイル名のみをラベルとして表示
+        
     - name: Display pipeline information
       ansible.builtin.debug:
         msg: |

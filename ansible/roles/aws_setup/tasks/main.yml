@@ -8,6 +8,7 @@
     - "{{ playbook_dir }}/../../scripts/aws-env.sh"
     - "{{ playbook_dir }}/../../scripts/aws-credentials.sh"
     - "{{ playbook_dir }}/../../scripts/check-aws-creds.sh"
+  no_log: true  # 詳細なステータス情報を抑制
 
 - name: Ensure AWS scripts have execute permissions
   ansible.builtin.file:
@@ -17,12 +18,15 @@
   loop: "{{ script_stats.results }}"
   when: item.stat.exists and not item.stat.executable
   register: script_permission_updates
+  no_log: true  # 詳細な出力を抑制
 
 - name: Display script permission updates
   ansible.builtin.debug:
-    msg: "実行権限を付与しました: {{ item.item }}"
+    msg: "実行権限を付与: {{ item.item | basename }}"
   loop: "{{ script_permission_updates.results }}"
   when: item.changed | default(false)
+  loop_control:
+    label: "{{ item.item | basename }}"  # ファイル名のみをラベルとして表示
 
 - name: Check AWS credentials
   ansible.builtin.shell: aws sts get-caller-identity

@@ -17,6 +17,7 @@
     path: "{{ scripts_dir }}/aws-env.sh"
     mode: '0755'
   register: aws_env_script_permission
+  no_log: true  # 詳細なログを抑制
   
 - name: Report permission update
   ansible.builtin.debug:
