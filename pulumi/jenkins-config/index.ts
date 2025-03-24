@@ -14,6 +14,9 @@ const config = new pulumi.Config();
 const projectName = config.get("projectName") || "jenkins-infra";
 const environment = pulumi.getStack();
 
+// 現在のタイムスタンプをバージョン名として使用
+const versionTimestamp = `${new Date().toISOString().slice(0, 19).replace(/[:-]/g, "")}`;
+
 // スクリプトファイルの読み込み関数
 function loadScript(scriptPath: string): string {
     try {
@@ -83,6 +86,9 @@ const recoveryModeGroovyParam = new aws.ssm.Parameter(`${projectName}-jenkins-re
 const jenkinsUpdateRepoDocument = new aws.ssm.Document(`${projectName}-jenkins-update-repo`, {
     name: `${projectName}-jenkins-update-repo-${environment}`,
     documentType: "Command",
+    // バージョン管理対応
+    updateMethod: "NewVersion",
+    versionName: versionTimestamp, 
     content: JSON.stringify({
         schemaVersion: "2.2",
         description: "Update Git repository for Jenkins scripts",
@@ -159,6 +165,9 @@ const jenkinsUpdateRepoDocument = new aws.ssm.Document(`${projectName}-jenkins-u
 const jenkinsInstallDocument = new aws.ssm.Document(`${projectName}-jenkins-install`, {
     name: `${projectName}-jenkins-install-${environment}`,
     documentType: "Command",
+    // バージョン管理対応
+    updateMethod: "NewVersion",
+    versionName: versionTimestamp,
     content: JSON.stringify({
         schemaVersion: "2.2",
         description: "Jenkins Controller installation",
@@ -222,6 +231,9 @@ const jenkinsInstallDocument = new aws.ssm.Document(`${projectName}-jenkins-inst
 const jenkinsMountEfsDocument = new aws.ssm.Document(`${projectName}-jenkins-mount-efs`, {
     name: `${projectName}-jenkins-mount-efs-${environment}`,
     documentType: "Command",
+    // バージョン管理対応
+    updateMethod: "NewVersion",
+    versionName: versionTimestamp,
     content: JSON.stringify({
         schemaVersion: "2.2",
         description: "Mount EFS for Jenkins",
@@ -284,6 +296,9 @@ const jenkinsMountEfsDocument = new aws.ssm.Document(`${projectName}-jenkins-mou
 const jenkinsConfigureDocument = new aws.ssm.Document(`${projectName}-jenkins-configure`, {
     name: `${projectName}-jenkins-configure-${environment}`,
     documentType: "Command",
+    // バージョン管理対応
+    updateMethod: "NewVersion",
+    versionName: versionTimestamp,
     content: JSON.stringify({
         schemaVersion: "2.2",
         description: "Configure Jenkins controller",
@@ -349,6 +364,9 @@ const jenkinsConfigureDocument = new aws.ssm.Document(`${projectName}-jenkins-co
 const jenkinsStartupDocument = new aws.ssm.Document(`${projectName}-jenkins-startup`, {
     name: `${projectName}-jenkins-startup-${environment}`,
     documentType: "Command",
+    // バージョン管理対応
+    updateMethod: "NewVersion",
+    versionName: versionTimestamp,
     content: JSON.stringify({
         schemaVersion: "2.2",
         description: "Start Jenkins controller service",
