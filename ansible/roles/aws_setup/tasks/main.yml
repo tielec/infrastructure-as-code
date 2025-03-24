@@ -12,7 +12,7 @@
 
 - name: Ensure AWS scripts have execute permissions
   ansible.builtin.file:
-    path: "{{ item.item }}"
+    path: "{{ item.item }}"  # item.item が stat タスクからの元のパス
     mode: '0755'
     state: file
   loop: "{{ script_stats.results }}"
@@ -22,11 +22,11 @@
 
 - name: Display script permission updates
   ansible.builtin.debug:
-    msg: "実行権限を付与: {{ item.item | basename }}"
+    msg: "実行権限を付与しました: {{ item.path | basename }}"
   loop: "{{ script_permission_updates.results }}"
   when: item.changed | default(false)
   loop_control:
-    label: "{{ item.item | basename }}"  # ファイル名のみをラベルとして表示
+    label: "{{ item.path | basename if item.path is defined else 'unknown' }}"
 
 - name: Check AWS credentials
   ansible.builtin.shell: aws sts get-caller-identity
