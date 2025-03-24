@@ -131,11 +131,15 @@ const jenkinsUpdateRepoDocument = new aws.ssm.Document(`${projectName}-jenkins-u
                         "else",
                         "  echo \"Repository already exists, updating\"",
                         "  cd infrastructure-as-code",
+                        "  # リセットして強制的に最新状態にする",
+                        "  echo \"Resetting any local changes\"",
+                        "  git reset --hard",
+                        "  git clean -fd",
                         "  git fetch --all",
                         "fi",
                         "# Checkout and pull the specified branch",
                         "git checkout $GIT_BRANCH",
-                        "git pull origin $GIT_BRANCH",
+                        "git reset --hard origin/$GIT_BRANCH",
                         "echo \"Repository updated to branch $GIT_BRANCH\"",
                         "git log -1 --format=\"%h %s by %an (%ar)\"",
                         "echo \"Making shell scripts executable\"",
@@ -191,7 +195,19 @@ const jenkinsInstallDocument = new aws.ssm.Document(`${projectName}-jenkins-inst
                         "export ENVIRONMENT={{Environment}}",
                         "export JENKINS_VERSION={{JenkinsVersion}}",
                         "export JENKINS_COLOR={{JenkinsColor}}",
-                        `source /root/infrastructure-as-code/scripts/jenkins/shell/controller-install.sh`
+                        "# 既存のログをクリア",
+                        "rm -f /var/log/jenkins-install.log",
+                        "# スクリプト実行",
+                        `source /root/infrastructure-as-code/scripts/jenkins/shell/controller-install.sh`,
+                        "# ログファイルの内容を表示",
+                        "echo '===== BEGIN JENKINS INSTALL LOG ====='",
+                        "cat /var/log/jenkins-install.log 2>/dev/null || echo 'No log file found'",
+                        "echo '===== END JENKINS INSTALL LOG ====='",
+                        "# インストール状態確認",
+                        "echo '===== JENKINS INSTALL STATUS ====='",
+                        "rpm -q jenkins || echo 'Jenkins not installed'",
+                        "# 終了ステータス確認",
+                        "exit ${PIPESTATUS[0]}"
                     ]
                 }
             }
@@ -241,7 +257,19 @@ const jenkinsMountEfsDocument = new aws.ssm.Document(`${projectName}-jenkins-mou
                         "export ENVIRONMENT={{Environment}}",
                         "export EFS_ID={{EfsId}}",
                         "export AWS_REGION={{Region}}",
-                        `source /root/infrastructure-as-code/scripts/jenkins/shell/controller-mount-efs.sh`
+                        "# 既存のログをクリア",
+                        "rm -f /var/log/efs-mount.log",
+                        "# スクリプト実行",
+                        `source /root/infrastructure-as-code/scripts/jenkins/shell/controller-mount-efs.sh`,
+                        "# ログファイルの内容を表示",
+                        "echo '===== BEGIN EFS MOUNT LOG ====='",
+                        "cat /var/log/efs-mount.log 2>/dev/null || echo 'No log file found'",
+                        "echo '===== END EFS MOUNT LOG ====='",
+                        "# マウント状態確認",
+                        "echo '===== MOUNT STATUS ====='", 
+                        "df -h | grep -i efs || echo 'EFS not mounted'",
+                        "# 終了ステータス確認",
+                        "exit ${PIPESTATUS[0]}"
                     ]
                 }
             }
@@ -294,7 +322,19 @@ const jenkinsConfigureDocument = new aws.ssm.Document(`${projectName}-jenkins-co
                         "export ENVIRONMENT={{Environment}}",
                         "export JENKINS_MODE={{JenkinsMode}}",
                         "export JENKINS_COLOR={{JenkinsColor}}",
-                        `source /root/infrastructure-as-code/scripts/jenkins/shell/controller-configure.sh`
+                        "# 既存のログをクリア",
+                        "rm -f /var/log/jenkins-configure.log",
+                        "# スクリプト実行",
+                        `source /root/infrastructure-as-code/scripts/jenkins/shell/controller-configure.sh`,
+                        "# ログファイルの内容を表示",
+                        "echo '===== BEGIN JENKINS CONFIGURE LOG ====='",
+                        "cat /var/log/jenkins-configure.log 2>/dev/null || echo 'No log file found'",
+                        "echo '===== END JENKINS CONFIGURE LOG ====='",
+                        "# Jenkinsディレクトリ確認",
+                        "echo '===== JENKINS DIRECTORY STATUS ====='",
+                        "ls -la /mnt/efs/jenkins",
+                        "# 終了ステータス確認",
+                        "exit ${PIPESTATUS[0]}"
                     ]
                 }
             }
@@ -340,7 +380,19 @@ const jenkinsStartupDocument = new aws.ssm.Document(`${projectName}-jenkins-star
                         "export PROJECT_NAME={{ProjectName}}",
                         "export ENVIRONMENT={{Environment}}",
                         "export JENKINS_COLOR={{JenkinsColor}}",
-                        `source /root/infrastructure-as-code/scripts/jenkins/shell/controller-startup.sh`
+                        "# 既存のログをクリア",
+                        "rm -f /var/log/jenkins-startup.log",
+                        "# スクリプト実行",
+                        `source /root/infrastructure-as-code/scripts/jenkins/shell/controller-startup.sh`,
+                        "# ログファイルの内容を表示",
+                        "echo '===== BEGIN JENKINS STARTUP LOG ====='",
+                        "cat /var/log/jenkins-startup.log 2>/dev/null || echo 'No log file found'",
+                        "echo '===== END JENKINS STARTUP LOG ====='",
+                        "# Jenkins サービス状態確認",
+                        "echo '===== JENKINS SERVICE STATUS ====='",
+                        "systemctl status jenkins --no-pager || echo 'Jenkins service not found'",
+                        "# 終了ステータス確認",
+                        "exit ${PIPESTATUS[0]}"
                     ]
                 }
             }
