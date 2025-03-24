@@ -169,11 +169,17 @@
         aws ssm get-command-invocation \
           --command-id "{{ git_update_command_id }}" \
           --instance-id "{{ jenkins_instance_id }}" \
-          --output json
-      register: git_update_status
-      until: (git_update_status.stdout | from_json).Status == 'Success' or (git_update_status.stdout | from_json).Status == 'Failed' or (git_update_status.stdout | from_json).Status == 'Cancelled'
+          --output json || echo '{"Status": "Unknown"}'
+      register: git_update_status_result
+      until: git_update_status_result.rc == 0 and ((git_update_status_result.stdout | from_json).Status == 'Success' or (git_update_status_result.stdout | from_json).Status == 'Failed' or (git_update_status_result.stdout | from_json).Status == 'Cancelled')
       retries: 30
       delay: 10
+      ignore_errors: true
+      
+    - name: Set command status
+      ansible.builtin.set_fact:
+        git_update_status: "{{ git_update_status_result.stdout | from_json }}"
+        command_failed: "{{ git_update_status_result.rc != 0 }}"
       
     - name: Fetch Git update command output
       ansible.builtin.shell: |
@@ -181,22 +187,18 @@
           --command-id "{{ git_update_command_id }}" \
           --instance-id "{{ jenkins_instance_id }}" \
           --query "StandardOutputContent" \
-          --output text
+          --output text || echo "No output available"
       register: git_update_output
+      ignore_errors: true
       
     - name: Display Git update output
       ansible.builtin.debug:
         msg: "Git repository update output:\n{{ git_update_output.stdout }}"
       
     - name: Verify Git update success
-      ansible.builtin.shell: |
-        aws ssm get-command-invocation \
-          --command-id "{{ git_update_command_id }}" \
-          --instance-id "{{ jenkins_instance_id }}" \
-          --query "Status" \
-          --output text
-      register: git_update_final_status
-      failed_when: git_update_final_status.stdout != 'Success'
+      ansible.builtin.fail:
+        msg: "Git update command failed with status: {{ git_update_status.Status | default('Unknown') }}"
+      when: command_failed or git_update_status.Status != 'Success'
       
     - name: Mark Git update as successful
       ansible.builtin.set_fact:
