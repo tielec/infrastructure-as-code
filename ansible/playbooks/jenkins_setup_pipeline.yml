@@ -154,8 +154,6 @@
     - name: Configure Jenkins Controller
       ansible.builtin.include_role:
         name: jenkins_config
-      vars:
-        jenkins_instance_id: "{{ jenkins_instance_id | default('') }}"
       when: 
         - controller_deployed | default(false) | bool
         - run_config | default(true) | bool
