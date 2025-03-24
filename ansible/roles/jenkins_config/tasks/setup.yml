@@ -159,25 +159,22 @@
           --targets "Key=instanceids,Values={{ jenkins_instance_id }}" \
           --parameters "ProjectName={{ project_name }},Environment={{ env_name }},GitBranch={{ git_branch }},GitRepo={{ git_repo }}" \
           --comment "Updating Git repository" \
-          --output json
+          --output json | grep -v "export AWS_" | tail -n +2
       register: git_update_command
       changed_when: true
       
-    # デバッグ出力を追加
     - name: Debug Git update command output
       ansible.builtin.debug:
         var: git_update_command.stdout
-        
-    - name: Extract Git update command ID safely
-      ansible.builtin.set_fact:
-        git_update_command_id: "{{ git_update_command.stdout | from_json | json_query('Command.CommandId') | default('unknown') }}"
-      ignore_errors: yes
       
-    # コマンドIDが取得できていない場合はデフォルト値を設定
+    - name: Extract Git update command ID safely
+      ansible.builtin.shell: |
+        echo '{{ git_update_command.stdout }}' | grep -o '"CommandId": "[^"]*"' | cut -d'"' -f4
+      register: command_id_result
+      
     - name: Set default command ID if extraction failed
       ansible.builtin.set_fact:
-        git_update_command_id: "unknown"
-      when: git_update_command_id is not defined or git_update_command_id == ""
+        git_update_command_id: "{{ command_id_result.stdout if command_id_result.stdout != '' else 'unknown' }}"
       
     - name: Display command ID
       ansible.builtin.debug:
@@ -192,18 +189,16 @@
           --region {{ aws_region_name }} \
           --command-id "{{ git_update_command_id }}" \
           --query "Commands[0].Status" \
-          --output text || echo "Unknown"
-      register: command_status_result
-      until: command_status_result.stdout == 'Success' or command_status_result.stdout == 'Failed' or command_status_result.stdout == 'Cancelled'
+          --output text
+      register: command_status
+      until: command_status.stdout == 'Success' or command_status.stdout == 'Failed' or command_status.stdout == 'Cancelled'
       retries: 10
       delay: 5
-      ignore_errors: true
-      when: git_update_command_id != "unknown"
+      when: git_update_command_id != 'unknown'
       
     - name: Display command status
       ansible.builtin.debug:
-        msg: "Command status: {{ command_status_result.stdout | default('Unknown') }}"
-      when: command_status_result is defined
+        msg: "Command status: {{ command_status.stdout | default('Unknown') }}"
       
     - name: Fetch Git update command output
       ansible.builtin.shell: |
@@ -217,8 +212,8 @@
           --query "CommandInvocations[0].CommandPlugins[0].Output" \
           --output text || echo "No output available"
       register: git_update_output
+      when: git_update_command_id != 'unknown' and command_status.stdout | default('') == 'Success'
       ignore_errors: true
-      when: git_update_command_id != "unknown"
       
     - name: Display Git update output
       ansible.builtin.debug:
@@ -226,14 +221,16 @@
       
     - name: Verify Git update success
       ansible.builtin.set_fact:
-        git_update_complete: >-
-          {{ command_status_result is defined and command_status_result.stdout is defined and command_status_result.stdout == 'Success' }}
+        git_update_complete: "{{ (command_status.stdout | default('')) == 'Success' }}"
       
     - name: Fail if command was not successful
       ansible.builtin.fail:
         msg: "Git update command failed or status unknown"
-      when: not git_update_complete
+      when: not git_update_complete | bool
       
+    - name: Mark Git update as successful
+      ansible.builtin.set_fact:
+        git_update_complete: true
   rescue:
     - name: Mark Git update as failed
       ansible.builtin.set_fact:
@@ -243,7 +240,6 @@
       ansible.builtin.debug:
         msg: "Git repository update failed. Check AWS console for command ID: {{ git_update_command_id | default('unknown') }}"
       
-    # コマンドIDが不明な場合は再確認せずに続行を試みる
     - name: Mark as complete to continue the deployment
       ansible.builtin.set_fact:
         git_update_complete: true
@@ -267,25 +263,22 @@
           --targets "Key=instanceids,Values={{ jenkins_instance_id }}" \
           --parameters "ProjectName={{ project_name }},Environment={{ env_name }},EfsId={{ efs_file_system_id }},Region={{ aws_region_name }}" \
           --comment "Mounting EFS" \
-          --output json
+          --output json | grep -v "export AWS_" | tail -n +2
       register: efs_mount_command
       changed_when: true
       
-    # デバッグ出力を追加
     - name: Debug EFS mount command output
       ansible.builtin.debug:
         var: efs_mount_command.stdout
-        
-    - name: Extract EFS mount command ID safely
-      ansible.builtin.set_fact:
-        efs_mount_command_id: "{{ efs_mount_command.stdout | from_json | json_query('Command.CommandId') | default('unknown') }}"
-      ignore_errors: yes
       
-    # コマンドIDが取得できていない場合はデフォルト値を設定
+    - name: Extract EFS mount command ID safely
+      ansible.builtin.shell: |
+        echo '{{ efs_mount_command.stdout }}' | grep -o '"CommandId": "[^"]*"' | cut -d'"' -f4
+      register: command_id_result
+      
     - name: Set default command ID if extraction failed
       ansible.builtin.set_fact:
-        efs_mount_command_id: "unknown"
-      when: efs_mount_command_id is not defined or efs_mount_command_id == ""
+        efs_mount_command_id: "{{ command_id_result.stdout if command_id_result.stdout != '' else 'unknown' }}"
       
     - name: Display command ID
       ansible.builtin.debug:
@@ -300,18 +293,16 @@
           --region {{ aws_region_name }} \
           --command-id "{{ efs_mount_command_id }}" \
           --query "Commands[0].Status" \
-          --output text || echo "Unknown"
-      register: command_status_result
-      until: command_status_result.stdout == 'Success' or command_status_result.stdout == 'Failed' or command_status_result.stdout == 'Cancelled'
+          --output text
+      register: command_status
+      until: command_status.stdout == 'Success' or command_status.stdout == 'Failed' or command_status.stdout == 'Cancelled'
       retries: 10
       delay: 5
-      ignore_errors: true
-      when: efs_mount_command_id != "unknown"
+      when: efs_mount_command_id != 'unknown'
       
     - name: Display command status
       ansible.builtin.debug:
-        msg: "Command status: {{ command_status_result.stdout | default('Unknown') }}"
-      when: command_status_result is defined
+        msg: "Command status: {{ command_status.stdout | default('Unknown') }}"
       
     - name: Fetch EFS mount command output
       ansible.builtin.shell: |
@@ -325,8 +316,8 @@
           --query "CommandInvocations[0].CommandPlugins[0].Output" \
           --output text || echo "No output available"
       register: efs_mount_output
+      when: efs_mount_command_id != 'unknown' and command_status.stdout | default('') == 'Success'
       ignore_errors: true
-      when: efs_mount_command_id != "unknown"
       
     - name: Display EFS mount output
       ansible.builtin.debug:
@@ -334,14 +325,16 @@
       
     - name: Verify EFS mount success
       ansible.builtin.set_fact:
-        efs_mount_complete: >-
-          {{ command_status_result is defined and command_status_result.stdout is defined and command_status_result.stdout == 'Success' }}
+        efs_mount_complete: "{{ (command_status.stdout | default('')) == 'Success' }}"
       
     - name: Fail if command was not successful
       ansible.builtin.fail:
         msg: "EFS mount command failed or status unknown"
-      when: not efs_mount_complete
+      when: not efs_mount_complete | bool
       
+    - name: Mark EFS mount as successful
+      ansible.builtin.set_fact:
+        efs_mount_complete: true
   rescue:
     - name: Mark EFS mount as failed
       ansible.builtin.set_fact:
@@ -351,7 +344,6 @@
       ansible.builtin.debug:
         msg: "EFS mount failed. Check AWS console for command ID: {{ efs_mount_command_id | default('unknown') }}"
       
-    # コマンドIDが不明な場合は再確認せずに続行を試みる
     - name: Mark as complete to continue the deployment
       ansible.builtin.set_fact:
         efs_mount_complete: true
@@ -359,7 +351,7 @@
     - name: Display continuation message
       ansible.builtin.debug:
         msg: "Attempting to continue with deployment despite EFS mount issue."
-  when: not ansible_check_mode
+  when: not ansible_check_mode and git_update_complete | default(false)
 
 # ステップ3: Jenkinsインストール
 - name: Step 3 - Install Jenkins
@@ -375,25 +367,22 @@
           --targets "Key=instanceids,Values={{ jenkins_instance_id }}" \
           --parameters "ProjectName={{ project_name }},Environment={{ env_name }},JenkinsVersion={{ jenkins_version }},JenkinsColor={{ jenkins_color }}" \
           --comment "Installing Jenkins" \
-          --output json
+          --output json | grep -v "export AWS_" | tail -n +2
       register: jenkins_install_command
       changed_when: true
       
-    # デバッグ出力を追加
     - name: Debug Jenkins install command output
       ansible.builtin.debug:
         var: jenkins_install_command.stdout
-        
-    - name: Extract Jenkins install command ID safely
-      ansible.builtin.set_fact:
-        jenkins_install_command_id: "{{ jenkins_install_command.stdout | from_json | json_query('Command.CommandId') | default('unknown') }}"
-      ignore_errors: yes
       
-    # コマンドIDが取得できていない場合はデフォルト値を設定
+    - name: Extract Jenkins install command ID safely
+      ansible.builtin.shell: |
+        echo '{{ jenkins_install_command.stdout }}' | grep -o '"CommandId": "[^"]*"' | cut -d'"' -f4
+      register: command_id_result
+      
     - name: Set default command ID if extraction failed
       ansible.builtin.set_fact:
-        jenkins_install_command_id: "unknown"
-      when: jenkins_install_command_id is not defined or jenkins_install_command_id == ""
+        jenkins_install_command_id: "{{ command_id_result.stdout if command_id_result.stdout != '' else 'unknown' }}"
       
     - name: Display command ID
       ansible.builtin.debug:
@@ -408,18 +397,16 @@
           --region {{ aws_region_name }} \
           --command-id "{{ jenkins_install_command_id }}" \
           --query "Commands[0].Status" \
-          --output text || echo "Unknown"
-      register: command_status_result
-      until: command_status_result.stdout == 'Success' or command_status_result.stdout == 'Failed' or command_status_result.stdout == 'Cancelled'
+          --output text
+      register: command_status
+      until: command_status.stdout == 'Success' or command_status.stdout == 'Failed' or command_status.stdout == 'Cancelled'
       retries: 10
       delay: 5
-      ignore_errors: true
-      when: jenkins_install_command_id != "unknown"
+      when: jenkins_install_command_id != 'unknown'
       
     - name: Display command status
       ansible.builtin.debug:
-        msg: "Command status: {{ command_status_result.stdout | default('Unknown') }}"
-      when: command_status_result is defined
+        msg: "Command status: {{ command_status.stdout | default('Unknown') }}"
       
     - name: Fetch Jenkins install command output
       ansible.builtin.shell: |
@@ -433,8 +420,8 @@
           --query "CommandInvocations[0].CommandPlugins[0].Output" \
           --output text || echo "No output available"
       register: jenkins_install_output
+      when: jenkins_install_command_id != 'unknown' and command_status.stdout | default('') == 'Success'
       ignore_errors: true
-      when: jenkins_install_command_id != "unknown"
       
     - name: Display Jenkins install output
       ansible.builtin.debug:
@@ -442,14 +429,16 @@
       
     - name: Verify Jenkins install success
       ansible.builtin.set_fact:
-        jenkins_install_complete: >-
-          {{ command_status_result is defined and command_status_result.stdout is defined and command_status_result.stdout == 'Success' }}
+        jenkins_install_complete: "{{ (command_status.stdout | default('')) == 'Success' }}"
       
     - name: Fail if command was not successful
       ansible.builtin.fail:
         msg: "Jenkins install command failed or status unknown"
-      when: not jenkins_install_complete
+      when: not jenkins_install_complete | bool
       
+    - name: Mark Jenkins install as successful
+      ansible.builtin.set_fact:
+        jenkins_install_complete: true
   rescue:
     - name: Mark Jenkins install as failed
       ansible.builtin.set_fact:
@@ -459,7 +448,6 @@
       ansible.builtin.debug:
         msg: "Jenkins installation failed. Check AWS console for command ID: {{ jenkins_install_command_id | default('unknown') }}"
       
-    # コマンドIDが不明な場合は再確認せずに続行を試みる
     - name: Mark as complete to continue the deployment
       ansible.builtin.set_fact:
         jenkins_install_complete: true
@@ -467,7 +455,7 @@
     - name: Display continuation message
       ansible.builtin.debug:
         msg: "Attempting to continue with deployment despite Jenkins install issue."
-  when: not ansible_check_mode
+  when: not ansible_check_mode and efs_mount_complete | default(false)
 
 # ステップ4: Jenkins設定
 - name: Step 4 - Configure Jenkins
@@ -483,25 +471,22 @@
           --targets "Key=instanceids,Values={{ jenkins_instance_id }}" \
           --parameters "ProjectName={{ project_name }},Environment={{ env_name }},JenkinsMode={{ recovery_mode | ternary('recovery', 'normal') }},JenkinsColor={{ jenkins_color }}" \
           --comment "Configuring Jenkins" \
-          --output json
+          --output json | grep -v "export AWS_" | tail -n +2
       register: jenkins_configure_command
       changed_when: true
       
-    # デバッグ出力を追加
     - name: Debug Jenkins configure command output
       ansible.builtin.debug:
         var: jenkins_configure_command.stdout
-        
-    - name: Extract Jenkins configure command ID safely
-      ansible.builtin.set_fact:
-        jenkins_configure_command_id: "{{ jenkins_configure_command.stdout | from_json | json_query('Command.CommandId') | default('unknown') }}"
-      ignore_errors: yes
       
-    # コマンドIDが取得できていない場合はデフォルト値を設定
+    - name: Extract Jenkins configure command ID safely
+      ansible.builtin.shell: |
+        echo '{{ jenkins_configure_command.stdout }}' | grep -o '"CommandId": "[^"]*"' | cut -d'"' -f4
+      register: command_id_result
+      
     - name: Set default command ID if extraction failed
       ansible.builtin.set_fact:
-        jenkins_configure_command_id: "unknown"
-      when: jenkins_configure_command_id is not defined or jenkins_configure_command_id == ""
+        jenkins_configure_command_id: "{{ command_id_result.stdout if command_id_result.stdout != '' else 'unknown' }}"
       
     - name: Display command ID
       ansible.builtin.debug:
@@ -516,18 +501,16 @@
           --region {{ aws_region_name }} \
           --command-id "{{ jenkins_configure_command_id }}" \
           --query "Commands[0].Status" \
-          --output text || echo "Unknown"
-      register: command_status_result
-      until: command_status_result.stdout == 'Success' or command_status_result.stdout == 'Failed' or command_status_result.stdout == 'Cancelled'
+          --output text
+      register: command_status
+      until: command_status.stdout == 'Success' or command_status.stdout == 'Failed' or command_status.stdout == 'Cancelled'
       retries: 10
       delay: 5
-      ignore_errors: true
-      when: jenkins_configure_command_id != "unknown"
+      when: jenkins_configure_command_id != 'unknown'
       
     - name: Display command status
       ansible.builtin.debug:
-        msg: "Command status: {{ command_status_result.stdout | default('Unknown') }}"
-      when: command_status_result is defined
+        msg: "Command status: {{ command_status.stdout | default('Unknown') }}"
       
     - name: Fetch Jenkins configure command output
       ansible.builtin.shell: |
@@ -541,8 +524,8 @@
           --query "CommandInvocations[0].CommandPlugins[0].Output" \
           --output text || echo "No output available"
       register: jenkins_configure_output
+      when: jenkins_configure_command_id != 'unknown' and command_status.stdout | default('') == 'Success'
       ignore_errors: true
-      when: jenkins_configure_command_id != "unknown"
       
     - name: Display Jenkins configure output
       ansible.builtin.debug:
@@ -550,14 +533,16 @@
       
     - name: Verify Jenkins configure success
       ansible.builtin.set_fact:
-        jenkins_configure_complete: >-
-          {{ command_status_result is defined and command_status_result.stdout is defined and command_status_result.stdout == 'Success' }}
+        jenkins_configure_complete: "{{ (command_status.stdout | default('')) == 'Success' }}"
       
     - name: Fail if command was not successful
       ansible.builtin.fail:
         msg: "Jenkins configure command failed or status unknown"
-      when: not jenkins_configure_complete
+      when: not jenkins_configure_complete | bool
       
+    - name: Mark Jenkins configure as successful
+      ansible.builtin.set_fact:
+        jenkins_configure_complete: true
   rescue:
     - name: Mark Jenkins configure as failed
       ansible.builtin.set_fact:
@@ -567,7 +552,6 @@
       ansible.builtin.debug:
         msg: "Jenkins configuration failed. Check AWS console for command ID: {{ jenkins_configure_command_id | default('unknown') }}"
       
-    # コマンドIDが不明な場合は再確認せずに続行を試みる
     - name: Mark as complete to continue the deployment
       ansible.builtin.set_fact:
         jenkins_configure_complete: true
@@ -575,7 +559,7 @@
     - name: Display continuation message
       ansible.builtin.debug:
         msg: "Attempting to continue with deployment despite Jenkins configure issue."
-  when: not ansible_check_mode
+  when: not ansible_check_mode and jenkins_install_complete | default(false)
 
 # ステップ5: Jenkins起動
 - name: Step 5 - Start Jenkins
@@ -591,25 +575,22 @@
           --targets "Key=instanceids,Values={{ jenkins_instance_id }}" \
           --parameters "ProjectName={{ project_name }},Environment={{ env_name }},JenkinsColor={{ jenkins_color }}" \
           --comment "Starting Jenkins" \
-          --output json
+          --output json | grep -v "export AWS_" | tail -n +2
       register: jenkins_startup_command
       changed_when: true
       
-    # デバッグ出力を追加
     - name: Debug Jenkins startup command output
       ansible.builtin.debug:
         var: jenkins_startup_command.stdout
-        
-    - name: Extract Jenkins startup command ID safely
-      ansible.builtin.set_fact:
-        jenkins_startup_command_id: "{{ jenkins_startup_command.stdout | from_json | json_query('Command.CommandId') | default('unknown') }}"
-      ignore_errors: yes
       
-    # コマンドIDが取得できていない場合はデフォルト値を設定
+    - name: Extract Jenkins startup command ID safely
+      ansible.builtin.shell: |
+        echo '{{ jenkins_startup_command.stdout }}' | grep -o '"CommandId": "[^"]*"' | cut -d'"' -f4
+      register: command_id_result
+      
     - name: Set default command ID if extraction failed
       ansible.builtin.set_fact:
-        jenkins_startup_command_id: "unknown"
-      when: jenkins_startup_command_id is not defined or jenkins_startup_command_id == ""
+        jenkins_startup_command_id: "{{ command_id_result.stdout if command_id_result.stdout != '' else 'unknown' }}"
       
     - name: Display command ID
       ansible.builtin.debug:
@@ -624,18 +605,16 @@
           --region {{ aws_region_name }} \
           --command-id "{{ jenkins_startup_command_id }}" \
           --query "Commands[0].Status" \
-          --output text || echo "Unknown"
-      register: command_status_result
-      until: command_status_result.stdout == 'Success' or command_status_result.stdout == 'Failed' or command_status_result.stdout == 'Cancelled'
+          --output text
+      register: command_status
+      until: command_status.stdout == 'Success' or command_status.stdout == 'Failed' or command_status.stdout == 'Cancelled'
       retries: 10
       delay: 5
-      ignore_errors: true
-      when: jenkins_startup_command_id != "unknown"
+      when: jenkins_startup_command_id != 'unknown'
       
     - name: Display command status
       ansible.builtin.debug:
-        msg: "Command status: {{ command_status_result.stdout | default('Unknown') }}"
-      when: command_status_result is defined
+        msg: "Command status: {{ command_status.stdout | default('Unknown') }}"
       
     - name: Fetch Jenkins startup command output
       ansible.builtin.shell: |
@@ -649,8 +628,8 @@
           --query "CommandInvocations[0].CommandPlugins[0].Output" \
           --output text || echo "No output available"
       register: jenkins_startup_output
+      when: jenkins_startup_command_id != 'unknown' and command_status.stdout | default('') == 'Success'
       ignore_errors: true
-      when: jenkins_startup_command_id != "unknown"
       
     - name: Display Jenkins startup output
       ansible.builtin.debug:
@@ -658,14 +637,16 @@
       
     - name: Verify Jenkins startup success
       ansible.builtin.set_fact:
-        jenkins_startup_complete: >-
-          {{ command_status_result is defined and command_status_result.stdout is defined and command_status_result.stdout == 'Success' }}
+        jenkins_startup_complete: "{{ (command_status.stdout | default('')) == 'Success' }}"
       
     - name: Fail if command was not successful
       ansible.builtin.fail:
         msg: "Jenkins startup command failed or status unknown"
-      when: not jenkins_startup_complete
+      when: not jenkins_startup_complete | bool
       
+    - name: Mark Jenkins startup as successful
+      ansible.builtin.set_fact:
+        jenkins_startup_complete: true
   rescue:
     - name: Mark Jenkins startup as failed
       ansible.builtin.set_fact:
@@ -675,7 +656,6 @@
       ansible.builtin.debug:
         msg: "Jenkins startup failed. Check AWS console for command ID: {{ jenkins_startup_command_id | default('unknown') }}"
       
-    # コマンドIDが不明な場合は再確認せずに続行を試みる
     - name: Mark as complete to continue the deployment
       ansible.builtin.set_fact:
         jenkins_startup_complete: true
@@ -683,7 +663,7 @@
     - name: Display continuation message
       ansible.builtin.debug:
         msg: "Attempting to continue with deployment despite Jenkins startup issue."
-  when: not ansible_check_mode
+  when: not ansible_check_mode and jenkins_configure_complete | default(false)
 
 # 設定結果のサマリー表示
 - name: Display Jenkins setup completion status
