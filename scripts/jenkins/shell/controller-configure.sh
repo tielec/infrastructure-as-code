@@ -12,86 +12,108 @@ JENKINS_MODE="${JENKINS_MODE:-normal}"
 JENKINS_COLOR="${JENKINS_COLOR:-blue}"
 JENKINS_HOME_DIR="/mnt/efs/jenkins"
 
-echo "Configuring Jenkins in ${JENKINS_MODE} mode for ${JENKINS_COLOR} environment"
+echo "Jenkinsを設定: ${JENKINS_MODE}モード, ${JENKINS_COLOR}環境"
 
-# EFSマウントとJenkinsインストールの確認
+# EFSマウントの確認
 if ! df -h | grep -q "/mnt/efs"; then
-  echo "エラー: EFSがマウントされていません。設定を中止します。"
+  echo "エラー: EFSがマウントされていません。先にEFSマウントスクリプトを実行してください。"
   exit 1
 fi
 
-if ! rpm -q jenkins &>/dev/null; then
-  echo "エラー: Jenkinsがインストールされていません。設定を中止します。"
+# Jenkinsディレクトリの確認
+if [ ! -d "$JENKINS_HOME_DIR" ]; then
+  echo "エラー: Jenkinsディレクトリが存在しません: $JENKINS_HOME_DIR"
   exit 1
 fi
 
-# Jenkinsユーザーとグループの確認
-if ! getent group jenkins > /dev/null; then
-  echo "Jenkinsグループが存在しません。作成します。"
-  groupadd -f jenkins
-fi
+# 前回の設定との比較用に設定情報を保存
+mkdir -p "$JENKINS_HOME_DIR/.config"
+CURRENT_CONFIG="$JENKINS_HOME_DIR/.config/current_config.json"
+CONFIG_DATA="{\"mode\":\"$JENKINS_MODE\",\"color\":\"$JENKINS_COLOR\",\"timestamp\":\"$(date +%Y%m%d%H%M%S)\"}"
 
-if ! id -u jenkins > /dev/null 2>&1; then
-  echo "Jenkinsユーザーが存在しません。作成します。"
-  useradd -m -d $JENKINS_HOME_DIR -g jenkins jenkins
-  usermod -aG docker jenkins 2>/dev/null || true
-fi
-
-# UID/GIDの取得
-JENKINS_UID=$(id -u jenkins)
-JENKINS_GID=$(getent group jenkins | cut -d: -f3)
-echo "Jenkins UID:GID = $JENKINS_UID:$JENKINS_GID"
-
-# Jenkinsディレクトリ構造の確認
-echo "Jenkinsディレクトリ構造の確認"
-for dir in init.groovy.d logs plugins jobs secrets nodes; do
-  if [ ! -d "$JENKINS_HOME_DIR/$dir" ]; then
-    echo "ディレクトリ作成: $JENKINS_HOME_DIR/$dir"
-    mkdir -p "$JENKINS_HOME_DIR/$dir"
+# 前回の設定を読み込む
+if [ -f "$CURRENT_CONFIG" ]; then
+  PREV_CONFIG=$(cat "$CURRENT_CONFIG")
+  echo "前回の設定: $PREV_CONFIG"
+  echo "現在の設定: $CONFIG_DATA"
+  
+  # 設定が変更されたか確認
+  PREV_MODE=$(echo $PREV_CONFIG | jq -r '.mode // ""')
+  
+  if [ "$PREV_MODE" = "$JENKINS_MODE" ]; then
+    echo "前回と同じモード設定です。既存の設定を更新します。"
+  else
+    echo "モード設定が変更されました: $PREV_MODE -> $JENKINS_MODE"
   fi
-done
+else
+  echo "初回設定を実行します"
+fi
+
+# 現在の設定を保存
+echo "$CONFIG_DATA" > "$CURRENT_CONFIG"
+chown jenkins:jenkins "$CURRENT_CONFIG"
 
 # Groovyスクリプトディレクトリの準備
 GROOVY_DIR="$JENKINS_HOME_DIR/init.groovy.d"
-echo "Groovyスクリプトディレクトリの準備: $GROOVY_DIR"
 mkdir -p $GROOVY_DIR
 rm -f $GROOVY_DIR/*.groovy
 
 # SSMパラメータストアから設定を取得
 PARAMETER_PATH="/${PROJECT_NAME}/${ENVIRONMENT}/jenkins"
 
+# 必須パラメータの取得
+SCRIPTS_OBTAINED=false
+SCRIPT_FAILURES=0
+
 # CLI無効化スクリプト取得
-echo "CLI無効化Groovyスクリプトの取得"
-DISABLE_CLI_GROOVY=$(aws ssm get-parameter --name "${PARAMETER_PATH}/groovy/disable-cli" --with-decryption --query "Parameter.Value" --output text)
-echo "$DISABLE_CLI_GROOVY" > $GROOVY_DIR/disable-cli.groovy
+echo "CLI無効化スクリプトを取得"
+DISABLE_CLI_GROOVY=$(aws ssm get-parameter --name "${PARAMETER_PATH}/groovy/disable-cli" --with-decryption --query "Parameter.Value" --output text 2>/dev/null)
+if [ $? -eq 0 ] && [ -n "$DISABLE_CLI_GROOVY" ]; then
+  echo "$DISABLE_CLI_GROOVY" > $GROOVY_DIR/disable-cli.groovy
+  SCRIPTS_OBTAINED=true
+else
+  echo "エラー: CLI無効化スクリプトの取得に失敗しました"
+  SCRIPT_FAILURES=$((SCRIPT_FAILURES+1))
+fi
 
 # 基本設定スクリプト取得
-echo "基本設定Groovyスクリプトの取得"
-BASIC_SETTINGS_GROOVY=$(aws ssm get-parameter --name "${PARAMETER_PATH}/groovy/basic-settings" --with-decryption --query "Parameter.Value" --output text)
-echo "$BASIC_SETTINGS_GROOVY" > $GROOVY_DIR/basic-settings.groovy
-
-# プラグインインストールスクリプト取得
-echo "プラグインインストールGroovyスクリプトの取得"
-INSTALL_PLUGINS_GROOVY=$(aws ssm get-parameter --name "${PARAMETER_PATH}/groovy/install-plugins" --with-decryption --query "Parameter.Value" --output text)
-echo "$INSTALL_PLUGINS_GROOVY" > $GROOVY_DIR/install-plugins.groovy
+echo "基本設定スクリプトを取得"
+BASIC_SETTINGS_GROOVY=$(aws ssm get-parameter --name "${PARAMETER_PATH}/groovy/basic-settings" --with-decryption --query "Parameter.Value" --output text 2>/dev/null)
+if [ $? -eq 0 ] && [ -n "$BASIC_SETTINGS_GROOVY" ]; then
+  echo "$BASIC_SETTINGS_GROOVY" > $GROOVY_DIR/basic-settings.groovy
+  SCRIPTS_OBTAINED=true
+else
+  echo "エラー: 基本設定スクリプトの取得に失敗しました"
+  SCRIPT_FAILURES=$((SCRIPT_FAILURES+1))
+fi
 
 # リカバリーモードスクリプト取得（条件付き）
 if [ "$JENKINS_MODE" = "recovery" ]; then
-  echo "リカバリーモードGroovyスクリプトの取得"
-  RECOVERY_MODE_GROOVY=$(aws ssm get-parameter --name "${PARAMETER_PATH}/groovy/recovery-mode" --with-decryption --query "Parameter.Value" --output text)
-  echo "$RECOVERY_MODE_GROOVY" > $GROOVY_DIR/basic-security.groovy
+  echo "リカバリーモードスクリプトを取得"
+  RECOVERY_MODE_GROOVY=$(aws ssm get-parameter --name "${PARAMETER_PATH}/groovy/recovery-mode" --with-decryption --query "Parameter.Value" --output text 2>/dev/null)
+  if [ $? -eq 0 ] && [ -n "$RECOVERY_MODE_GROOVY" ]; then
+    echo "$RECOVERY_MODE_GROOVY" > $GROOVY_DIR/basic-security.groovy
+    SCRIPTS_OBTAINED=true
+  else
+    echo "エラー: リカバリーモードスクリプトの取得に失敗しました"
+    SCRIPT_FAILURES=$((SCRIPT_FAILURES+1))
+  fi
+fi
+
+# 少なくとも1つのスクリプトが取得できたか確認
+if [ "$SCRIPTS_OBTAINED" != "true" ]; then
+  echo "エラー: 必要なスクリプトの取得に失敗しました。設定を中止します。"
+  exit 1
+fi
+
+# スクリプト取得の警告を表示
+if [ $SCRIPT_FAILURES -gt 0 ]; then
+  echo "警告: $SCRIPT_FAILURES 個のスクリプト取得に失敗しましたが、一部のスクリプトは取得できました。"
 fi
 
 # ファイル権限の設定
-echo "Groovyスクリプトのパーミッション設定"
-chmod 644 $GROOVY_DIR/*.groovy
-chown -R $JENKINS_UID:$JENKINS_GID $GROOVY_DIR
-
-# Jenkinsディレクトリの権限再確認
-echo "Jenkinsディレクトリの権限設定"
-chown -R $JENKINS_UID:$JENKINS_GID $JENKINS_HOME_DIR
-find $JENKINS_HOME_DIR -type d -exec chmod 755 {} \; 2>/dev/null || true
-find $JENKINS_HOME_DIR -type f -exec chmod 644 {} \; 2>/dev/null || true
+chown -R jenkins:jenkins $GROOVY_DIR
+chmod 644 $GROOVY_DIR/*.groovy 2>/dev/null || true
 
 # モード特有の設定
 if [ "$JENKINS_MODE" = "recovery" ]; then
@@ -110,13 +132,12 @@ else
 fi
 
 # Jenkinsログディレクトリの権限確保
-echo "ログディレクトリの権限確認"
 chmod 755 $JENKINS_HOME_DIR/logs
-chown -R $JENKINS_UID:$JENKINS_GID $JENKINS_HOME_DIR/logs
+chown -R jenkins:jenkins $JENKINS_HOME_DIR/logs
 
 # 設定完了を示すマーカーファイル
-echo "設定完了マーカーの作成"
 echo "$(date '+%Y-%m-%d %H:%M:%S')" > $JENKINS_HOME_DIR/.configuration-complete
 chown jenkins:jenkins $JENKINS_HOME_DIR/.configuration-complete
 
-echo "Jenkins configuration completed"
+echo "Jenkins設定が完了しました"
+exit 0
