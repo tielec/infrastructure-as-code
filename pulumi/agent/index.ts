@@ -163,8 +163,8 @@ const agentLaunchTemplate = new aws.ec2.LaunchTemplate(`${projectName}-agent-lt`
         ebs: {
             volumeSize: 30,
             volumeType: "gp3",
-            deleteOnTermination: true,
-            encrypted: true,
+            deleteOnTermination: "true", // 文字列に変更
+            encrypted: "true", // 文字列に変更
         },
     }],
     metadataOptions: {
@@ -232,7 +232,7 @@ const spotFleetRequest = new aws.ec2.SpotFleetRequest(`${projectName}-agent-spot
     spotPrice: spotPrice,
     targetCapacity: minTargetCapacity,
     terminateInstancesWithExpiration: true,
-    instanceInterruptionBehavior: "terminate",
+    instanceInterruptionBehaviour: "terminate", // スペルを修正 behavior → behaviour
     launchTemplateConfigs: pulumi.all([privateSubnetIds]).apply(([subnetIds]) => 
         subnetIds.map((subnetId: string) => ({
             launchTemplateSpecification: {
