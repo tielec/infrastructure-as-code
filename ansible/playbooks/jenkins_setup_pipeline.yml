@@ -154,6 +154,11 @@
     - name: Configure Jenkins Controller
       ansible.builtin.include_role:
         name: jenkins_config
+      vars:
+        # 必要な変数を明示的に設定
+        jenkins_version: "{{ jenkins_version | default(jenkins.version) }}"
+        jenkins_color: "{{ jenkins_color | default(jenkins.color) }}"
+        recovery_mode: "{{ recovery_mode | default(jenkins.recovery_mode) }}"
       when: 
         - controller_deployed | default(false) | bool
         - run_config | default(true) | bool
