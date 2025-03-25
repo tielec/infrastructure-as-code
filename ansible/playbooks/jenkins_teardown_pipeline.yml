@@ -14,17 +14,9 @@
     scripts_dir: "{{ playbook_dir }}/../../scripts"
     pulumi_path: "{{ playbook_dir }}/../../pulumi"
     # 削除確認フラグ（デフォルトはfalse）
-    confirm_destroy: "{{ confirm | default(false) }}"
+    confirm_destroy: "{{ confirm | default(false) | bool }}"
     # スタック削除フラグ（デフォルトはfalse）
-    remove_stacks: "{{ remove_stacks | default(false) }}"
-    # 個別コンポーネント削除フラグ（デフォルトは全てtrue）
-    tear_config: "{{ tear_config | default(true) | bool }}"
-    tear_agent: "{{ tear_agent | default(true) | bool }}"
-    tear_controller: "{{ tear_controller | default(true) | bool }}"
-    tear_loadbalancer: "{{ tear_loadbalancer | default(true) | bool }}"
-    tear_storage: "{{ tear_storage | default(true) | bool }}"
-    tear_security: "{{ tear_security | default(true) | bool }}"
-    tear_network: "{{ tear_network | default(true) | bool }}"
+    remove_stacks: "{{ remove_stacks | default(false) | bool }}"
   
   pre_tasks:
     # all.yml から変数を読み込む
@@ -44,6 +36,17 @@
         controller_project_name: "{{ infra.pulumi.controller_project }}"
         agent_project_name: "{{ infra.pulumi.agent_project }}"
         config_project_name: "{{ infra.pulumi.config_project }}"
+    
+    # コンポーネント削除フラグの設定（デフォルトは全てtrue）
+    - name: Set component teardown flags
+      ansible.builtin.set_fact:
+        tear_config: "{{ tear_config | default(true) | bool }}"
+        tear_agent: "{{ tear_agent | default(true) | bool }}"
+        tear_controller: "{{ tear_controller | default(true) | bool }}"
+        tear_loadbalancer: "{{ tear_loadbalancer | default(true) | bool }}"
+        tear_storage: "{{ tear_storage | default(true) | bool }}"
+        tear_security: "{{ tear_security | default(true) | bool }}"
+        tear_network: "{{ tear_network | default(true) | bool }}"
 
   roles:
     - aws_setup
@@ -120,7 +123,7 @@
         operation: "destroy"
         remove_stacks: "{{ remove_stacks }}"
       when: tear_agent | bool
-
+    
 
     # 2. Config削除（SSMドキュメント）
     - name: Destroy Jenkins Configuration Resources
