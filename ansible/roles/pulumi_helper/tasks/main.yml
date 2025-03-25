@@ -125,6 +125,7 @@
       refresh: "source {{ playbook_dir }}/../../scripts/aws-env.sh > /dev/null && eval $({{ playbook_dir }}/../../scripts/aws-env.sh) > /dev/null && sudo -E {{ pulumi_bin_path }} refresh --yes"
       stack_output: "source {{ playbook_dir }}/../../scripts/aws-env.sh > /dev/null && eval $({{ playbook_dir }}/../../scripts/aws-env.sh) > /dev/null && sudo -E {{ pulumi_bin_path }} stack output"
       stack_ls: "source {{ playbook_dir }}/../../scripts/aws-env.sh > /dev/null && eval $({{ playbook_dir }}/../../scripts/aws-env.sh) > /dev/null && sudo -E {{ pulumi_bin_path }} stack ls"
+      stack_rm: "source {{ playbook_dir }}/../../scripts/aws-env.sh > /dev/null && eval $({{ playbook_dir }}/../../scripts/aws-env.sh) > /dev/null && sudo -E {{ pulumi_bin_path }} stack rm --yes"
       config_set: "source {{ playbook_dir }}/../../scripts/aws-env.sh > /dev/null && eval $({{ playbook_dir }}/../../scripts/aws-env.sh) > /dev/null && sudo -E {{ pulumi_bin_path }} config set"
       build: "npm run build"
       tsc: "npx tsc"
@@ -140,3 +141,5 @@
     pulumi_config_failed: false
     stack_output_succeeded: false
     stack_output_failed: false
+    stack_rm_failed: false
+    stack_init_failed: false

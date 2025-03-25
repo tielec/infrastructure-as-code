@@ -3,3 +3,8 @@
 
 - name: Include setup tasks
   ansible.builtin.include_tasks: setup.yml
+  when: operation | default('deploy') == 'deploy'
+
+- name: Include destroy tasks
+  ansible.builtin.include_tasks: destroy.yml
+  when: operation | default('deploy') == 'destroy'

@@ -1,0 +1,63 @@
+# Pulumiスタックを削除するヘルパータスク
+
+- name: Remove Pulumi stack
+  block:
+    # スタック名が指定されているか確認
+    - name: Verify stack name is provided
+      ansible.builtin.fail:
+        msg: "Required variable 'stack_name' is not defined"
+      when: stack_name is not defined or stack_name | length == 0
+    
+    # スタックの存在を確認
+    - name: Check if stack exists
+      ansible.builtin.shell: |
+        cd {{ pulumi_project_path }}
+        source {{ playbook_dir }}/../../scripts/aws-env.sh > /dev/null
+        eval $({{ playbook_dir }}/../../scripts/aws-env.sh) > /dev/null
+        sudo -E {{ pulumi_bin_path }} stack ls | grep {{ stack_name }} || echo "stack_not_found"
+      register: stack_check_result
+      changed_when: false
+      failed_when: false
+      when: not ansible_check_mode
+    
+    # スタックが存在しない場合は警告を表示して終了
+    - name: Skip if stack does not exist
+      ansible.builtin.debug:
+        msg: "Stack '{{ stack_name }}' does not exist in project {{ pulumi_project_path }}. Skipping removal."
+      when: 
+        - not ansible_check_mode
+        - stack_check_result is defined 
+        - "'stack_not_found' in stack_check_result.stdout"
+    
+    # スタックの削除（rm）を実行
+    - name: Remove stack with Pulumi
+      ansible.builtin.shell: |
+        cd {{ pulumi_project_path }}
+        source {{ playbook_dir }}/../../scripts/aws-env.sh > /dev/null
+        eval $({{ playbook_dir }}/../../scripts/aws-env.sh) > /dev/null
+        sudo -E {{ pulumi_bin_path }} stack rm --yes {{ stack_name }}
+      register: stack_rm_result
+      changed_when: stack_rm_result.rc == 0
+      failed_when: false
+      when: 
+        - not ansible_check_mode
+        - stack_check_result is defined
+        - "'stack_not_found' not in stack_check_result.stdout"
+    
+    # スタック削除の結果を表示
+    - name: Display stack removal result
+      ansible.builtin.debug:
+        msg: "Successfully removed stack '{{ stack_name }}' from project {{ pulumi_project_path }}"
+      when: 
+        - not ansible_check_mode
+        - stack_rm_result is defined
+        - stack_rm_result.rc == 0
+  rescue:
+    - name: Display error message on stack removal failure
+      ansible.builtin.debug:
+        msg: "Failed to remove Pulumi stack '{{ stack_name }}'. Check error message above."
+
+- name: Mock stack removal (check mode)
+  ansible.builtin.debug:
+    msg: "Would remove Pulumi stack '{{ stack_name }}' from project {{ pulumi_project_path }} (check mode active)"
+  when: ansible_check_mode

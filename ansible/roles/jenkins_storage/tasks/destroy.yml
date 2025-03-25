@@ -1,0 +1,64 @@
+---
+# ストレージ（EFS）削除タスク
+
+- name: Display storage destruction information
+  ansible.builtin.debug:
+    msg: |
+      Destroying Jenkins Storage Infrastructure:
+      - Project: {{ project_name }}
+      - Storage Pulumi Project: {{ storage_project_name }}
+      - Environment: {{ env_name }}
+      - Remove Stack: {{ remove_stacks | default(false) }}
+
+# ファイル権限設定
+- name: Ensure aws-env.sh has execute permissions
+  ansible.builtin.file:
+    path: "{{ scripts_dir }}/aws-env.sh"
+    mode: '0755'
+  register: aws_env_script_permission
+  no_log: true  # 詳細なログを抑制
+
+# Pulumiによる削除
+- name: Destroy Storage Infrastructure with Pulumi
+  block:
+    # Pulumiヘルパータスクを呼び出す
+    - name: Initialize storage stack
+      ansible.builtin.include_role:
+        name: pulumi_helper
+        tasks_from: init_stack
+      vars:
+        pulumi_project_path: "{{ pulumi_path }}/jenkins-storage"
+        stack_name: "{{ env_name }}"
+    
+    # Pulumiリソースの削除
+    - name: Destroy storage resources with Pulumi
+      ansible.builtin.include_role:
+        name: pulumi_helper
+        tasks_from: destroy
+      vars:
+        pulumi_project_path: "{{ pulumi_path }}/jenkins-storage"
+    
+    # スタック自体の削除（オプション）
+    - name: Remove storage stack (if requested)
+      ansible.builtin.include_role:
+        name: pulumi_helper
+        tasks_from: remove_stack
+      vars:
+        pulumi_project_path: "{{ pulumi_path }}/jenkins-storage"
+        stack_name: "{{ env_name }}"
+      when: remove_stacks | default(false) | bool
+    
+    # 削除ステータスの設定
+    - name: Set storage destruction status on success
+      ansible.builtin.set_fact:
+        storage_destroyed: true
+  
+  rescue:
+    # エラーハンドリング
+    - name: Set storage destruction status on failure
+      ansible.builtin.set_fact:
+        storage_destroyed: false
+    
+    - name: Display error
+      ansible.builtin.debug:
+        msg: "Failed to destroy storage infrastructure. See error details above."
