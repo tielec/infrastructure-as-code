@@ -40,17 +40,17 @@
       
     - name: Set remove_stacks flag
       ansible.builtin.set_fact:
-        remove_stacks: "{{ lookup('env', 'REMOVE_STACKS') | default(lookup('vars', 'remove_stacks_input') | default('false')) }}"
+        remove_stack_flag: "{{ remove_stacks | default('false') }}"
       
     - name: Set component teardown flags
       ansible.builtin.set_fact:
-        tear_config: "{{ lookup('env', 'TEAR_CONFIG') | default(lookup('vars', 'tear_config_input') | default('true')) }}"
-        tear_agent: "{{ lookup('env', 'TEAR_AGENT') | default(lookup('vars', 'tear_agent_input') | default('true')) }}"
-        tear_controller: "{{ lookup('env', 'TEAR_CONTROLLER') | default(lookup('vars', 'tear_controller_input') | default('true')) }}"
-        tear_loadbalancer: "{{ lookup('env', 'TEAR_LOADBALANCER') | default(lookup('vars', 'tear_loadbalancer_input') | default('true')) }}"
-        tear_storage: "{{ lookup('env', 'TEAR_STORAGE') | default(lookup('vars', 'tear_storage_input') | default('true')) }}"
-        tear_security: "{{ lookup('env', 'TEAR_SECURITY') | default(lookup('vars', 'tear_security_input') | default('true')) }}"
-        tear_network: "{{ lookup('env', 'TEAR_NETWORK') | default(lookup('vars', 'tear_network_input') | default('true')) }}"
+        tear_config_flag: "{{ tear_config | default('true') }}"
+        tear_agent_flag: "{{ tear_agent | default('true') }}"
+        tear_controller_flag: "{{ tear_controller | default('true') }}"
+        tear_loadbalancer_flag: "{{ tear_loadbalancer | default('true') }}"
+        tear_storage_flag: "{{ tear_storage | default('true') }}"
+        tear_security_flag: "{{ tear_security | default('true') }}"
+        tear_network_flag: "{{ tear_network | default('true') }}"
       
   roles:
     - aws_setup
@@ -93,6 +93,17 @@
           Environment: {{ env_name }}
           AWS Region: {{ aws_region_name }}
           
+          Components to destroy:
+          - Config: {{ tear_config_flag }}
+          - Agent: {{ tear_agent_flag }}
+          - Controller: {{ tear_controller_flag }}
+          - LoadBalancer: {{ tear_loadbalancer_flag }}
+          - Storage: {{ tear_storage_flag }}
+          - Security: {{ tear_security_flag }}
+          - Network: {{ tear_network_flag }}
+          
+          Remove Pulumi stacks: {{ remove_stack_flag }}
+          
           WARNING: This will destroy your Jenkins infrastructure!
           Use --extra-vars "confirm=true" to proceed.
     
@@ -114,7 +125,8 @@
         name: jenkins_config
       vars:
         operation: "destroy"
-      when: tear_config == 'true'
+        remove_stacks: "{{ remove_stack_flag }}"
+      when: tear_config_flag == 'true'
     
     # 1. エージェント削除
     - name: Destroy Agent Infrastructure
@@ -122,7 +134,8 @@
         name: jenkins_agent
       vars:
         operation: "destroy"
-      when: tear_agent == 'true'
+        remove_stacks: "{{ remove_stack_flag }}"
+      when: tear_agent_flag == 'true'
     
     # 2. コントローラー削除
     - name: Destroy Controller Infrastructure
@@ -130,7 +143,8 @@
         name: jenkins_controller
       vars:
         operation: "destroy"
-      when: tear_controller == 'true'
+        remove_stacks: "{{ remove_stack_flag }}"
+      when: tear_controller_flag == 'true'
     
     # 3. ロードバランサー削除
     - name: Destroy LoadBalancer Infrastructure
@@ -138,7 +152,8 @@
         name: jenkins_loadbalancer
       vars:
         operation: "destroy"
-      when: tear_loadbalancer == 'true'
+        remove_stacks: "{{ remove_stack_flag }}"
+      when: tear_loadbalancer_flag == 'true'
     
     # 4. ストレージ削除
     - name: Destroy Storage Infrastructure
@@ -146,7 +161,8 @@
         name: jenkins_storage
       vars:
         operation: "destroy"
-      when: tear_storage == 'true'
+        remove_stacks: "{{ remove_stack_flag }}"
+      when: tear_storage_flag == 'true'
     
     # 5. セキュリティグループ削除
     - name: Destroy Security Groups
@@ -154,7 +170,8 @@
         name: jenkins_security
       vars:
         operation: "destroy"
-      when: tear_security == 'true'
+        remove_stacks: "{{ remove_stack_flag }}"
+      when: tear_security_flag == 'true'
     
     # 6. ネットワーク削除（最後に実行）
     - name: Destroy Network Infrastructure
@@ -162,7 +179,8 @@
         name: jenkins_network
       vars:
         operation: "destroy"
-      when: tear_network == 'true'
+        remove_stacks: "{{ remove_stack_flag }}"
+      when: tear_network_flag == 'true'
     
     # 削除結果のサマリー表示
     - name: Display teardown results
