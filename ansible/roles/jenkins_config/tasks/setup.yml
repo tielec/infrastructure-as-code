@@ -10,7 +10,7 @@
       - Config Pulumi Project: {{ config_project_name }}
       - Environment: {{ env_name }}
       - Jenkins Instance ID: {{ jenkins_instance_id | default('未設定') }}
-      - Jenkins Color: {{ jenkins_color }}
+      - Jenkins Color: {{ jenkins_color | default('blue') }}
 
 # 既存のSSMドキュメントを削除
 - name: Destroy existing SSM documents with Pulumi
