@@ -51,12 +51,12 @@
         name: pulumi_helper
         tasks_from: init_stack
       vars:
-        pulumi_project_path: "{{ pulumi_path }}/agent"
+        pulumi_project_path: "{{ pulumi_path }}/jenkins-agent"
         stack_name: "{{ env_name }}"
     
     - name: Configure agent stack
       ansible.builtin.shell: |
-        cd {{ pulumi_path }}/agent
+        cd {{ pulumi_path }}/jenkins-agent
         source {{ scripts_dir }}/aws-env.sh 
         eval $({{ scripts_dir }}/aws-env.sh)
         
@@ -80,7 +80,7 @@
         name: pulumi_helper
         tasks_from: get_outputs
       vars:
-        pulumi_project_path: "{{ pulumi_path }}/network"
+        pulumi_project_path: "{{ pulumi_path }}/jenkins-network"
         output_name: "vpcId"
         mock_output: "mock-vpc-id-for-check-mode"
     
@@ -93,7 +93,7 @@
         name: pulumi_helper
         tasks_from: get_outputs
       vars:
-        pulumi_project_path: "{{ pulumi_path }}/security"
+        pulumi_project_path: "{{ pulumi_path }}/jenkins-security"
         output_name: "jenkinsAgentSecurityGroupId"
         mock_output: "mock-agent-sg-id"
     
@@ -114,7 +114,7 @@
         name: pulumi_helper
         tasks_from: preview
       vars:
-        pulumi_project_path: "{{ pulumi_path }}/agent"
+        pulumi_project_path: "{{ pulumi_path }}/jenkins-agent"
     
     # Pulumiデプロイ
     - name: Deploy agent stack
@@ -122,7 +122,7 @@
         name: pulumi_helper
         tasks_from: deploy
       vars:
-        pulumi_project_path: "{{ pulumi_path }}/agent"
+        pulumi_project_path: "{{ pulumi_path }}/jenkins-agent"
     
     # デプロイ後に少し待機してスタックが完全に更新されるのを待つ
     - name: Wait for stack outputs to be available
@@ -136,7 +136,7 @@
         name: pulumi_helper
         tasks_from: get_outputs
       vars:
-        pulumi_project_path: "{{ pulumi_path }}/agent"
+        pulumi_project_path: "{{ pulumi_path }}/jenkins-agent"
         output_name: "spotFleetRequestId"
         mock_output: "mock-spot-fleet-request-id"
     
@@ -149,7 +149,7 @@
         name: pulumi_helper
         tasks_from: get_outputs
       vars:
-        pulumi_project_path: "{{ pulumi_path }}/agent"
+        pulumi_project_path: "{{ pulumi_path }}/jenkins-agent"
         output_name: "launchTemplateId"
         mock_output: "mock-launch-template-id"
     

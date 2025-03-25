@@ -37,7 +37,7 @@
     name: pulumi_helper
     tasks_from: get_outputs
   vars:
-    pulumi_project_path: "{{ pulumi_path }}/controller"
+    pulumi_project_path: "{{ pulumi_path }}/jenkins-controller"
     output_name: "jenkinsInstanceId"
     mock_output: "mock-jenkins-instance-id"
   when: jenkins_instance_id is not defined or jenkins_instance_id == ""
@@ -64,7 +64,7 @@
     name: pulumi_helper
     tasks_from: get_outputs
   vars:
-    pulumi_project_path: "{{ pulumi_path }}/storage"
+    pulumi_project_path: "{{ pulumi_path }}/jenkins-storage"
     output_name: "efsFileSystemId"
     mock_output: "mock-efs-id"
   when: efs_file_system_id is not defined or efs_file_system_id == ""
