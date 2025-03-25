@@ -36,21 +36,27 @@
     # 各フラグは別々のステップで設定する
     - name: Set confirm_destroy flag
       ansible.builtin.set_fact:
-        confirm_destroy: "{{ confirm | default('false') }}"
+        confirm_destroy: "{{ confirm | default(false) }}"
+
+    # デバッグ出力を追加して変数の値を確認
+    - name: Debug confirm variable
+      ansible.builtin.debug:
+        msg: "confirm variable is: {{ confirm | default('not set') }}, confirm_destroy is: {{ confirm_destroy }}"
+      when: ansible_verbosity > 0
       
     - name: Set remove_stacks flag
       ansible.builtin.set_fact:
-        remove_stack_flag: "{{ remove_stacks | default('false') }}"
+        remove_stack_flag: "{{ remove_stacks | default(false) }}"
       
     - name: Set component teardown flags
       ansible.builtin.set_fact:
-        tear_config_flag: "{{ tear_config | default('true') }}"
-        tear_agent_flag: "{{ tear_agent | default('true') }}"
-        tear_controller_flag: "{{ tear_controller | default('true') }}"
-        tear_loadbalancer_flag: "{{ tear_loadbalancer | default('true') }}"
-        tear_storage_flag: "{{ tear_storage | default('true') }}"
-        tear_security_flag: "{{ tear_security | default('true') }}"
-        tear_network_flag: "{{ tear_network | default('true') }}"
+        tear_config_flag: "{{ tear_config | default(true) }}"
+        tear_agent_flag: "{{ tear_agent | default(true) }}"
+        tear_controller_flag: "{{ tear_controller | default(true) }}"
+        tear_loadbalancer_flag: "{{ tear_loadbalancer | default(true) }}"
+        tear_storage_flag: "{{ tear_storage | default(true) }}"
+        tear_security_flag: "{{ tear_security | default(true) }}"
+        tear_network_flag: "{{ tear_network | default(true) }}"
       
   roles:
     - aws_setup
@@ -111,13 +117,13 @@
     - name: Verify teardown confirmation
       ansible.builtin.fail:
         msg: "Teardown not confirmed. Please run with --extra-vars 'confirm=true' to proceed."
-      when: confirm_destroy != 'true'
+      when: not confirm_destroy | bool
     
     # 確認後にプロセスを継続
     - name: Confirm teardown process
       ansible.builtin.debug:
         msg: "Teardown confirmed. Proceeding with infrastructure destruction..."
-      when: confirm_destroy == 'true'
+      when: confirm_destroy | bool
     
     # 0. Config削除（SSMドキュメント）
     - name: Destroy Jenkins Configuration Resources
@@ -126,7 +132,7 @@
       vars:
         operation: "destroy"
         remove_stacks: "{{ remove_stack_flag }}"
-      when: tear_config_flag == 'true'
+      when: tear_config_flag | bool
     
     # 1. エージェント削除
     - name: Destroy Agent Infrastructure
@@ -135,7 +141,7 @@
       vars:
         operation: "destroy"
         remove_stacks: "{{ remove_stack_flag }}"
-      when: tear_agent_flag == 'true'
+      when: tear_agent_flag | bool
     
     # 2. コントローラー削除
     - name: Destroy Controller Infrastructure
@@ -144,7 +150,7 @@
       vars:
         operation: "destroy"
         remove_stacks: "{{ remove_stack_flag }}"
-      when: tear_controller_flag == 'true'
+      when: tear_controller_flag | bool
     
     # 3. ロードバランサー削除
     - name: Destroy LoadBalancer Infrastructure
@@ -153,7 +159,7 @@
       vars:
         operation: "destroy"
         remove_stacks: "{{ remove_stack_flag }}"
-      when: tear_loadbalancer_flag == 'true'
+      when: tear_loadbalancer_flag | bool
     
     # 4. ストレージ削除
     - name: Destroy Storage Infrastructure
@@ -162,7 +168,7 @@
       vars:
         operation: "destroy"
         remove_stacks: "{{ remove_stack_flag }}"
-      when: tear_storage_flag == 'true'
+      when: tear_storage_flag | bool
     
     # 5. セキュリティグループ削除
     - name: Destroy Security Groups
@@ -171,7 +177,7 @@
       vars:
         operation: "destroy"
         remove_stacks: "{{ remove_stack_flag }}"
-      when: tear_security_flag == 'true'
+      when: tear_security_flag | bool
     
     # 6. ネットワーク削除（最後に実行）
     - name: Destroy Network Infrastructure
@@ -180,7 +186,7 @@
       vars:
         operation: "destroy"
         remove_stacks: "{{ remove_stack_flag }}"
-      when: tear_network_flag == 'true'
+      when: tear_network_flag | bool
     
     # 削除結果のサマリー表示
     - name: Display teardown results
