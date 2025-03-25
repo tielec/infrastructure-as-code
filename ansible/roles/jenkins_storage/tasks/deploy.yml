@@ -1,0 +1,160 @@
+---
+# ストレージ（EFS）デプロイタスク
+
+- name: Display storage deployment information
+  ansible.builtin.debug:
+    msg: |
+      Deploying Storage Infrastructure:
+      - Project: {{ project_name }}
+      - Storage Pulumi Project: {{ storage_project_name }}
+      - Network Pulumi Project: {{ network_project_name }}
+      - Security Pulumi Project: {{ security_project_name }}
+      - Environment: {{ env_name }}
+
+# ファイル権限設定
+- name: Ensure aws-env.sh has execute permissions
+  ansible.builtin.file:
+    path: "{{ scripts_dir }}/aws-env.sh"
+    mode: '0755'
+  register: aws_env_script_permission
+  no_log: true  # 詳細なログを抑制
+  
+- name: Report permission update
+  ansible.builtin.debug:
+    msg: "aws-env.sh スクリプトに実行権限を付与しました"
+  when: aws_env_script_permission.changed
+
+# Pulumiデプロイ
+- name: Deploy Storage Infrastructure with Pulumi
+  block:
+    # Pulumiヘルパータスクを呼び出す
+    - name: Initialize storage stack
+      ansible.builtin.include_role:
+        name: pulumi_helper
+        tasks_from: init_stack
+      vars:
+        pulumi_project_path: "{{ pulumi_path }}/jenkins-storage"
+        stack_name: "{{ env_name }}"
+    
+    - name: Configure storage stack
+      ansible.builtin.shell: |
+        cd {{ pulumi_path }}/jenkins-storage
+        source {{ scripts_dir }}/aws-env.sh 
+        eval $({{ scripts_dir }}/aws-env.sh)
+        
+        sudo -E /root/.pulumi/bin/pulumi config set aws:region {{ aws_region_name }}
+        sudo -E /root/.pulumi/bin/pulumi config set {{ storage_project_name }}:projectName {{ project_name }}
+        sudo -E /root/.pulumi/bin/pulumi config set {{ storage_project_name }}:networkStackName {{ network_project_name }}
+        sudo -E /root/.pulumi/bin/pulumi config set {{ storage_project_name }}:securityStackName {{ security_project_name }}
+      register: pulumi_config_result
+      changed_when: pulumi_config_result.rc == 0
+    
+    # 依存関係の確認: NetworkとSecurityがデプロイ済みであることを確認
+    - name: Check network stack outputs
+      ansible.builtin.include_role:
+        name: pulumi_helper
+        tasks_from: get_outputs
+      vars:
+        pulumi_project_path: "{{ pulumi_path }}/jenkins-network"
+        output_name: "vpcId"
+        mock_output: "mock-vpc-id-for-check-mode"
+    
+    - name: Set network VPC ID
+      ansible.builtin.set_fact:
+        network_vpc_id: "{{ stack_output_result.stdout | trim }}"
+    
+    - name: Check security stack outputs
+      ansible.builtin.include_role:
+        name: pulumi_helper
+        tasks_from: get_outputs
+      vars:
+        pulumi_project_path: "{{ pulumi_path }}/jenkins-security"
+        output_name: "efsSecurityGroupId"
+        mock_output: "mock-efs-sg-id"
+    
+    - name: Set EFS security group ID
+      ansible.builtin.set_fact:
+        efs_sg_id: "{{ stack_output_result.stdout | trim }}"
+    
+    - name: Display dependency validation
+      ansible.builtin.debug:
+        msg: |
+          Dependency validation:
+          VPC ID from network stack: {{ network_vpc_id }}
+          EFS Security Group ID from security stack: {{ efs_sg_id }}
+    
+    # Pulumiプレビュー
+    - name: Preview storage deployment
+      ansible.builtin.include_role:
+        name: pulumi_helper
+        tasks_from: preview
+      vars:
+        pulumi_project_path: "{{ pulumi_path }}/jenkins-storage"
+    
+    # Pulumiデプロイ
+    - name: Deploy storage stack
+      ansible.builtin.include_role:
+        name: pulumi_helper
+        tasks_from: deploy
+      vars:
+        pulumi_project_path: "{{ pulumi_path }}/jenkins-storage"
+    
+    # デプロイ後に少し待機してスタックが完全に更新されるのを待つ
+    - name: Wait for stack outputs to be available
+      ansible.builtin.pause:
+        seconds: 10
+      when: not ansible_check_mode
+    
+    # EFSファイルシステムIDの取得
+    - name: Get EFS file system ID
+      ansible.builtin.include_role:
+        name: pulumi_helper
+        tasks_from: get_outputs
+      vars:
+        pulumi_project_path: "{{ pulumi_path }}/jenkins-storage"
+        output_name: "efsFileSystemId"
+        mock_output: "mock-efs-id"
+    
+    - name: Set EFS file system ID
+      ansible.builtin.set_fact:
+        efs_file_system_id: "{{ stack_output_result.stdout | trim }}"
+    
+    # Jenkins Access Point IDの取得
+    - name: Get Jenkins access point ID
+      ansible.builtin.include_role:
+        name: pulumi_helper
+        tasks_from: get_outputs
+      vars:
+        pulumi_project_path: "{{ pulumi_path }}/jenkins-storage"
+        output_name: "jenkinsAccessPointId"
+        mock_output: "mock-jenkins-ap-id"
+    
+    - name: Set Jenkins access point ID
+      ansible.builtin.set_fact:
+        jenkins_access_point_id: "{{ stack_output_result.stdout | trim }}"
+    
+    - name: Set storage facts for use in other playbooks
+      ansible.builtin.set_fact:
+        storage_deployed: true
+        # スタック参照情報も保存
+        storage_stack_name: "{{ storage_project_name }}"
+      
+    - name: Summary of storage deployment
+      ansible.builtin.debug:
+        msg: |
+          Storage Infrastructure Deployed Successfully:
+          - EFS File System ID: {{ efs_file_system_id }}
+          - Jenkins Access Point ID: {{ jenkins_access_point_id }}
+  
+  rescue:
+    - name: Set storage deployment status on failure
+      ansible.builtin.set_fact:
+        storage_deployed: false
+      
+    - name: Display error
+      ansible.builtin.debug:
+        msg: "Failed to deploy storage infrastructure. See error details above."
+      
+    - name: Fail the playbook
+      ansible.builtin.fail:
+        msg: "Storage deployment failed."

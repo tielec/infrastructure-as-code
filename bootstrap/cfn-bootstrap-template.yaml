@@ -1,5 +1,5 @@
 AWSTemplateFormatVersion: '2010-09-09'
-Description: 'Minimal Bootstrap EC2 Instance'
+Description: 'Bootstrap EC2 Instance with minimal setup (Git and Ansible only)'
 
 Parameters:
   KeyName:
@@ -143,20 +143,42 @@ Resources:
       UserData:
         Fn::Base64: !Sub |
           #!/bin/bash -xe
+          
+          # 最小限の更新とパッケージのインストール
           yum update -y
-          yum install -y git jq
+          yum install -y git python3 python3-pip jq
+          
+          # Ansibleのインストール
+          pip3 install ansible
+          
+          # SSMエージェントの確認（すでにインストール済みかもしれませんが念のため）
+          yum install -y amazon-ssm-agent
+          systemctl enable amazon-ssm-agent
+          systemctl start amazon-ssm-agent
+          
+          # スタートアップガイドの作成
+          cat > /home/ec2-user/SETUP_GUIDE.txt << 'EOF'
+          === Bootstrap Environment Setup Guide ===
+          
+          This EC2 instance has been configured with the minimum required tools.
+          To complete the setup, follow these two simple steps:
+          
+          1. Clone your Git repository:
+             git clone <YOUR_REPOSITORY_URL> && cd <YOUR_REPOSITORY_DIRECTORY>
+          
+          2. Run the bootstrap setup script:
+             ./scripts/setup-bootstrap.sh
+          
+          That's it! The setup script will install all necessary tools and configure your environment.
+          EOF
+          
+          chown ec2-user:ec2-user /home/ec2-user/SETUP_GUIDE.txt
+          
+          # セットアップガイドを表示するように設定
+          echo "cat /home/ec2-user/SETUP_GUIDE.txt" >> /home/ec2-user/.bashrc
+          
+          echo "Bootstrap minimal setup complete!"
 
-          # Install Node.js
-          curl -sL https://rpm.nodesource.com/setup_16.x | bash -
-          yum install -y nodejs
-          
-          # Install AWS CLI v2
-          curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
-          unzip awscliv2.zip
-          ./aws/install
-          
-          # Bootstrap complete message
-          echo "Bootstrap complete! You can now SSH into this instance."
       Tags:
         - Key: Name
           Value: Bootstrap-Instance

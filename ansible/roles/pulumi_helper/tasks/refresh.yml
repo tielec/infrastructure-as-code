@@ -1,0 +1,29 @@
+# Pulumiスタックを更新するヘルパータスク
+
+- name: Refresh Pulumi stack
+  block:
+    - name: Run Pulumi refresh command
+      ansible.builtin.shell: |
+        cd {{ pulumi_project_path }}
+        {{ pulumi_commands.refresh }}
+      register: pulumi_refresh_result
+      changed_when: "'No changes required' not in pulumi_refresh_result.stdout"
+      when: not ansible_check_mode
+  
+    - name: Display Pulumi refresh results
+      ansible.builtin.debug:
+        msg: "{{ pulumi_refresh_result.stdout_lines }}"
+      when: not ansible_check_mode and ansible_verbosity > 0
+  rescue:
+    - name: Display error message on refresh failure
+      ansible.builtin.debug:
+        msg: "Failed to refresh Pulumi stack. Check error message above."
+    
+    - name: Set refresh status on failure
+      ansible.builtin.set_fact:
+        pulumi_refresh_failed: true
+        
+- name: Mock refresh (check mode)
+  ansible.builtin.debug:
+    msg: "Would refresh stack with Pulumi (check mode active)"
+  when: ansible_check_mode

@@ -1,0 +1,63 @@
+# Pulumiプロジェクトのビルドを実行するヘルパータスク
+
+- name: Build Pulumi TypeScript project
+  block:
+    - name: Check for package.json
+      ansible.builtin.stat:
+        path: "{{ pulumi_project_path }}/package.json"
+      register: package_json_check
+
+    - name: Fail if package.json not found
+      ansible.builtin.fail:
+        msg: "package.json not found in {{ pulumi_project_path }}"
+      when: not package_json_check.stat.exists
+
+    - name: Check if build script exists
+      ansible.builtin.shell: |
+        cd {{ pulumi_project_path }}
+        grep -q '"build"' package.json
+      register: build_script_check
+      failed_when: false
+      changed_when: false
+
+    - name: Run npm build if build script exists
+      ansible.builtin.shell: |
+        cd {{ pulumi_project_path }}
+        npm run build
+      register: npm_build_result
+      changed_when: npm_build_result.rc == 0
+      when: not ansible_check_mode and build_script_check.rc == 0
+  
+    - name: Run tsc directly if no build script
+      ansible.builtin.shell: |
+        cd {{ pulumi_project_path }}
+        npx tsc
+      register: tsc_build_result
+      changed_when: tsc_build_result.rc == 0
+      when: not ansible_check_mode and build_script_check.rc != 0
+  
+    - name: Run tsc syntax check
+      ansible.builtin.shell: |
+        cd {{ pulumi_project_path }}
+        npx tsc --noEmit
+      register: tsc_check_result
+      changed_when: false
+      when: not ansible_check_mode
+  
+    - name: Display build results
+      ansible.builtin.debug:
+        msg: "TypeScript build completed successfully"
+      when: not ansible_check_mode and ansible_verbosity > 0
+  rescue:
+    - name: Display error message on build failure
+      ansible.builtin.debug:
+        msg: "Failed to build Pulumi TypeScript project. Check error message above."
+    
+    - name: Set build status on failure
+      ansible.builtin.set_fact:
+        pulumi_build_failed: true
+        
+- name: Mock build (check mode)
+  ansible.builtin.debug:
+    msg: "Would build TypeScript project in {{ pulumi_project_path }} (check mode active)"
+  when: ansible_check_mode

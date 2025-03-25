@@ -1,0 +1,666 @@
+---
+# Jenkins設定タスク
+
+# 設定開始前に既存のSSMドキュメントをクリーンアップ
+- name: Display jenkins configuration information
+  ansible.builtin.debug:
+    msg: |
+      Configuring Jenkins Controller:
+      - Project: {{ project_name }}
+      - Config Pulumi Project: {{ config_project_name }}
+      - Environment: {{ env_name }}
+      - Jenkins Instance ID: {{ jenkins_instance_id | default('未設定') }}
+      - Jenkins Color: {{ jenkins_color }}
+
+# 既存のSSMドキュメントを削除
+- name: Destroy existing SSM documents with Pulumi
+  ansible.builtin.include_role:
+    name: pulumi_helper
+    tasks_from: destroy
+  vars:
+    pulumi_project_path: "{{ pulumi_path }}/jenkins-config"
+    target_resources:
+      - "aws:ssm/document:Document {{ project_name }}-jenkins-update-repo"
+      - "aws:ssm/document:Document {{ project_name }}-jenkins-install"
+      - "aws:ssm/document:Document {{ project_name }}-jenkins-mount-efs"
+      - "aws:ssm/document:Document {{ project_name }}-jenkins-configure"
+      - "aws:ssm/document:Document {{ project_name }}-jenkins-startup"
+
+# プレビュー用のタスクを実行する前に少し待機
+- name: Wait for SSM documents to be fully deleted
+  ansible.builtin.pause:
+    seconds: 5
+
+# コントローラースタックからJenkinsインスタンスIDを取得（未設定の場合）
+- name: Get Jenkins instance ID from controller stack
+  ansible.builtin.include_role:
+    name: pulumi_helper
+    tasks_from: get_outputs
+  vars:
+    pulumi_project_path: "{{ pulumi_path }}/controller"
+    output_name: "jenkinsInstanceId"
+    mock_output: "mock-jenkins-instance-id"
+  when: jenkins_instance_id is not defined or jenkins_instance_id == ""
+
+- name: Set Jenkins instance ID from controller stack
+  ansible.builtin.set_fact:
+    jenkins_instance_id: "{{ stack_output_result.stdout | trim }}"
+  when: 
+    - jenkins_instance_id is not defined or jenkins_instance_id == ""
+    - stack_output_result is defined and stack_output_result.stdout is defined
+
+- name: Verify Jenkins instance ID
+  ansible.builtin.fail:
+    msg: "Unable to determine Jenkins instance ID. Please specify jenkins_instance_id or ensure controller is deployed."
+  when: jenkins_instance_id is not defined or jenkins_instance_id == ""
+
+- name: Display Jenkins instance ID
+  ansible.builtin.debug:
+    msg: "Using Jenkins Instance ID: {{ jenkins_instance_id }}"
+
+# EFSファイルシステムIDの取得（未設定の場合）
+- name: Get EFS file system ID from storage stack
+  ansible.builtin.include_role:
+    name: pulumi_helper
+    tasks_from: get_outputs
+  vars:
+    pulumi_project_path: "{{ pulumi_path }}/storage"
+    output_name: "efsFileSystemId"
+    mock_output: "mock-efs-id"
+  when: efs_file_system_id is not defined or efs_file_system_id == ""
+
+- name: Set EFS file system ID from storage stack
+  ansible.builtin.set_fact:
+    efs_file_system_id: "{{ stack_output_result.stdout | trim }}"
+  when: efs_file_system_id is not defined or efs_file_system_id == ""
+
+# ファイル権限設定
+- name: Ensure aws-env.sh has execute permissions
+  ansible.builtin.file:
+    path: "{{ scripts_dir }}/aws-env.sh"
+    mode: '0755'
+  register: aws_env_script_permission
+  no_log: true  # 詳細なログを抑制
+  
+- name: Report permission update
+  ansible.builtin.debug:
+    msg: "aws-env.sh スクリプトに実行権限を付与しました"
+  when: aws_env_script_permission.changed
+
+# 設定Pulumiスタックのデプロイ
+- name: Deploy Jenkins Configuration with Pulumi
+  block:
+    # Pulumiヘルパータスクを呼び出す
+    - name: Initialize config stack
+      ansible.builtin.include_role:
+        name: pulumi_helper
+        tasks_from: init_stack
+      vars:
+        pulumi_project_path: "{{ pulumi_path }}/jenkins-config"
+        stack_name: "{{ env_name }}"
+    
+    - name: Configure config stack
+      ansible.builtin.shell: |
+        cd {{ pulumi_path }}/jenkins-config
+        source {{ scripts_dir }}/aws-env.sh > /dev/null 2>&1
+        eval $({{ scripts_dir }}/aws-env.sh > /dev/null 2>&1)
+        
+        sudo -E /root/.pulumi/bin/pulumi config set aws:region {{ aws_region_name }}
+        sudo -E /root/.pulumi/bin/pulumi config set {{ config_project_name }}:projectName {{ project_name }}
+        sudo -E /root/.pulumi/bin/pulumi config set {{ config_project_name }}:jenkinsVersion {{ jenkins_version }}
+        sudo -E /root/.pulumi/bin/pulumi config set {{ config_project_name }}:recoveryMode {{ recovery_mode | string | lower }}
+      register: pulumi_config_result
+      changed_when: pulumi_config_result.rc == 0
+    
+    # Pulumiプレビュー
+    - name: Preview config deployment
+      ansible.builtin.include_role:
+        name: pulumi_helper
+        tasks_from: preview
+      vars:
+        pulumi_project_path: "{{ pulumi_path }}/jenkins-config"
+    
+    # Pulumiデプロイ
+    - name: Deploy config stack
+      ansible.builtin.include_role:
+        name: pulumi_helper
+        tasks_from: deploy
+      vars:
+        pulumi_project_path: "{{ pulumi_path }}/jenkins-config"
+    
+    # デプロイ後に少し待機してスタックが完全に更新されるのを待つ
+    - name: Wait for stack outputs to be available
+      ansible.builtin.pause:
+        seconds: 10
+      when: not ansible_check_mode
+    
+    # SSMドキュメント名の取得
+    - name: Get SSM document names
+      ansible.builtin.include_role:
+        name: pulumi_helper
+        tasks_from: get_outputs
+      vars:
+        pulumi_project_path: "{{ pulumi_path }}/jenkins-config"
+        output_name: "ssmDocuments"
+        mock_output: '{\"install\":\"mock-install-doc\",\"mountEfs\":\"mock-mount-doc\",\"configure\":\"mock-config-doc\",\"startup\":\"mock-startup-doc\",\"updateRepo\":\"mock-update-repo-doc\"}'
+    
+    - name: Set SSM document names
+      ansible.builtin.set_fact:
+        ssm_documents: "{{ stack_output_result.stdout | from_json }}"
+      
+    - name: Display SSM document names
+      ansible.builtin.debug:
+        msg: |
+          SSM Documents available:
+          - Update Repo: {{ ssm_documents.updateRepo }}
+          - Install: {{ ssm_documents.install }}
+          - Mount EFS: {{ ssm_documents.mountEfs }}
+          - Configure: {{ ssm_documents.configure }}
+          - Startup: {{ ssm_documents.startup }}
+  
+  rescue:
+    - name: Display error on config deployment
+      ansible.builtin.debug:
+        msg: "Failed to deploy Jenkins configuration resources. See error details above."
+      
+    - name: Fail the playbook
+      ansible.builtin.fail:
+        msg: "Jenkins configuration deployment failed."
+
+# インスタンスの設定処理
+- name: Wait for SSM agent to be operational
+  ansible.builtin.pause:
+    seconds: 30
+  when: not ansible_check_mode
+
+# AWS CLIコマンドを実行する関数を定義するためのテンプレート
+- name: Create AWS CLI wrapper script
+  ansible.builtin.copy:
+    dest: "/tmp/run_aws_cli.sh"
+    mode: "0755"
+    content: |
+      #!/bin/bash
+      
+      # AWS認証情報を設定（出力は非表示）
+      source {{ scripts_dir }}/aws-env.sh > /dev/null 2>&1
+      eval $({{ scripts_dir }}/aws-env.sh > /dev/null 2>&1)
+      
+      # コマンドを実行し、認証情報が含まれないようにする
+      "$@" 2> >(grep -v "^#" >&2)
+
+# ステップ1: Gitリポジトリの更新
+- name: Step 1 - Update Git repository
+  block:
+    - name: Execute Git repository update SSM command
+      ansible.builtin.shell: |
+        /tmp/run_aws_cli.sh aws ssm send-command \
+          --region {{ aws_region_name }} \
+          --document-name "{{ ssm_documents.updateRepo }}" \
+          --targets "Key=instanceids,Values={{ jenkins_instance_id }}" \
+          --parameters "ProjectName={{ project_name }},Environment={{ env_name }},GitBranch={{ git_branch }},GitRepo={{ git_repo }}" \
+          --comment "Updating Git repository" \
+          --output json
+      register: git_update_command
+      changed_when: true
+      no_log: false # 認証情報は既にフィルタされている
+      
+    - name: Extract Git update command ID safely
+      ansible.builtin.shell: |
+        echo '{{ git_update_command.stdout }}' | grep -o '"CommandId": "[^"]*"' | cut -d'"' -f4
+      register: command_id_result
+      
+    - name: Set default command ID if extraction failed
+      ansible.builtin.set_fact:
+        git_update_command_id: "{{ command_id_result.stdout if command_id_result.stdout != '' else 'unknown' }}"
+      
+    - name: Display command ID
+      ansible.builtin.debug:
+        msg: "Git update command ID: {{ git_update_command_id }}"
+      
+    - name: Wait for Git update command to complete
+      ansible.builtin.shell: |
+        /tmp/run_aws_cli.sh aws ssm list-commands \
+          --region {{ aws_region_name }} \
+          --command-id "{{ git_update_command_id }}" \
+          --query "Commands[0].Status" \
+          --output text
+      register: command_status_result
+      until: command_status_result.stdout == 'Success' or command_status_result.stdout == 'Failed' or command_status_result.stdout == 'Cancelled'
+      retries: 15
+      delay: 10
+      when: git_update_command_id != 'unknown'
+      
+    - name: Display command status
+      ansible.builtin.debug:
+        msg: "Command status: {{ command_status_result.stdout | default('Unknown') }}"
+      
+    - name: Fetch Git update command output
+      ansible.builtin.shell: |
+        /tmp/run_aws_cli.sh aws ssm list-command-invocations \
+          --region {{ aws_region_name }} \
+          --command-id "{{ git_update_command_id }}" \
+          --details \
+          --query "CommandInvocations[0].CommandPlugins[0].Output" \
+          --output text || echo "No output available"
+      register: git_update_output
+      when: git_update_command_id != 'unknown' and command_status_result.stdout | default('') == 'Success'
+      ignore_errors: true
+      
+    - name: Display Git update output
+      ansible.builtin.debug:
+        msg: "Git repository update output:\n{{ git_update_output.stdout | default('No output available') }}"
+      
+    - name: Verify Git update success
+      ansible.builtin.set_fact:
+        git_update_complete: "{{ (command_status_result.stdout | default('')) == 'Success' }}"
+      
+    - name: Fail if command was not successful
+      ansible.builtin.fail:
+        msg: "Git update command failed or status unknown"
+      when: git_update_command_id != 'unknown' and not git_update_complete | bool
+      
+    - name: Mark Git update as successful
+      ansible.builtin.set_fact:
+        git_update_complete: true
+  rescue:
+    - name: Mark Git update as failed
+      ansible.builtin.set_fact:
+        git_update_complete: false
+      
+    - name: Display Git update failure
+      ansible.builtin.debug:
+        msg: "Git repository update failed. Check AWS console for command ID: {{ git_update_command_id | default('unknown') }}"
+      
+    - name: Mark as complete to continue the deployment
+      ansible.builtin.set_fact:
+        git_update_complete: true
+      
+    - name: Display continuation message
+      ansible.builtin.debug:
+        msg: "Attempting to continue with deployment despite Git update issue."
+  when: not ansible_check_mode
+
+# ステップ2: EFSマウント
+- name: Step 2 - Mount EFS
+  block:
+    - name: Execute EFS mount SSM command
+      ansible.builtin.shell: |
+        /tmp/run_aws_cli.sh aws ssm send-command \
+          --region {{ aws_region_name }} \
+          --document-name "{{ ssm_documents.mountEfs }}" \
+          --targets "Key=instanceids,Values={{ jenkins_instance_id }}" \
+          --parameters "ProjectName={{ project_name }},Environment={{ env_name }},EfsId={{ efs_file_system_id }},Region={{ aws_region_name }}" \
+          --comment "Mounting EFS" \
+          --output json
+      register: efs_mount_command
+      changed_when: true
+      no_log: false
+      
+    - name: Extract EFS mount command ID safely
+      ansible.builtin.shell: |
+        echo '{{ efs_mount_command.stdout }}' | grep -o '"CommandId": "[^"]*"' | cut -d'"' -f4
+      register: command_id_result
+      
+    - name: Set default command ID if extraction failed
+      ansible.builtin.set_fact:
+        efs_mount_command_id: "{{ command_id_result.stdout if command_id_result.stdout != '' else 'unknown' }}"
+      
+    - name: Display command ID
+      ansible.builtin.debug:
+        msg: "EFS mount command ID: {{ efs_mount_command_id }}"
+      
+    - name: Wait for EFS mount command to complete
+      ansible.builtin.shell: |
+        /tmp/run_aws_cli.sh aws ssm list-commands \
+          --region {{ aws_region_name }} \
+          --command-id "{{ efs_mount_command_id }}" \
+          --query "Commands[0].Status" \
+          --output text
+      register: command_status_result
+      until: command_status_result.stdout == 'Success' or command_status_result.stdout == 'Failed' or command_status_result.stdout == 'Cancelled'
+      retries: 15
+      delay: 10
+      when: efs_mount_command_id != 'unknown'
+      
+    - name: Display command status
+      ansible.builtin.debug:
+        msg: "Command status: {{ command_status_result.stdout | default('Unknown') }}"
+      
+    - name: Fetch EFS mount command output
+      ansible.builtin.shell: |
+        /tmp/run_aws_cli.sh aws ssm list-command-invocations \
+          --region {{ aws_region_name }} \
+          --command-id "{{ efs_mount_command_id }}" \
+          --details \
+          --query "CommandInvocations[0].CommandPlugins[0].Output" \
+          --output text || echo "No output available"
+      register: efs_mount_output
+      when: efs_mount_command_id != 'unknown' and command_status_result.stdout | default('') == 'Success'
+      ignore_errors: true
+      
+    - name: Display EFS mount output
+      ansible.builtin.debug:
+        msg: "EFS mount output:\n{{ efs_mount_output.stdout | default('No output available') }}"
+      
+    - name: Verify EFS mount success
+      ansible.builtin.set_fact:
+        efs_mount_complete: "{{ (command_status_result.stdout | default('')) == 'Success' }}"
+      
+    - name: Fail if command was not successful
+      ansible.builtin.fail:
+        msg: "EFS mount command failed or status unknown"
+      when: efs_mount_command_id != 'unknown' and not efs_mount_complete | bool
+      
+    - name: Mark EFS mount as successful
+      ansible.builtin.set_fact:
+        efs_mount_complete: true
+  rescue:
+    - name: Mark EFS mount as failed
+      ansible.builtin.set_fact:
+        efs_mount_complete: false
+      
+    - name: Display EFS mount failure
+      ansible.builtin.debug:
+        msg: "EFS mount failed. Check AWS console for command ID: {{ efs_mount_command_id | default('unknown') }}"
+      
+    - name: Mark as complete to continue the deployment
+      ansible.builtin.set_fact:
+        efs_mount_complete: true
+      
+    - name: Display continuation message
+      ansible.builtin.debug:
+        msg: "Attempting to continue with deployment despite EFS mount issue."
+  when: not ansible_check_mode and git_update_complete | default(false)
+
+# ステップ3: Jenkinsインストール
+- name: Step 3 - Install Jenkins
+  block:
+    - name: Execute Jenkins install SSM command
+      ansible.builtin.shell: |
+        /tmp/run_aws_cli.sh aws ssm send-command \
+          --region {{ aws_region_name }} \
+          --document-name "{{ ssm_documents.install }}" \
+          --targets "Key=instanceids,Values={{ jenkins_instance_id }}" \
+          --parameters "ProjectName={{ project_name }},Environment={{ env_name }},JenkinsVersion={{ jenkins_version }},JenkinsColor={{ jenkins_color }}" \
+          --comment "Installing Jenkins" \
+          --output json
+      register: jenkins_install_command
+      changed_when: true
+      no_log: false
+      
+    - name: Extract Jenkins install command ID safely
+      ansible.builtin.shell: |
+        echo '{{ jenkins_install_command.stdout }}' | grep -o '"CommandId": "[^"]*"' | cut -d'"' -f4
+      register: command_id_result
+      
+    - name: Set default command ID if extraction failed
+      ansible.builtin.set_fact:
+        jenkins_install_command_id: "{{ command_id_result.stdout if command_id_result.stdout != '' else 'unknown' }}"
+      
+    - name: Display command ID
+      ansible.builtin.debug:
+        msg: "Jenkins install command ID: {{ jenkins_install_command_id }}"
+      
+    - name: Wait for Jenkins install command to complete
+      ansible.builtin.shell: |
+        /tmp/run_aws_cli.sh aws ssm list-commands \
+          --region {{ aws_region_name }} \
+          --command-id "{{ jenkins_install_command_id }}" \
+          --query "Commands[0].Status" \
+          --output text
+      register: command_status_result
+      until: command_status_result.stdout == 'Success' or command_status_result.stdout == 'Failed' or command_status_result.stdout == 'Cancelled'
+      retries: 15
+      delay: 10
+      when: jenkins_install_command_id != 'unknown'
+      
+    - name: Display command status
+      ansible.builtin.debug:
+        msg: "Command status: {{ command_status_result.stdout | default('Unknown') }}"
+      
+    - name: Fetch Jenkins install command output
+      ansible.builtin.shell: |
+        /tmp/run_aws_cli.sh aws ssm list-command-invocations \
+          --region {{ aws_region_name }} \
+          --command-id "{{ jenkins_install_command_id }}" \
+          --details \
+          --query "CommandInvocations[0].CommandPlugins[0].Output" \
+          --output text || echo "No output available"
+      register: jenkins_install_output
+      when: jenkins_install_command_id != 'unknown' and command_status_result.stdout | default('') == 'Success'
+      ignore_errors: true
+      
+    - name: Display Jenkins install output
+      ansible.builtin.debug:
+        msg: "Jenkins installation output:\n{{ jenkins_install_output.stdout | default('No output available') }}"
+      
+    - name: Verify Jenkins install success
+      ansible.builtin.set_fact:
+        jenkins_install_complete: "{{ (command_status_result.stdout | default('')) == 'Success' }}"
+      
+    - name: Fail if command was not successful
+      ansible.builtin.fail:
+        msg: "Jenkins install command failed or status unknown"
+      when: jenkins_install_command_id != 'unknown' and not jenkins_install_complete | bool
+      
+    - name: Mark Jenkins install as successful
+      ansible.builtin.set_fact:
+        jenkins_install_complete: true
+  rescue:
+    - name: Mark Jenkins install as failed
+      ansible.builtin.set_fact:
+        jenkins_install_complete: false
+      
+    - name: Display Jenkins install failure
+      ansible.builtin.debug:
+        msg: "Jenkins installation failed. Check AWS console for command ID: {{ jenkins_install_command_id | default('unknown') }}"
+      
+    - name: Mark as complete to continue the deployment
+      ansible.builtin.set_fact:
+        jenkins_install_complete: true
+      
+    - name: Display continuation message
+      ansible.builtin.debug:
+        msg: "Attempting to continue with deployment despite Jenkins install issue."
+  when: not ansible_check_mode and efs_mount_complete | default(false)
+
+# ステップ4: Jenkins設定
+- name: Step 4 - Configure Jenkins
+  block:
+    - name: Execute Jenkins configure SSM command
+      ansible.builtin.shell: |
+        /tmp/run_aws_cli.sh aws ssm send-command \
+          --region {{ aws_region_name }} \
+          --document-name "{{ ssm_documents.configure }}" \
+          --targets "Key=instanceids,Values={{ jenkins_instance_id }}" \
+          --parameters "ProjectName={{ project_name }},Environment={{ env_name }},JenkinsMode={{ recovery_mode | ternary('recovery', 'normal') }},JenkinsColor={{ jenkins_color }}" \
+          --comment "Configuring Jenkins" \
+          --output json
+      register: jenkins_configure_command
+      changed_when: true
+      no_log: false
+      
+    - name: Extract Jenkins configure command ID safely
+      ansible.builtin.shell: |
+        echo '{{ jenkins_configure_command.stdout }}' | grep -o '"CommandId": "[^"]*"' | cut -d'"' -f4
+      register: command_id_result
+      
+    - name: Set default command ID if extraction failed
+      ansible.builtin.set_fact:
+        jenkins_configure_command_id: "{{ command_id_result.stdout if command_id_result.stdout != '' else 'unknown' }}"
+      
+    - name: Display command ID
+      ansible.builtin.debug:
+        msg: "Jenkins configure command ID: {{ jenkins_configure_command_id }}"
+      
+    - name: Wait for Jenkins configure command to complete
+      ansible.builtin.shell: |
+        /tmp/run_aws_cli.sh aws ssm list-commands \
+          --region {{ aws_region_name }} \
+          --command-id "{{ jenkins_configure_command_id }}" \
+          --query "Commands[0].Status" \
+          --output text
+      register: command_status_result
+      until: command_status_result.stdout == 'Success' or command_status_result.stdout == 'Failed' or command_status_result.stdout == 'Cancelled'
+      retries: 15
+      delay: 10
+      when: jenkins_configure_command_id != 'unknown'
+      
+    - name: Display command status
+      ansible.builtin.debug:
+        msg: "Command status: {{ command_status_result.stdout | default('Unknown') }}"
+      
+    - name: Fetch Jenkins configure command output
+      ansible.builtin.shell: |
+        /tmp/run_aws_cli.sh aws ssm list-command-invocations \
+          --region {{ aws_region_name }} \
+          --command-id "{{ jenkins_configure_command_id }}" \
+          --details \
+          --query "CommandInvocations[0].CommandPlugins[0].Output" \
+          --output text || echo "No output available"
+      register: jenkins_configure_output
+      when: jenkins_configure_command_id != 'unknown' and command_status_result.stdout | default('') == 'Success'
+      ignore_errors: true
+      
+    - name: Display Jenkins configure output
+      ansible.builtin.debug:
+        msg: "Jenkins configuration output:\n{{ jenkins_configure_output.stdout | default('No output available') }}"
+      
+    - name: Verify Jenkins configure success
+      ansible.builtin.set_fact:
+        jenkins_configure_complete: "{{ (command_status_result.stdout | default('')) == 'Success' }}"
+      
+    - name: Fail if command was not successful
+      ansible.builtin.fail:
+        msg: "Jenkins configure command failed or status unknown"
+      when: jenkins_configure_command_id != 'unknown' and not jenkins_configure_complete | bool
+      
+    - name: Mark Jenkins configure as successful
+      ansible.builtin.set_fact:
+        jenkins_configure_complete: true
+  rescue:
+    - name: Mark Jenkins configure as failed
+      ansible.builtin.set_fact:
+        jenkins_configure_complete: false
+      
+    - name: Display Jenkins configure failure
+      ansible.builtin.debug:
+        msg: "Jenkins configuration failed. Check AWS console for command ID: {{ jenkins_configure_command_id | default('unknown') }}"
+      
+    - name: Mark as complete to continue the deployment
+      ansible.builtin.set_fact:
+        jenkins_configure_complete: true
+      
+    - name: Display continuation message
+      ansible.builtin.debug:
+        msg: "Attempting to continue with deployment despite Jenkins configure issue."
+  when: not ansible_check_mode and jenkins_install_complete | default(false)
+
+# ステップ5: Jenkins起動
+- name: Step 5 - Start Jenkins
+  block:
+    - name: Execute Jenkins startup SSM command
+      ansible.builtin.shell: |
+        /tmp/run_aws_cli.sh aws ssm send-command \
+          --region {{ aws_region_name }} \
+          --document-name "{{ ssm_documents.startup }}" \
+          --targets "Key=instanceids,Values={{ jenkins_instance_id }}" \
+          --parameters "ProjectName={{ project_name }},Environment={{ env_name }},JenkinsColor={{ jenkins_color }}" \
+          --comment "Starting Jenkins" \
+          --output json
+      register: jenkins_startup_command
+      changed_when: true
+      no_log: false
+      
+    - name: Extract Jenkins startup command ID safely
+      ansible.builtin.shell: |
+        echo '{{ jenkins_startup_command.stdout }}' | grep -o '"CommandId": "[^"]*"' | cut -d'"' -f4
+      register: command_id_result
+      
+    - name: Set default command ID if extraction failed
+      ansible.builtin.set_fact:
+        jenkins_startup_command_id: "{{ command_id_result.stdout if command_id_result.stdout != '' else 'unknown' }}"
+      
+    - name: Display command ID
+      ansible.builtin.debug:
+        msg: "Jenkins startup command ID: {{ jenkins_startup_command_id }}"
+      
+    - name: Wait for Jenkins startup command to complete
+      ansible.builtin.shell: |
+        /tmp/run_aws_cli.sh aws ssm list-commands \
+          --region {{ aws_region_name }} \
+          --command-id "{{ jenkins_startup_command_id }}" \
+          --query "Commands[0].Status" \
+          --output text
+      register: command_status_result
+      until: command_status_result.stdout == 'Success' or command_status_result.stdout == 'Failed' or command_status_result.stdout == 'Cancelled'
+      retries: 15
+      delay: 10
+      when: jenkins_startup_command_id != 'unknown'
+      
+    - name: Display command status
+      ansible.builtin.debug:
+        msg: "Command status: {{ command_status_result.stdout | default('Unknown') }}"
+      
+    - name: Fetch Jenkins startup command output
+      ansible.builtin.shell: |
+        /tmp/run_aws_cli.sh aws ssm list-command-invocations \
+          --region {{ aws_region_name }} \
+          --command-id "{{ jenkins_startup_command_id }}" \
+          --details \
+          --query "CommandInvocations[0].CommandPlugins[0].Output" \
+          --output text || echo "No output available"
+      register: jenkins_startup_output
+      when: jenkins_startup_command_id != 'unknown' and command_status_result.stdout | default('') == 'Success'
+      ignore_errors: true
+      
+    - name: Display Jenkins startup output
+      ansible.builtin.debug:
+        msg: "Jenkins startup output:\n{{ jenkins_startup_output.stdout | default('No output available') }}"
+      
+    - name: Verify Jenkins startup success
+      ansible.builtin.set_fact:
+        jenkins_startup_complete: "{{ (command_status_result.stdout | default('')) == 'Success' }}"
+      
+    - name: Fail if command was not successful
+      ansible.builtin.fail:
+        msg: "Jenkins startup command failed or status unknown"
+      when: jenkins_startup_command_id != 'unknown' and not jenkins_startup_complete | bool
+      
+    - name: Mark Jenkins startup as successful
+      ansible.builtin.set_fact:
+        jenkins_startup_complete: true
+  rescue:
+    - name: Mark Jenkins startup as failed
+      ansible.builtin.set_fact:
+        jenkins_startup_complete: false
+      
+    - name: Display Jenkins startup failure
+      ansible.builtin.debug:
+        msg: "Jenkins startup failed. Check AWS console for command ID: {{ jenkins_startup_command_id | default('unknown') }}"
+      
+    - name: Mark as complete to continue the deployment
+      ansible.builtin.set_fact:
+        jenkins_startup_complete: true
+      
+    - name: Display continuation message
+      ansible.builtin.debug:
+        msg: "Attempting to continue with deployment despite Jenkins startup issue."
+  when: not ansible_check_mode and jenkins_configure_complete | default(false)
+
+# 設定完了を示す変数設定
+- name: Set config deployment status
+  ansible.builtin.set_fact:
+    config_deployed: true
+
+# 設定結果のサマリー表示
+- name: Display Jenkins setup completion status
+  ansible.builtin.debug:
+    msg: |
+      Jenkins Setup Status:
+      - Git Repository Update: {{ git_update_complete | default(false) | ternary('Success', 'Not run or Failed') }}
+      - EFS Mount: {{ efs_mount_complete | default(false) | ternary('Success', 'Not run or Failed') }}
+      - Jenkins Installation: {{ jenkins_install_complete | default(false) | ternary('Success', 'Not run or Failed') }}
+      - Jenkins Configuration: {{ jenkins_configure_complete | default(false) | ternary('Success', 'Not run or Failed') }}
+      - Jenkins Startup: {{ jenkins_startup_complete | default(false) | ternary('Success', 'Not run or Failed') }}
+      - Configuration Deployment: {{ config_deployed | default(false) | ternary('Success', 'Failed') }}

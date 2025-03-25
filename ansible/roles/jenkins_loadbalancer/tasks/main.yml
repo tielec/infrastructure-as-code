@@ -1,0 +1,5 @@
+# jenkins_loadbalancer ロールのメインタスク
+# このファイルはロールのエントリーポイントとなります
+
+- name: Include deploy tasks
+  ansible.builtin.include_tasks: deploy.yml

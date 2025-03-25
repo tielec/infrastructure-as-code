@@ -1,0 +1,36 @@
+# Pulumiスタックの設定値を管理するヘルパータスク
+
+- name: Configure Pulumi stack
+  block:
+    - name: Check if config variable is defined
+      ansible.builtin.fail:
+        msg: "Required variables 'config_key' and 'config_value' are not defined"
+      when: config_key is not defined or config_value is not defined
+  
+    - name: Set Pulumi config value
+      ansible.builtin.shell: |
+        cd {{ pulumi_project_path }}
+        source {{ playbook_dir }}/../../scripts/aws-env.sh > /dev/null
+        eval $({{ playbook_dir }}/../../scripts/aws-env.sh) > /dev/null
+        sudo -E /root/.pulumi/bin/pulumi config set {{ config_key }} "{{ config_value }}" {{ '--secret' if config_secret | default(false) else '' }}
+      register: pulumi_config_result
+      changed_when: pulumi_config_result.rc == 0
+      when: not ansible_check_mode
+  
+    - name: Display Pulumi config set result
+      ansible.builtin.debug:
+        msg: "Set config '{{ config_key }}' to {{ 'secret value' if config_secret | default(false) else config_value }}"
+      when: not ansible_check_mode and ansible_verbosity > 0
+  rescue:
+    - name: Display error message on config failure
+      ansible.builtin.debug:
+        msg: "Failed to set Pulumi config. Check error message above."
+    
+    - name: Set config status on failure
+      ansible.builtin.set_fact:
+        pulumi_config_failed: true
+        
+- name: Mock config set (check mode)
+  ansible.builtin.debug:
+    msg: "Would set config key '{{ config_key | default('unknown') }}' to {{ 'secret value' if config_secret | default(false) else config_value | default('unknown') }} (check mode active)"
+  when: ansible_check_mode

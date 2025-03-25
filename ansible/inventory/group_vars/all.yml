@@ -1,0 +1,46 @@
+---
+# インフラストラクチャ共通設定
+
+# プロジェクト識別子
+infra:
+  # メインのプロジェクト名（変数展開に使用）
+  project_name: "jenkins-infra"
+  
+  # Pulumiプロジェクト名（スタック参照に使用）
+  pulumi:
+    network_project: "jenkins-network"
+    security_project: "jenkins-security" 
+    storage_project: "jenkins-storage"
+    loadbalancer_project: "jenkins-loadbalancer"
+    controller_project: "jenkins-controller"
+    agent_project: "jenkins-agent"
+    config_project: "jenkins-config"
+  
+  # AWS設定
+  aws:
+    default_region: "ap-northeast-1"
+    vpc_cidr: "10.0.0.0/16"
+
+  # 環境設定
+  environments:
+    dev:
+      name: "dev"
+      domain: "dev.jenkins.example.com"
+    staging:
+      name: "staging"
+      domain: "staging.jenkins.example.com"
+    prod:
+      name: "prod"
+      domain: "jenkins.example.com"
+
+# Jenkinsコントローラー設定
+jenkins:
+  version: "latest"
+  color: "blue"
+  recovery_mode: false
+  instance_type: "t3.medium"
+  key_name: ""  # 必要に応じて設定
+  git:
+    repo: "https://github.com/tielec/infrastructure-as-code.git"
+    branch: "main"  # デフォルトのブランチ
+

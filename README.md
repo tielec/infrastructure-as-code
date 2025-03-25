@@ -1,12 +1,13 @@
 # Jenkins CI/CD インフラストラクチャ構築
 
-このリポジトリは、AWSクラウド上にJenkinsベースのCI/CD環境をPulumiを使って構築するためのコードを管理します。ブルーグリーンデプロイに対応したJenkinsマスター環境を実現し、効率的なCI/CDパイプラインを提供します。
+このリポジトリは、AWSクラウド上にJenkinsベースのCI/CD環境をAnsibleとPulumiを組み合わせて段階的に構築するためのコードを管理します。ブルーグリーンデプロイに対応したJenkinsコントローラー環境を実現し、効率的なCI/CDパイプラインを提供します。
 
 ## 前提条件
 
 - AWSアカウント
 - 有効なEC2キーペア
 - CloudFormationスタックをデプロイする権限
+- Pulumiアカウント（アクセストークンが必要）
 
 ## セットアップ手順
 
@@ -33,7 +34,7 @@
 
 ### 2. ブートストラップ環境の構築
 
-次に、Pulumiを実行するための踏み台サーバーをCloudFormationで構築します。
+基本的なツールをインストールしたEC2踏み台サーバーをCloudFormationで構築します。
 
 1. AWSコンソールのCloudFormationから以下のテンプレートをアップロード：
     - `bootstrap/cfn-bootstrap-template.yaml`
@@ -50,119 +51,66 @@
     - `VPCID`: 作成されたVPC ID
     - `PublicSubnetID`: パブリックサブネットID
 
-### 3. 踏み台サーバーへの接続
+### 3. 踏み台サーバーへの接続とセットアップ
 
-1. AWSコンソールにログイン
-2. EC2ダッシュボードに移動
-3. インスタンスを選択
-4. 「接続」ボタンをクリック
-5. 「EC2 Instance Connectを使用して接続する」を選択
-6. 「接続」ボタンをクリック
+1. 以下のコマンドで踏み台サーバーにSSH接続します：
+   ```bash
+   ssh -i bootstrap-environment-key.pem ec2-user@<BootstrapPublicIP>
+   ```
 
-これにより、ブラウザベースのターミナルが開き、インスタンスに直接接続できます。
+2. 接続すると、簡易セットアップガイドが表示されます。以下の2ステップでセットアップが完了します：
 
-### 4. インフラストラクチャコードのセットアップ
+   ```bash
+   # 1. リポジトリをクローン
+   git clone <リポジトリURL>
+   cd infrastructure-as-code
+   
+   # 2. ブートストラップセットアップスクリプトを実行
+   chmod +x ./scripts/setup-bootstrap.sh
+   ./scripts/setup-bootstrap.sh
+   ```
 
-踏み台サーバーではPulumiが正しくインストールされていないため、新たにインストールする必要があります。
+   このスクリプトは以下の処理を自動的に行います：
+   - GitHubアクセス用のSSHキー生成（必要な場合）
+   - Node.js, AWS CLI, Pulumi, Dockerなどの必要なツールのインストール
+   - AWS認証情報の設定
 
-```bash
-# rootユーザーに切り替え
-sudo su -
+### 4. Pulumiアクセストークンの設定
 
-# Pulumiのインストール
-curl -fsSL https://get.pulumi.com | sh
+Jenkinsインフラのデプロイ前に、Pulumiのアクセストークンを設定する必要があります：
 
-# パスを設定
-echo 'export PATH=$PATH:$HOME/.pulumi/bin' >> ~/.bashrc
-source ~/.bashrc
+1. [Pulumi Console](https://app.pulumi.com/account/tokens)からアクセストークンを取得
+2. 以下のコマンドで環境変数を設定：
 
-# Pulumiのバージョン確認
-pulumi version
-```
+   ```bash
+   export PULUMI_ACCESS_TOKEN="pul-YOUR_ACCESS_TOKEN"
+   ```
 
-### 5. Pulumiアカウントへのログイン
+   Ansible実行時にこの環境変数を使って自動的にPulumiログインが行われます。
 
-Pulumiを使用するには、アカウント認証が必要です：
+### 5. Jenkinsインフラの段階的デプロイ
 
-```bash
-# Pulumiアカウントにログイン
-pulumi login
-```
-
-以下のようなプロンプトが表示されます：
-```
-Manage your Pulumi stacks by logging in.
-Run `pulumi login --help` for alternative login options.
-Enter your access token from https://app.pulumi.com/account/tokens
-    or hit <ENTER> to log in using your browser
-```
-
-アクセストークンを入力する場合：
-1. ブラウザで https://app.pulumi.com/account/tokens にアクセス
-2. 「NEW ACCESS TOKEN」をクリックしてトークンを作成
-3. トークン名を入力（例：「Bootstrap Environment」）
-4. 作成されたトークンをコピーして、プロンプトに貼り付け
-
-ログインに成功すると、以下のようなメッセージが表示されます：
-```
-Welcome to Pulumi!
-...
-Logged in to pulumi.com as username (https://app.pulumi.com/username)
-```
-
-### 6. GitHubリポジトリのセットアップ
+環境準備ができたら、以下のコマンドでインフラをデプロイします：
 
 ```bash
-# SSHキーを作成（rootユーザーとして）
-ssh-keygen -t ed25519 -C "your_email@example.com"
+# 全体のデプロイパイプラインを実行（初期構築）
+cd ansible
+ansible-playbook playbooks/jenkins_setup_pipeline.yml -e "env=dev"
 
-# 公開キーの表示（この内容をGitHubに登録）
-cat ~/.ssh/id_ed25519.pub
+# 特定のコンポーネントだけをデプロイする場合
+ansible-playbook playbooks/jenkins_setup_pipeline.yml -e "env=dev run_network=true run_security=false run_storage=false"
 ```
 
-表示された公開キー全体をGitHubアカウントに追加します：
-1. GitHubにログイン
-2. 右上のプロフィールアイコン → Settings
-3. 左側メニューの「SSH and GPG keys」→「New SSH key」
-4. タイトルを入力（例: EC2 Bootstrap Instance Root）
-5. キータイプは「Authentication Key」を選択
-6. 表示された公開キー（`ssh-ed25519`で始まる行全体）を貼り付け
-7. 「Add SSH key」をクリック
-
-GitHub認証設定後：
+各コンポーネントを個別にデプロイすることも可能です：
 
 ```bash
-# リポジトリをクローン（rootユーザーとして）
-git clone git@github.com:tielec/infrastructure-as-code.git
-cd infrastructure-as-code
+# ネットワークコンポーネントのみをデプロイ
+ansible-playbook playbooks/deploy_jenkins_network.yml -e "env=dev"
 
-# Pulumiの初期化
-pulumi stack init dev
+# セキュリティグループのみをデプロイ
+ansible-playbook playbooks/deploy_jenkins_security.yml -e "env=dev"
 
-# 依存関係のインストール
-npm install
-
-# TypeScriptをコンパイル
-npx tsc
-```
-
-### 7. AWS認証情報の設定
-
-PulumiがAWS APIにアクセスするために必要な認証情報を設定します：
-
-```bash
-# スクリプトを実行して認証情報を環境変数に設定
-source scripts/aws-credentials.sh
-```
-
-### 8. Jenkinsインフラのデプロイ
-
-```bash
-# プレビュー
-pulumi preview
-
-# デプロイ実行
-pulumi up
+# その他のコンポーネントも同様に個別デプロイ可能
 ```
 
 ## インフラストラクチャの構成
@@ -170,7 +118,7 @@ pulumi up
 このリポジトリは以下のAWSリソースを設定します：
 
 - VPC、サブネット、ルートテーブル、セキュリティグループなどのネットワークリソース
-- Jenkinsマスターサーバー用のEC2インスタンス（ブルー/グリーン環境）
+- Jenkinsコントローラー用のEC2インスタンス（ブルー/グリーン環境）
 - Jenkinsエージェント用のEC2 SpotFleet（自動スケーリング対応）
 - Jenkinsデータ永続化のためのEFSファイルシステム
 - ブルーグリーンデプロイ用のALB（Application Load Balancer）
@@ -180,46 +128,114 @@ pulumi up
 
 ```
 infrastructure-as-code/
-├─bootstrap/                  # 初期セットアップ用スクリプト
-├─scripts/                    # 設定スクリプト
-│  └─jenkins/
-│     ├─groovy/               # Jenkins初期化用Groovyスクリプト
-│     │  ├─basic-settings.groovy
-│     │  ├─disable-cli.groovy
-│     │  └─recovery-mode.groovy
-│     └─shell/                # EC2インスタンス設定用シェルスクリプト
-│        ├─agent-setup.sh     # エージェント設定スクリプト
-│        ├─agent-template.sh  # エージェント最小限設定スクリプト
-│        ├─efs-mount.sh       # EFSマウント設定スクリプト
-│        ├─jenkins-setup.sh   # Jenkinsセットアップ基本スクリプト
-│        ├─jenkins-startup.sh # Jenkins起動確認スクリプト
-│        ├─normal-mode-setup.sh
-│        └─recovery-mode-setup.sh
-└─src/                        # Pulumiソースコード
-   ├─index.ts                 # メインエントリポイント
-   ├─network.ts               # ネットワークリソース定義
-   ├─security.ts              # セキュリティグループ定義
-   ├─jenkins-controller.ts    # Jenkinsマスターインスタンス定義
-   ├─jenkins-agent.ts         # Jenkinsエージェント定義
-   └─load-balancer.ts         # ロードバランサー定義
+├─ansible/                     # Ansible設定ファイル
+│  ├─ansible.cfg               # Ansible設定
+│  ├─inventory/
+│  │  ├─hosts
+│  │  └─group_vars/
+│  │      └─all.yml            # 共通変数定義ファイル
+│  ├─playbooks/                # 各種プレイブック
+│  │  ├─jenkins_setup_pipeline.yml  # メインパイプライン
+│  │  ├─deploy_jenkins_network.yml
+│  │  ├─deploy_jenkins_security.yml
+│  │  ├─deploy_jenkins_storage.yml
+│  │  ├─deploy_jenkins_loadbalancer.yml
+│  │  ├─deploy_jenkins_controller.yml
+│  │  ├─deploy_jenkins_agent.yml
+│  │  └─deploy_jenkins_application.yml
+│  └─roles/                    # 共通ロール
+│      ├─aws_setup/           # AWS環境設定ロール
+│      │  ├─defaults/
+│      │  ├─tasks/
+│      │  └─vars/
+│      └─pulumi_helper/       # Pulumiヘルパーロール
+│          ├─defaults/
+│          └─tasks/
+│
+├─bootstrap/                  # 初期セットアップ用
+│  ├─cfn-bootstrap-template.yaml  # 簡略化されたCloudFormationテンプレート
+│  └─ansible/                 
+│      └─bootstrap-setup.yml  # ブートストラップ環境のセットアップ用プレイブック
+│
+├─pulumi/                     # Pulumiプロジェクト
+│  ├─package.json             # ルートパッケージ設定
+│  ├─Pulumi.yaml              # ルートプロジェクト設定
+│  ├─tsconfig.json            # TypeScript設定
+│  ├─config/                  # 設定ディレクトリ
+│  ├─network/                 # ネットワークスタック
+│  │  ├─index.ts
+│  │  ├─Pulumi.yaml
+│  │  └─package.json
+│  ├─security/                # セキュリティスタック
+│  │  ├─index.ts
+│  │  ├─Pulumi.yaml
+│  │  ├─package.json
+│  │  └─tsconfig.json
+│  └─src/                     # ソースコード
+│      ├─common/              # 共通ユーティリティ
+│      │  └─dependency-utils.ts
+│      └─services/            # サービス別モジュール
+│          └─jenkins/         # Jenkins関連モジュール
+│              ├─index.ts
+│              ├─jenkins-agent.ts
+│              ├─jenkins-controller.ts
+│              ├─load-balancer.ts
+│              ├─network.ts
+│              └─security.ts
+│
+└─scripts/                    # 設定スクリプト
+    ├─aws-credentials.sh      # AWS認証情報設定
+    ├─setup-bootstrap.sh      # ブートストラップ環境セットアップスクリプト
+    └─jenkins/                # Jenkins関連スクリプト
+        ├─groovy/             # Jenkins初期化用Groovyスクリプト
+        │  ├─basic-settings.groovy
+        │  ├─disable-cli.groovy
+        │  ├─install-plugins.groovy
+        │  └─recovery-mode.groovy
+        │
+        └─shell/              # EC2インスタンス設定用シェルスクリプト
+           ├─agent-setup.sh
+           ├─agent-template.sh
+           ├─controller-configure.sh
+           ├─controller-install.sh
+           ├─controller-mount-efs.sh
+           ├─controller-startup.sh
+           ├─controller-update.sh
+           └─controller-user-data.sh
 ```
 
 ### 主な機能
 
+- **段階的デプロイ**: Ansibleを使用して各コンポーネントを順番にデプロイ
+- **モジュール分割**: 各インフラコンポーネントを独立したPulumiスタックとして管理
 - **ブルー/グリーンデプロイメント**: Jenkinsの更新を無停止で行えるデュアル環境
 - **自動スケーリングエージェント**: EC2 SpotFleetによるコスト効率の高いJenkinsエージェント
 - **リカバリーモード**: 管理者アカウントロックアウト時などの緊急アクセス用モード
 - **データ永続性**: EFSによるJenkinsデータの永続化と高可用性の確保
-- **モジュール化された設計**: 保守性と再利用性を高めるスクリプト分離パターン
-- **最新版Jenkins対応**: 常に最新バージョンのJenkinsを使用可能
-
 
 ## トラブルシューティング
 
 - **Pulumiデプロイエラー**: `pulumi logs`でエラー詳細を確認
+- **Ansibleエラー**: `-vvv`オプションを追加して詳細なログを確認（例: `ansible-playbook -vvv playbooks/jenkins_setup_pipeline.yml`）
 - **AWS認証エラー**: `source scripts/aws-credentials.sh`を実行して認証情報を更新
+- **Pulumiログインエラー**: 環境変数`PULUMI_ACCESS_TOKEN`が正しく設定されているか確認
 - **Jenkinsへのアクセス問題**: セキュリティグループの設定を確認
 - **EFSマウント問題**: マウントターゲットの可用性を確認
+
+## 共有パラメータの確認と修正
+
+共有パラメータファイル（`all.yml`）が適切に設定されていることを確認してください。パラメータを変更する場合は以下の手順で行います：
+
+```bash
+# パラメータファイルを編集
+vi ansible/inventory/group_vars/all.yml
+
+# エディタで必要な変更を行った後、構文をチェック
+ansible-playbook playbooks/jenkins_setup_pipeline.yml -e "env=dev" --syntax-check
+
+# 変更を適用（コミットする前にチェックモードで実行）
+ansible-playbook playbooks/jenkins_setup_pipeline.yml -e "env=dev" --check
+```
 
 ## 注意事項
 
@@ -227,3 +243,25 @@ infrastructure-as-code/
 - AdministratorAccess権限は開発段階のみに使用し、本番環境では最小権限原則に従ってください
 - バックアップ戦略の実装を忘れずに行ってください
 - AWS認証情報は定期的に更新が必要です。セッションが切れた場合は`source scripts/aws-credentials.sh`を実行してください
+- Pulumiアクセストークンは安全に管理してください。環境変数として設定する場合は、他のユーザーに見えないように注意してください
+
+## 拡張方法
+
+リポジトリ構造は以下のように拡張可能です：
+
+1. 新しいコンポーネントの追加:
+```
+pulumi/
+  ├─network/          # 既存のネットワークスタック
+  ├─security/         # 既存のセキュリティスタック
+  ├─monitoring/       # 新しいモニタリングスタック
+  └─database/         # 新しいデータベーススタック
+```
+
+2. 新しいAnsibleプレイブックの追加:
+```
+ansible/playbooks/
+  ├─jenkins_setup_pipeline.yml      # 既存のメインパイプライン
+  ├─deploy_jenkins_network.yml      # 既存のネットワークデプロイ
+  └─deploy_monitoring.yml           # 新しいモニタリングデプロイ
+```

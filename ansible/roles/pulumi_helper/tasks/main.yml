@@ -1,0 +1,142 @@
+# Pulumiプロジェクト操作の共通ヘルパータスク
+# 
+# このロールは以下の機能を提供します：
+# - Pulumiの設定と認証
+# - スタックの初期化と選択（init_stack.yml）
+# - スタックのプレビュー（preview.yml）
+# - スタックのデプロイ（deploy.yml）
+# - スタックの削除（destroy.yml）
+# - スタックの更新（refresh.yml）
+# - スタック設定の管理（set_config.yml）
+# - スタック出力の取得（get_outputs.yml）
+# - TypeScriptプロジェクトのビルド（build.yml）
+
+# AWS環境の準備
+- name: Ensure AWS credential scripts are executable
+  ansible.builtin.file:
+    path: "{{ playbook_dir }}/../../scripts/aws-env.sh"
+    mode: '0755'
+  register: aws_env_script_perm
+  failed_when: false
+  no_log: true  # 詳細出力を抑制
+
+- name: Report AWS script permissions update
+  ansible.builtin.debug:
+    msg: "aws-env.sh スクリプトに実行権限を付与しました"
+  when: aws_env_script_perm.changed | default(false)
+
+- name: Ensure AWS credentials are properly set
+  ansible.builtin.include_role:
+    name: aws_setup
+
+# Pulumiの確認と準備
+- name: Check if Pulumi is installed
+  ansible.builtin.stat:
+    path: "/root/.pulumi/bin/pulumi"
+  register: pulumi_check
+  failed_when: false
+
+- name: Check root Pulumi installation
+  ansible.builtin.stat:
+    path: "/root/.pulumi/bin/pulumi"
+  register: pulumi_root_check
+  failed_when: false
+  when: not pulumi_check.stat.exists
+
+- name: Ensure Pulumi is available
+  ansible.builtin.fail:
+    msg: "Pulumi is not installed. Please run bootstrap setup first."
+  when: not pulumi_check.stat.exists and not pulumi_root_check.stat.exists
+
+- name: Set Pulumi path
+  ansible.builtin.set_fact:
+    pulumi_bin_path: "/root/.pulumi/bin/pulumi"
+
+# Pulumiのバージョン確認
+- name: Check Pulumi version
+  ansible.builtin.command: "{{ pulumi_bin_path }} version"
+  register: pulumi_version
+  changed_when: false
+  
+- name: Display Pulumi version
+  ansible.builtin.debug:
+    msg: "Using Pulumi version: {{ pulumi_version.stdout }}"
+  when: ansible_verbosity > 0
+
+# Pulumiのログイン状態確認
+- name: Check Pulumi login status
+  ansible.builtin.command: sudo {{ pulumi_bin_path }} whoami
+  register: pulumi_login_check
+  changed_when: false
+  failed_when: false
+  ignore_errors: true
+  
+- name: Display Pulumi login status
+  ansible.builtin.debug:
+    msg: "Pulumi login status: {{ 'Logged in as ' + pulumi_login_check.stdout if pulumi_login_check.rc == 0 else 'Not logged in' }}"
+
+# Pulumiログイン処理
+- name: Check for PULUMI_ACCESS_TOKEN in environment
+  ansible.builtin.set_fact:
+    pulumi_token_set: "{{ lookup('env', 'PULUMI_ACCESS_TOKEN') | length > 0 }}"
+
+- name: Login to Pulumi using access token from environment
+  ansible.builtin.command: sudo {{ pulumi_bin_path }} login
+  environment:
+    PULUMI_ACCESS_TOKEN: "{{ lookup('env', 'PULUMI_ACCESS_TOKEN') }}"
+  when: 
+    - pulumi_token_set 
+    - pulumi_login_check.rc != 0
+  register: pulumi_login_result
+  changed_when: pulumi_login_result.rc == 0
+  no_log: true  # 認証情報が含まれる可能性があるため、ログに出力しない
+
+- name: Warn about Pulumi login requirement
+  ansible.builtin.debug:
+    msg: >
+      WARNING: Pulumi is not logged in and no PULUMI_ACCESS_TOKEN environment variable was found.
+      Please set the PULUMI_ACCESS_TOKEN environment variable before running this playbook:
+      export PULUMI_ACCESS_TOKEN="pul-YOUR_ACCESS_TOKEN"
+  when: 
+    - not pulumi_token_set 
+    - pulumi_login_check.rc != 0
+
+- name: Verify Pulumi login after attempts
+  ansible.builtin.command: sudo {{ pulumi_bin_path }} whoami
+  register: pulumi_verify_login
+  failed_when: 
+    - pulumi_token_set 
+    - pulumi_verify_login.rc != 0
+  changed_when: false
+  when: pulumi_token_set
+  
+- name: Display Pulumi login verification
+  ansible.builtin.debug:
+    msg: "Pulumi login verified: {{ pulumi_verify_login.stdout if pulumi_verify_login.rc == 0 else 'Failed to verify login' }}"
+  when: pulumi_token_set
+
+# Pulumiコマンド定義
+- name: Set Pulumi standard tasks
+  ansible.builtin.set_fact:
+    pulumi_commands:
+      preview: "source {{ playbook_dir }}/../../scripts/aws-env.sh > /dev/null && eval $({{ playbook_dir }}/../../scripts/aws-env.sh) > /dev/null && sudo -E {{ pulumi_bin_path }} preview"
+      up: "source {{ playbook_dir }}/../../scripts/aws-env.sh > /dev/null && eval $({{ playbook_dir }}/../../scripts/aws-env.sh) > /dev/null && sudo -E {{ pulumi_bin_path }} up --yes"
+      destroy: "source {{ playbook_dir }}/../../scripts/aws-env.sh > /dev/null && eval $({{ playbook_dir }}/../../scripts/aws-env.sh) > /dev/null && sudo -E {{ pulumi_bin_path }} destroy --yes"
+      refresh: "source {{ playbook_dir }}/../../scripts/aws-env.sh > /dev/null && eval $({{ playbook_dir }}/../../scripts/aws-env.sh) > /dev/null && sudo -E {{ pulumi_bin_path }} refresh --yes"
+      stack_output: "source {{ playbook_dir }}/../../scripts/aws-env.sh > /dev/null && eval $({{ playbook_dir }}/../../scripts/aws-env.sh) > /dev/null && sudo -E {{ pulumi_bin_path }} stack output"
+      stack_ls: "source {{ playbook_dir }}/../../scripts/aws-env.sh > /dev/null && eval $({{ playbook_dir }}/../../scripts/aws-env.sh) > /dev/null && sudo -E {{ pulumi_bin_path }} stack ls"
+      config_set: "source {{ playbook_dir }}/../../scripts/aws-env.sh > /dev/null && eval $({{ playbook_dir }}/../../scripts/aws-env.sh) > /dev/null && sudo -E {{ pulumi_bin_path }} config set"
+      build: "npm run build"
+      tsc: "npx tsc"
+
+# 結果変数の初期化
+- name: Initialize result variables
+  ansible.builtin.set_fact:
+    pulumi_deployment_succeeded: false
+    pulumi_deployment_failed: false
+    pulumi_destroy_failed: false
+    pulumi_refresh_failed: false
+    pulumi_build_failed: false
+    pulumi_config_failed: false
+    stack_output_succeeded: false
+    stack_output_failed: false
