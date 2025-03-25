@@ -1,4 +1,0 @@
-name: jenkins-infrastructure
-runtime: nodejs
-description: Jenkins CI/CD infrastructure with blue-green deployment capability
-main: src/services/jenkins/index.ts

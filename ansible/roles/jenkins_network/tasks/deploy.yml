@@ -32,12 +32,12 @@
         name: pulumi_helper
         tasks_from: init_stack
       vars:
-        pulumi_project_path: "{{ pulumi_path }}/network"
+        pulumi_project_path: "{{ pulumi_path }}/jenkins-network"
         stack_name: "{{ env_name }}"
     
     - name: Configure network stack
       ansible.builtin.shell: |
-        cd {{ pulumi_path }}/network
+        cd {{ pulumi_path }}/jenkins-network
         source {{ scripts_dir }}/aws-env.sh 
         eval $({{ scripts_dir }}/aws-env.sh)
         
@@ -53,7 +53,7 @@
         name: pulumi_helper
         tasks_from: preview
       vars:
-        pulumi_project_path: "{{ pulumi_path }}/network"
+        pulumi_project_path: "{{ pulumi_path }}/jenkins-network"
     
     # Pulumiデプロイ
     - name: Deploy network stack
@@ -61,7 +61,7 @@
         name: pulumi_helper
         tasks_from: deploy
       vars:
-        pulumi_project_path: "{{ pulumi_path }}/network"
+        pulumi_project_path: "{{ pulumi_path }}/jenkins-network"
     
     # デプロイ後に少し待機してスタックが完全に更新されるのを待つ
     - name: Wait for stack outputs to be available
@@ -72,7 +72,7 @@
     # スタック出力の取得
     - name: Get VPC ID from stack outputs
       ansible.builtin.shell: |
-        cd {{ pulumi_path }}/network
+        cd {{ pulumi_path }}/jenkins-network
         source {{ scripts_dir }}/aws-env.sh 
         eval $({{ scripts_dir }}/aws-env.sh)
         
@@ -96,7 +96,7 @@
     # Public Subnet IDs取得
     - name: Get public subnet IDs
       ansible.builtin.shell: |
-        cd {{ pulumi_path }}/network
+        cd {{ pulumi_path }}/jenkins-network
         source {{ scripts_dir }}/aws-env.sh 
         eval $({{ scripts_dir }}/aws-env.sh)
         
@@ -113,7 +113,7 @@
     # Private Subnet IDs取得
     - name: Get private subnet IDs
       ansible.builtin.shell: |
-        cd {{ pulumi_path }}/network
+        cd {{ pulumi_path }}/jenkins-network
         source {{ scripts_dir }}/aws-env.sh 
         eval $({{ scripts_dir }}/aws-env.sh)
         

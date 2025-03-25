@@ -32,12 +32,12 @@
         name: pulumi_helper
         tasks_from: init_stack
       vars:
-        pulumi_project_path: "{{ pulumi_path }}/security"
+        pulumi_project_path: "{{ pulumi_path }}/jenkins-security"
         stack_name: "{{ env_name }}"
     
     - name: Configure security stack
       ansible.builtin.shell: |
-        cd {{ pulumi_path }}/security
+        cd {{ pulumi_path }}/jenkins-security
         source {{ scripts_dir }}/aws-env.sh 
         eval $({{ scripts_dir }}/aws-env.sh)
         
@@ -53,7 +53,7 @@
         name: pulumi_helper
         tasks_from: get_outputs
       vars:
-        pulumi_project_path: "{{ pulumi_path }}/network"
+        pulumi_project_path: "{{ pulumi_path }}/jenkins-network"
         output_name: "vpcId"
         mock_output: "mock-vpc-id-for-check-mode"
     
@@ -67,7 +67,7 @@
         name: pulumi_helper
         tasks_from: preview
       vars:
-        pulumi_project_path: "{{ pulumi_path }}/security"
+        pulumi_project_path: "{{ pulumi_path }}/jenkins-security"
     
     # Pulumiデプロイ
     - name: Deploy security stack
@@ -75,7 +75,7 @@
         name: pulumi_helper
         tasks_from: deploy
       vars:
-        pulumi_project_path: "{{ pulumi_path }}/security"
+        pulumi_project_path: "{{ pulumi_path }}/jenkins-security"
     
     # セキュリティグループIDの取得
     - name: Get ALB security group ID
@@ -83,7 +83,7 @@
         name: pulumi_helper
         tasks_from: get_outputs
       vars:
-        pulumi_project_path: "{{ pulumi_path }}/security"
+        pulumi_project_path: "{{ pulumi_path }}/jenkins-security"
         output_name: "albSecurityGroupId"
         mock_output: "mock-alb-sg-id"
     
@@ -96,7 +96,7 @@
         name: pulumi_helper
         tasks_from: get_outputs
       vars:
-        pulumi_project_path: "{{ pulumi_path }}/security"
+        pulumi_project_path: "{{ pulumi_path }}/jenkins-security"
         output_name: "jenkinsSecurityGroupId"
         mock_output: "mock-jenkins-sg-id"
     
@@ -109,7 +109,7 @@
         name: pulumi_helper
         tasks_from: get_outputs
       vars:
-        pulumi_project_path: "{{ pulumi_path }}/security"
+        pulumi_project_path: "{{ pulumi_path }}/jenkins-security"
         output_name: "jenkinsAgentSecurityGroupId"
         mock_output: "mock-agent-sg-id"
     
@@ -122,7 +122,7 @@
         name: pulumi_helper
         tasks_from: get_outputs
       vars:
-        pulumi_project_path: "{{ pulumi_path }}/security"
+        pulumi_project_path: "{{ pulumi_path }}/jenkins-security"
         output_name: "efsSecurityGroupId"
         mock_output: "mock-efs-sg-id"
     

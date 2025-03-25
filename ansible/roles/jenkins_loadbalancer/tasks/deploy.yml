@@ -33,12 +33,12 @@
         name: pulumi_helper
         tasks_from: init_stack
       vars:
-        pulumi_project_path: "{{ pulumi_path }}/loadbalancer"
+        pulumi_project_path: "{{ pulumi_path }}/jenkins-loadbalancer"
         stack_name: "{{ env_name }}"
     
     - name: Configure loadbalancer stack
       ansible.builtin.shell: |
-        cd {{ pulumi_path }}/loadbalancer
+        cd {{ pulumi_path }}/jenkins-loadbalancer
         source {{ scripts_dir }}/aws-env.sh 
         eval $({{ scripts_dir }}/aws-env.sh)
         
@@ -55,7 +55,7 @@
         name: pulumi_helper
         tasks_from: get_outputs
       vars:
-        pulumi_project_path: "{{ pulumi_path }}/network"
+        pulumi_project_path: "{{ pulumi_path }}/jenkins-network"
         output_name: "vpcId"
         mock_output: "mock-vpc-id-for-check-mode"
     
@@ -68,7 +68,7 @@
         name: pulumi_helper
         tasks_from: get_outputs
       vars:
-        pulumi_project_path: "{{ pulumi_path }}/security"
+        pulumi_project_path: "{{ pulumi_path }}/jenkins-security"
         output_name: "albSecurityGroupId"
         mock_output: "mock-alb-sg-id"
     
@@ -89,7 +89,7 @@
         name: pulumi_helper
         tasks_from: preview
       vars:
-        pulumi_project_path: "{{ pulumi_path }}/loadbalancer"
+        pulumi_project_path: "{{ pulumi_path }}/jenkins-loadbalancer"
     
     # Pulumiデプロイ
     - name: Deploy loadbalancer stack
@@ -97,7 +97,7 @@
         name: pulumi_helper
         tasks_from: deploy
       vars:
-        pulumi_project_path: "{{ pulumi_path }}/loadbalancer"
+        pulumi_project_path: "{{ pulumi_path }}/jenkins-loadbalancer"
     
     # デプロイ後に少し待機してスタックが完全に更新されるのを待つ
     - name: Wait for stack outputs to be available
@@ -111,7 +111,7 @@
         name: pulumi_helper
         tasks_from: get_outputs
       vars:
-        pulumi_project_path: "{{ pulumi_path }}/loadbalancer"
+        pulumi_project_path: "{{ pulumi_path }}/jenkins-loadbalancer"
         output_name: "albDnsName"
         mock_output: "mock-alb-dns-name"
     
@@ -125,7 +125,7 @@
         name: pulumi_helper
         tasks_from: get_outputs
       vars:
-        pulumi_project_path: "{{ pulumi_path }}/loadbalancer"
+        pulumi_project_path: "{{ pulumi_path }}/jenkins-loadbalancer"
         output_name: "blueTargetGroupArn"
         mock_output: "mock-blue-tg-arn"
     
@@ -139,7 +139,7 @@
         name: pulumi_helper
         tasks_from: get_outputs
       vars:
-        pulumi_project_path: "{{ pulumi_path }}/loadbalancer"
+        pulumi_project_path: "{{ pulumi_path }}/jenkins-loadbalancer"
         output_name: "greenTargetGroupArn"
         mock_output: "mock-green-tg-arn"
     
