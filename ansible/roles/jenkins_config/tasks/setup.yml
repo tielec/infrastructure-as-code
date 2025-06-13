@@ -189,15 +189,41 @@
       register: git_update_command
       changed_when: true
       
+    - name: Display raw command output for debugging
+      ansible.builtin.debug:
+        msg: "Raw output: {{ git_update_command.stdout | default('No output') }}"
+      when: git_update_command is defined
+      
     - name: Parse Git update command response
       ansible.builtin.set_fact:
         git_update_data: "{{ git_update_command.stdout | from_json }}"
-      when: git_update_command.stdout is defined and git_update_command.stdout != ''
+      when: 
+        - git_update_command.stdout is defined 
+        - git_update_command.stdout != ''
+        - git_update_command.rc == 0
       
-    - name: Set Git update command ID
+    - name: Set Git update command ID from parsed data
       ansible.builtin.set_fact:
         git_update_command_id: "{{ git_update_data.Command.CommandId }}"
-      when: git_update_data is defined and git_update_data.Command is defined
+      when: 
+        - git_update_data is defined 
+        - git_update_data.Command is defined
+        - git_update_data.Command.CommandId is defined
+    
+    - name: Extract command ID using alternative method if parsing failed
+      ansible.builtin.shell: |
+        echo '{{ git_update_command.stdout }}' | grep -o '"CommandId"[[:space:]]*:[[:space:]]*"[^"]*"' | cut -d'"' -f4 | head -1
+      register: command_id_extract
+      when: git_update_command_id is not defined and git_update_command.stdout is defined
+      
+    - name: Set Git update command ID from extraction
+      ansible.builtin.set_fact:
+        git_update_command_id: "{{ command_id_extract.stdout | trim }}"
+      when: 
+        - git_update_command_id is not defined
+        - command_id_extract is defined
+        - command_id_extract.stdout is defined
+        - command_id_extract.stdout != ''
       
     - name: Display command ID
       ansible.builtin.debug:
@@ -278,15 +304,41 @@
       register: efs_mount_command
       changed_when: true
       
+    - name: Display raw command output for debugging
+      ansible.builtin.debug:
+        msg: "Raw output: {{ efs_mount_command.stdout | default('No output') }}"
+      when: efs_mount_command is defined
+      
     - name: Parse EFS mount command response
       ansible.builtin.set_fact:
         efs_mount_data: "{{ efs_mount_command.stdout | from_json }}"
-      when: efs_mount_command.stdout is defined and efs_mount_command.stdout != ''
+      when: 
+        - efs_mount_command.stdout is defined 
+        - efs_mount_command.stdout != ''
+        - efs_mount_command.rc == 0
       
-    - name: Set EFS mount command ID
+    - name: Set EFS mount command ID from parsed data
       ansible.builtin.set_fact:
         efs_mount_command_id: "{{ efs_mount_data.Command.CommandId }}"
-      when: efs_mount_data is defined and efs_mount_data.Command is defined
+      when: 
+        - efs_mount_data is defined 
+        - efs_mount_data.Command is defined
+        - efs_mount_data.Command.CommandId is defined
+    
+    - name: Extract command ID using alternative method if parsing failed
+      ansible.builtin.shell: |
+        echo '{{ efs_mount_command.stdout }}' | grep -o '"CommandId"[[:space:]]*:[[:space:]]*"[^"]*"' | cut -d'"' -f4 | head -1
+      register: command_id_extract
+      when: efs_mount_command_id is not defined and efs_mount_command.stdout is defined
+      
+    - name: Set EFS mount command ID from extraction
+      ansible.builtin.set_fact:
+        efs_mount_command_id: "{{ command_id_extract.stdout | trim }}"
+      when: 
+        - efs_mount_command_id is not defined
+        - command_id_extract is defined
+        - command_id_extract.stdout is defined
+        - command_id_extract.stdout != ''
       
     - name: Display command ID
       ansible.builtin.debug:
@@ -365,15 +417,41 @@
       register: jenkins_install_command
       changed_when: true
       
+    - name: Display raw command output for debugging
+      ansible.builtin.debug:
+        msg: "Raw output: {{ jenkins_install_command.stdout | default('No output') }}"
+      when: jenkins_install_command is defined
+      
     - name: Parse Jenkins install command response
       ansible.builtin.set_fact:
         jenkins_install_data: "{{ jenkins_install_command.stdout | from_json }}"
-      when: jenkins_install_command.stdout is defined and jenkins_install_command.stdout != ''
+      when: 
+        - jenkins_install_command.stdout is defined 
+        - jenkins_install_command.stdout != ''
+        - jenkins_install_command.rc == 0
       
-    - name: Set Jenkins install command ID
+    - name: Set Jenkins install command ID from parsed data
       ansible.builtin.set_fact:
         jenkins_install_command_id: "{{ jenkins_install_data.Command.CommandId }}"
-      when: jenkins_install_data is defined and jenkins_install_data.Command is defined
+      when: 
+        - jenkins_install_data is defined 
+        - jenkins_install_data.Command is defined
+        - jenkins_install_data.Command.CommandId is defined
+    
+    - name: Extract command ID using alternative method if parsing failed
+      ansible.builtin.shell: |
+        echo '{{ jenkins_install_command.stdout }}' | grep -o '"CommandId"[[:space:]]*:[[:space:]]*"[^"]*"' | cut -d'"' -f4 | head -1
+      register: command_id_extract
+      when: jenkins_install_command_id is not defined and jenkins_install_command.stdout is defined
+      
+    - name: Set Jenkins install command ID from extraction
+      ansible.builtin.set_fact:
+        jenkins_install_command_id: "{{ command_id_extract.stdout | trim }}"
+      when: 
+        - jenkins_install_command_id is not defined
+        - command_id_extract is defined
+        - command_id_extract.stdout is defined
+        - command_id_extract.stdout != ''
       
     - name: Display command ID
       ansible.builtin.debug:
@@ -452,15 +530,41 @@
       register: jenkins_configure_command
       changed_when: true
       
+    - name: Display raw command output for debugging
+      ansible.builtin.debug:
+        msg: "Raw output: {{ jenkins_configure_command.stdout | default('No output') }}"
+      when: jenkins_configure_command is defined
+      
     - name: Parse Jenkins configure command response
       ansible.builtin.set_fact:
         jenkins_configure_data: "{{ jenkins_configure_command.stdout | from_json }}"
-      when: jenkins_configure_command.stdout is defined and jenkins_configure_command.stdout != ''
+      when: 
+        - jenkins_configure_command.stdout is defined 
+        - jenkins_configure_command.stdout != ''
+        - jenkins_configure_command.rc == 0
       
-    - name: Set Jenkins configure command ID
+    - name: Set Jenkins configure command ID from parsed data
       ansible.builtin.set_fact:
         jenkins_configure_command_id: "{{ jenkins_configure_data.Command.CommandId }}"
-      when: jenkins_configure_data is defined and jenkins_configure_data.Command is defined
+      when: 
+        - jenkins_configure_data is defined 
+        - jenkins_configure_data.Command is defined
+        - jenkins_configure_data.Command.CommandId is defined
+    
+    - name: Extract command ID using alternative method if parsing failed
+      ansible.builtin.shell: |
+        echo '{{ jenkins_configure_command.stdout }}' | grep -o '"CommandId"[[:space:]]*:[[:space:]]*"[^"]*"' | cut -d'"' -f4 | head -1
+      register: command_id_extract
+      when: jenkins_configure_command_id is not defined and jenkins_configure_command.stdout is defined
+      
+    - name: Set Jenkins configure command ID from extraction
+      ansible.builtin.set_fact:
+        jenkins_configure_command_id: "{{ command_id_extract.stdout | trim }}"
+      when: 
+        - jenkins_configure_command_id is not defined
+        - command_id_extract is defined
+        - command_id_extract.stdout is defined
+        - command_id_extract.stdout != ''
       
     - name: Display command ID
       ansible.builtin.debug:
@@ -539,15 +643,41 @@
       register: jenkins_startup_command
       changed_when: true
       
+    - name: Display raw command output for debugging
+      ansible.builtin.debug:
+        msg: "Raw output: {{ jenkins_startup_command.stdout | default('No output') }}"
+      when: jenkins_startup_command is defined
+      
     - name: Parse Jenkins startup command response
       ansible.builtin.set_fact:
         jenkins_startup_data: "{{ jenkins_startup_command.stdout | from_json }}"
-      when: jenkins_startup_command.stdout is defined and jenkins_startup_command.stdout != ''
+      when: 
+        - jenkins_startup_command.stdout is defined 
+        - jenkins_startup_command.stdout != ''
+        - jenkins_startup_command.rc == 0
       
-    - name: Set Jenkins startup command ID
+    - name: Set Jenkins startup command ID from parsed data
       ansible.builtin.set_fact:
         jenkins_startup_command_id: "{{ jenkins_startup_data.Command.CommandId }}"
-      when: jenkins_startup_data is defined and jenkins_startup_data.Command is defined
+      when: 
+        - jenkins_startup_data is defined 
+        - jenkins_startup_data.Command is defined
+        - jenkins_startup_data.Command.CommandId is defined
+    
+    - name: Extract command ID using alternative method if parsing failed
+      ansible.builtin.shell: |
+        echo '{{ jenkins_startup_command.stdout }}' | grep -o '"CommandId"[[:space:]]*:[[:space:]]*"[^"]*"' | cut -d'"' -f4 | head -1
+      register: command_id_extract
+      when: jenkins_startup_command_id is not defined and jenkins_startup_command.stdout is defined
+      
+    - name: Set Jenkins startup command ID from extraction
+      ansible.builtin.set_fact:
+        jenkins_startup_command_id: "{{ command_id_extract.stdout | trim }}"
+      when: 
+        - jenkins_startup_command_id is not defined
+        - command_id_extract is defined
+        - command_id_extract.stdout is defined
+        - command_id_extract.stdout != ''
       
     - name: Display command ID
       ansible.builtin.debug:
