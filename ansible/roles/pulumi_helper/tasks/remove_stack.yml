@@ -51,7 +51,19 @@
       when: 
         - not ansible_check_mode
         - stack_rm_result is defined
+        - stack_rm_result.rc is defined
         - stack_rm_result.rc == 0
+
+    # スタック削除に失敗した場合のメッセージ
+    - name: Display stack removal failure
+      ansible.builtin.debug:
+        msg: "Failed to remove stack '{{ stack_name }}'. Return code: {{ stack_rm_result.rc | default('N/A') }}"
+      when:
+        - not ansible_check_mode
+        - stack_rm_result is defined
+        - stack_rm_result.rc is defined
+        - stack_rm_result.rc != 0
+  
   rescue:
     - name: Display error message on stack removal failure
       ansible.builtin.debug:
