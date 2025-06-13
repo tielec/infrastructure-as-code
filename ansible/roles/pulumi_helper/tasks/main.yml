@@ -65,7 +65,9 @@
 
 # Pulumiのログイン状態確認
 - name: Check Pulumi login status
-  ansible.builtin.command: sudo {{ pulumi_bin_path }} whoami
+  ansible.builtin.shell: |
+    export PULUMI_ACCESS_TOKEN="{{ lookup('env', 'PULUMI_ACCESS_TOKEN') }}"
+    sudo -E {{ pulumi_bin_path }} whoami
   register: pulumi_login_check
   changed_when: false
   failed_when: false
@@ -81,9 +83,9 @@
     pulumi_token_set: "{{ lookup('env', 'PULUMI_ACCESS_TOKEN') | length > 0 }}"
 
 - name: Login to Pulumi using access token from environment
-  ansible.builtin.command: sudo {{ pulumi_bin_path }} login
-  environment:
-    PULUMI_ACCESS_TOKEN: "{{ lookup('env', 'PULUMI_ACCESS_TOKEN') }}"
+  ansible.builtin.shell: |
+    export PULUMI_ACCESS_TOKEN="{{ lookup('env', 'PULUMI_ACCESS_TOKEN') }}"
+    sudo -E {{ pulumi_bin_path }} login
   when: 
     - pulumi_token_set 
     - pulumi_login_check.rc != 0
@@ -102,7 +104,9 @@
     - pulumi_login_check.rc != 0
 
 - name: Verify Pulumi login after attempts
-  ansible.builtin.command: sudo {{ pulumi_bin_path }} whoami
+  ansible.builtin.shell: |
+    export PULUMI_ACCESS_TOKEN="{{ lookup('env', 'PULUMI_ACCESS_TOKEN') }}"
+    sudo -E {{ pulumi_bin_path }} whoami
   register: pulumi_verify_login
   failed_when: 
     - pulumi_token_set 
@@ -115,17 +119,18 @@
     msg: "Pulumi login verified: {{ pulumi_verify_login.stdout if pulumi_verify_login.rc == 0 else 'Failed to verify login' }}"
   when: pulumi_token_set
 
-# Pulumiコマンド定義
+# Pulumiコマンド定義（PULUMI_ACCESS_TOKENを含むように修正）
 - name: Set Pulumi standard tasks
   ansible.builtin.set_fact:
     pulumi_commands:
-      preview: "source {{ playbook_dir }}/../../scripts/aws-env.sh > /dev/null && eval $({{ playbook_dir }}/../../scripts/aws-env.sh) > /dev/null && sudo -E {{ pulumi_bin_path }} preview"
-      up: "source {{ playbook_dir }}/../../scripts/aws-env.sh > /dev/null && eval $({{ playbook_dir }}/../../scripts/aws-env.sh) > /dev/null && sudo -E {{ pulumi_bin_path }} up --yes"
-      destroy: "source {{ playbook_dir }}/../../scripts/aws-env.sh > /dev/null && eval $({{ playbook_dir }}/../../scripts/aws-env.sh) > /dev/null && sudo -E {{ pulumi_bin_path }} destroy --yes"
-      refresh: "source {{ playbook_dir }}/../../scripts/aws-env.sh > /dev/null && eval $({{ playbook_dir }}/../../scripts/aws-env.sh) > /dev/null && sudo -E {{ pulumi_bin_path }} refresh --yes"
-      stack_output: "source {{ playbook_dir }}/../../scripts/aws-env.sh > /dev/null && eval $({{ playbook_dir }}/../../scripts/aws-env.sh) > /dev/null && sudo -E {{ pulumi_bin_path }} stack output"
-      stack_ls: "source {{ playbook_dir }}/../../scripts/aws-env.sh > /dev/null && eval $({{ playbook_dir }}/../../scripts/aws-env.sh) > /dev/null && sudo -E {{ pulumi_bin_path }} stack ls"
-      config_set: "source {{ playbook_dir }}/../../scripts/aws-env.sh > /dev/null && eval $({{ playbook_dir }}/../../scripts/aws-env.sh) > /dev/null && sudo -E {{ pulumi_bin_path }} config set"
+      preview: "export PULUMI_ACCESS_TOKEN=\"{{ lookup('env', 'PULUMI_ACCESS_TOKEN') }}\"; source {{ playbook_dir }}/../../scripts/aws-env.sh > /dev/null && eval $({{ playbook_dir }}/../../scripts/aws-env.sh) > /dev/null && sudo -E {{ pulumi_bin_path }} preview"
+      up: "export PULUMI_ACCESS_TOKEN=\"{{ lookup('env', 'PULUMI_ACCESS_TOKEN') }}\"; source {{ playbook_dir }}/../../scripts/aws-env.sh > /dev/null && eval $({{ playbook_dir }}/../../scripts/aws-env.sh) > /dev/null && sudo -E {{ pulumi_bin_path }} up --yes"
+      destroy: "export PULUMI_ACCESS_TOKEN=\"{{ lookup('env', 'PULUMI_ACCESS_TOKEN') }}\"; source {{ playbook_dir }}/../../scripts/aws-env.sh > /dev/null && eval $({{ playbook_dir }}/../../scripts/aws-env.sh) > /dev/null && sudo -E {{ pulumi_bin_path }} destroy --yes"
+      refresh: "export PULUMI_ACCESS_TOKEN=\"{{ lookup('env', 'PULUMI_ACCESS_TOKEN') }}\"; source {{ playbook_dir }}/../../scripts/aws-env.sh > /dev/null && eval $({{ playbook_dir }}/../../scripts/aws-env.sh) > /dev/null && sudo -E {{ pulumi_bin_path }} refresh --yes"
+      stack_output: "export PULUMI_ACCESS_TOKEN=\"{{ lookup('env', 'PULUMI_ACCESS_TOKEN') }}\"; source {{ playbook_dir }}/../../scripts/aws-env.sh > /dev/null && eval $({{ playbook_dir }}/../../scripts/aws-env.sh) > /dev/null && sudo -E {{ pulumi_bin_path }} stack output"
+      stack_ls: "export PULUMI_ACCESS_TOKEN=\"{{ lookup('env', 'PULUMI_ACCESS_TOKEN') }}\"; source {{ playbook_dir }}/../../scripts/aws-env.sh > /dev/null && eval $({{ playbook_dir }}/../../scripts/aws-env.sh) > /dev/null && sudo -E {{ pulumi_bin_path }} stack ls"
+      stack_rm: "export PULUMI_ACCESS_TOKEN=\"{{ lookup('env', 'PULUMI_ACCESS_TOKEN') }}\"; source {{ playbook_dir }}/../../scripts/aws-env.sh > /dev/null && eval $({{ playbook_dir }}/../../scripts/aws-env.sh) > /dev/null && sudo -E {{ pulumi_bin_path }} stack rm --yes"
+      config_set: "export PULUMI_ACCESS_TOKEN=\"{{ lookup('env', 'PULUMI_ACCESS_TOKEN') }}\"; source {{ playbook_dir }}/../../scripts/aws-env.sh > /dev/null && eval $({{ playbook_dir }}/../../scripts/aws-env.sh) > /dev/null && sudo -E {{ pulumi_bin_path }} config set"
       build: "npm run build"
       tsc: "npx tsc"
 
@@ -140,3 +145,5 @@
     pulumi_config_failed: false
     stack_output_succeeded: false
     stack_output_failed: false
+    stack_rm_failed: false
+    stack_init_failed: false

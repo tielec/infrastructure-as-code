@@ -1,0 +1,198 @@
+---
+# jenkins_teardown_pipeline.yml
+# Jenkins環境のコンポーネントを逆順で削除するプレイブック
+
+- name: Jenkins Infrastructure Teardown Pipeline
+  hosts: localhost
+  connection: local
+  gather_facts: yes
+  
+  vars:
+    # 環境名はコマンドラインから指定可能
+    env_name: "{{ env | default('dev') }}"
+    # パスを明示的に定義
+    scripts_dir: "{{ playbook_dir }}/../../scripts"
+    pulumi_path: "{{ playbook_dir }}/../../pulumi"
+  
+  pre_tasks:
+    # all.yml から変数を読み込む
+    - name: Include group_vars/all.yml
+      ansible.builtin.include_vars:
+        file: "{{ playbook_dir }}/../inventory/group_vars/all.yml"
+        
+    # 必要な変数を設定
+    - name: Set required variables from all.yml
+      ansible.builtin.set_fact:
+        project_name: "{{ infra.project_name }}"
+        aws_region_name: "{{ infra.aws.default_region }}"
+        network_project_name: "{{ infra.pulumi.network_project }}"
+        security_project_name: "{{ infra.pulumi.security_project }}"
+        storage_project_name: "{{ infra.pulumi.storage_project }}"
+        loadbalancer_project_name: "{{ infra.pulumi.loadbalancer_project }}"
+        controller_project_name: "{{ infra.pulumi.controller_project }}"
+        agent_project_name: "{{ infra.pulumi.agent_project }}"
+        config_project_name: "{{ infra.pulumi.config_project }}"
+    
+    # 各フラグは別々のステップで設定する
+    - name: Set confirm_destroy flag
+      ansible.builtin.set_fact:
+        confirm_destroy: "{{ confirm | default(false) }}"
+
+    # デバッグ出力を追加して変数の値を確認
+    - name: Debug confirm variable
+      ansible.builtin.debug:
+        msg: "confirm variable is: {{ confirm | default('not set') }}, confirm_destroy is: {{ confirm_destroy }}"
+      when: ansible_verbosity > 0
+      
+    - name: Set remove_stacks flag
+      ansible.builtin.set_fact:
+        remove_stack_flag: "{{ remove_stacks | default(false) }}"
+      
+    - name: Set component teardown flags
+      ansible.builtin.set_fact:
+        tear_config_flag: "{{ tear_config | default(true) }}"
+        tear_agent_flag: "{{ tear_agent | default(true) }}"
+        tear_controller_flag: "{{ tear_controller | default(true) }}"
+        tear_loadbalancer_flag: "{{ tear_loadbalancer | default(true) }}"
+        tear_storage_flag: "{{ tear_storage | default(true) }}"
+        tear_security_flag: "{{ tear_security | default(true) }}"
+        tear_network_flag: "{{ tear_network | default(true) }}"
+      
+  roles:
+    - aws_setup
+    - pulumi_helper
+    
+  tasks:
+    - name: Check scripts directory exists
+      ansible.builtin.stat:
+        path: "{{ scripts_dir }}"
+      register: scripts_dir_stat
+      no_log: true
+      
+    - name: Fail if scripts directory doesn't exist
+      ansible.builtin.fail:
+        msg: "Scripts directory doesn't exist: {{ scripts_dir }}"
+      when: not scripts_dir_stat.stat.exists
+      
+    - name: Ensure all shell scripts have proper execute permissions
+      ansible.builtin.find:
+        paths: "{{ scripts_dir }}"
+        patterns: "*.sh"
+        recurse: yes
+      register: script_files
+      no_log: true
+      
+    - name: Set execute permissions on shell scripts
+      ansible.builtin.file:
+        path: "{{ item.path }}"
+        mode: "0755"
+      loop: "{{ script_files.files }}"
+      register: script_perm_updates
+      no_log: true
+        
+    - name: Display teardown information
+      ansible.builtin.debug:
+        msg: |
+          Jenkins Infrastructure Teardown Pipeline
+          ==================================
+          Project: {{ project_name }}
+          Environment: {{ env_name }}
+          AWS Region: {{ aws_region_name }}
+          
+          Components to destroy:
+          - Config: {{ tear_config_flag }}
+          - Agent: {{ tear_agent_flag }}
+          - Controller: {{ tear_controller_flag }}
+          - LoadBalancer: {{ tear_loadbalancer_flag }}
+          - Storage: {{ tear_storage_flag }}
+          - Security: {{ tear_security_flag }}
+          - Network: {{ tear_network_flag }}
+          
+          Remove Pulumi stacks: {{ remove_stack_flag }}
+          
+          WARNING: This will destroy your Jenkins infrastructure!
+          Use --extra-vars "confirm=true" to proceed.
+    
+    # 削除確認（confirm=trueが指定されていない場合は中断）
+    - name: Verify teardown confirmation
+      ansible.builtin.fail:
+        msg: "Teardown not confirmed. Please run with --extra-vars 'confirm=true' to proceed."
+      when: not confirm_destroy | bool
+    
+    # 確認後にプロセスを継続
+    - name: Confirm teardown process
+      ansible.builtin.debug:
+        msg: "Teardown confirmed. Proceeding with infrastructure destruction..."
+      when: confirm_destroy | bool
+    
+    # 0. Config削除（SSMドキュメント）
+    - name: Destroy Jenkins Configuration Resources
+      ansible.builtin.include_role:
+        name: jenkins_config
+      vars:
+        operation: "destroy"
+        remove_stacks: "{{ remove_stack_flag }}"
+      when: tear_config_flag | bool
+    
+    # 1. エージェント削除
+    - name: Destroy Agent Infrastructure
+      ansible.builtin.include_role:
+        name: jenkins_agent
+      vars:
+        operation: "destroy"
+        remove_stacks: "{{ remove_stack_flag }}"
+      when: tear_agent_flag | bool
+    
+    # 2. コントローラー削除
+    - name: Destroy Controller Infrastructure
+      ansible.builtin.include_role:
+        name: jenkins_controller
+      vars:
+        operation: "destroy"
+        remove_stacks: "{{ remove_stack_flag }}"
+      when: tear_controller_flag | bool
+    
+    # 3. ロードバランサー削除
+    - name: Destroy LoadBalancer Infrastructure
+      ansible.builtin.include_role:
+        name: jenkins_loadbalancer
+      vars:
+        operation: "destroy"
+        remove_stacks: "{{ remove_stack_flag }}"
+      when: tear_loadbalancer_flag | bool
+    
+    # 4. ストレージ削除
+    - name: Destroy Storage Infrastructure
+      ansible.builtin.include_role:
+        name: jenkins_storage
+      vars:
+        operation: "destroy"
+        remove_stacks: "{{ remove_stack_flag }}"
+      when: tear_storage_flag | bool
+    
+    # 5. セキュリティグループ削除
+    - name: Destroy Security Groups
+      ansible.builtin.include_role:
+        name: jenkins_security
+      vars:
+        operation: "destroy"
+        remove_stacks: "{{ remove_stack_flag }}"
+      when: tear_security_flag | bool
+    
+    # 6. ネットワーク削除（最後に実行）
+    - name: Destroy Network Infrastructure
+      ansible.builtin.include_role:
+        name: jenkins_network
+      vars:
+        operation: "destroy"
+        remove_stacks: "{{ remove_stack_flag }}"
+      when: tear_network_flag | bool
+    
+    # 削除結果のサマリー表示
+    - name: Display teardown results
+      ansible.builtin.debug:
+        msg: |
+          Jenkins Infrastructure Teardown Results
+          =====================================
+          Teardown process completed.
+          Check the logs above for details of each component's status.

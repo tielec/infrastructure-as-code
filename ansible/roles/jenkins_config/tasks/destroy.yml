@@ -1,0 +1,64 @@
+---
+# Jenkins設定リソース削除タスク
+
+- name: Display config destruction information
+  ansible.builtin.debug:
+    msg: |
+      Destroying Jenkins Configuration Resources:
+      - Project: {{ project_name }}
+      - Config Pulumi Project: {{ config_project_name }}
+      - Environment: {{ env_name }}
+      - Remove Stack: {{ remove_stacks | default(false) }}
+
+# ファイル権限設定
+- name: Ensure aws-env.sh has execute permissions
+  ansible.builtin.file:
+    path: "{{ scripts_dir }}/aws-env.sh"
+    mode: '0755'
+  register: aws_env_script_permission
+  no_log: true  # 詳細なログを抑制
+
+# Pulumiによる削除
+- name: Destroy Configuration Resources with Pulumi
+  block:
+    # Pulumiヘルパータスクを呼び出す
+    - name: Initialize config stack
+      ansible.builtin.include_role:
+        name: pulumi_helper
+        tasks_from: init_stack
+      vars:
+        pulumi_project_path: "{{ pulumi_path }}/jenkins-config"
+        stack_name: "{{ env_name }}"
+    
+    # Pulumiリソースの削除
+    - name: Destroy config resources with Pulumi
+      ansible.builtin.include_role:
+        name: pulumi_helper
+        tasks_from: destroy
+      vars:
+        pulumi_project_path: "{{ pulumi_path }}/jenkins-config"
+    
+    # スタック自体の削除（オプション）
+    - name: Remove config stack (if requested)
+      ansible.builtin.include_role:
+        name: pulumi_helper
+        tasks_from: remove_stack
+      vars:
+        pulumi_project_path: "{{ pulumi_path }}/jenkins-config"
+        stack_name: "{{ env_name }}"
+      when: remove_stacks | default(false) | bool
+    
+    # 削除ステータスの設定
+    - name: Set config destruction status on success
+      ansible.builtin.set_fact:
+        config_destroyed: true
+  
+  rescue:
+    # エラーハンドリング
+    - name: Set config destruction status on failure
+      ansible.builtin.set_fact:
+        config_destroyed: false
+    
+    - name: Display error
+      ansible.builtin.debug:
+        msg: "Failed to destroy config resources. See error details above."

@@ -44,27 +44,28 @@ const efsFileSystem = new aws.efs.FileSystem(`${projectName}-efs`, {
     }],
 });
 
-// EFSマウントターゲットの作成 (プライベートサブネットに1つずつ)
-const mountTargets = pulumi.all([privateSubnetAId, privateSubnetBId, efsSecurityGroupId])
-    .apply(([subnetA, subnetB, securityGroupId]) => {
-        const targets = [];
-        
-        // サブネットAのマウントターゲット
-        targets.push(new aws.efs.MountTarget(`${projectName}-efs-mt-a`, {
-            fileSystemId: efsFileSystem.id,
-            subnetId: subnetA,
-            securityGroups: [securityGroupId],
-        }));
-        
-        // サブネットBのマウントターゲット
-        targets.push(new aws.efs.MountTarget(`${projectName}-efs-mt-b`, {
-            fileSystemId: efsFileSystem.id,
-            subnetId: subnetB,
-            securityGroups: [securityGroupId],
-        }));
-        
-        return targets;
-    });
+// マウントターゲットを個別に作成（削除順序を制御するため）
+const mountTargetA = new aws.efs.MountTarget(`${projectName}-efs-mt-a`, {
+    fileSystemId: efsFileSystem.id,
+    subnetId: privateSubnetAId,
+    securityGroups: [efsSecurityGroupId],
+}, {
+    // 明示的な依存関係と削除順序の設定
+    dependsOn: [efsFileSystem],
+    // 削除前にEFSファイルシステムが削除されないようにする
+    deleteBeforeReplace: true,
+});
+
+const mountTargetB = new aws.efs.MountTarget(`${projectName}-efs-mt-b`, {
+    fileSystemId: efsFileSystem.id,
+    subnetId: privateSubnetBId,
+    securityGroups: [efsSecurityGroupId],
+}, {
+    // 明示的な依存関係と削除順序の設定
+    dependsOn: [efsFileSystem],
+    // 削除前にEFSファイルシステムが削除されないようにする
+    deleteBeforeReplace: true,
+});
 
 // EFSアクセスポイント (Jenkinsホームディレクトリ用)
 const jenkinsAccessPoint = new aws.efs.AccessPoint(`${projectName}-jenkins-ap`, {
@@ -85,6 +86,9 @@ const jenkinsAccessPoint = new aws.efs.AccessPoint(`${projectName}-jenkins-ap`, 
         Name: `${projectName}-jenkins-ap-${environment}`,
         Environment: environment,
     },
+}, {
+    // アクセスポイントも明示的に依存関係を設定
+    dependsOn: [efsFileSystem, mountTargetA, mountTargetB],
 });
 
 // エクスポート
@@ -93,7 +97,5 @@ export const efsFileSystemArn = efsFileSystem.arn;
 export const efsFileSystemDnsName = pulumi.interpolate`${efsFileSystem.id}.efs.${aws.config.region}.amazonaws.com`;
 export const jenkinsAccessPointId = jenkinsAccessPoint.id;
 export const jenkinsAccessPointArn = jenkinsAccessPoint.arn;
-
-// マウントターゲットIDのエクスポート - 型定義を追加
-export const mountTargetA = mountTargets.apply((targets: aws.efs.MountTarget[]) => targets[0].id);
-export const mountTargetB = mountTargets.apply((targets: aws.efs.MountTarget[]) => targets[1].id);
+export const mountTargetAId = mountTargetA.id;
+export const mountTargetBId = mountTargetB.id;
