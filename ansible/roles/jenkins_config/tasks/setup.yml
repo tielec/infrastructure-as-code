@@ -227,32 +227,40 @@
       ansible.builtin.debug:
         msg: "Command status: {{ command_status_result.stdout | default('Unknown') }}"
       
-    - name: Fetch Git update command output when successful
+    - name: Fetch Git update command output
       ansible.builtin.shell: |
         eval $({{ scripts_dir }}/aws-env.sh)
         aws ssm get-command-invocation \
           --region {{ aws_region_name }} \
           --command-id "{{ git_update_command_id }}" \
           --instance-id "{{ jenkins_instance_id }}" \
-          --query "[StandardOutputContent,StandardErrorContent]" \
-          --output text 2>&1 | grep -v "^export"
-      register: git_update_output
-      when: 
-        - git_update_command_id is defined
-        - command_status_result.stdout == 'Success'
+          --output json 2>&1 | grep -v "^export"
+      register: git_update_output_raw
+      when: git_update_command_id is defined
       ignore_errors: true
+      
+    - name: Parse Git update command output
+      ansible.builtin.set_fact:
+        git_update_output: "{{ git_update_output_raw.stdout | from_json }}"
+      when: 
+        - git_update_output_raw is defined
+        - git_update_output_raw.stdout is defined
+        - git_update_output_raw.rc == 0
       
     - name: Display Git update output
       ansible.builtin.debug:
         msg: |
           Git repository update output:
-          {{ git_update_output.stdout | default('No output available') }}
+          Standard Output: {{ git_update_output.StandardOutputContent | default('No output') }}
+          Standard Error: {{ git_update_output.StandardErrorContent | default('No error') }}
       when: git_update_output is defined
       
     - name: Mark Git update as successful
       ansible.builtin.set_fact:
         git_update_complete: true
-      when: command_status_result.stdout == 'Success'
+      when: 
+        - command_status_result.stdout == 'Success'
+        - git_update_output is defined
       
   rescue:
     - name: Mark Git update as failed
@@ -329,17 +337,27 @@
           --region {{ aws_region_name }} \
           --command-id "{{ efs_mount_command_id }}" \
           --instance-id "{{ jenkins_instance_id }}" \
-          --query "[StandardOutputContent,StandardErrorContent]" \
-          --output text 2>&1 | grep -v "^export"
-      register: efs_mount_output
+          --output json 2>&1 | grep -v "^export"
+      register: efs_mount_output_raw
       when: efs_mount_command_id is defined
       ignore_errors: true
+      
+    - name: Parse EFS mount command output
+      ansible.builtin.set_fact:
+        efs_mount_output: "{{ efs_mount_output_raw.stdout | from_json }}"
+      when: 
+        - efs_mount_output_raw is defined
+        - efs_mount_output_raw.stdout is defined
+        - efs_mount_output_raw.rc == 0
       
     - name: Display EFS mount output
       ansible.builtin.debug:
         msg: |
           EFS mount output:
-          {{ efs_mount_output.stdout | default('No output available') }}
+          Status: {{ command_status_result.stdout }}
+          Standard Output: {{ efs_mount_output.StandardOutputContent | default('No output') }}
+          Standard Error: {{ efs_mount_output.StandardErrorContent | default('No error') }}
+          Status Details: {{ efs_mount_output.StatusDetails | default('No details') }}
       when: efs_mount_output is defined
       
     - name: Mark EFS mount as successful
@@ -422,17 +440,27 @@
           --region {{ aws_region_name }} \
           --command-id "{{ jenkins_install_command_id }}" \
           --instance-id "{{ jenkins_instance_id }}" \
-          --query "[StandardOutputContent,StandardErrorContent]" \
-          --output text 2>&1 | grep -v "^export"
-      register: jenkins_install_output
+          --output json 2>&1 | grep -v "^export"
+      register: jenkins_install_output_raw
       when: jenkins_install_command_id is defined
       ignore_errors: true
+      
+    - name: Parse Jenkins install command output
+      ansible.builtin.set_fact:
+        jenkins_install_output: "{{ jenkins_install_output_raw.stdout | from_json }}"
+      when: 
+        - jenkins_install_output_raw is defined
+        - jenkins_install_output_raw.stdout is defined
+        - jenkins_install_output_raw.rc == 0
       
     - name: Display Jenkins install output
       ansible.builtin.debug:
         msg: |
           Jenkins installation output:
-          {{ jenkins_install_output.stdout | default('No output available') }}
+          Status: {{ command_status_result.stdout }}
+          Standard Output: {{ jenkins_install_output.StandardOutputContent | default('No output') }}
+          Standard Error: {{ jenkins_install_output.StandardErrorContent | default('No error') }}
+          Status Details: {{ jenkins_install_output.StatusDetails | default('No details') }}
       when: jenkins_install_output is defined
       
     - name: Mark Jenkins install as successful
@@ -515,17 +543,27 @@
           --region {{ aws_region_name }} \
           --command-id "{{ jenkins_configure_command_id }}" \
           --instance-id "{{ jenkins_instance_id }}" \
-          --query "[StandardOutputContent,StandardErrorContent]" \
-          --output text 2>&1 | grep -v "^export"
-      register: jenkins_configure_output
+          --output json 2>&1 | grep -v "^export"
+      register: jenkins_configure_output_raw
       when: jenkins_configure_command_id is defined
       ignore_errors: true
+      
+    - name: Parse Jenkins configure command output
+      ansible.builtin.set_fact:
+        jenkins_configure_output: "{{ jenkins_configure_output_raw.stdout | from_json }}"
+      when: 
+        - jenkins_configure_output_raw is defined
+        - jenkins_configure_output_raw.stdout is defined
+        - jenkins_configure_output_raw.rc == 0
       
     - name: Display Jenkins configure output
       ansible.builtin.debug:
         msg: |
           Jenkins configuration output:
-          {{ jenkins_configure_output.stdout | default('No output available') }}
+          Status: {{ command_status_result.stdout }}
+          Standard Output: {{ jenkins_configure_output.StandardOutputContent | default('No output') }}
+          Standard Error: {{ jenkins_configure_output.StandardErrorContent | default('No error') }}
+          Status Details: {{ jenkins_configure_output.StatusDetails | default('No details') }}
       when: jenkins_configure_output is defined
       
     - name: Mark Jenkins configure as successful
@@ -608,17 +646,27 @@
           --region {{ aws_region_name }} \
           --command-id "{{ jenkins_startup_command_id }}" \
           --instance-id "{{ jenkins_instance_id }}" \
-          --query "[StandardOutputContent,StandardErrorContent]" \
-          --output text 2>&1 | grep -v "^export"
-      register: jenkins_startup_output
+          --output json 2>&1 | grep -v "^export"
+      register: jenkins_startup_output_raw
       when: jenkins_startup_command_id is defined
       ignore_errors: true
+      
+    - name: Parse Jenkins startup command output
+      ansible.builtin.set_fact:
+        jenkins_startup_output: "{{ jenkins_startup_output_raw.stdout | from_json }}"
+      when: 
+        - jenkins_startup_output_raw is defined
+        - jenkins_startup_output_raw.stdout is defined
+        - jenkins_startup_output_raw.rc == 0
       
     - name: Display Jenkins startup output
       ansible.builtin.debug:
         msg: |
           Jenkins startup output:
-          {{ jenkins_startup_output.stdout | default('No output available') }}
+          Status: {{ command_status_result.stdout }}
+          Standard Output: {{ jenkins_startup_output.StandardOutputContent | default('No output') }}
+          Standard Error: {{ jenkins_startup_output.StandardErrorContent | default('No error') }}
+          Status Details: {{ jenkins_startup_output.StatusDetails | default('No details') }}
       when: jenkins_startup_output is defined
       
     - name: Mark Jenkins startup as successful
