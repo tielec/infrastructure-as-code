@@ -178,21 +178,16 @@
   block:
     - name: Execute Git repository update SSM command
       ansible.builtin.shell: |
-        source {{ scripts_dir }}/aws-env.sh
+        eval $({{ scripts_dir }}/aws-env.sh)
         aws ssm send-command \
           --region {{ aws_region_name }} \
           --document-name "{{ ssm_documents.updateRepo }}" \
           --targets "Key=instanceids,Values={{ jenkins_instance_id }}" \
           --parameters "ProjectName={{ project_name }},Environment={{ env_name }},GitBranch={{ git_branch }},GitRepo={{ git_repo }}" \
           --comment "Updating Git repository" \
-          --output json
+          --output json 2>&1 | grep -v "^export"
       register: git_update_command
       changed_when: true
-      
-    - name: Display raw command output for debugging
-      ansible.builtin.debug:
-        msg: "Raw output: {{ git_update_command.stdout | default('No output') }}"
-      when: git_update_command is defined
       
     - name: Parse Git update command response
       ansible.builtin.set_fact:
@@ -209,21 +204,6 @@
         - git_update_data is defined 
         - git_update_data.Command is defined
         - git_update_data.Command.CommandId is defined
-    
-    - name: Extract command ID using alternative method if parsing failed
-      ansible.builtin.shell: |
-        echo '{{ git_update_command.stdout }}' | grep -o '"CommandId"[[:space:]]*:[[:space:]]*"[^"]*"' | cut -d'"' -f4 | head -1
-      register: command_id_extract
-      when: git_update_command_id is not defined and git_update_command.stdout is defined
-      
-    - name: Set Git update command ID from extraction
-      ansible.builtin.set_fact:
-        git_update_command_id: "{{ command_id_extract.stdout | trim }}"
-      when: 
-        - git_update_command_id is not defined
-        - command_id_extract is defined
-        - command_id_extract.stdout is defined
-        - command_id_extract.stdout != ''
       
     - name: Display command ID
       ansible.builtin.debug:
@@ -231,12 +211,12 @@
       
     - name: Wait for Git update command to complete
       ansible.builtin.shell: |
-        source {{ scripts_dir }}/aws-env.sh
+        eval $({{ scripts_dir }}/aws-env.sh)
         aws ssm list-commands \
           --region {{ aws_region_name }} \
           --command-id "{{ git_update_command_id }}" \
           --query "Commands[0].Status" \
-          --output text
+          --output text 2>&1 | grep -v "^export"
       register: command_status_result
       until: command_status_result.stdout in ['Success', 'Failed', 'Cancelled', 'TimedOut']
       retries: 30
@@ -249,13 +229,13 @@
       
     - name: Fetch Git update command output when successful
       ansible.builtin.shell: |
-        source {{ scripts_dir }}/aws-env.sh
+        eval $({{ scripts_dir }}/aws-env.sh)
         aws ssm get-command-invocation \
           --region {{ aws_region_name }} \
           --command-id "{{ git_update_command_id }}" \
           --instance-id "{{ jenkins_instance_id }}" \
           --query "[StandardOutputContent,StandardErrorContent]" \
-          --output text
+          --output text 2>&1 | grep -v "^export"
       register: git_update_output
       when: 
         - git_update_command_id is defined
@@ -293,21 +273,16 @@
   block:
     - name: Execute EFS mount SSM command
       ansible.builtin.shell: |
-        source {{ scripts_dir }}/aws-env.sh
+        eval $({{ scripts_dir }}/aws-env.sh)
         aws ssm send-command \
           --region {{ aws_region_name }} \
           --document-name "{{ ssm_documents.mountEfs }}" \
           --targets "Key=instanceids,Values={{ jenkins_instance_id }}" \
           --parameters "ProjectName={{ project_name }},Environment={{ env_name }},EfsId={{ efs_file_system_id }},Region={{ aws_region_name }}" \
           --comment "Mounting EFS" \
-          --output json
+          --output json 2>&1 | grep -v "^export"
       register: efs_mount_command
       changed_when: true
-      
-    - name: Display raw command output for debugging
-      ansible.builtin.debug:
-        msg: "Raw output: {{ efs_mount_command.stdout | default('No output') }}"
-      when: efs_mount_command is defined
       
     - name: Parse EFS mount command response
       ansible.builtin.set_fact:
@@ -324,21 +299,6 @@
         - efs_mount_data is defined 
         - efs_mount_data.Command is defined
         - efs_mount_data.Command.CommandId is defined
-    
-    - name: Extract command ID using alternative method if parsing failed
-      ansible.builtin.shell: |
-        echo '{{ efs_mount_command.stdout }}' | grep -o '"CommandId"[[:space:]]*:[[:space:]]*"[^"]*"' | cut -d'"' -f4 | head -1
-      register: command_id_extract
-      when: efs_mount_command_id is not defined and efs_mount_command.stdout is defined
-      
-    - name: Set EFS mount command ID from extraction
-      ansible.builtin.set_fact:
-        efs_mount_command_id: "{{ command_id_extract.stdout | trim }}"
-      when: 
-        - efs_mount_command_id is not defined
-        - command_id_extract is defined
-        - command_id_extract.stdout is defined
-        - command_id_extract.stdout != ''
       
     - name: Display command ID
       ansible.builtin.debug:
@@ -346,12 +306,12 @@
       
     - name: Wait for EFS mount command to complete
       ansible.builtin.shell: |
-        source {{ scripts_dir }}/aws-env.sh
+        eval $({{ scripts_dir }}/aws-env.sh)
         aws ssm list-commands \
           --region {{ aws_region_name }} \
           --command-id "{{ efs_mount_command_id }}" \
           --query "Commands[0].Status" \
-          --output text
+          --output text 2>&1 | grep -v "^export"
       register: command_status_result
       until: command_status_result.stdout in ['Success', 'Failed', 'Cancelled', 'TimedOut']
       retries: 30
@@ -364,13 +324,13 @@
       
     - name: Fetch EFS mount command output
       ansible.builtin.shell: |
-        source {{ scripts_dir }}/aws-env.sh
+        eval $({{ scripts_dir }}/aws-env.sh)
         aws ssm get-command-invocation \
           --region {{ aws_region_name }} \
           --command-id "{{ efs_mount_command_id }}" \
           --instance-id "{{ jenkins_instance_id }}" \
           --query "[StandardOutputContent,StandardErrorContent]" \
-          --output text
+          --output text 2>&1 | grep -v "^export"
       register: efs_mount_output
       when: efs_mount_command_id is defined
       ignore_errors: true
@@ -406,21 +366,16 @@
   block:
     - name: Execute Jenkins install SSM command
       ansible.builtin.shell: |
-        source {{ scripts_dir }}/aws-env.sh
+        eval $({{ scripts_dir }}/aws-env.sh)
         aws ssm send-command \
           --region {{ aws_region_name }} \
           --document-name "{{ ssm_documents.install }}" \
           --targets "Key=instanceids,Values={{ jenkins_instance_id }}" \
           --parameters "ProjectName={{ project_name }},Environment={{ env_name }},JenkinsVersion={{ jenkins_version }},JenkinsColor={{ jenkins_color }}" \
           --comment "Installing Jenkins" \
-          --output json
+          --output json 2>&1 | grep -v "^export"
       register: jenkins_install_command
       changed_when: true
-      
-    - name: Display raw command output for debugging
-      ansible.builtin.debug:
-        msg: "Raw output: {{ jenkins_install_command.stdout | default('No output') }}"
-      when: jenkins_install_command is defined
       
     - name: Parse Jenkins install command response
       ansible.builtin.set_fact:
@@ -437,21 +392,6 @@
         - jenkins_install_data is defined 
         - jenkins_install_data.Command is defined
         - jenkins_install_data.Command.CommandId is defined
-    
-    - name: Extract command ID using alternative method if parsing failed
-      ansible.builtin.shell: |
-        echo '{{ jenkins_install_command.stdout }}' | grep -o '"CommandId"[[:space:]]*:[[:space:]]*"[^"]*"' | cut -d'"' -f4 | head -1
-      register: command_id_extract
-      when: jenkins_install_command_id is not defined and jenkins_install_command.stdout is defined
-      
-    - name: Set Jenkins install command ID from extraction
-      ansible.builtin.set_fact:
-        jenkins_install_command_id: "{{ command_id_extract.stdout | trim }}"
-      when: 
-        - jenkins_install_command_id is not defined
-        - command_id_extract is defined
-        - command_id_extract.stdout is defined
-        - command_id_extract.stdout != ''
       
     - name: Display command ID
       ansible.builtin.debug:
@@ -459,12 +399,12 @@
       
     - name: Wait for Jenkins install command to complete
       ansible.builtin.shell: |
-        source {{ scripts_dir }}/aws-env.sh
+        eval $({{ scripts_dir }}/aws-env.sh)
         aws ssm list-commands \
           --region {{ aws_region_name }} \
           --command-id "{{ jenkins_install_command_id }}" \
           --query "Commands[0].Status" \
-          --output text
+          --output text 2>&1 | grep -v "^export"
       register: command_status_result
       until: command_status_result.stdout in ['Success', 'Failed', 'Cancelled', 'TimedOut']
       retries: 30
@@ -477,13 +417,13 @@
       
     - name: Fetch Jenkins install command output
       ansible.builtin.shell: |
-        source {{ scripts_dir }}/aws-env.sh
+        eval $({{ scripts_dir }}/aws-env.sh)
         aws ssm get-command-invocation \
           --region {{ aws_region_name }} \
           --command-id "{{ jenkins_install_command_id }}" \
           --instance-id "{{ jenkins_instance_id }}" \
           --query "[StandardOutputContent,StandardErrorContent]" \
-          --output text
+          --output text 2>&1 | grep -v "^export"
       register: jenkins_install_output
       when: jenkins_install_command_id is defined
       ignore_errors: true
@@ -519,21 +459,16 @@
   block:
     - name: Execute Jenkins configure SSM command
       ansible.builtin.shell: |
-        source {{ scripts_dir }}/aws-env.sh
+        eval $({{ scripts_dir }}/aws-env.sh)
         aws ssm send-command \
           --region {{ aws_region_name }} \
           --document-name "{{ ssm_documents.configure }}" \
           --targets "Key=instanceids,Values={{ jenkins_instance_id }}" \
           --parameters "ProjectName={{ project_name }},Environment={{ env_name }},JenkinsMode={{ recovery_mode | ternary('recovery', 'normal') }},JenkinsColor={{ jenkins_color }}" \
           --comment "Configuring Jenkins" \
-          --output json
+          --output json 2>&1 | grep -v "^export"
       register: jenkins_configure_command
       changed_when: true
-      
-    - name: Display raw command output for debugging
-      ansible.builtin.debug:
-        msg: "Raw output: {{ jenkins_configure_command.stdout | default('No output') }}"
-      when: jenkins_configure_command is defined
       
     - name: Parse Jenkins configure command response
       ansible.builtin.set_fact:
@@ -550,21 +485,6 @@
         - jenkins_configure_data is defined 
         - jenkins_configure_data.Command is defined
         - jenkins_configure_data.Command.CommandId is defined
-    
-    - name: Extract command ID using alternative method if parsing failed
-      ansible.builtin.shell: |
-        echo '{{ jenkins_configure_command.stdout }}' | grep -o '"CommandId"[[:space:]]*:[[:space:]]*"[^"]*"' | cut -d'"' -f4 | head -1
-      register: command_id_extract
-      when: jenkins_configure_command_id is not defined and jenkins_configure_command.stdout is defined
-      
-    - name: Set Jenkins configure command ID from extraction
-      ansible.builtin.set_fact:
-        jenkins_configure_command_id: "{{ command_id_extract.stdout | trim }}"
-      when: 
-        - jenkins_configure_command_id is not defined
-        - command_id_extract is defined
-        - command_id_extract.stdout is defined
-        - command_id_extract.stdout != ''
       
     - name: Display command ID
       ansible.builtin.debug:
@@ -572,12 +492,12 @@
       
     - name: Wait for Jenkins configure command to complete
       ansible.builtin.shell: |
-        source {{ scripts_dir }}/aws-env.sh
+        eval $({{ scripts_dir }}/aws-env.sh)
         aws ssm list-commands \
           --region {{ aws_region_name }} \
           --command-id "{{ jenkins_configure_command_id }}" \
           --query "Commands[0].Status" \
-          --output text
+          --output text 2>&1 | grep -v "^export"
       register: command_status_result
       until: command_status_result.stdout in ['Success', 'Failed', 'Cancelled', 'TimedOut']
       retries: 30
@@ -590,13 +510,13 @@
       
     - name: Fetch Jenkins configure command output
       ansible.builtin.shell: |
-        source {{ scripts_dir }}/aws-env.sh
+        eval $({{ scripts_dir }}/aws-env.sh)
         aws ssm get-command-invocation \
           --region {{ aws_region_name }} \
           --command-id "{{ jenkins_configure_command_id }}" \
           --instance-id "{{ jenkins_instance_id }}" \
           --query "[StandardOutputContent,StandardErrorContent]" \
-          --output text
+          --output text 2>&1 | grep -v "^export"
       register: jenkins_configure_output
       when: jenkins_configure_command_id is defined
       ignore_errors: true
@@ -632,21 +552,16 @@
   block:
     - name: Execute Jenkins startup SSM command
       ansible.builtin.shell: |
-        source {{ scripts_dir }}/aws-env.sh
+        eval $({{ scripts_dir }}/aws-env.sh)
         aws ssm send-command \
           --region {{ aws_region_name }} \
           --document-name "{{ ssm_documents.startup }}" \
           --targets "Key=instanceids,Values={{ jenkins_instance_id }}" \
           --parameters "ProjectName={{ project_name }},Environment={{ env_name }},JenkinsColor={{ jenkins_color }}" \
           --comment "Starting Jenkins" \
-          --output json
+          --output json 2>&1 | grep -v "^export"
       register: jenkins_startup_command
       changed_when: true
-      
-    - name: Display raw command output for debugging
-      ansible.builtin.debug:
-        msg: "Raw output: {{ jenkins_startup_command.stdout | default('No output') }}"
-      when: jenkins_startup_command is defined
       
     - name: Parse Jenkins startup command response
       ansible.builtin.set_fact:
@@ -663,21 +578,6 @@
         - jenkins_startup_data is defined 
         - jenkins_startup_data.Command is defined
         - jenkins_startup_data.Command.CommandId is defined
-    
-    - name: Extract command ID using alternative method if parsing failed
-      ansible.builtin.shell: |
-        echo '{{ jenkins_startup_command.stdout }}' | grep -o '"CommandId"[[:space:]]*:[[:space:]]*"[^"]*"' | cut -d'"' -f4 | head -1
-      register: command_id_extract
-      when: jenkins_startup_command_id is not defined and jenkins_startup_command.stdout is defined
-      
-    - name: Set Jenkins startup command ID from extraction
-      ansible.builtin.set_fact:
-        jenkins_startup_command_id: "{{ command_id_extract.stdout | trim }}"
-      when: 
-        - jenkins_startup_command_id is not defined
-        - command_id_extract is defined
-        - command_id_extract.stdout is defined
-        - command_id_extract.stdout != ''
       
     - name: Display command ID
       ansible.builtin.debug:
@@ -685,12 +585,12 @@
       
     - name: Wait for Jenkins startup command to complete
       ansible.builtin.shell: |
-        source {{ scripts_dir }}/aws-env.sh
+        eval $({{ scripts_dir }}/aws-env.sh)
         aws ssm list-commands \
           --region {{ aws_region_name }} \
           --command-id "{{ jenkins_startup_command_id }}" \
           --query "Commands[0].Status" \
-          --output text
+          --output text 2>&1 | grep -v "^export"
       register: command_status_result
       until: command_status_result.stdout in ['Success', 'Failed', 'Cancelled', 'TimedOut']
       retries: 30
@@ -703,13 +603,13 @@
       
     - name: Fetch Jenkins startup command output
       ansible.builtin.shell: |
-        source {{ scripts_dir }}/aws-env.sh
+        eval $({{ scripts_dir }}/aws-env.sh)
         aws ssm get-command-invocation \
           --region {{ aws_region_name }} \
           --command-id "{{ jenkins_startup_command_id }}" \
           --instance-id "{{ jenkins_instance_id }}" \
           --query "[StandardOutputContent,StandardErrorContent]" \
-          --output text
+          --output text 2>&1 | grep -v "^export"
       register: jenkins_startup_output
       when: jenkins_startup_command_id is defined
       ignore_errors: true
