@@ -113,6 +113,41 @@ ansible-playbook playbooks/deploy_jenkins_security.yml -e "env=dev"
 # その他のコンポーネントも同様に個別デプロイ可能
 ```
 
+## インフラストラクチャの削除
+
+構築したJenkinsインフラストラクチャを削除する場合は、以下のコマンドを使用します：
+
+### 全体の削除
+
+```bash
+# 削除の確認（ドライラン）
+ansible-playbook playbooks/jenkins_teardown_pipeline.yml -e "env=dev"
+
+# 実際に削除を実行
+ansible-playbook playbooks/jenkins_teardown_pipeline.yml -e "env=dev confirm=true"
+
+# Pulumiスタックも含めて完全に削除
+ansible-playbook playbooks/jenkins_teardown_pipeline.yml -e "env=dev confirm=true remove_stacks=true"
+```
+
+### 特定コンポーネントの削除
+
+```bash
+# ネットワークとセキュリティグループを残して他を削除
+ansible-playbook playbooks/jenkins_teardown_pipeline.yml \
+  -e "env=dev confirm=true tear_network=false tear_security=false"
+
+# エージェントとコントローラーのみ削除
+ansible-playbook playbooks/jenkins_teardown_pipeline.yml \
+  -e "env=dev confirm=true tear_config=false tear_loadbalancer=false tear_storage=false tear_security=false tear_network=false"
+```
+
+**注意**: 削除操作は破壊的な操作です。以下の点に注意してください：
+- 必ず `confirm=true` の指定が必要です
+- 環境名 (`env`) を正しく指定してください
+- EFSに保存されているJenkinsデータも削除されます
+- 削除前に重要なデータのバックアップを取ることを推奨します
+
 ## インフラストラクチャの構成
 
 このリポジトリは以下のAWSリソースを設定します：
@@ -128,85 +163,67 @@ ansible-playbook playbooks/deploy_jenkins_security.yml -e "env=dev"
 
 ```
 infrastructure-as-code/
-├─ansible/                     # Ansible設定ファイル
-│  ├─ansible.cfg               # Ansible設定
-│  ├─inventory/
-│  │  ├─hosts
-│  │  └─group_vars/
-│  │      └─all.yml            # 共通変数定義ファイル
-│  ├─playbooks/                # 各種プレイブック
-│  │  ├─jenkins_setup_pipeline.yml  # メインパイプライン
-│  │  ├─deploy_jenkins_network.yml
-│  │  ├─deploy_jenkins_security.yml
-│  │  ├─deploy_jenkins_storage.yml
-│  │  ├─deploy_jenkins_loadbalancer.yml
-│  │  ├─deploy_jenkins_controller.yml
-│  │  ├─deploy_jenkins_agent.yml
-│  │  └─deploy_jenkins_application.yml
-│  └─roles/                    # 共通ロール
-│      ├─aws_setup/           # AWS環境設定ロール
-│      │  ├─defaults/
-│      │  ├─tasks/
-│      │  └─vars/
-│      └─pulumi_helper/       # Pulumiヘルパーロール
-│          ├─defaults/
-│          └─tasks/
+├─ ansible/                    # Ansible設定ファイル
+│  ├─ ansible.cfg             # Ansible設定
+│  ├─ inventory/
+│  │  ├─ hosts               # インベントリファイル
+│  │  └─ group_vars/
+│  │      └─ all.yml         # 共通変数定義ファイル
+│  ├─ playbooks/              # 各種プレイブック
+│  │  ├─ bootstrap-setup.yml              # ブートストラップ環境セットアップ
+│  │  ├─ jenkins_setup_pipeline.yml       # メインパイプライン（構築）
+│  │  ├─ jenkins_teardown_pipeline.yml    # メインパイプライン（削除）
+│  │  ├─ deploy_jenkins_network.yml       # ネットワーク構築
+│  │  ├─ deploy_jenkins_security.yml      # セキュリティグループ構築
+│  │  ├─ deploy_jenkins_storage.yml       # ストレージ（EFS）構築
+│  │  ├─ deploy_jenkins_loadbalancer.yml  # ロードバランサー構築
+│  │  ├─ deploy_jenkins_controller.yml    # コントローラー構築
+│  │  ├─ deploy_jenkins_agent.yml         # エージェント構築
+│  │  ├─ deploy_jenkins_application.yml   # アプリケーション設定
+│  │  └─ configure_jenkins_controller.yml # コントローラー設定
+│  └─ roles/                  # Ansibleロール
+│      ├─ aws_setup/         # AWS環境設定ロール
+│      ├─ pulumi_helper/     # Pulumiヘルパーロール
+│      └─ jenkins_*/         # Jenkins関連ロール
 │
-├─bootstrap/                  # 初期セットアップ用
-│  ├─cfn-bootstrap-template.yaml  # 簡略化されたCloudFormationテンプレート
-│  └─ansible/                 
-│      └─bootstrap-setup.yml  # ブートストラップ環境のセットアップ用プレイブック
+├─ bootstrap/                 # 初期セットアップ用
+│  └─ cfn-bootstrap-template.yaml  # CloudFormationテンプレート
 │
-├─pulumi/                     # Pulumiプロジェクト
-│  ├─package.json             # ルートパッケージ設定
-│  ├─Pulumi.yaml              # ルートプロジェクト設定
-│  ├─tsconfig.json            # TypeScript設定
-│  ├─config/                  # 設定ディレクトリ
-│  ├─network/                 # ネットワークスタック
-│  │  ├─index.ts
-│  │  ├─Pulumi.yaml
-│  │  └─package.json
-│  ├─security/                # セキュリティスタック
-│  │  ├─index.ts
-│  │  ├─Pulumi.yaml
-│  │  ├─package.json
-│  │  └─tsconfig.json
-│  └─src/                     # ソースコード
-│      ├─common/              # 共通ユーティリティ
-│      │  └─dependency-utils.ts
-│      └─services/            # サービス別モジュール
-│          └─jenkins/         # Jenkins関連モジュール
-│              ├─index.ts
-│              ├─jenkins-agent.ts
-│              ├─jenkins-controller.ts
-│              ├─load-balancer.ts
-│              ├─network.ts
-│              └─security.ts
+├─ pulumi/                    # Pulumiプロジェクト
+│  ├─ jenkins-network/       # ネットワークスタック
+│  ├─ jenkins-security/      # セキュリティスタック
+│  ├─ jenkins-storage/       # ストレージスタック
+│  ├─ jenkins-loadbalancer/  # ロードバランサースタック
+│  ├─ jenkins-controller/    # コントローラースタック
+│  ├─ jenkins-agent/         # エージェントスタック
+│  └─ jenkins-config/        # 設定管理スタック
 │
-└─scripts/                    # 設定スクリプト
-    ├─aws-credentials.sh      # AWS認証情報設定
-    ├─setup-bootstrap.sh      # ブートストラップ環境セットアップスクリプト
-    └─jenkins/                # Jenkins関連スクリプト
-        ├─groovy/             # Jenkins初期化用Groovyスクリプト
-        │  ├─basic-settings.groovy
-        │  ├─disable-cli.groovy
-        │  ├─install-plugins.groovy
-        │  └─recovery-mode.groovy
-        │
-        └─shell/              # EC2インスタンス設定用シェルスクリプト
-           ├─agent-setup.sh
-           ├─agent-template.sh
-           ├─controller-configure.sh
-           ├─controller-install.sh
-           ├─controller-mount-efs.sh
-           ├─controller-startup.sh
-           ├─controller-update.sh
-           └─controller-user-data.sh
+└─ scripts/                   # 各種スクリプト
+    ├─ aws-credentials.sh    # AWS認証情報設定
+    ├─ aws-env.sh           # AWS環境変数設定
+    ├─ check-aws-creds.sh   # AWS認証確認
+    ├─ setup-bootstrap.sh   # ブートストラップセットアップ
+    └─ jenkins/             # Jenkins関連スクリプト
+        ├─ groovy/          # Jenkins初期化用Groovyスクリプト
+        │  ├─ basic-settings.groovy
+        │  ├─ disable-cli.groovy
+        │  ├─ install-plugins.groovy
+        │  └─ recovery-mode.groovy
+        └─ shell/           # EC2設定用シェルスクリプト
+           ├─ agent-setup.sh
+           ├─ agent-template.sh
+           ├─ controller-configure.sh
+           ├─ controller-install.sh
+           ├─ controller-mount-efs.sh
+           ├─ controller-startup.sh
+           ├─ controller-update.sh
+           └─ controller-user-data.sh
 ```
 
 ### 主な機能
 
 - **段階的デプロイ**: Ansibleを使用して各コンポーネントを順番にデプロイ
+- **段階的削除**: 依存関係を考慮した安全な削除処理
 - **モジュール分割**: 各インフラコンポーネントを独立したPulumiスタックとして管理
 - **ブルー/グリーンデプロイメント**: Jenkinsの更新を無停止で行えるデュアル環境
 - **自動スケーリングエージェント**: EC2 SpotFleetによるコスト効率の高いJenkinsエージェント
@@ -219,8 +236,16 @@ infrastructure-as-code/
 - **Ansibleエラー**: `-vvv`オプションを追加して詳細なログを確認（例: `ansible-playbook -vvv playbooks/jenkins_setup_pipeline.yml`）
 - **AWS認証エラー**: `source scripts/aws-credentials.sh`を実行して認証情報を更新
 - **Pulumiログインエラー**: 環境変数`PULUMI_ACCESS_TOKEN`が正しく設定されているか確認
+  ```bash
+  # トークンが設定されているか確認
+  echo $PULUMI_ACCESS_TOKEN
+  
+  # 再設定が必要な場合
+  export PULUMI_ACCESS_TOKEN="pul-YOUR_ACCESS_TOKEN"
+  ```
 - **Jenkinsへのアクセス問題**: セキュリティグループの設定を確認
 - **EFSマウント問題**: マウントターゲットの可用性を確認
+- **削除時のリソース依存関係エラー**: 削除順序が正しいか確認（ネットワークは最後に削除）
 
 ## 共有パラメータの確認と修正
 
@@ -244,6 +269,7 @@ ansible-playbook playbooks/jenkins_setup_pipeline.yml -e "env=dev" --check
 - バックアップ戦略の実装を忘れずに行ってください
 - AWS認証情報は定期的に更新が必要です。セッションが切れた場合は`source scripts/aws-credentials.sh`を実行してください
 - Pulumiアクセストークンは安全に管理してください。環境変数として設定する場合は、他のユーザーに見えないように注意してください
+- **削除操作は取り消せません**。本番環境での削除操作は特に注意して実行してください
 
 ## 拡張方法
 
@@ -252,16 +278,19 @@ ansible-playbook playbooks/jenkins_setup_pipeline.yml -e "env=dev" --check
 1. 新しいコンポーネントの追加:
 ```
 pulumi/
-  ├─network/          # 既存のネットワークスタック
-  ├─security/         # 既存のセキュリティスタック
-  ├─monitoring/       # 新しいモニタリングスタック
-  └─database/         # 新しいデータベーススタック
+  ├─jenkins-network/          # 既存のネットワークスタック
+  ├─jenkins-security/         # 既存のセキュリティスタック
+  ├─monitoring/               # 新しいモニタリングスタック
+  └─database/                 # 新しいデータベーススタック
 ```
 
 2. 新しいAnsibleプレイブックの追加:
 ```
 ansible/playbooks/
   ├─jenkins_setup_pipeline.yml      # 既存のメインパイプライン
+  ├─jenkins_teardown_pipeline.yml   # 既存の削除パイプライン
   ├─deploy_jenkins_network.yml      # 既存のネットワークデプロイ
   └─deploy_monitoring.yml           # 新しいモニタリングデプロイ
 ```
+
+3. 新しいロールの追加時は、必ず`deploy.yml`と`destroy.yml`の両方を実装してください
