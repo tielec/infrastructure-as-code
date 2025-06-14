@@ -1,5 +1,5 @@
 /**
- * pulumi/controller/index.ts
+ * pulumi/jenkins-controller/index.ts
  * 
  * Jenkinsインフラのコントローラーリソースを構築するPulumiスクリプト
  * EC2インスタンスとIAMロールに集中し、設定部分は別スタックで管理
@@ -37,6 +37,7 @@ const loadbalancerStack = new pulumi.StackReference(`${pulumi.getOrganization()}
 const vpcId = networkStack.getOutput("vpcId");
 const privateSubnetIds = networkStack.getOutput("privateSubnetIds");
 const jenkinsSecurityGroupId = securityStack.getOutput("jenkinsSecurityGroupId");
+const efsSecurityGroupId = securityStack.getOutput("efsSecurityGroupId"); // EFSセキュリティグループも取得
 const efsFileSystemId = storageStack.getOutput("efsFileSystemId");
 const jenkinsAccessPointId = storageStack.getOutput("jenkinsAccessPointId");
 const blueTargetGroupArn = loadbalancerStack.getOutput("blueTargetGroupArn");
@@ -183,7 +184,9 @@ const jenkinsInstance = new aws.ec2.Instance(`${projectName}-jenkins-${jenkinsCo
     ami: ami.then(ami => ami.id),
     instanceType: instanceType,
     subnetId: privateSubnetIds.apply(subnets => subnets[0]),
-    vpcSecurityGroupIds: [jenkinsSecurityGroupId],
+    vpcSecurityGroupIds: pulumi.all([jenkinsSecurityGroupId, efsSecurityGroupId]).apply(
+        ([jenkinsSgId, efsSgId]) => [jenkinsSgId, efsSgId]
+    ),
     keyName: keyName,
     iamInstanceProfile: jenkinsInstanceProfile.name,
     userData: userDataScript.apply(script => Buffer.from(script).toString("base64")),

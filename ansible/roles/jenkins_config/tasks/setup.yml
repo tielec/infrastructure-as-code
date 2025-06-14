@@ -304,7 +304,6 @@
           --targets "Key=instanceids,Values={{ jenkins_instance_id }}" \
           --parameters "ProjectName={{ project_name }},Environment={{ env_name }},EfsId={{ efs_file_system_id }},Region={{ aws_region_name }}" \
           --comment "Mounting EFS" \
-          --cloud-watch-output-config "CloudWatchLogGroupName=/aws/ssm/{{ project_name }},CloudWatchOutputEnabled=true" \
           --output json 2>&1 | grep -v "^export"
       register: efs_mount_command
       changed_when: true
