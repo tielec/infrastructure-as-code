@@ -16,9 +16,6 @@ error_exit() {
     exit 1
 }
 
-# デバッグモード
-set -x
-
 JENKINS_HOME_DIR="/mnt/efs/jenkins"
 log "Starting Jenkins service"
 
