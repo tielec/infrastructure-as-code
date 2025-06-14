@@ -173,6 +173,22 @@
     seconds: 30
   when: not ansible_check_mode
 
+# SSMドキュメントの内容を確認
+- name: Check SSM document content for debugging
+  ansible.builtin.shell: |
+    eval $({{ scripts_dir }}/aws-env.sh)
+    aws ssm describe-document \
+      --name "{{ ssm_documents.mountEfs }}" \
+      --region {{ aws_region_name }} \
+      --query "Document.Content" \
+      --output text 2>&1 | grep -v "^export"
+  register: ssm_doc_content
+  ignore_errors: true
+
+- name: Display SSM document content
+  ansible.builtin.debug:
+    msg: "SSM Document content: {{ ssm_doc_content.stdout | default('Could not retrieve') }}"
+
 # ステップ1: Gitリポジトリの更新
 - name: Step 1 - Update Git repository
   block:
@@ -288,6 +304,7 @@
           --targets "Key=instanceids,Values={{ jenkins_instance_id }}" \
           --parameters "ProjectName={{ project_name }},Environment={{ env_name }},EfsId={{ efs_file_system_id }},Region={{ aws_region_name }}" \
           --comment "Mounting EFS" \
+          --cloud-watch-output-config "CloudWatchLogGroupName=/aws/ssm/{{ project_name }},CloudWatchOutputEnabled=true" \
           --output json 2>&1 | grep -v "^export"
       register: efs_mount_command
       changed_when: true
@@ -358,7 +375,27 @@
           Standard Output: {{ efs_mount_output.StandardOutputContent | default('No output') }}
           Standard Error: {{ efs_mount_output.StandardErrorContent | default('No error') }}
           Status Details: {{ efs_mount_output.StatusDetails | default('No details') }}
+          Command ID: {{ efs_mount_command_id }}
       when: efs_mount_output is defined
+      
+    - name: Get detailed error from CloudWatch if command failed
+      ansible.builtin.shell: |
+        eval $({{ scripts_dir }}/aws-env.sh)
+        aws ssm list-command-invocations \
+          --command-id "{{ efs_mount_command_id }}" \
+          --region {{ aws_region_name }} \
+          --details \
+          --output json 2>&1 | grep -v "^export"
+      register: efs_mount_details
+      when: 
+        - efs_mount_command_id is defined
+        - command_status_result.stdout == 'Failed'
+      ignore_errors: true
+      
+    - name: Display detailed EFS mount error
+      ansible.builtin.debug:
+        msg: "Detailed error: {{ efs_mount_details.stdout | default('No details available') }}"
+      when: efs_mount_details is defined
       
     - name: Mark EFS mount as successful
       ansible.builtin.set_fact:
@@ -715,4 +752,19 @@
       3. Check instance connectivity and security groups
       4. Review SSM document definitions in AWS console
       5. Check CloudWatch logs for SSM command execution details
+      
+      To manually debug on the instance:
+      - SSH to the instance and check:
+        - SSM agent status: sudo systemctl status amazon-ssm-agent
+        - SSM agent logs: sudo tail -f /var/log/amazon/ssm/amazon-ssm-agent.log
+        - Check if EFS tools are installed: rpm -qa | grep -E 'nfs-utils|amazon-efs-utils'
+        - Check if Jenkins is installed: rpm -qa | grep jenkins
+        - Check system logs: sudo journalctl -xe
+      
+      Command IDs for manual investigation:
+      - Git update: {{ git_update_command_id | default('N/A') }}
+      - EFS mount: {{ efs_mount_command_id | default('N/A') }}
+      - Jenkins install: {{ jenkins_install_command_id | default('N/A') }}
+      - Jenkins configure: {{ jenkins_configure_command_id | default('N/A') }}
+      - Jenkins startup: {{ jenkins_startup_command_id | default('N/A') }}
   when: not (git_update_complete and efs_mount_complete and jenkins_install_complete and jenkins_configure_complete and jenkins_startup_complete)
