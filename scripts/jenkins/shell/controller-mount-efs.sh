@@ -1,10 +1,19 @@
 #!/bin/bash
-# Jenkins用EFSマウントスクリプト
-# SSM用に最適化されたバージョン
-
 # エラーハンドリングを設定
 set -e
-exec > >(tee /var/log/efs-mount.log|logger -t efs-mount -s 2>/dev/console) 2>&1
+
+# ログ関数
+log() {
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*" | tee -a /var/log/efs-mount.log
+}
+
+# エラーハンドラー
+error_exit() {
+    log "ERROR: $1"
+    exit 1
+}
+
+# デバッグモード
 set -x
 
 # 引数またはSSMパラメータからの取得
@@ -13,60 +22,41 @@ AWS_REGION="${AWS_REGION}"
 JENKINS_HOME_DIR="/mnt/efs/jenkins"
 MOUNT_POINT="/mnt/efs"
 
-echo "EFS ID: $EFS_ID, リージョン: $AWS_REGION"
+log "Starting EFS mount script"
+log "EFS ID: $EFS_ID, Region: $AWS_REGION"
 
 # EFS IDが指定されているか確認
 if [ -z "$EFS_ID" ]; then
-  echo "エラー: EFS_ID が指定されていません。マウントできません。"
-  exit 1
+  error_exit "EFS_ID が指定されていません。マウントできません。"
 fi
 
 # リージョンが空の場合はメタデータから取得
 if [ -z "$AWS_REGION" ]; then
-  AWS_REGION=$(curl -s http://169.254.169.254/latest/meta-data/placement/region)
+  # IMDSv2対応
+  TOKEN=$(curl -s -X PUT "http://169.254.169.254/latest/api/token" -H "X-aws-ec2-metadata-token-ttl-seconds: 21600")
+  AWS_REGION=$(curl -s -H "X-aws-ec2-metadata-token: $TOKEN" http://169.254.169.254/latest/meta-data/placement/region)
   if [ -z "$AWS_REGION" ]; then
-    AZ=$(curl -s http://169.254.169.254/latest/meta-data/placement/availability-zone)
-    if [ -n "$AZ" ]; then
-      AWS_REGION=${AZ%?}
-    else
-      AWS_REGION="us-east-1"
-    fi
+    AWS_REGION="ap-northeast-1"
   fi
-  echo "使用するリージョン: $AWS_REGION"
+  log "使用するリージョン: $AWS_REGION"
 fi
 
 # 冪等性対応: 正しくマウントされているか確認
 if df -h | grep -q "$MOUNT_POINT"; then
-  echo "EFSは既にマウントされています"
-  
-  # マウントされているのが正しいEFSか確認
-  MOUNTED_FS_ID=$(mount | grep $MOUNT_POINT | grep -o 'fs-[a-z0-9]*' || echo "")
-  if [ -n "$MOUNTED_FS_ID" ] && [ "$MOUNTED_FS_ID" != "$EFS_ID" ]; then
-    echo "警告: マウントされているファイルシステムID($MOUNTED_FS_ID)が指定されたID($EFS_ID)と異なります"
-    echo "既存のマウントをアンマウントします"
-    umount $MOUNT_POINT
-    # 続行してマウントし直す
-  else
-    # 同じEFSがマウントされている場合は、Jenkinsディレクトリ確認だけ行う
-    if [ ! -d "$JENKINS_HOME_DIR" ]; then
-      mkdir -p $JENKINS_HOME_DIR/{plugins,jobs,secrets,nodes,logs,init.groovy.d}
-      echo "Jenkinsディレクトリを作成しました: $JENKINS_HOME_DIR"
-    fi
-    echo "正しいEFSがマウントされていることを確認しました"
-    exit 0
-  fi
+  log "EFSは既にマウントされています"
+  exit 0
 fi
 
 # 必要なパッケージがインストールされているか確認
-echo "必要なパッケージの確認"
+log "必要なパッケージの確認"
 if ! rpm -q amazon-efs-utils &>/dev/null; then
-  echo "amazon-efs-utilsをインストールします"
-  dnf install -y amazon-efs-utils
+  log "amazon-efs-utilsをインストールします"
+  dnf install -y amazon-efs-utils || yum install -y amazon-efs-utils
 fi
 
 if ! rpm -q nfs-utils &>/dev/null; then
-  echo "nfs-utilsをインストールします"
-  dnf install -y nfs-utils
+  log "nfs-utilsをインストールします"
+  dnf install -y nfs-utils || yum install -y nfs-utils
 fi
 
 # マウントポイントの作成
@@ -77,41 +67,41 @@ chmod 755 $MOUNT_POINT
 sed -i '/efs/d' /etc/fstab
 sed -i '/fs-/d' /etc/fstab
 
-# 接続テスト
-echo "EFSエンドポイントへの接続テスト"
+# DNS解決のテスト（オプショナル）
+log "EFSエンドポイントへの接続テスト（DNS解決をスキップ）"
 EFS_DNS="$EFS_ID.efs.$AWS_REGION.amazonaws.com"
 
-if ! host $EFS_DNS &>/dev/null; then
-  echo "エラー: DNSルックアップ失敗 - $EFS_DNS"
-  echo "DNSレコードが存在しないか、DNSサーバーに到達できません"
-  exit 1
-fi
+# DNS解決の問題を回避するため、mount.efsに任せる
+log "EFSファイルシステムをマウントします（mount.efsがDNS解決を処理）"
 
-# EFSマウントエントリを/etc/fstabに追加
-echo "$EFS_ID:/ $MOUNT_POINT efs _netdev,tls,iam 0 0" >> /etc/fstab
-echo "fstabエントリを追加しました"
-
-# マウント実行
-echo "EFSファイルシステムをマウントします"
-if ! mount -a -t efs; then
-  echo "エラー: EFSのマウントに失敗しました"
-  # 診断情報を収集
-  echo "診断情報:"
-  mount
-  df -h
-  # マウントエントリを削除して再起動の問題を防止
-  sed -i '/efs/d' /etc/fstab
-  sed -i '/fs-/d' /etc/fstab
-  exit 1
+# 方法1: mount.efsを直接使用（推奨）
+if ! mount -t efs -o tls,iam $EFS_ID:/ $MOUNT_POINT; then
+  log "警告: IAMオプション付きのマウントに失敗しました。tlsのみで再試行します"
+  
+  # 方法2: IAMなしで再試行
+  if ! mount -t efs -o tls $EFS_ID:/ $MOUNT_POINT; then
+    log "エラー: tlsオプションでのマウントに失敗しました"
+    
+    # 診断情報を収集
+    log "診断情報:"
+    log "VPC DNS設定の確認が必要かもしれません"
+    
+    # EFSヘルパーのログを確認
+    if [ -f /var/log/amazon/efs/mount.log ]; then
+      log "EFSマウントヘルパーのログ:"
+      tail -20 /var/log/amazon/efs/mount.log | tee -a /var/log/efs-mount.log
+    fi
+    
+    error_exit "EFSマウントに失敗しました"
+  fi
 fi
 
 # マウント確認
 if ! df -h | grep -q "$MOUNT_POINT"; then
-  echo "エラー: マウントコマンドは成功しましたが、マウントが存在しません"
-  exit 1
+  error_exit "マウントコマンドは成功しましたが、マウントが存在しません"
 fi
 
-echo "EFSマウント成功"
+log "EFSマウント成功"
 
 # Jenkinsディレクトリ構造の作成
 mkdir -p $JENKINS_HOME_DIR/{plugins,jobs,secrets,nodes,logs,init.groovy.d}
@@ -140,7 +130,11 @@ elif [ -d "$SYSTEM_JENKINS_HOME" ]; then
 fi
 
 ln -sf "$JENKINS_HOME_DIR" "$SYSTEM_JENKINS_HOME"
-echo "シンボリックリンクを作成: $SYSTEM_JENKINS_HOME -> $JENKINS_HOME_DIR"
+log "シンボリックリンクを作成: $SYSTEM_JENKINS_HOME -> $JENKINS_HOME_DIR"
 
-echo "EFSマウント処理が完了しました"
+# fstabにエントリを追加（永続化）
+echo "$EFS_ID:/ $MOUNT_POINT efs _netdev,tls,iam 0 0" >> /etc/fstab
+log "fstabエントリを追加しました"
+
+log "EFSマウント処理が完了しました"
 exit 0
