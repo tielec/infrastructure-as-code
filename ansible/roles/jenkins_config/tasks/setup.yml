@@ -167,27 +167,74 @@
       ansible.builtin.fail:
         msg: "Jenkins configuration deployment failed."
 
-# インスタンスの設定処理
-- name: Wait for SSM agent to be operational
-  ansible.builtin.pause:
-    seconds: 30
-  when: not ansible_check_mode
-
-# SSMドキュメントの内容を確認
-- name: Check SSM document content for debugging
+# インスタンスの状態を直接確認
+- name: Check instance basic information
   ansible.builtin.shell: |
     eval $({{ scripts_dir }}/aws-env.sh)
-    aws ssm describe-document \
+    aws ssm send-command \
+      --region {{ aws_region_name }} \
+      --document-name "AWS-RunShellScript" \
+      --targets "Key=instanceids,Values={{ jenkins_instance_id }}" \
+      --parameters 'commands=["echo Instance Info:","uname -a","cat /etc/os-release","echo","echo SSM Agent Status:","systemctl status amazon-ssm-agent | head -20","echo","echo Available Commands:","which yum","which mount","which systemctl","echo","echo Network:","ip addr show","echo","echo Disk:","df -h"]' \
+      --output json 2>&1 | grep -v "^export"
+  register: instance_check_command
+  ignore_errors: true
+
+- name: Wait for instance check to complete
+  ansible.builtin.pause:
+    seconds: 10
+  when: instance_check_command.rc == 0
+
+- name: Get instance check results
+  ansible.builtin.shell: |
+    eval $({{ scripts_dir }}/aws-env.sh)
+    COMMAND_ID=$(echo '{{ instance_check_command.stdout }}' | grep -o '"CommandId": "[^"]*"' | cut -d'"' -f4 | head -1)
+    if [ -n "$COMMAND_ID" ]; then
+      aws ssm get-command-invocation \
+        --region {{ aws_region_name }} \
+        --command-id "$COMMAND_ID" \
+        --instance-id "{{ jenkins_instance_id }}" \
+        --query "StandardOutputContent" \
+        --output text 2>&1 | grep -v "^export"
+    fi
+  register: instance_info
+  when: instance_check_command.rc == 0
+  ignore_errors: true
+
+- name: Display instance information
+  ansible.builtin.debug:
+    msg: |
+      Instance diagnostic information:
+      {{ instance_info.stdout | default('Could not retrieve instance information') }}
+  when: instance_info is defined
+
+# SSMドキュメントの内容を確認
+- name: Get SSM document details for debugging
+  ansible.builtin.shell: |
+    eval $({{ scripts_dir }}/aws-env.sh)
+    aws ssm get-document \
       --name "{{ ssm_documents.mountEfs }}" \
       --region {{ aws_region_name }} \
-      --query "Document.Content" \
-      --output text 2>&1 | grep -v "^export"
-  register: ssm_doc_content
+      --document-version "\$DEFAULT" \
+      --output json 2>&1 | grep -v "^export"
+  register: ssm_doc_details
+  ignore_errors: true
+
+- name: Parse SSM document details
+  ansible.builtin.set_fact:
+    ssm_doc_content: "{{ (ssm_doc_details.stdout | from_json).Content | default('{}') }}"
+  when: 
+    - ssm_doc_details.stdout is defined
+    - ssm_doc_details.rc == 0
   ignore_errors: true
 
 - name: Display SSM document content
   ansible.builtin.debug:
-    msg: "SSM Document content: {{ ssm_doc_content.stdout | default('Could not retrieve') }}"
+    msg: |
+      SSM Document analysis:
+      - Document Name: {{ ssm_documents.mountEfs }}
+      - Content: {{ ssm_doc_content | default('Could not retrieve') }}
+  when: ssm_doc_content is defined
 
 # ステップ1: Gitリポジトリの更新
 - name: Step 1 - Update Git repository
@@ -396,6 +443,43 @@
       ansible.builtin.debug:
         msg: "Detailed error: {{ efs_mount_details.stdout | default('No details available') }}"
       when: efs_mount_details is defined
+      
+    - name: Get CloudWatch logs for EFS mount
+      ansible.builtin.shell: |
+        eval $({{ scripts_dir }}/aws-env.sh)
+        # Wait a bit for logs to be available
+        sleep 5
+        # Get the log stream name
+        LOG_STREAM=$(aws logs describe-log-streams \
+          --log-group-name "/aws/ssm/{{ project_name }}" \
+          --region {{ aws_region_name }} \
+          --order-by LastEventTime \
+          --descending \
+          --query "logStreams[?contains(logStreamName, '{{ efs_mount_command_id }}')].logStreamName | [0]" \
+          --output text 2>&1 | grep -v "^export")
+        
+        if [ "$LOG_STREAM" != "None" ] && [ -n "$LOG_STREAM" ]; then
+          aws logs get-log-events \
+            --log-group-name "/aws/ssm/{{ project_name }}" \
+            --log-stream-name "$LOG_STREAM" \
+            --region {{ aws_region_name }} \
+            --query "events[].message" \
+            --output json 2>&1 | grep -v "^export"
+        else
+          echo "No log stream found"
+        fi
+      register: efs_mount_cloudwatch_logs
+      when: 
+        - efs_mount_command_id is defined
+        - command_status_result.stdout == 'Failed'
+      ignore_errors: true
+      
+    - name: Display CloudWatch logs for EFS mount
+      ansible.builtin.debug:
+        msg: |
+          CloudWatch logs for EFS mount:
+          {{ efs_mount_cloudwatch_logs.stdout | default('No logs available') }}
+      when: efs_mount_cloudwatch_logs is defined
       
     - name: Mark EFS mount as successful
       ansible.builtin.set_fact:
