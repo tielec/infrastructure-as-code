@@ -167,118 +167,27 @@
       ansible.builtin.fail:
         msg: "Jenkins configuration deployment failed."
 
-# インスタンスの状態を直接確認
-- name: Check instance basic information
-  ansible.builtin.shell: |
-    eval $({{ scripts_dir }}/aws-env.sh)
-    aws ssm send-command \
-      --region {{ aws_region_name }} \
-      --document-name "AWS-RunShellScript" \
-      --targets "Key=instanceids,Values={{ jenkins_instance_id }}" \
-      --parameters 'commands=["echo Instance Info:","uname -a","cat /etc/os-release","echo","echo SSM Agent Status:","systemctl status amazon-ssm-agent | head -20","echo","echo Available Commands:","which yum","which mount","which systemctl","echo","echo Network:","ip addr show","echo","echo Disk:","df -h"]' \
-      --output json 2>&1 | grep -v "^export"
-  register: instance_check_command
-  ignore_errors: true
-
-- name: Wait for instance check to complete
+# インスタンスの設定処理
+- name: Wait for SSM agent to be operational
   ansible.builtin.pause:
-    seconds: 10
-  when: instance_check_command.rc == 0
-
-- name: Get instance check results
-  ansible.builtin.shell: |
-    eval $({{ scripts_dir }}/aws-env.sh)
-    COMMAND_ID=$(echo '{{ instance_check_command.stdout }}' | grep -o '"CommandId": "[^"]*"' | cut -d'"' -f4 | head -1)
-    if [ -n "$COMMAND_ID" ]; then
-      aws ssm get-command-invocation \
-        --region {{ aws_region_name }} \
-        --command-id "$COMMAND_ID" \
-        --instance-id "{{ jenkins_instance_id }}" \
-        --query "StandardOutputContent" \
-        --output text 2>&1 | grep -v "^export"
-    fi
-  register: instance_info
-  when: instance_check_command.rc == 0
-  ignore_errors: true
-
-- name: Display instance information
-  ansible.builtin.debug:
-    msg: |
-      Instance diagnostic information:
-      {{ instance_info.stdout | default('Could not retrieve instance information') }}
-  when: instance_info is defined
+    seconds: 30
+  when: not ansible_check_mode
 
 # SSMドキュメントの内容を確認
-- name: Get SSM document content using AWS CLI
+- name: Check SSM document content for debugging
   ansible.builtin.shell: |
     eval $({{ scripts_dir }}/aws-env.sh)
-    # First, check if the document exists
     aws ssm describe-document \
       --name "{{ ssm_documents.mountEfs }}" \
       --region {{ aws_region_name }} \
-      --output json 2>&1 | grep -v "^export"
-  register: doc_describe
+      --query "Document.Content" \
+      --output text 2>&1 | grep -v "^export"
+  register: ssm_doc_content
   ignore_errors: true
 
-- name: Get actual document content
-  ansible.builtin.shell: |
-    eval $({{ scripts_dir }}/aws-env.sh)
-    aws ssm get-document \
-      --name "{{ ssm_documents.mountEfs }}" \
-      --region {{ aws_region_name }} \
-      --document-version "\$DEFAULT" \
-      --output json 2>&1 | grep -v "^export"
-  register: doc_content
-  when: doc_describe.rc == 0
-  ignore_errors: true
-
-- name: Display document information
+- name: Display SSM document content
   ansible.builtin.debug:
-    msg: |
-      Document description: {{ doc_describe.stdout | default('Not found') }}
-      Document content: {{ doc_content.stdout | default('Not retrieved') }}
-  when: doc_describe is defined
-
-# Also check what's in the infrastructure-as-code repository
-- name: Check repository contents for SSM documents
-  ansible.builtin.shell: |
-    eval $({{ scripts_dir }}/aws-env.sh)
-    aws ssm send-command \
-      --region {{ aws_region_name }} \
-      --document-name "AWS-RunShellScript" \
-      --targets "Key=instanceids,Values={{ jenkins_instance_id }}" \
-      --parameters 'commands=["echo === Repository Contents ===","ls -la /opt/infrastructure-as-code/","echo === SSM Documents ===","find /opt/infrastructure-as-code -name \"*.yaml\" -o -name \"*.yml\" | grep -i ssm | head -10","echo === Mount EFS Script ===","find /opt/infrastructure-as-code -name \"*mount*efs*\" -type f | head -5"]' \
-      --output json 2>&1 | grep -v "^export"
-  register: repo_check
-  ignore_errors: true
-
-- name: Wait for repo check
-  ansible.builtin.pause:
-    seconds: 5
-  when: repo_check.rc == 0
-
-- name: Get repo check results
-  ansible.builtin.shell: |
-    eval $({{ scripts_dir }}/aws-env.sh)
-    COMMAND_ID=$(echo '{{ repo_check.stdout | default("") }}' | grep -o '"CommandId": "[^"]*"' | cut -d'"' -f4 | head -1)
-    if [ -n "$COMMAND_ID" ]; then
-      aws ssm get-command-invocation \
-        --region {{ aws_region_name }} \
-        --command-id "$COMMAND_ID" \
-        --instance-id "{{ jenkins_instance_id }}" \
-        --query "StandardOutputContent" \
-        --output text 2>&1 | grep -v "^export"
-    fi
-  register: repo_contents
-  when: repo_check.rc == 0
-  ignore_errors: true
-
-- name: Display repository check results
-  ansible.builtin.debug:
-    msg: |
-      Repository contents:
-      {{ repo_contents.stdout | default('Could not check repository') }}
-  when: repo_contents is defined
+    msg: "SSM Document content: {{ ssm_doc_content.stdout | default('Could not retrieve') }}"
 
 # ステップ1: Gitリポジトリの更新
 - name: Step 1 - Update Git repository
@@ -386,127 +295,19 @@
 # ステップ2: EFSマウント
 - name: Step 2 - Mount EFS
   block:
-    # まず簡単なテストコマンドを実行して、SSMが正常に動作するか確認
-    # スクリプトの存在と内容を確認
-    - name: Verify EFS mount script exists and check content
+    - name: Execute EFS mount SSM command
       ansible.builtin.shell: |
         eval $({{ scripts_dir }}/aws-env.sh)
         aws ssm send-command \
           --region {{ aws_region_name }} \
-          --document-name "AWS-RunShellScript" \
+          --document-name "{{ ssm_documents.mountEfs }}" \
           --targets "Key=instanceids,Values={{ jenkins_instance_id }}" \
-          --parameters 'commands=["echo === Checking EFS mount script ===","ls -la /root/infrastructure-as-code/scripts/jenkins/shell/controller-mount-efs.sh","echo === Script content (first 50 lines) ===","head -50 /root/infrastructure-as-code/scripts/jenkins/shell/controller-mount-efs.sh","echo === Testing script syntax ===","bash -n /root/infrastructure-as-code/scripts/jenkins/shell/controller-mount-efs.sh && echo Script syntax is valid || echo Script has syntax errors"]' \
+          --parameters "ProjectName={{ project_name }},Environment={{ env_name }},EfsId={{ efs_file_system_id }},Region={{ aws_region_name }}" \
+          --comment "Mounting EFS" \
+          --cloud-watch-output-config "CloudWatchLogGroupName=/aws/ssm/{{ project_name }},CloudWatchOutputEnabled=true" \
           --output json 2>&1 | grep -v "^export"
-      register: script_verify
-      ignore_errors: true
-      
-    - name: Wait for script verification
-      ansible.builtin.pause:
-        seconds: 5
-      when: script_verify.rc == 0
-      
-    - name: Get script verification results
-      ansible.builtin.shell: |
-        eval $({{ scripts_dir }}/aws-env.sh)
-        COMMAND_ID=$(echo '{{ script_verify.stdout }}' | grep -o '"CommandId": "[^"]*"' | cut -d'"' -f4 | head -1)
-        if [ -n "$COMMAND_ID" ]; then
-          aws ssm get-command-invocation \
-            --region {{ aws_region_name }} \
-            --command-id "$COMMAND_ID" \
-            --instance-id "{{ jenkins_instance_id }}" \
-            --query "StandardOutputContent" \
-            --output text 2>&1 | grep -v "^export"
-        fi
-      register: script_content
-      when: script_verify.rc == 0
-      ignore_errors: true
-      
-    - name: Display script verification results
-      ansible.builtin.debug:
-        msg: |
-          EFS mount script verification:
-          {{ script_content.stdout | default('Could not verify script') }}
-      when: script_content is defined
-
-    # デバッグモードでスクリプトを実行
-    - name: Execute EFS mount script with debug mode
-      ansible.builtin.shell: |
-        eval $({{ scripts_dir }}/aws-env.sh)
-        aws ssm send-command \
-          --region {{ aws_region_name }} \
-          --document-name "AWS-RunShellScript" \
-          --targets "Key=instanceids,Values={{ jenkins_instance_id }}" \
-          --parameters 'commands=["#!/bin/bash -x","export PROJECT_NAME={{ project_name }}","export ENVIRONMENT={{ env_name }}","export EFS_ID={{ efs_file_system_id }}","export AWS_REGION={{ aws_region_name }}","echo Starting EFS mount process","cd /root/infrastructure-as-code","pwd","ls -la scripts/jenkins/shell/","echo Executing mount script with bash -x for debug","bash -x scripts/jenkins/shell/controller-mount-efs.sh 2>&1 | tee /tmp/efs-mount-debug.log","EXIT_CODE=$?","echo Exit code: $EXIT_CODE","echo === Debug output ===","cat /tmp/efs-mount-debug.log | tail -100","exit $EXIT_CODE"]' \
-          --output json 2>&1 | grep -v "^export"
-      register: debug_mount
-      ignore_errors: true
-      
-    - name: Wait for debug mount execution
-      ansible.builtin.pause:
-        seconds: 10
-      when: debug_mount.rc == 0
-      
-    - name: Get debug mount results
-      ansible.builtin.shell: |
-        eval $({{ scripts_dir }}/aws-env.sh)
-        COMMAND_ID=$(echo '{{ debug_mount.stdout }}' | grep -o '"CommandId": "[^"]*"' | cut -d'"' -f4 | head -1)
-        if [ -n "$COMMAND_ID" ]; then
-          aws ssm get-command-invocation \
-            --region {{ aws_region_name }} \
-            --command-id "$COMMAND_ID" \
-            --instance-id "{{ jenkins_instance_id }}" \
-            --output json 2>&1 | grep -v "^export"
-        fi
-      register: debug_mount_results
-      when: debug_mount.rc == 0
-      ignore_errors: true
-      
-    - name: Display debug mount results
-      ansible.builtin.debug:
-        msg: |
-          Debug mount execution results:
-          {{ debug_mount_results.stdout | default('No debug results') }}
-      when: debug_mount_results is defined
-
-    # 手動でEFSマウントコマンドを実行してエラーを確認
-    - name: Manually test EFS mount
-      ansible.builtin.shell: |
-        eval $({{ scripts_dir }}/aws-env.sh)
-        aws ssm send-command \
-          --region {{ aws_region_name }} \
-          --document-name "AWS-RunShellScript" \
-          --targets "Key=instanceids,Values={{ jenkins_instance_id }}" \
-          --parameters 'commands=["echo === Manual EFS Mount Test ===","export PROJECT_NAME={{ project_name }}","export ENVIRONMENT={{ env_name }}","export EFS_ID={{ efs_file_system_id }}","export AWS_REGION={{ aws_region_name }}","echo Testing EFS DNS resolution","nslookup {{ efs_file_system_id }}.efs.{{ aws_region_name }}.amazonaws.com || echo DNS resolution failed","echo Creating mount point","mkdir -p /var/lib/jenkins","echo Testing EFS mount directly","mount -t efs -o tls {{ efs_file_system_id }}:/ /var/lib/jenkins || echo Direct mount failed","echo Checking if mounted","df -h | grep efs","echo Unmounting if mounted","umount /var/lib/jenkins 2>/dev/null || true"]' \
-          --output json 2>&1 | grep -v "^export"
-      register: manual_mount_test
-      ignore_errors: true
-      
-    - name: Wait for manual mount test
-      ansible.builtin.pause:
-        seconds: 10
-      when: manual_mount_test.rc == 0
-      
-    - name: Get manual mount test results
-      ansible.builtin.shell: |
-        eval $({{ scripts_dir }}/aws-env.sh)
-        COMMAND_ID=$(echo '{{ manual_mount_test.stdout }}' | grep -o '"CommandId": "[^"]*"' | cut -d'"' -f4 | head -1)
-        if [ -n "$COMMAND_ID" ]; then
-          aws ssm get-command-invocation \
-            --region {{ aws_region_name }} \
-            --command-id "$COMMAND_ID" \
-            --instance-id "{{ jenkins_instance_id }}" \
-            --output json 2>&1 | grep -v "^export"
-        fi
-      register: manual_mount_results
-      when: manual_mount_test.rc == 0
-      ignore_errors: true
-      
-    - name: Display manual mount test results
-      ansible.builtin.debug:
-        msg: |
-          Manual EFS mount test results:
-          {{ manual_mount_results.stdout | default('No results') }}
-      when: manual_mount_results is defined
+      register: efs_mount_command
+      changed_when: true
       
     - name: Parse EFS mount command response
       ansible.builtin.set_fact:
@@ -595,50 +396,6 @@
       ansible.builtin.debug:
         msg: "Detailed error: {{ efs_mount_details.stdout | default('No details available') }}"
       when: efs_mount_details is defined
-      
-    - name: Get CloudWatch logs for EFS mount
-      ansible.builtin.shell: |
-        eval $({{ scripts_dir }}/aws-env.sh)
-        # Get SSM agent logs directly from the instance
-        aws ssm send-command \
-          --region {{ aws_region_name }} \
-          --document-name "AWS-RunShellScript" \
-          --targets "Key=instanceids,Values={{ jenkins_instance_id }}" \
-          --parameters 'commands=["echo === SSM Agent Logs ===","sudo tail -50 /var/log/amazon/ssm/amazon-ssm-agent.log | grep -A 10 -B 10 {{ efs_mount_command_id }} || echo No logs found for command","echo === Recent SSM Errors ===","sudo grep -i error /var/log/amazon/ssm/amazon-ssm-agent.log | tail -20","echo === Document Execution Logs ===","sudo ls -la /var/lib/amazon/ssm/{{ jenkins_instance_id }}/document/orchestration/{{ efs_mount_command_id }}/ || echo No execution logs found"]' \
-          --output json 2>&1 | grep -v "^export"
-      register: ssm_logs_command
-      when: 
-        - efs_mount_command_id is defined
-        - command_status_result.stdout == 'Failed'
-      ignore_errors: true
-      
-    - name: Wait for SSM logs command
-      ansible.builtin.pause:
-        seconds: 5
-      when: ssm_logs_command is defined and ssm_logs_command.rc == 0
-      
-    - name: Get SSM logs results
-      ansible.builtin.shell: |
-        eval $({{ scripts_dir }}/aws-env.sh)
-        COMMAND_ID=$(echo '{{ ssm_logs_command.stdout | default("") }}' | grep -o '"CommandId": "[^"]*"' | cut -d'"' -f4 | head -1)
-        if [ -n "$COMMAND_ID" ]; then
-          aws ssm get-command-invocation \
-            --region {{ aws_region_name }} \
-            --command-id "$COMMAND_ID" \
-            --instance-id "{{ jenkins_instance_id }}" \
-            --query "StandardOutputContent" \
-            --output text 2>&1 | grep -v "^export"
-        fi
-      register: ssm_logs_output
-      when: ssm_logs_command is defined and ssm_logs_command.rc == 0
-      ignore_errors: true
-      
-    - name: Display SSM agent logs
-      ansible.builtin.debug:
-        msg: |
-          SSM Agent logs related to EFS mount:
-          {{ ssm_logs_output.stdout | default('No logs available') }}
-      when: ssm_logs_output is defined
       
     - name: Mark EFS mount as successful
       ansible.builtin.set_fact:
@@ -995,19 +752,4 @@
       3. Check instance connectivity and security groups
       4. Review SSM document definitions in AWS console
       5. Check CloudWatch logs for SSM command execution details
-      
-      To manually debug on the instance:
-      - SSH to the instance and check:
-        - SSM agent status: sudo systemctl status amazon-ssm-agent
-        - SSM agent logs: sudo tail -f /var/log/amazon/ssm/amazon-ssm-agent.log
-        - Check if EFS tools are installed: rpm -qa | grep -E 'nfs-utils|amazon-efs-utils'
-        - Check if Jenkins is installed: rpm -qa | grep jenkins
-        - Check system logs: sudo journalctl -xe
-      
-      Command IDs for manual investigation:
-      - Git update: {{ git_update_command_id | default('N/A') }}
-      - EFS mount: {{ efs_mount_command_id | default('N/A') }}
-      - Jenkins install: {{ jenkins_install_command_id | default('N/A') }}
-      - Jenkins configure: {{ jenkins_configure_command_id | default('N/A') }}
-      - Jenkins startup: {{ jenkins_startup_command_id | default('N/A') }}
   when: not (git_update_complete and efs_mount_complete and jenkins_install_complete and jenkins_configure_complete and jenkins_startup_complete)
