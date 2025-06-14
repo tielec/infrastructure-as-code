@@ -405,16 +405,24 @@ const jenkinsConfigureDocument = new aws.ssm.Document(`${projectName}-jenkins-co
                         "fi",
                         "",
                         "# スクリプト実行",
-                        "echo 'Executing Jenkins configuration script...'",
-                        "bash $SCRIPT_PATH 2>&1 || EXIT_CODE=$?",
+                        "echo '===== EXECUTING JENKINS CONFIGURE SCRIPT ====='",
+                        "bash -x $SCRIPT_PATH 2>&1 | tee -a $LOG_FILE || EXIT_CODE=$?",
                         "",
-                        "# 設定結果確認",
-                        "echo ''",
-                        "echo '===== Configuration Result ====='",
-                        "if [ -f /mnt/efs/jenkins/.configuration-complete ]; then",
-                        "  echo 'SUCCESS: Jenkins configuration completed'",
-                        "  echo 'Groovy scripts installed:'",
-                        "  ls -la /mnt/efs/jenkins/init.groovy.d/ 2>/dev/null | grep -E '\\.groovy
+                        "# ログファイルの内容を表示",
+                        "echo '===== COMPLETE JENKINS CONFIGURE LOG ====='",
+                        "cat $LOG_FILE || echo 'Failed to read log file'",
+                        "",
+                        "# Jenkinsディレクトリ確認",
+                        "echo '===== JENKINS DIRECTORY STATUS ====='",
+                        "ls -la /mnt/efs/jenkins 2>/dev/null || echo 'Jenkins directory not found'",
+                        "",
+                        "# エラーがあった場合は終了",
+                        "if [ ! -z \"$EXIT_CODE\" ] && [ \"$EXIT_CODE\" -ne 0 ]; then",
+                        "  echo \"ERROR: Script failed with exit code: $EXIT_CODE\"",
+                        "  exit $EXIT_CODE",
+                        "fi",
+                        "",
+                        "exit 0"
                     ]
                 }
             }
