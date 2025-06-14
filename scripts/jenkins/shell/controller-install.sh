@@ -16,9 +16,6 @@ error_exit() {
     exit 1
 }
 
-# デバッグモード
-set -x
-
 # 環境変数
 JENKINS_COLOR="${JENKINS_COLOR:-blue}"
 JENKINS_VERSION="${JENKINS_VERSION:-latest}"

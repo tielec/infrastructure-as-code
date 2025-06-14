@@ -5,7 +5,6 @@
 # エラーハンドリングとログ設定
 set -e
 exec > >(tee /var/log/jenkins-update.log|logger -t jenkins-update -s 2>/dev/console) 2>&1
-set -x
 
 # 環境変数
 JENKINS_VERSION="${JENKINS_VERSION:-latest}"

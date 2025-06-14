@@ -13,9 +13,6 @@ error_exit() {
     exit 1
 }
 
-# デバッグモード
-set -x
-
 # 引数またはSSMパラメータからの取得
 EFS_ID="${EFS_ID}"
 AWS_REGION="${AWS_REGION}"
