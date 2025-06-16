@@ -1,0 +1,137 @@
+@Library('jenkins-shared-lib') _
+
+pipeline {
+    agent any
+    
+    stages {
+        stage('GitHub Connection Test') {
+            steps {
+                script {
+                    // gitUtilsライブラリを使用したテスト
+                    def authType = gitUtils.getAuthType()
+                    def selectedAuthType = params.AUTH_TYPE == 'GITHUB_APP' ? authType.GITHUB_APP : authType.PAT
+                    def credentialsId = params.AUTH_TYPE == 'GITHUB_APP' ? params.GITHUB_APP_CREDENTIALS_ID : params.PAT_CREDENTIALS_ID
+                    
+                    echo "選択された認証タイプ: ${params.AUTH_TYPE}"
+                    echo "使用する認証情報ID: ${credentialsId}"
+                    
+                    // 接続テスト実行
+                    def result = gitUtils.testGitHubConnection([
+                        authType: selectedAuthType,
+                        credentialsId: credentialsId
+                    ])
+                    
+                    if (result.success) {
+                        echo "GitHub ${params.AUTH_TYPE}接続テストが成功しました！"
+                        echo "API残り呼び出し回数: ${result.rate_limit.resources.core.remaining}/${result.rate_limit.resources.core.limit}"
+                        echo "APIリセット時間: ${new Date(result.rate_limit.resources.core.reset * 1000L)}"
+                        
+                        // パーソナルアクセストークンの場合はユーザー情報も表示
+                        if (params.AUTH_TYPE == 'PAT' && result.user_info) {
+                            echo "認証ユーザー情報:"
+                            echo "  ログイン名: ${result.user_info.login}"
+                            echo "  ユーザーID: ${result.user_info.id}"
+                            echo "  ユーザー名: ${result.user_info.name ?: 'N/A'}"
+                            echo "  Eメール: ${result.user_info.email ?: 'N/A'}"
+                        }
+                        
+                        // APIレート制限の詳細表示
+                        echo "=== API レート制限詳細 ==="
+                        result.rate_limit.resources.each { resource, info ->
+                            echo "${resource}: ${info.remaining}/${info.limit} (残り/上限)"
+                        }
+                    } else {
+                        error "GitHub ${params.AUTH_TYPE}接続テストが失敗しました: ${result.message}"
+                    }
+                }
+            }
+        }
+        
+        stage('Get Latest PR Test') {
+            steps {
+                script {
+                    def authType = gitUtils.getAuthType()
+                    def selectedAuthType = params.AUTH_TYPE == 'GITHUB_APP' ? authType.GITHUB_APP : authType.PAT
+                    def credentialsId = params.AUTH_TYPE == 'GITHUB_APP' ? params.GITHUB_APP_CREDENTIALS_ID : params.PAT_CREDENTIALS_ID
+                    
+                    echo "最新PRを取得します (認証タイプ: ${params.AUTH_TYPE})"
+                    echo "リポジトリ: ${params.REPO_OWNER}/${params.REPO_NAME}"
+                    
+                    try {
+                        // 最新のPull Requestを取得
+                        def latestPR = gitUtils.getLatestPullRequest([
+                            authType: selectedAuthType,
+                            credentialsId: credentialsId,
+                            repoOwner: params.REPO_OWNER,
+                            repoName: params.REPO_NAME
+                        ])
+                        
+                        if (latestPR) {
+                            echo "最新のPull Requestを取得しました"
+                            echo "============== PR情報 ==============="
+                            echo "PR番号: #${latestPR.number}"
+                            echo "タイトル: ${latestPR.title}"
+                            echo "作成者: ${latestPR.user?.login ?: 'N/A'}"
+                            echo "作成日時: ${latestPR.created_at ?: 'N/A'}"
+                            echo "更新日時: ${latestPR.updated_at ?: 'N/A'}"
+                            echo "ブランチ: ${latestPR.head?.ref ?: 'N/A'} → ${latestPR.base?.ref ?: 'N/A'}"
+                            
+                            // nullチェックを追加
+                            echo "コミット数: ${latestPR.commits != null ? latestPR.commits : 'N/A'}"
+                            echo "変更ファイル数: ${latestPR.changed_files != null ? latestPR.changed_files : 'N/A'}"
+                            echo "追加行数: ${latestPR.additions != null ? latestPR.additions : 'N/A'}"
+                            echo "削除行数: ${latestPR.deletions != null ? latestPR.deletions : 'N/A'}"
+                            echo "PR URL: ${latestPR.html_url ?: 'N/A'}"
+                            
+                            // PR本文（nullチェックを追加）
+                            if (latestPR.body) {
+                                echo "PR説明文:"
+                                // 文字列に変換してから操作
+                                def bodyText = latestPR.body.toString()
+                                echo "${bodyText.length() > 500 ? bodyText.substring(0, 500) + '...(省略)' : bodyText}"
+                            } else {
+                                echo "PR説明文: なし"
+                            }
+                            
+                            // PRの詳細情報も取得
+                            try {
+                                echo "PRの詳細情報を取得します..."
+                                def prFiles = gitUtils.getPullRequestFiles(latestPR.number, [
+                                    authType: selectedAuthType,
+                                    credentialsId: credentialsId,
+                                    repoOwner: params.REPO_OWNER,
+                                    repoName: params.REPO_NAME
+                                ])
+                                
+                                if (prFiles && prFiles.size() > 0) {
+                                    echo "変更ファイル一覧:"
+                                    prFiles.each { file ->
+                                        echo "  * ${file.filename ?: 'N/A'} (${file.status ?: 'N/A'})"
+                                    }
+                                } else {
+                                    echo "変更ファイルはありません"
+                                }
+                            } catch (Exception e) {
+                                echo "PRファイル一覧の取得に失敗しました: ${e.message}"
+                            }
+                        } else {
+                            echo "オープンなPull Requestが見つかりませんでした"
+                        }
+                    } catch (Exception e) {
+                        echo "最新PRの取得中にエラーが発生しました: ${e.message}"
+                        throw e
+                    }
+                }
+            }
+        }
+    }
+    
+    post {
+        success {
+            echo '全てのテストが成功しました'
+        }
+        failure {
+            echo 'テストが失敗しました'
+        }
+    }
+}

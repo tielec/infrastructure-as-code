@@ -1,0 +1,305 @@
+@Library('jenkins-shared-lib') _
+
+pipeline {
+    agent any
+    
+    stages {
+        stage('Setup') {
+            steps {
+                script {
+                    echo "=== GitHub Webhook Test Pipeline ==="
+                    echo "Test Type: ${params.TEST_TYPE}"
+                    echo "Dry Run: ${params.DRY_RUN}"
+                    echo "Cleanup: ${params.CLEANUP_AFTER_TEST}"
+                    
+                    // Git情報を取得
+                    def repoInfo = gitUtils.extractRepoInfo(params.REPO_URL)
+                    env.REPO_OWNER = repoInfo[0]
+                    env.REPO_NAME = repoInfo[1]
+                    
+                    echo "Repository: ${env.REPO_OWNER}/${env.REPO_NAME}"
+                    
+                    // GitHubの接続テスト
+                    def connectionTest = gitUtils.testGitHubAppConnection()
+                    if (connectionTest.success) {
+                        echo "✅ GitHub接続テスト: 成功"
+                        echo "Rate Limit: ${connectionTest.rate_limit.remaining}/${connectionTest.rate_limit.limit}"
+                    } else {
+                        error "❌ GitHub接続テスト: 失敗"
+                    }
+                }
+            }
+        }
+        
+        stage('List Webhooks') {
+            when {
+                anyOf {
+                    expression { params.TEST_TYPE == 'ALL' }
+                    expression { params.TEST_TYPE == 'LIST_ONLY' }
+                }
+            }
+            steps {
+                script {
+                    try {
+                        echo "=== 既存Webhook一覧 ==="
+                        def webhooks = gitUtils.listWebhooks([ repoUrl: params.REPO_URL ])
+                        
+                        if (webhooks && webhooks.size() > 0) {
+                            webhooks.each { webhook ->
+                                echo "ID: ${webhook.id}"
+                                echo "  URL: ${webhook.config?.url ?: 'N/A'}"
+                                echo "  Events: ${webhook.events?.join(', ') ?: 'N/A'}"
+                                echo "  Active: ${webhook.active}"
+                                echo "  Created: ${webhook.created_at}"
+                                echo "---"
+                            }
+                            echo "合計: ${webhooks.size()}個のWebhook"
+                        } else {
+                            echo "既存のWebhookはありません"
+                        }
+                    } catch (Exception e) {
+                        echo "❌ Webhook一覧取得エラー: ${e.message}"
+                        if (!params.DRY_RUN) {
+                            throw e
+                        }
+                    }
+                }
+            }
+        }
+        
+        stage('Create & Update Tests') {
+            when {
+                allOf {
+                    anyOf {
+                        expression { params.TEST_TYPE == 'ALL' }
+                        expression { params.TEST_TYPE == 'CREATE_UPDATE' }
+                    }
+                    expression { !params.DRY_RUN }
+                }
+            }
+            steps {
+                script {
+                    echo "=== Webhook作成・更新テスト開始 ==="
+                    
+                    try {
+                        // 1. Webhook作成テスト
+                        echo "1. Webhook作成テスト"
+                        def webhookResult = gitUtils.createWebhook(
+                            params.WEBHOOK_URL,
+                            ['push', 'pull_request', 'issues'],
+                            [ repoUrl: params.REPO_URL ]
+                        )
+
+                        env.TEST_WEBHOOK_ID = "${webhookResult.id}"
+                        echo "✅ Webhook作成成功: ID=${env.TEST_WEBHOOK_ID}"
+                        echo "   URL: ${webhookResult.config?.url}"
+                        echo "   Events: ${webhookResult.events?.join(', ')}"
+                        
+                        // 2. 作成したWebhookの取得テスト
+                        echo "2. Webhook取得テスト"
+                        def getResult = gitUtils.getWebhook(
+                            env.TEST_WEBHOOK_ID,
+                            [ repoUrl: params.REPO_URL ]
+                        )
+                        echo "✅ Webhook取得成功: ${getResult.config?.url}"
+                        
+                        // 3. Webhookの更新テスト
+                        echo "3. Webhook更新テスト"
+                        def updateResult = gitUtils.updateWebhook(
+                            env.TEST_WEBHOOK_ID,
+                            [
+                                events: ['push', 'release'],
+                                active: false
+                            ],
+                            [ repoUrl: params.REPO_URL ]
+                        )
+                        echo "✅ Webhook更新成功:"
+                        echo "   Events: ${updateResult.events?.join(', ')}"
+                        echo "   Active: ${updateResult.active}"
+                        
+                        // 4. Webhookのpingテスト
+                        echo "4. Webhook pingテスト"
+                        def pingResult = gitUtils.pingWebhook(
+                            env.TEST_WEBHOOK_ID,
+                            [ repoUrl: params.REPO_URL ]
+                        )
+                        echo "✅ Webhook ping成功"
+                        
+                    } catch (Exception e) {
+                        echo "❌ Webhook作成・更新テストエラー: ${e.message}"
+                        throw e
+                    }
+                }
+            }
+        }
+        
+        stage('Batch Create Test') {
+            when {
+                allOf {
+                    anyOf {
+                        expression { params.TEST_TYPE == 'ALL' }
+                        expression { params.TEST_TYPE == 'BATCH_CREATE' }
+                    }
+                    expression { !params.DRY_RUN }
+                }
+            }
+            steps {
+                script {
+                    echo "=== Webhook一括作成テスト開始 ==="
+                    
+                    try {
+                        def batchConfigs = [
+                            [
+                                url: "${params.WEBHOOK_URL}/batch1",
+                                events: ['push'],
+                                config: [active: true]
+                            ],
+                            [
+                                url: "${params.WEBHOOK_URL}/batch2", 
+                                events: ['pull_request'],
+                                config: [active: false]
+                            ],
+                            [
+                                url: "${params.WEBHOOK_URL}/batch3",
+                                events: ['issues', 'issue_comment'],
+                                config: [active: true]
+                            ]
+                        ]
+                        
+                        def batchResults = gitUtils.batchCreateWebhooks(
+                            batchConfigs,
+                            [ repoUrl: params.REPO_URL ]
+                        )
+                        
+                        def successCount = batchResults.count { it.success }
+                        echo "✅ 一括作成完了: ${successCount}/${batchResults.size()} 成功"
+                        
+                        // 結果の詳細表示
+                        batchResults.eachWithIndex { result, index ->
+                            if (result.success) {
+                                echo "  [${index + 1}] ✅ 成功: ID=${result.result.id}, URL=${result.result.config?.url}"
+                            } else {
+                                echo "  [${index + 1}] ❌ 失敗: ${result.error}"
+                            }
+                        }
+                        
+                        // 作成されたWebhookのIDを記録（削除用）
+                        def batchWebhookIds = batchResults.findAll { it.success }.collect { it.result.id }
+                        env.BATCH_WEBHOOK_IDS = batchWebhookIds.join(',')
+                        
+                    } catch (Exception e) {
+                        echo "❌ Webhook一括作成テストエラー: ${e.message}"
+                        throw e
+                    }
+                }
+            }
+        }
+        
+        stage('Verification') {
+            when {
+                expression { !params.DRY_RUN && params.TEST_TYPE != 'LIST_ONLY' }
+            }
+            steps {
+                script {
+                    echo "=== 作成されたWebhookの確認 ==="
+                    
+                    try {
+                        // 最新のWebhook一覧を取得
+                        def finalWebhooks = gitUtils.listWebhooks([ repoUrl: params.REPO_URL ])
+                        echo "現在のWebhook総数: ${finalWebhooks?.size() ?: 0}"
+                        
+                        // テストで作成したWebhookの確認
+                        if (env.TEST_WEBHOOK_ID) {
+                            def testWebhook = gitUtils.getWebhook(
+                                env.TEST_WEBHOOK_ID,
+                                [ repoUrl: params.REPO_URL ]
+                            )
+                            echo "✅ テストWebhook確認:"
+                            echo "   URL: ${testWebhook.config?.url}"
+                            echo "   Events: ${testWebhook.events?.join(', ')}"
+                            echo "   Active: ${testWebhook.active}"
+                        }
+                        
+                        // バッチ作成したWebhookの数を確認
+                        if (env.BATCH_WEBHOOK_IDS) {
+                            def batchIds = env.BATCH_WEBHOOK_IDS.split(',')
+                            echo "✅ バッチ作成Webhook数: ${batchIds.size()}"
+                        }
+                        
+                    } catch (Exception e) {
+                        echo "⚠️ 確認中にエラー: ${e.message}"
+                    }
+                }
+            }
+        }
+    }
+    
+    post {
+        always {
+            script {
+                echo "=== テスト結果サマリー ==="
+                echo "Repository: ${env.REPO_OWNER}/${env.REPO_NAME}"
+                echo "Test Type: ${params.TEST_TYPE}"
+                echo "Dry Run: ${params.DRY_RUN}"
+                echo "Webhook URL: ${params.WEBHOOK_URL}"
+            }
+        }
+        
+        cleanup {
+            script {
+                if (params.CLEANUP_AFTER_TEST && !params.DRY_RUN && params.TEST_TYPE != 'LIST_ONLY') {
+                    echo "=== クリーンアップ開始 ==="
+                    
+                    // テスト用Webhookの削除
+                    if (env.TEST_WEBHOOK_ID) {
+                        try {
+                            gitUtils.deleteWebhook(
+                                env.TEST_WEBHOOK_ID,
+                                [ repoUrl: params.REPO_URL ]
+                            )
+                            echo "✅ テストWebhook削除完了: ID=${env.TEST_WEBHOOK_ID}"
+                        } catch (Exception e) {
+                            echo "⚠️ テストWebhook削除エラー: ${e.message}"
+                        }
+                    }
+                    
+                    // 一括作成したWebhookの削除
+                    if (env.BATCH_WEBHOOK_IDS) {
+                        def deletedCount = 0
+                        env.BATCH_WEBHOOK_IDS.split(',').each { webhookId ->
+                            try {
+                                gitUtils.deleteWebhook(
+                                    webhookId.trim(),
+                                    [ repoUrl: params.REPO_URL ]
+                                )
+                                deletedCount++
+                                echo "✅ バッチWebhook削除完了: ID=${webhookId}"
+                            } catch (Exception e) {
+                                echo "⚠️ バッチWebhook削除エラー (ID=${webhookId}): ${e.message}"
+                            }
+                        }
+                        echo "バッチWebhook削除結果: ${deletedCount}/${env.BATCH_WEBHOOK_IDS.split(',').size()}"
+                    }
+                    
+                    echo "=== クリーンアップ完了 ==="
+                } else if (!params.CLEANUP_AFTER_TEST && !params.DRY_RUN && params.TEST_TYPE != 'LIST_ONLY') {
+                    echo "=== クリーンアップをスキップしました ==="
+                    if (env.TEST_WEBHOOK_ID) {
+                        echo "⚠️ 手動削除が必要なWebhook ID: ${env.TEST_WEBHOOK_ID}"
+                    }
+                    if (env.BATCH_WEBHOOK_IDS) {
+                        echo "⚠️ 手動削除が必要なバッチWebhook IDs: ${env.BATCH_WEBHOOK_IDS}"
+                    }
+                }
+            }
+        }
+        
+        success {
+            echo "🎉 Webhookテストが正常に完了しました！"
+        }
+        
+        failure {
+            echo "❌ Webhookテストが失敗しました。ログを確認してください。"
+        }
+    }
+}

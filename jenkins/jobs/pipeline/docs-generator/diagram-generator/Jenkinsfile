@@ -1,0 +1,129 @@
+@Library('jenkins-shared-lib') _
+
+pipeline {
+    agent {
+        docker {
+            label 'ec2-fleet'
+            image 'python:3.11-slim'
+            args '''
+                -v ${WORKSPACE}:/workspace
+                -w /workspace
+                -u root
+            '''
+        }
+    }
+    
+    parameters {
+        // アーキテクチャ図の要求仕様
+        text(
+            name: 'DIAGRAM_REQUIREMENT',
+            defaultValue: 'AWS上でEC2とRDSをVPCで囲んだ図を作りたい',
+            description: '作図したいアーキテクチャの要望を記入してください'
+        )
+        
+        // 既存の diagrams.py の内容 (空なら新規作成、入力があればアップデート)
+        text(
+            name: 'DIAGRAM_CODE',
+            defaultValue: '',
+            description: '既存の diagrams.py コードを貼り付けてください (空欄なら新規作成)'
+        )
+
+        // 最後に成功したビルドから diagram.py を引き継ぐかどうか
+        booleanParam(
+            name: 'USE_PREVIOUS_DIAGRAM',
+            defaultValue: false,
+            description: '最後に成功したビルドの diagram.py を再利用する場合はチェック'
+        )
+    }
+    
+    environment {
+        // OpenAI用のキー (JenkinsのCredentialsで "openai-api-key" IDのシークレットテキストを使用)
+        OPENAI_API_KEY = credentials('openai-api-key')
+        OPENAI_API_ENDPOINT = "https://your-open-ai-endpoint/"
+
+        // 出力物保存先のディレクトリ
+        REPORTS_DIR = 'reports'
+        
+        // このパイプラインが配置されているディレクトリパス
+        // 実際の配置に合わせて修正してください。
+        PROJECT_DIR = 'jenkins/jobs/pipeline/docs-generator/diagram-generator'
+    }
+    
+    stages {
+
+        stage('Retrieve previous diagram') {
+            when {
+                expression { return params.USE_PREVIOUS_DIAGRAM }
+            }
+            steps {
+                script {
+                    // 1) 前回成功時のビルドから diagram.py を取得
+                    copyArtifacts(
+                        projectName: env.JOB_NAME,
+                        selector: lastSuccessful(),
+                        filter: "${REPORTS_DIR}/diagram.py",
+                        fingerprintArtifacts: true
+                    )
+
+                    // 2) ファイルのパーミッションを広めにしておく (エラーにならないよう || true を付与)
+                    sh """
+                        if [ -f "${WORKSPACE}/${REPORTS_DIR}/diagram.py" ]; then
+                            echo "[INFO] Found previous diagram.py. Setting chmod 777..."
+                            chmod 777 "${WORKSPACE}/${REPORTS_DIR}/diagram.py" || true
+                        else
+                            echo "[WARN] No previous diagram.py found."
+                        fi
+                    """
+                }
+            }
+        }
+
+        stage('セットアップ') {
+            steps {
+                script {
+                    sh """
+                        apt-get update && apt-get install -y graphviz
+                        python -m pip install --upgrade pip
+                        
+                        # 必要ライブラリのインストール (requirements.txt は PROJECT_DIR に配置)
+                        cd \${PROJECT_DIR}
+                        pip install -r requirements.txt --no-cache-dir
+                        
+                        # レポート用ディレクトリの作成
+                        mkdir -p \${WORKSPACE}/\${REPORTS_DIR}/images
+                    """
+                }
+            }
+        }
+        
+        stage('図の生成 (新規作成 or アップデート)') {
+            steps {
+                script {
+                    // Pythonスクリプトを実行し、図を生成
+                    // 生成後、PNGが \${REPORTS_DIR}/images 配下に出力される想定
+                    sh """
+                        python \${PROJECT_DIR}/generate_diagram.py \
+                            --requirement "\${DIAGRAM_REQUIREMENT}" \
+                            --diagram-code "\${DIAGRAM_CODE}" \
+                            --output-dir "\${WORKSPACE}/\${REPORTS_DIR}/images"
+                    """
+                }
+            }
+        }
+    }
+    
+    post {
+        always {
+            // 生成した diagram.py をレポートディレクトリにコピー
+            script {
+                sh """
+                    cp diagram.py \${WORKSPACE}/\${REPORTS_DIR}/diagram.py || true
+                    chmod 777 \${WORKSPACE}/\${REPORTS_DIR}/diagram.py || true
+                """
+            }
+            
+            // 成果物をアーカイブ (図やログファイル、diagram.py など)
+            archiveArtifacts artifacts: "${REPORTS_DIR}/**/*", fingerprint: true
+        }
+    }
+}

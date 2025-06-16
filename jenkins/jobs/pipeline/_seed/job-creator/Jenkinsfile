@@ -1,0 +1,144 @@
+pipeline {
+    agent {
+        label 'built-in'
+    }
+
+    environment {
+        CONFIG_YAML_PATH = 'jenkins/jobs/pipeline/_seed/job-creator/job-config.yaml'
+        FODLER_DSL_PATH = 'jenkins/jobs/dsl/folders.groovy'
+    }
+    
+    stages {
+        stage('Validate Configuration') {
+            steps {
+                script {
+                    // YAMLファイルを読み込む
+                    def config = readYaml file: env.CONFIG_YAML_PATH
+                    def validationErrors = []
+                    def validationSummary = []
+                    def totalJobs = config['jenkins-jobs'].size()
+                    def processedJobs = 0
+                    
+                    echo "=== Starting configuration validation for ${totalJobs} jobs ==="
+                    
+                    // jenkins-jobsの各ジョブ設定を検証
+                    config['jenkins-jobs'].each { jobKey, jobConfig ->
+                        processedJobs++
+                        def jobValidationResults = []
+                        def hasErrors = false
+                        
+                        // 進捗表示（10ジョブごと）
+                        if (processedJobs % 10 == 0 || processedJobs == totalJobs) {
+                            echo "Progress: ${processedJobs}/${totalJobs} jobs validated..."
+                        }
+                        
+                        // dslfileの存在チェック
+                        if (jobConfig.dslfile) {
+                            if (!fileExists(jobConfig.dslfile)) {
+                                validationErrors.add("Job '${jobKey}': DSL file not found - ${jobConfig.dslfile}")
+                                jobValidationResults.add("  ✗ DSL file: ${jobConfig.dslfile} (NOT FOUND)")
+                                hasErrors = true
+                            } else {
+                                jobValidationResults.add("  ✓ DSL file: ${jobConfig.dslfile}")
+                            }
+                        }
+                        
+                        // jenkinsfileの存在チェック（定義されている場合のみ）
+                        if (jobConfig.jenkinsfile) {
+                            if (!fileExists(jobConfig.jenkinsfile)) {
+                                validationErrors.add("Job '${jobKey}': Jenkinsfile not found - ${jobConfig.jenkinsfile}")
+                                jobValidationResults.add("  ✗ Jenkinsfile: ${jobConfig.jenkinsfile} (NOT FOUND)")
+                                hasErrors = true
+                            } else {
+                                jobValidationResults.add("  ✓ Jenkinsfile: ${jobConfig.jenkinsfile}")
+                            }
+                        }
+                        
+                        // エラーがある場合のみ、またはデバッグ用に全て表示したい場合
+                        if (hasErrors) {
+                            validationSummary.add("${jobKey}:")
+                            validationSummary.addAll(jobValidationResults)
+                        }
+                    }
+                    
+                    // folders.groovyの存在チェック
+                    def foldersFile = env.FODLER_DSL_PATH
+                    if (!fileExists(foldersFile)) {
+                        validationSummary.add("Warning: folders.groovy not found at ${foldersFile}")
+                    }
+                    
+                    // 検証結果のサマリー表示
+                    echo "\n=== Validation Summary ==="
+                    echo "Total jobs validated: ${totalJobs}"
+                    echo "Errors found: ${validationErrors.size()}"
+                    
+                    // エラーがある場合は詳細を表示
+                    if (validationErrors.size() > 0) {
+                        echo "\n=== Validation Errors ==="
+                        echo validationSummary.join('\n')
+                        
+                        // 文字列を明示的に作成してからerrorを呼び出す
+                        def errorMessage = "Configuration validation failed with ${validationErrors.size()} errors. Please check the file paths in job-config.yaml"
+                        error(errorMessage)
+                    } else {
+                        echo "All files validated successfully! ✓"
+                    }
+                }
+            }
+        }
+        
+        stage('Create Jobs') {
+            steps {
+                script {
+                    // YAMLファイルを読み込む
+                    def config = readYaml file: env.CONFIG_YAML_PATH
+                    def dslFiles = []
+                    
+                    // folders.groovyを追加（存在する場合）
+                    def foldersFile = env.FODLER_DSL_PATH
+                    if (fileExists(foldersFile)) {
+                        dslFiles.add(0, foldersFile) // 最初に実行してフォルダ構造を作成
+                    }
+
+                    // jenkins-jobsから全てのdslfileを抽出
+                    config['jenkins-jobs'].each { jobKey, jobConfig ->
+                        if (jobConfig.dslfile) {
+                            dslFiles.add(jobConfig.dslfile)
+                        }
+                    }
+                    
+                    echo "JobDSL targets: ${dslFiles.size()} files"
+                    echo "Jobs configured: ${config['jenkins-jobs'].size()}"
+                    
+                    // 追加のパラメータを準備
+                    def additionalParams = [
+                        jenkinsJobsConfig: config['jenkins-jobs']
+                    ]
+                    
+                    // 他の設定が存在する場合は追加
+                    if (config['docs-generator-repositories']) {
+                        echo "Repositories configured: ${config['docs-generator-repositories'].size()}"
+                        additionalParams['docsGeneratorRepositories'] = config['docs-generator-repositories']
+                    }
+                    
+                    if (config['common-settings']) {
+                        echo "Common settings loaded: Yes"
+                        additionalParams['commonSettings'] = config['common-settings']
+                    }
+                    
+                    jobDsl(
+                        targets: dslFiles.join('\n'),
+                        lookupStrategy: 'SEED_JOB',
+                        additionalParameters: additionalParams
+                    )
+                }
+            }
+        }
+    }
+    
+    post {
+        always {
+            cleanWs()
+        }
+    }
+}

@@ -1,0 +1,270 @@
+@Library('jenkins-shared-lib') _
+
+def userId = ''
+def userEmail = ''
+
+pipeline {
+    agent any
+    
+    environment {
+        SCRIPT_PATH = 'jenkins/jobs/pipeline/account-setup/user-self-activation/scripts'
+    }
+    
+    stages {
+        stage('Verify User') {
+            steps {
+                script {
+                    wrap([$class: 'BuildUser']) {
+                        userId = env.BUILD_USER_ID
+                        userEmail = env.BUILD_USER_EMAIL
+                    }
+                    echo "=== Self Activation Job Started ==="
+                    echo "実行ユーザー: ${userId}"
+                    echo "実行ユーザーメール: ${userEmail}"
+                    echo "実行時刻: ${new Date()}"
+                    // BUILD_USER_ID と BUILD_USER_EMAIL が設定されているか確認
+                    if (!userId) {
+                        error "ユーザーIDを取得できません。Build User Vars Pluginが有効になっているか確認してください。"
+                    }
+                    
+                    if (!userEmail) {
+                        error "メールアドレスを取得できません。Build User Vars Pluginが有効になっているか、GitHub認証でメールアドレスが設定されているか確認してください。"
+                    }
+                    
+                    
+                    echo "検証中..."
+                    echo "ユーザーID: ${userId}"
+                    echo "メールアドレス: ${userEmail}"
+                    
+                    // @tielec.netドメインのチェック
+                    if (!userEmail.endsWith("@tielec.net")) {
+                        error """
+                        |===============================================
+                        |エラー: 権限のないユーザーです
+                        |===============================================
+                        |このジョブは @tielec.net ドメインのユーザーのみ実行できます。
+                        |あなたのメールアドレス: ${userEmail}
+                        |
+                        |@tielec.net ドメインのメールアドレスでGitHub認証を
+                        |行っているか確認してください。
+                        |===============================================
+                        """.stripMargin()
+                    }
+                    
+                    echo "✓ @tielec.netドメインのユーザーであることを確認しました"
+                    
+                    // Jenkins CLI のセットアップ
+                    echo "Jenkins CLIをセットアップ中..."
+                    try {
+                        def cliPath = jenkinsCliUtils.setupCli(env.JENKINS_URL)
+                        echo "Jenkins CLI準備完了: ${cliPath}"
+                    } catch (Exception e) {
+                        echo "Jenkins CLIのセットアップに失敗しました: ${e.message}"
+                        error "Jenkins CLIが利用できません"
+                    }
+                }
+                
+                script {
+                    // スクリプトファイルの存在確認
+                    if (!fileExists("${SCRIPT_PATH}/activate-user.groovy")) {
+                        error "${SCRIPT_PATH}/activate-user.groovy が見つかりません"
+                    }
+                    if (!fileExists("${SCRIPT_PATH}/check-activation-status.groovy")) {
+                        error "${SCRIPT_PATH}/check-activation-status.groovy が見つかりません"
+                    }
+                }
+            }
+        }
+        
+        stage('Check Current Status') {
+            steps {
+                echo "=== 現在の権限状態を確認 ==="
+                script {
+                    withCredentials([usernamePassword(
+                        credentialsId: 'jenkins-pat',
+                        usernameVariable: 'JENKINS_USER',
+                        passwordVariable: 'JENKINS_TOKEN'
+                    )]) {
+                        try {
+                            def scriptContent = readFile("${SCRIPT_PATH}/check-activation-status.groovy")
+                            
+                            // ユーザーIDを埋め込む
+                            def lines = scriptContent.split('\n')
+                            def modifiedLines = []
+                            
+                            lines.each { line ->
+                                if (line.contains('def targetUserId =')) {
+                                    modifiedLines.add("def targetUserId = '${userId}'  // Set by Jenkins")
+                                } else {
+                                    modifiedLines.add(line)
+                                }
+                            }
+                            
+                            scriptContent = modifiedLines.join('\n')
+                            
+                            def tempFile = "temp_check_status_${BUILD_NUMBER}.groovy"
+                            writeFile file: tempFile, text: scriptContent
+                            
+                            def result = sh(
+                                script: '''
+                                    cat ''' + tempFile + ''' | java -jar jenkins-cli.jar \
+                                        -s ${JENKINS_URL} \
+                                        -auth ${JENKINS_USER}:${JENKINS_TOKEN} \
+                                        groovy =
+                                ''',
+                                returnStdout: true
+                            ).trim()
+                            
+                            echo "現在の状態:\n${result}"
+                            
+                            // 既にアクティベート済みかチェック
+                            if (result.contains("すでに必要な権限を持っています")) {
+                                echo """
+                                |===============================================
+                                |既にアクティベート済みです
+                                |===============================================
+                                |あなたは既に必要な権限を持っています。
+                                |再度アクティベートする必要はありません。
+                                |===============================================
+                                """.stripMargin()
+                                currentBuild.result = 'SUCCESS'
+                                return
+                            }
+                            
+                        } catch (Exception e) {
+                            echo "権限状態の確認中にエラーが発生しました: ${e.message}"
+                            echo "アクティベーション処理を続行します..."
+                        }
+                    }
+                }
+            }
+        }
+        
+        stage('Activate Permissions') {
+            steps {
+                echo "=== 権限のアクティベーション ==="
+                script {
+                    withCredentials([usernamePassword(
+                        credentialsId: 'jenkins-pat',
+                        usernameVariable: 'JENKINS_USER',
+                        passwordVariable: 'JENKINS_TOKEN'
+                    )]) {
+                        try {
+                            def scriptContent = readFile("${SCRIPT_PATH}/activate-user.groovy")
+                            
+                            // ユーザーIDを埋め込む
+                            def lines = scriptContent.split('\n')
+                            def modifiedLines = []
+                            
+                            lines.each { line ->
+                                if (line.contains('def targetUserId =')) {
+                                    modifiedLines.add("def targetUserId = '${userId}'  // Set by Jenkins")
+                                } else {
+                                    modifiedLines.add(line)
+                                }
+                            }
+                            
+                            scriptContent = modifiedLines.join('\n')
+                            
+                            def tempFile = "temp_activate_${BUILD_NUMBER}.groovy"
+                            writeFile file: tempFile, text: scriptContent
+                            
+                            def result = sh(
+                                script: '''
+                                    cat ''' + tempFile + ''' | java -jar jenkins-cli.jar \
+                                        -s ${JENKINS_URL} \
+                                        -auth ${JENKINS_USER}:${JENKINS_TOKEN} \
+                                        groovy =
+                                ''',
+                                returnStdout: true
+                            ).trim()
+                            
+                            echo "実行結果:\n${result}"
+                            
+                            if (result.contains("アクティベーション完了")) {
+                                echo """
+                                |===============================================
+                                |✓ アクティベーション成功！
+                                |===============================================
+                                |おめでとうございます！
+                                |あなたのアカウントの権限が正常にアクティベートされました。
+                                |
+                                |付与された権限:
+                                |- adminロール（全権限）
+                                |
+                                |Jenkinsの全機能が利用可能になりました。
+                                |===============================================
+                                """.stripMargin()
+                            }
+                            
+                        } catch (Exception e) {
+                            error "アクティベーション処理中にエラーが発生しました: ${e.message}"
+                        }
+                    }
+                }
+            }
+        }
+        
+        stage('Generate Report') {
+            steps {
+                echo "=== アクティベーションレポート ==="
+                script {
+                    def reportContent = """
+                    |Jenkins Self Activation Report
+                    |==============================
+                    |実行日時: ${new Date()}
+                    |実行ユーザー: ${userId}
+                    |ビルド番号: ${env.BUILD_NUMBER}
+                    |ビルドURL: ${env.BUILD_URL}
+                    |
+                    |結果: SUCCESS
+                    |
+                    |このレポートは権限アクティベーションの記録として保存されます。
+                    """.stripMargin()
+                    
+                    def reportFile = "activation-report-${userId}-${BUILD_NUMBER}.txt"
+                    writeFile file: reportFile, text: reportContent
+                    archiveArtifacts artifacts: reportFile, allowEmptyArchive: true
+                    
+                    echo "レポートを保存しました: ${reportFile}"
+                }
+            }
+        }
+    }
+    
+    post {
+        success {
+            echo """
+            |========================================
+            |権限アクティベーション完了
+            |========================================
+            |${userId} さんの権限が正常に
+            |アクティベートされました。
+            |
+            |Jenkinsの全機能をご利用いただけます。
+            |========================================
+            """.stripMargin()
+        }
+        failure {
+            echo """
+            |========================================
+            |権限アクティベーション失敗
+            |========================================
+            |エラーが発生しました。
+            |ログを確認してください。
+            |
+            |サポートが必要な場合は管理者に
+            |お問い合わせください。
+            |========================================
+            """.stripMargin()
+        }
+        always {
+            script {
+                // 一時ファイルのクリーンアップ
+                sh '''
+                    rm -f temp_*.groovy || true
+                '''
+            }
+        }
+    }
+}

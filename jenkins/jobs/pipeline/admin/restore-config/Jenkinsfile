@@ -1,0 +1,84 @@
+@Library('jenkins-shared-lib') _
+
+pipeline {
+    agent { label 'built-in' }
+
+    environment {
+        JENKINS_PAT = credentials('jenkins-pat')
+        REPO_URL = "git@github.com:tielec/infrastructure-as-code.git"
+        GITHUB_CREDENTIALS_ID = 'github-deploy-key-tielec-jenkins-pipeline'
+        CASC_JENKINS_CONFIG = "${JENKINS_HOME}/jenkins.yaml"
+    }
+
+    stages {
+        stage('Prepare Workspace') {
+            steps {
+                script {
+                    cleanWs()
+                    
+                    gitUtils.checkoutRepository(
+                        env.REPO_URL,
+                        params.TARGET_BRANCH,
+                        env.GITHUB_CREDENTIALS_ID
+                    )
+                    
+                    // Jenkins CLIのセットアップ
+                    jenkinsCliUtils.setupCli(env.JENKINS_URL)
+                }
+            }
+        }
+
+        stage('Validate Configuration') {
+            steps {
+                script {
+                    if (!fileExists(params.CONFIG_FILE)) {
+                        error "設定ファイル ${params.CONFIG_FILE} が見つかりません。"
+                    }
+                    jenkinsCliUtils.checkConfiguration(params.CONFIG_FILE)
+                }
+            }
+        }
+
+        stage('Backup Current Configuration') {
+            steps {
+                script {
+                    def timestamp = sh(script: 'date "+%Y%m%d-%H%M%S"', returnStdout: true).trim()
+                    def backupFile = "jenkins_backup_${timestamp}.yaml"
+                    jenkinsCliUtils.exportConfiguration(backupFile)
+                    archiveArtifacts artifacts: backupFile
+                }
+            }
+        }
+
+        stage('Copy and Reload Configuration') {
+            steps {
+                script {
+                    sh "cp '${params.CONFIG_FILE}' '${CASC_JENKINS_CONFIG}'"
+                    jenkinsCliUtils.reloadJCasCConfiguration()
+                }
+            }
+        }
+
+        stage('Restart Jenkins') {
+            when { expression { params.RESTART_JENKINS } }
+            steps {
+                script {
+                    jenkinsCliUtils.safeRestart([timeout: 10])
+                }
+            }
+        }
+    }
+
+    post {
+        success { 
+            script {
+                echo '設定のリストアが完了しました。'
+            }
+        }
+        cleanup { 
+            script {
+                cleanWs()
+            }
+        }
+    }
+}

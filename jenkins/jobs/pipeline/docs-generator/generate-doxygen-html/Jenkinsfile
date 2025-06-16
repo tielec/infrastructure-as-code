@@ -1,0 +1,175 @@
+@Library('jenkins-shared-lib') _
+
+pipeline {
+    agent {
+        label 'ec2-fleet'
+    }
+
+    environment {
+        // ディレクトリ構造
+        DOC_DIR = 'documentation'
+        HTML_DIR = "${DOC_DIR}/html"
+        DOXYGEN_CONFIG_DIR = 'doxygen-config'
+        SOURCE_CODE_DIR = 'source-code'
+        DOXYGEN_AWESOME_DIR = 'doxygen-awesome'
+        
+        // バージョン設定
+        DOXYGEN_AWESOME_VERSION = 'v2.3.4'
+        
+        // Jenkins用Gitリポジトリ設定（定数）
+        GIT_JENKINS_REPO_URL = 'git@github.com:tielec/infrastructure-as-code.git'
+        GIT_JENKINS_REPO_BRANCH = 'main'
+        GIT_JENKINS_CREDENTIALS_ID = 'github-deploy-key-tielec-jenkins-pipeline'
+        
+        // Dockerコンテナ設定
+        DOCKER_BASE_IMAGE = 'ubuntu:22.04'
+        DOXYGEN_VERSION = '1.13.2'
+        
+        // タイムスタンプ
+        BUILD_TIMESTAMP = sh(
+            script: 'TZ="Asia/Tokyo" date "+%Y%m%d_%H%M%S"',
+            returnStdout: true
+        ).trim()
+    }
+
+    options {
+        timeout(time: 1, unit: 'HOURS')
+        disableConcurrentBuilds()
+        buildDiscarder(logRotator(numToKeepStr: '10'))
+    }
+
+    stages {
+        stage('Prepare Workspace') {
+            steps {
+                script {
+                    // クリーンアップと初期ディレクトリ作成
+                    cleanWs()
+                    sh """
+                        mkdir -p ${DOC_DIR} ${HTML_DIR} ${DOXYGEN_CONFIG_DIR} ${SOURCE_CODE_DIR}
+                        chmod -R 777 ${DOC_DIR}
+                    """
+
+                    // ソースコードのリポジトリをチェックアウト
+                    dir(env.SOURCE_CODE_DIR) {
+                        // メインリポジトリのチェックアウト
+                        gitUtils.checkoutRepository(
+                            params.GIT_SOURCE_REPO_URL,
+                            params.GIT_SOURCE_REPO_BRANCH,
+                            params.GIT_SOURCE_REPO_CREDENTIALS_ID
+                        )
+                        gitUtils.setupGit()
+
+                        // サブモジュールとしてDoxygen Awesomeを追加
+                        sh """
+                            # サブモジュールが既に存在するか確認
+                            if [ ! -f .gitmodules ] || ! grep -q "doxygen-awesome-css" .gitmodules; then
+                                git submodule add https://github.com/jothepro/doxygen-awesome-css.git
+                            fi
+
+                            # サブモジュールを初期化して更新
+                            git submodule init
+                            git submodule update
+
+                            # Doxygen Awesomeの特定のバージョンをチェックアウト
+                            cd doxygen-awesome-css
+                            git checkout ${DOXYGEN_AWESOME_VERSION}
+                        """
+                    }
+
+                    // Jenkins のリポジトリをチェックアウト
+                    dir(env.DOXYGEN_CONFIG_DIR) {
+                        gitUtils.checkoutRepository(
+                            env.GIT_JENKINS_REPO_URL,
+                            env.GIT_JENKINS_REPO_BRANCH,
+                            env.GIT_JENKINS_CREDENTIALS_ID
+                        )
+                    }
+
+                    // リポジトリ名を抽出
+                    def (repoOwner, repoName) =  gitUtils.extractRepoInfo(params.GIT_SOURCE_REPO_URL)
+                    // Doxyfileの準備と設定更新
+                    sh """
+                        cp ${DOXYGEN_CONFIG_DIR}/jenkins/jobs/pipeline/docs-generator/generate-doxygen-html/config/Doxyfile ${SOURCE_CODE_DIR}/
+                        cp ${DOXYGEN_CONFIG_DIR}/jenkins/jobs/pipeline/docs-generator/generate-doxygen-html/config/index.md ${SOURCE_CODE_DIR}/
+                        
+                        # Doxyfileのディレクトリパスを修正
+                        sed -i "s|OUTPUT_DIRECTORY       = .*|OUTPUT_DIRECTORY       = ../${DOC_DIR}|" ${SOURCE_CODE_DIR}/Doxyfile
+                        
+                        # PROJECT_NAMEを更新
+                        sed -i 's|PROJECT_NAME           = .*|PROJECT_NAME           = \"[${repoName}] Doxygen Docs\"|' ${SOURCE_CODE_DIR}/Doxyfile
+                    """
+
+                    // 設定用リポジトリの削除
+                    sh "rm -rf ${DOXYGEN_CONFIG_DIR}"
+                }
+            }
+        }
+
+        stage('Generate Documentation') {
+            steps {
+                withDockerContainer(
+                    image: env.DOCKER_BASE_IMAGE,
+                    args: "-u root -v ${WORKSPACE}:/workspace -w /workspace"
+                ) {
+                    script {
+                        // 必要なパッケージのインストール
+                        installDependencies()
+                        // ドキュメント生成
+                        dir(env.SOURCE_CODE_DIR) {
+                            generateDocs()
+                        }
+                    }
+                }
+            }
+        }
+
+        stage('Publish Documentation') {
+            steps {
+                publishHTML([
+                    allowMissing: false,
+                    alwaysLinkToLastBuild: true,
+                    keepAll: true,
+                    reportDir: "${HTML_DIR}",
+                    reportFiles: 'index.html',
+                    reportName: "Doxygen Docs - ${BUILD_TIMESTAMP}",
+                    reportTitles: ''
+                ])
+            }
+        }
+    }
+
+    post {
+        always {
+            archiveArtifacts artifacts: "${DOC_DIR}/**/*", fingerprint: true
+        }
+        success {
+            echo 'Documentation generated successfully!'
+        }
+        failure {
+            echo 'Failed to generate documentation'
+        }
+        cleanup {
+            cleanWs()
+        }
+    }
+}
+
+// ヘルパー関数
+def installDependencies() {
+    sh """
+        export DEBIAN_FRONTEND=noninteractive
+        apt-get update
+        apt-get install -y wget graphviz python3
+
+        cd /tmp
+        wget https://github.com/doxygen/doxygen/releases/download/Release_${env.DOXYGEN_VERSION.replace('.', '_')}/doxygen-${env.DOXYGEN_VERSION}.linux.bin.tar.gz
+        tar -xzf doxygen-${env.DOXYGEN_VERSION}.linux.bin.tar.gz
+        cp doxygen-${env.DOXYGEN_VERSION}/bin/doxygen /usr/local/bin/
+        chmod +x /usr/local/bin/doxygen
+    """
+}
+
+def generateDocs() {
+    sh 'doxygen -v'
+    sh "doxygen Doxyfile"
+}

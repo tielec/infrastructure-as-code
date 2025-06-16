@@ -1,0 +1,527 @@
+@Library('jenkins-shared-lib') _
+/**
+ * ドキュメント生成ツールテスト用パイプライン
+ * Python/シェルスクリプト/Rust/TypeScriptにDoxygenスタイルのドキュメントを自動生成するテストを行います
+ */
+
+pipeline {
+    agent {
+        docker {
+            label 'ec2-fleet'
+            image 'nikolaik/python-nodejs:python3.11-nodejs20'
+            args '-v ${WORKSPACE}:/workspace -w /workspace -u root'
+        }
+    }
+
+    parameters {
+        string(name: 'GIT_REPO_URL', defaultValue: 'git@github.com:tielec/infrastructure-as-code.git', description: 'ドキュメント生成ツールのリポジトリURL')
+        string(name: 'GIT_BRANCH', defaultValue: 'main', description: 'ドキュメント生成ツールのブランチ')
+        string(name: 'GIT_CREDENTIALS_ID', defaultValue: 'github-deploy-key-tielec-jenkins-pipeline', description: 'GitHub認証情報ID')
+        booleanParam(name: 'OVERWRITE_DOCS', defaultValue: true, description: '既存のドキュメントを上書きする')
+        string(name: 'MAX_RETRIES', defaultValue: '3', description: '処理失敗時の最大リトライ回数')
+    }
+
+    environment {
+        // APIキーと認証情報
+        OPENAI_API_KEY = credentials('openai-api-key')
+        OPENAI_API_ENDPOINT = "https://your-open-ai-endpoint/"
+        OPENAI_DEPLOYMENT_NAME = "gpt-4o-mini"
+        
+        // 作業ディレクトリ構造
+        PROJECT_HOME_DIR = "project-repo"        // ツールのコード
+        TEST_CODE_DIR = "test-code"              // テスト用コード
+        
+        // ドキュメント生成ツールのパス
+        PROJECT_BASE_DIR = "${PROJECT_HOME_DIR}/jenkins/jobs/pipeline/docs-generator/auto-insert-doxygen-comment"
+        MAIN_SCRIPT_PATH = "${PROJECT_BASE_DIR}/src/main.py"
+        PROJECT_TEMPRATE_DIR = "${PROJECT_BASE_DIR}/templates"
+        
+        // テンプレートのパス
+        PYTHON_TEMPLATES_DIR = "${PROJECT_TEMPRATE_DIR}/python"
+        SHELL_TEMPLATES_DIR = "${PROJECT_TEMPRATE_DIR}/shell"
+        RUST_TEMPLATES_DIR = "${PROJECT_TEMPRATE_DIR}/rust"
+        TYPESCRIPT_TEMPLATES_DIR = "${PROJECT_TEMPRATE_DIR}/typescript"
+
+        // テスト用コードの場所
+        TEST_SOURCE_PATH = "${PROJECT_BASE_DIR}/tests/fixtures"
+
+        // 生成物の保存ディレクトリ
+        REPORTS_DIR = "reports"
+        PYTHON_REPORTS_DIR = "${REPORTS_DIR}/python"
+        SHELL_REPORTS_DIR = "${REPORTS_DIR}/shell"
+        RUST_REPORTS_DIR = "${REPORTS_DIR}/rust"
+        TYPESCRIPT_REPORTS_DIR = "${REPORTS_DIR}/typescript"
+        
+        // タイムスタンプ
+        TIME_STAMP = sh(script: 'TZ="Asia/Tokyo" date "+%Y%m%d-%H%M%S"', returnStdout: true).trim()
+    }
+
+    stages {
+        stage('準備') {
+            steps {
+                script {   
+                    // 必要なツールのインストール
+                    sh "apt-get update && apt-get install -y git curl jq"
+
+                    // ドキュメント生成ツールのコードをチェックアウト
+                    dir(PROJECT_HOME_DIR) {
+                        gitUtils.checkoutRepository(
+                            params.GIT_REPO_URL,
+                            params.GIT_BRANCH,
+                            params.GIT_CREDENTIALS_ID
+                        )
+                    }
+                    
+                    // テスト用コードをコピー
+                    sh """
+                        # テスト用コードディレクトリの作成
+                        mkdir -p ${TEST_CODE_DIR}
+                        
+                        # テスト用コードをコピー
+                        cp -r ${PROJECT_BASE_DIR}/tests/fixtures/* ${TEST_CODE_DIR}/
+                        
+                        # コピーできたか確認
+                        ls -la ${TEST_CODE_DIR}
+                    """
+                    
+                    // 依存関係をインストール
+                    sh """
+                        python -m pip install --upgrade pip
+                        cd ${PROJECT_BASE_DIR}/src
+                        pip install -r requirements.txt --no-cache-dir
+                    """
+
+                    // レポート用ディレクトリの作成
+                    sh """
+                        mkdir -p ${PYTHON_REPORTS_DIR}/{success,failed}
+                        mkdir -p ${SHELL_REPORTS_DIR}/{success,failed}
+                        mkdir -p ${RUST_REPORTS_DIR}/{success,failed}
+                        mkdir -p ${TYPESCRIPT_REPORTS_DIR}/{success,failed}
+                        chmod -R 777 ${REPORTS_DIR}
+                    """
+                }
+            }
+        }
+
+        stage('Python ドキュメント生成テスト') {
+            steps {
+                script {
+                    def pythonFilesOutput = sh(
+                        script: "find ${TEST_CODE_DIR} -name '*.py'",
+                        returnStdout: true
+                    ).trim()
+                    
+                    def pythonFiles = []
+                    if (pythonFilesOutput) {
+                        pythonFiles = pythonFilesOutput.split('\n')
+                    }
+                    
+                    if (pythonFiles.size() == 0) {
+                        echo "テスト用のPythonファイルが見つかりませんでした。"
+                    } else {
+                        def successCount = 0
+                        def failCount = 0
+                        
+                        pythonFiles.each { filePath ->
+                            echo "Python ファイルをテスト中: ${filePath}"
+                            
+                            def docGenCommand = """
+                                python -u ${MAIN_SCRIPT_PATH} \
+                                    --file "${filePath}" \
+                                    --language python \
+                                    --python-class-template "${PYTHON_TEMPLATES_DIR}/docstring_class_template.md" \
+                                    --python-function-template "${PYTHON_TEMPLATES_DIR}/docstring_function_template.md" \
+                                    --python-module-template "${PYTHON_TEMPLATES_DIR}/docstring_module_template.md" \
+                                    ${params.OVERWRITE_DOCS ? '--overwrite-docstring' : ''}
+                            """
+                            
+                            def result = sh(script: docGenCommand, returnStatus: true)
+                            
+                            if (result == 0) {
+                                successCount++
+                                def fileName = filePath.split('/')[-1]
+                                sh """
+                                    mkdir -p "${PYTHON_REPORTS_DIR}/success"
+                                    cp "${filePath}" "${PYTHON_REPORTS_DIR}/success/${fileName}"
+                                """
+                                echo "✅ テスト成功: ${filePath}"
+                            } else {
+                                failCount++
+                                def fileName = filePath.split('/')[-1]
+                                sh """
+                                    mkdir -p "${PYTHON_REPORTS_DIR}/failed"
+                                    cp "${filePath}" "${PYTHON_REPORTS_DIR}/failed/${fileName}"
+                                """
+                                echo "❌ テスト失敗: ${filePath}"
+                            }
+                        }
+                        
+                        // テスト結果を保存
+                        def pythonResults = [
+                            total_files: pythonFiles.size(),
+                            success_count: successCount,
+                            failed_count: failCount,
+                            timestamp: env.TIME_STAMP
+                        ]
+                        
+                        writeJSON file: "${PYTHON_REPORTS_DIR}/results.json", json: pythonResults, pretty: 4
+                        
+                        // テスト結果を表示
+                        echo """
+                        Pythonテスト結果:
+                          - 総ファイル数: ${pythonFiles.size()}
+                          - 成功: ${successCount}
+                          - 失敗: ${failCount}
+                        """
+                    }
+                }
+            }
+        }
+        
+        stage('Shell ドキュメント生成テスト') {
+            steps {
+                script {
+                    def shellFilesOutput = sh(
+                        script: "find ${TEST_CODE_DIR} -name '*.sh' -o -name '*.bash'",
+                        returnStdout: true
+                    ).trim()
+                    
+                    def shellFiles = []
+                    if (shellFilesOutput) {
+                        shellFiles = shellFilesOutput.split('\n')
+                    }
+                    
+                    if (shellFiles.size() == 0) {
+                        echo "テスト用のShellファイルが見つかりませんでした。"
+                    } else {
+                        def successCount = 0
+                        def failCount = 0
+                        
+                        shellFiles.each { filePath ->
+                            echo "Shell ファイルをテスト中: ${filePath}"
+                            
+                            def docGenCommand = """
+                                python -u ${MAIN_SCRIPT_PATH} \
+                                    --file "${filePath}" \
+                                    --language shell \
+                                    --shell-function-template "${SHELL_TEMPLATES_DIR}/shell_function_template.md" \
+                                    --shell-script-template "${SHELL_TEMPLATES_DIR}/shell_script_template.md" \
+                                    ${params.OVERWRITE_DOCS ? '--overwrite-docstring' : ''}
+                            """
+                            
+                            def result = sh(script: docGenCommand, returnStatus: true)
+                            
+                            if (result == 0) {
+                                successCount++
+                                def fileName = filePath.split('/')[-1]
+                                sh """
+                                    mkdir -p "${SHELL_REPORTS_DIR}/success"
+                                    cp "${filePath}" "${SHELL_REPORTS_DIR}/success/${fileName}"
+                                """
+                                echo "✅ テスト成功: ${filePath}"
+                            } else {
+                                failCount++
+                                def fileName = filePath.split('/')[-1]
+                                sh """
+                                    mkdir -p "${SHELL_REPORTS_DIR}/failed"
+                                    cp "${filePath}" "${SHELL_REPORTS_DIR}/failed/${fileName}"
+                                """
+                                echo "❌ テスト失敗: ${filePath}"
+                            }
+                        }
+                        
+                        // テスト結果を保存
+                        def shellResults = [
+                            total_files: shellFiles.size(),
+                            success_count: successCount,
+                            failed_count: failCount,
+                            timestamp: env.TIME_STAMP
+                        ]
+                        
+                        writeJSON file: "${SHELL_REPORTS_DIR}/results.json", json: shellResults, pretty: 4
+                        
+                        // テスト結果を表示
+                        echo """
+                        Shellテスト結果:
+                          - 総ファイル数: ${shellFiles.size()}
+                          - 成功: ${successCount}
+                          - 失敗: ${failCount}
+                        """
+                    }
+                }
+            }
+        }
+
+        stage('Rust ドキュメント生成テスト') {
+            steps {
+                script {
+                    def rustFilesOutput = sh(
+                        script: "find ${TEST_CODE_DIR} -name '*.rs'",
+                        returnStdout: true
+                    ).trim()
+                    
+                    def rustFiles = []
+                    if (rustFilesOutput) {
+                        rustFiles = rustFilesOutput.split('\n')
+                    }
+                    
+                    if (rustFiles.size() == 0) {
+                        echo "テスト用のRustファイルが見つかりませんでした。"
+                    } else {
+                        def successCount = 0
+                        def failCount = 0
+                        
+                        rustFiles.each { filePath ->
+                            echo "Rust ファイルをテスト中: ${filePath}"
+                            
+                            def docGenCommand = """
+                                python -u ${MAIN_SCRIPT_PATH} \
+                                    --file "${filePath}" \
+                                    --language rust \
+                                    --rust-function-template "${RUST_TEMPLATES_DIR}/rust_function_template.md" \
+                                    --rust-struct-template "${RUST_TEMPLATES_DIR}/rust_struct_template.md" \
+                                    --rust-enum-template "${RUST_TEMPLATES_DIR}/rust_enum_template.md" \
+                                    --rust-trait-template "${RUST_TEMPLATES_DIR}/rust_trait_template.md" \
+                                    --rust-module-template "${RUST_TEMPLATES_DIR}/rust_module_template.md" \
+                                    ${params.OVERWRITE_DOCS ? '--overwrite-docstring' : ''}
+                            """
+                            
+                            def result = sh(script: docGenCommand, returnStatus: true)
+                            
+                            if (result == 0) {
+                                successCount++
+                                def fileName = filePath.split('/')[-1]
+                                sh """
+                                    mkdir -p "${RUST_REPORTS_DIR}/success"
+                                    cp "${filePath}" "${RUST_REPORTS_DIR}/success/${fileName}"
+                                """
+                                echo "✅ テスト成功: ${filePath}"
+                            } else {
+                                failCount++
+                                def fileName = filePath.split('/')[-1]
+                                sh """
+                                    mkdir -p "${RUST_REPORTS_DIR}/failed"
+                                    cp "${filePath}" "${RUST_REPORTS_DIR}/failed/${fileName}"
+                                """
+                                echo "❌ テスト失敗: ${filePath}"
+                            }
+                        }
+                        
+                        // テスト結果を保存
+                        def rustResults = [
+                            total_files: rustFiles.size(),
+                            success_count: successCount,
+                            failed_count: failCount,
+                            timestamp: env.TIME_STAMP
+                        ]
+                        
+                        writeJSON file: "${RUST_REPORTS_DIR}/results.json", json: rustResults, pretty: 4
+                        
+                        // テスト結果を表示
+                        echo """
+                        Rustテスト結果:
+                          - 総ファイル数: ${rustFiles.size()}
+                          - 成功: ${successCount}
+                          - 失敗: ${failCount}
+                        """
+                    }
+                }
+            }
+        }
+
+        stage('TypeScript ドキュメント生成テスト') {
+            steps {
+                script {
+                    // 特定のファイルをテスト
+                    def tsFilePath = "${TEST_CODE_DIR}/example_module.ts"
+                    
+                    // ファイルの存在確認
+                    def fileExists = sh(
+                        script: "test -f ${tsFilePath} && echo 'true' || echo 'false'",
+                        returnStdout: true
+                    ).trim()
+                    
+                    if (fileExists == 'false') {
+                        echo "指定されたTypeScriptファイル ${tsFilePath} が見つかりませんでした。"
+                        // テスト結果（失敗）を保存
+                        def typescriptResults = [
+                            total_files: 1,
+                            success_count: 0,
+                            failed_count: 1,
+                            timestamp: env.TIME_STAMP
+                        ]
+                        writeJSON file: "${TYPESCRIPT_REPORTS_DIR}/results.json", json: typescriptResults, pretty: 4
+                    } else {
+                        echo "TypeScript ファイルをテスト中: ${tsFilePath}"
+                        
+                        def docGenCommand = """
+                            python -u ${MAIN_SCRIPT_PATH} \
+                                --file "${tsFilePath}" \
+                                --language typescript \
+                                --typescript-function-template "${TYPESCRIPT_TEMPLATES_DIR}/typescript_function_template.md" \
+                                --typescript-class-template "${TYPESCRIPT_TEMPLATES_DIR}/typescript_class_template.md" \
+                                --typescript-interface-template "${TYPESCRIPT_TEMPLATES_DIR}/typescript_interface_template.md" \
+                                --typescript-type-template "${TYPESCRIPT_TEMPLATES_DIR}/typescript_type_template.md" \
+                                --typescript-enum-template "${TYPESCRIPT_TEMPLATES_DIR}/typescript_enum_template.md" \
+                                --typescript-module-template "${TYPESCRIPT_TEMPLATES_DIR}/typescript_module_template.md" \
+                                ${params.OVERWRITE_DOCS ? '--overwrite-docstring' : ''}
+                        """
+                        
+                        def result = sh(script: docGenCommand, returnStatus: true)
+                        
+                        if (result == 0) {
+                            def fileName = tsFilePath.split('/')[-1]
+                            sh """
+                                mkdir -p "${TYPESCRIPT_REPORTS_DIR}/success"
+                                cp "${tsFilePath}" "${TYPESCRIPT_REPORTS_DIR}/success/${fileName}"
+                            """
+                            echo "✅ テスト成功: ${tsFilePath}"
+                            
+                            // テスト結果（成功）を保存
+                            def typescriptResults = [
+                                total_files: 1,
+                                success_count: 1,
+                                failed_count: 0,
+                                timestamp: env.TIME_STAMP
+                            ]
+                            writeJSON file: "${TYPESCRIPT_REPORTS_DIR}/results.json", json: typescriptResults, pretty: 4
+                        } else {
+                            def fileName = tsFilePath.split('/')[-1]
+                            sh """
+                                mkdir -p "${TYPESCRIPT_REPORTS_DIR}/failed"
+                                cp "${tsFilePath}" "${TYPESCRIPT_REPORTS_DIR}/failed/${fileName}"
+                            """
+                            echo "❌ テスト失敗: ${tsFilePath}"
+                            
+                            // テスト結果（失敗）を保存
+                            def typescriptResults = [
+                                total_files: 1,
+                                success_count: 0,
+                                failed_count: 1,
+                                timestamp: env.TIME_STAMP
+                            ]
+                            writeJSON file: "${TYPESCRIPT_REPORTS_DIR}/results.json", json: typescriptResults, pretty: 4
+                        }
+                    }
+                }
+            }
+        }
+
+        stage('テスト結果サマリー') {
+            steps {
+                script {
+                    def pythonResults = [:]
+                    def shellResults = [:]
+                    def rustResults = [:]
+                    def typescriptResults = [:]
+                    
+                    // 各言語の結果ファイルが存在する場合に読み込む
+                    if (fileExists("${PYTHON_REPORTS_DIR}/results.json")) {
+                        pythonResults = readJSON file: "${PYTHON_REPORTS_DIR}/results.json"
+                    } else {
+                        pythonResults = [total_files: 0, success_count: 0, failed_count: 0]
+                    }
+                    
+                    if (fileExists("${SHELL_REPORTS_DIR}/results.json")) {
+                        shellResults = readJSON file: "${SHELL_REPORTS_DIR}/results.json"
+                    } else {
+                        shellResults = [total_files: 0, success_count: 0, failed_count: 0]
+                    }
+                    
+                    if (fileExists("${RUST_REPORTS_DIR}/results.json")) {
+                        rustResults = readJSON file: "${RUST_REPORTS_DIR}/results.json"
+                    } else {
+                        rustResults = [total_files: 0, success_count: 0, failed_count: 0]
+                    }
+                    
+                    if (fileExists("${TYPESCRIPT_REPORTS_DIR}/results.json")) {
+                        typescriptResults = readJSON file: "${TYPESCRIPT_REPORTS_DIR}/results.json"
+                    } else {
+                        typescriptResults = [total_files: 0, success_count: 0, failed_count: 0]
+                    }
+                    
+                    // テスト結果サマリーの作成
+                    def combinedResults = [
+                        timestamp: env.TIME_STAMP,
+                        python_results: pythonResults,
+                        shell_results: shellResults,
+                        rust_results: rustResults,
+                        typescript_results: typescriptResults,
+                        total_processed_files: pythonResults.total_files + shellResults.total_files + rustResults.total_files + typescriptResults.total_files,
+                        total_success_files: pythonResults.success_count + shellResults.success_count + rustResults.success_count + typescriptResults.success_count,
+                        total_failed_files: pythonResults.failed_count + shellResults.failed_count + rustResults.failed_count + typescriptResults.failed_count
+                    ]
+                    
+                    writeJSON file: "${REPORTS_DIR}/test_results.json", json: combinedResults, pretty: 4
+                    
+                    // テスト結果の表示
+                    echo """
+                    ======= テスト実行結果 =======
+                    Python処理:
+                      - 総ファイル数: ${pythonResults.total_files}
+                      - 成功: ${pythonResults.success_count}
+                      - 失敗: ${pythonResults.failed_count}
+                      
+                    Shell処理:
+                      - 総ファイル数: ${shellResults.total_files}
+                      - 成功: ${shellResults.success_count}
+                      - 失敗: ${shellResults.failed_count}
+                      
+                    Rust処理:
+                      - 総ファイル数: ${rustResults.total_files}
+                      - 成功: ${rustResults.success_count}
+                      - 失敗: ${rustResults.failed_count}
+                      
+                    TypeScript処理:
+                      - 総ファイル数: ${typescriptResults.total_files}
+                      - 成功: ${typescriptResults.success_count}
+                      - 失敗: ${typescriptResults.failed_count}
+                      
+                    合計:
+                      - 総処理ファイル数: ${pythonResults.total_files + shellResults.total_files + rustResults.total_files + typescriptResults.total_files}
+                      - 総成功数: ${pythonResults.success_count + shellResults.success_count + rustResults.success_count + typescriptResults.success_count}
+                      - 総失敗数: ${pythonResults.failed_count + shellResults.failed_count + rustResults.failed_count + typescriptResults.failed_count}
+                    ============================
+                    """
+                    
+                    // テスト結果に基づいてビルドステータスを設定
+                    if (combinedResults.total_failed_files > 0) {
+                        currentBuild.result = 'UNSTABLE'
+                    }
+                }
+            }
+        }
+    }
+
+    post {
+        always {
+            archiveArtifacts artifacts: """
+                ${REPORTS_DIR}/test_results.json,
+                ${PYTHON_REPORTS_DIR}/results.json,
+                ${SHELL_REPORTS_DIR}/results.json,
+                ${RUST_REPORTS_DIR}/results.json,
+                ${TYPESCRIPT_REPORTS_DIR}/results.json,
+                ${PYTHON_REPORTS_DIR}/success/**/*,
+                ${PYTHON_REPORTS_DIR}/failed/**/*,
+                ${SHELL_REPORTS_DIR}/success/**/*,
+                ${SHELL_REPORTS_DIR}/failed/**/*,
+                ${RUST_REPORTS_DIR}/success/**/*,
+                ${RUST_REPORTS_DIR}/failed/**/*,
+                ${TYPESCRIPT_REPORTS_DIR}/success/**/*,
+                ${TYPESCRIPT_REPORTS_DIR}/failed/**/*
+            """, fingerprint: true, allowEmptyArchive: true
+        }
+        success {
+            echo 'テストが完了しました。全てのテストが成功しました。'
+        }
+        unstable {
+            echo 'テストが完了しましたが、一部のテストが失敗しました。'
+        }
+        failure {
+            echo 'テスト実行中にエラーが発生しました。ログを確認してください。'
+        }
+        cleanup {
+            cleanWs()
+        }
+    }
+}

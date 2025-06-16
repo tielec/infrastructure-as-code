@@ -1,0 +1,422 @@
+@Library('jenkins-shared-lib') _
+
+pipeline {
+    agent any
+    
+    stages {
+        stage('Validation') {
+            steps {
+                script {
+                    echo "=== GitHub Webhook 本番運用パイプライン ==="
+                    echo "Action: ${params.ACTION}"
+                    
+                    // 必須パラメータのチェック
+                    if (!params.REPO_URL) {
+                        error "リポジトリURLは必須です"
+                    }
+                    
+                    // リポジトリ情報の抽出
+                    def repoInfo = gitUtils.extractRepoInfo(params.REPO_URL)
+                    env.REPO_OWNER = repoInfo[0]
+                    env.REPO_NAME = repoInfo[1]
+                    
+                    // リポジトリ名の正規化（ハイフンを除去、小文字に変換）
+                    env.REPO_NAME_NORMALIZED = env.REPO_NAME.replaceAll('-', '').toLowerCase()
+                    
+                    // Webhook URLの構築
+                    if (params.CUSTOM_WEBHOOK_URL) {
+                        env.WEBHOOK_URL = params.CUSTOM_WEBHOOK_URL
+                        echo "カスタムWebhook URLを使用します"
+                    } else {
+                        env.WEBHOOK_URL = "${params.JENKINS_BASE_URL}/generic-webhook-trigger/invoke?token=${env.REPO_NAME_NORMALIZED}-${params.WEBHOOK_TOKEN_SUFFIX}"
+                    }
+                    
+                    echo "Repository: ${env.REPO_OWNER}/${env.REPO_NAME}"
+                    echo "Normalized Name: ${env.REPO_NAME_NORMALIZED}"
+                    echo "Webhook URL: ${env.WEBHOOK_URL}"
+                    
+                    // GitHub接続テスト
+                    def connectionTest = gitUtils.testGitHubAppConnection()
+                    if (connectionTest.success) {
+                        echo "✅ GitHub接続テスト: 成功"
+                        echo "Rate Limit: ${connectionTest.rate_limit.remaining}/${connectionTest.rate_limit.limit}"
+                    } else {
+                        error "❌ GitHub接続テスト: 失敗"
+                    }
+                }
+            }
+        }
+        
+        stage('Find Target Webhook') {
+            when {
+                expression { params.ACTION in ['CREATE_OR_UPDATE', 'DELETE', 'VALIDATE'] }
+            }
+            steps {
+                script {
+                    echo "=== 対象Webhookの検索 ==="
+                    
+                    def webhooks = gitUtils.listWebhooks([ repoUrl: params.REPO_URL ])
+                    
+                    // スクリプト変数として定義
+                    def targetWebhookExists = false
+                    
+                    // 手動でIDが指定されている場合
+                    if (params.WEBHOOK_ID) {
+                        def webhook = webhooks?.find { it.id.toString() == params.WEBHOOK_ID }
+                        if (webhook) {
+                            env.TARGET_WEBHOOK_ID = params.WEBHOOK_ID
+                            targetWebhookExists = true
+                            echo "✅ 指定されたWebhook IDが見つかりました: ${env.TARGET_WEBHOOK_ID}"
+                            echo "  URL: ${webhook.config?.url}"
+                        } else {
+                            error "指定されたWebhook ID (${params.WEBHOOK_ID}) が見つかりません"
+                        }
+                    } else {
+                        // URLで検索
+                        def matchingWebhook = webhooks?.find { 
+                            it.config?.url == env.WEBHOOK_URL 
+                        }
+                        
+                        if (matchingWebhook) {
+                            env.TARGET_WEBHOOK_ID = matchingWebhook.id.toString()
+                            targetWebhookExists = true
+                            echo "✅ 該当するWebhookが見つかりました:"
+                            echo "  ID: ${env.TARGET_WEBHOOK_ID}"
+                            echo "  URL: ${matchingWebhook.config?.url}"
+                            echo "  Events: ${matchingWebhook.events?.join(', ')}"
+                            echo "  Active: ${matchingWebhook.active}"
+                        } else {
+                            echo "ℹ️ 該当するWebhookは存在しません"
+                            
+                            if (params.ACTION == 'DELETE') {
+                                error "削除対象のWebhookが見つかりません (URL: ${env.WEBHOOK_URL})"
+                            }
+                        }
+                    }
+                    
+                    // 環境変数に設定
+                    env.TARGET_WEBHOOK_EXISTS = targetWebhookExists ? 'true' : 'false'
+                    echo "DEBUG: TARGET_WEBHOOK_EXISTS = ${env.TARGET_WEBHOOK_EXISTS}"
+                }
+            }
+        }
+        
+        stage('List Webhooks') {
+            when {
+                expression { params.ACTION == 'LIST' }
+            }
+            steps {
+                script {
+                    echo "=== 既存Webhook一覧 ==="
+                    def webhooks = gitUtils.listWebhooks([ repoUrl: params.REPO_URL ])
+                    
+                    if (webhooks && webhooks.size() > 0) {
+                        webhooks.each { webhook ->
+                            def isTarget = webhook.config?.url == env.WEBHOOK_URL
+                            echo "${isTarget ? '>>> ' : ''}ID: ${webhook.id}"
+                            echo "  URL: ${webhook.config?.url ?: 'N/A'}"
+                            echo "  Events: ${webhook.events?.join(', ') ?: 'N/A'}"
+                            echo "  Active: ${webhook.active}"
+                            echo "  Content-Type: ${webhook.config?.content_type ?: 'N/A'}"
+                            echo "  SSL Verification: ${webhook.config?.insecure_ssl == '0' ? 'Enabled' : 'Disabled'}"
+                            echo "  Created: ${webhook.created_at}"
+                            echo "  Updated: ${webhook.updated_at}"
+                            echo "---"
+                        }
+                        echo "合計: ${webhooks.size()}個のWebhook"
+                    } else {
+                        echo "既存のWebhookはありません"
+                    }
+                }
+            }
+        }
+        
+        stage('Create Webhook') {
+            when {
+                expression { 
+                    params.ACTION == 'CREATE_OR_UPDATE' && 
+                    env.TARGET_WEBHOOK_EXISTS != 'true' && 
+                    !params.DRY_RUN 
+                }
+            }
+            steps {
+                script {
+                    echo "=== Webhook作成 ==="
+                    echo "DEBUG: TARGET_WEBHOOK_EXISTS = '${env.TARGET_WEBHOOK_EXISTS}'"
+                    
+                    // イベントリストの解析
+                    def events = params.WEBHOOK_EVENTS.split(',').collect { it.trim() }
+                    
+                    // Webhook設定の構築
+                    def webhookConfig = [
+                        config: [
+                            url: env.WEBHOOK_URL,
+                            content_type: params.CONTENT_TYPE == 'application/json' ? 'json' : 'form',
+                            insecure_ssl: params.SSL_VERIFICATION ? '0' : '1'
+                        ],
+                        events: events,
+                        active: params.WEBHOOK_ACTIVE
+                    ]
+                    
+                    echo "設定内容:"
+                    echo "  URL: ${webhookConfig.config.url}"
+                    echo "  Events: ${webhookConfig.events.join(', ')}"
+                    echo "  Content-Type: ${params.CONTENT_TYPE}"
+                    echo "  SSL Verification: ${params.SSL_VERIFICATION}"
+                    echo "  Active: ${webhookConfig.active}"
+                    
+                    try {
+                        def result = gitUtils.createWebhook(
+                            webhookConfig.config.url,
+                            webhookConfig.events,
+                            [ 
+                                repoUrl: params.REPO_URL,
+                                config: webhookConfig.config,
+                                active: webhookConfig.active
+                            ]
+                        )
+                        
+                        echo "✅ Webhook作成成功:"
+                        echo "  ID: ${result.id}"
+                        echo "  URL: ${result.config?.url}"
+                        echo "  Events: ${result.events?.join(', ')}"
+                        echo "  Active: ${result.active}"
+                        
+                        env.TARGET_WEBHOOK_ID = result.id.toString()
+                        
+                        // Pingテスト
+                        try {
+                            gitUtils.pingWebhook(
+                                env.TARGET_WEBHOOK_ID,
+                                [ repoUrl: params.REPO_URL ]
+                            )
+                            echo "✅ Pingテスト成功"
+                        } catch (Exception e) {
+                            echo "⚠️ Pingテスト失敗: ${e.message}"
+                        }
+                        
+                    } catch (Exception e) {
+                        echo "❌ Webhook作成エラー詳細: ${e.message}"
+                        if (e.message.contains('422')) {
+                            echo "⚠️ エラー422: 同じURLのWebhookが既に存在する可能性があります"
+                            echo "既存のWebhookを確認してください"
+                        }
+                        error "Webhook作成エラー: ${e.message}"
+                    }
+                }
+            }
+        }
+        
+        stage('Update Webhook') {
+            when {
+                expression { 
+                    params.ACTION == 'CREATE_OR_UPDATE' && 
+                    env.TARGET_WEBHOOK_EXISTS == 'true' && 
+                    !params.DRY_RUN 
+                }
+            }
+            steps {
+                script {
+                    echo "=== Webhook更新 ==="
+                    echo "DEBUG: TARGET_WEBHOOK_EXISTS = '${env.TARGET_WEBHOOK_EXISTS}'"
+                    
+                    // 現在の設定を取得
+                    def currentWebhook = gitUtils.getWebhook(
+                        env.TARGET_WEBHOOK_ID,
+                        [ repoUrl: params.REPO_URL ]
+                    )
+                    
+                    echo "現在の設定:"
+                    echo "  ID: ${currentWebhook.id}"
+                    echo "  URL: ${currentWebhook.config?.url}"
+                    echo "  Events: ${currentWebhook.events?.join(', ')}"
+                    echo "  Active: ${currentWebhook.active}"
+                    
+                    // 更新設定の構築
+                    def events = params.WEBHOOK_EVENTS.split(',').collect { it.trim() }
+                    def updateConfig = [
+                        config: [
+                            url: env.WEBHOOK_URL,
+                            content_type: params.CONTENT_TYPE == 'application/json' ? 'json' : 'form',
+                            insecure_ssl: params.SSL_VERIFICATION ? '0' : '1'
+                        ],
+                        events: events,
+                        active: params.WEBHOOK_ACTIVE
+                    ]
+                    
+                    echo "新しい設定:"
+                    echo "  URL: ${updateConfig.config.url}"
+                    echo "  Events: ${updateConfig.events.join(', ')}"
+                    echo "  Active: ${updateConfig.active}"
+                    
+                    try {
+                        def result = gitUtils.updateWebhook(
+                            env.TARGET_WEBHOOK_ID,
+                            updateConfig,
+                            [ repoUrl: params.REPO_URL ]
+                        )
+                        
+                        echo "✅ Webhook更新成功"
+                        
+                        // Pingテスト
+                        try {
+                            gitUtils.pingWebhook(
+                                env.TARGET_WEBHOOK_ID,
+                                [ repoUrl: params.REPO_URL ]
+                            )
+                            echo "✅ Pingテスト成功"
+                        } catch (Exception e) {
+                            echo "⚠️ Pingテスト失敗: ${e.message}"
+                        }
+                        
+                    } catch (Exception e) {
+                        error "Webhook更新エラー: ${e.message}"
+                    }
+                }
+            }
+        }
+        
+        stage('Delete Webhook') {
+            when {
+                allOf {
+                    expression { params.ACTION == 'DELETE' }
+                    expression { !params.DRY_RUN }
+                }
+            }
+            steps {
+                script {
+                    echo "=== Webhook削除 ==="
+                    
+                    if (!env.TARGET_WEBHOOK_ID) {
+                        error "削除対象のWebhookが見つかりません"
+                    }
+                    
+                    // 削除前の確認
+                    try {
+                        def webhook = gitUtils.getWebhook(
+                            env.TARGET_WEBHOOK_ID,
+                            [ repoUrl: params.REPO_URL ]
+                        )
+                        echo "削除対象:"
+                        echo "  ID: ${webhook.id}"
+                        echo "  URL: ${webhook.config?.url}"
+                        echo "  Events: ${webhook.events?.join(', ')}"
+                        
+                        gitUtils.deleteWebhook(
+                            env.TARGET_WEBHOOK_ID,
+                            [ repoUrl: params.REPO_URL ]
+                        )
+                        echo "✅ Webhook削除成功: ID=${env.TARGET_WEBHOOK_ID}"
+                        
+                    } catch (Exception e) {
+                        error "Webhook削除エラー: ${e.message}"
+                    }
+                }
+            }
+        }
+        
+        stage('Validate Configuration') {
+            when {
+                expression { params.ACTION == 'VALIDATE' }
+            }
+            steps {
+                script {
+                    echo "=== 設定検証 ==="
+                    
+                    // 期待されるWebhook設定
+                    echo "期待される設定:"
+                    echo "  URL: ${env.WEBHOOK_URL}"
+                    echo "  Events: ${params.WEBHOOK_EVENTS}"
+                    echo "  Active: ${params.WEBHOOK_ACTIVE}"
+                    echo "  Content-Type: ${params.CONTENT_TYPE}"
+                    echo "  SSL Verification: ${params.SSL_VERIFICATION}"
+                    
+                    if (env.TARGET_WEBHOOK_EXISTS == 'true') {
+                        def webhook = gitUtils.getWebhook(
+                            env.TARGET_WEBHOOK_ID,
+                            [ repoUrl: params.REPO_URL ]
+                        )
+                        
+                        echo "実際の設定:"
+                        echo "  ID: ${webhook.id}"
+                        echo "  URL: ${webhook.config?.url}"
+                        echo "  Events: ${webhook.events?.join(', ')}"
+                        echo "  Active: ${webhook.active}"
+                        echo "  Content-Type: ${webhook.config?.content_type == 'json' ? 'application/json' : 'application/x-www-form-urlencoded'}"
+                        echo "  SSL Verification: ${webhook.config?.insecure_ssl == '0' ? 'Enabled' : 'Disabled'}"
+                        
+                        // 設定の検証
+                        def expectedEvents = params.WEBHOOK_EVENTS.split(',').collect { it.trim() }.sort()
+                        def actualEvents = webhook.events?.sort() ?: []
+                        
+                        def validationErrors = []
+                        
+                        if (webhook.config?.url != env.WEBHOOK_URL) {
+                            validationErrors.add("URL: 期待=${env.WEBHOOK_URL}, 実際=${webhook.config?.url}")
+                        }
+                        if (expectedEvents != actualEvents) {
+                            validationErrors.add("Events: 期待=${expectedEvents.join(', ')}, 実際=${actualEvents.join(', ')}")
+                        }
+                        if (webhook.active != params.WEBHOOK_ACTIVE) {
+                            validationErrors.add("Active: 期待=${params.WEBHOOK_ACTIVE}, 実際=${webhook.active}")
+                        }
+                        
+                        def expectedContentType = params.CONTENT_TYPE == 'application/json' ? 'json' : 'form'
+                        if (webhook.config?.content_type != expectedContentType) {
+                            validationErrors.add("Content-Type: 期待=${params.CONTENT_TYPE}, 実際=${webhook.config?.content_type == 'json' ? 'application/json' : 'application/x-www-form-urlencoded'}")
+                        }
+                        
+                        def expectedInsecureSSL = params.SSL_VERIFICATION ? '0' : '1'
+                        if (webhook.config?.insecure_ssl != expectedInsecureSSL) {
+                            validationErrors.add("SSL Verification: 期待=${params.SSL_VERIFICATION}, 実際=${webhook.config?.insecure_ssl == '0'}")
+                        }
+                        
+                        if (validationErrors.isEmpty()) {
+                            echo "✅ 設定が正しく適用されています"
+                        } else {
+                            echo "⚠️ 設定に差異があります:"
+                            validationErrors.each { error ->
+                                echo "  - ${error}"
+                            }
+                        }
+                    } else {
+                        echo "❌ 該当するWebhookが見つかりません"
+                        echo "CREATE_OR_UPDATE アクションで作成してください"
+                    }
+                }
+            }
+        }
+    }
+    
+    post {
+        success {
+            script {
+                echo "=== 操作完了 ==="
+                echo "Repository: ${env.REPO_OWNER}/${env.REPO_NAME}"
+                echo "Action: ${params.ACTION}"
+                echo "Webhook URL: ${env.WEBHOOK_URL}"
+                
+                if (params.DRY_RUN) {
+                    echo "ドライランモードで実行しました（実際の変更は行われていません）"
+                } else if (params.ACTION == 'CREATE_OR_UPDATE') {
+                    if (env.TARGET_WEBHOOK_EXISTS == 'true') {
+                        echo "✅ Webhookを更新しました (ID: ${env.TARGET_WEBHOOK_ID})"
+                    } else {
+                        echo "✅ 新規Webhookを作成しました (ID: ${env.TARGET_WEBHOOK_ID})"
+                    }
+                } else if (params.ACTION != 'LIST' && params.ACTION != 'VALIDATE') {
+                    echo "✅ ${params.ACTION}操作が正常に完了しました"
+                }
+            }
+        }
+        
+        failure {
+            script {
+                echo "❌ 操作が失敗しました"
+                echo "Repository: ${env.REPO_OWNER}/${env.REPO_NAME}"
+                echo "Action: ${params.ACTION}"
+                echo "詳細はログを確認してください"
+            }
+        }
+    }
+}

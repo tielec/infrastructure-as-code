@@ -1,0 +1,187 @@
+@Library('jenkins-shared-lib') _
+
+pipeline {
+    agent any
+
+    environment {
+        JENKINS_PAT = credentials('jenkins-pat')
+        REPO_URL = "git@github.com:tielec/infrastructure-as-code.git"
+        GITHUB_CREDENTIALS_ID = 'github-deploy-key-tielec-jenkins-pipeline'
+        TIMESTAMP = sh(script: 'date "+%Y%m%d-%H%M%S"', returnStdout: true).trim()
+        BRANCH_NAME = "config_backup/${TIMESTAMP}"
+        CONFIG_DIR = "jenkins/config/casc"
+        CONFIG_FILE = "${CONFIG_DIR}/jenkins.yaml"
+    }
+
+    stages {
+        stage('Prepare Workspace') {
+            steps {
+                script {
+                    // ワークスペースのクリーンアップ
+                    cleanWs()
+                    
+                    // Gitのセットアップとチェックアウト
+                    gitUtils.checkoutRepository(
+                        env.REPO_URL,
+                        params.TARGET_BRANCH,
+                        env.GITHUB_CREDENTIALS_ID
+                    )
+                    gitUtils.setupGit()
+
+                    // Jenkins CLIのセットアップ
+                    jenkinsCliUtils.setupCli(env.JENKINS_URL)
+                }
+            }
+        }
+
+        stage('Prepare Config') {
+            steps {
+                script {
+                    // 最新の設定をエクスポート
+                    def exportCommand = """
+                        |java -jar jenkins-cli.jar -s ${env.JENKINS_URL} -auth ${JENKINS_PAT_USR}:${JENKINS_PAT_PSW} export-configuration > jenkins_new_temp.yaml
+                        |
+                        |# 1. credentialsセクションの削除
+                        |sed '/^credentials:/,/^[a-z]/{/^[a-z]/!d;/^credentials:/d;}' jenkins_new_temp.yaml > jenkins_new_temp_1.yaml
+                        |
+                        |# 2. scriptApprovalセクションの削除
+                        |sed '/^  scriptApproval:/,/^[a-z]/{/^[a-z]/!d;/^  scriptApproval:/d;}' jenkins_new_temp_1.yaml > jenkins_new_temp_2.yaml
+                        |
+                        |# 3. インスタンスIDを含むラベルの削除 (built-inとec2-fleetは保持)
+                        |sed '/^  labelAtoms:/,/^[a-z]/{/name: "i-[a-z0-9]*"/d;}' jenkins_new_temp_2.yaml > jenkins_new_temp_3.yaml
+                        |
+                        |# 4. clientSecretの置換
+                        |sed 's/clientSecret: *"[^"]*"/clientSecret: "d724ed60d2fed121cab7ae543ecd8ca03c41b67a"/' jenkins_new_temp_3.yaml > jenkins_new.yaml
+                        |
+                        |# 一時ファイルの削除
+                        |rm jenkins_new_temp*.yaml
+                        |""".stripMargin()
+
+                    // GITの設定をエクスポート
+                    def processCommand = """
+                        |# 1. credentialsセクションの削除
+                        |sed '/^credentials:/,/^[a-z]/{/^[a-z]/!d;/^credentials:/d;}' "${CONFIG_FILE}" > jenkins_old_temp_1.yaml
+                        |
+                        |# 2. scriptApprovalセクションの削除
+                        |sed '/^  scriptApproval:/,/^[a-z]/{/^[a-z]/!d;/^  scriptApproval:/d;}' jenkins_old_temp_1.yaml > jenkins_old_temp_2.yaml
+                        |
+                        |# 3. インスタンスIDを含むラベルの削除 (built-inとec2-fleetは保持)
+                        |sed '/^  labelAtoms:/,/^[a-z]/{/name: "i-[a-z0-9]*"/d;}' jenkins_old_temp_2.yaml > jenkins_old_temp_3.yaml
+                        |
+                        |# 4. clientSecretの置換
+                        |sed 's/clientSecret: *"[^"]*"/clientSecret: "d724ed60d2fed121cab7ae543ecd8ca03c41b67a"/' jenkins_old_temp_3.yaml > jenkins_old.yaml
+                        |
+                        |# 一時ファイルの削除
+                        |rm jenkins_old_temp*.yaml
+                        |""".stripMargin()
+
+                    // jenkins_new.yaml の作成
+                    sh exportCommand
+                    
+                    // jenkins_old.yaml の作成                    
+                    if (fileExists(env.CONFIG_FILE)) {
+                        sh processCommand
+                    } else {
+                        writeFile file: 'jenkins_old.yaml', text: ''
+                    }
+                }
+            }
+        }
+
+        stage('Check Differences') {
+            steps {
+                script {
+                    def diffOutput = sh(
+                        script: '''
+                            diff -u jenkins_new.yaml jenkins_old.yaml | \
+                            grep -v "^+++" | \
+                            grep -v "^---" | \
+                            tail -n +3 || true
+                        ''',
+                        returnStdout: true
+                    ).trim()
+
+                    env.CONFIG_DIFF = diffOutput
+                    env.HAS_CHANGES = diffOutput ? 'true' : 'false'
+
+                    if (env.HAS_CHANGES == 'true') {
+                        echo "検出された変更:\n${diffOutput}"
+                    }
+                }
+            }
+        }
+
+        stage('Update Configuration') {
+            when {
+                environment name: 'HAS_CHANGES', value: 'true'
+            }
+            steps {
+                script {
+                    sh "mkdir -p ${CONFIG_DIR}"
+                    sh "cp jenkins_new.yaml ${CONFIG_FILE}"
+
+                    def commitMessage = "Jenkins設定バックアップ - ${new Date().format('yyyy-MM-dd HH:mm:ss')}"
+                    
+                    gitUtils.commitAndPushChanges(
+                        env.BRANCH_NAME,             // ブランチ名 
+                        commitMessage,               // コミットメッセージ
+                        env.CONFIG_FILE,               // 変更されたファイル一覧
+                        env.GITHUB_CREDENTIALS_ID,   // 認証情報ID
+                        [
+                            repoUrl: env.REPO_URL,
+                            createNewBranch: true,
+                            baseBranch: 'main'
+                        ]
+                    )
+                }
+            }
+        }
+
+        stage('Create Pull Request') {
+            when {
+                environment name: 'HAS_CHANGES', value: 'true'
+            }
+            steps {
+                script {
+                    def prBody = """
+                        |# Jenkins設定の自動バックアップ
+                        |
+                        |## 概要
+                        |Jenkins Configuration as Codeの設定ファイルの自動バックアップを行いました。
+                        |
+                        |## 補足情報
+                        |- バックアップ日時: ${env.TIMESTAMP}
+                        |- ジョブURL: ${BUILD_URL}
+                        |
+                        |この変更は自動生成されています。レビュー後、問題がなければマージしてください。
+                        """.stripMargin()
+
+                    def prTitle = "Jenkins設定バックアップ - ${env.TIMESTAMP}"
+
+                    gitUtils.createPullRequest(
+                        prTitle,
+                        prBody,
+                        env.BRANCH_NAME,
+                        'main'
+                    )
+                }
+            }
+        }
+    }
+
+    post {
+        success {
+            script {
+                if (env.HAS_CHANGES == 'false') {
+                    echo "設定ファイルに変更はありません。"
+                }
+            }
+        }
+        failure {
+            echo 'バックアップ処理が失敗しました。ログを確認してください。'
+        }
+        cleanup {
+            cleanWs()
+        }
+    }
+}

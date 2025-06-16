@@ -1,0 +1,767 @@
+@Library('jenkins-shared-lib') _
+
+/**
+ * GitHub PRの履歴に基づく技術ドキュメント生成パイプライン
+ * 
+ * 指定された期間内のPRコメントを順番に処理し、OpenAIを使用して技術ドキュメントを生成・更新していきます
+ * マルチセクション方式に対応しており、各セクションごとに独立したドキュメントを生成し、結合します
+ */
+pipeline {
+    agent {
+        docker {
+            label 'ec2-fleet'
+            image 'nikolaik/python-nodejs:python3.11-nodejs20'
+            args '-v ${WORKSPACE}:/workspace -w /workspace -u root'
+        }
+    }
+    
+    environment {
+        // 認証情報
+        OPENAI_API_KEY = credentials('openai-api-key')
+        
+        // API/リポジトリ設定
+        OPENAI_API_ENDPOINT = "https://your-open-ai-endpoint"
+        GIT_JENKINS_REPO_URL = 'git@github.com:tielec/infrastructure-as-code.git'
+        GIT_JENKINS_REPO_BRANCH = 'main'
+        GIT_JENKINS_REPO_CREDENTIALS_ID = 'github-deploy-key-tielec-jenkins-pipeline'
+        
+        // ディレクトリ構造
+        COMMENTS_DIR = "pr-comments"
+        ORIGINAL_CODE_DIR = "original-code"
+        DOCS_DIR = "tech-docs"
+        SECTIONS_DIR = "${DOCS_DIR}/sections"
+        PROJECT_HOME_DIR = "project-repo"
+        PROJECT_BASE_DIR = "${PROJECT_HOME_DIR}/jenkins/jobs/pipeline/docs-generator/technical-docs-writer"
+        PYTHON_PROJECT_DIR = "${PROJECT_BASE_DIR}/src"
+        TEMPLATES_DIR = "${PROJECT_BASE_DIR}/templates"
+        
+        // 日時関連
+        TIME_STAMP = sh(script: 'TZ="Asia/Tokyo" date "+%Y/%m/%d %H:%M:%S"', returnStdout: true).trim()
+        REPORT_DATE = sh(script: 'TZ="Asia/Tokyo" date "+%Y%m%d_%H%M%S"', returnStdout: true).trim()
+    }
+    
+    stages {
+        stage('パラメータ検証') {
+            steps {
+                script {
+                    // リポジトリURLのバリデーション
+                    if (!params.GIT_REPO_URL?.trim()) {
+                        error "リポジトリURLが指定されていません。"
+                    }
+                    
+                    // リポジトリ情報の設定と検証
+                    def (repoOwner, repoName) =  gitUtils.extractRepoInfo(params.GIT_REPO_URL)
+                    env.REPO_OWNER = repoOwner
+                    env.REPO_NAME  = repoName 
+                    if (!env.REPO_OWNER?.trim() || !env.REPO_NAME?.trim()) {
+                                        error "リポジトリURLの形式が正しくありません。'https://github.com/owner/repo'または'git@github.com:owner/repo'の形式で入力してください。"
+                    }             
+                    echo "対象リポジトリ: ${env.REPO_OWNER}/${env.REPO_NAME}"
+                    
+                    // 日付パラメータの検証
+                    validateDateParameters()
+                }
+            }
+        }
+        
+        stage('環境準備') {
+            steps {
+                script {
+                    // 必要なツールのインストール
+                    sh '''
+                    # 必要最小限のパッケージのみインストール
+                    apt-get update && apt-get install -y git curl jq
+
+                    # Puppeteer依存関係のインストール
+                    apt-get install -y chromium libatk-bridge2.0-0 libatk1.0-0 libcups2 libdrm2 libgbm1 libnspr4 libnss3 libxcomposite1 libxdamage1 libxfixes3 libxkbcommon0 libxrandr2 xvfb
+
+                    # Mermaid CLIのインストール
+                    npm install -g @mermaid-js/mermaid-cli
+
+                    # インストールの確認
+                    echo "Node.js version: $(node --version)"
+                    echo "Python version: $(python --version)"
+                    echo "Mermaid CLI version: $(mmdc --version || echo 'not installed')"
+                    '''
+                    
+                    // ドキュメントファイル名の設定
+                    env.DOC_FILENAME = params.DOC_FILENAME.endsWith('.md') ? params.DOC_FILENAME : "${params.DOC_FILENAME}.md"
+                    echo "ドキュメントファイル名: ${env.DOC_FILENAME}"
+                    
+                    // 作業ディレクトリの準備
+                    prepareWorkDirectories()
+                    
+                    //gitリポジトリのチェックアウト
+                    dir(ORIGINAL_CODE_DIR) {
+                        gitUtils.checkoutRepository(
+                            params.GIT_REPO_URL,
+                            params.GIT_DOCUMENT_BRANCH,
+                            params.GIT_CREDENTIALS_ID 
+                        )
+                    }
+
+                    // ツールのチェックアウト
+                    dir(PROJECT_HOME_DIR) {
+                        gitUtils.checkoutRepository(
+                            env.GIT_JENKINS_REPO_URL,
+                            env.GIT_JENKINS_REPO_BRANCH,
+                            env.GIT_JENKINS_REPO_CREDENTIALS_ID 
+                        )
+                    }
+                    
+                    // テンプレートをワークスペースにコピー
+                    sh """
+                        cp -r ${PROJECT_BASE_DIR}/templates ${WORKSPACE}/
+                        chmod -R 777 ${WORKSPACE}/templates
+                    """
+                    
+                    // Pythonの依存関係をインストール
+                    installPythonDependencies()
+                    
+                    // Xvfbを起動（ヘッドレスブラウザのための仮想ディスプレイ）
+                    sh "Xvfb :99 -screen 0 1024x768x24 > /dev/null 2>&1 &"
+                    env.DISPLAY = ":99"
+                }
+            }
+        }
+        
+        stage('マージ済みPRコメントの抽出') {
+            steps {
+                script {
+                    try {
+                        echo "期間内のマージ済みPRの自動生成コメントを抽出中..."
+                        echo "抽出期間: ${env.PR_START_DATE} から ${env.PR_END_DATE} まで"
+                        
+                        def prCommentsData = gitUtils.extractCommentsFromMergedPRsByDate([
+                            repoOwner: env.REPO_OWNER,
+                            repoName: env.REPO_NAME,
+                            commentTag: 'auto-generated-comment',
+                            base: params.GIT_TARGET_BRANCH,
+                            sort: 'merged',
+                            direction: 'asc',  // 古い順（マージされた順）
+                            startDate: env.PR_START_DATE,
+                            endDate: env.PR_END_DATE
+                        ])
+                        
+                        echo "抽出完了: ${prCommentsData.size()}件のPRから自動生成コメントを取得しました"
+                        
+                        // 対象となったPRの番号とタイトルをログに出力
+                        logPRInformation(prCommentsData)
+                        
+                        // 結果をJSONとして保存
+                        writeJSON file: "${WORKSPACE}/${COMMENTS_DIR}/pr_comments.json", json: prCommentsData, pretty: 4
+                        
+                        // 処理対象のPRが0件の場合は警告
+                        if (prCommentsData.size() == 0) {
+                            echo "警告: 指定された期間内（${env.PR_START_DATE}〜${env.PR_END_DATE}）にマージされたPRが見つかりませんでした。"
+                        }
+                    } catch (Exception e) {
+                        error "コメントの抽出に失敗しました: ${e.message}\n${e.getStackTrace().join('\n')}"
+                    }
+                }
+            }
+        }
+        
+        stage('ドキュメント生成準備') {
+            when {
+                expression { return fileExists("${WORKSPACE}/${COMMENTS_DIR}/pr_comments.json") }
+            }
+            steps {
+                script {
+                    def prData = readJSON file: "${WORKSPACE}/${COMMENTS_DIR}/pr_comments.json"
+                    def totalPRs = prData.size()
+                    
+                    if (totalPRs == 0) {
+                        echo "警告: 処理対象のPRコメントが見つかりませんでした。"
+                        return
+                    }
+                    
+                    echo "技術ドキュメント生成を準備中: ${totalPRs}件のPRを順次処理します"
+                    echo "処理対象PRの詳細:"
+                    
+                    // 対象リポジトリの既存READMEをコピー（存在する場合）
+                    def origReadmePath = "${WORKSPACE}/${ORIGINAL_CODE_DIR}/${env.DOC_FILENAME}"
+                    def destReadmePath = "${WORKSPACE}/${DOCS_DIR}/${env.DOC_FILENAME}"
+                    
+                    if (fileExists(origReadmePath)) {
+                        echo "対象リポジトリに既存の ${env.DOC_FILENAME} を作業フォルダにコピーします。"
+                        sh "cp ${origReadmePath} ${destReadmePath}"
+                        echo "コピー完了: ${destReadmePath}"
+                    } 
+
+                    // PRごとにコメント内容をファイルに出力
+                    preparePRData(prData)
+                    
+                    echo "すべてのPRデータの準備が完了しました。ドキュメント生成を開始します。"
+                }
+            }
+        }
+        
+        stage('ドキュメント生成') {
+            when {
+                expression { return fileExists("${WORKSPACE}/${COMMENTS_DIR}/pr_comments.json") }
+            }
+            steps {
+                script {
+                    def prData = readJSON file: "${WORKSPACE}/${COMMENTS_DIR}/pr_comments.json"
+                    def totalPRs = prData.size()
+                    
+                    if (totalPRs == 0) {
+                        echo "警告: 処理対象のPRコメントが見つかりませんでした。"
+                        return
+                    }
+                    
+                    // バージョン管理の初期化
+                    def docVersion = 0
+                    def startPRIndex = 1
+                    
+                    // 初回ドキュメント生成（パラメータで制御）
+                    if (params.GENERATE_INITIAL_DOC) {
+                        docVersion = 1
+                        echo "最初のPRで新規ドキュメントを作成します..."
+                        
+                        // ディレクトリに書き込み権限を確保
+                        sh "mkdir -p ${WORKSPACE}/${DOCS_DIR} && chmod -R 777 ${WORKSPACE}/${DOCS_DIR}"
+                        sh "mkdir -p ${WORKSPACE}/${SECTIONS_DIR} && chmod -R 777 ${WORKSPACE}/${SECTIONS_DIR}"
+                        
+                        // 最初のPRで新規ドキュメント生成
+                        createInitialDocument(docVersion)
+                        
+                        echo "初期ドキュメント作成完了 - バージョン: ${docVersion}"
+                        
+                        startPRIndex = 2  // 2番目のPRから処理開始
+                    } else {
+                        echo "既存ドキュメントを更新モードで処理します"
+                        // 既存ドキュメントファイルの存在確認
+                        if (!fileExists("${WORKSPACE}/${DOCS_DIR}/${env.DOC_FILENAME}")) {
+                            error "更新モードが指定されましたが、ドキュメントファイル ${env.DOC_FILENAME} が存在しません。"
+                        }
+                        
+                        // 既存ドキュメントを初期バージョンとしてコピー
+                        def baseFilename = env.DOC_FILENAME.replaceAll(/\.md$/, "")
+                        sh "cp ${WORKSPACE}/${DOCS_DIR}/${env.DOC_FILENAME} ${WORKSPACE}/${DOCS_DIR}/${baseFilename}_v${docVersion}.md"
+                        
+                        echo "既存ドキュメントを初期バージョン（v${docVersion}）として設定しました"
+                        
+                        // 初回PRからすべて処理する
+                        startPRIndex = 1
+                    }
+                    
+                    // PRを処理（新規生成モードでは2番目から、更新モードでは1番目から）
+                    updateDocumentWithRemainingPRs(startPRIndex, totalPRs, docVersion)
+                    
+                    // 最終ドキュメントをタイムスタンプ付きでコピー
+                    def baseFilename = env.DOC_FILENAME.replaceAll(/\.md$/, "")
+                    sh """
+                        cp ${WORKSPACE}/${DOCS_DIR}/${env.DOC_FILENAME} ${WORKSPACE}/${DOCS_DIR}/${baseFilename}_${env.REPORT_DATE}.md
+                        chmod 666 ${WORKSPACE}/${DOCS_DIR}/${baseFilename}_${env.REPORT_DATE}.md
+                    """
+                    
+                    echo "ドキュメント生成が完了しました: ${DOCS_DIR}/${env.DOC_FILENAME}"
+                }
+            }
+        }
+
+        stage('変更のコミットとプッシュ') {
+            when {
+                expression { return params.CREATE_PR && fileExists("${WORKSPACE}/${DOCS_DIR}/${env.DOC_FILENAME}") }
+            }
+            steps {
+                script {
+                    dir(ORIGINAL_CODE_DIR) {
+                        // 生成したドキュメントをコピー
+                        sh """
+                            cp ${WORKSPACE}/${DOCS_DIR}/${env.DOC_FILENAME} ./${env.DOC_FILENAME}
+                        """
+
+                        // 新しいブランチ名を生成
+                        env.BRANCH_NAME = "feature/update-docs-${env.REPORT_DATE}"
+                        
+                        // 変更の有無を確認
+                        def gitStatus = sh(script: 'git status --porcelain', returnStdout: true).trim()
+                        
+                        if (gitStatus) {
+                            // 変更されたファイルの一覧を取得
+                            def changedFiles = gitStatus.split('\n').collect { line ->
+                                line.trim().substring(2)
+                            }
+                            
+                            // コミットメッセージの生成
+                            def commitMessage = "docs: Update ${env.DOC_FILENAME} documentation\n\n" +
+                                "* 自動生成された技術ドキュメントをコミット\n" +
+                                "* 生成日時: ${env.REPORT_DATE}\n" +
+                                "* Jenkins URL: ${BUILD_URL}"
+                            
+                            // gitUtilsを使用してコミットとプッシュを行う
+                            gitUtils.commitAndPushChanges(
+                                env.BRANCH_NAME,                    // ブランチ名 
+                                commitMessage,                      // コミットメッセージ
+                                changedFiles,                       // 変更されたファイル一覧
+                                params.GIT_CREDENTIALS_ID,          // 認証情報ID
+                                [
+                                    repoUrl: params.GIT_REPO_URL,
+                                    createNewBranch: true,
+                                    baseBranch: params.GIT_DOCUMENT_BRANCH
+                                ]
+                            )
+                            
+                            // 環境変数として保存して次のステージで使用
+                            env.HAS_CHANGES = 'true'
+                            
+                            echo "変更をコミットしてブランチ ${env.BRANCH_NAME} にプッシュしました"
+                        } else {
+                            echo "変更が検出されませんでした。コミットをスキップします。"
+                            env.HAS_CHANGES = 'false'
+                        }
+                    }
+                }
+            }
+        }
+
+        stage('PR作成') {
+            when {
+                allOf {
+                    expression { return params.CREATE_PR }
+                    expression { return fileExists("${WORKSPACE}/${DOCS_DIR}/${env.DOC_FILENAME}") }
+                    expression { return env.HAS_CHANGES == 'true' }
+                }
+            }
+            steps {
+                script {
+                    dir(ORIGINAL_CODE_DIR) {
+                        def prBody = """
+                            # 技術ドキュメント自動生成 PR
+                            ## 概要
+                            このPRは、Jenkinsパイプラインによって自動生成された技術ドキュメントをコミットします。
+
+                            ## ドキュメント生成情報
+                            * ドキュメントファイル: ${env.DOC_FILENAME}
+                            * 生成日時: ${env.TIME_STAMP}
+                            * Jenkins Job: ${BUILD_URL}
+                            * ドキュメント生成対象のPRマージ先ブランチ: ${params.GIT_TARGET_BRANCH}
+                            * ドキュメントマージ先ブランチ: ${params.GIT_DOCUMENT_BRANCH}
+
+                            自動生成されたドキュメントです。内容を確認し必要に応じて修正してください。
+                            """.stripIndent()
+                        
+                        // PRの作成
+                        gitUtils.createPullRequest(
+                            "docs: Update ${env.DOC_FILENAME} documentation",
+                            prBody,
+                            env.BRANCH_NAME,
+                            params.GIT_DOCUMENT_BRANCH,
+                        )
+                        
+                        echo "PR作成完了: ドキュメントファイル ${env.DOC_FILENAME} の変更をブランチ ${env.BRANCH_NAME} からブランチ ${params.GIT_DOCUMENT_BRANCH} へのPRとしてコミットしました"
+                    }
+                }
+            }
+        }
+    }
+    
+    post {
+        always {
+            // 作成したレポートをアーティファクトとして保存
+            archiveArtifacts artifacts: """
+                ${COMMENTS_DIR}/**/*,
+                ${DOCS_DIR}/**/*
+            """, allowEmptyArchive: true
+            
+            // 実行結果のサマリーを表示
+            script {
+                outputSummary()
+            }
+            
+            // ワークスペースのクリーンアップ
+            cleanWs()
+        }
+        
+        success {
+            echo "技術ドキュメント生成が正常に完了しました。生成されたドキュメントはアーティファクトを確認してください。"
+        }
+        
+        failure {
+            echo "技術ドキュメント生成に失敗しました。ログを確認してください。"
+        }
+    }
+}
+
+/**
+ * マージ日時を人間が読みやすい形式にフォーマットする
+ */
+def formatMergeDate(mergedAtString) {
+    if (!mergedAtString) {
+        return "N/A"
+    }
+    
+    try {
+        // SimpleDateFormatを使用してパース
+        def sdf = new java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'")
+        sdf.setTimeZone(java.util.TimeZone.getTimeZone("UTC"))
+        def mergedDateUTC = sdf.parse(mergedAtString)
+        
+        // JSTに変換（+9時間）
+        def cal = java.util.Calendar.getInstance()
+        cal.setTime(mergedDateUTC)
+        cal.add(java.util.Calendar.HOUR_OF_DAY, 9)
+        def mergedDateJST = cal.getTime()
+        
+        // フォーマット
+        def outputFormat = new java.text.SimpleDateFormat("yyyy/MM/dd HH:mm:ss")
+        return outputFormat.format(mergedDateJST) + " (JST)"
+    } catch (Exception e) {
+        return "パース失敗: ${mergedAtString}"
+    }
+}
+
+/**
+ * コメント本文からタグを除去する
+ */
+def cleanCommentBody(commentBody) {
+    if (!commentBody) {
+        return ""
+    }
+    
+    // タグ部分を除去
+    def tagStart = commentBody.indexOf("<!-- auto-generated-comment")
+    def tagEnd = commentBody.indexOf("-->", tagStart)
+    
+    if (tagStart != -1 && tagEnd != -1) {
+        return commentBody.substring(tagEnd + 3).trim()
+    }
+    
+    return commentBody
+}
+
+/**
+ * 実行結果のサマリーを出力する
+ */
+def outputSummary() {
+    def commentsJsonExists = fileExists("${WORKSPACE}/${COMMENTS_DIR}/pr_comments.json")
+    def docExists = fileExists("${WORKSPACE}/${DOCS_DIR}/${env.DOC_FILENAME}")
+    
+    if (commentsJsonExists) {
+        def commentsJson = readJSON file: "${WORKSPACE}/${COMMENTS_DIR}/pr_comments.json"
+        def totalPRs = commentsJson.size()
+        def docStatus = docExists ? "生成完了" : "生成失敗"
+        def prStatus = params.CREATE_PR ? (docExists ? "PR作成" : "PR作成スキップ") : "PR作成無効"
+        
+        echo """
+            # 技術ドキュメント生成サマリー
+
+            対象リポジトリ: ${env.REPO_OWNER}/${env.REPO_NAME}
+            対象期間: ${env.PR_START_DATE} 〜 ${env.PR_END_DATE}
+            処理PR数: ${totalPRs}
+            ドキュメント状態: ${docStatus}
+            生成ファイル: ${env.DOC_FILENAME}
+            PRの作成: ${prStatus}
+
+            生成されたドキュメントは添付のアーティファクトをご確認ください。
+            """.stripIndent()
+    } else {
+        echo """
+            =============================================
+            ドキュメント生成結果サマリー
+            =============================================
+            対象リポジトリ: ${env.REPO_OWNER}/${env.REPO_NAME}
+            対象期間: ${env.PR_START_DATE} 〜 ${env.PR_END_DATE}
+            結果: 対象となる自動生成コメントが見つかりませんでした
+            =============================================
+        """.stripIndent()
+    }
+}
+
+/**
+ * 日付パラメータを検証する
+ */
+def validateDateParameters() {
+    try {
+        // 開始日のバリデーション
+        def startDatePattern = ~/^\d{4}-\d{2}-\d{2}$/
+        if (!params.START_DATE?.trim() || !(params.START_DATE =~ startDatePattern)) {
+            error "開始日の形式が正しくありません。YYYY-MM-DD形式で入力してください: ${params.START_DATE}"
+        }
+        
+        // 終了日のバリデーション (空の場合は現在日付を使用)
+        if (params.END_DATE?.trim()) {
+            def endDatePattern = ~/^\d{4}-\d{2}-\d{2}$/
+            if (!(params.END_DATE =~ endDatePattern)) {
+                error "終了日の形式が正しくありません。YYYY-MM-DD形式で入力してください: ${params.END_DATE}"
+            }
+            
+            // 開始日 <= 終了日 のチェック
+            def sdf = new java.text.SimpleDateFormat("yyyy-MM-dd")
+            def startDate = sdf.parse(params.START_DATE)
+            def endDate = sdf.parse(params.END_DATE)
+            
+            if (startDate.after(endDate)) {
+                error "開始日が終了日よりも後になっています: ${params.START_DATE} > ${params.END_DATE}"
+            }
+        }
+        
+        // 環境変数に設定
+        env.PR_START_DATE = params.START_DATE
+        env.PR_END_DATE = params.END_DATE ?: sh(script: 'date +%Y-%m-%d', returnStdout: true).trim()
+        
+        echo "処理対象期間: ${env.PR_START_DATE} から ${env.PR_END_DATE} まで"
+    } catch (Exception e) {
+        error "日付のパースに失敗しました: ${e.message}"
+    }
+}
+
+/**
+ * 作業ディレクトリを準備する
+ */
+def prepareWorkDirectories() {
+    sh """
+        mkdir -p ${WORKSPACE}/${COMMENTS_DIR}
+        mkdir -p ${WORKSPACE}/${DOCS_DIR}
+        mkdir -p ${WORKSPACE}/${SECTIONS_DIR}
+        chmod -R 777 ${WORKSPACE}/${COMMENTS_DIR}
+        chmod -R 777 ${WORKSPACE}/${DOCS_DIR}
+        chmod -R 777 ${WORKSPACE}/${SECTIONS_DIR}
+    """
+}
+
+/**
+ * Pythonの依存関係をインストールする
+ */
+def installPythonDependencies() {
+    sh """
+        python -m pip install --upgrade pip
+        cd ${PYTHON_PROJECT_DIR}
+        if [ -f requirements.txt ]; then
+            pip install -r requirements.txt --no-cache-dir
+        else
+            pip install openai python-dateutil --no-cache-dir
+        fi
+    """
+}
+
+/**
+ * PR情報をログに出力する
+ */
+def logPRInformation(prCommentsData) {
+    echo "対象となったPRの一覧:"
+    prCommentsData.each { prData ->
+        def pr = prData.pr_info
+        echo "PR #${pr.number}: ${pr.title} (マージ日時: ${pr.merged_at})"
+    }
+}
+
+/**
+ * PRデータを準備する
+ */
+def preparePRData(prData) {
+    def totalPRs = prData.size()
+    
+    prData.eachWithIndex { prInfo, index ->
+        def pr = prInfo.pr_info
+        def comments = prInfo.comments
+        
+        // マージ日時のフォーマット
+        def mergedDateFormatted = formatMergeDate(pr.merged_at)
+        
+        // ログに処理中のPR情報を詳細に出力
+        echo """
+        PR ${index + 1}/${totalPRs}:
+          - 番号: #${pr.number}
+          - タイトル: ${pr.title}
+          - 作成者: ${pr.user.login}
+          - マージ日時: ${mergedDateFormatted}
+          - URL: ${pr.html_url}
+          - コメント数: ${comments.size()}
+        """.stripIndent()
+        
+        // PRの情報を含めたメタデータ
+        def prMetadata = [
+            pr_number: pr.number,
+            pr_title: pr.title,
+            pr_url: pr.html_url,
+            pr_author: pr.user.login,
+            merged_at: mergedDateFormatted,
+            repo_owner: env.REPO_OWNER,
+            repo_name: env.REPO_NAME,
+            pr_index: index + 1,
+            total_prs: totalPRs
+        ]
+        
+        writeJSON file: "${WORKSPACE}/${COMMENTS_DIR}/pr_${index + 1}_metadata.json", json: prMetadata, pretty: 4
+        
+        // コメント内容を抽出して保存
+        comments.eachWithIndex { comment, commentIndex ->
+            def commentBody = comment.body ?: ''
+            def cleanComment = cleanCommentBody(commentBody)
+            
+            writeFile file: "${WORKSPACE}/${COMMENTS_DIR}/pr_${index + 1}_comment_${commentIndex + 1}.md", text: cleanComment
+            echo "    コメント ${commentIndex + 1} を保存: ${COMMENTS_DIR}/pr_${index + 1}_comment_${commentIndex + 1}.md (${cleanComment.take(50)}${cleanComment.length() > 50 ? '...' : ''})"
+        }
+        
+        // PR変更ファイル情報を取得して保存
+        try {
+            def changedFiles = gitUtils.getPullRequestFiles(pr.number)
+
+            if (changedFiles) {
+                writeJSON file: "${WORKSPACE}/${COMMENTS_DIR}/pr_${index + 1}_changed_files.json", json: changedFiles, pretty: 4
+                echo "    PR #${pr.number} の変更ファイル情報を保存: ${changedFiles.size()}ファイル"
+            }
+        } catch (Exception e) {
+            echo "    WARNING: PR #${pr.number} の変更ファイル情報の取得に失敗しました: ${e.message}"
+        }
+        
+        echo "PR #${pr.number} のメタデータとコメントを保存しました"
+    }
+}
+
+/**
+ * 初期ドキュメントを作成する
+ */
+def createInitialDocument(docVersion) {
+    withCredentials([string(credentialsId: 'openai-api-key', variable: 'OPENAI_API_KEY')]) {
+        // 変更ファイル情報のパラメータを準備
+        def changedFilesParam = ""
+        if (fileExists("${WORKSPACE}/${COMMENTS_DIR}/pr_1_changed_files.json")) {
+            changedFilesParam = "--changed-files ${WORKSPACE}/${COMMENTS_DIR}/pr_1_changed_files.json"
+        }
+        
+        // 初回は構造最適化を行わない
+        sh """
+            python ${PYTHON_PROJECT_DIR}/main.py \
+                --pr-metadata ${WORKSPACE}/${COMMENTS_DIR}/pr_1_metadata.json \
+                --pr-comment ${WORKSPACE}/${COMMENTS_DIR}/pr_1_comment_1.md \
+                --sections-dir ${WORKSPACE}/${SECTIONS_DIR} \
+                --output-file ${WORKSPACE}/${DOCS_DIR}/${env.DOC_FILENAME} \
+                --templates-dir ${WORKSPACE}/templates \
+                --openai-model ${params.OPENAI_MODEL} \
+                --api-endpoint ${OPENAI_API_ENDPOINT} \
+                --api-key ${OPENAI_API_KEY} \
+                --section-mode all \
+                --save-prompts \
+                --use-reflection \
+                --verbose \
+                --no-optimize-structure \
+                ${changedFilesParam}
+        """
+    }
+    
+    // ファイルの権限を確保
+    sh "chmod 666 ${WORKSPACE}/${DOCS_DIR}/${env.DOC_FILENAME}"
+    
+    // ベース名（拡張子なし）を取得
+    def baseFilename = env.DOC_FILENAME.replaceAll(/\.md$/, "")
+    
+    // バージョンファイルを保存
+    sh "cp ${WORKSPACE}/${DOCS_DIR}/${env.DOC_FILENAME} ${WORKSPACE}/${DOCS_DIR}/${baseFilename}_v${docVersion}.md"
+    sh "cp ${WORKSPACE}/${DOCS_DIR}/generate_doc_prompts.md ${WORKSPACE}/${DOCS_DIR}/generate_doc_prompts_v${docVersion}.md || true"
+}
+
+/**
+ * 残りのPRでドキュメントを更新する
+ */
+def updateDocumentWithRemainingPRs(startPRIndex, totalPRs, docVersion) {
+    withCredentials([string(credentialsId: 'openai-api-key', variable: 'OPENAI_API_KEY')]) {
+        // ベース名（拡張子なし）を取得
+        def baseFilename = env.DOC_FILENAME.replaceAll(/\.md$/, "")
+        
+        // 最適化戦略を取得
+        def optimizeStrategy = params.DOC_OPTIMIZE_STRATEGY ?: 'FINAL_ONLY'  // デフォルトは最後に1回
+        
+        echo "ドキュメント構造最適化戦略: ${optimizeStrategy}"
+        
+        for (int i = startPRIndex; i <= totalPRs; i++) {
+            // バージョン番号を増やす
+            docVersion += 1
+            
+            // 最適化判断ロジック
+            def optimizeStructure = false
+            def optimizeReason = ""
+            
+            switch(optimizeStrategy) {
+                case 'FIVE_STEP':
+                    // 5回に1回の最適化（カウントの基準を修正）
+                    if ((i - startPRIndex + 1) % 5 == 0) {
+                        optimizeStructure = true
+                        optimizeReason = "5回に1回の最適化"
+                    }
+                    break
+                    
+                case 'FINAL_ONLY':
+                    // 最後のPRでのみ最適化
+                    if (i == totalPRs) {
+                        optimizeStructure = true
+                        optimizeReason = "最終PRでの最適化"
+                    }
+                    break
+                    
+                case 'NONE':
+                    // 最適化なし
+                    optimizeStructure = false
+                    break
+                    
+                default:
+                    // デフォルトは最後に1回
+                    if (i == totalPRs) {
+                        optimizeStructure = true
+                        optimizeReason = "最終PRでの最適化（デフォルト）"
+                    }
+            }
+            
+            // 変更ファイル情報のパラメータを準備
+            def changedFilesParam = ""
+            if (fileExists("${WORKSPACE}/${COMMENTS_DIR}/pr_${i}_changed_files.json")) {
+                changedFilesParam = "--changed-files ${WORKSPACE}/${COMMENTS_DIR}/pr_${i}_changed_files.json"
+            }
+            
+            // 更新モードフラグを追加
+            def updateModeParam = ""
+            if (!params.GENERATE_INITIAL_DOC) {
+                updateModeParam = "--update-mode"
+            }
+            
+            // 最適化フラグをパラメータとして追加
+            def optimizeParam = optimizeStructure ? "--optimize-structure" : "--no-optimize-structure"
+            
+            // ログメッセージを調整
+            def processingMsg = optimizeStructure 
+                ? "PR #${i}/${totalPRs} の内容に基づいてドキュメントを更新中...（バージョン ${docVersion} - 構造最適化あり）理由: ${optimizeReason}"
+                : "PR #${i}/${totalPRs} の内容に基づいてドキュメントを更新中...（バージョン ${docVersion}）"
+            
+            echo processingMsg
+            
+            sh """
+                python ${PYTHON_PROJECT_DIR}/main.py \
+                    --pr-metadata ${WORKSPACE}/${COMMENTS_DIR}/pr_${i}_metadata.json \
+                    --pr-comment ${WORKSPACE}/${COMMENTS_DIR}/pr_${i}_comment_1.md \
+                    --sections-dir ${WORKSPACE}/${SECTIONS_DIR} \
+                    --output-file ${WORKSPACE}/${DOCS_DIR}/${env.DOC_FILENAME} \
+                    --templates-dir ${WORKSPACE}/templates \
+                    --openai-model ${params.OPENAI_MODEL} \
+                    --api-endpoint ${OPENAI_API_ENDPOINT} \
+                    --api-key ${OPENAI_API_KEY} \
+                    --section-mode analyze \
+                    --save-prompts \
+                    --use-reflection \
+                    --verbose \
+                    ${changedFilesParam} \
+                    ${updateModeParam} \
+                    ${optimizeParam}
+            """
+            
+            // 新しいバージョン付きでドキュメントを保存
+            sh "cp ${WORKSPACE}/${DOCS_DIR}/${env.DOC_FILENAME} ${WORKSPACE}/${DOCS_DIR}/${baseFilename}_v${docVersion}.md"
+            // 中間プロンプトを保存
+            sh "cp ${WORKSPACE}/${DOCS_DIR}/generate_doc_prompts.md ${WORKSPACE}/${DOCS_DIR}/generate_doc_prompts_v${docVersion}.md || true"
+            
+            // 構造最適化の実行有無をログに記録
+            def completionMsg = optimizeStructure 
+                ? "PR #${i}/${totalPRs} の処理が完了しました - 現在のバージョン: ${docVersion}（構造最適化実施: ${optimizeReason}）"
+                : "PR #${i}/${totalPRs} の処理が完了しました - 現在のバージョン: ${docVersion}"
+            echo completionMsg
+            
+            // API制限対策として少し待機
+            if (i < totalPRs) {
+                sleep 3
+            }
+        }
+    }
+}

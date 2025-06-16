@@ -1,0 +1,164 @@
+@Library('jenkins-shared-lib') _
+
+pipeline {
+    agent {
+        docker {
+            label 'ec2-fleet'
+            // Node.js ベースのイメージを使用し、Mermaid CLIをインストールするため
+            image 'node:18-slim'
+            args '''
+                -v ${WORKSPACE}:/workspace
+                -w /workspace
+                -u root
+            '''
+        }
+    }
+    
+    environment {
+        // OpenAI用のキー (JenkinsのCredentialsで "openai-api-key" IDのシークレットテキストを使用)
+        OPENAI_API_KEY = credentials('openai-api-key')
+        OPENAI_API_ENDPOINT = "https://your-open-ai-endpoint/"
+
+        // 出力物保存先のディレクトリ
+        REPORTS_DIR = 'reports'
+
+        // このパイプラインが配置されているディレクトリパス (実際の配置に合わせて修正)
+        PROJECT_DIR = 'jenkins/jobs/pipeline/docs-generator/mermaid-generator'
+    }
+
+    parameters {
+        text(
+            name: 'DIAGRAM_REQUIREMENT',
+            defaultValue: 'AWS上でEC2とRDSをVPCで囲んだ図を作りたい',
+            description: '作図したいアーキテクチャの要望を記入してください'
+        )
+        text(
+            name: 'DIAGRAM_CODE',
+            defaultValue: '',
+            description: '既存の Mermaidコード (diagram.mmd) を貼り付けてください (空欄なら新規作成)'
+        )
+        booleanParam(
+            name: 'USE_PREVIOUS_DIAGRAM',
+            defaultValue: false,
+            description: '最後に成功したビルドの diagram.mmd を再利用する場合はチェック'
+        )
+    }
+
+    stages {
+
+        stage('Retrieve previous diagram') {
+            when {
+                expression { return params.USE_PREVIOUS_DIAGRAM }
+            }
+            steps {
+                script {
+                    // 前回成功したビルドの diagram.mmd をコピー
+                    // (fingerprintArtifacts: false で chmod を回避)
+                    copyArtifacts(
+                        projectName: env.JOB_NAME,
+                        selector: lastSuccessful(),
+                        filter: "${REPORTS_DIR}/diagram.mmd",
+                        fingerprintArtifacts: false
+                    )
+                }
+            }
+        }
+
+        stage('セットアップ') {
+            steps {
+                script {
+                    sh """
+                        apt-get update && apt-get install -y --no-install-recommends \\
+                            ca-certificates \\
+                            libglib2.0-0 \\
+                            libnss3 \\
+                            libx11-6 \\
+                            libx11-xcb1 \\
+                            libxcomposite1 \\
+                            libxcursor1 \\
+                            libxdamage1 \\
+                            libxext6 \\
+                            libxfixes3 \\
+                            libxi6 \\
+                            libxrandr2 \\
+                            libxrender1 \\
+                            libxshmfence1 \\
+                            libgbm1 \\
+                            libasound2 \\
+                            libatk1.0-0 \\
+                            libatk-bridge2.0-0 \\
+                            libpangocairo-1.0-0 \\
+                            libgtk-3-0 \\
+                            python3 \\
+                            python3-pip \\
+                            python3-venv
+
+                        # Mermaid CLI のインストール
+                        npm install -g @mermaid-js/mermaid-cli
+
+                        # venv を作成してライブラリをインストール
+                        python3 -m venv /tmp/venv
+                        /tmp/venv/bin/pip install --upgrade pip
+                        /tmp/venv/bin/pip install openai
+
+                        # レポート用ディレクトリの作成
+                        mkdir -p ${WORKSPACE}/${REPORTS_DIR}/images
+                    """
+                }
+            }
+        }
+        
+        stage('図の生成 (新規作成 or アップデート)') {
+            steps {
+                script {
+                    // 1) 「前回ビルドをコピーしてきた diagram.mmd」があるかチェック
+                    def prevDiagramPath = "${WORKSPACE}/${REPORTS_DIR}/diagram.mmd"
+                    boolean foundPrevFile = fileExists(prevDiagramPath)
+
+                    // 2) パラメータの DIAGRAM_CODE があるかチェック
+                    def paramCode = params.DIAGRAM_CODE?.trim()
+                    boolean hasParamCode = (paramCode && paramCode != '')
+
+                    // 3) 実際に generate_mermaid.py に渡すファイルパスを決める
+                    //    (パラメータのコードがあればそちらをファイル化、無ければ前回ビルドファイルを使う)
+                    def localDiagramPath = ''
+                    if (hasParamCode) {
+                        // Jenkinsパラメータで入力されたコードをファイル化
+                        writeFile file: 'diagram-param.mmd', text: paramCode
+                        localDiagramPath = 'diagram-param.mmd'
+                    } else if (foundPrevFile) {
+                        // 前回ビルドのファイルを使う
+                        localDiagramPath = prevDiagramPath
+                    } else {
+                        // どちらも無ければ空で指定 (generate_mermaid.py 側で新規作成モードになる)
+                        localDiagramPath = ''
+                    }
+
+                    // 4) Mermaidコード生成スクリプトを実行 (diagram.mmd は自動上書き)
+                    sh """
+                        /tmp/venv/bin/python ${PROJECT_DIR}/generate_mermaid.py \\
+                            --requirement "${params.DIAGRAM_REQUIREMENT}" \\
+                            --diagram-code-file "${localDiagramPath}" \\
+                            --output-dir "${WORKSPACE}/${REPORTS_DIR}/images"
+                    """
+                }
+            }
+        }
+    }
+    
+    post {
+        always {
+            script {
+                // 生成した diagram.mmd をレポートディレクトリにコピー
+                // chmod はエラーにならないよう || true で保護
+                sh """
+                    cp diagram.mmd ${WORKSPACE}/${REPORTS_DIR}/diagram.mmd || true
+                    chmod 777 ${WORKSPACE}/${REPORTS_DIR}/diagram.mmd || true
+                """
+            }
+            
+            // 成果物をアーカイブ (fingerprintをfalseにしてパーミッション変更を回避)
+            archiveArtifacts artifacts: "${REPORTS_DIR}/**/*", fingerprint: false
+        }
+    }
+}
