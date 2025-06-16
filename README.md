@@ -113,6 +113,21 @@ ansible-playbook playbooks/deploy_jenkins_security.yml -e "env=dev"
 # その他のコンポーネントも同様に個別デプロイ可能
 ```
 
+### 6. Jenkins環境構築後の設定管理
+
+Jenkins環境が構築された後、アプリケーションレベルの設定を管理できます：
+
+```bash
+# Jenkinsのバージョン更新、プラグインインストール、再起動を実行
+ansible-playbook playbooks/deploy_jenkins_application.yml -e "env=dev"
+
+# Jenkinsバージョンのみ更新（プラグインインストールはスキップ）
+ansible-playbook playbooks/deploy_jenkins_application.yml -e "env=dev version=2.426.1 plugins=false"
+
+# プラグインのみインストール（Gitリポジトリ更新はスキップ）
+ansible-playbook playbooks/deploy_jenkins_application.yml -e "env=dev update_git=false plugins=true restart=false"
+```
+
 ## インフラストラクチャの削除
 
 構築したJenkinsインフラストラクチャを削除する場合は、以下のコマンドを使用します：
@@ -158,6 +173,7 @@ ansible-playbook playbooks/jenkins_teardown_pipeline.yml \
 - Jenkinsデータ永続化のためのEFSファイルシステム
 - ブルーグリーンデプロイ用のALB（Application Load Balancer）
 - Jenkins関連リソースのIAMロールとポリシー
+- アプリケーション設定管理用のSSMドキュメントとパラメータ
 
 ### ディレクトリ構造
 
@@ -179,8 +195,8 @@ infrastructure-as-code/
 │  │  ├─ deploy_jenkins_loadbalancer.yml  # ロードバランサー構築
 │  │  ├─ deploy_jenkins_controller.yml    # コントローラー構築
 │  │  ├─ deploy_jenkins_agent.yml         # エージェント構築
-│  │  ├─ deploy_jenkins_application.yml   # アプリケーション設定
-│  │  └─ configure_jenkins_controller.yml # コントローラー設定
+│  │  ├─ deploy_jenkins_config.yml        # 初期設定
+│  │  └─ deploy_jenkins_application.yml   # アプリケーション設定
 │  └─ roles/                  # Ansibleロール
 │      ├─ aws_setup/         # AWS環境設定ロール
 │      ├─ pulumi_helper/     # Pulumiヘルパーロール
@@ -196,7 +212,8 @@ infrastructure-as-code/
 │  ├─ jenkins-loadbalancer/  # ロードバランサースタック
 │  ├─ jenkins-controller/    # コントローラースタック
 │  ├─ jenkins-agent/         # エージェントスタック
-│  └─ jenkins-config/        # 設定管理スタック
+│  ├─ jenkins-config/        # 設定管理スタック
+│  └─ jenkins-application/   # アプリケーション設定スタック
 │
 └─ scripts/                   # 各種スクリプト
     ├─ aws-credentials.sh    # AWS認証情報設定
@@ -212,6 +229,7 @@ infrastructure-as-code/
         └─ shell/           # EC2設定用シェルスクリプト
            ├─ agent-setup.sh
            ├─ agent-template.sh
+           ├─ application-update-version.sh  # Jenkinsバージョン更新
            ├─ controller-configure.sh
            ├─ controller-install.sh
            ├─ controller-mount-efs.sh
@@ -229,6 +247,23 @@ infrastructure-as-code/
 - **自動スケーリングエージェント**: EC2 SpotFleetによるコスト効率の高いJenkinsエージェント
 - **リカバリーモード**: 管理者アカウントロックアウト時などの緊急アクセス用モード
 - **データ永続性**: EFSによるJenkinsデータの永続化と高可用性の確保
+- **アプリケーション設定管理**: Jenkinsバージョン更新、プラグイン管理、再起動処理の自動化
+
+### Jenkins環境構築後の管理機能
+
+`deploy_jenkins_application.yml` プレイブックを使用して、以下の管理タスクを実行できます：
+
+1. **Jenkinsバージョン更新**
+   - 最新バージョンまたは特定バージョンへの安全なアップグレード
+   - 自動バックアップとロールバック機能
+
+2. **プラグイン管理**
+   - `install-plugins.groovy`スクリプトによる一括インストール・更新
+   - プラグイン依存関係の自動解決
+
+3. **サービス管理**
+   - Jenkinsの安全な再起動
+   - 起動確認とヘルスチェック
 
 ## トラブルシューティング
 
@@ -246,6 +281,8 @@ infrastructure-as-code/
 - **Jenkinsへのアクセス問題**: セキュリティグループの設定を確認
 - **EFSマウント問題**: マウントターゲットの可用性を確認
 - **削除時のリソース依存関係エラー**: 削除順序が正しいか確認（ネットワークは最後に削除）
+- **Jenkinsバージョン更新失敗**: `/var/log/jenkins-update-version.log`を確認
+- **プラグインインストール失敗**: Jenkins管理画面のシステムログを確認
 
 ## 共有パラメータの確認と修正
 
@@ -270,6 +307,7 @@ ansible-playbook playbooks/jenkins_setup_pipeline.yml -e "env=dev" --check
 - AWS認証情報は定期的に更新が必要です。セッションが切れた場合は`source scripts/aws-credentials.sh`を実行してください
 - Pulumiアクセストークンは安全に管理してください。環境変数として設定する場合は、他のユーザーに見えないように注意してください
 - **削除操作は取り消せません**。本番環境での削除操作は特に注意して実行してください
+- Jenkinsバージョン更新前には必ずバックアップを取得してください
 
 ## 拡張方法
 
@@ -280,6 +318,7 @@ ansible-playbook playbooks/jenkins_setup_pipeline.yml -e "env=dev" --check
 pulumi/
   ├─jenkins-network/          # 既存のネットワークスタック
   ├─jenkins-security/         # 既存のセキュリティスタック
+  ├─jenkins-application/      # 既存のアプリケーション設定スタック
   ├─monitoring/               # 新しいモニタリングスタック
   └─database/                 # 新しいデータベーススタック
 ```
@@ -290,6 +329,7 @@ ansible/playbooks/
   ├─jenkins_setup_pipeline.yml      # 既存のメインパイプライン
   ├─jenkins_teardown_pipeline.yml   # 既存の削除パイプライン
   ├─deploy_jenkins_network.yml      # 既存のネットワークデプロイ
+  ├─deploy_jenkins_application.yml  # 既存のアプリケーション設定
   └─deploy_monitoring.yml           # 新しいモニタリングデプロイ
 ```
 

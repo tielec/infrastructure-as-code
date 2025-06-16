@@ -1,0 +1,422 @@
+@Library('jenkins-shared-lib') _
+
+/**
+ * バッチPR処理パイプライン
+ * 指定されたPR番号の範囲に対して、pull_request_comment_builderを連続実行します
+ */
+pipeline {
+    agent {
+        label 'ec2-fleet'
+    }
+    
+    environment {
+        // 処理状況追跡用
+        RESULTS_DIR = 'results'
+        SUMMARY_FILE = "${RESULTS_DIR}/summary.json"
+        
+        // タイムスタンプ
+        TIME_STAMP = sh(script: 'TZ="Asia/Tokyo" date "+%Y/%m/%d %H:%M:%S"', returnStdout: true).trim()
+        START_TIME = System.currentTimeMillis()
+    }
+    
+    stages {
+        stage('パラメータ検証') {
+            steps {
+                script {
+                    // 必須パラメータのチェック
+                    if (!params.START_PR_NUMBER?.trim() || !params.END_PR_NUMBER?.trim()) {
+                        error "開始PRと終了PRの両方を指定してください。"
+                    }
+                    
+                    // 数値変換と範囲チェック
+                    try {
+                        env.START_PR = Integer.parseInt(params.START_PR_NUMBER)
+                        env.END_PR = Integer.parseInt(params.END_PR_NUMBER)
+                        
+                        if (env.START_PR.toInteger() > env.END_PR.toInteger()) {
+                            error "開始PR番号（${env.START_PR}）は終了PR番号（${env.END_PR}）以下である必要があります。"
+                        }
+                    } catch (NumberFormatException e) {
+                        error "PR番号は数値で指定してください: ${e.message}"
+                    }
+                    
+                    // リポジトリURLのチェック
+                    if (!params.REPO_URL?.trim()) {
+                        error "リポジトリURLを指定してください。"
+                    }
+                    
+                    // リポジトリ情報の抽出
+                    try {
+                        env.REPO_OWNER = sh(script: "echo '${params.REPO_URL}' | sed -n 's#.*/\\([^/]\\+\\)/[^/]\\+\$#\\1#p'", returnStdout: true).trim()
+                        env.REPO_NAME = sh(script: "echo '${params.REPO_URL}' | sed -n 's#.*/[^/]\\+/\\([^/]\\+\\)\$#\\1#p'", returnStdout: true).trim()
+                        
+                        if (!env.REPO_OWNER || !env.REPO_NAME) {
+                            error "リポジトリURLから所有者とリポジトリ名を抽出できませんでした: ${params.REPO_URL}"
+                        }
+                        
+                        echo "リポジトリ情報: ${env.REPO_OWNER}/${env.REPO_NAME}"
+                    } catch (Exception e) {
+                        error "リポジトリ情報の抽出に失敗しました: ${e.message}"
+                    }
+                    
+                    // ビルド名の設定
+                    currentBuild.displayName = "#${BUILD_NUMBER} - PR ${env.START_PR}→${env.END_PR} (${params.TARGET_BRANCH}/${params.PR_STATUS})"
+                }
+            }
+        }
+        
+        stage('準備') {
+            steps {
+                script {
+                    // 作業ディレクトリの準備
+                    sh """
+                        mkdir -p ${RESULTS_DIR}
+                    """
+                    
+                    // 結果追跡用の初期JSONを作成
+                    def summary = [
+                        start_time: env.TIME_STAMP,
+                        start_pr: env.START_PR.toInteger(),
+                        end_pr: env.END_PR.toInteger(),
+                        repo_url: params.REPO_URL,
+                        target_branch: params.TARGET_BRANCH,  // JSONに追加
+                        pr_status: params.PR_STATUS,          // JSONに追加
+                        jobs: [:],
+                        status: [
+                            total: (env.END_PR.toInteger() - env.START_PR.toInteger() + 1),
+                            success: 0,
+                            failed: 0,
+                            skipped: 0,
+                            pending: (env.END_PR.toInteger() - env.START_PR.toInteger() + 1)
+                        ]
+                    ]
+                    
+                    writeJSON file: env.SUMMARY_FILE, json: summary, pretty: 4
+                }
+            }
+        }
+        
+        stage('PR処理') {
+            steps {
+                script {
+                    def summary = readJSON file: env.SUMMARY_FILE
+                    def jobResults = [:]
+                    
+                    for (int prNum = env.START_PR.toInteger(); prNum <= env.END_PR.toInteger(); prNum++) {
+                        // 各PRのステータスと処理結果を追跡
+                        def currentPrStatus = [
+                            status: 'PENDING',
+                            start_time: new Date().format("yyyy/MM/dd HH:mm:ss", TimeZone.getTimeZone("Asia/Tokyo")),
+                            job_url: null,
+                            end_time: null,
+                            duration: null
+                        ]
+                        
+                        summary.jobs[prNum.toString()] = currentPrStatus
+                        writeJSON file: env.SUMMARY_FILE, json: summary, pretty: 4
+                        
+                        try {
+                            echo "PR #${prNum} の処理を開始します..."
+                            
+                            // PRの詳細情報を取得
+                            def prInfo = gitUtils.getPullRequestInfo(
+                                prNum,
+                                [
+                                    repoOwner: env.REPO_OWNER,
+                                    repoName: env.REPO_NAME
+                                ]
+                            )
+                            
+                            // 指定されたターゲットブランチへのPRかどうかをチェック
+                            def targetBranch = prInfo.base?.ref
+                            if (targetBranch != params.TARGET_BRANCH) {
+                                echo "PR #${prNum} は${params.TARGET_BRANCH}ブランチへのマージではありません（対象: ${targetBranch}）。スキップします。"
+                                currentPrStatus.status = 'SKIPPED'
+                                currentPrStatus.reason = "${params.TARGET_BRANCH}ブランチへのマージではありません（対象: ${targetBranch}）"
+                                currentPrStatus.end_time = new Date().format("yyyy/MM/dd HH:mm:ss", TimeZone.getTimeZone("Asia/Tokyo"))
+                                
+                                summary.status.skipped++
+                                summary.status.pending--
+                                continue
+                            }
+                            
+                            // PRのステータスをチェック
+                            def prState = prInfo.state
+                            def isMerged = prInfo.merged
+                            
+                            if (params.PR_STATUS != 'all') {
+                                def shouldSkip = false
+                                def skipReason = ""
+                                
+                                switch (params.PR_STATUS) {
+                                    case 'open':
+                                        if (prState != 'open') {
+                                            shouldSkip = true
+                                            skipReason = "オープン状態のPRではありません（現在の状態: ${prState}）"
+                                        }
+                                        break
+                                    case 'merged':
+                                        if (!isMerged) {
+                                            shouldSkip = true
+                                            skipReason = "マージ済みのPRではありません"
+                                        }
+                                        break
+                                    case 'closed_without_merge':
+                                        if (prState != 'closed' || isMerged) {
+                                            shouldSkip = true
+                                            skipReason = "マージせずにクローズされたPRではありません" + 
+                                                        (prState != 'closed' ? "（現在の状態: ${prState}）" : "（マージ済み）")
+                                        }
+                                        break
+                                }
+                                
+                                if (shouldSkip) {
+                                    echo "PR #${prNum} は${skipReason}。スキップします。"
+                                    currentPrStatus.status = 'SKIPPED'
+                                    currentPrStatus.reason = skipReason
+                                    currentPrStatus.end_time = new Date().format("yyyy/MM/dd HH:mm:ss", TimeZone.getTimeZone("Asia/Tokyo"))
+                                    
+                                    summary.status.skipped++
+                                    summary.status.pending--
+                                    continue
+                                }
+                            }
+                            
+                            echo "PR #${prNum} は${params.TARGET_BRANCH}ブランチへのマージで、ステータス条件を満たしています。処理を続行します。"
+                            
+                            // 下流ジョブの実行
+                            def job = build job: 'pull_request_comment_builder', 
+                                parameters: [
+                                    string(name: 'PR_NUMBER', value: prNum.toString()),
+                                    string(name: 'REPO_URL', value: params.REPO_URL),
+                                    booleanParam(name: 'UPDATE_TITLE', value: params.UPDATE_TITLE),
+                                    booleanParam(name: 'FORCE_ANALYSIS', value: params.FORCE_ANALYSIS)
+                                ], 
+                                wait: true,
+                                propagate: false
+                            
+                            // ジョブが即時に取得できる場合のURL設定
+                            currentPrStatus.job_url = job.absoluteUrl
+                            
+                            // 実行後の状態管理
+                            currentPrStatus.status = job.result
+                            currentPrStatus.end_time = new Date().format("yyyy/MM/dd HH:mm:ss", TimeZone.getTimeZone("Asia/Tokyo"))
+                            currentPrStatus.duration = job.duration
+                            
+                            if (job.result == 'SUCCESS') {
+                                summary.status.success++
+                                summary.status.pending--
+                                echo "PR #${prNum} の処理が成功しました。"
+                            } else {
+                                summary.status.failed++
+                                summary.status.pending--
+                                echo "PR #${prNum} の処理が失敗しました: ${job.result}"
+                                error "PR #${prNum} の処理が失敗したため、残りのPR処理をスキップします。"
+                            }
+                        } catch (Exception e) {
+                            currentPrStatus.status = 'ERROR'
+                            currentPrStatus.end_time = new Date().format("yyyy/MM/dd HH:mm:ss", TimeZone.getTimeZone("Asia/Tokyo"))
+                            currentPrStatus.error_message = e.message
+                            
+                            summary.status.failed++
+                            summary.status.pending--
+                            
+                            echo "PR #${prNum} の処理中にエラーが発生しました: ${e.message}"
+                            error "PR #${prNum} の処理中にエラーが発生したため、残りのPR処理をスキップします。"
+                        } finally {
+                            // 進捗状況を更新
+                            summary.jobs[prNum.toString()] = currentPrStatus
+                            writeJSON file: env.SUMMARY_FILE, json: summary, pretty: 4
+                        }
+                    }
+                }
+            }
+        }
+        
+        stage('サマリーレポート生成') {
+            steps {
+                script {
+                    def summary = readJSON file: env.SUMMARY_FILE
+                    def endTime = new Date().format("yyyy/MM/dd HH:mm:ss", TimeZone.getTimeZone("Asia/Tokyo"))
+                    def totalDuration = (System.currentTimeMillis() - env.START_TIME.toLong()) / 1000
+                    
+                    // 最終統計情報の更新
+                    summary.end_time = endTime
+                    summary.duration_seconds = totalDuration
+                    
+                    try {
+                        summary.duration_formatted = durationToString(totalDuration)
+                    } catch (Exception e) {
+                        summary.duration_formatted = "${totalDuration}秒"
+                        echo "時間フォーマット中にエラーが発生: ${e.message}"
+                    }
+                    
+                    writeJSON file: env.SUMMARY_FILE, json: summary, pretty: 4
+                    
+                    // マークダウン形式のレポートも生成
+                    def markdownReport = createMarkdownReport(summary)
+                    writeFile file: "${RESULTS_DIR}/summary.md", text: markdownReport
+                    
+                    echo "処理サマリー:"
+                    echo "- 処理対象PR: ${summary.start_pr} → ${summary.end_pr}"
+                    echo "- 処理結果: 成功=${summary.status.success}, 失敗=${summary.status.failed}, スキップ=${summary.status.skipped}, 保留=${summary.status.pending}"
+                }
+            }
+        }
+    }
+    
+    post {
+        always {
+            archiveArtifacts artifacts: "${RESULTS_DIR}/**", allowEmptyArchive: true
+        }
+    }
+}
+
+/**
+ * 秒単位の時間を人間が読みやすい形式に変換
+ */
+def durationToString(seconds) {
+    try {
+        // 確実に整数値として扱う
+        def secondsInt = seconds instanceof BigDecimal ? seconds.intValue() : seconds as int
+        def hours = secondsInt / 3600
+        def minutes = (secondsInt - (hours * 3600)) / 60
+        def secs = secondsInt - (hours * 3600) - (minutes * 60)
+        
+        return String.format("%02d:%02d:%02d", hours as int, minutes as int, secs as int)
+    } catch (Exception e) {
+        // エラーが発生した場合はシンプルに時間を返す
+        return "${seconds}秒"
+    }
+}
+
+/**
+ * サマリー情報からマークダウンレポートを生成
+ * 計算を簡略化してエラーを防止
+ */
+def createMarkdownReport(summary) {
+    def reportBuilder = new StringBuilder()
+    
+    // 基本情報の追加（グラフやデータに依存しない部分）
+    reportBuilder.append("# バッチPR処理サマリー\n\n")
+    reportBuilder.append("## 処理概要\n\n")
+    
+    // 安全に文字列を取得するヘルパー関数
+    def safeGetValue = { obj, key, defaultValue = '未指定' ->
+        try {
+            def value = obj[key]
+            return (value != null) ? value.toString() : defaultValue
+        } catch (Exception e) {
+            return defaultValue
+        }
+    }
+    
+    // 基本情報
+    reportBuilder.append("- **対象リポジトリ**: ${safeGetValue(summary, 'repo_url')}\n")
+    reportBuilder.append("- **対象PR範囲**: ${safeGetValue(summary, 'start_pr')} → ${safeGetValue(summary, 'end_pr')}\n")
+    reportBuilder.append("- **対象ブランチ**: ${safeGetValue(summary, 'target_branch')}\n")
+    reportBuilder.append("- **PRステータス**: ${safeGetValue(summary, 'pr_status')}\n")
+    reportBuilder.append("- **開始時刻**: ${safeGetValue(summary, 'start_time')}\n")
+    reportBuilder.append("- **終了時刻**: ${safeGetValue(summary, 'end_time')}\n")
+    
+    // 処理結果 - ステータス情報も安全に取得
+    reportBuilder.append("## 処理結果\n\n")
+    
+    def success = 0
+    def failed = 0
+    def skipped = 0
+    def pending = 0
+    
+    try {
+        if (summary.status) {
+            success = summary.status.success ?: 0
+            failed = summary.status.failed ?: 0
+            skipped = summary.status.skipped ?: 0
+            pending = summary.status.pending ?: 0
+        }
+    } catch (Exception e) {
+        // エラーが発生した場合は何もしない（デフォルト値をそのまま使用）
+    }
+    
+    reportBuilder.append("- **成功**: ${success}\n")
+    reportBuilder.append("- **失敗**: ${failed}\n")
+    reportBuilder.append("- **スキップ**: ${skipped}\n")
+    reportBuilder.append("- **保留**: ${pending}\n\n")
+    
+    // PR情報のテーブル
+    reportBuilder.append("## PRごとの処理状況\n\n")
+    reportBuilder.append("| PR # | 状態 | 処理時間 | リンク |\n")
+    reportBuilder.append("|------|------|----------|--------|\n")
+    
+    // jobsが存在するかチェック
+    if (summary.jobs) {
+        try {
+            summary.jobs.each { prNum, prData ->
+                def row = ""
+                try {
+                    // PR番号
+                    row += "| ${prNum} "
+                    
+                    // ステータス情報
+                    def status = "UNKNOWN"
+                    def statusEmoji = "⏳"
+                    def reason = ""
+                    
+                    try {
+                        if (prData) {
+                            status = prData.status ?: "UNKNOWN"
+                            
+                            // 絵文字の決定
+                            if (status == "SUCCESS") statusEmoji = "✅"
+                            else if (status == "FAILURE" || status == "UNSTABLE" || status == "ERROR") statusEmoji = "❌"
+                            else if (status == "TRIGGERED") statusEmoji = "🔄"
+                            else if (status == "SKIPPED") statusEmoji = "⏭️"
+                            
+                            // 理由の取得
+                            if (prData.reason) {
+                                reason = " (${prData.reason})"
+                            }
+                        }
+                    } catch (Exception e) {
+                        // エラー時はデフォルト値を使用
+                    }
+                    
+                    row += "| ${statusEmoji} ${status}${reason} "
+                    
+                    // 処理時間（計算を避けて単純化）
+                    def duration = "-"
+                    try {
+                        if (prData && prData.duration != null && prData.duration != "null" && prData.duration.toString() != "null") {
+                            duration = "${prData.duration}ms"
+                        }
+                    } catch (Exception e) {
+                        // エラー時はデフォルト値
+                    }
+                    row += "| ${duration} "
+                    
+                    // リンク
+                    def link = "-"
+                    try {
+                        if (prData && prData.job_url && prData.job_url != "null" && prData.job_url.toString() != "null") {
+                            link = "[ビルド](${prData.job_url})"
+                        }
+                    } catch (Exception e) {
+                        // エラー時はデフォルト値
+                    }
+                    row += "| ${link} |\n"
+                    
+                    reportBuilder.append(row)
+                } catch (Exception e) {
+                    // 行の処理中にエラーが発生した場合、最低限の情報だけを表示
+                    reportBuilder.append("| ${prNum} | エラー | - | - |\n")
+                }
+            }
+        } catch (Exception e) {
+            reportBuilder.append("| - | レポート生成エラー | - | - |\n")
+        }
+    } else {
+        reportBuilder.append("| - | PRデータなし | - | - |\n")
+    }
+    
+    return reportBuilder.toString()
+}

@@ -1,0 +1,36 @@
+# OpenAI API
+openai>=1.56.0
+
+# AST処理
+astroid>=3.1.0
+black>=24.3.0
+
+# 型ヒント
+typing-extensions>=4.11.0
+
+# ファイルパス処理
+pathlib>=1.0.1
+
+# JSON Schema
+jsonschema>=4.21.1
+
+# テスト関連
+pytest>=8.1.1
+pytest-cov>=4.1.0
+
+# ビルド関連
+setuptools>=69.2.0
+wheel>=0.43.0
+
+# GitHub API
+PyGithub>=2.1.1
+
+# 基本ユーティリティ
+requests>=2.31.0
+urllib3>=2.2.1
+
+# 文字列処理
+chardet>=5.2.0
+
+# ロギング拡張
+rich>=13.7.1  # 高度なコンソール出力

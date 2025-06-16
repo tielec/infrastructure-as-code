@@ -1,0 +1,246 @@
+@Library('jenkins-shared-lib') _
+
+pipeline {
+    agent any
+    
+    environment {
+        SCRIPT_PATH = 'jenkins/jobs/pipeline/admin/user-management/scripts'
+    }
+    
+    stages {
+        stage('Setup') {
+            steps {
+                echo "=== User Management Job Setup ==="
+                echo "Execution Mode: ${params.EXECUTION_MODE}"
+                echo "Cleanup Users: ${params.CLEANUP_USERS}"
+                echo "Users to Delete: ${params.USERS_TO_DELETE ?: 'None specified'}"
+                echo "Delete Non-Domain Users: ${params.DELETE_NON_DOMAIN_USERS}"
+                echo "Jenkins URL: ${env.JENKINS_URL}"
+                
+                script {
+                    // 入力の確認
+                    if (params.CLEANUP_USERS) {
+                        if (params.DELETE_NON_DOMAIN_USERS && params.USERS_TO_DELETE?.trim()) {
+                            echo "両方のオプションが指定されています。特定ユーザーとドメイン外ユーザーの両方を削除します。"
+                        } else if (params.DELETE_NON_DOMAIN_USERS) {
+                            echo "ドメイン外ユーザーを削除します。"
+                        } else if (params.USERS_TO_DELETE?.trim()) {
+                            echo "特定ユーザーを削除します: ${params.USERS_TO_DELETE}"
+                        } else {
+                            echo "警告: CLEANUP_USERSが有効ですが、削除対象が指定されていません。"
+                        }
+                    }
+                    
+                    echo "Setting up Jenkins CLI..."
+                    try {
+                        def cliPath = jenkinsCliUtils.setupCli(env.JENKINS_URL)
+                        echo "Jenkins CLI setup completed: ${cliPath}"
+                    } catch (Exception e) {
+                        echo "Failed to setup Jenkins CLI: ${e.message}"
+                        error "Jenkins CLI is not available"
+                    }
+                }
+                
+                script {
+                    // スクリプトファイルの存在確認
+                    if (!fileExists("${SCRIPT_PATH}/assign-admin-role.groovy")) {
+                        error "${SCRIPT_PATH}/assign-admin-role.groovy not found"
+                    }
+                    if (params.CLEANUP_USERS && !fileExists("${SCRIPT_PATH}/cleanup-users.groovy")) {
+                        error "${SCRIPT_PATH}/cleanup-users.groovy not found"
+                    }
+                }
+            }
+        }
+        
+        stage('Cleanup Users') {
+            when {
+                expression { params.CLEANUP_USERS }
+            }
+            steps {
+                echo "=== User Cleanup Process ==="
+                script {
+                    withCredentials([usernamePassword(
+                        credentialsId: 'jenkins-pat',
+                        usernameVariable: 'JENKINS_USER',
+                        passwordVariable: 'JENKINS_TOKEN'
+                    )]) {
+                        try {
+                            def scriptContent = readFile("${SCRIPT_PATH}/cleanup-users.groovy")
+                            def dryRunValue = (params.EXECUTION_MODE == 'DRY_RUN') ? 'true' : 'false'
+                            
+                            // パラメータの設定
+                            def lines = scriptContent.split('\n')
+                            def modifiedLines = []
+                            
+                            lines.each { line ->
+                                if (line.contains('def dryRun =')) {
+                                    modifiedLines.add("def dryRun = ${dryRunValue}  // Modified by Jenkins")
+                                    echo "Set dryRun = ${dryRunValue}"
+                                } else if (line.contains('def deleteNonDomainUsers =')) {
+                                    modifiedLines.add("def deleteNonDomainUsers = ${params.DELETE_NON_DOMAIN_USERS}")
+                                    echo "Set deleteNonDomainUsers = ${params.DELETE_NON_DOMAIN_USERS}"
+                                } else if (line.contains('def specificUsersToDelete =')) {
+                                    def usersList = params.USERS_TO_DELETE?.trim() ? 
+                                        params.USERS_TO_DELETE.split(',').collect { "'${it.trim()}'" }.join(', ') : 
+                                        ''
+                                    modifiedLines.add("def specificUsersToDelete = [${usersList}]")
+                                    echo "Set specificUsersToDelete = [${usersList}]"
+                                } else {
+                                    modifiedLines.add(line)
+                                }
+                            }
+                            
+                            scriptContent = modifiedLines.join('\n')
+                            
+                            def tempFile = "temp_cleanup_${BUILD_NUMBER}.groovy"
+                            writeFile file: tempFile, text: scriptContent
+                            
+                            // デバッグ: 最初の40行を表示
+                            echo "Script preview (first 40 lines):"
+                            echo scriptContent.split('\n').take(40).join('\n')
+                            
+                            def result = sh(
+                                script: '''
+                                    cat ''' + tempFile + ''' | java -jar jenkins-cli.jar \
+                                        -s ${JENKINS_URL} \
+                                        -auth ${JENKINS_USER}:${JENKINS_TOKEN} \
+                                        groovy =
+                                ''',
+                                returnStdout: true
+                            ).trim()
+                            
+                            echo "Result:\n${result}"
+                        } catch (Exception e) {
+                            echo "Warning: Failed to execute via Jenkins CLI: ${e.message}"
+                            echo "Please execute manually in Script Console:"
+                            echo "${WORKSPACE}/${SCRIPT_PATH}/cleanup-users.groovy"
+                            unstable('User cleanup script auto-execution failed')
+                        }
+                    }
+                }
+            }
+        }
+        
+        stage('Assign Admin Role') {
+            steps {
+                echo "=== Admin Role Assignment Process ==="
+                script {
+                    withCredentials([usernamePassword(
+                        credentialsId: 'jenkins-pat',
+                        usernameVariable: 'JENKINS_USER',
+                        passwordVariable: 'JENKINS_TOKEN'
+                    )]) {
+                        try {
+                            def scriptContent = readFile("${SCRIPT_PATH}/assign-admin-role.groovy")
+                            def dryRunValue = (params.EXECUTION_MODE == 'DRY_RUN') ? 'true' : 'false'
+                            
+                            // 行単位で処理
+                            def lines = scriptContent.split('\n')
+                            def modifiedLines = []
+                            
+                            lines.each { line ->
+                                if (line.contains('def dryRun =')) {
+                                    modifiedLines.add("def dryRun = ${dryRunValue}  // Modified by Jenkins")
+                                    echo "Set dryRun = ${dryRunValue}"
+                                } else {
+                                    modifiedLines.add(line)
+                                }
+                            }
+                            
+                            scriptContent = modifiedLines.join('\n')
+                            
+                            def tempFile = "temp_assign_role_${BUILD_NUMBER}.groovy"
+                            writeFile file: tempFile, text: scriptContent
+                            
+                            def result = sh(
+                                script: '''
+                                    cat ''' + tempFile + ''' | java -jar jenkins-cli.jar \
+                                        -s ${JENKINS_URL} \
+                                        -auth ${JENKINS_USER}:${JENKINS_TOKEN} \
+                                        groovy =
+                                ''',
+                                returnStdout: true
+                            ).trim()
+                            
+                            echo "Result:\n${result}"
+                        } catch (Exception e) {
+                            echo "Warning: Failed to execute via Jenkins CLI: ${e.message}"
+                            echo "Please execute manually in Script Console:"
+                            echo "${WORKSPACE}/${SCRIPT_PATH}/assign-admin-role.groovy"
+                            unstable('Admin role assignment script auto-execution failed')
+                        }
+                    }
+                }
+            }
+        }
+        
+        stage('Generate Report') {
+            steps {
+                echo "=== User Status Report ==="
+                script {
+                    withCredentials([usernamePassword(
+                        credentialsId: 'jenkins-pat',
+                        usernameVariable: 'JENKINS_USER',
+                        passwordVariable: 'JENKINS_TOKEN'
+                    )]) {
+                        try {
+                            def scriptPath = "${SCRIPT_PATH}/generate-report.groovy"
+                            def result = sh(
+                                script: '''
+                                    cat ''' + scriptPath + ''' | java -jar jenkins-cli.jar \
+                                        -s ${JENKINS_URL} \
+                                        -auth ${JENKINS_USER}:${JENKINS_TOKEN} \
+                                        groovy =
+                                ''',
+                                returnStdout: true
+                            ).trim()
+                            
+                            echo "Report:\n${result}"
+                            
+                            def reportFile = "user-management-report-${BUILD_NUMBER}.txt"
+                            writeFile file: reportFile, text: result
+                            archiveArtifacts artifacts: reportFile, allowEmptyArchive: true
+                        } catch (Exception e) {
+                            echo "Warning: Report generation failed: ${e.message}"
+                            echo "Please execute manually in Script Console:"
+                            echo "${WORKSPACE}/${SCRIPT_PATH}/generate-report.groovy"
+                        }
+                    }
+                }
+            }
+        }
+    }
+    
+    post {
+        success {
+            echo 'User management job completed successfully'
+            script {
+                def summary = """
+                User Management Job Summary:
+                - Execution Mode: ${params.EXECUTION_MODE}
+                - Cleanup Users: ${params.CLEANUP_USERS}
+                - Delete Non-Domain Users: ${params.DELETE_NON_DOMAIN_USERS}
+                - Specific Users Deleted: ${params.USERS_TO_DELETE ?: 'None'}
+                - Build: ${env.BUILD_URL}
+                """
+                echo summary
+            }
+        }
+        unstable {
+            echo 'User management job partially completed. Manual intervention required.'
+        }
+        failure {
+            echo 'User management job failed'
+        }
+        always {
+            echo "Execution time: ${new Date()}"
+            
+            script {
+                sh '''
+                    rm -f temp_*.groovy || true
+                '''
+            }
+        }
+    }
+}

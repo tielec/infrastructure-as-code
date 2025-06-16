@@ -1,0 +1,125 @@
+@Library('jenkins-shared-lib') _
+
+pipeline {
+    agent any
+
+    environment {
+        TEST_REGION = 'us-west-2'
+        TEST_ACCOUNT = '573941938407'
+        TEST_TARGET_ACCOUNT = '554761799494'
+        TEST_QUEUE_PREFIX = 'GA4-WorkerQueue-'
+    }
+    
+    stages {
+        stage('環境チェック') {
+            steps {
+                script {
+                    echo "現在の実行環境の確認:"
+                    
+                    def callerIdentity = sh(
+                        script: 'aws sts get-caller-identity --output json',
+                        returnStdout: true
+                    ).trim()
+                    
+                    echo "Caller Identity: ${callerIdentity}"
+                }
+            }
+        }
+        
+        stage('AWS Utils テスト') {
+            steps {
+                script {
+                    def aws = awsUtils()
+                    echo "AWS Utilsのテストを開始します"
+                    
+                    try {
+                        // ARN生成テスト
+                        def roleArn = aws.general.buildArn(
+                            'iam',
+                            "role/${params.TARGET_ROLE_NAME}",
+                            [accountId: env.TEST_TARGET_ACCOUNT]
+                        )
+                        echo "生成したロールARN: ${roleArn}"
+                        
+                        if (!roleArn.matches("arn:aws:iam::${env.TEST_TARGET_ACCOUNT}:role/.+")) {
+                            error "不正なARN形式: ${roleArn}"
+                        }
+
+                        echo "ARN生成テスト: 成功"
+
+                        // AssumeRole & SQSテストの統合
+                        def credentials = aws.general.assumeRole(
+                            roleArn,
+                            'MonitoringCheck',
+                            [environment: params.ENVIRONMENT]
+                        )
+                        
+                        echo "認証情報の取得に成功しました"
+                        
+                        // SQS操作テスト
+                        withEnv([
+                            "AWS_ACCESS_KEY_ID=${credentials.Credentials.AccessKeyId}",
+                            "AWS_SECRET_ACCESS_KEY=${credentials.Credentials.SecretAccessKey}",
+                            "AWS_SESSION_TOKEN=${credentials.Credentials.SessionToken}",
+                            "AWS_DEFAULT_REGION=${env.TEST_REGION}"
+                        ]) {
+                            // キュー一覧の取得
+                            def queueUrls = aws.sqs.listQueuesByPrefix(
+                                env.TEST_QUEUE_PREFIX,
+                                env.TEST_REGION
+                            )
+                            
+                            echo """
+                            キュー一覧の取得結果:
+                            - プレフィックス: ${env.TEST_QUEUE_PREFIX}
+                            - 取得キュー数: ${queueUrls.size()}
+                            """.stripIndent()
+
+                            // 各キューの詳細情報取得
+                            queueUrls.each { queueUrl ->
+                                def queueName = queueUrl.tokenize('/')[-1]
+                                def messageCounts = aws.sqs.getQueueMessageCounts(queueUrl)
+                                
+                                echo """
+                                キュー詳細 - ${queueName}:
+                                - 利用可能なメッセージ数: ${messageCounts.availableCount}
+                                - 処理中のメッセージ数: ${messageCounts.processingCount}
+                                - 合計メッセージ数: ${messageCounts.totalCount}
+                                - isDLQ: ${aws.sqs.isDLQ(queueName)}
+                                """.stripIndent()
+                            }
+                        }
+
+                    } catch (Exception e) {
+                        echo "テスト中にエラーが発生しました: ${e.message}"
+                        throw e
+                    }
+                }
+            }
+        }
+    }
+    
+    post {
+        success {
+            script {
+                echo """
+                テスト成功:
+                - ARN生成
+                - AssumeRole実行
+                - SQSキュー一覧取得
+                - キュー詳細情報取得
+                - DLQ判定
+                """.stripIndent()
+            }
+        }
+        failure {
+            script {
+                echo """
+                テスト失敗:
+                実行結果: ${currentBuild.result}
+                詳細: ${currentBuild.description ?: 'エラーの詳細は利用できません'}
+                """.stripIndent()
+            }
+        }
+    }
+}

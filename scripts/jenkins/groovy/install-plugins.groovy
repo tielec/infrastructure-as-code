@@ -32,6 +32,7 @@ def plugins = [
     "build-timeout",
     "build-user-vars-plugin",
     "generic-webhook-trigger",
+    "parameterized-trigger",
     "throttle-concurrents",
     "timestamper",
     "ws-cleanup",

@@ -1,0 +1,408 @@
+@Library('jenkins-shared-lib') _
+
+/**
+ * GitHub PRコメント自動生成パイプライン
+ * OpenAI APIを使用してPRの内容を分析し、コメントを自動生成・投稿します
+ */
+pipeline {
+    agent {
+        docker {
+            label 'ec2-fleet'
+            image 'python:3.11-slim'
+            args '-v ${WORKSPACE}:/workspace -w /workspace -u root'
+        }
+    }
+    
+    environment {
+        // OpenAI API設定
+        OPENAI_API_KEY = credentials('openai-api-key')
+        OPENAI_API_ENDPOINT = "https://your-open-ai-endpoint"
+        OPENAI_DEPLOYMENT_NAME = "gpt-4o"
+        
+        // 作業ディレクトリ構造（WORKSPACEからの相対パス）
+        WORKSPACE_DIR = "pr-workspace"
+        DIFF_DIR = "diff-files"
+        ANALYSIS_DIR = "analysis-results"
+        PROJECT_HOME_DIR = "project-repo"
+
+        // Githubリポジトリ設定
+        GIT_JENKINS_REPO_URL = 'git@github.com:tielec/infrastructure-as-code.git'
+        GIT_JENKINS_REPO_BRANCH = 'main'
+        GIT_JENKINS_CREDENTIALS_ID = 'github-deploy-key-tielec-jenkins-pipeline'
+        
+        // ツールのパス
+        PROJECT_BASE_DIR = "${PROJECT_HOME_DIR}/jenkins/jobs/pipeline/docs-generator/pull-request-comment-builder"
+        PYTHON_PROJECT_DIR = "${PROJECT_BASE_DIR}/src"
+        
+        // タイムスタンプ
+        TIME_STAMP = sh(script: 'TZ="Asia/Tokyo" date "+%Y/%m/%d %H:%M:%S"', returnStdout: true).trim()
+    }
+    
+    stages {
+        stage('パラメータ検証') {
+            steps {
+                script {
+                    // リポジトリ情報の設定
+                    def (repoOwner, repoName) =  gitUtils.extractRepoInfo(params.REPO_URL)
+                    env.REPO_OWNER = repoOwner
+                    env.REPO_NAME  = repoName 
+                    
+                    if (!env.REPO_OWNER?.trim() || !env.REPO_NAME?.trim()) {
+                        error "リポジトリ情報が不足しています。"
+                    }
+                    
+                    // PR番号の検証と設定
+                    def prNumber = env.CHANGE_ID?.trim() ?: params.PR_NUMBER?.trim()
+                    
+                    if (!prNumber) {
+                        error "PR番号が指定されていません。"
+                    }
+                    
+                    try {
+                        // Latestの場合は最新のPRを取得
+                        if (prNumber.equalsIgnoreCase('Latest')) {
+                            try {
+                                def latestPR = gitUtils.getLatestPullRequest([
+                                    repoOwner: env.REPO_OWNER,
+                                    repoName: env.REPO_NAME,
+                                    state: 'open'
+                                ])
+                                
+                                if (!latestPR) {
+                                    error "オープンなPRが見つかりませんでした。"
+                                }
+                                
+                                prNumber = latestPR.number.toString()
+                                echo "最新のPR #${prNumber} (${latestPR.title}) を処理対象とします。"
+                                
+                            } catch (Exception e) {
+                                error "最新のPR情報の取得に失敗しました: ${e.message}"
+                            }
+                        }
+                        
+                        env.PR_NUMBER = prNumber
+                        Integer.parseInt(prNumber)
+                    } catch (NumberFormatException e) {
+                        error "PR番号は数値である必要があります: ${prNumber}"
+                    }
+                }
+            }
+        }
+
+        stage('環境準備') {
+            steps {
+                script {
+                    // 必要なツールのインストール
+                    sh """
+                        apt-get update && apt-get install -y git curl jq
+                    """
+                    
+                    // 作業ディレクトリの準備
+                    sh """
+                        mkdir -p ${WORKSPACE_DIR}
+                        mkdir -p ${DIFF_DIR}
+                        mkdir -p ${ANALYSIS_DIR}
+                    """
+                    
+                    // ツールのチェックアウト
+                    dir(PROJECT_HOME_DIR) {
+                        gitUtils.checkoutRepository(
+                            env.GIT_JENKINS_REPO_URL,
+                            env.GIT_JENKINS_REPO_BRANCH,
+                            env.GIT_JENKINS_CREDENTIALS_ID
+                        )
+                    }
+                    
+                    // Pythonの依存関係をインストール
+                    sh """
+                        python -m pip install --upgrade pip
+                        cd ${PYTHON_PROJECT_DIR}
+                        pip install -r requirements.txt --no-cache-dir
+                    """
+                }
+            }
+        }
+        
+        stage('既存コメントの確認') {
+            steps {
+                script {
+                    // このフラグでステージのスキップを制御
+                    env.SKIP_ANALYSIS = 'false'
+                    
+                    try {
+                                                    // PR上の全コメントを取得
+                            def existingComments = gitUtils.getPullRequestComments(
+                                env.PR_NUMBER as Integer,
+                                [
+                                    repoOwner: env.REPO_OWNER,
+                                    repoName: env.REPO_NAME
+                                ]
+                            )                        
+                            
+                            // デバッグ情報の出力
+                            echo "既存コメントの数: ${existingComments?.size() ?: 0}"
+                            
+                            // 自動生成コメントを探す（最新のものを使用）
+                            def autoGenComment = existingComments?.findAll { existingComment ->
+                                existingComment.body?.contains('<!-- auto-generated-comment')
+                            }?.sort { it.created_at }?.reverse()?.find()
+
+                            if (autoGenComment && !params.FORCE_ANALYSIS) {
+                                echo "既存の自動生成コメントが見つかりました（コメントID: ${autoGenComment.id}）"
+                                echo "FORCE_ANALYSISがfalseのため、以降のステージをスキップします"
+                                
+                                // スキップフラグを設定
+                                env.SKIP_ANALYSIS = 'true'
+                                
+                                // コメント情報を保存（後続ステージで使用するため）
+                                env.EXISTING_COMMENT_ID = autoGenComment.id.toString()
+                            } else if (autoGenComment && params.FORCE_ANALYSIS) {
+                                echo "既存の自動生成コメントが見つかりましたが、FORCE_ANALYSISがtrueのため処理を続行します"
+                                env.EXISTING_COMMENT_ID = autoGenComment.id.toString()
+                            } else {
+                                echo "既存の自動生成コメントは見つかりませんでした。処理を続行します"
+                            }
+                            
+                            echo "スキップフラグの状態: SKIP_ANALYSIS=${env.SKIP_ANALYSIS}"
+                    } catch (Exception e) {
+                        echo "既存コメントの確認中にエラーが発生しました: ${e.message}"
+                        echo "処理を続行します"
+                    }
+                }
+            }
+        }
+        
+        stage('PR情報と差分の取得') {
+            when {
+                expression { 
+                    echo "スキップフラグの状態（PR情報取得ステージ）: SKIP_ANALYSIS=${env.SKIP_ANALYSIS}"
+                    return env.SKIP_ANALYSIS == 'false'
+                }
+            }
+            steps {
+                script {
+                    try {
+                        sh "mkdir -p ${DIFF_DIR} ${ANALYSIS_DIR}"
+                            
+                            def prInfo = gitUtils.getPullRequestInfo(
+                                env.PR_NUMBER as Integer,
+                                [
+                                    repoOwner: env.REPO_OWNER,
+                                    repoName: env.REPO_NAME
+                                ]
+                            )
+                            
+                            def prDiff = gitUtils.getPullRequestDiff(
+                                env.PR_NUMBER as Integer,
+                                [
+                                    repoOwner: env.REPO_OWNER,
+                                    repoName: env.REPO_NAME
+                                ]
+                            )
+                            
+                            // 単純にカレントディレクトリからの相対パスで書き込み
+                            writeJSON(file: "pr_diff.json", json: prDiff, pretty: 4)
+                            writeJSON(file: "pr_info.json", json: prInfo, pretty: 4)
+                            
+                            // ファイルを正しい場所に移動
+                            sh """
+                                mv pr_diff.json ${DIFF_DIR}/
+                                mv pr_info.json ${DIFF_DIR}/
+                            """
+                    } catch (Exception e) {
+                        error "PR情報・差分の取得に失敗しました: ${e.message}"
+                    }
+                }
+            }
+        }
+        
+        stage('OpenAIによる分析') {
+            when {
+                expression { 
+                    // 文字列比較は '==' を使用
+                    echo "スキップフラグの状態（分析ステージ）: SKIP_ANALYSIS=${env.SKIP_ANALYSIS}"
+                    return env.SKIP_ANALYSIS == 'false'
+                }
+            }
+            steps {
+                script {
+                    try {
+                        // プロンプト保存用ディレクトリを作成
+                        sh "mkdir -p ${WORKSPACE}/prompts"
+                        
+                        withCredentials([
+                            usernamePassword(credentialsId: 'your-github-app-credentials-id', 
+                                            usernameVariable: 'GITHUB_APP_ID',
+                                            passwordVariable: 'GITHUB_ACCESS_TOKEN'),
+                            string(credentialsId: 'openai-api-key', 
+                                variable: 'OPENAI_API_KEY')
+                        ]) {
+                            // 保存フラグを明示的に環境変数に設定
+                            withEnv(['SAVE_PROMPTS=true', 'GITHUB_AUTH_METHOD=app']) {
+                                sh """
+                                    cd ${PYTHON_PROJECT_DIR}
+                                    python pr_comment_generator.py \
+                                        --pr-diff ${WORKSPACE}/${DIFF_DIR}/pr_diff.json \
+                                        --pr-info ${WORKSPACE}/${DIFF_DIR}/pr_info.json \
+                                        --output ${WORKSPACE}/${ANALYSIS_DIR}/analysis_result.json \
+                                        --save-prompts \
+                                        --prompt-output-dir ${WORKSPACE}/prompts
+                                """
+                            }
+                        }
+                        
+                        echo "OpenAIによる分析が完了しました。プロンプトと結果は 'prompts' ディレクトリに保存されています。"
+                    } catch (Exception e) {
+                        error "OpenAIによる分析に失敗しました: ${e.message}"
+                    }
+                }
+            }
+        }
+        
+        stage('PRコメントとタイトルの更新') {
+            when {
+                expression {
+                    echo "スキップフラグの状態（更新ステージ）: SKIP_ANALYSIS=${env.SKIP_ANALYSIS}" 
+                    return env.SKIP_ANALYSIS == 'false'
+                }
+            }
+            steps {
+                script {
+                    try {
+                        // 分析結果の読み込み
+                        def analysisResult = readJSON file: "${ANALYSIS_DIR}/analysis_result.json"
+                        def comment = analysisResult.comment
+                        def suggestedTitle = analysisResult.suggested_title
+
+                        // 自動生成タグの作成（タイムスタンプを含む）
+                        def autoGenTag = """
+                            <!-- auto-generated-comment
+                            timestamp: ${env.TIME_STAMP}
+                            jenkins-job: ${env.JOB_NAME}
+                            build-number: ${env.BUILD_NUMBER}
+                            -->
+                            
+                        """.stripIndent()
+                            
+                            // タイトルの更新とコメントの準備
+                            if (params.UPDATE_TITLE) {
+                                // タイトルを更新する場合
+                                if (suggestedTitle?.trim()) {
+                                    gitUtils.updatePullRequestTitle(
+                                        env.PR_NUMBER as Integer,
+                                        suggestedTitle,
+                                        [
+                                            repoOwner: env.REPO_OWNER,
+                                            repoName: env.REPO_NAME
+                                        ]
+                                    )
+                                }
+                            } else {
+                                // タイトルを更新しない場合、コメント内のヘッダーを置換
+                                if (suggestedTitle?.trim()) {
+                                    comment = comment.replaceFirst(
+                                        "# 変更内容サマリー(\\r?\\n|\\r)",
+                                        "# 変更内容サマリー: ${suggestedTitle}\$1"
+                                    )
+                                }
+                            }
+
+                            // 自動生成タグをコメントの先頭に追加
+                            comment = autoGenTag + comment
+
+                            // 既存の自動生成コメントの更新または新規作成
+                            if (env.EXISTING_COMMENT_ID) {
+                                try {
+                                    echo "自動生成コメントの更新を開始: コメントID ${env.EXISTING_COMMENT_ID}"
+                                    gitUtils.updatePullRequestComment(
+                                        env.EXISTING_COMMENT_ID,
+                                        comment,
+                                        [
+                                            repoOwner: env.REPO_OWNER,
+                                            repoName: env.REPO_NAME
+                                        ]
+                                    )
+                                    echo "既存の自動生成コメントを更新しました: コメントID ${env.EXISTING_COMMENT_ID}"
+                                } catch (Exception e) {
+                                    error "コメントの更新に失敗しました: ${e.message}"
+                                }
+                            } else {
+                                echo "新規コメントの作成を開始"
+                                gitUtils.createPullRequestComment(
+                                    env.PR_NUMBER as Integer,
+                                    comment,
+                                    [
+                                        repoOwner: env.REPO_OWNER,
+                                        repoName: env.REPO_NAME
+                                    ]
+                                )
+                                echo "新規PRコメントを作成しました"
+                        }
+                    } catch (Exception e) {
+                        error "PRの更新に失敗しました: ${e.message}"
+                    }
+                }
+            }
+        }
+    }
+    
+    post {
+        always {
+            // 分析結果とプロンプトファイルを成果物として保存
+            archiveArtifacts artifacts: """
+                ${DIFF_DIR}/*.json,
+                ${ANALYSIS_DIR}/*.json,
+                prompts/**/*
+            """, allowEmptyArchive: true
+            
+            // 実行結果のサマリーを表示
+            script {
+                if (env.SKIP_ANALYSIS == 'true') {
+                    echo """
+                        =============================================
+                        PR分析結果サマリー
+                        =============================================
+                        PR番号: ${env.PR_NUMBER}
+                        処理結果: 既存の自動生成コメントが存在するため処理をスキップしました
+                        ※再分析を実行するには FORCE_ANALYSIS パラメータを有効にしてください
+                        =============================================
+                    """.stripIndent()
+                } else {
+                    try {
+                        def analysisResult = readJSON file: "${ANALYSIS_DIR}/analysis_result.json"
+                        if (analysisResult.usage) {
+                            echo """
+                                =============================================
+                                PR分析結果サマリー
+                                =============================================
+                                PR番号: ${env.PR_NUMBER}
+                                タイトル: ${analysisResult.suggested_title ?: 'N/A'}
+                                処理ファイル数: ${analysisResult.processed_file_count ?: 'N/A'} / ${analysisResult.file_count ?: 'N/A'}
+                                スキップファイル数: ${analysisResult.skipped_file_count ?: '0'}
+                                トークン使用量: ${analysisResult.usage.total_tokens ?: 'N/A'}
+                                実行時間: ${analysisResult.execution_time_seconds ?: 'N/A'} 秒
+                                =============================================
+                            """.stripIndent()
+                        }
+                    } catch (Exception e) {
+                        echo "分析結果の読み込みに失敗しました: ${e.message}"
+                    }
+                }
+            }
+        }
+        
+        success {
+            script {
+                if (env.SKIP_ANALYSIS == 'true') {
+                    echo "既存のコメントが見つかりました。スキップして正常終了しました。"
+                } else {
+                    echo "PRコメント生成が正常に完了しました。"
+                }
+            }
+        }
+        
+        failure {
+            echo "PRコメント生成に失敗しました。ログを確認してください。"
+        }
+    }
+}

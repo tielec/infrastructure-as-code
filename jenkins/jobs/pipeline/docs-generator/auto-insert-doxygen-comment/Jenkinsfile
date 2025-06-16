@@ -1,0 +1,649 @@
+@Library('jenkins-shared-lib') _
+/**
+ * ドキュメント生成パイプライン
+ * Python/シェルスクリプト/Rust/TypeScriptにDoxygenスタイルのドキュメントを自動生成し、PRを作成します
+ */
+
+pipeline {
+    agent {
+        docker {
+            label 'ec2-fleet'
+            image 'nikolaik/python-nodejs:python3.11-nodejs20'
+            args '-v ${WORKSPACE}:/workspace -w /workspace -u root'
+        }
+    }
+
+    environment {
+        // APIキーと認証情報
+        OPENAI_API_KEY = credentials('openai-api-key')
+        OPENAI_API_ENDPOINT = "https://your-open-ai-endpoint/"
+        OPENAI_DEPLOYMENT_NAME = "gpt-4o-mini"
+        
+        // GitHub関連の設定
+        GIT_JENKINS_REPO_URL = 'git@github.com:tielec/infrastructure-as-code.git'
+        GIT_JENKINS_REPO_BRANCH = 'main'
+        GIT_JENKINS_CREDENTIALS_ID = 'github-deploy-key-tielec-jenkins-pipeline'
+        
+        // 作業ディレクトリ構造
+        ORIGINAL_CODE_DIR = "original-code"      // ドキュメント生成の対象となるコード
+        BASE_BRANCH_DIR = "base-branch"          // PRの作成元となるブランチ
+        PROJECT_HOME_DIR = "project-repo"        // ツールのコード
+        
+        // ドキュメント生成ツールのパス
+        PROJECT_BASE_DIR = "${PROJECT_HOME_DIR}/jenkins/jobs/pipeline/docs-generator/auto-insert-doxygen-comment"
+        MAIN_SCRIPT_PATH = "${PROJECT_BASE_DIR}/src/main.py"
+        PROJECT_TEMPRATE_DIR = "${PROJECT_BASE_DIR}/templates"
+        
+        // テンプレートのパス
+        PYTHON_TEMPLATES_DIR = "${PROJECT_TEMPRATE_DIR}/python"
+        SHELL_TEMPLATES_DIR = "${PROJECT_TEMPRATE_DIR}/shell"
+        RUST_TEMPLATES_DIR = "${PROJECT_TEMPRATE_DIR}/rust"
+        TYPESCRIPT_TEMPLATES_DIR = "${PROJECT_TEMPRATE_DIR}/typescript"
+
+        // 生成物の保存ディレクトリ
+        REPORTS_DIR = "reports"
+        PYTHON_REPORTS_DIR = "${REPORTS_DIR}/python"
+        SHELL_REPORTS_DIR = "${REPORTS_DIR}/shell"
+        RUST_REPORTS_DIR = "${REPORTS_DIR}/rust"
+        TYPESCRIPT_REPORTS_DIR = "${REPORTS_DIR}/typescript"
+        
+        // Git操作用の設定
+        TIME_STAMP = sh(script: 'TZ="Asia/Tokyo" date "+%Y%m%d-%H%M%S"', returnStdout: true).trim()
+        BRANCH_NAME = "feature/add-docs-${TIME_STAMP}"
+    }
+
+    stages {
+        stage('準備') {
+            steps {
+                script {   
+                    // 必要なツールのインストール
+                    sh "apt-get update && apt-get install -y git curl jq"
+
+                    // 1. ドキュメント生成対象のコードをチェックアウト
+                    dir(ORIGINAL_CODE_DIR) {
+                        gitUtils.checkoutRepository(
+                            params.REPO_URL,
+                            params.TARGET_BRANCH,  // ドキュメント生成対象のブランチ
+                            params.GIT_CREDENTIALS_ID  // 認証情報ID
+                        )
+                    }
+
+                    // 2. PRのベースとなるブランチをチェックアウト
+                    dir(BASE_BRANCH_DIR) {
+                        gitUtils.checkoutRepository(
+                            params.REPO_URL,
+                            params.PR_TARGET_BRANCH,  // PRのマージ先となるブランチ
+                            params.GIT_CREDENTIALS_ID  // 認証情報ID
+                        )
+                    }
+
+                    // 3. ドキュメント生成ツールのコードをチェックアウト
+                    dir(PROJECT_HOME_DIR) {
+                        gitUtils.checkoutRepository(
+                            env.GIT_JENKINS_REPO_URL,
+                            env.GIT_JENKINS_REPO_BRANCH,
+                            env.GIT_JENKINS_CREDENTIALS_ID
+                        )
+                    }
+                    
+                    // 統合された依存関係をインストール
+                    sh """
+                        python -m pip install --upgrade pip
+                        cd ${PROJECT_BASE_DIR}/src
+                        pip install -r requirements.txt --no-cache-dir
+                    """
+                    
+                    // レポート用ディレクトリの作成
+                    sh """
+                        mkdir -p ${PYTHON_REPORTS_DIR}/{success,failed}
+                        mkdir -p ${SHELL_REPORTS_DIR}/{success,failed}
+                        mkdir -p ${RUST_REPORTS_DIR}/{success,failed}
+                        mkdir -p ${TYPESCRIPT_REPORTS_DIR}/{success,failed}
+                        chmod -R 777 ${REPORTS_DIR}
+                    """
+                }
+            }
+        }
+
+        stage('Python ドキュメント生成') {
+            steps {
+                script {
+                    def pythonConfig = [
+                        fileType: 'python',
+                        findPattern: "find . -name '*.py' -not -path './venv/*' -not -path './.git/*'",
+                        language: 'python',
+                        templates: [
+                            '--python-class-template': "${PYTHON_TEMPLATES_DIR}/docstring_class_template.md",
+                            '--python-function-template': "${PYTHON_TEMPLATES_DIR}/docstring_function_template.md",
+                            '--python-module-template': "${PYTHON_TEMPLATES_DIR}/docstring_module_template.md"
+                        ],
+                        overwriteFlag: params.OVERWRITE_DOCS ? '--overwrite-docstring' : '',
+                        reportsDir: env.PYTHON_REPORTS_DIR
+                    ]
+            
+                    def pythonResults = processLanguageFiles(pythonConfig)
+                    writeJSON file: "${PYTHON_REPORTS_DIR}/results.json", json: pythonResults, pretty: 4
+                }
+            }
+        }
+        
+        stage('Shell ドキュメント生成') {
+            steps {
+                script {
+                    def shellConfig = [
+                        fileType: 'shell',
+                        findPattern: """find . -type f \\( -name '*.sh' -o -name '*.bash' \\) -not -path './.git/*'""",
+                        language: 'shell',
+                        templates: [
+                            '--shell-function-template': "${SHELL_TEMPLATES_DIR}/shell_function_template.md",
+                            '--shell-script-template': "${SHELL_TEMPLATES_DIR}/shell_script_template.md"
+                        ],
+                        overwriteFlag: params.OVERWRITE_DOCS ? '--overwrite-docstring' : '',
+                        reportsDir: env.SHELL_REPORTS_DIR
+                    ]
+            
+                    def shellResults = processLanguageFiles(shellConfig)
+                    writeJSON file: "${SHELL_REPORTS_DIR}/results.json", json: shellResults, pretty: 4
+                }
+            }
+        }
+
+        stage('Rust ドキュメント生成') {
+            steps {
+                script {
+                    def rustConfig = [
+                        fileType: 'rust',
+                        findPattern: "find . -name '*.rs' -not -path './.git/*'",
+                        language: 'rust',
+                        templates: [
+                            '--rust-function-template': "${RUST_TEMPLATES_DIR}/rust_function_template.md",
+                            '--rust-struct-template': "${RUST_TEMPLATES_DIR}/rust_struct_template.md",
+                            '--rust-enum-template': "${RUST_TEMPLATES_DIR}/rust_enum_template.md",
+                            '--rust-trait-template': "${RUST_TEMPLATES_DIR}/rust_trait_template.md",
+                            '--rust-module-template': "${RUST_TEMPLATES_DIR}/rust_module_template.md"
+                        ],
+                        overwriteFlag: params.OVERWRITE_DOCS ? '--overwrite-docstring' : '',
+                        reportsDir: env.RUST_REPORTS_DIR,
+                    ]
+
+                    def rustResults = processLanguageFiles(rustConfig)
+                    writeJSON file: "${RUST_REPORTS_DIR}/results.json", json: rustResults, pretty: 4
+                }
+            }
+        }
+
+        stage('TypeScript ドキュメント生成') {
+            steps {
+                script {
+                    def typescriptConfig = [
+                        fileType: 'typescript',
+                        findPattern: """find . -type f \\( -name '*.ts' -o -name '*.tsx' \\) -not -path './node_modules/*' -not -path './.git/*'""",
+                        language: 'typescript',
+                        templates: [
+                            '--typescript-function-template': "${TYPESCRIPT_TEMPLATES_DIR}/typescript_function_template.md",
+                            '--typescript-class-template': "${TYPESCRIPT_TEMPLATES_DIR}/typescript_class_template.md",
+                            '--typescript-interface-template': "${TYPESCRIPT_TEMPLATES_DIR}/typescript_interface_template.md",
+                            '--typescript-type-template': "${TYPESCRIPT_TEMPLATES_DIR}/typescript_type_template.md",
+                            '--typescript-enum-template': "${TYPESCRIPT_TEMPLATES_DIR}/typescript_enum_template.md",
+                            '--typescript-module-template': "${TYPESCRIPT_TEMPLATES_DIR}/typescript_module_template.md"
+                        ],
+                        overwriteFlag: params.OVERWRITE_DOCS ? '--overwrite-docstring' : '',
+                        reportsDir: env.TYPESCRIPT_REPORTS_DIR
+                    ]
+
+                    def typescriptResults = processLanguageFiles(typescriptConfig)
+                    writeJSON file: "${TYPESCRIPT_REPORTS_DIR}/results.json", json: typescriptResults, pretty: 4
+                }
+            }
+        }
+
+        stage('変更のコミットとプッシュ') {
+            steps {
+                script {
+                    def pythonResults = readJSON file: "${PYTHON_REPORTS_DIR}/results.json"
+                    def shellResults = readJSON file: "${SHELL_REPORTS_DIR}/results.json"
+                    def rustResults = readJSON file: "${RUST_REPORTS_DIR}/results.json"
+                    def typescriptResults = readJSON file: "${TYPESCRIPT_REPORTS_DIR}/results.json"
+
+                    dir(BASE_BRANCH_DIR) {
+                        // 成功したファイルの処理
+                        processLanguageSuccessFiles(pythonResults, PYTHON_REPORTS_DIR)
+                        processLanguageSuccessFiles(shellResults, SHELL_REPORTS_DIR)
+                        processLanguageSuccessFiles(rustResults, RUST_REPORTS_DIR)
+                        processLanguageSuccessFiles(typescriptResults, TYPESCRIPT_REPORTS_DIR)
+                        
+
+                        // 変更の有無を確認
+                        def gitStatus = sh(script: 'git status --porcelain', returnStdout: true).trim()
+                        
+                        if (gitStatus) {
+                            // 変更されたファイルの一覧を取得
+                            def changedFiles = gitStatus.split('\n').collect { line ->
+                                line.trim().substring(2)
+                            }
+                            
+                            // コミットメッセージの生成
+                            def commitMessage = generateCommitMessage(
+                                pythonResults,
+                                shellResults,
+                                rustResults,
+                                typescriptResults,
+                                changedFiles,
+                                "${env.TIME_STAMP}"
+                            )
+                            
+                            
+                            if (params.COMMIT_MODE == 'CREATE_PR') {
+                                // PRフロー: 新しいブランチにコミットしてプッシュ
+                                gitUtils.commitAndPushChanges(
+                                    env.BRANCH_NAME,             // ブランチ名 
+                                    commitMessage,               // コミットメッセージ
+                                    changedFiles,                // 変更されたファイル一覧
+                                    params.GIT_CREDENTIALS_ID,   // 認証情報ID
+                                    [
+                                        repoUrl: params.REPO_URL,
+                                        createNewBranch: true,
+                                        baseBranch: params.PR_TARGET_BRANCH
+                                    ]
+                                )
+                                echo "ブランチ ${env.BRANCH_NAME} をプッシュしました。"
+                            } else {
+                                // 直接プッシュフロー: 直接ターゲットブランチにコミットしてプッシュ
+                                gitUtils.commitAndPushChanges(
+                                    params.PR_TARGET_BRANCH,     // ターゲットブランチ
+                                    commitMessage,               // コミットメッセージ 
+                                    changedFiles,                // 変更されたファイル一覧
+                                    params.GIT_CREDENTIALS_ID,   // 認証情報ID
+                                    [
+                                        repoUrl: params.REPO_URL,
+                                        createNewBranch: false,
+                                        baseBranch: params.PR_TARGET_BRANCH
+                                    ]
+                                )
+                                echo "変更を ${params.PR_TARGET_BRANCH} に直接プッシュしました。"
+                            }
+                            
+                            // 環境変数として保存して次のステージで使用
+                            env.HAS_CHANGES = 'true'
+                            // セキュリティの警告を避けるため、writeJSONを使用
+                            writeJSON file: "${WORKSPACE}/changedFiles.json", json: changedFiles, pretty: 4
+                        } else {
+                            echo "変更が検出されませんでした。コミットをスキップします。"
+                            env.HAS_CHANGES = 'false'
+                        }
+                    }
+                }
+            }
+        }
+        
+        stage('PR作成') {
+            when {
+                allOf {
+                    expression { return params.COMMIT_MODE == 'CREATE_PR' }
+                    expression { return env.HAS_CHANGES == 'true' }
+                }
+            }
+            steps {
+                script {
+                    def pythonResults = readJSON file: "${PYTHON_REPORTS_DIR}/results.json"
+                    def shellResults = readJSON file: "${SHELL_REPORTS_DIR}/results.json"
+                    def rustResults = readJSON file: "${RUST_REPORTS_DIR}/results.json"
+                    def typescriptResults = readJSON file: "${TYPESCRIPT_REPORTS_DIR}/results.json"
+                    
+                    // changedFiles.jsonファイルから変更ファイルのリストを読み込み
+                    def changedFiles = readJSON file: "${WORKSPACE}/changedFiles.json"
+                    
+                    dir(BASE_BRANCH_DIR) {
+
+                        // PR本文の生成
+                        def prBody = generatePullRequestBody(
+                            pythonResults,
+                            shellResults,
+                            rustResults,
+                            typescriptResults,
+                            changedFiles,
+                            "${env.TIME_STAMP}",
+                            "${BUILD_URL}"
+                        )
+                        
+                        // PRの作成
+                        gitUtils.createPullRequest(
+                            "docs: Add auto-generated documentation - ${env.TIME_STAMP}",
+                            prBody,
+                            env.BRANCH_NAME,
+                            params.PR_TARGET_BRANCH
+                        )
+                        
+                        echo "PR作成が完了しました。"
+                    }
+                    
+                    // 結果サマリーの作成
+                    def combinedResults = [
+                        timestamp: env.TIME_STAMP,
+                        commit_mode: params.COMMIT_MODE,
+                        python_results: pythonResults,
+                        shell_results: shellResults,
+                        rust_results: rustResults,
+                        typescript_results: typescriptResults,
+                        total_processed_files: pythonResults.total_files + shellResults.total_files + rustResults.total_files + typescriptResults.total_files,
+                        total_success_files: pythonResults.success_count + shellResults.success_count + rustResults.success_count + typescriptResults.success_count,
+                        total_failed_files: pythonResults.failed_count + shellResults.failed_count + rustResults.failed_count + typescriptResults.failed_count
+                    ]                                    
+                    writeJSON file: "${REPORTS_DIR}/combined_results.json", json: combinedResults, pretty: 4
+                }
+            }
+        }
+    }
+
+    post {
+        always {
+            archiveArtifacts artifacts: """
+                ${REPORTS_DIR}/combined_results.json,
+                ${PYTHON_REPORTS_DIR}/results.json,
+                ${SHELL_REPORTS_DIR}/results.json,
+                ${RUST_REPORTS_DIR}/results.json,
+                ${TYPESCRIPT_REPORTS_DIR}/results.json,
+                ${PYTHON_REPORTS_DIR}/success/**/*,
+                ${PYTHON_REPORTS_DIR}/failed/**/*,
+                ${SHELL_REPORTS_DIR}/success/**/*,
+                ${SHELL_REPORTS_DIR}/failed/**/*,
+                ${RUST_REPORTS_DIR}/success/**/*,
+                ${RUST_REPORTS_DIR}/failed/**/*,
+                ${TYPESCRIPT_REPORTS_DIR}/success/**/*,
+                ${TYPESCRIPT_REPORTS_DIR}/failed/**/*
+            """, fingerprint: true, allowEmptyArchive: true
+        }
+        success {
+            echo '全ての処理が完了しました。'
+        }
+        unstable {
+            echo '一部のファイルの処理に失敗しました。各results.jsonを確認してください。'
+        }
+        failure {
+            echo 'ドキュメント生成処理が失敗しました。ログを確認してください。'
+        }
+        cleanup {
+            cleanWs()
+        }
+    }
+}
+
+/**
+ * 言語固有のファイル処理を実行する共通関数
+ * @param results 処理結果オブジェクト
+ * @param reportsDir 対応する言語のレポートディレクトリ
+ */
+def processLanguageSuccessFiles(Map results, String reportsDir) {
+    results.success_files.each { filePath ->
+        def normalizedPath = filePath.replaceFirst('^\\./','')
+        sh """
+            mkdir -p "\$(dirname '${normalizedPath}')"
+            cp "${WORKSPACE}/${reportsDir}/success/${normalizedPath}" "${normalizedPath}"
+        """
+    }
+}
+
+
+def processLanguageFiles(Map config) {
+    def allFiles = []
+    def targetFiles = []
+    def successFiles = []
+    def failedFiles = []
+    
+    // 1. すべての対象ファイルを取得
+    allFiles = sh(
+        script: "cd ${ORIGINAL_CODE_DIR} && ${config.findPattern}",
+        returnStdout: true
+    ).trim().split('\n').findAll { it && !it.isEmpty() }
+
+    if (allFiles.size() == 0) {
+        echo "処理対象の${config.fileType}ファイルが見つかりませんでした。"
+        return createEmptyResults()
+    }
+
+    // 2. ファイル選択モードに基づいたフィルタリング
+    if (params.FILE_SELECTION_MODE == 'LATEST_PR' || params.FILE_SELECTION_MODE == 'SPECIFIC_PR') {
+        def prNumber = params.FILE_SELECTION_MODE == 'LATEST_PR' ? 'Latest' : params.PR_NUMBER
+        def prFiles = gitUtils.getPullRequestFiles(prNumber)
+        
+        if (prFiles.isEmpty()) {
+            if (params.FILE_SELECTION_MODE == 'LATEST_PR') {
+                echo "警告: 最新PRの変更ファイルを取得できませんでした。すべてのファイルを処理します。"
+            } else {
+                echo "警告: PR #${params.PR_NUMBER} の変更ファイルを取得できませんでした。すべてのファイルを処理します。"
+            }
+        } else {
+            def prFilesSet = prFiles.toSet()
+            def filteredFiles = allFiles.findAll { file ->
+                def normalizedPath = file.replaceFirst('^\\./','')
+                def matched = prFilesSet.contains(normalizedPath)
+                if (matched) {
+                    echo "マッチしたファイル: ${normalizedPath}"
+                }
+                return matched
+            }
+            
+            if (filteredFiles.isEmpty()) {
+                echo "警告: PRの変更ファイルの中に対象の${config.fileType}ファイルが見つかりませんでした。"
+            }
+            
+            allFiles = filteredFiles
+            echo "PRの変更ファイルでフィルタリング後: ${allFiles.size()}ファイル"
+        }
+    } else {
+        echo "すべてのファイルを処理モードです: ${allFiles.size()}ファイル"
+    }
+
+    // 3. 処理対象ファイルの制限
+    def maxFiles = params.MAX_FILES.toInteger()
+    if (maxFiles > 0 && allFiles.size() > 0) {
+        // 最大ファイル数で制限
+        targetFiles = allFiles[0..Math.min(maxFiles - 1, allFiles.size() - 1)]
+    } else {
+        // 制限なし
+        targetFiles = allFiles
+    }
+
+    // 4. 処理状況の表示
+    printProcessingStatus(config.fileType, allFiles, targetFiles)
+
+    // 5. ファイル処理の実行
+    for (def filePath : targetFiles) {
+        def processResult = processFile(filePath, config)
+        if (processResult) {
+            // 成功したファイルを記録
+            successFiles.add(filePath)
+        } else {
+            // 失敗したファイルを記録
+            failedFiles.add(filePath)
+        }
+        // 進捗状況の表示
+        printProgress(config.fileType, targetFiles, successFiles, failedFiles)
+    }
+
+    // 6. 処理結果の返却
+    return createResults(targetFiles, allFiles, successFiles, failedFiles)
+}
+
+def processFile(String filePath, Map config) {
+    echo "Processing file: ${filePath}"
+    def maxRetries = params.MAX_RETRIES.toInteger()
+    
+    // リトライループ
+    for (int retryCount = 1; retryCount <= maxRetries; retryCount++) {
+        echo "Attempt ${retryCount}/${maxRetries} for ${filePath}"
+        
+        // テンプレートオプションの構築
+        def templateOptions = config.templates.collect { key, value ->
+            "${key} ${value}"
+        }.join(' ')
+
+        // 追加パラメータが設定されている場合は追加
+        def additionalParams = config.additionalParams ?: ''
+
+        // 統一されたmain.pyを使った新しいドキュメント生成コマンド
+        def docGenCommand = """
+            python -u ${MAIN_SCRIPT_PATH} \
+                --file "${ORIGINAL_CODE_DIR}/${filePath}" \
+                --language ${config.language} \
+                ${templateOptions} \
+                ${additionalParams} \
+                ${config.overwriteFlag}
+        """
+
+        def result = 0
+        try {
+            // コマンドの実行
+            result = sh(script: docGenCommand, returnStatus: true)
+        } catch (Exception e) {
+            // コマンド実行エラーの処理
+            echo "Error executing command: ${e.message}"
+            if (retryCount == maxRetries) {
+                // 最大リトライ回数に達した場合
+                createFailureDirectory(filePath, config)
+                return false
+            }
+            continue  // 次のリトライへ
+        }
+
+        if (result == 0) {
+            // 成功時の処理
+            createResultDirectory(filePath, config, 'success')
+            return true
+        }
+
+        if (retryCount == maxRetries) {
+            // 最大リトライ回数に達した場合
+            createResultDirectory(filePath, config, 'failed')
+            return false
+        }
+    }
+    return false
+}
+
+/**
+ * 処理結果ディレクトリにファイルをコピーする共通関数
+ * @param filePath 対象ファイルのパス
+ * @param config 設定オブジェクト
+ * @param resultType 結果タイプ（'success'または'failed'）
+ */
+def createResultDirectory(String filePath, Map config, String resultType) {
+    sh """
+        # 保存先ディレクトリの作成
+        mkdir -p "\$(dirname '${config.reportsDir}/${resultType}/${filePath}')"
+        
+        # ファイルをコピー
+        cp "${ORIGINAL_CODE_DIR}/${filePath}" "${config.reportsDir}/${resultType}/${filePath}"
+    """
+}
+
+@NonCPS
+def createEmptyResults() {
+    return [
+        total_files: 0,
+        total_detected_files: 0,
+        success_files: [],
+        failed_files: [],
+        success_count: 0,
+        failed_count: 0
+    ]
+}
+
+@NonCPS
+def createResults(targetFiles, allFiles, successFiles, failedFiles) {
+    return [
+        total_files: targetFiles.size(),
+        total_detected_files: allFiles.size(),
+        success_files: successFiles,
+        failed_files: failedFiles,
+        success_count: successFiles.size(),
+        failed_count: failedFiles.size(),
+        timestamp: env.TIME_STAMP
+    ]
+}
+
+@NonCPS
+def printProcessingStatus(fileType, allFiles, targetFiles) {
+    echo """
+        ${fileType}処理設定:
+        - 検出された総ファイル数: ${allFiles.size()}
+        - 処理予定ファイル数: ${targetFiles.size()}
+        - 最大ファイル数設定: ${params.MAX_FILES.toInteger() == 0 ? '無制限' : params.MAX_FILES}
+    """.stripIndent()
+}
+
+@NonCPS
+def printProgress(fileType, targetFiles, successFiles, failedFiles) {
+    echo """
+        ${fileType}処理進捗:
+        - 現在の処理件数: ${successFiles.size() + failedFiles.size()}/${targetFiles.size()}
+        - 成功: ${successFiles.size()}
+        - 失敗: ${failedFiles.size()}
+    """.stripIndent()
+}
+
+@NonCPS
+def generateCommitMessage(pythonResults, shellResults, rustResults, typescriptResults, changedFiles, timeStamp) {
+    return """docs: Add documentation for Python, Shell, Rust, and TypeScript code
+
+* Added auto-generated documentation using Azure OpenAI
+* Python files processed: ${pythonResults.success_count}
+* Shell files processed: ${shellResults.success_count}
+* Rust files processed: ${rustResults.success_count}
+* TypeScript files processed: ${typescriptResults.success_count}
+* Total changed files: ${changedFiles.size()}
+* Generated at: ${timeStamp}
+* Added by: Jenkins Documentation Bot""".stripIndent()
+}
+
+@NonCPS
+def generatePullRequestBody(pythonResults, shellResults, rustResults, typescriptResults, changedFiles, timeStamp, buildUrl) {
+    def filesSection = changedFiles.collect { "- ${it}" }.join('\n')
+    
+    def prInfoLine = ""
+    if (params.FILE_SELECTION_MODE == 'LATEST_PR') {
+        prInfoLine = "* 処理対象: 最新のマージ済みPR"
+    } else if (params.FILE_SELECTION_MODE == 'SPECIFIC_PR') {
+        prInfoLine = "* 処理対象: PR #${params.PR_NUMBER}"
+    } else {
+        prInfoLine = "* 処理対象: リポジトリ内の全ファイル"
+    }
+    
+    return """# ドキュメント自動生成 PR
+
+## 概要
+このPRは、Python、シェルスクリプト、Rust、およびTypeScriptコードにドキュメントを自動で追加または更新します。
+すべての変更はコメントの追加のみであり、コードロジックには一切影響ありません。
+
+## 処理結果
+### Python処理結果
+* 検出ファイル数: ${pythonResults.total_detected_files}
+* 処理成功: ${pythonResults.success_count}
+* 処理失敗: ${pythonResults.failed_count}
+
+### シェルスクリプト処理結果
+* 検出ファイル数: ${shellResults.total_detected_files}
+* 処理成功: ${shellResults.success_count}
+* 処理失敗: ${shellResults.failed_count}
+
+### Rust処理結果
+* 検出ファイル数: ${rustResults.total_detected_files}
+* 処理成功: ${rustResults.success_count}
+* 処理失敗: ${rustResults.failed_count}
+
+### TypeScript処理結果
+* 検出ファイル数: ${typescriptResults.total_detected_files}
+* 処理成功: ${typescriptResults.success_count}
+* 処理失敗: ${typescriptResults.failed_count}
+
+### 変更されたファイル
+${filesSection}
+
+## 補足情報
+* 生成日時: ${timeStamp}
+* ジョブURL: ${buildUrl}
+${prInfoLine}
+* ファイル選択モード: ${params.FILE_SELECTION_MODE}
+
+自動生成されたドキュメントです。内容を確認し、必要に応じて修正してください。""".stripIndent()
+}

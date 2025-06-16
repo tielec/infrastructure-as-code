@@ -1,0 +1,178 @@
+# JobDSL設定ファイル
+
+# 共通設定
+common-settings:
+  # Jenkinsパイプラインリポジトリ設定
+  jenkins-pipeline-repo:
+    url: 'https://github.com/tielec/infrastructure-as-code'
+    credentials: 'your-github-app-credentials-id'
+    branch: '*/main'
+
+# Jenkinsジョブ定義
+jenkins-jobs:
+  # Account Management Jobs
+  account_self_activation_job:
+    name: 'Activate_My_Account'
+    displayName: 'Activate My Account'
+    dslfile: jenkins/jobs/dsl/account-setup/account_setup_self_activation_job.groovy
+    jenkinsfile: jenkins/jobs/pipeline/account-setup/user-self-activation/Jenkinsfile
+
+  # Admin Jobs
+  admin_backup_config_job:
+    name: 'Backup_Config'
+    displayName: 'Backup Jenkins Configurations'
+    dslfile: jenkins/jobs/dsl/admin/admin_backup_config_job.groovy
+    jenkinsfile: jenkins/jobs/pipeline/admin/backup-config/Jenkinsfile
+
+  admin_convert_key_job:
+    name: 'Convert_GitHub_App_Key'
+    displayName: 'GitHub App Key Converter'
+    dslfile: jenkins/jobs/dsl/admin/admin_convert_key_job.groovy
+
+  admin_github_deploykeys_setting_job:
+    name: 'Github_DeployKeys_Setting'
+    displayName: 'GitHub Deploy Keys Setting Job'
+    dslfile: jenkins/jobs/dsl/admin/admin_github_deploykeys_setting_job.groovy
+    jenkinsfile: jenkins/jobs/pipeline/admin/github-deploykeys-setting/Jenkinsfile
+
+  admin_github_webhooks_setting_job:
+    name: 'Github_Webhooks_Setting'
+    displayName: 'GitHub Webhooks Setting Job'
+    dslfile: jenkins/jobs/dsl/admin/admin_github_webhooks_setting_job.groovy
+    jenkinsfile: jenkins/jobs/pipeline/admin/github-webhooks-setting/Jenkinsfile
+
+  admin_restore_config_job:
+    name: 'Restore_Config'
+    displayName: 'Restore Jenkins Configurations'
+    dslfile: jenkins/jobs/dsl/admin/admin_restore_config_job.groovy
+    jenkinsfile: jenkins/jobs/pipeline/admin/restore-config/Jenkinsfile
+
+  admin_run_script_job:
+    name: 'Run_Script'
+    displayName: 'Run Shell Script as Admin'
+    dslfile: jenkins/jobs/dsl/admin/admin_run_script_job.groovy
+
+  admin_test_ec2_fleet_job:
+    name: 'Test_EC2_Fleet_Agent'
+    displayName: 'Test EC2 Fleet Agent Functionality'
+    dslfile: jenkins/jobs/dsl/admin/admin_test_ec2_fleet_job.groovy
+
+  admin_test_github_job:
+    name: 'Test_GitHub_Repository_Access'
+    displayName: 'GitHub Repository Access Test Job'
+    dslfile: jenkins/jobs/dsl/admin/admin_test_github_job.groovy
+
+  admin_update_config_job:
+    name: 'Update_Config'
+    displayName: 'Update Jenkins Configuration with JCasC'
+    dslfile: jenkins/jobs/dsl/admin/admin_update_config_job.groovy
+
+  admin_user_management_job:
+    name: 'Manage_User_Accounts'
+    displayName: 'User Account Management Job'
+    dslfile: jenkins/jobs/dsl/admin/admin_user_management_job.groovy
+    jenkinsfile: jenkins/jobs/pipeline/admin/user-management/Jenkinsfile
+
+  # Docs Generator Jobs
+  docs_generator_auto_insert_doxygen_comment_job:
+    name: 'auto_insert_doxygen_comment'
+    displayName: 'Auto Insert Doxygen Comments'
+    dslfile: jenkins/jobs/dsl/docs-generator/docs_generator_auto_insert_doxygen_comment_job.groovy
+    jenkinsfile: jenkins/jobs/pipeline/docs-generator/auto-insert-doxygen-comment/Jenkinsfile
+
+  docs_generator_auto_insert_doxygen_comment_test_job:
+    name: 'auto_insert_doxygen_comment_test'
+    displayName: 'Test Auto Insert Doxygen Comments'
+    dslfile: jenkins/jobs/dsl/docs-generator/docs_generator_auto_insert_doxygen_comment_test_job.groovy
+    jenkinsfile: jenkins/jobs/pipeline/docs-generator/auto-insert-doxygen-comment/tests/Jenkinsfile
+
+  docs_generator_auto_insert_doxygen_comment_github_trigger_job:
+    name: 'auto_insert_doxygen_comment_github_trigger'
+    displayName: 'GitHub Trigger - Auto Insert Doxygen Comments'
+    dslfile: jenkins/jobs/dsl/docs-generator/docs_generator_auto_insert_doxygen_comment_github_trigger_job.groovy
+    downstreamJob: auto_insert_doxygen_comment
+
+  docs_generator_generate_doxygen_html_job:
+    name: 'generate_doxygen_html'
+    displayName: 'Generate Doxygen HTML Documentation'
+    dslfile: jenkins/jobs/dsl/docs-generator/docs_generator_generate_doxygen_html_job.groovy
+    jenkinsfile: jenkins/jobs/pipeline/docs-generator/generate-doxygen-html/Jenkinsfile
+
+  docs_generator_generate_doxygen_html_github_trigger_job:
+    name: 'generate_doxygen_html_github_trigger'
+    displayName: 'GitHub Trigger - Generate Doxygen HTML'
+    dslfile: jenkins/jobs/dsl/docs-generator/docs_generator_generate_doxygen_html_github_trigger_job.groovy
+    downstreamJob: 'generate_doxygen_html'
+
+  docx_generator_pull_request_comment_builder_job:
+    name: 'pull_request_comment_builder'
+    displayName: 'Build DOCX from Pull Request Comments'
+    dslfile: jenkins/jobs/dsl/docs-generator/docx_generator_pull_request_comment_builder_job.groovy
+    jenkinsfile: jenkins/jobs/pipeline/docs-generator/pull-request-comment-builder/Jenkinsfile
+
+  docx_generator_pull_request_comment_builder_github_trigger_job:
+    name: 'pull_request_comment_builder_github_trigger'
+    displayName: 'GitHub Trigger - Build DOCX from PR Comments'
+    dslfile: jenkins/jobs/dsl/docs-generator/docx_generator_pull_request_comment_builder_github_trigger_job.groovy
+    downstreamJob: 'pull_request_comment_builder'
+
+  docs_generator_multi_pull_request_comment_builder_job:
+    name: 'multi_pull_request_comment_builder'
+    displayName: 'Build Docs from Multiple PR Comments'
+    dslfile: jenkins/jobs/dsl/docs-generator/docs_generator_multi_pull_request_comment_builder_job.groovy
+    jenkinsfile: jenkins/jobs/pipeline/docs-generator/multi-pull-request-comment-builder/Jenkinsfile
+
+  docs_generator_technical_docs_writer_job:
+    name: 'technical-docs-writer'
+    displayName: 'Technical Documentation Writer'
+    dslfile: jenkins/jobs/dsl/docs-generator/docs_generator_technical_docs_writer_job.groovy
+    jenkinsfile: jenkins/jobs/pipeline/docs-generator/technical-docs-writer/Jenkinsfile
+
+  docs_generator_technical_docs_writer_schedule_trigger_job:
+    name: 'technical-docs-writer-trigger'
+    displayName: 'Scheduled Technical Documentation Writer'
+    dslfile: jenkins/jobs/dsl/docs-generator/docs_generator_technical_docs_writer_schedule_trigger_job.groovy
+    downstreamJob: 'technical-docs-writer'
+
+  # Shared Library Jobs
+  shared_library_aws_sqs_check_operation_test_job:
+    name: 'SQS_Check_Operation_Test'
+    displayName: 'Test AWS SQS Operations'
+    dslfile: jenkins/jobs/dsl/shared-library/shared_library_aws_sqs_check_operation_test_job.groovy
+    jenkinsfile: jenkins/jobs/pipeline/shared-library/test-aws-utils/sqs-check-operation/Jenkinsfile
+
+  shared_library_git_deploykeys_operation_test_job:
+    name: 'DeployKeys_Operation_Test'
+    displayName: 'Test Git Deploy Keys Operations'
+    dslfile: jenkins/jobs/dsl/shared-library/shared_library_git_deploykeys_operation_test_job.groovy
+    jenkinsfile: jenkins/jobs/pipeline/shared-library/test-git-utils/deploykeys-operation/Jenkinsfile
+
+  shared_library_git_webhook_operation_test_job:
+    name: 'Webhook_Operation_Test'
+    displayName: 'Test Git Webhook Operations'
+    dslfile: jenkins/jobs/dsl/shared-library/shared_library_git_webhook_operation_test_job.groovy
+    jenkinsfile: jenkins/jobs/pipeline/shared-library/test-git-utils/webhook-operation/Jenkinsfile
+
+  shared_library_github_apps_basic_operation_test_job:
+    name: 'GitHub_Apps_Basic_Operation_Test'
+    displayName: 'GitHub Apps Basic Operations Test'
+    dslfile: jenkins/jobs/dsl/shared-library/shared_library_github_apps_basic_operation_test_job.groovy
+    jenkinsfile: jenkins/jobs/pipeline/shared-library/test-git-utils/github-apps-basic-operation/Jenkinsfile
+
+  shared_library_jenkins_credentials_operation_test_job:
+    name: 'Credentials_Operation_Test'
+    displayName: 'Test Jenkins Credentials Operations'
+    dslfile: jenkins/jobs/dsl/shared-library/shared_library_jenkins_credentials_operation_test_job.groovy
+    jenkinsfile: jenkins/jobs/pipeline/shared-library/test-jenkins-utils/credentials-operation/Jenkinsfile
+
+# docs-generator 生成対象リポジトリ設定
+docs-generator-repositories:
+  infrastructure-as-code:
+    httpsUrl: https://github.com/tielec/infrastructure-as-code
+    sshUrl: git@github.com:tielec/infrastructure-as-code
+    mainBranch: main
+    docBranch: document
+    credentialsId: github-deploy-key-tielec-infrastructure-as-code
+    technicalDocsStartDate: '2025-01-01'
+    technicalDocsFile: REPODOC.md
+    updatePullRequestTitle: 'true'

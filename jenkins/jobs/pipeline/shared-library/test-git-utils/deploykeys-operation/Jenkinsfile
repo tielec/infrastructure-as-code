@@ -1,0 +1,397 @@
+@Library('jenkins-shared-lib') _
+
+pipeline {
+    agent any
+    
+    
+    stages {
+        stage('Setup') {
+            steps {
+                script {
+                    echo "=== GitHub Deploy Key Test Pipeline ==="
+                    echo "Test Type: ${params.TEST_TYPE}"
+                    echo "Dry Run: ${params.DRY_RUN}"
+                    echo "Cleanup: ${params.CLEANUP_AFTER_TEST}"
+                    
+                    // Git情報を取得
+                    def repoInfo = gitUtils.extractRepoInfo(params.REPO_URL)
+                    env.REPO_OWNER = repoInfo[0]
+                    env.REPO_NAME = repoInfo[1]
+                    
+                    echo "Repository: ${env.REPO_OWNER}/${env.REPO_NAME}"
+                    
+                    // GitHubの接続テスト
+                    def connectionTest = gitUtils.testGitHubAppConnection()
+                    if (connectionTest.success) {
+                        echo "✅ GitHub接続テスト: 成功"
+                        echo "Rate Limit: ${connectionTest.rate_limit.remaining}/${connectionTest.rate_limit.limit}"
+                    } else {
+                        error "❌ GitHub接続テスト: 失敗"
+                    }
+                }
+            }
+        }
+        
+        stage('List Deploy Keys') {
+            when {
+                anyOf {
+                    expression { params.TEST_TYPE == 'ALL' }
+                    expression { params.TEST_TYPE == 'LIST_ONLY' }
+                }
+            }
+            steps {
+                script {
+                    try {
+                        echo "=== 既存Deploy Key一覧 ==="
+                        def deployKeys = gitUtils.listDeployKeys([ repoUrl: params.REPO_URL ])
+                        
+                        if (deployKeys && deployKeys.size() > 0) {
+                            deployKeys.each { key ->
+                                echo "ID: ${key.id}"
+                                echo "  Title: ${key.title}"
+                                echo "  Key: ${key.key?.take(50)}..."
+                                echo "  Read Only: ${key.read_only}"
+                                echo "  Created: ${key.created_at}"
+                                echo "  Verified: ${key.verified}"
+                                echo "---"
+                            }
+                            echo "合計: ${deployKeys.size()}個のDeploy Key"
+                        } else {
+                            echo "既存のDeploy Keyはありません"
+                        }
+                    } catch (Exception e) {
+                        echo "❌ Deploy Key一覧取得エラー: ${e.message}"
+                        if (!params.DRY_RUN) {
+                            throw e
+                        }
+                    }
+                }
+            }
+        }
+        
+        stage('Create & Update Tests') {
+            when {
+                allOf {
+                    anyOf {
+                        expression { params.TEST_TYPE == 'ALL' }
+                        expression { params.TEST_TYPE == 'CREATE_UPDATE' }
+                    }
+                    expression { !params.DRY_RUN }
+                }
+            }
+            steps {
+                script {
+                    echo "=== Deploy Key作成・取得テスト開始 ==="
+                    
+                    try {
+                        // テスト用SSH鍵ペア生成
+                        echo "1. テスト用SSH鍵生成"
+                        sh '''
+                            # テスト用の一時的なSSH鍵ペアを生成
+                            ssh-keygen -t ed25519 -f ./test_key -N "" -C "jenkins-test@example.com"
+                            chmod 600 ./test_key*
+                        '''
+                        
+                        def publicKey = readFile('./test_key.pub').trim()
+                        echo "✅ テスト用SSH鍵生成完了"
+                        echo "   公開鍵: ${publicKey.take(50)}..."
+                        
+                        // 2. Deploy Key作成テスト
+                        echo "2. Deploy Key作成テスト"
+                        def deployKeyResult = gitUtils.createDeployKey(
+                            params.DEPLOY_KEY_TITLE,
+                            publicKey,
+                            true, // read-only
+                            [ repoUrl: params.REPO_URL ]
+                        )
+                        
+                        env.TEST_DEPLOY_KEY_ID = deployKeyResult.id.toString()
+                        echo "✅ Deploy Key作成成功:"
+                        echo "   ID: ${env.TEST_DEPLOY_KEY_ID}"
+                        echo "   Title: ${deployKeyResult.title}"
+                        echo "   Read Only: ${deployKeyResult.read_only}"
+                        echo "   Verified: ${deployKeyResult.verified}"
+                        
+                        // 3. 作成したDeploy Keyの取得テスト
+                        echo "3. Deploy Key取得テスト"
+                        def getKeyResult = gitUtils.getDeployKey(
+                            env.TEST_DEPLOY_KEY_ID,
+                            [ repoUrl: params.REPO_URL ]
+                        )
+                        echo "✅ Deploy Key取得成功:"
+                        echo "   Title: ${getKeyResult.title}"
+                        echo "   Created: ${getKeyResult.created_at}"
+                        
+                        // 4. 書き込み可能なDeploy Key作成テスト
+                        echo "4. 書き込み可能Deploy Key作成テスト"
+                        sh '''
+                            ssh-keygen -t ed25519 -f ./test_key_rw -N "" -C "jenkins-test-rw@example.com"
+                            chmod 600 ./test_key_rw*
+                        '''
+                        
+                        def publicKeyRW = readFile('./test_key_rw.pub').trim()
+                        def deployKeyRWResult = gitUtils.createDeployKey(
+                            "${params.DEPLOY_KEY_TITLE} (Read-Write)",
+                            publicKeyRW,
+                            false, // read-write
+                            [ repoUrl: params.REPO_URL ]
+                        )
+                        
+                        env.TEST_DEPLOY_KEY_RW_ID = deployKeyRWResult.id.toString()
+                        echo "✅ 書き込み可能Deploy Key作成成功:"
+                        echo "   ID: ${env.TEST_DEPLOY_KEY_RW_ID}"
+                        echo "   Read Only: ${deployKeyRWResult.read_only}"
+                        
+                    } catch (Exception e) {
+                        echo "❌ Deploy Key作成・取得テストエラー: ${e.message}"
+                        throw e
+                    }
+                }
+            }
+        }
+        
+        stage('Search Test') {
+            when {
+                allOf {
+                    anyOf {
+                        expression { params.TEST_TYPE == 'ALL' }
+                        expression { params.TEST_TYPE == 'SEARCH' }
+                    }
+                    expression { !params.DRY_RUN }
+                }
+            }
+            steps {
+                script {
+                    echo "=== Deploy Key検索テスト開始 ==="
+                    
+                    try {
+                        // タイトル検索テスト
+                        echo "1. タイトル部分一致検索テスト"
+                        def searchResults = gitUtils.findDeployKeysByTitle(
+                            'Jenkins',
+                            [ repoUrl: params.REPO_URL ]
+                        )
+                        echo "✅ 'Jenkins'を含むDeploy Key: ${searchResults.size()}件"
+                        searchResults.each { key ->
+                            echo "   - ${key.title} (ID: ${key.id})"
+                        }
+                        
+                        // 完全一致検索テスト
+                        echo "2. タイトル完全一致検索テスト"
+                        def exactResults = gitUtils.findDeployKeysByTitle(
+                            params.DEPLOY_KEY_TITLE,
+                            [ repoUrl: params.REPO_URL ]
+                        )
+                        echo "✅ '${params.DEPLOY_KEY_TITLE}'と完全一致: ${exactResults.size()}件"
+                        
+                    } catch (Exception e) {
+                        echo "❌ Deploy Key検索テストエラー: ${e.message}"
+                        throw e
+                    }
+                }
+            }
+        }
+        
+        stage('Batch Create Test') {
+            when {
+                allOf {
+                    anyOf {
+                        expression { params.TEST_TYPE == 'ALL' }
+                        expression { params.TEST_TYPE == 'BATCH_CREATE' }
+                    }
+                    expression { !params.DRY_RUN }
+                }
+            }
+            steps {
+                script {
+                    echo "=== Deploy Key一括作成テスト開始 ==="
+                    
+                    try {
+                        // 一括作成用の鍵生成
+                        echo "1. 一括作成用SSH鍵生成"
+                        sh '''
+                            for i in 1 2 3; do
+                                ssh-keygen -t ed25519 -f ./test_batch_key${i} -N "" -C "jenkins-batch-test${i}@example.com"
+                                chmod 600 ./test_batch_key${i}*
+                            done
+                        '''
+                        
+                        def publicKey1 = readFile('./test_batch_key1.pub').trim()
+                        def publicKey2 = readFile('./test_batch_key2.pub').trim()
+                        def publicKey3 = readFile('./test_batch_key3.pub').trim()
+                        
+                        def batchKeyConfigs = [
+                            [
+                                title: 'Jenkins Batch Test Key 1',
+                                key: publicKey1,
+                                readOnly: true
+                            ],
+                            [
+                                title: 'Jenkins Batch Test Key 2',
+                                key: publicKey2,
+                                readOnly: false
+                            ],
+                            [
+                                title: 'Jenkins Batch Test Key 3',
+                                key: publicKey3,
+                                readOnly: true
+                            ]
+                        ]
+                        
+                        echo "2. Deploy Key一括作成実行"
+                        def batchKeyResults = gitUtils.batchCreateDeployKeys(
+                            batchKeyConfigs,
+                            [ repoUrl: params.REPO_URL ]
+                        )
+                        
+                        def keySuccessCount = batchKeyResults.count { it.success }
+                        echo "✅ Deploy Key一括作成完了: ${keySuccessCount}/${batchKeyResults.size()} 成功"
+                        
+                        // 結果の詳細表示
+                        batchKeyResults.eachWithIndex { result, index ->
+                            if (result.success) {
+                                echo "  [${index + 1}] ✅ 成功: ID=${result.result.id}, Title=${result.result.title}, ReadOnly=${result.result.read_only}"
+                            } else {
+                                echo "  [${index + 1}] ❌ 失敗: ${result.error}"
+                            }
+                        }
+                        
+                        // 作成されたDeploy KeyのIDを記録（削除用）
+                        def batchKeyIds = batchKeyResults.findAll { it.success }.collect { it.result.id }
+                        env.BATCH_DEPLOY_KEY_IDS = batchKeyIds.join(',')
+                        
+                    } catch (Exception e) {
+                        echo "❌ Deploy Key一括作成テストエラー: ${e.message}"
+                        throw e
+                    }
+                }
+            }
+        }
+        
+        stage('Verification') {
+            when {
+                expression { !params.DRY_RUN && params.TEST_TYPE != 'LIST_ONLY' }
+            }
+            steps {
+                script {
+                    echo "=== 作成されたDeploy Keyの確認 ==="
+                    
+                    try {
+                        // 最新のDeploy Key一覧を取得
+                        def finalDeployKeys = gitUtils.listDeployKeys([ repoUrl: params.REPO_URL ])
+                        echo "現在のDeploy Key総数: ${finalDeployKeys?.size() ?: 0}"
+                        
+                        // テストで作成したDeploy Keyの確認
+                        if (env.TEST_DEPLOY_KEY_ID) {
+                            def testDeployKey = gitUtils.getDeployKey(
+                                env.TEST_DEPLOY_KEY_ID,
+                                [ repoUrl: params.REPO_URL ]
+                            )
+                            echo "✅ テストDeploy Key確認:"
+                            echo "   Title: ${testDeployKey.title}"
+                            echo "   Read Only: ${testDeployKey.read_only}"
+                            echo "   Verified: ${testDeployKey.verified}"
+                        }
+                        
+                        // バッチ作成したDeploy Keyの数を確認
+                        if (env.BATCH_DEPLOY_KEY_IDS) {
+                            def batchIds = env.BATCH_DEPLOY_KEY_IDS.split(',')
+                            echo "✅ バッチ作成Deploy Key数: ${batchIds.size()}"
+                        }
+                        
+                    } catch (Exception e) {
+                        echo "⚠️ 確認中にエラー: ${e.message}"
+                    }
+                }
+            }
+        }
+    }
+    
+    post {
+        always {
+            script {
+                echo "=== テスト結果サマリー ==="
+                echo "Repository: ${env.REPO_OWNER}/${env.REPO_NAME}"
+                echo "Test Type: ${params.TEST_TYPE}"
+                echo "Dry Run: ${params.DRY_RUN}"
+                echo "Deploy Key Title: ${params.DEPLOY_KEY_TITLE}"
+                
+                // 一時ファイルのクリーンアップ
+                sh 'rm -f ./test_key* ./test_batch_key* || true'
+            }
+        }
+        
+        cleanup {
+            script {
+                if (params.CLEANUP_AFTER_TEST && !params.DRY_RUN && params.TEST_TYPE != 'LIST_ONLY') {
+                    echo "=== クリーンアップ開始 ==="
+                    
+                    // テスト用Deploy Keyの削除
+                    if (env.TEST_DEPLOY_KEY_ID) {
+                        try {
+                            gitUtils.deleteDeployKey(
+                                env.TEST_DEPLOY_KEY_ID,
+                                [ repoUrl: params.REPO_URL ]
+                            )
+                            echo "✅ テストDeploy Key削除完了: ID=${env.TEST_DEPLOY_KEY_ID}"
+                        } catch (Exception e) {
+                            echo "⚠️ テストDeploy Key削除エラー: ${e.message}"
+                        }
+                    }
+                    
+                    // 書き込み可能Deploy Keyの削除
+                    if (env.TEST_DEPLOY_KEY_RW_ID) {
+                        try {
+                            gitUtils.deleteDeployKey(
+                                env.TEST_DEPLOY_KEY_RW_ID,
+                                [ repoUrl: params.REPO_URL ]
+                            )
+                            echo "✅ 書き込み可能Deploy Key削除完了: ID=${env.TEST_DEPLOY_KEY_RW_ID}"
+                        } catch (Exception e) {
+                            echo "⚠️ 書き込み可能Deploy Key削除エラー: ${e.message}"
+                        }
+                    }
+                    
+                    // 一括作成したDeploy Keyの削除
+                    if (env.BATCH_DEPLOY_KEY_IDS) {
+                        def deletedCount = 0
+                        env.BATCH_DEPLOY_KEY_IDS.split(',').each { keyId ->
+                            try {
+                                gitUtils.deleteDeployKey(
+                                    keyId.trim(),
+                                    [ repoUrl: params.REPO_URL ]
+                                )
+                                deletedCount++
+                                echo "✅ バッチDeploy Key削除完了: ID=${keyId}"
+                            } catch (Exception e) {
+                                echo "⚠️ バッチDeploy Key削除エラー (ID=${keyId}): ${e.message}"
+                            }
+                        }
+                        echo "バッチDeploy Key削除結果: ${deletedCount}/${env.BATCH_DEPLOY_KEY_IDS.split(',').size()}"
+                    }
+                    
+                    echo "=== クリーンアップ完了 ==="
+                } else if (!params.CLEANUP_AFTER_TEST && !params.DRY_RUN && params.TEST_TYPE != 'LIST_ONLY') {
+                    echo "=== クリーンアップをスキップしました ==="
+                    if (env.TEST_DEPLOY_KEY_ID) {
+                        echo "⚠️ 手動削除が必要なDeploy Key ID: ${env.TEST_DEPLOY_KEY_ID}"
+                    }
+                    if (env.TEST_DEPLOY_KEY_RW_ID) {
+                        echo "⚠️ 手動削除が必要なDeploy Key ID (RW): ${env.TEST_DEPLOY_KEY_RW_ID}"
+                    }
+                    if (env.BATCH_DEPLOY_KEY_IDS) {
+                        echo "⚠️ 手動削除が必要なバッチDeploy Key IDs: ${env.BATCH_DEPLOY_KEY_IDS}"
+                    }
+                }
+            }
+        }
+        
+        success {
+            echo "🎉 Deploy Keyテストが正常に完了しました！"
+        }
+        
+        failure {
+            echo "❌ Deploy Keyテストが失敗しました。ログを確認してください。"
+        }
+    }
+}
