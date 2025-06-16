@@ -1,0 +1,3 @@
+name: jenkins-application
+runtime: nodejs
+description: Jenkins Application Configuration Resources (Updates, Plugins, Jobs)
