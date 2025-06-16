@@ -30,6 +30,7 @@ def plugins = [
     // ビルド管理プラグイン
     "build-name-setter",
     "build-timeout",
+    "build-user-vars-plugin",
     "generic-webhook-trigger",
     "throttle-concurrents",
     "timestamper",
@@ -80,6 +81,7 @@ def plugins = [
     
     // その他のユーティリティプラグイン
     "copyartifact",
+    "envinject",
     "htmlpublisher",
     "http_request",
     "ssh-agent",

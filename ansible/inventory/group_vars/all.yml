@@ -15,7 +15,8 @@ infra:
     controller_project: "jenkins-controller"
     agent_project: "jenkins-agent"
     config_project: "jenkins-config"
-  
+    application_project: "jenkins-application"
+
   # AWS設定
   aws:
     default_region: "ap-northeast-1"

@@ -1,0 +1,196 @@
+---
+# アプリケーション設定デプロイタスク
+
+- name: Display application deployment information
+  ansible.builtin.debug:
+    msg: |
+      Deploying Jenkins Application Configuration:
+      - Project: {{ project_name }}
+      - Application Pulumi Project: {{ application_project_name }}
+      - Environment: {{ env_name }}
+      - Jenkins Version: {{ jenkins_version }}
+      - Install Plugins: {{ install_plugins }}
+      - Update Repository: {{ update_repo }}
+
+# ファイル権限設定
+- name: Ensure aws-env.sh has execute permissions
+  ansible.builtin.file:
+    path: "{{ scripts_dir }}/aws-env.sh"
+    mode: '0755'
+  register: aws_env_script_permission
+  no_log: true
+
+# Pulumiデプロイ
+- name: Deploy Application Configuration with Pulumi
+  block:
+    # Pulumiヘルパータスクを呼び出す
+    - name: Initialize application stack
+      ansible.builtin.include_role:
+        name: pulumi_helper
+        tasks_from: init_stack
+      vars:
+        pulumi_project_path: "{{ pulumi_path }}/jenkins-application"
+        stack_name: "{{ env_name }}"
+    
+    - name: Configure application stack
+      ansible.builtin.shell: |
+        cd {{ pulumi_path }}/jenkins-application
+        source {{ scripts_dir }}/aws-env.sh 
+        eval $({{ scripts_dir }}/aws-env.sh)
+        
+        sudo -E /root/.pulumi/bin/pulumi config set aws:region {{ aws_region_name }}
+        sudo -E /root/.pulumi/bin/pulumi config set {{ application_project_name }}:projectName {{ project_name }}
+        sudo -E /root/.pulumi/bin/pulumi config set {{ application_project_name }}:jenkinsVersion {{ jenkins_version }}
+      register: pulumi_config_result
+      changed_when: pulumi_config_result.rc == 0
+    
+    # Pulumiプレビュー
+    - name: Preview application deployment
+      ansible.builtin.include_role:
+        name: pulumi_helper
+        tasks_from: preview
+      vars:
+        pulumi_project_path: "{{ pulumi_path }}/jenkins-application"
+    
+    # Pulumiデプロイ
+    - name: Deploy application stack
+      ansible.builtin.include_role:
+        name: pulumi_helper
+        tasks_from: deploy
+      vars:
+        pulumi_project_path: "{{ pulumi_path }}/jenkins-application"
+    
+    # SSMドキュメント名の取得
+    - name: Get SSM document names
+      ansible.builtin.include_role:
+        name: pulumi_helper
+        tasks_from: get_outputs
+      vars:
+        pulumi_project_path: "{{ pulumi_path }}/jenkins-application"
+        output_name: "ssmDocuments"
+        mock_output: '{\"updateVersion\":\"mock-update-doc\",\"installPlugins\":\"mock-plugins-doc\",\"restartJenkins\":\"mock-restart-doc\"}'
+    
+    - name: Set SSM document names
+      ansible.builtin.set_fact:
+        ssm_documents: "{{ stack_output_result.stdout | from_json }}"
+    
+    # jenkins_configのSSMドキュメントも取得
+    - name: Get config SSM document names
+      ansible.builtin.include_role:
+        name: pulumi_helper
+        tasks_from: get_outputs
+      vars:
+        pulumi_project_path: "{{ pulumi_path }}/jenkins-config"
+        output_name: "ssmDocuments"
+        mock_output: '{\"updateRepo\":\"mock-update-repo-doc\"}'
+    
+    - name: Set config SSM document names
+      ansible.builtin.set_fact:
+        config_ssm_documents: "{{ stack_output_result.stdout | from_json }}"
+  
+  rescue:
+    - name: Display error on application deployment
+      ansible.builtin.debug:
+        msg: "Failed to deploy Jenkins application configuration. See error details above."
+      
+    - name: Fail the playbook
+      ansible.builtin.fail:
+        msg: "Jenkins application deployment failed."
+
+# Jenkinsインスタンスの取得
+- name: Get active Jenkins instance
+  block:
+    - name: Determine active Jenkins color
+      ansible.builtin.shell: |
+        eval $({{ scripts_dir }}/aws-env.sh)
+        aws ssm get-parameter \
+          --name "/${project_name}/${env_name}/jenkins/active-environment" \
+          --region {{ aws_region_name }} \
+          --query "Parameter.Value" \
+          --output text 2>/dev/null || echo "{{ jenkins_color }}"
+      register: active_color_result
+      changed_when: false
+    
+    - name: Set active Jenkins color
+      ansible.builtin.set_fact:
+        active_jenkins_color: "{{ active_color_result.stdout | trim }}"
+    
+    - name: Get Jenkins instance ID from controller stack
+      ansible.builtin.include_role:
+        name: pulumi_helper
+        tasks_from: get_outputs
+      vars:
+        pulumi_project_path: "{{ pulumi_path }}/jenkins-controller"
+        output_name: "jenkinsInstanceId"
+        mock_output: "mock-jenkins-instance-id"
+    
+    - name: Set Jenkins instance ID
+      ansible.builtin.set_fact:
+        jenkins_instance_id: "{{ stack_output_result.stdout | trim }}"
+
+# アプリケーション設定の実行
+- name: Execute application configuration tasks
+  block:
+    # 0. Gitリポジトリ更新（既存のSSMドキュメントを使用）
+    - name: Update Git repository
+      when: update_repo | bool
+      block:
+        - name: Execute Git repository update
+          ansible.builtin.include_tasks: tasks/execute_ssm_command.yml
+          vars:
+            ssm_document_name: "{{ config_ssm_documents.updateRepo }}"
+            ssm_parameters: "ProjectName={{ project_name }},Environment={{ env_name }},GitBranch={{ git_branch }},GitRepo={{ git_repo }}"
+            ssm_comment: "Updating Git repository"
+            instance_id: "{{ jenkins_instance_id }}"
+    
+    # 1. Jenkinsバージョン更新
+    - name: Update Jenkins version if required
+      when: jenkins_version != 'latest' or update_jenkins | default(false) | bool
+      block:
+        - name: Execute Jenkins version update
+          ansible.builtin.include_tasks: tasks/execute_ssm_command.yml
+          vars:
+            ssm_document_name: "{{ ssm_documents.updateVersion }}"
+            ssm_parameters: "ProjectName={{ project_name }},Environment={{ env_name }},JenkinsVersion={{ jenkins_version }}"
+            ssm_comment: "Updating Jenkins version"
+            instance_id: "{{ jenkins_instance_id }}"
+    
+    # 2. プラグインインストール
+    - name: Install/Update Jenkins plugins
+      when: install_plugins | bool
+      block:
+        - name: Execute plugin installation
+          ansible.builtin.include_tasks: tasks/execute_ssm_command.yml
+          vars:
+            ssm_document_name: "{{ ssm_documents.installPlugins }}"
+            ssm_parameters: "ProjectName={{ project_name }},Environment={{ env_name }}"
+            ssm_comment: "Installing Jenkins plugins"
+            instance_id: "{{ jenkins_instance_id }}"
+    
+    # 3. Jenkins再起動
+    - name: Restart Jenkins if required
+      when: restart_jenkins | bool
+      block:
+        - name: Execute Jenkins restart
+          ansible.builtin.include_tasks: tasks/execute_ssm_command.yml
+          vars:
+            ssm_document_name: "{{ ssm_documents.restartJenkins }}"
+            ssm_parameters: "ProjectName={{ project_name }},Environment={{ env_name }}"
+            ssm_comment: "Restarting Jenkins"
+            instance_id: "{{ jenkins_instance_id }}"
+
+# 設定完了を示す変数設定
+- name: Set application deployment status
+  ansible.builtin.set_fact:
+    application_deployed: true
+
+# 設定結果のサマリー表示
+- name: Display application deployment summary
+  ansible.builtin.debug:
+    msg: |
+      Jenkins Application Configuration Summary:
+      - Repository Updated: {{ update_repo }}
+      - Jenkins Version: {{ jenkins_version }}
+      - Plugins Installed: {{ install_plugins }}
+      - Jenkins Restarted: {{ restart_jenkins }}
+      - Configuration Status: {{ application_deployed | ternary('Success', 'Failed') }}

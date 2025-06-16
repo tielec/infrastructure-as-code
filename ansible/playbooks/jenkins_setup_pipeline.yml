@@ -32,6 +32,7 @@
         controller_project_name: "{{ infra.pulumi.controller_project }}"
         agent_project_name: "{{ infra.pulumi.agent_project }}"
         config_project_name: "{{ infra.pulumi.config_project }}"
+        application_project_name: "{{ infra.pulumi.application_project | default('jenkins-application') }}"
         jenkins_version: "{{ version | default(jenkins.version) }}"
         jenkins_color: "{{ color | default(jenkins.color) }}"
         recovery_mode: "{{ recovery | default(jenkins.recovery_mode) }}"
@@ -94,6 +95,8 @@
           - LoadBalancer: {{ loadbalancer_project_name }}
           - Controller: {{ controller_project_name }}
           - Agent: {{ agent_project_name }}
+          - Config: {{ config_project_name }}
+          - Application: {{ application_project_name }}
     
     - name: Check Ansible version
       ansible.builtin.debug:
@@ -175,6 +178,32 @@
       ansible.builtin.debug:
         msg: "Config deployment status: {{ config_deployed | default(false) }}"
 
+    # Jenkinsアプリケーション設定をデプロイ
+    - name: Deploy Jenkins Application Configuration
+      ansible.builtin.include_role:
+        name: jenkins_application
+      vars:
+        # アプリケーション設定パラメータ
+        update_repo: "{{ app_update_repo | default(true) }}"
+        jenkins_version: "{{ app_jenkins_version | default('latest') }}"
+        install_plugins: "{{ app_install_plugins | default(true) }}"
+        restart_jenkins: "{{ app_restart_jenkins | default(true) }}"
+      when: 
+        - config_deployed | default(false) | bool
+        - run_application | default(true) | bool
+      register: application_deploy_result
+      
+    # application_deployedを明示的に設定
+    - name: Set application deployment status
+      ansible.builtin.set_fact:
+        application_deployed: "{{ application_deploy_result is defined and application_deploy_result.rc is not defined }}"
+      when: application_deploy_result is defined
+        
+    # 設定ステータスをデバッグ表示
+    - name: Debug application deployment status
+      ansible.builtin.debug:
+        msg: "Application deployment status: {{ application_deployed | default(false) }}"
+
     # Jenkinsエージェントをデプロイ
     - name: Deploy Jenkins Agent
       ansible.builtin.include_role:
@@ -207,4 +236,5 @@
           Load Balancer: {{ loadbalancer_deployed | default(false) }}
           Controller: {{ controller_deployed | default(false) }}
           Configuration: {{ config_deployed | default(false) }}
+          Application: {{ application_deployed | default(false) }}
           Agent: {{ agent_deployed | default(false) }}
