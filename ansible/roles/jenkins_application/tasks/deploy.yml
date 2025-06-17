@@ -167,16 +167,32 @@
             ssm_comment: "Installing Jenkins plugins"
             instance_id: "{{ jenkins_instance_id }}"
     
-    # 3. CLIユーザー設定
+    # 3. CLIユーザー設定（2段階実行）
     - name: Setup CLI user and credentials
       when: setup_cli_user | default(true) | bool
       block:
-        - name: Execute CLI user setup
+        # Step 1: CLIユーザー作成
+        - name: Create CLI user and generate token
           ansible.builtin.include_tasks: tasks/execute_ssm_command.yml
           vars:
-            ssm_document_name: "{{ ssm_documents.setupCliUser }}"
+            ssm_document_name: "{{ ssm_documents.createCliUser }}"
             ssm_parameters: "ProjectName={{ project_name }},Environment={{ env_name }}"
-            ssm_comment: "Setting up CLI user"
+            ssm_comment: "Creating CLI user"
+            instance_id: "{{ jenkins_instance_id }}"
+        
+        # 待機時間を設ける
+        - name: Wait for token to be available in SSM
+          ansible.builtin.pause:
+            seconds: 15
+            prompt: "Waiting for CLI token to be saved to SSM..."
+        
+        # Step 2: クレデンシャル設定
+        - name: Setup credentials with CLI token
+          ansible.builtin.include_tasks: tasks/execute_ssm_command.yml
+          vars:
+            ssm_document_name: "{{ ssm_documents.setupCredentials }}"
+            ssm_parameters: "ProjectName={{ project_name }},Environment={{ env_name }}"
+            ssm_comment: "Setting up credentials"
             instance_id: "{{ jenkins_instance_id }}"
     
     # 4. Jenkins再起動

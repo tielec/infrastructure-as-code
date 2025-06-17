@@ -280,13 +280,13 @@ const jenkinsRestartDocument = new aws.ssm.Document(`${projectName}-jenkins-rest
     },
 });
 
-// SSMドキュメント（CLIユーザー設定用）
-const jenkinsSetupCliUserDocument = new aws.ssm.Document(`${projectName}-jenkins-setup-cli-user`, {
-    name: `${projectName}-jenkins-setup-cli-user-${environment}`,
+// SSMドキュメント（CLIユーザー作成専用）
+const jenkinsCreateCliUserDocument = new aws.ssm.Document(`${projectName}-jenkins-create-cli-user`, {
+    name: `${projectName}-jenkins-create-cli-user-${environment}`,
     documentType: "Command",
     content: JSON.stringify({
         schemaVersion: "2.2",
-        description: "Setup Jenkins CLI user and credentials",
+        description: "Create Jenkins CLI user and generate token",
         parameters: {
             ProjectName: {
                 type: "String",
@@ -302,7 +302,7 @@ const jenkinsSetupCliUserDocument = new aws.ssm.Document(`${projectName}-jenkins
         mainSteps: [
             {
                 action: "aws:runShellScript",
-                name: "setupCliUser",
+                name: "createCliUser",
                 inputs: {
                     runCommand: [
                         "#!/bin/bash",
@@ -310,13 +310,13 @@ const jenkinsSetupCliUserDocument = new aws.ssm.Document(`${projectName}-jenkins
                         "export PROJECT_NAME={{ProjectName}}",
                         "export ENVIRONMENT={{Environment}}",
                         "",
-                        "echo '===== Setting up Jenkins CLI User ====='",
+                        "echo '===== Creating Jenkins CLI User ====='",
                         "",
                         "# Groovyスクリプトを配置",
                         "GROOVY_DIR=/mnt/efs/jenkins/init.groovy.d",
                         "mkdir -p $GROOVY_DIR",
                         "",
-                        "# CLIユーザー作成スクリプトを取得",
+                        "# CLIユーザー作成スクリプトのみを取得",
                         "echo 'Fetching CLI user creation script...'",
                         "aws ssm get-parameter \\",
                         "  --name \"/${PROJECT_NAME}/${ENVIRONMENT}/jenkins/groovy/create-cli-user\" \\",
@@ -324,20 +324,12 @@ const jenkinsSetupCliUserDocument = new aws.ssm.Document(`${projectName}-jenkins
                         "  --query \"Parameter.Value\" \\",
                         "  --output text > $GROOVY_DIR/create-cli-user.groovy",
                         "",
-                        "# クレデンシャル設定スクリプトを取得",
-                        "echo 'Fetching credentials setup script...'",
-                        "aws ssm get-parameter \\",
-                        "  --name \"/${PROJECT_NAME}/${ENVIRONMENT}/jenkins/groovy/setup-credentials\" \\",
-                        "  --with-decryption \\",
-                        "  --query \"Parameter.Value\" \\",
-                        "  --output text > $GROOVY_DIR/setup-credentials.groovy",
-                        "",
                         "# 権限設定",
-                        "chown jenkins:jenkins $GROOVY_DIR/*.groovy",
-                        "chmod 644 $GROOVY_DIR/*.groovy",
+                        "chown jenkins:jenkins $GROOVY_DIR/create-cli-user.groovy",
+                        "chmod 644 $GROOVY_DIR/create-cli-user.groovy",
                         "",
                         "# Jenkinsを再起動してスクリプトを実行",
-                        "echo 'Restarting Jenkins to execute scripts...'",
+                        "echo 'Restarting Jenkins to create CLI user...'",
                         "systemctl restart jenkins",
                         "",
                         "# 起動を待機",
@@ -354,12 +346,11 @@ const jenkinsSetupCliUserDocument = new aws.ssm.Document(`${projectName}-jenkins
                         "done",
                         "",
                         "# 処理完了を待機",
-                        "echo 'Waiting for CLI user setup to complete...'",
+                        "echo 'Waiting for CLI user creation to complete...'",
                         "sleep 30",
                         "",
-                        "# スクリプトファイルを削除（次回起動時に実行されないように）",
+                        "# スクリプトファイルを削除",
                         "rm -f $GROOVY_DIR/create-cli-user.groovy",
-                        "rm -f $GROOVY_DIR/setup-credentials.groovy",
                         "",
                         "# トークンが作成されたか確認",
                         "TOKEN_EXISTS=$(aws ssm get-parameter \\",
@@ -370,10 +361,106 @@ const jenkinsSetupCliUserDocument = new aws.ssm.Document(`${projectName}-jenkins
                         "if [ \"$TOKEN_EXISTS\" = \"true\" ]; then",
                         "  echo 'CLI user token successfully created in SSM'",
                         "else",
-                        "  echo 'WARNING: CLI user token not found in SSM. Manual verification required.'",
+                        "  echo 'ERROR: CLI user token was not created'",
+                        "  exit 1",
                         "fi",
                         "",
-                        "echo 'CLI user setup completed'"
+                        "echo 'CLI user creation completed'"
+                    ]
+                }
+            }
+        ]
+    }),
+    tags: {
+        Environment: environment,
+    },
+});
+
+// SSMドキュメント（クレデンシャル設定専用）
+const jenkinsSetupCredentialsDocument = new aws.ssm.Document(`${projectName}-jenkins-setup-credentials`, {
+    name: `${projectName}-jenkins-setup-credentials-${environment}`,
+    documentType: "Command",
+    content: JSON.stringify({
+        schemaVersion: "2.2",
+        description: "Setup Jenkins credentials from CLI user token",
+        parameters: {
+            ProjectName: {
+                type: "String",
+                default: projectName,
+                description: "Project name"
+            },
+            Environment: {
+                type: "String",
+                default: environment,
+                description: "Environment name"
+            }
+        },
+        mainSteps: [
+            {
+                action: "aws:runShellScript",
+                name: "setupCredentials",
+                inputs: {
+                    runCommand: [
+                        "#!/bin/bash",
+                        "set -e",
+                        "export PROJECT_NAME={{ProjectName}}",
+                        "export ENVIRONMENT={{Environment}}",
+                        "",
+                        "echo '===== Setting up Jenkins Credentials ====='",
+                        "",
+                        "# トークンがSSMに存在するか確認",
+                        "echo 'Checking if CLI token exists in SSM...'",
+                        "TOKEN_EXISTS=$(aws ssm get-parameter \\",
+                        "  --name \"/${PROJECT_NAME}/${ENVIRONMENT}/jenkins/cli-user-token\" \\",
+                        "  --region $(curl -s http://169.254.169.254/latest/meta-data/placement/region) \\",
+                        "  2>&1 | grep -q ParameterNotFound && echo \"false\" || echo \"true\")",
+                        "",
+                        "if [ \"$TOKEN_EXISTS\" != \"true\" ]; then",
+                        "  echo 'ERROR: CLI token not found in SSM. Please run CLI user setup first.'",
+                        "  exit 1",
+                        "fi",
+                        "",
+                        "# Groovyスクリプトを配置",
+                        "GROOVY_DIR=/mnt/efs/jenkins/init.groovy.d",
+                        "mkdir -p $GROOVY_DIR",
+                        "",
+                        "# クレデンシャル設定スクリプトのみを取得",
+                        "echo 'Fetching credentials setup script...'",
+                        "aws ssm get-parameter \\",
+                        "  --name \"/${PROJECT_NAME}/${ENVIRONMENT}/jenkins/groovy/setup-credentials\" \\",
+                        "  --with-decryption \\",
+                        "  --query \"Parameter.Value\" \\",
+                        "  --output text > $GROOVY_DIR/setup-credentials.groovy",
+                        "",
+                        "# 権限設定",
+                        "chown jenkins:jenkins $GROOVY_DIR/setup-credentials.groovy",
+                        "chmod 644 $GROOVY_DIR/setup-credentials.groovy",
+                        "",
+                        "# Jenkinsを再起動してスクリプトを実行",
+                        "echo 'Restarting Jenkins to setup credentials...'",
+                        "systemctl restart jenkins",
+                        "",
+                        "# 起動を待機",
+                        "echo 'Waiting for Jenkins to start...'",
+                        "TIMEOUT=300",
+                        "ELAPSED=0",
+                        "while [ $ELAPSED -lt $TIMEOUT ]; do",
+                        "  if curl -s -f http://localhost:8080/login > /dev/null; then",
+                        "    echo 'Jenkins is running'",
+                        "    break",
+                        "  fi",
+                        "  sleep 10",
+                        "  ELAPSED=$((ELAPSED + 10))",
+                        "done",
+                        "",
+                        "# 処理完了を待機",
+                        "echo 'Waiting for credentials setup to complete...'",
+                        "sleep 30",
+                        "",
+                        "# スクリプトファイルを削除",
+                        "rm -f $GROOVY_DIR/setup-credentials.groovy",
+                        "",
+                        "echo 'Credentials setup completed'"
                     ]
                 }
             }
@@ -390,5 +477,6 @@ export const ssmDocuments = {
     updateVersion: jenkinsUpdateVersionDocument.name,
     installPlugins: jenkinsInstallPluginsDocument.name,
     restartJenkins: jenkinsRestartDocument.name,
-    setupCliUser: jenkinsSetupCliUserDocument.name,
+    createCliUser: jenkinsCreateCliUserDocument.name,
+    setupCredentials: jenkinsSetupCredentialsDocument.name,
 };

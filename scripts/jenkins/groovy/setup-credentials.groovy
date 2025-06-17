@@ -4,6 +4,7 @@
  * SSMパラメータストアからトークンを取得して、Jenkinsクレデンシャルとして登録
  */
 import jenkins.model.*
+import hudson.model.*
 import com.cloudbees.plugins.credentials.*
 import com.cloudbees.plugins.credentials.common.*
 import com.cloudbees.plugins.credentials.domains.*
@@ -15,6 +16,35 @@ import hudson.util.Secret
 def instance = Jenkins.getInstance()
 
 println("=== Starting Credentials Setup ===")
+
+// CLIユーザーが作成されるまで待機（最大60秒）
+def maxWaitTime = 60
+def waitInterval = 5
+def elapsed = 0
+def cliUserExists = false
+
+println("Waiting for CLI user to be created...")
+while (elapsed < maxWaitTime && !cliUserExists) {
+    try {
+        def cliUser = User.get("cli-user", false, null)
+        if (cliUser != null) {
+            cliUserExists = true
+            println("CLI user found!")
+            break
+        }
+    } catch (Exception e) {
+        // ユーザーが存在しない場合
+    }
+    
+    println("CLI user not found yet. Waiting... (${elapsed}s/${maxWaitTime}s)")
+    Thread.sleep(waitInterval * 1000)
+    elapsed += waitInterval
+}
+
+if (!cliUserExists) {
+    println("ERROR: CLI user was not created within timeout. Exiting.")
+    return
+}
 
 // 環境変数から設定を取得
 def projectName = System.getenv("PROJECT_NAME") ?: "jenkins-infra"
@@ -31,10 +61,25 @@ def parameterName = "/${projectName}/${environment}/jenkins/cli-user-token"
 
 println("Fetching CLI token from SSM parameter: ${parameterName}")
 
-// SSMからトークンを取得
-def cliToken = getTokenFromSSM(parameterName, region)
+// SSMからトークンを取得（リトライ付き）
+def cliToken = null
+def maxRetries = 3
+def retryDelay = 5000 // 5秒
+
+for (int i = 0; i < maxRetries; i++) {
+    cliToken = getTokenFromSSM(parameterName, region)
+    if (cliToken != null && !cliToken.isEmpty()) {
+        break
+    }
+    
+    if (i < maxRetries - 1) {
+        println("Retry ${i + 1}/${maxRetries - 1}: Token not found, waiting ${retryDelay/1000} seconds...")
+        Thread.sleep(retryDelay)
+    }
+}
+
 if (cliToken == null || cliToken.isEmpty()) {
-    println("WARNING: Could not retrieve CLI token from SSM. Skipping credential setup.")
+    println("ERROR: Could not retrieve CLI token from SSM after ${maxRetries} attempts. Skipping credential setup.")
     return
 }
 
