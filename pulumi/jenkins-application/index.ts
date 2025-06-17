@@ -81,8 +81,8 @@ const jenkinsExecuteScriptDocument = new aws.ssm.Document(`${projectName}-jenkin
 });
 
 // Jenkins再起動用SSMドキュメント（これは残す）
-const jenkinsRestartDocument = new aws.ssm.Document(`${projectName}-jenkins-restart-v2`, {
-    name: `${projectName}-jenkins-restart-v2-${environment}`,
+const jenkinsRestartDocument = new aws.ssm.Document(`${projectName}-jenkins-restart`, {
+    name: `${projectName}-jenkins-restart-${environment}`,
     documentType: "Command",
     documentFormat: "JSON",
     content: JSON.stringify({
