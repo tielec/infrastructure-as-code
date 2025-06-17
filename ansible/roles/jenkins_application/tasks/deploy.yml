@@ -167,7 +167,19 @@
             ssm_comment: "Installing Jenkins plugins"
             instance_id: "{{ jenkins_instance_id }}"
     
-    # 3. Jenkins再起動
+    # 3. CLIユーザー設定
+    - name: Setup CLI user and credentials
+      when: setup_cli_user | default(true) | bool
+      block:
+        - name: Execute CLI user setup
+          ansible.builtin.include_tasks: tasks/execute_ssm_command.yml
+          vars:
+            ssm_document_name: "{{ ssm_documents.setupCliUser }}"
+            ssm_parameters: "ProjectName={{ project_name }},Environment={{ env_name }}"
+            ssm_comment: "Setting up CLI user"
+            instance_id: "{{ jenkins_instance_id }}"
+    
+    # 4. Jenkins再起動
     - name: Restart Jenkins if required
       when: restart_jenkins | bool
       block:

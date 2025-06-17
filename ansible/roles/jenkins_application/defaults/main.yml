@@ -12,3 +12,4 @@ jenkins_version: "latest"
 install_plugins: true
 create_seed_job: true
 restart_jenkins: true
+setup_cli_user: true
