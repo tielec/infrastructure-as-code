@@ -16,6 +16,7 @@ const environment = pulumi.getStack();
 const jenkinsExecuteScriptDocument = new aws.ssm.Document(`${projectName}-jenkins-execute-script`, {
     name: `${projectName}-jenkins-execute-script-${environment}`,
     documentType: "Command",
+    documentFormat: "JSON",
     content: JSON.stringify({
         schemaVersion: "2.2",
         description: "Execute script from Git repository on Jenkins instance",
@@ -83,9 +84,11 @@ const jenkinsExecuteScriptDocument = new aws.ssm.Document(`${projectName}-jenkin
 const jenkinsRestartDocument = new aws.ssm.Document(`${projectName}-jenkins-restart`, {
     name: `${projectName}-jenkins-restart-${environment}`,
     documentType: "Command",
+    documentFormat: "JSON",
     content: JSON.stringify({
         schemaVersion: "2.2",
         description: "Restart Jenkins service",
+        parameters: {},
         mainSteps: [
             {
                 action: "aws:runShellScript",
