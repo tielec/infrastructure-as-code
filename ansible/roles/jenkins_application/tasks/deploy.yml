@@ -68,7 +68,7 @@
       vars:
         pulumi_project_path: "{{ pulumi_path }}/jenkins-application"
         output_name: "ssmDocuments"
-        mock_output: '{\"updateVersion\":\"mock-update-doc\",\"installPlugins\":\"mock-plugins-doc\",\"restartJenkins\":\"mock-restart-doc\"}'
+        mock_output: '{"executeScript":"mock-execute-script","restart":"mock-restart"}'
     
     - name: Set SSM document names
       ansible.builtin.set_fact:
@@ -82,7 +82,7 @@
       vars:
         pulumi_project_path: "{{ pulumi_path }}/jenkins-config"
         output_name: "ssmDocuments"
-        mock_output: '{\"updateRepo\":\"mock-update-repo-doc\"}'
+        mock_output: '{"updateRepo":"mock-update-repo-doc"}'
     
     - name: Set config SSM document names
       ansible.builtin.set_fact:
@@ -150,8 +150,8 @@
         - name: Execute Jenkins version update
           ansible.builtin.include_tasks: tasks/execute_ssm_command.yml
           vars:
-            ssm_document_name: "{{ ssm_documents.updateVersion }}"
-            ssm_parameters: "ProjectName={{ project_name }},Environment={{ env_name }},JenkinsVersion={{ jenkins_version }}"
+            ssm_document_name: "{{ ssm_documents.executeScript }}"
+            ssm_parameters: "ScriptPath=scripts/jenkins/shell/application-update-version.sh"
             ssm_comment: "Updating Jenkins version"
             instance_id: "{{ jenkins_instance_id }}"
     
@@ -162,37 +162,21 @@
         - name: Execute plugin installation
           ansible.builtin.include_tasks: tasks/execute_ssm_command.yml
           vars:
-            ssm_document_name: "{{ ssm_documents.installPlugins }}"
-            ssm_parameters: "ProjectName={{ project_name }},Environment={{ env_name }}"
+            ssm_document_name: "{{ ssm_documents.executeScript }}"
+            ssm_parameters: "ScriptPath=scripts/jenkins/shell/application-install-plugins.sh"
             ssm_comment: "Installing Jenkins plugins"
             instance_id: "{{ jenkins_instance_id }}"
     
-    # 3. CLIユーザー設定（2段階実行）
+    # 3. CLIユーザーとクレデンシャル設定（統合版）
     - name: Setup CLI user and credentials
       when: setup_cli_user | default(true) | bool
       block:
-        # Step 1: CLIユーザー作成
-        - name: Create CLI user and generate token
+        - name: Create CLI user and setup credentials
           ansible.builtin.include_tasks: tasks/execute_ssm_command.yml
           vars:
-            ssm_document_name: "{{ ssm_documents.createCliUser }}"
-            ssm_parameters: "ProjectName={{ project_name }},Environment={{ env_name }}"
-            ssm_comment: "Creating CLI user"
-            instance_id: "{{ jenkins_instance_id }}"
-        
-        # 待機時間を設ける
-        - name: Wait for token to be available in SSM
-          ansible.builtin.pause:
-            seconds: 15
-            prompt: "Waiting for CLI token to be saved to SSM..."
-        
-        # Step 2: クレデンシャル設定
-        - name: Setup credentials with CLI token
-          ansible.builtin.include_tasks: tasks/execute_ssm_command.yml
-          vars:
-            ssm_document_name: "{{ ssm_documents.setupCredentials }}"
-            ssm_parameters: "ProjectName={{ project_name }},Environment={{ env_name }}"
-            ssm_comment: "Setting up credentials"
+            ssm_document_name: "{{ ssm_documents.executeScript }}"
+            ssm_parameters: "ScriptPath=scripts/jenkins/shell/application-setup-cli-user-and-credentials.sh"
+            ssm_comment: "Setting up CLI user and credentials"
             instance_id: "{{ jenkins_instance_id }}"
     
     # 4. Jenkins再起動
@@ -202,8 +186,8 @@
         - name: Execute Jenkins restart
           ansible.builtin.include_tasks: tasks/execute_ssm_command.yml
           vars:
-            ssm_document_name: "{{ ssm_documents.restartJenkins }}"
-            ssm_parameters: "ProjectName={{ project_name }},Environment={{ env_name }}"
+            ssm_document_name: "{{ ssm_documents.restart }}"
+            ssm_parameters: ""
             ssm_comment: "Restarting Jenkins"
             instance_id: "{{ jenkins_instance_id }}"
 
@@ -220,5 +204,6 @@
       - Repository Updated: {{ update_repo }}
       - Jenkins Version: {{ jenkins_version }}
       - Plugins Installed: {{ install_plugins }}
+      - CLI User Setup: {{ setup_cli_user | default(true) }}
       - Jenkins Restarted: {{ restart_jenkins }}
       - Configuration Status: {{ application_deployed | ternary('Success', 'Failed') }}

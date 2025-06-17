@@ -8,13 +8,6 @@ import hudson.model.*
 import hudson.security.*
 import jenkins.security.*
 import jenkins.security.apitoken.*
-import com.cloudbees.plugins.credentials.*
-import com.cloudbees.plugins.credentials.common.*
-import com.cloudbees.plugins.credentials.domains.*
-import com.cloudbees.jenkins.plugins.sshcredentials.impl.*
-import org.jenkinsci.plugins.plaincredentials.*
-import org.jenkinsci.plugins.plaincredentials.impl.*
-import hudson.util.Secret
 
 def instance = Jenkins.getInstance()
 def hudsonRealm = instance.getSecurityRealm()
@@ -121,61 +114,50 @@ def saveTokenToSSM(String token) {
     println("Attempting to save API token to SSM Parameter Store")
     
     try {
-        // 環境変数から設定を取得
+        // 環境変数から設定を取得（Jenkinsプロセスから継承）
         def projectName = System.getenv("PROJECT_NAME") ?: "jenkins-infra"
         def environment = System.getenv("ENVIRONMENT") ?: "dev"
-        def region = System.getenv("AWS_REGION") ?: getRegionFromMetadata()
+        def region = System.getenv("AWS_REGION") ?: System.getenv("AWS_DEFAULT_REGION") ?: "ap-northeast-1"
+        
+        println("SSM Parameter configuration:")
+        println("  PROJECT_NAME: ${projectName}")
+        println("  ENVIRONMENT: ${environment}")
+        println("  AWS_REGION: ${region}")
         
         def parameterName = "/${projectName}/${environment}/jenkins/cli-user-token"
+        println("  Parameter path: ${parameterName}")
         
         // AWS CLIを使用してSSMパラメータを作成/更新
         def command = [
-            "aws", "ssm", "put-parameter",
-            "--name", parameterName,
-            "--value", token,
-            "--type", "SecureString",
-            "--description", "Jenkins CLI user API token",
-            "--overwrite",
-            "--region", region
+            "bash", "-c",
+            "aws ssm put-parameter " +
+            "--name '${parameterName}' " +
+            "--value '${token}' " +
+            "--type SecureString " +
+            "--description 'Jenkins CLI user API token' " +
+            "--overwrite " +
+            "--region ${region}"
         ]
         
+        println("Executing AWS CLI command...")
+        
         def process = command.execute()
+        def output = process.text
+        def error = process.err.text
         process.waitFor()
         
         if (process.exitValue() == 0) {
             println("API token successfully saved to SSM parameter: ${parameterName}")
+            println("Command output: ${output}")
         } else {
-            def error = process.err.text
-            println("ERROR: Failed to save token to SSM: ${error}")
+            println("ERROR: Failed to save token to SSM")
+            println("Exit code: ${process.exitValue()}")
+            println("Error output: ${error}")
+            println("Standard output: ${output}")
         }
         
     } catch (Exception e) {
         println("ERROR: Exception while saving token to SSM: ${e.message}")
         e.printStackTrace()
-    }
-}
-
-/**
- * EC2メタデータからリージョンを取得
- */
-def getRegionFromMetadata() {
-    try {
-        // IMDSv2対応
-        def tokenCommand = ["curl", "-s", "-X", "PUT", 
-                          "http://169.254.169.254/latest/api/token", 
-                          "-H", "X-aws-ec2-metadata-token-ttl-seconds: 21600"]
-        def tokenProcess = tokenCommand.execute()
-        tokenProcess.waitFor()
-        def token = tokenProcess.text.trim()
-        
-        def regionCommand = ["curl", "-s", "-H", "X-aws-ec2-metadata-token: ${token}",
-                           "http://169.254.169.254/latest/meta-data/placement/region"]
-        def regionProcess = regionCommand.execute()
-        regionProcess.waitFor()
-        
-        return regionProcess.text.trim()
-    } catch (Exception e) {
-        println("Failed to get region from metadata: ${e.message}")
-        return "ap-northeast-1" // デフォルト値
     }
 }
