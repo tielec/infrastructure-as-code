@@ -57,7 +57,7 @@ SEED_JOB_NAME="${SEED_JOB_NAME:-seed-job}"
 if command -v aws &> /dev/null; then
     # Gitリポジトリ設定
     if [ -z "$JENKINS_JOBS_REPO" ]; then
-        JENKINS_JOBS_REPO=$(aws ssm get-parameter --name "/${PROJECT_NAME}/${ENVIRONMENT}/jenkins/jobs-repo" --query "Parameter.Value" --output text 2>/dev/null || echo "https://github.com/your-org/jenkins-job-definitions.git")
+        JENKINS_JOBS_REPO=$(aws ssm get-parameter --name "/${PROJECT_NAME}/${ENVIRONMENT}/jenkins/jobs-repo" --query "Parameter.Value" --output text 2>/dev/null || echo "https://github.com/tielec/infrastructure-as-code.git")
     fi
     
     if [ -z "$JENKINS_JOBS_BRANCH" ]; then
@@ -65,12 +65,12 @@ if command -v aws &> /dev/null; then
     fi
 else
     # SSMが使えない場合のデフォルト値
-    JENKINS_JOBS_REPO="${JENKINS_JOBS_REPO:-https://github.com/your-org/jenkins-job-definitions.git}"
+    JENKINS_JOBS_REPO="${JENKINS_JOBS_REPO:-https://github.com/tielec/infrastructure-as-code.git}"
     JENKINS_JOBS_BRANCH="${JENKINS_JOBS_BRANCH:-main}"
 fi
 
 # その他のデフォルト値
-JOB_DSL_SCRIPTS_PATH="${JOB_DSL_SCRIPTS_PATH:-jenkins/jobs/seed-job/Jenkinsfile}"
+JOB_DSL_SCRIPTS_PATH="${JOB_DSL_SCRIPTS_PATH:-jenkins/jobs/pipeline/_seed/job-creator/Jenkinsfile}"
 UPDATE_EXISTING_JOB="${UPDATE_EXISTING_JOB:-true}"
 RUN_INITIAL_BUILD="${RUN_INITIAL_BUILD:-false}"
 

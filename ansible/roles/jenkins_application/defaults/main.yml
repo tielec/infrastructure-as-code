@@ -16,6 +16,6 @@ setup_cli_user: true
 
 # シードジョブ設定のデフォルト値
 seed_job_name: "seed-job"
-jenkins_jobs_repo: "https://github.com/your-org/jenkins-job-definitions.git"
+jenkins_jobs_repo: "https://github.com/tielec/infrastructure-as-code.git"
 jenkins_jobs_branch: "main"
 git_credentials_id: "github-credentials"

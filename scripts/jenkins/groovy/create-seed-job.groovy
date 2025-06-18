@@ -15,10 +15,10 @@ def instance = Jenkins.getInstance()
 
 // 設定
 def SEED_JOB_NAME = System.getenv("SEED_JOB_NAME") ?: "seed-job"
-def GIT_REPO_URL = System.getenv("JENKINS_JOBS_REPO") ?: "https://github.com/your-org/jenkins-job-definitions.git"
+def GIT_REPO_URL = System.getenv("JENKINS_JOBS_REPO") ?: "https://github.com/tielec/infrastructure-as-code.git"
 def GIT_BRANCH = System.getenv("JENKINS_JOBS_BRANCH") ?: "main"
 def GIT_CREDENTIALS_ID = System.getenv("GIT_CREDENTIALS_ID") ?: "github-credentials"
-def JOB_DSL_SCRIPTS_PATH = System.getenv("JOB_DSL_SCRIPTS_PATH") ?: "jenkins/jobs/seed-job/Jenkinsfile"
+def JOB_DSL_SCRIPTS_PATH = System.getenv("JOB_DSL_SCRIPTS_PATH") ?: "jenkins/jobs/pipeline/_seed/job-creator/Jenkinsfile"
 
 println("=== Starting Seed Job Setup ===")
 println("Job Name: ${SEED_JOB_NAME}")
@@ -49,9 +49,9 @@ if (existingJob != null) {
             if (jobXmlFile.exists()) {
                 def jobXml = jobXmlFile.text
                 // Git URLとブランチを置換
-                jobXml = jobXml.replaceAll('https://github.com/your-org/jenkins-job-definitions.git', GIT_REPO_URL)
+                jobXml = jobXml.replaceAll('https://github.com/tielec/infrastructure-as-code.git', GIT_REPO_URL)
                 jobXml = jobXml.replaceAll('\\*/main', "*/${GIT_BRANCH}")
-                jobXml = jobXml.replaceAll('jenkins/jobs/seed-job/Jenkinsfile', JOB_DSL_SCRIPTS_PATH)
+                jobXml = jobXml.replaceAll('jenkins/jobs/pipeline/_seed/job-creator/Jenkinsfile', JOB_DSL_SCRIPTS_PATH)
                 
                 // ジョブを更新
                 def xmlStream = new ByteArrayInputStream(jobXml.getBytes("UTF-8"))
@@ -107,9 +107,9 @@ try {
     def jobXml = jobXmlFile.text
     
     // プレースホルダーを実際の値に置換
-    jobXml = jobXml.replaceAll('https://github.com/your-org/jenkins-job-definitions.git', GIT_REPO_URL)
+    jobXml = jobXml.replaceAll('https://github.com/tielec/infrastructure-as-code.git', GIT_REPO_URL)
     jobXml = jobXml.replaceAll('\\*/main', "*/${GIT_BRANCH}")
-    jobXml = jobXml.replaceAll('jenkins/jobs/seed-job/Jenkinsfile', JOB_DSL_SCRIPTS_PATH)
+    jobXml = jobXml.replaceAll('jenkins/jobs/pipeline/_seed/job-creator/Jenkinsfile', JOB_DSL_SCRIPTS_PATH)
     
     // 説明文内の変数も置換
     jobXml = jobXml.replaceAll('\\$\\{JENKINS_JOBS_REPO\\}', GIT_REPO_URL)
