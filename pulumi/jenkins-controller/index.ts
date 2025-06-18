@@ -127,6 +127,162 @@ const ssmCustomPolicyAttachment = new aws.iam.RolePolicyAttachment(
     }
 );
 
+// EC2およびSpot Fleet管理用のカスタムポリシー
+const ec2SpotFleetPolicy = new aws.iam.Policy(`${projectName}-jenkins-ec2-spotfleet-policy-${jenkinsColor}`, {
+    description: "Policy for Jenkins controller to manage EC2 instances and Spot Fleet",
+    policy: JSON.stringify({
+        Version: "2012-10-17",
+        Statement: [
+            {
+                // EC2インスタンスの管理権限
+                Effect: "Allow",
+                Action: [
+                    "ec2:DescribeInstances",
+                    "ec2:DescribeInstanceStatus",
+                    "ec2:DescribeInstanceTypes",
+                    "ec2:DescribeAvailabilityZones",
+                    "ec2:DescribeSubnets",
+                    "ec2:DescribeSecurityGroups",
+                    "ec2:DescribeKeyPairs",
+                    "ec2:DescribeImages",
+                    "ec2:DescribeLaunchTemplates",
+                    "ec2:DescribeLaunchTemplateVersions",
+                    "ec2:RunInstances",
+                    "ec2:TerminateInstances",
+                    "ec2:StopInstances",
+                    "ec2:StartInstances",
+                    "ec2:CreateTags",
+                    "ec2:DeleteTags"
+                ],
+                Resource: "*"
+            },
+            {
+                // Spot Fleet の管理権限
+                Effect: "Allow",
+                Action: [
+                    "ec2:DescribeSpotFleetRequests",
+                    "ec2:DescribeSpotFleetInstances",
+                    "ec2:DescribeSpotInstanceRequests",
+                    "ec2:DescribeSpotPriceHistory",
+                    "ec2:RequestSpotFleet",
+                    "ec2:ModifySpotFleetRequest",
+                    "ec2:CancelSpotFleetRequests",
+                    "ec2:RequestSpotInstances",
+                    "ec2:CancelSpotInstanceRequests"
+                ],
+                Resource: "*"
+            },
+            {
+                // Auto Scaling関連の権限（将来的な拡張用）
+                Effect: "Allow",
+                Action: [
+                    "autoscaling:DescribeAutoScalingGroups",
+                    "autoscaling:DescribeAutoScalingInstances",
+                    "autoscaling:SetDesiredCapacity",
+                    "autoscaling:UpdateAutoScalingGroup"
+                ],
+                Resource: "*"
+            },
+            {
+                // CloudWatch メトリクスの読み取り（スケーリング判断用）
+                Effect: "Allow",
+                Action: [
+                    "cloudwatch:GetMetricStatistics",
+                    "cloudwatch:ListMetrics",
+                    "cloudwatch:PutMetricData"
+                ],
+                Resource: "*"
+            },
+            {
+                // IAM PassRole権限（EC2インスタンスにロールを付与するため）
+                Effect: "Allow",
+                Action: [
+                    "iam:PassRole"
+                ],
+                Resource: [
+                    `arn:aws:iam::*:role/${projectName}-agent-role-${environment}`,
+                    `arn:aws:iam::*:role/${projectName}-spotfleet-role-${environment}`
+                ]
+            },
+            {
+                // SSM Parameter Store（エージェント設定の読み取り用）
+                Effect: "Allow",
+                Action: [
+                    "ssm:GetParameter",
+                    "ssm:GetParameters"
+                ],
+                Resource: [
+                    `arn:aws:ssm:*:*:parameter/${projectName}/${environment}/jenkins/agent/*`
+                ]
+            }
+        ]
+    }),
+});
+
+// EC2 Spot Fleet ポリシーのアタッチ
+const ec2SpotFleetPolicyAttachment = new aws.iam.RolePolicyAttachment(
+    `${projectName}-jenkins-ec2-spotfleet-policy-attachment-${jenkinsColor}`, 
+    {
+        role: jenkinsRole.name,
+        policyArn: ec2SpotFleetPolicy.arn,
+    }
+);
+
+// Jenkins Plugins用の追加権限（EC2 Plugin, Fleet Plugin等）
+const jenkinsPluginPolicy = new aws.iam.Policy(`${projectName}-jenkins-plugin-policy-${jenkinsColor}`, {
+    description: "Additional permissions for Jenkins EC2 and Fleet plugins",
+    policy: JSON.stringify({
+        Version: "2012-10-17",
+        Statement: [
+            {
+                // EC2 Plugin固有の権限
+                Effect: "Allow",
+                Action: [
+                    "ec2:DescribeRegions",
+                    "ec2:DescribeZones",
+                    "ec2:DescribeVpcs",
+                    "ec2:DescribeInstanceAttribute",
+                    "ec2:ModifyInstanceAttribute",
+                    "ec2:GetConsoleOutput",
+                    "ec2:GetPasswordData"
+                ],
+                Resource: "*"
+            },
+            {
+                // ネットワークインターフェース関連（プライベートIPの管理）
+                Effect: "Allow",
+                Action: [
+                    "ec2:DescribeNetworkInterfaces",
+                    "ec2:CreateNetworkInterface",
+                    "ec2:DeleteNetworkInterface",
+                    "ec2:AttachNetworkInterface",
+                    "ec2:DetachNetworkInterface"
+                ],
+                Resource: "*"
+            },
+            {
+                // EBS ボリューム関連（必要に応じて）
+                Effect: "Allow",
+                Action: [
+                    "ec2:DescribeVolumes",
+                    "ec2:DescribeSnapshots",
+                    "ec2:CreateSnapshot",
+                    "ec2:DeleteSnapshot"
+                ],
+                Resource: "*"
+            }
+        ]
+    }),
+});
+
+const jenkinsPluginPolicyAttachment = new aws.iam.RolePolicyAttachment(
+    `${projectName}-jenkins-plugin-policy-attachment-${jenkinsColor}`, 
+    {
+        role: jenkinsRole.name,
+        policyArn: jenkinsPluginPolicy.arn,
+    }
+);
+
 // Jenkins用インスタンスプロファイル
 const jenkinsInstanceProfile = new aws.iam.InstanceProfile(
     `${projectName}-jenkins-profile-${jenkinsColor}`, 
