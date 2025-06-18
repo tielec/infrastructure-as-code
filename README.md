@@ -118,7 +118,7 @@ ansible-playbook playbooks/deploy_jenkins_security.yml -e "env=dev"
 Jenkins環境が構築された後、アプリケーションレベルの設定を管理できます：
 
 ```bash
-# Jenkinsのバージョン更新、プラグインインストール、再起動を実行
+# Jenkinsのバージョン更新、プラグインインストール、CLIユーザー作成、シードジョブ作成、再起動を実行
 ansible-playbook playbooks/deploy_jenkins_application.yml -e "env=dev"
 
 # Jenkinsバージョンのみ更新（プラグインインストールはスキップ）
@@ -126,6 +126,22 @@ ansible-playbook playbooks/deploy_jenkins_application.yml -e "env=dev version=2.
 
 # プラグインのみインストール（Gitリポジトリ更新はスキップ）
 ansible-playbook playbooks/deploy_jenkins_application.yml -e "env=dev update_git=false plugins=true restart=false"
+
+# シードジョブのみ作成（他の設定はスキップ）
+ansible-playbook playbooks/deploy_jenkins_application.yml -e "env=dev jenkins_version=latest install_plugins=false setup_cli_user=false restart_jenkins=false"
+```
+
+#### シードジョブのカスタマイズ
+
+シードジョブは、Gitリポジトリ内のJenkinsfileを実行して他のすべてのJenkinsジョブを管理します。以下の変数でカスタマイズ可能です：
+
+```bash
+# カスタムGitリポジトリとブランチを指定してシードジョブを作成
+ansible-playbook playbooks/deploy_jenkins_application.yml \
+  -e "env=dev" \
+  -e "jenkins_jobs_repo=https://github.com/myorg/jenkins-jobs.git" \
+  -e "jenkins_jobs_branch=develop" \
+  -e "jenkins_jobs_jenkinsfile=pipelines/seed-job/Jenkinsfile"
 ```
 
 ## インフラストラクチャの削除
@@ -223,13 +239,20 @@ infrastructure-as-code/
     └─ jenkins/             # Jenkins関連スクリプト
         ├─ groovy/          # Jenkins初期化用Groovyスクリプト
         │  ├─ basic-settings.groovy
+        │  ├─ create-seed-job.groovy           # シードジョブ作成
         │  ├─ disable-cli.groovy
         │  ├─ install-plugins.groovy
-        │  └─ recovery-mode.groovy
+        │  ├─ recovery-mode.groovy
+        │  └─ setup-cli-user-and-credentials.groovy  # CLIユーザー作成
+        ├─ jobs/            # ジョブ定義
+        │  └─ seed-job.xml  # シードジョブXML定義
         └─ shell/           # EC2設定用シェルスクリプト
            ├─ agent-setup.sh
            ├─ agent-template.sh
-           ├─ application-update-version.sh  # Jenkinsバージョン更新
+           ├─ application-create-seed-job.sh    # シードジョブ作成
+           ├─ application-install-plugins.sh     # プラグインインストール
+           ├─ application-setup-cli-user-and-credentials.sh  # CLIユーザー設定
+           ├─ application-update-version.sh      # Jenkinsバージョン更新
            ├─ controller-configure.sh
            ├─ controller-install.sh
            ├─ controller-mount-efs.sh
@@ -248,6 +271,8 @@ infrastructure-as-code/
 - **リカバリーモード**: 管理者アカウントロックアウト時などの緊急アクセス用モード
 - **データ永続性**: EFSによるJenkinsデータの永続化と高可用性の確保
 - **アプリケーション設定管理**: Jenkinsバージョン更新、プラグイン管理、再起動処理の自動化
+- **Jenkins CLIユーザー管理**: APIトークンを使用したCLIアクセスの自動設定
+- **シードジョブによるジョブ管理**: Infrastructure as Codeによるジョブの自動作成・更新・削除
 
 ### Jenkins環境構築後の管理機能
 
@@ -261,7 +286,17 @@ infrastructure-as-code/
    - `install-plugins.groovy`スクリプトによる一括インストール・更新
    - プラグイン依存関係の自動解決
 
-3. **サービス管理**
+3. **CLIユーザーとクレデンシャル管理**
+   - `cli-user`の自動作成
+   - APIトークンの生成とJenkinsクレデンシャルストアへの保存
+   - クレデンシャルID: `cli-user-token`として利用可能
+
+4. **シードジョブ管理**
+   - Gitリポジトリからジョブ定義を取得するパイプラインジョブの作成
+   - Job DSLを使用したジョブのライフサイクル管理
+   - ジョブ定義の変更を検知して自動的に反映
+
+5. **サービス管理**
    - Jenkinsの安全な再起動
    - 起動確認とヘルスチェック
 
@@ -283,6 +318,11 @@ infrastructure-as-code/
 - **削除時のリソース依存関係エラー**: 削除順序が正しいか確認（ネットワークは最後に削除）
 - **Jenkinsバージョン更新失敗**: `/var/log/jenkins-update-version.log`を確認
 - **プラグインインストール失敗**: Jenkins管理画面のシステムログを確認
+- **CLIユーザー作成失敗**: `/var/log/jenkins/jenkins.log`でGroovyスクリプトの実行ログを確認
+- **シードジョブ作成失敗**: 
+  - Pipeline pluginがインストールされているか確認
+  - `/var/log/jenkins/jenkins.log`でエラーを確認
+  - Gitリポジトリへのアクセス権限を確認
 
 ## 共有パラメータの確認と修正
 
@@ -308,6 +348,7 @@ ansible-playbook playbooks/jenkins_setup_pipeline.yml -e "env=dev" --check
 - Pulumiアクセストークンは安全に管理してください。環境変数として設定する場合は、他のユーザーに見えないように注意してください
 - **削除操作は取り消せません**。本番環境での削除操作は特に注意して実行してください
 - Jenkinsバージョン更新前には必ずバックアップを取得してください
+- シードジョブで管理されるジョブは、手動で変更しても次回シードジョブ実行時に上書きされます
 
 ## 拡張方法
 
