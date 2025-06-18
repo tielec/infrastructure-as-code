@@ -1,6 +1,20 @@
 <?xml version='1.1' encoding='UTF-8'?>
 <flow-definition plugin="workflow-job@1532.va_9a_d244074a_3">
-  <description>Seed job to create and manage all other Jenkins jobs using Job DSL</description>
+  <description>このジョブは、Gitリポジトリ内のJenkinsfileを実行して、他のすべてのJenkinsジョブを自動的に作成・更新・削除します。
+
+【設定内容】
+- リポジトリ: ${JENKINS_JOBS_REPO}
+- ブランチ: ${JENKINS_JOBS_BRANCH}
+- Jenkinsfile: ${JENKINSFILE_PATH}
+
+【役割】
+1. Gitリポジトリから最新のジョブ定義を取得
+2. Job DSLを使用してジョブを作成/更新
+3. 削除されたジョブ定義に対応するジョブを自動削除
+4. すべてのジョブをコードで管理（Infrastructure as Code）
+
+【実行タイミング】
+- 手動実行、または他のジョブからのトリガー</description>
   <keepDependencies>false</keepDependencies>
   <properties>
     <org.jenkinsci.plugins.workflow.job.properties.DisableConcurrentBuildsJobProperty>

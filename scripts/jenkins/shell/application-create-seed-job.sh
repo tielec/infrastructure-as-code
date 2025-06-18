@@ -223,9 +223,23 @@ if [ -d "${JENKINS_HOME}/jobs/${SEED_JOB_NAME}" ]; then
         
         # Git URLの確認
         if grep -q "$JENKINS_JOBS_REPO" "${JENKINS_HOME}/jobs/${SEED_JOB_NAME}/config.xml"; then
-            log "✓ Git repository URL correctly configured"
+            log "✓ Git repository URL correctly configured: $JENKINS_JOBS_REPO"
         else
             log "✗ WARNING: Git repository URL not found in config.xml"
+        fi
+        
+        # ブランチの確認
+        if grep -q "$JENKINS_JOBS_BRANCH" "${JENKINS_HOME}/jobs/${SEED_JOB_NAME}/config.xml"; then
+            log "✓ Git branch correctly configured: $JENKINS_JOBS_BRANCH"
+        else
+            log "✗ WARNING: Git branch not found in config.xml"
+        fi
+        
+        # Jenkinsfileパスの確認
+        if grep -q "$JOB_DSL_SCRIPTS_PATH" "${JENKINS_HOME}/jobs/${SEED_JOB_NAME}/config.xml"; then
+            log "✓ Jenkinsfile path correctly configured: $JOB_DSL_SCRIPTS_PATH"
+        else
+            log "✗ WARNING: Jenkinsfile path not found in config.xml"
         fi
     else
         log "✗ WARNING: Seed job config.xml not found"
@@ -235,3 +249,10 @@ else
 fi
 
 log "===== Seed Job Setup Completed ====="
+log ""
+log "Next steps:"
+log "1. Ensure your Git repository ($JENKINS_JOBS_REPO) contains:"
+log "   - Jenkinsfile at: $JOB_DSL_SCRIPTS_PATH"
+log "   - Job DSL scripts in the structure defined by your Jenkinsfile"
+log "2. Run the '$SEED_JOB_NAME' job in Jenkins to create all other jobs"
+log "3. The seed job will automatically manage job lifecycle (create/update/delete)"

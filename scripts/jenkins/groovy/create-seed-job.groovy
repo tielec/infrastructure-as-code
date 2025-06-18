@@ -111,6 +111,11 @@ try {
     jobXml = jobXml.replaceAll('\\*/main', "*/${GIT_BRANCH}")
     jobXml = jobXml.replaceAll('jenkins/jobs/seed-job/Jenkinsfile', JOB_DSL_SCRIPTS_PATH)
     
+    // 説明文内の変数も置換
+    jobXml = jobXml.replaceAll('\\$\\{JENKINS_JOBS_REPO\\}', GIT_REPO_URL)
+    jobXml = jobXml.replaceAll('\\$\\{JENKINS_JOBS_BRANCH\\}', GIT_BRANCH)
+    jobXml = jobXml.replaceAll('\\$\\{JENKINSFILE_PATH\\}', JOB_DSL_SCRIPTS_PATH)
+    
     // ジョブを作成
     def xmlStream = new ByteArrayInputStream(jobXml.getBytes("UTF-8"))
     
@@ -120,6 +125,11 @@ try {
         // Jenkins.instanceのcreateProjectFromXMLメソッドを使用
         def job = instance.createProjectFromXML(SEED_JOB_NAME, xmlStream)
         println("Seed job '${SEED_JOB_NAME}' created successfully")
+        println("\nJob Configuration:")
+        println("  - Repository: ${GIT_REPO_URL}")
+        println("  - Branch: ${GIT_BRANCH}")
+        println("  - Jenkinsfile: ${JOB_DSL_SCRIPTS_PATH}")
+        println("\nNext step: Run this job to create all other Jenkins jobs from your repository")
     } catch (Exception e) {
         // エラーが発生した場合は、別の方法を試す
         println("First attempt failed, trying alternative method: ${e.message}")
