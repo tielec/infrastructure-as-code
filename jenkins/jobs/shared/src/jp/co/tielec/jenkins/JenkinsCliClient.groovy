@@ -52,7 +52,7 @@ class JenkinsCliClient {
 
         def defaultConfig = [
             jenkinsUrl: env.JENKINS_URL,
-            credentialsId: 'jenkins-pat',
+            credentialsId: 'cli-user-token',
             timeout: 5
         ]
         config = defaultConfig + config

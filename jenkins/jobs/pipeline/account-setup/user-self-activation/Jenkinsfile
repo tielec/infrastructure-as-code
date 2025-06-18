@@ -81,7 +81,7 @@ pipeline {
                 echo "=== 現在の権限状態を確認 ==="
                 script {
                     withCredentials([usernamePassword(
-                        credentialsId: 'jenkins-pat',
+                        credentialsId: 'cli-user-token',
                         usernameVariable: 'JENKINS_USER',
                         passwordVariable: 'JENKINS_TOKEN'
                     )]) {
@@ -145,7 +145,7 @@ pipeline {
                 echo "=== 権限のアクティベーション ==="
                 script {
                     withCredentials([usernamePassword(
-                        credentialsId: 'jenkins-pat',
+                        credentialsId: 'cli-user-token',
                         usernameVariable: 'JENKINS_USER',
                         passwordVariable: 'JENKINS_TOKEN'
                     )]) {
