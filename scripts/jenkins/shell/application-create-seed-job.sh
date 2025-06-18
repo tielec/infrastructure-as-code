@@ -198,6 +198,14 @@ fi
 log "Waiting for seed job creation to complete..."
 sleep 30
 
+# Groovyスクリプトの実行ログを確認
+log "Checking Groovy script execution logs..."
+if [ -f "/var/log/jenkins/jenkins.log" ]; then
+    log "Recent Jenkins logs related to seed job:"
+    grep -i "seed" /var/log/jenkins/jenkins.log | tail -20 || true
+    grep -i "groovy" /var/log/jenkins/jenkins.log | tail -20 || true
+fi
+
 # スクリプトを削除
 rm -f "$GROOVY_DIR/create-seed-job.groovy"
 rm -f /tmp/seed-job.xml

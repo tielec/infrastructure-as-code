@@ -7,6 +7,9 @@ import jenkins.model.*
 import hudson.model.*
 import com.cloudbees.plugins.credentials.*
 import com.cloudbees.plugins.credentials.domains.*
+import javax.xml.transform.stream.StreamSource
+import org.jenkinsci.plugins.workflow.job.WorkflowJob
+import hudson.plugins.git.*
 
 def instance = Jenkins.getInstance()
 
@@ -83,8 +86,20 @@ try {
     if (!jobXmlFile.exists()) {
         println("ERROR: seed-job.xml not found")
         println("Expected locations:")
-        println("  - /tmp/seed-job.xml")
-        println("  - ${scriptDir}/jenkins/jobs/seed-job.xml")
+        println("  - /tmp/seed-job.xml (exists: ${new File('/tmp/seed-job.xml').exists()})")
+        
+        def scriptDir = System.getenv("SCRIPTS_DIR") ?: "/mnt/efs/jenkins/scripts"
+        def altPath = "${scriptDir}/jenkins/jobs/seed-job.xml"
+        println("  - ${altPath} (exists: ${new File(altPath).exists()})")
+        
+        // 現在のディレクトリの内容を表示
+        println("\nContents of /tmp:")
+        new File("/tmp").listFiles().each { file ->
+            if (file.name.contains("seed") || file.name.contains("job")) {
+                println("  - ${file.name}")
+            }
+        }
+        
         return
     }
     
@@ -98,7 +113,34 @@ try {
     
     // ジョブを作成
     def xmlStream = new ByteArrayInputStream(jobXml.getBytes("UTF-8"))
-    def job = instance.createProjectFromXML(SEED_JOB_NAME, xmlStream)
+    
+    // パイプラインジョブの場合は、createProjectFromXMLではなく、
+    // 適切なジョブタイプを指定して作成する必要がある
+    try {
+        // Jenkins.instanceのcreateProjectFromXMLメソッドを使用
+        def job = instance.createProjectFromXML(SEED_JOB_NAME, xmlStream)
+        println("Seed job '${SEED_JOB_NAME}' created successfully")
+    } catch (Exception e) {
+        // エラーが発生した場合は、別の方法を試す
+        println("First attempt failed, trying alternative method: ${e.message}")
+        
+        // XMLを再度読み込み
+        xmlStream = new ByteArrayInputStream(jobXml.getBytes("UTF-8"))
+        
+        try {
+            // ItemLoaderを使用して作成
+            def loader = new hudson.model.Items()
+            def job = loader.load(instance, new File("/tmp/"), SEED_JOB_NAME, xmlStream)
+            instance.putItem(job)
+            println("Seed job '${SEED_JOB_NAME}' created successfully using alternative method")
+        } catch (Exception e2) {
+            println("ERROR: Both methods failed to create job")
+            println("Error 1: ${e.message}")
+            println("Error 2: ${e2.message}")
+            e2.printStackTrace()
+            return
+        }
+    }
     
     println("Seed job '${SEED_JOB_NAME}' created successfully")
     
