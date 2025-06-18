@@ -32,6 +32,7 @@
         controller_project_name: "{{ infra.pulumi.controller_project }}"
         agent_project_name: "{{ infra.pulumi.agent_project }}"
         config_project_name: "{{ infra.pulumi.config_project }}"
+        application_project_name: "{{ infra.pulumi.application_project | default('jenkins-application') }}"
     
     # 各フラグは別々のステップで設定する
     - name: Set confirm_destroy flag
@@ -50,6 +51,7 @@
       
     - name: Set component teardown flags
       ansible.builtin.set_fact:
+        tear_application_flag: "{{ tear_application | default(true) }}"
         tear_config_flag: "{{ tear_config | default(true) }}"
         tear_agent_flag: "{{ tear_agent | default(true) }}"
         tear_controller_flag: "{{ tear_controller | default(true) }}"
@@ -100,6 +102,7 @@
           AWS Region: {{ aws_region_name }}
           
           Components to destroy:
+          - Application: {{ tear_application_flag }}
           - Config: {{ tear_config_flag }}
           - Agent: {{ tear_agent_flag }}
           - Controller: {{ tear_controller_flag }}
@@ -125,7 +128,16 @@
         msg: "Teardown confirmed. Proceeding with infrastructure destruction..."
       when: confirm_destroy | bool
     
-    # 0. Config削除（SSMドキュメント）
+    # 0. Application削除（アプリケーション設定）
+    - name: Destroy Jenkins Application Configuration
+      ansible.builtin.include_role:
+        name: jenkins_application
+      vars:
+        operation: "destroy"
+        remove_stacks: "{{ remove_stack_flag }}"
+      when: tear_application_flag | bool
+    
+    # 1. Config削除（SSMドキュメント）
     - name: Destroy Jenkins Configuration Resources
       ansible.builtin.include_role:
         name: jenkins_config
@@ -134,7 +146,7 @@
         remove_stacks: "{{ remove_stack_flag }}"
       when: tear_config_flag | bool
     
-    # 1. エージェント削除
+    # 2. エージェント削除
     - name: Destroy Agent Infrastructure
       ansible.builtin.include_role:
         name: jenkins_agent
@@ -143,7 +155,7 @@
         remove_stacks: "{{ remove_stack_flag }}"
       when: tear_agent_flag | bool
     
-    # 2. コントローラー削除
+    # 3. コントローラー削除
     - name: Destroy Controller Infrastructure
       ansible.builtin.include_role:
         name: jenkins_controller
@@ -152,7 +164,7 @@
         remove_stacks: "{{ remove_stack_flag }}"
       when: tear_controller_flag | bool
     
-    # 3. ロードバランサー削除
+    # 4. ロードバランサー削除
     - name: Destroy LoadBalancer Infrastructure
       ansible.builtin.include_role:
         name: jenkins_loadbalancer
@@ -161,7 +173,7 @@
         remove_stacks: "{{ remove_stack_flag }}"
       when: tear_loadbalancer_flag | bool
     
-    # 4. ストレージ削除
+    # 5. ストレージ削除
     - name: Destroy Storage Infrastructure
       ansible.builtin.include_role:
         name: jenkins_storage
@@ -170,7 +182,7 @@
         remove_stacks: "{{ remove_stack_flag }}"
       when: tear_storage_flag | bool
     
-    # 5. セキュリティグループ削除
+    # 6. セキュリティグループ削除
     - name: Destroy Security Groups
       ansible.builtin.include_role:
         name: jenkins_security
@@ -179,7 +191,7 @@
         remove_stacks: "{{ remove_stack_flag }}"
       when: tear_security_flag | bool
     
-    # 6. ネットワーク削除（最後に実行）
+    # 7. ネットワーク削除（最後に実行）
     - name: Destroy Network Infrastructure
       ansible.builtin.include_role:
         name: jenkins_network
