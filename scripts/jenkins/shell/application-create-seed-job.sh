@@ -20,8 +20,31 @@ log "===== Setting up Jenkins Seed Job ====="
 
 # 環境変数の設定
 JENKINS_HOME="${JENKINS_HOME:-/mnt/efs/jenkins}"
-SCRIPTS_DIR="${SCRIPTS_DIR:-/mnt/efs/jenkins/scripts}"
+
+# SSM実行時のGitリポジトリパスを取得
+if [ -n "$REPO_PATH" ]; then
+    # SSMドキュメントから渡されたパス
+    GIT_REPO_PATH="$REPO_PATH"
+else
+    # デフォルトパス
+    GIT_REPO_PATH="${GIT_REPO_PATH:-/mnt/efs/jenkins/git-repo}"
+fi
+
+# スクリプトディレクトリの設定
+if [ -d "$GIT_REPO_PATH/scripts" ]; then
+    SCRIPTS_DIR="$GIT_REPO_PATH/scripts"
+else
+    SCRIPTS_DIR="${SCRIPTS_DIR:-/mnt/efs/jenkins/scripts}"
+fi
+
 export SCRIPTS_DIR
+export GIT_REPO_PATH
+
+log "Environment:"
+log "  JENKINS_HOME: $JENKINS_HOME"
+log "  GIT_REPO_PATH: $GIT_REPO_PATH"
+log "  SCRIPTS_DIR: $SCRIPTS_DIR"
+log "  Current directory: $(pwd)"
 
 # プロジェクト情報を取得（環境変数またはSSMパラメータから）
 PROJECT_NAME="${PROJECT_NAME:-jenkins-infra}"
@@ -79,11 +102,60 @@ GROOVY_DIR="${JENKINS_HOME}/init.groovy.d"
 mkdir -p "$GROOVY_DIR"
 
 # スクリプトファイルの確認
-GROOVY_SCRIPT="${SCRIPTS_DIR}/jenkins/groovy/create-seed-job.groovy"
-XML_FILE="${SCRIPTS_DIR}/jenkins/jobs/seed-job.xml"
+# SSM実行時は現在のディレクトリがGitリポジトリのルート
+CURRENT_DIR="$(pwd)"
+log "Current working directory: $CURRENT_DIR"
+
+# 相対パスでスクリプトを探す（SSMドキュメントのデフォルト動作）
+if [ -f "scripts/jenkins/groovy/create-seed-job.groovy" ]; then
+    GROOVY_SCRIPT="$CURRENT_DIR/scripts/jenkins/groovy/create-seed-job.groovy"
+    XML_FILE="$CURRENT_DIR/scripts/jenkins/jobs/seed-job.xml"
+    SCRIPTS_DIR="$CURRENT_DIR/scripts"
+    log "Found scripts in Git repository at: $CURRENT_DIR"
+else
+    # フォールバック: 絶対パスで探す
+    GIT_REPO_PATH="${GIT_REPO_PATH:-/mnt/efs/jenkins/git-repo}"
+    if [ -d "$GIT_REPO_PATH" ]; then
+        GROOVY_SCRIPT="$GIT_REPO_PATH/scripts/jenkins/groovy/create-seed-job.groovy"
+        XML_FILE="$GIT_REPO_PATH/scripts/jenkins/jobs/seed-job.xml"
+        SCRIPTS_DIR="$GIT_REPO_PATH/scripts"
+    else
+        # 最終フォールバック
+        GROOVY_SCRIPT="/mnt/efs/jenkins/scripts/jenkins/groovy/create-seed-job.groovy"
+        XML_FILE="/mnt/efs/jenkins/scripts/jenkins/jobs/seed-job.xml"
+        SCRIPTS_DIR="/mnt/efs/jenkins/scripts"
+    fi
+fi
+
+export SCRIPTS_DIR
+
+log "Using Groovy script at: $GROOVY_SCRIPT"
+log "Using XML file at: $XML_FILE"
 
 if [ ! -f "$GROOVY_SCRIPT" ]; then
-    error_exit "Groovy script not found: $GROOVY_SCRIPT"
+    log "ERROR: Groovy script not found at any of the expected locations:"
+    log "  - $GIT_REPO_PATH/scripts/jenkins/groovy/create-seed-job.groovy"
+    log "  - ${SCRIPTS_DIR}/jenkins/groovy/create-seed-job.groovy"
+    log "  - $(pwd)/scripts/jenkins/groovy/create-seed-job.groovy"
+    
+    # ディレクトリ構造を確認
+    log "Checking directory structure..."
+    if [ -d "/mnt/efs/jenkins" ]; then
+        log "Contents of /mnt/efs/jenkins:"
+        ls -la /mnt/efs/jenkins/ | head -20
+    fi
+    
+    if [ -d "$GIT_REPO_PATH" ]; then
+        log "Contents of $GIT_REPO_PATH:"
+        ls -la "$GIT_REPO_PATH/" | head -20
+        
+        if [ -d "$GIT_REPO_PATH/scripts" ]; then
+            log "Contents of $GIT_REPO_PATH/scripts:"
+            find "$GIT_REPO_PATH/scripts" -type f -name "*.groovy" | head -20
+        fi
+    fi
+    
+    error_exit "Groovy script not found: create-seed-job.groovy"
 fi
 
 if [ ! -f "$XML_FILE" ]; then
