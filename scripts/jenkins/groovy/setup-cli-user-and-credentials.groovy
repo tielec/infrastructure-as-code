@@ -1,6 +1,6 @@
 #!/usr/bin/env groovy
 /**
- * Jenkins CLIユーザーを作成し、APIトークンを生成してSSMに保存するスクリプト
+ * Jenkins CLIユーザーを作成し、APIトークンをJenkinsクレデンシャルストアに保存するスクリプト
  * init.groovy.dディレクトリに配置して、Jenkins起動時に実行される
  */
 import jenkins.model.*
@@ -8,6 +8,10 @@ import hudson.model.*
 import hudson.security.*
 import jenkins.security.*
 import jenkins.security.apitoken.*
+import com.cloudbees.plugins.credentials.*
+import com.cloudbees.plugins.credentials.domains.*
+import com.cloudbees.plugins.credentials.impl.*
+import hudson.util.Secret
 
 def instance = Jenkins.getInstance()
 def hudsonRealm = instance.getSecurityRealm()
@@ -16,6 +20,8 @@ def hudsonRealm = instance.getSecurityRealm()
 def CLI_USERNAME = "cli-user"
 def CLI_FULLNAME = "Jenkins CLI User"
 def CLI_EMAIL = "cli-user@jenkins.local"
+def CREDENTIAL_ID = "cli-user-token"
+def CREDENTIAL_DESCRIPTION = "API token for Jenkins CLI user"
 
 println("=== Starting CLI User Setup ===")
 
@@ -27,8 +33,12 @@ if (!(hudsonRealm instanceof HudsonPrivateSecurityRealm)) {
 
 // ユーザーが既に存在するかチェック
 def existingUser = hudsonRealm.getUser(CLI_USERNAME)
+def cliUser = null
+def needsNewToken = false
+
 if (existingUser != null) {
-    println("CLI user '${CLI_USERNAME}' already exists. Checking token...")
+    println("CLI user '${CLI_USERNAME}' already exists.")
+    cliUser = User.get(CLI_USERNAME, false, null)
 } else {
     println("Creating new CLI user: ${CLI_USERNAME}")
     
@@ -45,49 +55,14 @@ if (existingUser != null) {
     
     user.save()
     println("CLI user created successfully")
+    
+    cliUser = User.get(CLI_USERNAME, false, null)
+    needsNewToken = true
 }
 
-// ユーザーを取得（作成済みまたは既存）
-def cliUser = User.get(CLI_USERNAME, false, null)
 if (cliUser == null) {
     println("ERROR: Failed to get CLI user")
     return
-}
-
-// APIトークンの生成または取得
-def tokenProperty = cliUser.getProperty(ApiTokenProperty.class)
-if (tokenProperty == null) {
-    println("ERROR: Failed to get API token property")
-    return
-}
-
-// 既存のトークンをチェック
-def tokenStore = tokenProperty.getTokenStore()
-def existingTokens = tokenStore.getTokenListSortedByName()
-def tokenName = "cli-automation-token"
-def apiToken = null
-
-// 既存のトークンを探す
-def existingToken = existingTokens.find { it.name == tokenName }
-if (existingToken != null) {
-    println("Token '${tokenName}' already exists. Skipping token generation.")
-    // 既存トークンの値は取得できないので、SSMから取得することを前提とする
-} else {
-    println("Generating new API token: ${tokenName}")
-    
-    try {
-        // 新しいトークンを生成
-        def tokenResult = tokenProperty.tokenStore.generateNewToken(tokenName)
-        apiToken = tokenResult.plainValue
-        println("API token generated successfully")
-        
-        // SSMパラメータに保存
-        saveTokenToSSM(apiToken)
-        
-    } catch (Exception e) {
-        println("ERROR: Failed to generate API token: ${e.message}")
-        e.printStackTrace()
-    }
 }
 
 // Admin権限を付与
@@ -105,59 +80,48 @@ if (authStrategy instanceof GlobalMatrixAuthorizationStrategy) {
     println("WARNING: Unknown authorization strategy. Could not grant specific permissions.")
 }
 
-println("=== CLI User Setup Completed ===")
+// クレデンシャルストアをチェック
+def credentialsStore = SystemCredentialsProvider.getInstance().getStore()
+def globalDomain = Domain.global()
+def existingCredentials = credentialsStore.getCredentials(globalDomain)
 
-/**
- * APIトークンをSSMパラメータストアに保存
- */
-def saveTokenToSSM(String token) {
-    println("Attempting to save API token to SSM Parameter Store")
+// 既存のクレデンシャルをチェック
+def existingCredential = existingCredentials.find { it.id == CREDENTIAL_ID }
+
+if (existingCredential != null) {
+    println("Credential '${CREDENTIAL_ID}' already exists in Jenkins credentials store.")
+} else {
+    println("Creating API token and storing in Jenkins credentials...")
+    
+    // APIトークンの生成
+    def tokenProperty = cliUser.getProperty(ApiTokenProperty.class)
+    if (tokenProperty == null) {
+        println("ERROR: Failed to get API token property")
+        return
+    }
     
     try {
-        // 環境変数から設定を取得（Jenkinsプロセスから継承）
-        def projectName = System.getenv("PROJECT_NAME") ?: "jenkins-infra"
-        def environment = System.getenv("ENVIRONMENT") ?: "dev"
-        def region = System.getenv("AWS_REGION") ?: System.getenv("AWS_DEFAULT_REGION") ?: "ap-northeast-1"
+        // 新しいトークンを生成
+        def tokenName = "cli-automation-token"
+        def tokenResult = tokenProperty.tokenStore.generateNewToken(tokenName)
+        def apiToken = tokenResult.plainValue
+        println("API token generated successfully")
         
-        println("SSM Parameter configuration:")
-        println("  PROJECT_NAME: ${projectName}")
-        println("  ENVIRONMENT: ${environment}")
-        println("  AWS_REGION: ${region}")
+        // Jenkinsのクレデンシャルストアに保存
+        def credentials = new UsernamePasswordCredentialsImpl(
+            CredentialsScope.GLOBAL,
+            CREDENTIAL_ID,
+            CREDENTIAL_DESCRIPTION,
+            CLI_USERNAME,
+            apiToken
+        )
         
-        def parameterName = "/${projectName}/${environment}/jenkins/cli-user-token"
-        println("  Parameter path: ${parameterName}")
-        
-        // AWS CLIを使用してSSMパラメータを作成/更新
-        def command = [
-            "bash", "-c",
-            "aws ssm put-parameter " +
-            "--name '${parameterName}' " +
-            "--value '${token}' " +
-            "--type SecureString " +
-            "--description 'Jenkins CLI user API token' " +
-            "--overwrite " +
-            "--region ${region}"
-        ]
-        
-        println("Executing AWS CLI command...")
-        
-        def process = command.execute()
-        def output = process.text
-        def error = process.err.text
-        process.waitFor()
-        
-        if (process.exitValue() == 0) {
-            println("API token successfully saved to SSM parameter: ${parameterName}")
-            println("Command output: ${output}")
-        } else {
-            println("ERROR: Failed to save token to SSM")
-            println("Exit code: ${process.exitValue()}")
-            println("Error output: ${error}")
-            println("Standard output: ${output}")
-        }
-        
+        credentialsStore.addCredentials(globalDomain, credentials)
+        println("API token stored in Jenkins credentials as '${CREDENTIAL_ID}'") 
     } catch (Exception e) {
-        println("ERROR: Exception while saving token to SSM: ${e.message}")
+        println("ERROR: Failed to generate or store API token: ${e.message}")
         e.printStackTrace()
     }
 }
+
+println("=== CLI User Setup Completed ===")
