@@ -23,11 +23,30 @@ JENKINS_HOME="${JENKINS_HOME:-/mnt/efs/jenkins}"
 SCRIPTS_DIR="${SCRIPTS_DIR:-/mnt/efs/jenkins/scripts}"
 export SCRIPTS_DIR
 
-# デフォルト値の設定
+# プロジェクト情報を取得（環境変数またはSSMパラメータから）
+PROJECT_NAME="${PROJECT_NAME:-jenkins-infra}"
+ENVIRONMENT="${ENVIRONMENT:-dev}"
+
+# デフォルト値の設定（環境変数が設定されていない場合）
 SEED_JOB_NAME="${SEED_JOB_NAME:-seed-job}"
-JENKINS_JOBS_REPO="${JENKINS_JOBS_REPO:-https://github.com/your-org/jenkins-job-definitions.git}"
-JENKINS_JOBS_BRANCH="${JENKINS_JOBS_BRANCH:-main}"
-GIT_CREDENTIALS_ID="${GIT_CREDENTIALS_ID:-github-credentials}"
+
+# SSMパラメータから設定を取得（オプション）
+if command -v aws &> /dev/null; then
+    # Gitリポジトリ設定
+    if [ -z "$JENKINS_JOBS_REPO" ]; then
+        JENKINS_JOBS_REPO=$(aws ssm get-parameter --name "/${PROJECT_NAME}/${ENVIRONMENT}/jenkins/jobs-repo" --query "Parameter.Value" --output text 2>/dev/null || echo "https://github.com/your-org/jenkins-job-definitions.git")
+    fi
+    
+    if [ -z "$JENKINS_JOBS_BRANCH" ]; then
+        JENKINS_JOBS_BRANCH=$(aws ssm get-parameter --name "/${PROJECT_NAME}/${ENVIRONMENT}/jenkins/jobs-branch" --query "Parameter.Value" --output text 2>/dev/null || echo "main")
+    fi
+else
+    # SSMが使えない場合のデフォルト値
+    JENKINS_JOBS_REPO="${JENKINS_JOBS_REPO:-https://github.com/your-org/jenkins-job-definitions.git}"
+    JENKINS_JOBS_BRANCH="${JENKINS_JOBS_BRANCH:-main}"
+fi
+
+# その他のデフォルト値
 JOB_DSL_SCRIPTS_PATH="${JOB_DSL_SCRIPTS_PATH:-jenkins/jobs/seed-job/Jenkinsfile}"
 UPDATE_EXISTING_JOB="${UPDATE_EXISTING_JOB:-true}"
 RUN_INITIAL_BUILD="${RUN_INITIAL_BUILD:-false}"
@@ -36,7 +55,6 @@ RUN_INITIAL_BUILD="${RUN_INITIAL_BUILD:-false}"
 export SEED_JOB_NAME
 export JENKINS_JOBS_REPO
 export JENKINS_JOBS_BRANCH
-export GIT_CREDENTIALS_ID
 export JOB_DSL_SCRIPTS_PATH
 export UPDATE_EXISTING_JOB
 export RUN_INITIAL_BUILD
@@ -46,7 +64,6 @@ log "  JENKINS_HOME: $JENKINS_HOME"
 log "  SEED_JOB_NAME: $SEED_JOB_NAME"
 log "  JENKINS_JOBS_REPO: $JENKINS_JOBS_REPO"
 log "  JENKINS_JOBS_BRANCH: $JENKINS_JOBS_BRANCH"
-log "  GIT_CREDENTIALS_ID: $GIT_CREDENTIALS_ID"
 log "  JENKINSFILE_PATH: $JOB_DSL_SCRIPTS_PATH"
 
 # プラグインの確認（パイプラインジョブなのでworkflow-jobプラグインを確認）
