@@ -13,3 +13,9 @@ install_plugins: true
 create_seed_job: true
 restart_jenkins: true
 setup_cli_user: true
+
+# シードジョブ設定のデフォルト値
+seed_job_name: "seed-job"
+jenkins_jobs_repo: "https://github.com/your-org/jenkins-job-definitions.git"
+jenkins_jobs_branch: "main"
+git_credentials_id: "github-credentials"
