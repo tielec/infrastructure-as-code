@@ -187,7 +187,7 @@
           ansible.builtin.include_tasks: tasks/execute_ssm_command.yml
           vars:
             ssm_document_name: "{{ ssm_documents.restart }}"
-            ssm_parameters: ""
+            ssm_parameters: ""  # 空文字列に設定
             ssm_comment: "Restarting Jenkins"
             instance_id: "{{ jenkins_instance_id }}"
 
