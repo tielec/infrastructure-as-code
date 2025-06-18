@@ -179,18 +179,29 @@
             ssm_comment: "Setting up CLI user and credentials"
             instance_id: "{{ jenkins_instance_id }}"
     
-    # 4. Jenkins再起動
-    - name: Restart Jenkins if required
-      when: restart_jenkins | bool
-      block:
-        - name: Execute Jenkins restart
-          ansible.builtin.include_tasks: tasks/execute_ssm_command.yml
-          vars:
-            ssm_document_name: "{{ ssm_documents.restart }}"
-            ssm_parameters: ""  # 空文字列に設定
-            ssm_comment: "Restarting Jenkins"
-            instance_id: "{{ jenkins_instance_id }}"
-
+    # 4. シードジョブの作成
+        - name: Create seed job
+          when: create_seed_job | default(true) | bool
+          block:
+            - name: Execute seed job creation
+              ansible.builtin.include_tasks: tasks/execute_ssm_command.yml
+              vars:
+                ssm_document_name: "{{ ssm_documents.executeScript }}"
+                ssm_parameters: "ScriptPath=scripts/jenkins/shell/application-create-seed-job.sh,Environment=SEED_JOB_NAME={{ seed_job_name | default('seed-job') }};JENKINS_JOBS_REPO={{ jenkins_jobs_repo | default('https://github.com/your-org/jenkins-job-definitions.git') }};JENKINS_JOBS_BRANCH={{ jenkins_jobs_branch | default('main') }};GIT_CREDENTIALS_ID={{ git_credentials_id | default('github-credentials') }}"
+                ssm_comment: "Creating Jenkins seed job"
+                instance_id: "{{ jenkins_instance_id }}"
+        
+        # 5. Jenkins再起動
+        - name: Restart Jenkins if required
+          when: restart_jenkins | bool
+          block:
+            - name: Execute Jenkins restart
+              ansible.builtin.include_tasks: tasks/execute_ssm_command.yml
+              vars:
+                ssm_document_name: "{{ ssm_documents.restart }}"
+                ssm_parameters: ""  # 空文字列に設定
+                ssm_comment: "Restarting Jenkins"
+                instance_id: "{{ jenkins_instance_id }}"
 # 設定完了を示す変数設定
 - name: Set application deployment status
   ansible.builtin.set_fact:
