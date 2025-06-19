@@ -12,6 +12,7 @@
     nodejs_version: "16.x"
     user_home: "/home/ec2-user"
     aws_credentials_script_path: "{{ playbook_dir }}/../scripts/aws-credentials.sh"
+    java_version: "21"
   
   tasks:
     - name: Display start message
@@ -74,6 +75,42 @@
             name: nodejs
             state: present
             
+    # Java 21のインストール (Amazon Corretto)
+    - name: Check if Java {{ java_version }} is installed
+      ansible.builtin.shell: java -version 2>&1 | grep -E 'version "{{ java_version }}'
+      register: java_check
+      changed_when: false
+      failed_when: false
+      
+    - name: Install Java {{ java_version }} (Amazon Corretto)
+      when: java_check.rc != 0
+      block:
+        - name: Download Amazon Corretto {{ java_version }} RPM
+          ansible.builtin.get_url:
+            url: "https://corretto.aws/downloads/latest/amazon-corretto-{{ java_version }}-x64-linux-jdk.rpm"
+            dest: "/tmp/amazon-corretto-{{ java_version }}.rpm"
+            mode: '0644'
+            
+        - name: Install Amazon Corretto {{ java_version }}
+          ansible.builtin.yum:
+            name: "/tmp/amazon-corretto-{{ java_version }}.rpm"
+            state: present
+            disable_gpg_check: yes
+            
+        - name: Clean up Corretto RPM file
+          ansible.builtin.file:
+            path: "/tmp/amazon-corretto-{{ java_version }}.rpm"
+            state: absent
+            
+        - name: Set JAVA_HOME environment variable
+          ansible.builtin.lineinfile:
+            path: "/etc/profile.d/java.sh"
+            line: |
+              export JAVA_HOME=/usr/lib/jvm/java-{{ java_version }}-amazon-corretto
+              export PATH=$JAVA_HOME/bin:$PATH
+            create: yes
+            mode: '0644'
+            
     # Pulumiのインストール (rootとして使用)
     - name: Check if Pulumi is installed
       ansible.builtin.stat:
@@ -122,6 +159,8 @@
           echo "Ansible: $(ansible --version 2>/dev/null | head -n 1 || echo 'Not installed')"
           echo "Pulumi: $(pulumi version 2>/dev/null || echo 'Not installed')"
           echo "Git: $(git --version 2>/dev/null || echo 'Not installed')"
+          echo "Java: $(java -version 2>&1 | head -n 1 || echo 'Not installed')"
+          echo "JAVA_HOME: $JAVA_HOME"
           echo "======================="
         owner: ec2-user
         group: ec2-user
@@ -147,23 +186,14 @@
         group: ec2-user
         mode: '0755'
         
-    # Docker のインストール（Jenkinsエージェントで必要）
-    - name: Install Docker
-      ansible.builtin.yum:
-        name: docker
-        state: present
-        
-    - name: Start and enable Docker service
-      ansible.builtin.systemd:
-        name: docker
-        state: started
-        enabled: yes
-        
-    - name: Add ec2-user to docker group
-      ansible.builtin.user:
-        name: ec2-user
-        groups: docker
-        append: yes
+    # Jenkins Agent接続用のディレクトリ作成
+    - name: Create Jenkins agent work directory
+      ansible.builtin.file:
+        path: "{{ user_home }}/jenkins-agent"
+        state: directory
+        owner: ec2-user
+        group: ec2-user
+        mode: '0755'
         
     # README.txtの作成（セットアップ手順）
     - name: Create detailed README file
@@ -175,11 +205,18 @@
           Your EC2 bootstrap instance has been configured with the following tools:
           - AWS CLI v2
           - Node.js {{ nodejs_version }}
+          - Java {{ java_version }} (Amazon Corretto)
           - Python 3 and pip3
           - Ansible
           - Pulumi
           - Git
-          - Docker
+          
+          === Jenkins Agent Setup ===
+          This instance is configured to work as a Jenkins Agent with:
+          - Java {{ java_version }} for Jenkins agent execution
+          - Build tools (gcc, make, etc.)
+          
+          Jenkins agent work directory: ~/jenkins-agent
           
           Next steps:
           1. Run "./verify-installation.sh" to check installed tools
@@ -192,6 +229,12 @@
           5. After adding the SSH key to GitHub, you can clone your repository
              and start working with the Jenkins Infrastructure as Code.
           
+          6. To connect this instance as a Jenkins Agent:
+             - In Jenkins, go to "Manage Jenkins" > "Manage Nodes and Clouds"
+             - Create a new node with SSH connection
+             - Use the EC2 instance's private IP or hostname
+             - Set Remote root directory to: /home/ec2-user/jenkins-agent
+          
           For more details, refer to the project documentation.
         owner: ec2-user
         group: ec2-user
@@ -199,4 +242,6 @@
 
     - name: Display completion message
       ansible.builtin.debug:
-        msg: "Bootstrap environment setup completed successfully!"
+        msg: |
+          Bootstrap environment setup completed successfully!
+          Java {{ java_version }} has been installed for Jenkins Agent compatibility.
