@@ -35,9 +35,16 @@ const privateRouteTableAId = networkStack.getOutput("privateRouteTableAId");
 const privateRouteTableBId = networkStack.getOutput("privateRouteTableBId");
 const natInstanceSecurityGroupId = securityStack.getOutput("natInstanceSecurityGroupId");
 
-// 出力用の変数
+// 出力用の変数（条件に応じて後で設定）
 let natResourceIds: pulumi.Output<string>[] = [];
 let natType: string;
+let natGatewayAId: pulumi.Output<string> | undefined;
+let natGatewayBId: pulumi.Output<string> | undefined;
+let natGatewayEipAAddress: pulumi.Output<string> | undefined;
+let natGatewayEipBAddress: pulumi.Output<string> | undefined;
+let natInstanceId: pulumi.Output<string> | undefined;
+let natInstancePublicIp: pulumi.Output<string> | undefined;
+let natInstancePrivateIp: pulumi.Output<string> | undefined;
 
 if (highAvailabilityMode) {
     // ハイアベイラビリティモード: NATゲートウェイ x2
@@ -97,12 +104,12 @@ if (highAvailabilityMode) {
     });
 
     natResourceIds = [natGatewayA.id, natGatewayB.id];
-
-    // NATゲートウェイ固有のエクスポート
-    export const natGatewayAId = natGatewayA.id;
-    export const natGatewayBId = natGatewayB.id;
-    export const natGatewayEipAAddress = natGatewayEipA.publicIp;
-    export const natGatewayEipBAddress = natGatewayEipB.publicIp;
+    
+    // NATゲートウェイ固有の出力を設定
+    natGatewayAId = natGatewayA.id;
+    natGatewayBId = natGatewayB.id;
+    natGatewayEipAAddress = natGatewayEipA.publicIp;
+    natGatewayEipBAddress = natGatewayEipB.publicIp;
 
 } else {
     // ノーマルモード: NATインスタンス x1
@@ -335,18 +342,29 @@ echo "NAT instance configuration completed successfully!"
     });
 
     natResourceIds = [natInstance.id];
-
-    // NATインスタンス固有のエクスポート
-    export const natInstanceId = natInstance.id;
-    export const natInstancePublicIp = natInstanceEip.publicIp;
-    export const natInstancePrivateIp = natInstance.privateIp;
-    export const natInstanceTypeExport = natInstanceType;
+    
+    // NATインスタンス固有の出力を設定
+    natInstanceId = natInstance.id;
+    natInstancePublicIp = natInstanceEip.publicIp;
+    natInstancePrivateIp = natInstance.privateIp;
 }
 
 // 共通エクスポート
 export const natTypeExport = natType;
 export const natResourceIdsExport = natResourceIds;
 export const highAvailabilityEnabled = highAvailabilityMode;
+
+// 条件付きエクスポート（NAT Gateway用）
+export const natGatewayAIdExport = natGatewayAId;
+export const natGatewayBIdExport = natGatewayBId;
+export const natGatewayEipA = natGatewayEipAAddress;
+export const natGatewayEipB = natGatewayEipBAddress;
+
+// 条件付きエクスポート（NAT Instance用）
+export const natInstanceIdExport = natInstanceId;
+export const natInstancePublicIpExport = natInstancePublicIp;
+export const natInstancePrivateIpExport = natInstancePrivateIp;
+export const natInstanceTypeExport = natInstanceType;
 
 // SSMパラメータにNAT設定を保存
 const natConfigParameter = new aws.ssm.Parameter(`${projectName}-nat-config`, {

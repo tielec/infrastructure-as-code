@@ -85,7 +85,7 @@
         source {{ scripts_dir }}/aws-env.sh 
         eval $({{ scripts_dir }}/aws-env.sh)
         
-        sudo -E /root/.pulumi/bin/pulumi stack output natType 2>/dev/null || echo "unknown"
+        sudo -E /root/.pulumi/bin/pulumi stack output natTypeExport 2>/dev/null || echo "unknown"
       register: nat_type_result
       changed_when: false
       ignore_errors: true
@@ -101,7 +101,7 @@
         source {{ scripts_dir }}/aws-env.sh 
         eval $({{ scripts_dir }}/aws-env.sh)
         
-        sudo -E /root/.pulumi/bin/pulumi stack output natResourceIds 2>/dev/null || 
+        sudo -E /root/.pulumi/bin/pulumi stack output natResourceIdsExport 2>/dev/null || 
           echo "['mock-nat-resource-id']"
       register: nat_resource_ids_result
       changed_when: false
@@ -118,7 +118,7 @@
         source {{ scripts_dir }}/aws-env.sh 
         eval $({{ scripts_dir }}/aws-env.sh)
         
-        sudo -E /root/.pulumi/bin/pulumi stack output natInstancePublicIp 2>/dev/null || echo "N/A"
+        sudo -E /root/.pulumi/bin/pulumi stack output natInstancePublicIpExport 2>/dev/null || echo "N/A"
       register: nat_instance_ip_result
       changed_when: false
       ignore_errors: true
