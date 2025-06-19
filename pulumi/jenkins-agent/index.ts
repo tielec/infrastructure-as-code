@@ -199,7 +199,7 @@ const agentLaunchTemplate = new aws.ec2.LaunchTemplate(`${projectName}-agent-lt`
     blockDeviceMappings: [{
         deviceName: "/dev/xvda",
         ebs: {
-            volumeSize: 10, // 10GBに設定
+            volumeSize: 30, // expect size>= 30GB
             volumeType: "gp3",
             deleteOnTermination: "true", // 文字列に変更
             encrypted: "true", // 文字列に変更
@@ -290,7 +290,7 @@ const agentLaunchTemplateArm = new aws.ec2.LaunchTemplate(`${projectName}-agent-
     blockDeviceMappings: [{
         deviceName: "/dev/xvda",
         ebs: {
-            volumeSize: 10, // 10GBに設定
+            volumeSize: 30,　// expect size>= 30GB
             volumeType: "gp3",
             deleteOnTermination: "true",
             encrypted: "true",
