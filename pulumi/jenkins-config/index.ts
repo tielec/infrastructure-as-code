@@ -2,27 +2,15 @@
  * pulumi/jenkins-config/index.ts
  * 
  * Jenkinsの設定関連リソースを構築するPulumiスクリプト
- * 汎用的なスクリプト実行用SSMドキュメントを使用
+ * 汎用的なスクリプト実行用SSMドキュメントとパラメータのみを管理
  */
 import * as pulumi from "@pulumi/pulumi";
 import * as aws from "@pulumi/aws";
-import * as fs from "fs";
-import * as path from "path";
 
 // コンフィグから設定を取得
 const config = new pulumi.Config();
 const projectName = config.get("projectName") || "jenkins-infra";
 const environment = pulumi.getStack();
-
-// スクリプトファイルの読み込み関数
-function loadScript(scriptPath: string): string {
-    try {
-        return fs.readFileSync(path.resolve(__dirname, scriptPath), 'utf8');
-    } catch (error) {
-        console.error(`Error loading script from ${scriptPath}:`, error);
-        throw error;
-    }
-}
 
 // Jenkins設定用SSMパラメータ
 const jenkinsVersionParam = new aws.ssm.Parameter(`${projectName}-jenkins-version`, {
@@ -40,40 +28,6 @@ const jenkinsModeParam = new aws.ssm.Parameter(`${projectName}-jenkins-mode`, {
     type: "String",
     value: config.getBoolean("recoveryMode") ? "recovery" : "normal",
     description: "Jenkins operating mode (normal/recovery)",
-    tags: {
-        Environment: environment,
-    },
-});
-
-// Groovyスクリプトのパラメータ
-const disableCliGroovyParam = new aws.ssm.Parameter(`${projectName}-jenkins-disable-cli-groovy`, {
-    name: `/${projectName}/${environment}/jenkins/groovy/disable-cli`,
-    type: "String",
-    value: loadScript('../../scripts/jenkins/groovy/disable-cli.groovy'),
-    description: "Jenkins Groovy script to disable CLI",
-    tier: "Standard",
-    tags: {
-        Environment: environment,
-    },
-});
-
-const basicSettingsGroovyParam = new aws.ssm.Parameter(`${projectName}-jenkins-basic-settings-groovy`, {
-    name: `/${projectName}/${environment}/jenkins/groovy/basic-settings`,
-    type: "String",
-    value: loadScript('../../scripts/jenkins/groovy/basic-settings.groovy'),
-    description: "Jenkins Groovy script for basic settings",
-    tier: "Standard",
-    tags: {
-        Environment: environment,
-    },
-});
-
-const recoveryModeGroovyParam = new aws.ssm.Parameter(`${projectName}-jenkins-recovery-mode-groovy`, {
-    name: `/${projectName}/${environment}/jenkins/groovy/recovery-mode`,
-    type: "String",
-    value: loadScript('../../scripts/jenkins/groovy/recovery-mode.groovy'),
-    description: "Jenkins Groovy script for recovery mode",
-    tier: "Standard",
     tags: {
         Environment: environment,
     },
@@ -137,6 +91,7 @@ const jenkinsConfigExecuteScriptDocument = new aws.ssm.Document(`${projectName}-
                         "export PROJECT_NAME='" + projectName + "'",
                         "export ENVIRONMENT='" + environment + "'",
                         "export JENKINS_HOME='/mnt/efs/jenkins'",
+                        "export REPO_PATH='/root/infrastructure-as-code'",
                         "",
                         "# リージョンの取得",
                         "TOKEN=$(curl -s -X PUT \"http://169.254.169.254/latest/api/token\" -H \"X-aws-ec2-metadata-token-ttl-seconds: 21600\")",

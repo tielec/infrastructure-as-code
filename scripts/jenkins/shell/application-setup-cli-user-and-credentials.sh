@@ -20,15 +20,16 @@ log "===== Setting up Jenkins CLI User and Credentials ====="
 
 # 環境変数の確認
 JENKINS_HOME="${JENKINS_HOME:-/mnt/efs/jenkins}"
+REPO_PATH="${REPO_PATH:-/root/infrastructure-as-code}"
 log "JENKINS_HOME: $JENKINS_HOME"
+log "REPO_PATH: $REPO_PATH"
 
 # Groovyスクリプトを配置
 GROOVY_DIR="${JENKINS_HOME}/init.groovy.d"
 mkdir -p "$GROOVY_DIR"
 
-# スクリプトのパスを確認
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-GROOVY_SCRIPT="${SCRIPT_DIR}/../groovy/setup-cli-user-and-credentials.groovy"
+# Gitリポジトリからスクリプトをコピー
+GROOVY_SCRIPT="${REPO_PATH}/scripts/jenkins/groovy/setup-cli-user-and-credentials.groovy"
 
 if [ ! -f "$GROOVY_SCRIPT" ]; then
     error_exit "Groovy script not found: $GROOVY_SCRIPT"

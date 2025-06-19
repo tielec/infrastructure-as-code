@@ -73,61 +73,42 @@ GROOVY_DIR="$JENKINS_HOME_DIR/init.groovy.d"
 mkdir -p $GROOVY_DIR
 rm -f $GROOVY_DIR/*.groovy
 
-# SSMパラメータストアから設定を取得
-PARAMETER_PATH="/${PROJECT_NAME}/${ENVIRONMENT}/jenkins"
+# Gitリポジトリからgroovyスクリプトをコピー
+REPO_PATH="${REPO_PATH:-/root/infrastructure-as-code}"
+GROOVY_SOURCE_DIR="$REPO_PATH/scripts/jenkins/groovy"
 
-# 必須パラメータの取得
-SCRIPTS_OBTAINED=false
-SCRIPT_FAILURES=0
+log "Groovyスクリプトをコピー中..."
 
-# CLI無効化スクリプト取得
-log "CLI無効化スクリプトを取得"
-DISABLE_CLI_GROOVY=$(aws ssm get-parameter --name "${PARAMETER_PATH}/groovy/disable-cli" --with-decryption --query "Parameter.Value" --output text 2>/dev/null)
-if [ $? -eq 0 ] && [ -n "$DISABLE_CLI_GROOVY" ]; then
-  echo "$DISABLE_CLI_GROOVY" > $GROOVY_DIR/disable-cli.groovy
-  SCRIPTS_OBTAINED=true
+# 基本的なGroovyスクリプトをコピー
+if [ -f "$GROOVY_SOURCE_DIR/disable-cli.groovy" ]; then
+  cp "$GROOVY_SOURCE_DIR/disable-cli.groovy" "$GROOVY_DIR/"
+  log "✓ disable-cli.groovy をコピーしました"
 else
-  log "エラー: CLI無効化スクリプトの取得に失敗しました"
-  SCRIPT_FAILURES=$((SCRIPT_FAILURES+1))
+  log "警告: disable-cli.groovy が見つかりません"
 fi
 
-# 基本設定スクリプト取得
-log "基本設定スクリプトを取得"
-BASIC_SETTINGS_GROOVY=$(aws ssm get-parameter --name "${PARAMETER_PATH}/groovy/basic-settings" --with-decryption --query "Parameter.Value" --output text 2>/dev/null)
-if [ $? -eq 0 ] && [ -n "$BASIC_SETTINGS_GROOVY" ]; then
-  echo "$BASIC_SETTINGS_GROOVY" > $GROOVY_DIR/basic-settings.groovy
-  SCRIPTS_OBTAINED=true
+if [ -f "$GROOVY_SOURCE_DIR/basic-settings.groovy" ]; then
+  cp "$GROOVY_SOURCE_DIR/basic-settings.groovy" "$GROOVY_DIR/"
+  log "✓ basic-settings.groovy をコピーしました"
 else
-  log "エラー: 基本設定スクリプトの取得に失敗しました"
-  SCRIPT_FAILURES=$((SCRIPT_FAILURES+1))
+  log "警告: basic-settings.groovy が見つかりません"
 fi
 
-# リカバリーモードスクリプト取得（条件付き）
+# リカバリーモードの場合のみリカバリースクリプトをコピー
 if [ "$JENKINS_MODE" = "recovery" ]; then
-  log "リカバリーモードスクリプトを取得"
-  RECOVERY_MODE_GROOVY=$(aws ssm get-parameter --name "${PARAMETER_PATH}/groovy/recovery-mode" --with-decryption --query "Parameter.Value" --output text 2>/dev/null)
-  if [ $? -eq 0 ] && [ -n "$RECOVERY_MODE_GROOVY" ]; then
-    echo "$RECOVERY_MODE_GROOVY" > $GROOVY_DIR/basic-security.groovy
-    SCRIPTS_OBTAINED=true
+  if [ -f "$GROOVY_SOURCE_DIR/recovery-mode.groovy" ]; then
+    cp "$GROOVY_SOURCE_DIR/recovery-mode.groovy" "$GROOVY_DIR/basic-security.groovy"
+    log "✓ recovery-mode.groovy を basic-security.groovy としてコピーしました"
   else
-    log "エラー: リカバリーモードスクリプトの取得に失敗しました"
-    SCRIPT_FAILURES=$((SCRIPT_FAILURES+1))
+    log "警告: recovery-mode.groovy が見つかりません"
   fi
-fi
-
-# 少なくとも1つのスクリプトが取得できたか確認
-if [ "$SCRIPTS_OBTAINED" != "true" ]; then
-  error_exit "必要なスクリプトの取得に失敗しました。設定を中止します。"
-fi
-
-# スクリプト取得の警告を表示
-if [ $SCRIPT_FAILURES -gt 0 ]; then
-  log "警告: $SCRIPT_FAILURES 個のスクリプト取得に失敗しましたが、一部のスクリプトは取得できました。"
 fi
 
 # ファイル権限の設定
 chown -R jenkins:jenkins $GROOVY_DIR
 chmod 644 $GROOVY_DIR/*.groovy 2>/dev/null || true
+
+log "Groovyスクリプトの配置が完了しました"
 
 # モード特有の設定
 if [ "$JENKINS_MODE" = "recovery" ]; then

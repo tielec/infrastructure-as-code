@@ -49,6 +49,7 @@ const jenkinsExecuteScriptDocument = new aws.ssm.Document(`${projectName}-jenkin
                         "export PROJECT_NAME='" + projectName + "'",
                         "export ENVIRONMENT='" + environment + "'",
                         "export JENKINS_HOME='/mnt/efs/jenkins'",
+                        "export REPO_PATH='/root/infrastructure-as-code'",
                         "",
                         "# リージョンの取得",
                         "TOKEN=$(curl -s -X PUT \"http://169.254.169.254/latest/api/token\" -H \"X-aws-ec2-metadata-token-ttl-seconds: 21600\")",
