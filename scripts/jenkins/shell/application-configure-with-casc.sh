@@ -88,22 +88,28 @@ export EC2_MIN_SIZE="${EC2_MIN_SIZE:-0}"
 export EC2_MAX_SIZE="${EC2_MAX_SIZE:-1}"
 export EC2_NUM_EXECUTORS="${EC2_NUM_EXECUTORS:-3}"
 
-# Jenkins URLの設定（ALBのDNS名から生成、SSMパラメータから取得）
+# Jenkins URLの設定（ALB経由の場合）
 JENKINS_URL=$(aws ssm get-parameter \
     --name "/${PROJECT_NAME}/${ENVIRONMENT}/jenkins/url" \
     --region "$AWS_REGION" \
     --query "Parameter.Value" \
-    --output text 2>/dev/null || echo "")
+    --output text 2>/dev/null || echo "http://localhost:8080/")
 
-if [ -z "$JENKINS_URL" ]; then
-    log "✗ WARNING: Jenkins URL not found in Parameter Store"
-    log "  Using default: http://localhost:8080/"
-    JENKINS_URL="http://localhost:8080/"
-else
-    log "✓ Found Jenkins URL: $JENKINS_URL"
-fi
+# URLが正しく取得できたかログ出力
+log "✓ Found Jenkins URL: $JENKINS_URL"
 
+# すべての環境変数をエクスポート（envsubstで使用するため）
 export JENKINS_URL
+export EC2_FLEET_ID
+export WORKTERMINAL_HOST
+export AWS_REGION
+export SHARED_LIBRARY_REPO
+export SHARED_LIBRARY_BRANCH
+export SHARED_LIBRARY_PATH
+export EC2_IDLE_MINUTES
+export EC2_MIN_SIZE
+export EC2_MAX_SIZE
+export EC2_NUM_EXECUTORS
 
 # JCasC設定ファイルの生成
 log "Generating JCasC configuration file..."
@@ -114,12 +120,30 @@ if [ ! -f "$TEMPLATE_FILE" ]; then
     error_exit "JCasC template not found: $TEMPLATE_FILE"
 fi
 
+# デバッグ: 環境変数の確認
+log "Environment variables for template substitution:"
+log "  JENKINS_URL: $JENKINS_URL"
+log "  EC2_FLEET_ID: $EC2_FLEET_ID"
+log "  WORKTERMINAL_HOST: $WORKTERMINAL_HOST"
+log "  SHARED_LIBRARY_REPO: $SHARED_LIBRARY_REPO"
+log "  SHARED_LIBRARY_PATH: $SHARED_LIBRARY_PATH"
+
 # テンプレートから設定ファイルを生成
-envsubst < "$TEMPLATE_FILE" > "$CASC_CONFIG_FILE"
+# shellcheckを無効化して変数リストを明示的に指定
+# shellcheck disable=SC2016
+envsubst '$JENKINS_URL $EC2_FLEET_ID $WORKTERMINAL_HOST $AWS_REGION $SHARED_LIBRARY_REPO $SHARED_LIBRARY_BRANCH $SHARED_LIBRARY_PATH $EC2_IDLE_MINUTES $EC2_MIN_SIZE $EC2_MAX_SIZE $EC2_NUM_EXECUTORS' < "$TEMPLATE_FILE" > "$CASC_CONFIG_FILE"
 
 # 権限設定
 chown jenkins:jenkins "$CASC_CONFIG_FILE"
 chmod 600 "$CASC_CONFIG_FILE"
+
+# デバッグ: 生成されたファイルの一部を確認
+if [ "${DEBUG_CASC:-false}" = "true" ]; then
+    log "Generated JCasC configuration (first 50 lines):"
+    head -n 50 "$CASC_CONFIG_FILE" | while IFS= read -r line; do
+        log "  $line"
+    done
+fi
 
 # JCasC設定を適用（Jenkinsを再起動）
 log "Applying JCasC configuration by restarting Jenkins..."
