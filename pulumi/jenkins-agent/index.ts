@@ -353,7 +353,20 @@ const spotFleetRequest = new aws.ec2.SpotFleetRequest(`${projectName}-agent-spot
     instanceInterruptionBehaviour: "terminate",
     allocationStrategy: "lowestPrice", // 最も安価なインスタンスを優先
     launchTemplateConfigs: pulumi.all([privateSubnetIds]).apply(([subnetIds]) => {
-        const configs = [];
+        // 型を明示的に定義
+        type LaunchTemplateConfig = {
+            launchTemplateSpecification: {
+                id: pulumi.Output<string>;
+                version: pulumi.Output<string>;
+            };
+            overrides: Array<{
+                subnetId: string;
+                instanceType: string;
+                spotPrice: string;
+            }>;
+        };
+        
+        const configs: LaunchTemplateConfig[] = [];
         
         // ARM64インスタンス用の設定（t4g.small）
         subnetIds.forEach((subnetId: string) => {
