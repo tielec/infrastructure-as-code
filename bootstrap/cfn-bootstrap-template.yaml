@@ -174,9 +174,10 @@ Resources:
           
           chown ec2-user:ec2-user /home/ec2-user/SETUP_GUIDE.txt
           
-          # セットアップガイドを表示するように設定
+          # セットアップガイドを表示するように設定 
+          echo "if [ -t 1 ]; then" >> /home/ec2-user/.bashrc
           echo "cat /home/ec2-user/SETUP_GUIDE.txt" >> /home/ec2-user/.bashrc
-          
+          echo "fi" >> /home/ec2-user/.bashrc
           echo "Bootstrap minimal setup complete!"
 
       Tags:

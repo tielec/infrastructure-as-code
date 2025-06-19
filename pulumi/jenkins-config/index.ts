@@ -2,7 +2,7 @@
  * pulumi/jenkins-config/index.ts
  * 
  * Jenkinsの設定関連リソースを構築するPulumiスクリプト
- * SSMドキュメント、パラメータストア、共有設定などに特化
+ * 汎用的なスクリプト実行用SSMドキュメントを使用
  */
 import * as pulumi from "@pulumi/pulumi";
 import * as aws from "@pulumi/aws";
@@ -79,10 +79,111 @@ const recoveryModeGroovyParam = new aws.ssm.Parameter(`${projectName}-jenkins-re
     },
 });
 
-// SSMドキュメント（Gitリポジトリ更新用）- ログ出力対応版
+// 汎用的なスクリプト実行用SSMドキュメント（jenkins-config専用）
+const jenkinsConfigExecuteScriptDocument = new aws.ssm.Document(`${projectName}-jenkins-config-execute-script`, {
+    name: `${projectName}-jenkins-config-execute-script-${environment}`,
+    documentType: "Command",
+    documentFormat: "JSON",
+    content: JSON.stringify({
+        schemaVersion: "2.2",
+        description: "Execute script from Git repository on Jenkins instance",
+        parameters: {
+            ScriptPath: {
+                type: "String",
+                description: "Path to script relative to repository root"
+            },
+            // 個別の環境変数パラメータ
+            EfsId: {
+                type: "String",
+                default: "",
+                description: "EFS File System ID"
+            },
+            AwsRegion: {
+                type: "String",
+                default: "",
+                description: "AWS Region"
+            },
+            JenkinsVersion: {
+                type: "String",
+                default: "",
+                description: "Jenkins version"
+            },
+            JenkinsColor: {
+                type: "String",
+                default: "",
+                description: "Jenkins color (blue/green)"
+            },
+            JenkinsMode: {
+                type: "String",
+                default: "",
+                description: "Jenkins mode (normal/recovery)"
+            },
+            WorkingDirectory: {
+                type: "String",
+                default: "/root/infrastructure-as-code",
+                description: "Working directory for script execution"
+            }
+        },
+        mainSteps: [
+            {
+                action: "aws:runShellScript",
+                name: "executeScript",
+                inputs: {
+                    runCommand: [
+                        "#!/bin/bash",
+                        "set -e",
+                        "",
+                        "# 環境変数の設定",
+                        "export PROJECT_NAME='" + projectName + "'",
+                        "export ENVIRONMENT='" + environment + "'",
+                        "export JENKINS_HOME='/mnt/efs/jenkins'",
+                        "",
+                        "# リージョンの取得",
+                        "TOKEN=$(curl -s -X PUT \"http://169.254.169.254/latest/api/token\" -H \"X-aws-ec2-metadata-token-ttl-seconds: 21600\")",
+                        "export AWS_REGION=$(curl -s -H \"X-aws-ec2-metadata-token: $TOKEN\" http://169.254.169.254/latest/meta-data/placement/region)",
+                        "export AWS_DEFAULT_REGION=$AWS_REGION",
+                        "",
+                        "# 個別パラメータから環境変数を設定",
+                        "[ -n \"{{EfsId}}\" ] && export EFS_ID=\"{{EfsId}}\"",
+                        "[ -n \"{{AwsRegion}}\" ] && export AWS_REGION=\"{{AwsRegion}}\"",
+                        "[ -n \"{{JenkinsVersion}}\" ] && export JENKINS_VERSION=\"{{JenkinsVersion}}\"",
+                        "[ -n \"{{JenkinsColor}}\" ] && export JENKINS_COLOR=\"{{JenkinsColor}}\"",
+                        "[ -n \"{{JenkinsMode}}\" ] && export JENKINS_MODE=\"{{JenkinsMode}}\"",
+                        "",
+                        "# 作業ディレクトリに移動",
+                        "cd {{WorkingDirectory}}",
+                        "",
+                        "# スクリプトの存在確認",
+                        "if [ ! -f \"{{ScriptPath}}\" ]; then",
+                        "  echo \"ERROR: Script not found: {{ScriptPath}}\"",
+                        "  exit 1",
+                        "fi",
+                        "",
+                        "# スクリプトを実行",
+                        "echo \"Executing: {{ScriptPath}}\"",
+                        "echo \"Environment variables set:\"",
+                        "[ -n \"$EFS_ID\" ] && echo \"  EFS_ID=$EFS_ID\"",
+                        "[ -n \"$JENKINS_VERSION\" ] && echo \"  JENKINS_VERSION=$JENKINS_VERSION\"",
+                        "[ -n \"$JENKINS_COLOR\" ] && echo \"  JENKINS_COLOR=$JENKINS_COLOR\"",
+                        "[ -n \"$JENKINS_MODE\" ] && echo \"  JENKINS_MODE=$JENKINS_MODE\"",
+                        "",
+                        "chmod +x \"{{ScriptPath}}\"",
+                        "bash \"{{ScriptPath}}\""
+                    ]
+                }
+            }
+        ]
+    }),
+    tags: {
+        Environment: environment,
+    },
+});
+
+// Gitリポジトリ更新用SSMドキュメント（これは残す）
 const jenkinsUpdateRepoDocument = new aws.ssm.Document(`${projectName}-jenkins-update-repo`, {
     name: `${projectName}-jenkins-update-repo-${environment}`,
     documentType: "Command",
+    documentFormat: "JSON",
     content: JSON.stringify({
         schemaVersion: "2.2",
         description: "Update Git repository for Jenkins scripts",
@@ -155,380 +256,9 @@ const jenkinsUpdateRepoDocument = new aws.ssm.Document(`${projectName}-jenkins-u
     },
 });
 
-// SSMドキュメント（インストール用）- ログ出力対応版
-const jenkinsInstallDocument = new aws.ssm.Document(`${projectName}-jenkins-install`, {
-    name: `${projectName}-jenkins-install-${environment}`,
-    documentType: "Command",
-    content: JSON.stringify({
-        schemaVersion: "2.2",
-        description: "Jenkins Controller installation",
-        parameters: {
-            ProjectName: {
-                type: "String",
-                default: projectName,
-                description: "Project name"
-            },
-            Environment: {
-                type: "String",
-                default: environment,
-                description: "Environment name"
-            },
-            JenkinsVersion: {
-                type: "String",
-                default: "latest",
-                description: "Jenkins version to install"
-            },
-            JenkinsColor: {
-                type: "String",
-                default: "blue",
-                description: "Jenkins environment color (blue/green)"
-            }
-        },
-        mainSteps: [
-            {
-                action: "aws:runShellScript",
-                name: "installJenkins",
-                inputs: {
-                    runCommand: [
-                        "#!/bin/bash",
-                        "# エラーハンドリングを設定",
-                        "set -e",
-                        "set -o pipefail",
-                        "",
-                        "# 環境変数の設定",
-                        "export PROJECT_NAME={{ProjectName}}",
-                        "export ENVIRONMENT={{Environment}}",
-                        "export JENKINS_VERSION={{JenkinsVersion}}",
-                        "export JENKINS_COLOR={{JenkinsColor}}",
-                        "",
-                        "echo '===== Starting Jenkins Installation ====='",
-                        "echo \"Project: $PROJECT_NAME\"",
-                        "echo \"Environment: $ENVIRONMENT\"",
-                        "echo \"Jenkins Version: $JENKINS_VERSION\"",
-                        "echo \"Jenkins Color: $JENKINS_COLOR\"",
-                        "",
-                        "# スクリプトの存在確認",
-                        "SCRIPT_PATH=/root/infrastructure-as-code/scripts/jenkins/shell/controller-install.sh",
-                        "if [ ! -f \"$SCRIPT_PATH\" ]; then",
-                        "  echo \"ERROR: Script not found: $SCRIPT_PATH\"",
-                        "  exit 1",
-                        "fi",
-                        "",
-                        "# スクリプト実行",
-                        "echo 'Executing Jenkins installation script...'",
-                        "bash $SCRIPT_PATH 2>&1 || EXIT_CODE=$?",
-                        "",
-                        "# インストール状態確認",
-                        "echo ''",
-                        "echo '===== Installation Result ====='",
-                        "if rpm -q jenkins >/dev/null 2>&1; then",
-                        "  JENKINS_VERSION=$(rpm -q jenkins --queryformat '%{VERSION}')",
-                        "  echo \"SUCCESS: Jenkins $JENKINS_VERSION is installed\"",
-                        "else",
-                        "  echo \"ERROR: Jenkins installation failed\"",
-                        "  exit 1",
-                        "fi",
-                        "",
-                        "# エラーがあった場合は終了",
-                        "if [ ! -z \"$EXIT_CODE\" ] && [ \"$EXIT_CODE\" -ne 0 ]; then",
-                        "  echo \"ERROR: Installation script failed with exit code: $EXIT_CODE\"",
-                        "  exit $EXIT_CODE",
-                        "fi",
-                        "",
-                        "echo 'Jenkins installation completed successfully'",
-                        "exit 0"
-                    ]
-                }
-            }
-        ]
-    }),
-    tags: {
-        Environment: environment,
-    },
-});
-
-// SSMドキュメント（EFSマウント用）- ログ出力対応版
-const jenkinsMountEfsDocument = new aws.ssm.Document(`${projectName}-jenkins-mount-efs`, {
-    name: `${projectName}-jenkins-mount-efs-${environment}`,
-    documentType: "Command",
-    content: JSON.stringify({
-        schemaVersion: "2.2",
-        description: "Mount EFS for Jenkins",
-        parameters: {
-            ProjectName: {
-                type: "String",
-                default: projectName,
-                description: "Project name"
-            },
-            Environment: {
-                type: "String",
-                default: environment,
-                description: "Environment name"
-            },
-            EfsId: {
-                type: "String",
-                description: "EFS File System ID"
-            },
-            Region: {
-                type: "String",
-                default: "{{global:REGION}}",
-                description: "AWS Region"
-            }
-        },
-        mainSteps: [
-            {
-                action: "aws:runShellScript",
-                name: "mountEfs",
-                inputs: {
-                    runCommand: [
-                        "#!/bin/bash",
-                        "# エラーハンドリングを設定",
-                        "set -e",
-                        "set -o pipefail",
-                        "",
-                        "# 環境変数の設定",
-                        "export PROJECT_NAME={{ProjectName}}",
-                        "export ENVIRONMENT={{Environment}}",
-                        "export EFS_ID={{EfsId}}",
-                        "export AWS_REGION={{Region}}",
-                        "",
-                        "echo '===== Starting EFS Mount ====='",
-                        "echo \"EFS ID: $EFS_ID\"",
-                        "echo \"AWS Region: $AWS_REGION\"",
-                        "",
-                        "# EFS関連パッケージの確認",
-                        "if ! rpm -q amazon-efs-utils >/dev/null 2>&1; then",
-                        "  echo 'Installing amazon-efs-utils...'",
-                        "  dnf install -y amazon-efs-utils || yum install -y amazon-efs-utils",
-                        "fi",
-                        "",
-                        "# スクリプトの存在確認",
-                        "SCRIPT_PATH=/root/infrastructure-as-code/scripts/jenkins/shell/controller-mount-efs.sh",
-                        "if [ ! -f \"$SCRIPT_PATH\" ]; then",
-                        "  echo \"ERROR: Script not found: $SCRIPT_PATH\"",
-                        "  exit 1",
-                        "fi",
-                        "",
-                        "# スクリプト実行",
-                        "echo 'Executing EFS mount script...'",
-                        "bash $SCRIPT_PATH 2>&1 || EXIT_CODE=$?",
-                        "",
-                        "# マウント状態確認",
-                        "echo ''",
-                        "echo '===== Mount Result ====='", 
-                        "if df -h | grep -i efs >/dev/null 2>&1; then",
-                        "  echo 'SUCCESS: EFS is mounted'",
-                        "  df -h | grep -i efs",
-                        "else",
-                        "  echo 'ERROR: EFS mount failed'",
-                        "  # エラー時のみ追加情報を表示",
-                        "  echo ''",
-                        "  echo 'Checking EFS mount helper log:'",
-                        "  tail -20 /var/log/amazon/efs/mount.log 2>/dev/null || echo 'No EFS helper log found'",
-                        "fi",
-                        "",
-                        "# エラーがあった場合は終了",
-                        "if [ ! -z \"$EXIT_CODE\" ] && [ \"$EXIT_CODE\" -ne 0 ]; then",
-                        "  echo \"ERROR: Mount script failed with exit code: $EXIT_CODE\"",
-                        "  exit $EXIT_CODE",
-                        "fi",
-                        "",
-                        "echo 'EFS mount completed successfully'",
-                        "exit 0"
-                    ]
-                }
-            }
-        ]
-    }),
-    tags: {
-        Environment: environment,
-    },
-});
-
-// SSMドキュメント（設定用）- ログ出力対応版
-const jenkinsConfigureDocument = new aws.ssm.Document(`${projectName}-jenkins-configure`, {
-    name: `${projectName}-jenkins-configure-${environment}`,
-    documentType: "Command",
-    content: JSON.stringify({
-        schemaVersion: "2.2",
-        description: "Configure Jenkins controller",
-        parameters: {
-            ProjectName: {
-                type: "String",
-                default: projectName,
-                description: "Project name"
-            },
-            Environment: {
-                type: "String",
-                default: environment,
-                description: "Environment name"
-            },
-            JenkinsMode: {
-                type: "String",
-                default: "normal",
-                allowedValues: ["normal", "recovery"],
-                description: "Jenkins mode (normal/recovery)"
-            },
-            JenkinsColor: {
-                type: "String",
-                default: "blue",
-                allowedValues: ["blue", "green"],
-                description: "Jenkins environment color (blue/green)"
-            }
-        },
-        mainSteps: [
-            {
-                action: "aws:runShellScript",
-                name: "configureJenkins",
-                inputs: {
-                    runCommand: [
-                        "#!/bin/bash",
-                        "# エラーハンドリングを設定",
-                        "set -e",
-                        "set -o pipefail",
-                        "",
-                        "# 環境変数の設定",
-                        "export PROJECT_NAME={{ProjectName}}",
-                        "export ENVIRONMENT={{Environment}}",
-                        "export JENKINS_MODE={{JenkinsMode}}",
-                        "export JENKINS_COLOR={{JenkinsColor}}",
-                        "",
-                        "echo '===== Starting Jenkins Configuration ====='",
-                        "echo \"Mode: $JENKINS_MODE\"",
-                        "echo \"Color: $JENKINS_COLOR\"",
-                        "",
-                        "# スクリプトの存在確認",
-                        "SCRIPT_PATH=/root/infrastructure-as-code/scripts/jenkins/shell/controller-configure.sh",
-                        "if [ ! -f \"$SCRIPT_PATH\" ]; then",
-                        "  echo \"ERROR: Script not found: $SCRIPT_PATH\"",
-                        "  exit 1",
-                        "fi",
-                        "",
-                        "# スクリプト実行",
-                        "echo 'Executing Jenkins configuration script...'",
-                        "bash $SCRIPT_PATH 2>&1 || EXIT_CODE=$?",
-                        "",
-                        "# 設定結果確認",
-                        "echo ''",
-                        "echo '===== Configuration Result ====='",
-                        "if [ -d /mnt/efs/jenkins ]; then",
-                        "  echo 'SUCCESS: Jenkins directory configured'",
-                        "  ls -la /mnt/efs/jenkins | head -10",
-                        "else",
-                        "  echo 'WARNING: Jenkins directory not found at /mnt/efs/jenkins'",
-                        "fi",
-                        "",
-                        "# エラーがあった場合は終了",
-                        "if [ ! -z \"$EXIT_CODE\" ] && [ \"$EXIT_CODE\" -ne 0 ]; then",
-                        "  echo \"ERROR: Configuration script failed with exit code: $EXIT_CODE\"",
-                        "  exit $EXIT_CODE",
-                        "fi",
-                        "",
-                        "echo 'Jenkins configuration completed successfully'",
-                        "exit 0"
-                    ]
-                }
-            }
-        ]
-    }),
-    tags: {
-        Environment: environment,
-    },
-});
-
-
-// SSMドキュメント（起動用）- ログ出力対応版
-const jenkinsStartupDocument = new aws.ssm.Document(`${projectName}-jenkins-startup`, {
-    name: `${projectName}-jenkins-startup-${environment}`,
-    documentType: "Command",
-    content: JSON.stringify({
-        schemaVersion: "2.2",
-        description: "Start Jenkins controller service",
-        parameters: {
-            ProjectName: {
-                type: "String",
-                default: projectName,
-                description: "Project name"
-            },
-            Environment: {
-                type: "String",
-                default: environment,
-                description: "Environment name"
-            },
-            JenkinsColor: {
-                type: "String",
-                default: "blue",
-                allowedValues: ["blue", "green"],
-                description: "Jenkins environment color (blue/green)"
-            }
-        },
-        mainSteps: [
-            {
-                action: "aws:runShellScript",
-                name: "startJenkins",
-                inputs: {
-                    runCommand: [
-                        "#!/bin/bash",
-                        "# エラーハンドリングを設定",
-                        "set -e",
-                        "set -o pipefail",
-                        "",
-                        "# 環境変数の設定",
-                        "export PROJECT_NAME={{ProjectName}}",
-                        "export ENVIRONMENT={{Environment}}",
-                        "export JENKINS_COLOR={{JenkinsColor}}",
-                        "",
-                        "echo '===== Starting Jenkins Service ====='",
-                        "echo \"Project: $PROJECT_NAME\"",
-                        "echo \"Environment: $ENVIRONMENT\"",
-                        "echo \"Color: $JENKINS_COLOR\"",
-                        "",
-                        "# スクリプトの存在確認",
-                        "SCRIPT_PATH=/root/infrastructure-as-code/scripts/jenkins/shell/controller-startup.sh",
-                        "if [ ! -f \"$SCRIPT_PATH\" ]; then",
-                        "  echo \"ERROR: Script not found: $SCRIPT_PATH\"",
-                        "  exit 1",
-                        "fi",
-                        "",
-                        "# スクリプト実行",
-                        "echo 'Executing Jenkins startup script...'",
-                        "bash $SCRIPT_PATH 2>&1 || EXIT_CODE=$?",
-                        "",
-                        "# サービス状態確認",
-                        "echo ''",
-                        "echo '===== Service Status ====='",
-                        "if systemctl is-active jenkins >/dev/null 2>&1; then",
-                        "  echo 'SUCCESS: Jenkins service is active'",
-                        "  systemctl status jenkins --no-pager | head -20",
-                        "else",
-                        "  echo 'ERROR: Jenkins service is not active'",
-                        "  systemctl status jenkins --no-pager || true",
-                        "fi",
-                        "",
-                        "# エラーがあった場合は終了",
-                        "if [ ! -z \"$EXIT_CODE\" ] && [ \"$EXIT_CODE\" -ne 0 ]; then",
-                        "  echo \"ERROR: Startup script failed with exit code: $EXIT_CODE\"",
-                        "  exit $EXIT_CODE",
-                        "fi",
-                        "",
-                        "echo 'Jenkins startup completed successfully'",
-                        "exit 0"
-                    ]
-                }
-            }
-        ]
-    }),
-    tags: {
-        Environment: environment,
-    },
-});
-
 // エクスポート
 export const parametersPath = `/${projectName}/${environment}/jenkins`;
 export const ssmDocuments = {
     updateRepo: jenkinsUpdateRepoDocument.name,
-    install: jenkinsInstallDocument.name,
-    mountEfs: jenkinsMountEfsDocument.name,
-    configure: jenkinsConfigureDocument.name,
-    startup: jenkinsStartupDocument.name,
+    executeScript: jenkinsConfigExecuteScriptDocument.name,
 };

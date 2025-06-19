@@ -16,6 +16,14 @@ error_exit() {
     exit 1
 }
 
+# 引数または環境変数から設定を取得
+# ScriptArgsから渡される場合: JENKINS_MODE=xxx JENKINS_COLOR=yyy
+for arg in "$@"; do
+    if [[ $arg == *"="* ]]; then
+        export "$arg"
+    fi
+done
+
 # 環境変数
 JENKINS_MODE="${JENKINS_MODE:-normal}"
 JENKINS_COLOR="${JENKINS_COLOR:-blue}"

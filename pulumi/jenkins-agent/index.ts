@@ -6,6 +6,7 @@
  */
 import * as pulumi from "@pulumi/pulumi";
 import * as aws from "@pulumi/aws";
+import * as tls from "@pulumi/tls";
 
 // コンフィグから設定を取得
 const config = new pulumi.Config();
@@ -19,9 +20,8 @@ const securityStackName = config.get("securityStackName") || "jenkins-security";
 // エージェント固有の設定を取得
 const maxTargetCapacity = config.getNumber("maxTargetCapacity") || 10;
 const minTargetCapacity = config.getNumber("minTargetCapacity") || 0;
-const spotPrice = config.get("spotPrice") || "0.10";
-const instanceType = config.get("instanceType") || "t3.medium";
-const keyName = config.get("keyName");
+const spotPrice = config.get("spotPrice") || "0.05"; // より小さいインスタンス用に価格を調整
+const instanceType = config.get("instanceType") || "t3.small"; // デフォルトをt3.smallに変更
 
 // 既存のスタックから値を取得
 const networkStack = new pulumi.StackReference(`${pulumi.getOrganization()}/${networkStackName}/${environment}`);
@@ -32,13 +32,51 @@ const vpcId = networkStack.getOutput("vpcId");
 const privateSubnetIds = networkStack.getOutput("privateSubnetIds");
 const jenkinsAgentSecurityGroupId = securityStack.getOutput("jenkinsAgentSecurityGroupId");
 
-// 最新のAmazon Linux 2023 AMIを取得
-const ami = aws.ec2.getAmi({
+// Jenkins Agent用のSSHキーペアを作成
+const agentPrivateKey = new tls.PrivateKey(`${projectName}-agent-private-key`, {
+    algorithm: "RSA",
+    rsaBits: 4096,
+});
+
+// AWS Key Pairリソースを作成
+const agentKeyPair = new aws.ec2.KeyPair(`${projectName}-agent-keypair`, {
+    keyName: `${projectName}-agent-${environment}`,
+    publicKey: agentPrivateKey.publicKeyOpenssh,
+    tags: {
+        Name: `${projectName}-agent-keypair-${environment}`,
+        Environment: environment,
+        ManagedBy: "pulumi",
+    },
+});
+
+// 秘密鍵をSSM Parameter Storeに保存（セキュアな管理のため）
+const agentPrivateKeyParameter = new aws.ssm.Parameter(`${projectName}-agent-private-key-param`, {
+    name: `/${projectName}/${environment}/jenkins/agent/private-key`,
+    type: "SecureString",
+    value: agentPrivateKey.privateKeyPem,
+    description: "Private key for Jenkins agent SSH access",
+    tags: {
+        Environment: environment,
+        ManagedBy: "pulumi",
+    },
+});
+
+// 最新のAmazon Linux 2023 AMIを取得（x86_64とARM64の両方）
+const amiX86 = aws.ec2.getAmi({
     mostRecent: true,
     owners: ["amazon"],
     filters: [{
         name: "name",
         values: ["al2023-ami-*-kernel-*-x86_64"],
+    }],
+});
+
+const amiArm = aws.ec2.getAmi({
+    mostRecent: true,
+    owners: ["amazon"],
+    filters: [{
+        name: "name",
+        values: ["al2023-ami-*-kernel-*-arm64"],
     }],
 });
 
@@ -148,12 +186,12 @@ const spotFleetRole = new aws.iam.Role(`${projectName}-spotfleet-role`, {
     },
 });
 
-// エージェント起動テンプレート
+// エージェント起動テンプレート（x86_64用）
 const agentLaunchTemplate = new aws.ec2.LaunchTemplate(`${projectName}-agent-lt`, {
     namePrefix: `${projectName}-agent-lt-`,
-    imageId: ami.then(ami => ami.id),
-    instanceType: instanceType,
-    keyName: keyName,
+    imageId: amiX86.then(ami => ami.id),
+    instanceType: "t3.small", // デフォルトをt3.smallに変更
+    keyName: agentKeyPair.keyName,  // 作成したキーペアを使用
     vpcSecurityGroupIds: [jenkinsAgentSecurityGroupId],
     iamInstanceProfile: {
         name: jenkinsAgentProfile.name,
@@ -161,7 +199,7 @@ const agentLaunchTemplate = new aws.ec2.LaunchTemplate(`${projectName}-agent-lt`
     blockDeviceMappings: [{
         deviceName: "/dev/xvda",
         ebs: {
-            volumeSize: 30,
+            volumeSize: 30, // expect size>= 30GB
             volumeType: "gp3",
             deleteOnTermination: "true", // 文字列に変更
             encrypted: "true", // 文字列に変更
@@ -186,9 +224,22 @@ const agentLaunchTemplate = new aws.ec2.LaunchTemplate(`${projectName}-agent-lt`
 exec > >(tee /var/log/user-data.log|logger -t user-data -s 2>/dev/console) 2>&1
 set -x
 
+# スワップファイルの作成（2GB）
+dd if=/dev/zero of=/swapfile bs=1M count=2048
+chmod 600 /swapfile
+mkswap /swapfile
+swapon /swapfile
+echo '/swapfile none swap sw 0 0' >> /etc/fstab
+
+# /tmpの容量を確保（tmpfsのサイズを調整）
+mount -o remount,size=2G /tmp
+
 # システムのアップデートと必要なパッケージのインストール（Javaを除く）
 dnf update -y
 dnf install -y docker git jq amazon-ssm-agent
+
+# 不要なパッケージキャッシュをクリーンアップ
+dnf clean all
 
 # Dockerの設定と起動
 systemctl enable docker
@@ -226,38 +277,153 @@ chown jenkins:jenkins /home/jenkins/agent/bootstrap-complete
     },
 });
 
-// SpotFleetリクエスト設定
+// ARM64用の起動テンプレート
+const agentLaunchTemplateArm = new aws.ec2.LaunchTemplate(`${projectName}-agent-lt-arm`, {
+    namePrefix: `${projectName}-agent-lt-arm-`,
+    imageId: amiArm.then(ami => ami.id),
+    instanceType: "t4g.small",
+    keyName: agentKeyPair.keyName,
+    vpcSecurityGroupIds: [jenkinsAgentSecurityGroupId],
+    iamInstanceProfile: {
+        name: jenkinsAgentProfile.name,
+    },
+    blockDeviceMappings: [{
+        deviceName: "/dev/xvda",
+        ebs: {
+            volumeSize: 30,　// expect size>= 30GB
+            volumeType: "gp3",
+            deleteOnTermination: "true",
+            encrypted: "true",
+        },
+    }],
+    metadataOptions: {
+        httpEndpoint: "enabled",
+        httpTokens: "required",
+        httpPutResponseHopLimit: 2,
+    },
+    tagSpecifications: [{
+        resourceType: "instance",
+        tags: {
+            Name: `${projectName}-agent-${environment}`,
+            Environment: environment,
+            Role: "jenkins-agent",
+            Architecture: "arm64",
+        },
+    }],
+    // ユーザーデータをBase64エンコード
+    userData: pulumi.output(`#!/bin/bash
+# Jenkins Agent Bootstrap Script
+exec > >(tee /var/log/user-data.log|logger -t user-data -s 2>/dev/console) 2>&1
+set -x
+
+# スワップファイルの作成（2GB）
+dd if=/dev/zero of=/swapfile bs=1M count=2048
+chmod 600 /swapfile
+mkswap /swapfile
+swapon /swapfile
+echo '/swapfile none swap sw 0 0' >> /etc/fstab
+
+# /tmpの容量を確保（tmpfsのサイズを調整）
+mount -o remount,size=2G /tmp
+
+# システムのアップデートと必要なパッケージのインストール（Javaを除く）
+dnf update -y
+dnf install -y docker git jq amazon-ssm-agent
+
+# 不要なパッケージキャッシュをクリーンアップ
+dnf clean all
+
+# Dockerの設定と起動
+systemctl enable docker
+systemctl start docker
+
+# Jenkinsユーザーの作成
+useradd -m -d /home/jenkins -s /bin/bash jenkins
+usermod -aG docker jenkins
+
+# エージェント作業ディレクトリの設定
+mkdir -p /home/jenkins/agent
+chown -R jenkins:jenkins /home/jenkins
+
+# 環境情報の保存
+echo "PROJECT_NAME=${projectName}" > /etc/jenkins-agent-env
+echo "ENVIRONMENT=${environment}" >> /etc/jenkins-agent-env
+echo "AGENT_ROOT=/home/jenkins/agent" >> /etc/jenkins-agent-env
+echo "ARCHITECTURE=arm64" >> /etc/jenkins-agent-env
+chmod 644 /etc/jenkins-agent-env
+
+# SSMエージェントの起動
+systemctl enable amazon-ssm-agent
+systemctl start amazon-ssm-agent
+
+# Javaのインストール（最後に実行）
+echo "Installing Java..."
+dnf install -y java-17-amazon-corretto
+
+# 起動完了のマーク
+echo "$(date) - Agent bootstrap completed" > /home/jenkins/agent/bootstrap-complete
+chown jenkins:jenkins /home/jenkins/agent/bootstrap-complete
+`).apply(userData => Buffer.from(userData).toString("base64")),
+    tags: {
+        Name: `${projectName}-agent-lt-arm-${environment}`,
+        Environment: environment,
+    },
+});
+
+// SpotFleetリクエスト設定（複数の起動テンプレートを使用）
 const spotFleetRequest = new aws.ec2.SpotFleetRequest(`${projectName}-agent-spot-fleet`, {
     iamFleetRole: spotFleetRole.arn,
     spotPrice: spotPrice,
     targetCapacity: minTargetCapacity,
     terminateInstancesWithExpiration: true,
-    instanceInterruptionBehaviour: "terminate", // スペルを修正 behavior → behaviour
-    launchTemplateConfigs: pulumi.all([privateSubnetIds]).apply(([subnetIds]) => 
-        subnetIds.map((subnetId: string) => ({
-            launchTemplateSpecification: {
-                id: agentLaunchTemplate.id,
-                version: agentLaunchTemplate.latestVersion,
-            },
-            overrides: [
-                {
-                    subnetId: subnetId,
-                    instanceType: "t3.medium",
-                    spotPrice: spotPrice,
+    instanceInterruptionBehaviour: "terminate",
+    allocationStrategy: "lowestPrice", // 最も安価なインスタンスを優先
+    replaceUnhealthyInstances: true,
+    launchTemplateConfigs: pulumi.all([privateSubnetIds]).apply(([subnetIds]) => {
+        const configs: any[] = [];
+        
+        // ARM64インスタンス用の設定（t4g.small）- 全AZで利用可能
+        subnetIds.forEach((subnetId: string) => {
+            configs.push({
+                launchTemplateSpecification: {
+                    id: agentLaunchTemplateArm.id,
+                    version: agentLaunchTemplateArm.latestVersion.apply(v => v.toString()),
                 },
-                {
+                overrides: [{
                     subnetId: subnetId,
-                    instanceType: "t3.large",
+                    instanceType: "t4g.small",
                     spotPrice: spotPrice,
+                    priority: 1, // 最優先
+                }],
+            });
+        });
+        
+        // x86_64インスタンス用の設定 - t3.smallとt2.smallのみ（全AZで利用可能）
+        subnetIds.forEach((subnetId: string) => {
+            configs.push({
+                launchTemplateSpecification: {
+                    id: agentLaunchTemplate.id,
+                    version: agentLaunchTemplate.latestVersion.apply(v => v.toString()),
                 },
-                {
-                    subnetId: subnetId,
-                    instanceType: "m5.large",
-                    spotPrice: spotPrice,
-                }
-            ],
-        }))
-    ),
+                overrides: [
+                    {
+                        subnetId: subnetId,
+                        instanceType: "t3.small",
+                        spotPrice: spotPrice,
+                        priority: 2,
+                    },
+                    {
+                        subnetId: subnetId,
+                        instanceType: "t2.small",
+                        spotPrice: spotPrice,
+                        priority: 3,
+                    }
+                ],
+            });
+        });
+        
+        return configs;
+    }),
     tags: {
         Name: `${projectName}-agent-fleet-${environment}`,
         Environment: environment,
@@ -284,6 +450,7 @@ const agentInfoParameter = new aws.ssm.Parameter(`${projectName}-agent-fleet-inf
         minCapacity: minTargetCapacity,
         maxCapacity: maxTargetCapacity,
         spotPrice: spotPrice,
+        keyPairName: agentKeyPair.keyName,  // キーペア名も保存
         createdAt: new Date().toISOString(),
     }),
     description: "Jenkins agent fleet configuration information",
@@ -308,8 +475,12 @@ export const agentRoleArn = jenkinsAgentRole.arn;
 export const agentProfileArn = jenkinsAgentProfile.arn;
 export const spotFleetRequestId = spotFleetRequest.id;
 export const launchTemplateId = agentLaunchTemplate.id;
+export const launchTemplateArmId = agentLaunchTemplateArm.id;
 export const launchTemplateLatestVersion = agentLaunchTemplate.latestVersion;
+export const launchTemplateArmLatestVersion = agentLaunchTemplateArm.latestVersion;
 export const spotFleetRoleArn = spotFleetRole.arn;
 export const notificationTopicArn = spotFleetNotificationTopic.arn;
 export const minCapacity = minTargetCapacity;
 export const maxCapacity = maxTargetCapacity;
+export const agentKeyPairName = agentKeyPair.keyName;
+export const privateKeyParameterName = agentPrivateKeyParameter.name;
