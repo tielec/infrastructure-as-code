@@ -35,9 +35,44 @@
   delay: 10
   when: command_data is defined
 
+- name: Get command output
+  ansible.builtin.shell: |
+    eval $({{ scripts_dir }}/aws-env.sh)
+    aws ssm get-command-invocation \
+      --region {{ aws_region_name }} \
+      --command-id "{{ command_data.Command.CommandId }}" \
+      --instance-id "{{ instance_id }}" \
+      --output json
+  register: command_output_raw
+  when: command_data is defined
+
+- name: Parse command output
+  ansible.builtin.set_fact:
+    command_output: "{{ command_output_raw.stdout | from_json }}"
+  when: 
+    - command_output_raw is defined
+    - command_output_raw.stdout is defined
+
+- name: Display command output
+  ansible.builtin.debug:
+    msg: |
+      === SSM Command Output for {{ ssm_comment }} ===
+      Status: {{ command_status_result.stdout }}
+      
+      Standard Output:
+      {{ command_output.StandardOutputContent | default('No output') }}
+      
+      {% if command_output.StandardErrorContent | default('') %}
+      Standard Error:
+      {{ command_output.StandardErrorContent }}
+      {% endif %}
+  when: command_output is defined
+
 - name: Check command result
   ansible.builtin.fail:
-    msg: "SSM command failed with status: {{ command_status_result.stdout }}"
+    msg: |
+      SSM command failed with status: {{ command_status_result.stdout }}
+      Error output: {{ command_output.StandardErrorContent | default('No error output available') }}
   when: 
     - command_data is defined
     - command_status_result.stdout != 'Success'
