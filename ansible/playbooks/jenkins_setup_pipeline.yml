@@ -178,6 +178,26 @@
       ansible.builtin.debug:
         msg: "Config deployment status: {{ config_deployed | default(false) }}"
 
+    # Jenkinsエージェントをデプロイ
+    - name: Deploy Jenkins Agent
+      ansible.builtin.include_role:
+        name: jenkins_agent
+      vars:
+        min_capacity: "{{ agent_min_capacity | default(0) }}"
+        max_capacity: "{{ agent_max_capacity | default(10) }}"
+        spot_price: "{{ agent_spot_price | default('0.10') }}"
+        instance_type: "{{ agent_instance_type | default('t3.medium') }}"
+      when: 
+        - controller_deployed | default(false) | bool
+        - run_agent | default(true) | bool
+      register: agent_deploy_result
+      
+    # agent_deployedを明示的に設定
+    - name: Set agent deployment status
+      ansible.builtin.set_fact:
+        agent_deployed: "{{ agent_deploy_result is defined and agent_deploy_result.rc is not defined }}"
+      when: agent_deploy_result is defined
+
     # Jenkinsアプリケーション設定をデプロイ
     - name: Deploy Jenkins Application Configuration
       ansible.builtin.include_role:
@@ -203,26 +223,6 @@
     - name: Debug application deployment status
       ansible.builtin.debug:
         msg: "Application deployment status: {{ application_deployed | default(false) }}"
-
-    # Jenkinsエージェントをデプロイ
-    - name: Deploy Jenkins Agent
-      ansible.builtin.include_role:
-        name: jenkins_agent
-      vars:
-        min_capacity: "{{ agent_min_capacity | default(0) }}"
-        max_capacity: "{{ agent_max_capacity | default(10) }}"
-        spot_price: "{{ agent_spot_price | default('0.10') }}"
-        instance_type: "{{ agent_instance_type | default('t3.medium') }}"
-      when: 
-        - controller_deployed | default(false) | bool
-        - run_agent | default(true) | bool
-      register: agent_deploy_result
-      
-    # agent_deployedを明示的に設定
-    - name: Set agent deployment status
-      ansible.builtin.set_fact:
-        agent_deployed: "{{ agent_deploy_result is defined and agent_deploy_result.rc is not defined }}"
-      when: agent_deploy_result is defined
 
     # デプロイメント結果サマリー
     - name: Deployment Summary
