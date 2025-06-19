@@ -379,8 +379,6 @@ const spotFleetRequest = new aws.ec2.SpotFleetRequest(`${projectName}-agent-spot
     instanceInterruptionBehaviour: "terminate",
     allocationStrategy: "lowestPrice", // 最も安価なインスタンスを優先
     replaceUnhealthyInstances: true,
-    // 複数のインスタンスタイプとAZの組み合わせから最適なものを選択
-    validUntil: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString(), // 1年間有効
     launchTemplateConfigs: pulumi.all([privateSubnetIds]).apply(([subnetIds]) => {
         const configs: any[] = [];
         
