@@ -199,7 +199,7 @@ const agentLaunchTemplate = new aws.ec2.LaunchTemplate(`${projectName}-agent-lt`
     blockDeviceMappings: [{
         deviceName: "/dev/xvda",
         ebs: {
-            volumeSize: 30,
+            volumeSize: 10, // 10GBに設定
             volumeType: "gp3",
             deleteOnTermination: "true", // 文字列に変更
             encrypted: "true", // 文字列に変更
@@ -224,9 +224,22 @@ const agentLaunchTemplate = new aws.ec2.LaunchTemplate(`${projectName}-agent-lt`
 exec > >(tee /var/log/user-data.log|logger -t user-data -s 2>/dev/console) 2>&1
 set -x
 
+# スワップファイルの作成（2GB）
+dd if=/dev/zero of=/swapfile bs=1M count=2048
+chmod 600 /swapfile
+mkswap /swapfile
+swapon /swapfile
+echo '/swapfile none swap sw 0 0' >> /etc/fstab
+
+# /tmpの容量を確保（tmpfsのサイズを調整）
+mount -o remount,size=2G /tmp
+
 # システムのアップデートと必要なパッケージのインストール（Javaを除く）
 dnf update -y
 dnf install -y docker git jq amazon-ssm-agent
+
+# 不要なパッケージキャッシュをクリーンアップ
+dnf clean all
 
 # Dockerの設定と起動
 systemctl enable docker
@@ -277,7 +290,7 @@ const agentLaunchTemplateArm = new aws.ec2.LaunchTemplate(`${projectName}-agent-
     blockDeviceMappings: [{
         deviceName: "/dev/xvda",
         ebs: {
-            volumeSize: 30,
+            volumeSize: 10, // 10GBに設定
             volumeType: "gp3",
             deleteOnTermination: "true",
             encrypted: "true",
@@ -303,9 +316,22 @@ const agentLaunchTemplateArm = new aws.ec2.LaunchTemplate(`${projectName}-agent-
 exec > >(tee /var/log/user-data.log|logger -t user-data -s 2>/dev/console) 2>&1
 set -x
 
+# スワップファイルの作成（2GB）
+dd if=/dev/zero of=/swapfile bs=1M count=2048
+chmod 600 /swapfile
+mkswap /swapfile
+swapon /swapfile
+echo '/swapfile none swap sw 0 0' >> /etc/fstab
+
+# /tmpの容量を確保（tmpfsのサイズを調整）
+mount -o remount,size=2G /tmp
+
 # システムのアップデートと必要なパッケージのインストール（Javaを除く）
 dnf update -y
 dnf install -y docker git jq amazon-ssm-agent
+
+# 不要なパッケージキャッシュをクリーンアップ
+dnf clean all
 
 # Dockerの設定と起動
 systemctl enable docker
