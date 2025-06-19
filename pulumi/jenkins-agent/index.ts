@@ -378,11 +378,14 @@ const spotFleetRequest = new aws.ec2.SpotFleetRequest(`${projectName}-agent-spot
     terminateInstancesWithExpiration: true,
     instanceInterruptionBehaviour: "terminate",
     allocationStrategy: "lowestPrice", // 最も安価なインスタンスを優先
+    replaceUnhealthyInstances: true,
+    // 複数のインスタンスタイプとAZの組み合わせから最適なものを選択
+    instancePoolsToUseCount: 2, // 最も安い2つのプールから選択
     launchTemplateConfigs: pulumi.all([privateSubnetIds]).apply(([subnetIds]) => {
         // 型を明示的に定義（versionをstringに変換）
         const configs: any[] = [];
         
-        // ARM64インスタンス用の設定（t4g.small）
+        // ARM64インスタンス用の設定（t4g.small）- 全AZで利用可能
         subnetIds.forEach((subnetId: string) => {
             configs.push({
                 launchTemplateSpecification: {
@@ -397,7 +400,7 @@ const spotFleetRequest = new aws.ec2.SpotFleetRequest(`${projectName}-agent-spot
             });
         });
         
-        // x86_64インスタンス用の設定（t3a.small, t3.small）
+        // x86_64インスタンス用の設定 - 複数のインスタンスタイプで柔軟性を確保
         subnetIds.forEach((subnetId: string) => {
             configs.push({
                 launchTemplateSpecification: {
@@ -407,12 +410,17 @@ const spotFleetRequest = new aws.ec2.SpotFleetRequest(`${projectName}-agent-spot
                 overrides: [
                     {
                         subnetId: subnetId,
+                        instanceType: "t3.small",
+                        spotPrice: spotPrice,
+                    },
+                    {
+                        subnetId: subnetId,
                         instanceType: "t3a.small",
                         spotPrice: spotPrice,
                     },
                     {
                         subnetId: subnetId,
-                        instanceType: "t3.small",
+                        instanceType: "t2.small",
                         spotPrice: spotPrice,
                     }
                 ],
