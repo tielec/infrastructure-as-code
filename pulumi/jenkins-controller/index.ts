@@ -127,9 +127,9 @@ const ssmCustomPolicyAttachment = new aws.iam.RolePolicyAttachment(
     }
 );
 
-// EC2およびSpot Fleet管理用のカスタムポリシー
+// EC2およびSpot Fleet管理用の包括的なポリシー
 const ec2SpotFleetPolicy = new aws.iam.Policy(`${projectName}-jenkins-ec2-spotfleet-policy-${jenkinsColor}`, {
-    description: "Policy for Jenkins controller to manage EC2 instances and Spot Fleet",
+    description: "Comprehensive policy for Jenkins controller to manage EC2 instances and Spot Fleet",
     policy: JSON.stringify({
         Version: "2012-10-17",
         Statement: [
@@ -157,7 +157,7 @@ const ec2SpotFleetPolicy = new aws.iam.Policy(`${projectName}-jenkins-ec2-spotfl
                 Resource: "*"
             },
             {
-                // Spot Fleet の管理権限
+                // Spot Fleet の包括的な管理権限
                 Effect: "Allow",
                 Action: [
                     "ec2:DescribeSpotFleetRequests",
@@ -173,13 +173,25 @@ const ec2SpotFleetPolicy = new aws.iam.Policy(`${projectName}-jenkins-ec2-spotfl
                 Resource: "*"
             },
             {
-                // Auto Scaling関連の権限（将来的な拡張用）
+                // EC2 Fleet の管理権限
+                Effect: "Allow",
+                Action: [
+                    "ec2:CreateFleet",
+                    "ec2:DeleteFleet",
+                    "ec2:DescribeFleets",
+                    "ec2:ModifyFleet"
+                ],
+                Resource: "*"
+            },
+            {
+                // Auto Scaling関連の権限
                 Effect: "Allow",
                 Action: [
                     "autoscaling:DescribeAutoScalingGroups",
                     "autoscaling:DescribeAutoScalingInstances",
                     "autoscaling:SetDesiredCapacity",
-                    "autoscaling:UpdateAutoScalingGroup"
+                    "autoscaling:UpdateAutoScalingGroup",
+                    "autoscaling:DescribeScalingActivities"
                 ],
                 Resource: "*"
             },
@@ -189,7 +201,8 @@ const ec2SpotFleetPolicy = new aws.iam.Policy(`${projectName}-jenkins-ec2-spotfl
                 Action: [
                     "cloudwatch:GetMetricStatistics",
                     "cloudwatch:ListMetrics",
-                    "cloudwatch:PutMetricData"
+                    "cloudwatch:PutMetricData",
+                    "cloudwatch:DescribeAlarms"
                 ],
                 Resource: "*"
             },
@@ -201,15 +214,29 @@ const ec2SpotFleetPolicy = new aws.iam.Policy(`${projectName}-jenkins-ec2-spotfl
                 ],
                 Resource: [
                     `arn:aws:iam::*:role/${projectName}-agent-role-${environment}`,
-                    `arn:aws:iam::*:role/${projectName}-spotfleet-role-${environment}`
+                    `arn:aws:iam::*:role/${projectName}-spotfleet-role-${environment}`,
+                    `arn:aws:iam::*:instance-profile/${projectName}-agent-profile-${environment}`
                 ]
             },
             {
-                // SSM Parameter Store（エージェント設定の読み取り用）
+                // IAM リストアクセス（ロールの確認用）
+                Effect: "Allow",
+                Action: [
+                    "iam:GetRole",
+                    "iam:GetInstanceProfile",
+                    "iam:ListInstanceProfiles",
+                    "iam:ListRoles"
+                ],
+                Resource: "*"
+            },
+            {
+                // SSM Parameter Store（エージェント設定の読み書き用）
                 Effect: "Allow",
                 Action: [
                     "ssm:GetParameter",
-                    "ssm:GetParameters"
+                    "ssm:GetParameters",
+                    "ssm:PutParameter",
+                    "ssm:DeleteParameter"
                 ],
                 Resource: [
                     `arn:aws:ssm:*:*:parameter/${projectName}/${environment}/jenkins/agent/*`
@@ -268,6 +295,14 @@ const jenkinsPluginPolicy = new aws.iam.Policy(`${projectName}-jenkins-plugin-po
                     "ec2:DescribeSnapshots",
                     "ec2:CreateSnapshot",
                     "ec2:DeleteSnapshot"
+                ],
+                Resource: "*"
+            },
+            {
+                // EC2 インスタンス接続関連
+                Effect: "Allow",
+                Action: [
+                    "ec2-instance-connect:SendSSHPublicKey"
                 ],
                 Resource: "*"
             }
