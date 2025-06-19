@@ -12,12 +12,16 @@ const config = new pulumi.Config();
 const projectName = config.get("projectName") || "jenkins-infra";
 const environment = pulumi.getStack();
 
+// タイムスタンプを生成（ドキュメント名の一意性を保証）
+const timestamp = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+
 // 汎用的なスクリプト実行用SSMドキュメント
 const jenkinsExecuteScriptDocument = new aws.ssm.Document(`${projectName}-jenkins-execute-script`, {
     name: `${projectName}-jenkins-execute-script-${environment}`,
     documentType: "Command",
     documentFormat: "JSON",
     targetType: "/AWS::EC2::Instance",
+    versionName: `v${timestamp}`,
     content: JSON.stringify({
         schemaVersion: "2.2",
         description: "Execute script from Git repository on Jenkins instance",
@@ -80,6 +84,8 @@ const jenkinsExecuteScriptDocument = new aws.ssm.Document(`${projectName}-jenkin
     tags: {
         Environment: environment,
     },
+}, {
+    replaceOnChanges: ["content", "targetType"]
 });
 
 // Jenkins再起動用SSMドキュメント（これは残す）
@@ -88,6 +94,7 @@ const jenkinsRestartDocument = new aws.ssm.Document(`${projectName}-jenkins-rest
     documentType: "Command",
     documentFormat: "JSON",
     targetType: "/AWS::EC2::Instance",
+    versionName: `v${timestamp}`,
     content: JSON.stringify({
         schemaVersion: "2.2",
         description: "Restart Jenkins service",
@@ -130,6 +137,8 @@ const jenkinsRestartDocument = new aws.ssm.Document(`${projectName}-jenkins-rest
     tags: {
         Environment: environment,
     },
+}, {
+    replaceOnChanges: ["content", "targetType"]
 });
 
 // エクスポート
