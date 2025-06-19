@@ -27,6 +27,7 @@
         aws_region_name: "{{ infra.aws.default_region }}"
         network_project_name: "{{ infra.pulumi.network_project }}"
         security_project_name: "{{ infra.pulumi.security_project }}"
+        nat_project_name: "{{ infra.pulumi.nat_project }}"
         storage_project_name: "{{ infra.pulumi.storage_project }}"
         loadbalancer_project_name: "{{ infra.pulumi.loadbalancer_project }}"
         controller_project_name: "{{ infra.pulumi.controller_project }}"
@@ -38,6 +39,10 @@
         recovery_mode: "{{ recovery | default(jenkins.recovery_mode) }}"
         git_repo: "{{ git_repo | default(jenkins.git.repo) }}"
         git_branch: "{{ git_branch | default(jenkins.git.branch) }}"
+        # NAT設定
+        high_availability_mode: "{{ infra.nat.high_availability_mode | default(false) }}"
+        nat_instance_type: "{{ infra.nat.instance_type | default('t3.nano') }}"
+        key_name: "{{ infra.aws.key_name | default('') }}"
 
   roles:
     - aws_setup
@@ -91,12 +96,19 @@
           Pulumi Projects:
           - Network: {{ network_project_name }}
           - Security: {{ security_project_name }}
+          - NAT: {{ nat_project_name }}
           - Storage: {{ storage_project_name }}
           - LoadBalancer: {{ loadbalancer_project_name }}
           - Controller: {{ controller_project_name }}
           - Agent: {{ agent_project_name }}
           - Config: {{ config_project_name }}
           - Application: {{ application_project_name }}
+          
+          NAT Configuration:
+          - Mode: {{ 'High Availability (NAT Gateway)' if high_availability_mode else 'Normal (NAT Instance)' }}
+          {% if not high_availability_mode %}
+          - Instance Type: {{ nat_instance_type }}
+          {% endif %}
     
     - name: Check Ansible version
       ansible.builtin.debug:
@@ -115,14 +127,24 @@
       when: 
         - network_deployed is defined and network_deployed
         - run_security | default(true) | bool
+    
+    # セキュリティグループデプロイが成功したらNATをデプロイ
+    - name: Deploy NAT Infrastructure
+      ansible.builtin.include_role:
+        name: jenkins_nat
+      when: 
+        - network_deployed is defined and network_deployed
+        - security_deployed is defined and security_deployed
+        - run_nat | default(true) | bool
         
-    # セキュリティグループデプロイが成功したらストレージ（EFS）をデプロイ
+    # NAT、セキュリティグループデプロイが成功したらストレージ（EFS）をデプロイ
     - name: Deploy Storage Infrastructure (EFS)
       ansible.builtin.include_role:
         name: jenkins_storage
       when: 
         - network_deployed is defined and network_deployed
         - security_deployed is defined and security_deployed
+        - nat_deployed is defined and nat_deployed
         - run_storage | default(true) | bool
 
     # ロードバランサーをデプロイ（ストレージの後に実行）
@@ -132,6 +154,7 @@
       when: 
         - network_deployed is defined and network_deployed
         - security_deployed is defined and security_deployed
+        - nat_deployed is defined and nat_deployed
         - storage_deployed is defined and storage_deployed
         - run_loadbalancer | default(true) | bool        
 
@@ -142,6 +165,7 @@
       when: 
         - network_deployed is defined and network_deployed
         - security_deployed is defined and security_deployed
+        - nat_deployed is defined and nat_deployed
         - storage_deployed is defined and storage_deployed
         - loadbalancer_deployed is defined and loadbalancer_deployed
         - run_controller | default(true) | bool
@@ -232,6 +256,7 @@
           =======================================
           Network: {{ network_deployed | default(false) }}
           Security: {{ security_deployed | default(false) }}
+          NAT: {{ nat_deployed | default(false) }} ({{ nat_type | default('N/A') }})
           Storage (EFS): {{ storage_deployed | default(false) }}
           Load Balancer: {{ loadbalancer_deployed | default(false) }}
           Controller: {{ controller_deployed | default(false) }}

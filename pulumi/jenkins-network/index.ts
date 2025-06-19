@@ -2,7 +2,7 @@
  * pulumi/network/index.ts
  * 
  * Jenkinsインフラのネットワークリソースを構築するPulumiスクリプト
- * VPC、サブネット、ルートテーブル、IGW、NATゲートウェイなどを作成
+ * VPC、サブネット、ルートテーブル、IGWのみを作成（NATは別スタックで管理）
  */
 import * as pulumi from "@pulumi/pulumi";
 import * as aws from "@pulumi/aws";
@@ -10,12 +10,12 @@ import * as aws from "@pulumi/aws";
 // コンフィグから設定を取得
 const config = new pulumi.Config();
 const projectName = config.get("projectName") || "jenkins-infra";
-const vpcCidr = config.get("vpcCidr") || "10.0.0.0/16";
+const vpcCidrBlock = config.get("vpcCidr") || "10.0.0.0/16";
 const environment = pulumi.getStack();
 
 // VPC作成
 const vpc = new aws.ec2.Vpc(`${projectName}-vpc`, {
-    cidrBlock: vpcCidr,
+    cidrBlock: vpcCidrBlock,
     enableDnsHostnames: true,
     enableDnsSupport: true,
     tags: {
@@ -145,63 +145,17 @@ const privateRtAssociationB = new aws.ec2.RouteTableAssociation(`${projectName}-
     routeTableId: privateRouteTableB.id,
 });
 
-// NATゲートウェイのEIPを作成
-const natGatewayEipA = new aws.ec2.Eip(`${projectName}-nat-eip-a`, {
-    vpc: true,
-    tags: {
-        Name: `${projectName}-nat-eip-a-${environment}`,
-        Environment: environment,
-    },
-});
-
-const natGatewayA = new aws.ec2.NatGateway(`${projectName}-nat-a`, {
-    allocationId: natGatewayEipA.id,
-    subnetId: publicSubnetA.id,
-    tags: {
-        Name: `${projectName}-nat-a-${environment}`,
-        Environment: environment,
-    },
-});
-
-const privateRouteToNatA = new aws.ec2.Route(`${projectName}-private-route-a`, {
-    routeTableId: privateRouteTableA.id,
-    destinationCidrBlock: "0.0.0.0/0",
-    natGatewayId: natGatewayA.id,
-});
-
-// 高可用性のための2つ目のNATゲートウェイ
-const natGatewayEipB = new aws.ec2.Eip(`${projectName}-nat-eip-b`, {
-    vpc: true,
-    tags: {
-        Name: `${projectName}-nat-eip-b-${environment}`,
-        Environment: environment,
-    },
-});
-
-const natGatewayB = new aws.ec2.NatGateway(`${projectName}-nat-b`, {
-    allocationId: natGatewayEipB.id,
-    subnetId: publicSubnetB.id,
-    tags: {
-        Name: `${projectName}-nat-b-${environment}`,
-        Environment: environment,
-    },
-});
-
-const privateRouteToNatB = new aws.ec2.Route(`${projectName}-private-route-b`, {
-    routeTableId: privateRouteTableB.id,
-    destinationCidrBlock: "0.0.0.0/0",
-    natGatewayId: natGatewayB.id,
-});
-
 // エクスポート
 export const vpcId = vpc.id;
+export const vpcCidr = vpc.cidrBlock;
 export const publicSubnetIds = [publicSubnetA.id, publicSubnetB.id];
 export const privateSubnetIds = [privateSubnetA.id, privateSubnetB.id];
 export const publicSubnetAId = publicSubnetA.id;
 export const publicSubnetBId = publicSubnetB.id;
 export const privateSubnetAId = privateSubnetA.id;
 export const privateSubnetBId = privateSubnetB.id;
-export const natGatewayIds = [natGatewayA.id, natGatewayB.id];
 export const internetGatewayId = igw.id;
 export const publicRouteTableId = publicRouteTable.id;
+export const privateRouteTableAId = privateRouteTableA.id;
+export const privateRouteTableBId = privateRouteTableB.id;
 export const privateRouteTableIds = [privateRouteTableA.id, privateRouteTableB.id];

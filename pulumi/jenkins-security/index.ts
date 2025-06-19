@@ -168,8 +168,44 @@ const efsSecurityGroup = new aws.ec2.SecurityGroup(`${projectName}-efs-sg`, {
     },
 });
 
-// エクスポート
+// NAT Instance用セキュリティグループ
+const natInstanceSecurityGroup = new aws.ec2.SecurityGroup(`${projectName}-nat-instance-sg`, {
+    vpcId: vpcId,
+    description: "Security group for NAT instance",
+    ingress: [
+        // VPC内からの全トラフィックを許可
+        {
+            protocol: "-1",
+            fromPort: 0,
+            toPort: 0,
+            cidrBlocks: ["10.0.0.0/16"],
+            description: "Allow all traffic from VPC",
+        },
+        // 管理用SSH（必要に応じて制限）
+        {
+            protocol: "tcp",
+            fromPort: 22,
+            toPort: 22,
+            cidrBlocks: ["0.0.0.0/0"], // 本番環境では管理者IPに制限
+            description: "SSH access for management",
+        },
+    ],
+    egress: [{
+        protocol: "-1",
+        fromPort: 0,
+        toPort: 0,
+        cidrBlocks: ["0.0.0.0/0"],
+        description: "Allow all outbound traffic",
+    }],
+    tags: {
+        Name: `${projectName}-nat-instance-sg-${environment}`,
+        Environment: environment,
+    },
+});
+
+// エクスポートに追加
 export const albSecurityGroupId = albSecurityGroup.id;
 export const jenkinsSecurityGroupId = jenkinsSecurityGroup.id;
 export const jenkinsAgentSecurityGroupId = jenkinsAgentSecurityGroup.id;
 export const efsSecurityGroupId = efsSecurityGroup.id;
+export const natInstanceSecurityGroupId = natInstanceSecurityGroup.id;
