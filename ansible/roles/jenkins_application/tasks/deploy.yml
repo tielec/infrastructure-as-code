@@ -179,29 +179,89 @@
             ssm_comment: "Setting up CLI user and credentials"
             instance_id: "{{ jenkins_instance_id }}"
     
-    # 4. シードジョブの作成
-        - name: Create seed job
-          when: create_seed_job | default(true) | bool
-          block:
-            - name: Execute seed job creation
-              ansible.builtin.include_tasks: tasks/execute_ssm_command.yml
-              vars:
-                ssm_document_name: "{{ ssm_documents.executeScript }}"
-                ssm_parameters: "ScriptPath=scripts/jenkins/shell/application-create-seed-job.sh"
-                ssm_comment: "Creating Jenkins seed job"
-                instance_id: "{{ jenkins_instance_id }}"
-        
-        # 5. Jenkins再起動
-        - name: Restart Jenkins if required
-          when: restart_jenkins | bool
-          block:
-            - name: Execute Jenkins restart
-              ansible.builtin.include_tasks: tasks/execute_ssm_command.yml
-              vars:
-                ssm_document_name: "{{ ssm_documents.restart }}"
-                ssm_parameters: ""  # 空文字列に設定
-                ssm_comment: "Restarting Jenkins"
-                instance_id: "{{ jenkins_instance_id }}"
+    # 4. SSHクレデンシャルの設定（パラメータストアから）
+    - name: Setup SSH credentials from Parameter Store
+      when: setup_ssh_credentials | default(true) | bool
+      block:
+        - name: Execute SSH credentials setup
+          ansible.builtin.include_tasks: tasks/execute_ssm_command.yml
+          vars:
+            ssm_document_name: "{{ ssm_documents.executeScript }}"
+            ssm_parameters: "ScriptPath=scripts/jenkins/shell/application-setup-ssh-credentials.sh"
+            ssm_comment: "Setting up SSH credentials from Parameter Store"
+            instance_id: "{{ jenkins_instance_id }}"
+    
+    # 5. EC2 Fleet Cloudの設定
+    - name: Configure EC2 Fleet Cloud
+      when: configure_ec2_fleet | default(true) | bool
+      block:
+        - name: Execute EC2 Fleet configuration
+          ansible.builtin.include_tasks: tasks/execute_ssm_command.yml
+          vars:
+            ssm_document_name: "{{ ssm_documents.executeScript }}"
+            ssm_parameters: "ScriptPath=scripts/jenkins/shell/application-configure-ec2-fleet.sh"
+            ssm_comment: "Configuring EC2 Fleet Cloud"
+            instance_id: "{{ jenkins_instance_id }}"
+    
+    # 6. Shared Libraryの設定
+    - name: Configure Shared Library
+      when: configure_shared_library | default(true) | bool
+      block:
+        - name: Execute Shared Library configuration
+          ansible.builtin.include_tasks: tasks/execute_ssm_command.yml
+          vars:
+            ssm_document_name: "{{ ssm_documents.executeScript }}"
+            ssm_parameters: "ScriptPath=scripts/jenkins/shell/application-configure-shared-library.sh"
+            ssm_comment: "Configuring Shared Library"
+            instance_id: "{{ jenkins_instance_id }}"
+    
+    # 7. セキュリティ設定（Markdown Formatter）
+    - name: Configure security settings
+      when: configure_security | default(true) | bool
+      block:
+        - name: Execute security configuration
+          ansible.builtin.include_tasks: tasks/execute_ssm_command.yml
+          vars:
+            ssm_document_name: "{{ ssm_documents.executeScript }}"
+            ssm_parameters: "ScriptPath=scripts/jenkins/shell/application-configure-security.sh"
+            ssm_comment: "Configuring security settings"
+            instance_id: "{{ jenkins_instance_id }}"
+    
+    # 8. Workterminalノードの追加
+    - name: Add Workterminal node
+      when: add_workterminal_node | default(true) | bool
+      block:
+        - name: Execute Workterminal node setup
+          ansible.builtin.include_tasks: tasks/execute_ssm_command.yml
+          vars:
+            ssm_document_name: "{{ ssm_documents.executeScript }}"
+            ssm_parameters: "ScriptPath=scripts/jenkins/shell/application-add-workterminal-node.sh"
+            ssm_comment: "Adding Workterminal node"
+            instance_id: "{{ jenkins_instance_id }}"
+    
+    # 9. シードジョブの作成
+    - name: Create seed job
+      when: create_seed_job | default(true) | bool
+      block:
+        - name: Execute seed job creation
+          ansible.builtin.include_tasks: tasks/execute_ssm_command.yml
+          vars:
+            ssm_document_name: "{{ ssm_documents.executeScript }}"
+            ssm_parameters: "ScriptPath=scripts/jenkins/shell/application-create-seed-job.sh"
+            ssm_comment: "Creating Jenkins seed job"
+            instance_id: "{{ jenkins_instance_id }}"
+    
+    # 10. Jenkins再起動
+    - name: Restart Jenkins if required
+      when: restart_jenkins | bool
+      block:
+        - name: Execute Jenkins restart
+          ansible.builtin.include_tasks: tasks/execute_ssm_command.yml
+          vars:
+            ssm_document_name: "{{ ssm_documents.restart }}"
+            ssm_parameters: ""  # 空文字列に設定
+            ssm_comment: "Restarting Jenkins"
+            instance_id: "{{ jenkins_instance_id }}"
 
 # 設定完了を示す変数設定
 - name: Set application deployment status
@@ -217,5 +277,11 @@
       - Jenkins Version: {{ jenkins_version }}
       - Plugins Installed: {{ install_plugins }}
       - CLI User Setup: {{ setup_cli_user | default(true) }}
+      - SSH Credentials Setup: {{ setup_ssh_credentials | default(true) }}
+      - EC2 Fleet Configured: {{ configure_ec2_fleet | default(true) }}
+      - Shared Library Configured: {{ configure_shared_library | default(true) }}
+      - Security Configured: {{ configure_security | default(true) }}
+      - Workterminal Node Added: {{ add_workterminal_node | default(true) }}
+      - Seed Job Created: {{ create_seed_job | default(true) }}
       - Jenkins Restarted: {{ restart_jenkins }}
       - Configuration Status: {{ application_deployed | ternary('Success', 'Failed') }}
