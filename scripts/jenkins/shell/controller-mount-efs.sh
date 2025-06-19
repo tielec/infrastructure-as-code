@@ -13,17 +13,8 @@ error_exit() {
     exit 1
 }
 
-# 引数または環境変数から設定を取得
-# ScriptArgsから渡される場合: EFS_ID=xxx AWS_REGION=yyy
-for arg in "$@"; do
-    if [[ $arg == *"="* ]]; then
-        export "$arg"
-    fi
-done
-
-# 環境変数の確認
-EFS_ID="${EFS_ID}"
-AWS_REGION="${AWS_REGION}"
+# 環境変数はSSMドキュメントで既に設定されている
+# EFS_ID と AWS_REGION が渡される
 JENKINS_HOME_DIR="/mnt/efs/jenkins"
 MOUNT_POINT="/mnt/efs"
 

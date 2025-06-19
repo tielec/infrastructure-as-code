@@ -11,6 +11,21 @@
       - Jenkins Instance ID: {{ jenkins_instance_id | default('未設定') }}
       - Jenkins Color: {{ jenkins_color | default('blue') }}
 
+# 既存のSSMドキュメントを削除（クリーンアップ）
+- name: Destroy existing SSM documents before update
+  ansible.builtin.include_role:
+    name: pulumi_helper
+    tasks_from: destroy
+  vars:
+    pulumi_project_path: "{{ pulumi_path }}/jenkins-config"
+    # 古いドキュメント名を指定して削除
+    target_resources:
+      - "aws:ssm/document:Document::jenkins-infra-jenkins-install-{{ env_name }}"
+      - "aws:ssm/document:Document::jenkins-infra-jenkins-mount-efs-{{ env_name }}"
+      - "aws:ssm/document:Document::jenkins-infra-jenkins-configure-{{ env_name }}"
+      - "aws:ssm/document:Document::jenkins-infra-jenkins-startup-{{ env_name }}"
+  ignore_errors: true
+
 # コントローラースタックからJenkinsインスタンスIDを取得（未設定の場合）
 - name: Get Jenkins instance ID from controller stack
   ansible.builtin.include_role:
@@ -156,7 +171,7 @@
       ansible.builtin.include_tasks: tasks/execute_ssm_command.yml
       vars:
         ssm_document_name: "{{ ssm_documents.executeScript }}"
-        ssm_parameters: "ScriptPath=scripts/jenkins/shell/controller-mount-efs.sh,ScriptArgs=\"EFS_ID={{ efs_file_system_id }} AWS_REGION={{ aws_region_name }}\""
+        ssm_parameters: "ScriptPath=scripts/jenkins/shell/controller-mount-efs.sh,EnvVars=\"EFS_ID={{ efs_file_system_id }} AWS_REGION={{ aws_region_name }}\""
         ssm_comment: "Mounting EFS"
         instance_id: "{{ jenkins_instance_id }}"
     
@@ -165,7 +180,7 @@
       ansible.builtin.include_tasks: tasks/execute_ssm_command.yml
       vars:
         ssm_document_name: "{{ ssm_documents.executeScript }}"
-        ssm_parameters: "ScriptPath=scripts/jenkins/shell/controller-install.sh,ScriptArgs=\"JENKINS_VERSION={{ jenkins_version }} JENKINS_COLOR={{ jenkins_color }}\""
+        ssm_parameters: "ScriptPath=scripts/jenkins/shell/controller-install.sh,EnvVars=\"JENKINS_VERSION={{ jenkins_version }} JENKINS_COLOR={{ jenkins_color }}\""
         ssm_comment: "Installing Jenkins"
         instance_id: "{{ jenkins_instance_id }}"
     
@@ -174,7 +189,7 @@
       ansible.builtin.include_tasks: tasks/execute_ssm_command.yml
       vars:
         ssm_document_name: "{{ ssm_documents.executeScript }}"
-        ssm_parameters: "ScriptPath=scripts/jenkins/shell/controller-configure.sh,ScriptArgs=\"JENKINS_MODE={{ recovery_mode | ternary('recovery', 'normal') }} JENKINS_COLOR={{ jenkins_color }}\""
+        ssm_parameters: "ScriptPath=scripts/jenkins/shell/controller-configure.sh,EnvVars=\"JENKINS_MODE={{ recovery_mode | ternary('recovery', 'normal') }} JENKINS_COLOR={{ jenkins_color }}\""
         ssm_comment: "Configuring Jenkins"
         instance_id: "{{ jenkins_instance_id }}"
     
@@ -183,7 +198,7 @@
       ansible.builtin.include_tasks: tasks/execute_ssm_command.yml
       vars:
         ssm_document_name: "{{ ssm_documents.executeScript }}"
-        ssm_parameters: "ScriptPath=scripts/jenkins/shell/controller-startup.sh,ScriptArgs=\"JENKINS_COLOR={{ jenkins_color }}\""
+        ssm_parameters: "ScriptPath=scripts/jenkins/shell/controller-startup.sh,EnvVars=\"JENKINS_COLOR={{ jenkins_color }}\""
         ssm_comment: "Starting Jenkins"
         instance_id: "{{ jenkins_instance_id }}"
 

@@ -79,9 +79,9 @@ const recoveryModeGroovyParam = new aws.ssm.Parameter(`${projectName}-jenkins-re
     },
 });
 
-// 汎用的なスクリプト実行用SSMドキュメント
-const jenkinsExecuteScriptDocument = new aws.ssm.Document(`${projectName}-jenkins-execute-script`, {
-    name: `${projectName}-jenkins-execute-script-${environment}`,
+// 汎用的なスクリプト実行用SSMドキュメント（jenkins-config専用）
+const jenkinsConfigExecuteScriptDocument = new aws.ssm.Document(`${projectName}-jenkins-config-execute-script`, {
+    name: `${projectName}-jenkins-config-execute-script-${environment}`,
     documentType: "Command",
     documentFormat: "JSON",
     content: JSON.stringify({
@@ -92,10 +92,10 @@ const jenkinsExecuteScriptDocument = new aws.ssm.Document(`${projectName}-jenkin
                 type: "String",
                 description: "Path to script relative to repository root"
             },
-            ScriptArgs: {
+            EnvVars: {
                 type: "String",
                 default: "",
-                description: "Arguments to pass to the script"
+                description: "Environment variables in KEY=VALUE format, separated by spaces"
             },
             WorkingDirectory: {
                 type: "String",
@@ -122,6 +122,13 @@ const jenkinsExecuteScriptDocument = new aws.ssm.Document(`${projectName}-jenkin
                         "export AWS_REGION=$(curl -s -H \"X-aws-ec2-metadata-token: $TOKEN\" http://169.254.169.254/latest/meta-data/placement/region)",
                         "export AWS_DEFAULT_REGION=$AWS_REGION",
                         "",
+                        "# 渡された環境変数を設定",
+                        "if [ -n \"{{EnvVars}}\" ]; then",
+                        "  for env_var in {{EnvVars}}; do",
+                        "    export \"$env_var\"",
+                        "  done",
+                        "fi",
+                        "",
                         "# 作業ディレクトリに移動",
                         "cd {{WorkingDirectory}}",
                         "",
@@ -132,11 +139,11 @@ const jenkinsExecuteScriptDocument = new aws.ssm.Document(`${projectName}-jenkin
                         "fi",
                         "",
                         "# スクリプトを実行",
-                        "echo \"Executing: {{ScriptPath}} {{ScriptArgs}}\"",
+                        "echo \"Executing: {{ScriptPath}}\"",
                         "echo \"Environment: PROJECT_NAME=$PROJECT_NAME, ENVIRONMENT=$ENVIRONMENT, AWS_REGION=$AWS_REGION\"",
                         "",
                         "chmod +x \"{{ScriptPath}}\"",
-                        "bash \"{{ScriptPath}}\" {{ScriptArgs}}"
+                        "bash \"{{ScriptPath}}\""
                     ]
                 }
             }
@@ -228,5 +235,5 @@ const jenkinsUpdateRepoDocument = new aws.ssm.Document(`${projectName}-jenkins-u
 export const parametersPath = `/${projectName}/${environment}/jenkins`;
 export const ssmDocuments = {
     updateRepo: jenkinsUpdateRepoDocument.name,
-    executeScript: jenkinsExecuteScriptDocument.name,
+    executeScript: jenkinsConfigExecuteScriptDocument.name,
 };
