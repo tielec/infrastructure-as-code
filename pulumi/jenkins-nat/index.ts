@@ -46,7 +46,6 @@ if (highAvailabilityMode) {
 
     // NATゲートウェイA用のEIP
     const natGatewayEipA = new aws.ec2.Eip(`${projectName}-nat-eip-a`, {
-        domain: "vpc",
         tags: {
             Name: `${projectName}-nat-eip-a-${environment}`,
             Environment: environment,
@@ -73,7 +72,6 @@ if (highAvailabilityMode) {
 
     // NATゲートウェイB用のEIP
     const natGatewayEipB = new aws.ec2.Eip(`${projectName}-nat-eip-b`, {
-        domain: "vpc",
         tags: {
             Name: `${projectName}-nat-eip-b-${environment}`,
             Environment: environment,
@@ -103,8 +101,8 @@ if (highAvailabilityMode) {
     // NATゲートウェイ固有のエクスポート
     export const natGatewayAId = natGatewayA.id;
     export const natGatewayBId = natGatewayB.id;
-    export const natGatewayEipA = natGatewayEipA.publicIp;
-    export const natGatewayEipB = natGatewayEipB.publicIp;
+    export const natGatewayEipAAddress = natGatewayEipA.publicIp;
+    export const natGatewayEipBAddress = natGatewayEipB.publicIp;
 
 } else {
     // ノーマルモード: NATインスタンス x1
@@ -160,7 +158,6 @@ if (highAvailabilityMode) {
 
     // NATインスタンス用のElastic IP
     const natInstanceEip = new aws.ec2.Eip(`${projectName}-nat-instance-eip`, {
-        domain: "vpc",
         tags: {
             Name: `${projectName}-nat-instance-eip-${environment}`,
             Environment: environment,
@@ -343,12 +340,12 @@ echo "NAT instance configuration completed successfully!"
     export const natInstanceId = natInstance.id;
     export const natInstancePublicIp = natInstanceEip.publicIp;
     export const natInstancePrivateIp = natInstance.privateIp;
-    export const natInstanceType = natInstanceType;
+    export const natInstanceTypeExport = natInstanceType;
 }
 
 // 共通エクスポート
-export const natType = natType;
-export const natResourceIds = natResourceIds;
+export const natTypeExport = natType;
+export const natResourceIdsExport = natResourceIds;
 export const highAvailabilityEnabled = highAvailabilityMode;
 
 // SSMパラメータにNAT設定を保存
