@@ -6,6 +6,7 @@
  */
 import * as pulumi from "@pulumi/pulumi";
 import * as aws from "@pulumi/aws";
+import * as tls from "@pulumi/tls";
 
 // コンフィグから設定を取得
 const config = new pulumi.Config();
@@ -21,7 +22,6 @@ const maxTargetCapacity = config.getNumber("maxTargetCapacity") || 10;
 const minTargetCapacity = config.getNumber("minTargetCapacity") || 0;
 const spotPrice = config.get("spotPrice") || "0.10";
 const instanceType = config.get("instanceType") || "t3.medium";
-const keyName = config.get("keyName");
 
 // 既存のスタックから値を取得
 const networkStack = new pulumi.StackReference(`${pulumi.getOrganization()}/${networkStackName}/${environment}`);
@@ -31,6 +31,35 @@ const securityStack = new pulumi.StackReference(`${pulumi.getOrganization()}/${s
 const vpcId = networkStack.getOutput("vpcId");
 const privateSubnetIds = networkStack.getOutput("privateSubnetIds");
 const jenkinsAgentSecurityGroupId = securityStack.getOutput("jenkinsAgentSecurityGroupId");
+
+// Jenkins Agent用のSSHキーペアを作成
+const agentPrivateKey = new tls.PrivateKey(`${projectName}-agent-private-key`, {
+    algorithm: "RSA",
+    rsaBits: 4096,
+});
+
+// AWS Key Pairリソースを作成
+const agentKeyPair = new aws.ec2.KeyPair(`${projectName}-agent-keypair`, {
+    keyName: `${projectName}-agent-${environment}`,
+    publicKey: agentPrivateKey.publicKeyOpenssh,
+    tags: {
+        Name: `${projectName}-agent-keypair-${environment}`,
+        Environment: environment,
+        ManagedBy: "pulumi",
+    },
+});
+
+// 秘密鍵をSSM Parameter Storeに保存（セキュアな管理のため）
+const agentPrivateKeyParameter = new aws.ssm.Parameter(`${projectName}-agent-private-key-param`, {
+    name: `/${projectName}/${environment}/jenkins/agent/private-key`,
+    type: "SecureString",
+    value: agentPrivateKey.privateKeyPem,
+    description: "Private key for Jenkins agent SSH access",
+    tags: {
+        Environment: environment,
+        ManagedBy: "pulumi",
+    },
+});
 
 // 最新のAmazon Linux 2023 AMIを取得
 const ami = aws.ec2.getAmi({
@@ -153,7 +182,7 @@ const agentLaunchTemplate = new aws.ec2.LaunchTemplate(`${projectName}-agent-lt`
     namePrefix: `${projectName}-agent-lt-`,
     imageId: ami.then(ami => ami.id),
     instanceType: instanceType,
-    keyName: keyName,
+    keyName: agentKeyPair.keyName,  // 作成したキーペアを使用
     vpcSecurityGroupIds: [jenkinsAgentSecurityGroupId],
     iamInstanceProfile: {
         name: jenkinsAgentProfile.name,
@@ -284,6 +313,7 @@ const agentInfoParameter = new aws.ssm.Parameter(`${projectName}-agent-fleet-inf
         minCapacity: minTargetCapacity,
         maxCapacity: maxTargetCapacity,
         spotPrice: spotPrice,
+        keyPairName: agentKeyPair.keyName,  // キーペア名も保存
         createdAt: new Date().toISOString(),
     }),
     description: "Jenkins agent fleet configuration information",
@@ -313,3 +343,5 @@ export const spotFleetRoleArn = spotFleetRole.arn;
 export const notificationTopicArn = spotFleetNotificationTopic.arn;
 export const minCapacity = minTargetCapacity;
 export const maxCapacity = maxTargetCapacity;
+export const agentKeyPairName = agentKeyPair.keyName;
+export const privateKeyParameterName = agentPrivateKeyParameter.name;
