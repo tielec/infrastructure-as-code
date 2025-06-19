@@ -49,17 +49,23 @@
       register: package_json_check
       when: not ansible_check_mode
     
-    - name: Install npm dependencies if needed
+    - name: Install npm dependencies
       ansible.builtin.shell: |
         cd {{ pulumi_project_path }}
         npm install
-      args:
-        creates: "{{ pulumi_project_path }}/node_modules"
       register: npm_install_result
-      changed_when: npm_install_result.rc == 0
+      changed_when: "'up to date' not in npm_install_result.stdout"
       when: 
         - not ansible_check_mode
         - package_json_check.stat.exists | default(false)
+    
+    - name: Display npm install result
+      ansible.builtin.debug:
+        msg: "npm install completed: {{ 'packages updated' if npm_install_result.changed else 'already up to date' }}"
+      when:
+        - not ansible_check_mode
+        - npm_install_result is defined
+        - ansible_verbosity > 0
     
     - name: Select stack
       ansible.builtin.shell: |
