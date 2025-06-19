@@ -92,10 +92,31 @@ const jenkinsConfigExecuteScriptDocument = new aws.ssm.Document(`${projectName}-
                 type: "String",
                 description: "Path to script relative to repository root"
             },
-            EnvVars: {
+            // 個別の環境変数パラメータ
+            EfsId: {
                 type: "String",
                 default: "",
-                description: "Environment variables in KEY=VALUE format, separated by spaces"
+                description: "EFS File System ID"
+            },
+            AwsRegion: {
+                type: "String",
+                default: "",
+                description: "AWS Region"
+            },
+            JenkinsVersion: {
+                type: "String",
+                default: "",
+                description: "Jenkins version"
+            },
+            JenkinsColor: {
+                type: "String",
+                default: "",
+                description: "Jenkins color (blue/green)"
+            },
+            JenkinsMode: {
+                type: "String",
+                default: "",
+                description: "Jenkins mode (normal/recovery)"
             },
             WorkingDirectory: {
                 type: "String",
@@ -122,12 +143,12 @@ const jenkinsConfigExecuteScriptDocument = new aws.ssm.Document(`${projectName}-
                         "export AWS_REGION=$(curl -s -H \"X-aws-ec2-metadata-token: $TOKEN\" http://169.254.169.254/latest/meta-data/placement/region)",
                         "export AWS_DEFAULT_REGION=$AWS_REGION",
                         "",
-                        "# 渡された環境変数を設定",
-                        "if [ -n \"{{EnvVars}}\" ]; then",
-                        "  for env_var in {{EnvVars}}; do",
-                        "    export \"$env_var\"",
-                        "  done",
-                        "fi",
+                        "# 個別パラメータから環境変数を設定",
+                        "[ -n \"{{EfsId}}\" ] && export EFS_ID=\"{{EfsId}}\"",
+                        "[ -n \"{{AwsRegion}}\" ] && export AWS_REGION=\"{{AwsRegion}}\"",
+                        "[ -n \"{{JenkinsVersion}}\" ] && export JENKINS_VERSION=\"{{JenkinsVersion}}\"",
+                        "[ -n \"{{JenkinsColor}}\" ] && export JENKINS_COLOR=\"{{JenkinsColor}}\"",
+                        "[ -n \"{{JenkinsMode}}\" ] && export JENKINS_MODE=\"{{JenkinsMode}}\"",
                         "",
                         "# 作業ディレクトリに移動",
                         "cd {{WorkingDirectory}}",
@@ -140,7 +161,11 @@ const jenkinsConfigExecuteScriptDocument = new aws.ssm.Document(`${projectName}-
                         "",
                         "# スクリプトを実行",
                         "echo \"Executing: {{ScriptPath}}\"",
-                        "echo \"Environment: PROJECT_NAME=$PROJECT_NAME, ENVIRONMENT=$ENVIRONMENT, AWS_REGION=$AWS_REGION\"",
+                        "echo \"Environment variables set:\"",
+                        "[ -n \"$EFS_ID\" ] && echo \"  EFS_ID=$EFS_ID\"",
+                        "[ -n \"$JENKINS_VERSION\" ] && echo \"  JENKINS_VERSION=$JENKINS_VERSION\"",
+                        "[ -n \"$JENKINS_COLOR\" ] && echo \"  JENKINS_COLOR=$JENKINS_COLOR\"",
+                        "[ -n \"$JENKINS_MODE\" ] && echo \"  JENKINS_MODE=$JENKINS_MODE\"",
                         "",
                         "chmod +x \"{{ScriptPath}}\"",
                         "bash \"{{ScriptPath}}\""
