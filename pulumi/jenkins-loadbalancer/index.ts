@@ -163,6 +163,18 @@ const activeEnvironmentParam = new aws.ssm.Parameter(`${shortProjectName}-active
     },
 });
 
+// Jenkins URLをSSMパラメータストアに保存
+const jenkinsUrlParam = new aws.ssm.Parameter(`${shortProjectName}-jenkins-url`, {
+    name: `/${projectName}/${environment}/jenkins/url`,
+    type: "String",
+    value: pulumi.interpolate`http://${alb.dnsName}/`,
+    description: "Jenkins URL for external access via ALB",
+    tags: {
+        Environment: environment,
+        ManagedBy: "pulumi",
+    },
+});
+
 // エクスポート
 export const albArn = alb.arn;
 export const albDnsName = alb.dnsName;
@@ -173,3 +185,4 @@ export const httpListenerArn = httpListener.arn;
 export const httpsListenerArn = httpsListener ? httpsListener.arn : undefined;
 export const httpDirectListenerArn = httpDirectListener.arn;
 export const activeEnvironment = activeEnvironmentParam.value;
+export const jenkinsUrl = jenkinsUrlParam.value;

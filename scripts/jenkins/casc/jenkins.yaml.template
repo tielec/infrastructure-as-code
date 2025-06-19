@@ -1,0 +1,121 @@
+jenkins:
+  systemMessage: "Jenkins is configured automatically using JCasC"
+  numExecutors: 0
+  mode: NORMAL
+  authorizationStrategy:
+    loggedInUsersCanDoAnything:
+      allowAnonymousRead: false
+  crumbIssuer:
+    standard:
+      excludeClientIPFromCrumb: true
+  markupFormatter:
+    markdownFormatter:
+      disableSyntaxHighlighting: false
+  disableRememberMe: false
+  clouds:
+    - eC2Fleet:
+        name: "ec2-fleet"
+        fleet: "${EC2_FLEET_ID}"
+        region: "${AWS_REGION:-ap-northeast-1}"
+        idleMinutes: ${EC2_IDLE_MINUTES:-15}
+        minSize: ${EC2_MIN_SIZE:-0}
+        maxSize: ${EC2_MAX_SIZE:-1}
+        numExecutors: ${EC2_NUM_EXECUTORS:-3}
+        computerConnector:
+          sSHConnector:
+            credentialsId: "ec2-agent-keypair"
+            port: 22
+            launchTimeoutSeconds: 60
+            maxNumRetries: 10
+            retryWaitTime: 15
+            sshHostKeyVerificationStrategy: "nonVerifyingKeyVerificationStrategy"
+        labelString: "ec2-fleet"
+        privateIpUsed: true
+        addNodeOnlyIfRunning: false
+        alwaysReconnect: false
+        cloudStatusIntervalSec: 30
+        disableTaskResubmit: false
+        executorScaler: "noScaler"
+        initOnlineCheckIntervalSec: 15
+        initOnlineTimeoutSec: 900
+        maxTotalUses: -1
+        minSpareSize: 0
+        noDelayProvision: false
+        restrictUsage: false
+        scaleExecutorsByWeight: false
+  nodes:
+    - permanent:
+        name: "bootstrap-workterminal"
+        nodeDescription: "Bootstrap Workterminal Node"
+        numExecutors: 1
+        remoteFS: "/home/ec2-user/jenkins-agent"
+        labelString: "bootstrap-workterminal"
+        mode: EXCLUSIVE
+        launcher:
+          ssh:
+            host: "${WORKTERMINAL_HOST}"
+            port: 22
+            credentialsId: "ec2-bootstrap-workterminal-keypair"
+            retryWaitTime: 5
+            sshHostKeyVerificationStrategy: "nonVerifyingKeyVerificationStrategy"
+        retentionStrategy: "always"
+
+security:
+  apiToken:
+    creationOfLegacyTokenEnabled: false
+    tokenGenerationOnCreationEnabled: false
+    usageStatisticsEnabled: true
+  copyartifact:
+    mode: PRODUCTION
+  cps:
+    hideSandbox: false
+  gitHooks:
+    allowedOnAgents: false
+    allowedOnController: false
+  gitHostKeyVerificationConfiguration:
+    sshHostKeyVerificationStrategy: "knownHostsFileVerificationStrategy"
+  globalJobDslSecurityConfiguration:
+    useScriptSecurity: false
+  sSHD:
+    port: -1
+
+unclassified:
+  location:
+    adminAddress: "jenkins-admin@example.com"
+    url: "${JENKINS_URL:-http://localhost:8080/}"
+  globalLibraries:
+    libraries:
+      - name: "jenkins-shared-lib"
+        defaultVersion: "${SHARED_LIBRARY_BRANCH:-main}"
+        retriever:
+          modernSCM:
+            clone: true
+            libraryPath: "${SHARED_LIBRARY_PATH:-jenkins/jobs/shared/}"
+            scm:
+              git:
+                remote: "${SHARED_LIBRARY_REPO:-https://github.com/tielec/infrastructure-as-code/}"
+                traits:
+                  - "gitBranchDiscovery"
+  gitSCM:
+    createAccountBasedOnEmail: false
+    showEntireCommitSummaryInChanges: false
+    useExistingAccountWithSameEmail: false
+  gitHubPluginConfig:
+    hookUrl: "${JENKINS_URL:-http://localhost:8080/}github-webhook/"
+  jobConfigHistory:
+    excludePattern: "queue\\.xml|nodeMonitors\\.xml|UpdateCenter\\.xml|global-build-stats|LockableResourcesManager\\.xml|MilestoneStep\\.xml|cloudbees-disk-usage-simple\\.xml"
+    saveModuleConfiguration: false
+    showBuildBadges: "always"
+    skipDuplicateHistory: true
+  pollSCM:
+    pollingThreadCount: 10
+  timestamper:
+    allPipelines: false
+    elapsedTimeFormat: "'<b>'HH:mm:ss.S'</b> '"
+    systemTimeFormat: "'<b>'HH:mm:ss'</b> '"
+
+tool:
+  git:
+    installations:
+      - name: "Default"
+        home: "git"
