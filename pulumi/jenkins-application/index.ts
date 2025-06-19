@@ -17,6 +17,7 @@ const jenkinsExecuteScriptDocument = new aws.ssm.Document(`${projectName}-jenkin
     name: `${projectName}-jenkins-execute-script-${environment}`,
     documentType: "Command",
     documentFormat: "JSON",
+    targetType: "/AWS::EC2::Instance",
     content: JSON.stringify({
         schemaVersion: "2.2",
         description: "Execute script from Git repository on Jenkins instance",
@@ -86,6 +87,7 @@ const jenkinsRestartDocument = new aws.ssm.Document(`${projectName}-jenkins-rest
     name: `${projectName}-jenkins-restart-${environment}`,
     documentType: "Command",
     documentFormat: "JSON",
+    targetType: "/AWS::EC2::Instance",
     content: JSON.stringify({
         schemaVersion: "2.2",
         description: "Restart Jenkins service",
