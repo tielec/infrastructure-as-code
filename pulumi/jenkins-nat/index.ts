@@ -175,7 +175,6 @@ if (highAvailabilityMode) {
     // Amazon Linux 2023用の改善されたNAT設定スクリプト
     const userDataScript = `#!/bin/bash
 # NAT Instance Setup Script for Amazon Linux 2023 with nftables
-# 改善版: 動作確認済みの設定
 
 # スクリプトの実行ログを記録
 exec > >(tee /var/log/user-data.log|logger -t user-data -s 2>/dev/console) 2>&1
@@ -205,12 +204,24 @@ echo "net.ipv4.conf.all.rp_filter = 0" | sudo tee -a /etc/sysctl.d/99-ip-forward
 echo "net.ipv4.conf.default.rp_filter = 0" | sudo tee -a /etc/sysctl.d/99-ip-forward.conf
 sudo sysctl -p /etc/sysctl.d/99-ip-forward.conf
 
-# システムアップデートとnftablesのインストール
-echo "Installing required packages..."
-sudo dnf install -y nftables iptables-nft
+# システムアップデート
+echo "Updating system packages..."
+sudo dnf update -y
+
+# nftablesのインストール（デフォルトでは含まれていない）
+echo "Installing nftables..."
+sudo dnf install -y nftables
+
+# iptables-nftが既にインストールされているか確認
+if ! rpm -q iptables-nft &>/dev/null; then
+    echo "Installing iptables-nft..."
+    sudo dnf install -y iptables-nft
+fi
 
 # iptables-nftへの切り替え（互換性のため）
-sudo alternatives --set iptables /usr/sbin/iptables-nft
+if [ -f /usr/sbin/iptables-nft ]; then
+    sudo alternatives --set iptables /usr/sbin/iptables-nft
+fi
 
 # nftablesサービスの有効化
 echo "Enabling nftables service..."
@@ -247,6 +258,9 @@ echo "Adding forwarding rules..."
 sudo nft add rule ip filter forward ip saddr $VPC_CIDR accept
 sudo nft add rule ip filter forward ip daddr $VPC_CIDR ct state related,established accept
 
+# 設定ディレクトリの作成
+sudo mkdir -p /etc/nftables
+
 # 設定の保存
 echo "Saving nftables configuration..."
 sudo nft list ruleset | sudo tee /etc/nftables/nat.nft
@@ -267,11 +281,17 @@ echo "IP Forwarding: $(cat /proc/sys/net/ipv4/ip_forward)"
 echo "RP Filter (all): $(cat /proc/sys/net/ipv4/conf/all/rp_filter)"
 echo "RP Filter (default): $(cat /proc/sys/net/ipv4/conf/default/rp_filter)"
 echo ""
+echo "=== Installed Packages ==="
+rpm -qa | grep -E "(iptables|nftables)"
+echo ""
 echo "=== Network Interfaces ==="
 ip addr show
 echo ""
 echo "=== Routing Table ==="
 ip route show
+echo ""
+echo "=== nftables Service Status ==="
+sudo systemctl status nftables --no-pager
 echo ""
 echo "=== nftables Rules ==="
 sudo nft list ruleset
@@ -284,6 +304,14 @@ if systemctl is-enabled amazon-ssm-agent &>/dev/null; then
     echo "SSM agent started"
 else
     echo "SSM agent not found, skipping..."
+fi
+
+# CloudWatchエージェントのインストール（オプション）
+echo "Installing CloudWatch agent..."
+if ! rpm -q amazon-cloudwatch-agent &>/dev/null; then
+    wget -q https://s3.amazonaws.com/amazoncloudwatch-agent/amazon_linux/amd64/latest/amazon-cloudwatch-agent.rpm
+    sudo rpm -U ./amazon-cloudwatch-agent.rpm || echo "CloudWatch agent installation skipped"
+    rm -f ./amazon-cloudwatch-agent.rpm
 fi
 
 # テストスクリプトの作成
