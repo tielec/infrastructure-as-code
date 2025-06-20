@@ -22,7 +22,7 @@ const loadbalancerStackName = config.get("loadbalancerStackName") || "jenkins-lo
 const jenkinsVersion = config.get("jenkinsVersion") || "latest";
 const jenkinsColor = config.get("jenkinsColor") || "blue";
 const recoveryMode = config.getBoolean("recoveryMode") || false;
-const instanceType = config.get("instanceType") || "t3.medium";
+const instanceType = config.get("instanceType") || "t4g.medium";  // t4g.mediumに変更
 const keyName = config.get("keyName");
 const gitRepo = config.get("gitRepo") || "https://github.com/tielec/infrastructure-as-code.git";
 const gitBranch = config.get("gitBranch") || "main";
@@ -46,14 +46,24 @@ const greenTargetGroupArn = loadbalancerStack.getOutput("greenTargetGroupArn");
 // 環境に基づいてターゲットグループを選択
 const targetGroupArn = jenkinsColor === "blue" ? blueTargetGroupArn : greenTargetGroupArn;
 
-// 最新のAmazon Linux 2023 AMIを取得
+// 最新のAmazon Linux 2023 AMI (ARM64版)を取得
 const ami = aws.ec2.getAmi({
     mostRecent: true,
     owners: ["amazon"],
-    filters: [{
-        name: "name",
-        values: ["al2023-ami-*-kernel-*-x86_64"],
-    }],
+    filters: [
+        {
+            name: "name",
+            values: ["al2023-ami-*-kernel-*-arm64"],  // ARM64アーキテクチャ用に変更
+        },
+        {
+            name: "architecture",
+            values: ["arm64"],  // 明示的にARM64アーキテクチャを指定
+        },
+        {
+            name: "virtualization-type",
+            values: ["hvm"],
+        },
+    ],
 });
 
 // IAMロール作成（Jenkins用）
@@ -331,8 +341,10 @@ const jenkinsInstanceProfile = new aws.iam.InstanceProfile(
 );
 
 // ユーザーデータスクリプト（SSMエージェント起動のみ）
+// ARM64アーキテクチャ対応の注意点を追加
 const userDataScript = pulumi.interpolate`#!/bin/bash
 # Jenkins Controller User Data Script - SSM Setup Only
+# ARM64 (t4g) instance compatible
 set -e
 exec > >(tee /var/log/user-data.log|logger -t user-data -s 2>/dev/console) 2>&1
 
@@ -349,6 +361,10 @@ TOKEN=$(curl -s -X PUT "http://169.254.169.254/latest/api/token" -H "X-aws-ec2-m
 INSTANCE_ID=$(curl -s -H "X-aws-ec2-metadata-token: $TOKEN" http://169.254.169.254/latest/meta-data/instance-id)
 echo "Instance ID: $INSTANCE_ID - SSM Agent started successfully"
 
+# アーキテクチャ情報の取得と記録
+ARCH=$(uname -m)
+echo "Architecture: $ARCH"
+
 # 基本的な環境変数を設定（設定スクリプトから使用される場合のため）
 cat > /etc/jenkins-env << EOF
 PROJECT_NAME=${projectName}
@@ -360,6 +376,7 @@ EFS_ID=${efsFileSystemId}
 ACCESS_POINT_ID=${jenkinsAccessPointId}
 GIT_REPO=${gitRepo}
 GIT_BRANCH=${gitBranch}
+ARCHITECTURE=$ARCH
 EOF
 chmod 644 /etc/jenkins-env
 
@@ -368,6 +385,9 @@ cd /root
 git clone ${gitRepo} infrastructure-as-code || echo "Repository already exists"
 cd infrastructure-as-code
 git checkout ${gitBranch}
+
+# ARM64用のJava設定メモ（Jenkinsインストール時に参照）
+echo "Note: When installing Jenkins, ensure to use ARM64-compatible Java runtime" >> /var/log/user-data.log
 `;
 
 // Jenkinsコントローラーインスタンス
@@ -392,6 +412,7 @@ const jenkinsInstance = new aws.ec2.Instance(`${projectName}-jenkins-${jenkinsCo
         Environment: environment,
         Color: jenkinsColor,
         Role: "jenkins-master",
+        Architecture: "arm64",  // アーキテクチャタグを追加
     },
 });
 
@@ -414,3 +435,4 @@ export const deployedJenkinsColor = jenkinsColor;
 export const recoveryModeEnabled = recoveryMode;
 export const deployedGitRepo = gitRepo;
 export const deployedGitBranch = gitBranch;
+export const instanceArchitecture = "arm64";  // アーキテクチャ情報をエクスポート
