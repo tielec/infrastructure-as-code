@@ -8,7 +8,7 @@ def instance = Jenkins.getInstance()
 
 // Basic Settings
 instance.setSystemMessage('Jenkins is ready!')
-instance.setNumExecutors(0)  // マスターノードでのビルド実行を無効化
+instance.setNumExecutors(1)  // マスターノードでのビルド実行は1に制限
 instance.save()
 
 // セキュリティ設定
