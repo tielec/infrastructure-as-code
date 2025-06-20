@@ -426,6 +426,20 @@ const targetGroupAttachment = new aws.lb.TargetGroupAttachment(
     }
 );
 
+// インスタンスIDをSSM Parameter Storeに保存
+const instanceIdParameter = new aws.ssm.Parameter(`${projectName}-jenkins-instance-id`, {
+    name: `/${projectName}/${environment}/jenkins/instanceId`,
+    type: "String",
+    value: jenkinsInstance.id,
+    description: `Jenkins Controller Instance ID for ${environment} environment (${jenkinsColor})`,
+    tags: {
+        Name: `${projectName}-jenkins-instance-id-${environment}`,
+        Environment: environment,
+        Color: jenkinsColor,
+    },
+    overwrite: true,  // 既存のパラメータを上書き可能にする
+});
+
 // エクスポート
 export const jenkinsInstanceId = jenkinsInstance.id;
 export const jenkinsPrivateIp = jenkinsInstance.privateIp;
