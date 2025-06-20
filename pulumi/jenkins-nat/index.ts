@@ -3,7 +3,7 @@
  * 
  * JenkinsインフラのNATリソースを構築するPulumiスクリプト
  * ハイアベイラビリティモード: NATゲートウェイ（2つ）
- * ノーマルモード: NATインスタンス（1つ）- Amazon Linux 2023使用
+ * ノーマルモード: NATインスタンス（1つ）- Amazon Linux 2023 + nftables使用
  */
 import * as pulumi from "@pulumi/pulumi";
 import * as aws from "@pulumi/aws";
@@ -115,7 +115,7 @@ if (highAvailabilityMode) {
 
 } else {
     // ノーマルモード: NATインスタンス x1
-    pulumi.log.info(`Deploying NAT Instance in Normal mode (AMI: ${useAwsNatAmi ? 'AWS NAT AMI' : 'Amazon Linux 2023'})`);
+    pulumi.log.info(`Deploying NAT Instance in Normal mode (AMI: ${useAwsNatAmi ? 'AWS NAT AMI' : 'Amazon Linux 2023 with nftables'})`);
     natType = "instance";
 
     // AMIの選択
@@ -230,9 +230,9 @@ fi
 
 echo "NAT instance configuration completed!"`;
     } else {
-        // Amazon Linux 2023用の完全なNAT設定
+        // Amazon Linux 2023用のnftablesベースのNAT設定
         userDataScript = `#!/bin/bash
-# NAT Instance Setup Script for Amazon Linux 2023
+# NAT Instance Setup Script for Amazon Linux 2023 with nftables
 set -e
 exec > >(tee /var/log/user-data.log|logger -t user-data -s 2>/dev/console) 2>&1
 
@@ -242,47 +242,48 @@ echo "Starting NAT instance configuration for Amazon Linux 2023..."
 dnf update -y
 
 # 必要なパッケージのインストール
-dnf install -y iptables-services amazon-ssm-agent
+echo "Installing required packages..."
+dnf install -y nftables amazon-ssm-agent
 
 # IP転送を有効化
 echo "Enabling IP forwarding..."
-echo 1 > /proc/sys/net/ipv4/ip_forward
-echo "net.ipv4.ip_forward = 1" >> /etc/sysctl.conf
-sysctl -p
+echo "net.ipv4.ip_forward = 1" > /etc/sysctl.d/90-nat-instance.conf
+sysctl -p /etc/sysctl.d/90-nat-instance.conf
 
-# iptablesサービスの有効化
-systemctl enable iptables
-systemctl start iptables
+# プライマリネットワークインターフェースを動的に取得
+echo "Detecting primary network interface..."
+PRIMARY_INTERFACE=$(ip -o link show device-number-0 | awk -F': ' '{print $2}')
+echo "Primary interface detected: $PRIMARY_INTERFACE"
 
-# iptablesルールの設定（AWS NAT AMIと同じ設定を適用）
-echo "Configuring iptables rules..."
+# nftablesでNAT設定
+echo "Configuring nftables NAT rules..."
+nft add table nat
+nft -- add chain nat prerouting { type nat hook prerouting priority -100 \\; }
+nft add chain nat postrouting { type nat hook postrouting priority 100 \\; }
+nft add rule nat postrouting oifname "$PRIMARY_INTERFACE" masquerade
 
-# 既存のルールをクリア
-iptables -F
-iptables -t nat -F
-iptables -t mangle -F
+# 設定の確認
+echo "Current nftables configuration:"
+nft list table nat
 
-# デフォルトポリシーの設定
-iptables -P INPUT ACCEPT
-iptables -P FORWARD ACCEPT
-iptables -P OUTPUT ACCEPT
+# nftables設定を永続化
+echo "Persisting nftables configuration..."
+mkdir -p /etc/nftables
+nft list table nat > /etc/nftables/al2023-nat.nft
 
-# NAT設定
-VPC_CIDR="${vpcCidr}"
-iptables -t nat -A POSTROUTING -o eth0 -s $VPC_CIDR -j MASQUERADE
+# systemd用の設定ファイルを作成
+cat > /etc/sysconfig/nftables.conf << 'EOF'
+# Load NAT configuration
+include "/etc/nftables/al2023-nat.nft"
+EOF
 
-# フォワーディングルール
-# 確立された接続を許可
-iptables -A FORWARD -m state --state RELATED,ESTABLISHED -j ACCEPT
-# VPC内からのすべてのトラフィックを許可
-iptables -A FORWARD -s $VPC_CIDR -j ACCEPT
-# インターネットから戻ってくるトラフィックを許可
-iptables -A FORWARD -d $VPC_CIDR -m state --state RELATED,ESTABLISHED -j ACCEPT
-
-# ルールを保存
-service iptables save
+# nftablesサービスの有効化と起動
+echo "Enabling and starting nftables service..."
+systemctl enable nftables
+systemctl start nftables
 
 # SSMエージェントの起動
+echo "Starting SSM agent..."
 systemctl enable amazon-ssm-agent
 systemctl start amazon-ssm-agent
 
@@ -338,14 +339,32 @@ EOF
     -c file:/opt/aws/amazon-cloudwatch-agent/etc/config.json
 
 # 動作確認
-echo "Verifying NAT configuration..."
+echo "=== NAT Configuration Status ==="
 echo "IP Forwarding: $(cat /proc/sys/net/ipv4/ip_forward)"
-echo "iptables NAT rules:"
-iptables -t nat -L POSTROUTING -n -v
-echo "iptables FORWARD rules:"
-iptables -L FORWARD -n -v
+echo "Primary Interface: $PRIMARY_INTERFACE"
+echo "nftables rules:"
+nft list table nat
+echo ""
+echo "nftables service status:"
+systemctl status nftables --no-pager
+echo ""
 
-echo "NAT instance configuration completed successfully!"`;
+echo "NAT instance configuration completed successfully!"
+
+# 接続性テスト用のスクリプトを作成
+cat > /usr/local/bin/test-nat.sh << 'SCRIPT_EOF'
+#!/bin/bash
+echo "=== NAT Instance Test ==="
+echo "Primary Interface: $(ip -o link show device-number-0 | awk -F': ' '{print $2}')"
+echo "IP Forwarding: $(cat /proc/sys/net/ipv4/ip_forward)"
+echo "Active connections: $(ss -nat | grep ESTABLISHED | wc -l)"
+echo ""
+echo "nftables NAT rules:"
+nft list table nat
+SCRIPT_EOF
+chmod +x /usr/local/bin/test-nat.sh
+
+echo "Test script created at /usr/local/bin/test-nat.sh"`;
     }
 
     // NATインスタンス
@@ -363,7 +382,7 @@ echo "NAT instance configuration completed successfully!"`;
             Environment: environment,
             Role: "nat-instance",
             InstanceType: natInstanceType,
-            AMIType: useAwsNatAmi ? "aws-nat-ami" : "amazon-linux-2023",
+            AMIType: useAwsNatAmi ? "aws-nat-ami" : "amazon-linux-2023-nftables",
         },
     });
 
@@ -441,7 +460,7 @@ echo "NAT instance configuration completed successfully!"`;
 export const natTypeExport = natType;
 export const natResourceIdsExport = natResourceIds;
 export const highAvailabilityEnabled = highAvailabilityMode;
-export const natAmiType = useAwsNatAmi ? "aws-nat-ami" : "amazon-linux-2023";
+export const natAmiType = useAwsNatAmi ? "aws-nat-ami" : "amazon-linux-2023-nftables";
 
 // 条件付きエクスポート（NAT Gateway用）
 export const natGatewayAIdExport = natGatewayAId;
@@ -463,7 +482,7 @@ const natConfigParameter = new aws.ssm.Parameter(`${projectName}-nat-config`, {
         type: natType,
         highAvailability: highAvailabilityMode,
         instanceType: natInstanceType,
-        amiType: useAwsNatAmi ? "aws-nat-ami" : "amazon-linux-2023",
+        amiType: useAwsNatAmi ? "aws-nat-ami" : "amazon-linux-2023-nftables",
         createdAt: new Date().toISOString(),
     }),
     description: "NAT configuration for Jenkins infrastructure",
