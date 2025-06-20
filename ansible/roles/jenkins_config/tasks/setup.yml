@@ -27,101 +27,54 @@
   ignore_errors: true
 
 # コントローラースタックからJenkinsインスタンスIDを取得（未設定の場合）
-- name: Get Jenkins instance ID from controller stack
-  ansible.builtin.include_role:
-    name: pulumi_helper
-    tasks_from: get_outputs
-  vars:
-    pulumi_project_path: "{{ pulumi_path }}/jenkins-controller"
-    output_name: "jenkinsInstanceId"
-    mock_output: "mock-jenkins-instance-id"
-  when: jenkins_instance_id is not defined or jenkins_instance_id == ""
-
-# デバッグ: 直接Pulumiコマンドを実行して確認
-- name: Debug - Get all Pulumi outputs directly
+- name: Get Jenkins instance ID directly from Pulumi
   ansible.builtin.shell: |
     cd {{ pulumi_path }}/jenkins-controller
     export PULUMI_ACCESS_TOKEN="{{ lookup('env', 'PULUMI_ACCESS_TOKEN') }}"
-    sudo -E /root/.pulumi/bin/pulumi stack output --json
-  register: pulumi_all_outputs
+    sudo -E /root/.pulumi/bin/pulumi stack output jenkinsInstanceId 2>/dev/null
+  register: jenkins_instance_id_output
+  changed_when: false
+  failed_when: false
   when: jenkins_instance_id is not defined or jenkins_instance_id == ""
 
-- name: Debug - Display all Pulumi outputs
-  ansible.builtin.debug:
-    msg: "All Pulumi outputs: {{ pulumi_all_outputs.stdout | from_json if pulumi_all_outputs.stdout else 'No outputs' }}"
-  when: pulumi_all_outputs is defined
-
-# デバッグ: 特定の出力を直接取得
-- name: Debug - Get specific jenkinsInstanceId output
-  ansible.builtin.shell: |
-    cd {{ pulumi_path }}/jenkins-controller
-    export PULUMI_ACCESS_TOKEN="{{ lookup('env', 'PULUMI_ACCESS_TOKEN') }}"
-    sudo -E /root/.pulumi/bin/pulumi stack output jenkinsInstanceId 2>&1
-  register: pulumi_instance_id_direct
-  when: jenkins_instance_id is not defined or jenkins_instance_id == ""
-
-- name: Debug - Display direct output result
-  ansible.builtin.debug:
-    msg: |
-      Direct command result:
-      stdout: {{ pulumi_instance_id_direct.stdout | default('None') }}
-      stderr: {{ pulumi_instance_id_direct.stderr | default('None') }}
-      rc: {{ pulumi_instance_id_direct.rc | default('None') }}
-  when: pulumi_instance_id_direct is defined
-
-- name: Set Jenkins instance ID from controller stack
+- name: Set Jenkins instance ID
   ansible.builtin.set_fact:
-    jenkins_instance_id: "{{ stack_output_result.stdout | trim }}"
+    jenkins_instance_id: "{{ jenkins_instance_id_output.stdout | trim }}"
   when: 
     - jenkins_instance_id is not defined or jenkins_instance_id == ""
-    - stack_output_result is defined 
-    - stack_output_result.stdout is defined
-    - stack_output_result.stdout | trim != ""
-    - stack_output_result.stdout | trim != "mock-jenkins-instance-id"
-
-# stack_output_resultが失敗した場合のフォールバック
-- name: Set Jenkins instance ID from debug output
-  ansible.builtin.set_fact:
-    jenkins_instance_id: "{{ pulumi_instance_id_direct.stdout | trim }}"
-  when:
-    - jenkins_instance_id is not defined or jenkins_instance_id == ""
-    - pulumi_instance_id_direct is defined
-    - pulumi_instance_id_direct.stdout is defined
-    - pulumi_instance_id_direct.rc == 0
-    - pulumi_instance_id_direct.stdout | trim != ""
+    - jenkins_instance_id_output is defined
+    - jenkins_instance_id_output.rc == 0
+    - jenkins_instance_id_output.stdout | trim | regex_search('^i-[a-f0-9]+)
 
 - name: Verify Jenkins instance ID
   ansible.builtin.fail:
     msg: "Unable to determine Jenkins instance ID. Please specify jenkins_instance_id or ensure controller is deployed."
   when: 
-    - jenkins_instance_id is not defined or jenkins_instance_id == ""
-    - jenkins_instance_id == "mock-jenkins-instance-id"
-    - not (jenkins_instance_id | default('') | regex_search('^i-[a-f0-9]+$'))
+    - jenkins_instance_id is not defined or jenkins_instance_id == "" or not (jenkins_instance_id | regex_search('^i-[a-f0-9]+))
 
 - name: Display Jenkins instance ID
   ansible.builtin.debug:
     msg: "Using Jenkins Instance ID: {{ jenkins_instance_id }}"
 
 # EFSファイルシステムIDの取得（未設定の場合）
-- name: Get EFS file system ID from storage stack
-  ansible.builtin.include_role:
-    name: pulumi_helper
-    tasks_from: get_outputs
-  vars:
-    pulumi_project_path: "{{ pulumi_path }}/jenkins-storage"
-    output_name: "efsFileSystemId"
-    mock_output: "mock-efs-id"
+- name: Get EFS file system ID directly from Pulumi
+  ansible.builtin.shell: |
+    cd {{ pulumi_path }}/jenkins-storage
+    export PULUMI_ACCESS_TOKEN="{{ lookup('env', 'PULUMI_ACCESS_TOKEN') }}"
+    sudo -E /root/.pulumi/bin/pulumi stack output efsFileSystemId 2>/dev/null
+  register: efs_file_system_id_output
+  changed_when: false
+  failed_when: false
   when: efs_file_system_id is not defined or efs_file_system_id == ""
 
-- name: Set EFS file system ID from storage stack
+- name: Set EFS file system ID
   ansible.builtin.set_fact:
-    efs_file_system_id: "{{ stack_output_result.stdout | trim }}"
+    efs_file_system_id: "{{ efs_file_system_id_output.stdout | trim }}"
   when: 
     - efs_file_system_id is not defined or efs_file_system_id == ""
-    - stack_output_result is defined
-    - stack_output_result.stdout is defined
-    - stack_output_result.stdout | trim != ""
-    - stack_output_result.stdout | trim != "mock-efs-id"
+    - efs_file_system_id_output is defined
+    - efs_file_system_id_output.rc == 0
+    - efs_file_system_id_output.stdout | trim | regex_search('^fs-[a-f0-9]+)
 
 # ファイル権限設定
 - name: Ensure aws-env.sh has execute permissions
@@ -171,26 +124,20 @@
         pulumi_project_path: "{{ pulumi_path }}/jenkins-config"
     
     # SSMドキュメント名の取得
-    - name: Get SSM document names - Direct approach
+    - name: Get SSM document names
       ansible.builtin.shell: |
         cd {{ pulumi_path }}/jenkins-config
         export PULUMI_ACCESS_TOKEN="{{ lookup('env', 'PULUMI_ACCESS_TOKEN') }}"
         sudo -E /root/.pulumi/bin/pulumi stack output ssmDocuments --json 2>/dev/null || echo '{}'
-      register: ssm_documents_direct
+      register: ssm_documents_output
       changed_when: false
-
-    - name: Debug SSM documents output
-      ansible.builtin.debug:
-        var: ssm_documents_direct
-      when: ansible_verbosity > 0
 
     - name: Set SSM document names
       ansible.builtin.set_fact:
-        ssm_documents: "{{ ssm_documents_direct.stdout | from_json }}"
+        ssm_documents: "{{ ssm_documents_output.stdout | from_json }}"
       when: 
-        - ssm_documents_direct.stdout | length > 0
-        - ssm_documents_direct.stdout != '{}'
-      failed_when: false
+        - ssm_documents_output.stdout | length > 0
+        - ssm_documents_output.stdout != '{}'
 
     # フォールバック: デフォルト値を設定
     - name: Set default SSM document names if not found
