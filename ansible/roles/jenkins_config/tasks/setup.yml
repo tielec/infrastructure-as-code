@@ -91,10 +91,8 @@
     
     - name: Configure config stack
       ansible.builtin.shell: |
+        {{ scripts_dir }}/aws-env.sh
         cd {{ pulumi_path }}/jenkins-config
-        source {{ scripts_dir }}/aws-env.sh > /dev/null 2>&1
-        eval $({{ scripts_dir }}/aws-env.sh > /dev/null 2>&1)
-        
         sudo -E /root/.pulumi/bin/pulumi config set aws:region {{ aws_region_name }}
         sudo -E /root/.pulumi/bin/pulumi config set {{ config_project_name }}:projectName {{ project_name }}
         sudo -E /root/.pulumi/bin/pulumi config set {{ config_project_name }}:jenkinsVersion {{ jenkins_version }}

@@ -37,10 +37,8 @@
     
     - name: Configure network stack
       ansible.builtin.shell: |
+        {{ scripts_dir }}/aws-env.sh
         cd {{ pulumi_path }}/jenkins-network
-        source {{ scripts_dir }}/aws-env.sh 
-        eval $({{ scripts_dir }}/aws-env.sh)
-        
         sudo -E /root/.pulumi/bin/pulumi config set aws:region {{ aws_region_name }}
         sudo -E /root/.pulumi/bin/pulumi config set {{ network_project_name }}:projectName {{ project_name }}
         sudo -E /root/.pulumi/bin/pulumi config set {{ network_project_name }}:vpcCidr {{ vpc_cidr | default('10.0.0.0/16') }}
@@ -72,10 +70,8 @@
     # スタック出力の取得
     - name: Get VPC ID from stack outputs
       ansible.builtin.shell: |
+        {{ scripts_dir }}/aws-env.sh
         cd {{ pulumi_path }}/jenkins-network
-        source {{ scripts_dir }}/aws-env.sh 
-        eval $({{ scripts_dir }}/aws-env.sh)
-        
         # スタック出力を確認
         sudo -E /root/.pulumi/bin/pulumi stack output || echo "No outputs available yet"
         
@@ -96,10 +92,8 @@
     # Public Subnet IDs取得
     - name: Get public subnet IDs
       ansible.builtin.shell: |
+        {{ scripts_dir }}/aws-env.sh
         cd {{ pulumi_path }}/jenkins-network
-        source {{ scripts_dir }}/aws-env.sh 
-        eval $({{ scripts_dir }}/aws-env.sh)
-        
         sudo -E /root/.pulumi/bin/pulumi stack output publicSubnetIds 2>/dev/null || 
           echo "['mock-public-subnet-1','mock-public-subnet-2']"
       register: public_subnets_result
@@ -113,10 +107,8 @@
     # Private Subnet IDs取得
     - name: Get private subnet IDs
       ansible.builtin.shell: |
+        {{ scripts_dir }}/aws-env.sh
         cd {{ pulumi_path }}/jenkins-network
-        source {{ scripts_dir }}/aws-env.sh 
-        eval $({{ scripts_dir }}/aws-env.sh)
-        
         sudo -E /root/.pulumi/bin/pulumi stack output privateSubnetIds 2>/dev/null || 
           echo "['mock-private-subnet-1','mock-private-subnet-2']"
       register: private_subnets_result

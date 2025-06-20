@@ -56,10 +56,8 @@
     
     - name: Configure agent stack
       ansible.builtin.shell: |
-        cd {{ pulumi_path }}/jenkins-agent
-        source {{ scripts_dir }}/aws-env.sh 
-        eval $({{ scripts_dir }}/aws-env.sh)
-        
+        {{ scripts_dir }}/aws-env.sh
+        cd {{ pulumi_path }}/jenkins-agent        
         sudo -E /root/.pulumi/bin/pulumi config set aws:region {{ aws_region_name }}
         sudo -E /root/.pulumi/bin/pulumi config set {{ agent_project_name }}:projectName {{ project_name }}
         sudo -E /root/.pulumi/bin/pulumi config set {{ agent_project_name }}:networkStackName {{ network_project_name }}
