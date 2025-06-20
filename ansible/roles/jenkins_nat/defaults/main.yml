@@ -9,4 +9,4 @@ env_name: "dev"
 
 # NATモードのデフォルト値
 high_availability_mode: false
-nat_instance_type: "t3.nano"
+nat_instance_type: "t4g.nano"
