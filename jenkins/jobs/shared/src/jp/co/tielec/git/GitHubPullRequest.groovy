@@ -133,7 +133,7 @@ class GitHubPullRequest implements Serializable {
             
             // デフォルト設定
             def defaultConfig = [
-                credentialsId: 'your-github-app-credentials-id',
+                credentialsId: 'github-app-credentials',
                 base: 'main',
                 maxResults: 10,
                 sort: 'merged',
@@ -221,7 +221,7 @@ class GitHubPullRequest implements Serializable {
             
             // デフォルト設定
             def defaultConfig = [
-                credentialsId: 'your-github-app-credentials-id',
+                credentialsId: 'github-app-credentials',
                 base: 'main',
                 sort: 'updated',  // 'merged' から 'updated' に変更
                 direction: 'desc', // 新しいものから取得するようにdescに変更
@@ -465,7 +465,7 @@ class GitHubPullRequest implements Serializable {
             
             // デフォルト設定
             def defaultConfig = [
-                credentialsId: 'your-github-app-credentials-id',
+                credentialsId: 'github-app-credentials',
                 commentTag: 'auto-generated-comment'
             ]
             config = defaultConfig + config

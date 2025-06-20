@@ -28,7 +28,7 @@ class GitHubApiClient implements Serializable {
     GitHubApiClient(def script) {
         this.script = script
         this.defaultConfig = [
-            credentialsId: 'your-github-app-credentials-id',
+            credentialsId: 'github-app-credentials',
             acceptType: 'application/vnd.github.v3+json',
             authType: AuthType.GITHUB_APP // デフォルトはGitHub App認証
         ]
@@ -342,7 +342,7 @@ class GitHubApiClient implements Serializable {
     /**
     * GitHub App接続をテストする（レート制限情報のみ取得）
     * @param config 設定（オプション）
-    *        - credentialsId: GitHub App認証情報ID (デフォルト: 'your-github-app-credentials-id')
+    *        - credentialsId: GitHub App認証情報ID (デフォルト: 'github-app-credentials')
     * @return テスト結果 (success: true/false, rate_limit: レート制限情報)
     */
     def testGitHubAppConnection(Map config = [:]) {
@@ -416,7 +416,7 @@ class GitHubApiClient implements Serializable {
             
             // デフォルトの認証情報IDを設定
             if (!updatedConfig.credentialsId) {
-                updatedConfig.credentialsId = (authType == AuthType.GITHUB_APP) ? 'your-github-app-credentials-id' : 'github-pat'
+                updatedConfig.credentialsId = (authType == AuthType.GITHUB_APP) ? 'github-app-credentials' : 'github-pat'
             }
             
             // レート制限情報を取得して接続テスト

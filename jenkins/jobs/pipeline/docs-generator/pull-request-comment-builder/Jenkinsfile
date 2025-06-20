@@ -231,7 +231,7 @@ pipeline {
                         sh "mkdir -p ${WORKSPACE}/prompts"
                         
                         withCredentials([
-                            usernamePassword(credentialsId: 'your-github-app-credentials-id', 
+                            usernamePassword(credentialsId: 'github-app-credentials', 
                                             usernameVariable: 'GITHUB_APP_ID',
                                             passwordVariable: 'GITHUB_ACCESS_TOKEN'),
                             string(credentialsId: 'openai-api-key', 

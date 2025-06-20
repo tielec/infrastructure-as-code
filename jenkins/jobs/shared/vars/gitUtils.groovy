@@ -367,7 +367,7 @@ def getRateLimit(Map config = [:]) {
 /**
  * GitHub Appのインストール情報を取得する
  * @param config 設定（オプション）
- *        - credentialsId: GitHub App認証情報ID (デフォルト: 'your-github-app-credentials-id')
+ *        - credentialsId: GitHub App認証情報ID (デフォルト: 'github-app-credentials')
  * @return アプリのインストール情報
  * @throws GitOperationException API呼び出しに失敗した場合
  */
@@ -390,7 +390,7 @@ def getGitHubAppInstallations(Map config = [:]) {
  * @param status ステータス (queued, in_progress, completed)
  * @param conclusion 結論 (success, failure, neutral, cancelled, skipped, timed_out, or action_required)
  * @param config 設定（オプション）
- *        - credentialsId: GitHub App認証情報ID (デフォルト: 'your-github-app-credentials-id')
+ *        - credentialsId: GitHub App認証情報ID (デフォルト: 'github-app-credentials')
  *        - title: チェック出力のタイトル
  *        - summary: チェック出力の概要
  *        - text: チェック出力の詳細テキスト
@@ -412,7 +412,7 @@ def createCheckRun(String repoOwner, String repoName, String headSha, String che
  * 指定した認証方式でGitHub接続をテストする
  * @param config 設定（オプション）
  *        - authType: 認証タイプ (GitHubApiClient.AuthType.PAT または GitHubApiClient.AuthType.GITHUB_APP)
- *        - credentialsId: 認証情報ID (デフォルト: authTypeに応じて'github-pat'または'your-github-app-credentials-id')
+ *        - credentialsId: 認証情報ID (デフォルト: authTypeに応じて'github-pat'または'github-app-credentials')
  * @return テスト結果 (success: true/false, rate_limit: レート制限情報)
  */
 def testGitHubConnection(Map config = [:]) {
@@ -442,7 +442,7 @@ def testPATConnection(Map config = [:]) {
 /**
  * GitHub App接続をテストする（シンプル版 - レート制限情報の取得のみ）
  * @param config 設定（オプション）
- *        - credentialsId: GitHub App認証情報ID (デフォルト: 'your-github-app-credentials-id')
+ *        - credentialsId: GitHub App認証情報ID (デフォルト: 'github-app-credentials')
  * @return テスト結果 (success: true/false, rate_limit: レート制限情報)
  */
 def testGitHubAppConnection(Map config = [:]) {
