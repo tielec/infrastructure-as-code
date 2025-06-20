@@ -3,7 +3,7 @@
  * 
  * JenkinsインフラのNATリソースを構築するPulumiスクリプト
  * ハイアベイラビリティモード: NATゲートウェイ（2つ）
- * ノーマルモード: NATインスタンス（1つ）
+ * ノーマルモード: NATインスタンス（1つ）- AWS NAT AMI使用
  */
 import * as pulumi from "@pulumi/pulumi";
 import * as aws from "@pulumi/aws";
@@ -116,14 +116,33 @@ if (highAvailabilityMode) {
     pulumi.log.info("Deploying NAT Instance in Normal mode");
     natType = "instance";
 
-    // 最新のAmazon Linux 2023 AMIを取得
+    // AWS公式のNATインスタンス用AMIを取得
+    // amzn-ami-vpc-nat-*のパターンでNAT用に最適化されたAMIを検索
     const natAmi = aws.ec2.getAmi({
         mostRecent: true,
         owners: ["amazon"],
-        filters: [{
-            name: "name",
-            values: ["al2023-ami-*-kernel-*-x86_64"],
-        }],
+        filters: [
+            {
+                name: "name",
+                values: ["amzn-ami-vpc-nat-*"],
+            },
+            {
+                name: "architecture",
+                values: ["x86_64"],
+            },
+            {
+                name: "virtualization-type",
+                values: ["hvm"],
+            },
+            {
+                name: "root-device-type",
+                values: ["ebs"],
+            },
+            {
+                name: "state",
+                values: ["available"],
+            },
+        ],
     });
 
     // NATインスタンス用のIAMロール
@@ -181,47 +200,31 @@ if (highAvailabilityMode) {
         vpcSecurityGroupIds: [natInstanceSecurityGroupId],
         iamInstanceProfile: natInstanceProfile.name,
         sourceDestCheck: false, // NATとして機能するために必要
+        // AWS NAT AMIは事前設定済みなので、追加の設定は最小限に
         userData: Buffer.from(`#!/bin/bash
-# NAT Instance Setup Script
+# AWS NAT AMI追加設定スクリプト
 set -e
 exec > >(tee /var/log/user-data.log|logger -t user-data -s 2>/dev/console) 2>&1
 
-echo "Starting NAT instance configuration..."
+echo "Starting NAT instance additional configuration..."
 
 # システムアップデート
-dnf update -y
+yum update -y
 
-# IP転送を有効化
-echo "Enabling IP forwarding..."
-echo 1 > /proc/sys/net/ipv4/ip_forward
-echo "net.ipv4.ip_forward = 1" >> /etc/sysctl.conf
-sysctl -p
+# SSMエージェントのインストールと起動（必要な場合）
+if ! systemctl is-active amazon-ssm-agent > /dev/null 2>&1; then
+    echo "Installing SSM agent..."
+    yum install -y amazon-ssm-agent
+    systemctl enable amazon-ssm-agent
+    systemctl start amazon-ssm-agent
+fi
 
-# iptables設定
-echo "Installing and configuring iptables..."
-dnf install -y iptables-services
-systemctl enable iptables
-systemctl start iptables
-
-# NAT設定
-echo "Configuring NAT rules..."
-iptables -t nat -A POSTROUTING -o eth0 -s ${vpcCidr} -j MASQUERADE
-iptables -A FORWARD -i eth0 -o eth0 -m state --state RELATED,ESTABLISHED -j ACCEPT
-iptables -A FORWARD -i eth0 -o eth0 -j ACCEPT
-
-# 設定を保存
-service iptables save
-
-# SSMエージェントの確認と起動
-echo "Starting SSM agent..."
-dnf install -y amazon-ssm-agent
-systemctl enable amazon-ssm-agent
-systemctl start amazon-ssm-agent
-
-# CloudWatchエージェントインストール
-echo "Installing CloudWatch agent..."
-wget -q https://s3.amazonaws.com/amazoncloudwatch-agent/amazon_linux/amd64/latest/amazon-cloudwatch-agent.rpm
-rpm -U ./amazon-cloudwatch-agent.rpm
+# CloudWatchエージェントインストール（モニタリング用）
+if [ ! -f /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl ]; then
+    echo "Installing CloudWatch agent..."
+    wget -q https://s3.amazonaws.com/amazoncloudwatch-agent/amazon_linux/amd64/latest/amazon-cloudwatch-agent.rpm
+    rpm -U ./amazon-cloudwatch-agent.rpm
+fi
 
 # CloudWatch設定
 cat > /opt/aws/amazon-cloudwatch-agent/etc/config.json << 'EOF'
@@ -269,7 +272,26 @@ EOF
     -s \
     -c file:/opt/aws/amazon-cloudwatch-agent/etc/config.json
 
-echo "NAT instance configuration completed successfully!"
+# IP転送が有効になっていることを確認（AWS NAT AMIでは通常有効）
+if [ "$(cat /proc/sys/net/ipv4/ip_forward)" != "1" ]; then
+    echo "Enabling IP forwarding..."
+    echo 1 > /proc/sys/net/ipv4/ip_forward
+fi
+
+# VPCのCIDRを使用してiptables設定を最適化（必要な場合）
+VPC_CIDR="${vpcCidr}"
+if [ ! -z "$VPC_CIDR" ]; then
+    # 既存のMASQUERADEルールがあるか確認
+    iptables -t nat -C POSTROUTING -s $VPC_CIDR -o eth0 -j MASQUERADE 2>/dev/null
+    if [ $? -ne 0 ]; then
+        echo "Adding MASQUERADE rule for VPC CIDR: $VPC_CIDR"
+        iptables -t nat -A POSTROUTING -s $VPC_CIDR -o eth0 -j MASQUERADE
+        service iptables save
+    fi
+fi
+
+echo "NAT instance additional configuration completed successfully!"
+echo "AMI ID: $(curl -s http://169.254.169.254/latest/meta-data/ami-id)"
 `).toString("base64"),
         tags: {
             Name: `${projectName}-nat-instance-${environment}`,
