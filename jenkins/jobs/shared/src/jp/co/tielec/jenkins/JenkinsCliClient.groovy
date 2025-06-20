@@ -442,7 +442,6 @@ class JenkinsCliClient {
     private String buildCliCommand(String command, Map config) {
         return """java -jar jenkins-cli.jar \\
             -s '${config.jenkinsUrl}' \\
-            -http \\
             -auth "\$USER:\$PASS" \\
             ${command}
         """.stripIndent()

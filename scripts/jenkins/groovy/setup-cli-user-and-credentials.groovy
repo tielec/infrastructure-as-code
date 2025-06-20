@@ -90,38 +90,92 @@ def existingCredential = existingCredentials.find { it.id == CREDENTIAL_ID }
 
 if (existingCredential != null) {
     println("Credential '${CREDENTIAL_ID}' already exists in Jenkins credentials store.")
-} else {
-    println("Creating API token and storing in Jenkins credentials...")
-    
-    // APIトークンの生成
-    def tokenProperty = cliUser.getProperty(ApiTokenProperty.class)
-    if (tokenProperty == null) {
-        println("ERROR: Failed to get API token property")
-        return
-    }
-    
-    try {
-        // 新しいトークンを生成
-        def tokenName = "cli-automation-token"
-        def tokenResult = tokenProperty.tokenStore.generateNewToken(tokenName)
-        def apiToken = tokenResult.plainValue
-        println("API token generated successfully")
-        
-        // Jenkinsのクレデンシャルストアに保存
-        def credentials = new UsernamePasswordCredentialsImpl(
-            CredentialsScope.GLOBAL,
-            CREDENTIAL_ID,
-            CREDENTIAL_DESCRIPTION,
-            CLI_USERNAME,
-            apiToken
-        )
-        
-        credentialsStore.addCredentials(globalDomain, credentials)
-        println("API token stored in Jenkins credentials as '${CREDENTIAL_ID}'") 
-    } catch (Exception e) {
-        println("ERROR: Failed to generate or store API token: ${e.message}")
-        e.printStackTrace()
-    }
+    // 既存のクレデンシャルを削除して再作成するオプション
+    println("Removing existing credential to recreate with new token...")
+    credentialsStore.removeCredentials(globalDomain, existingCredential)
 }
 
-println("=== CLI User Setup Completed ===")
+println("Creating API token and storing in Jenkins credentials...")
+
+// APIトークンの生成
+def tokenProperty = cliUser.getProperty(ApiTokenProperty.class)
+if (tokenProperty == null) {
+    // APIトークンプロパティを追加
+    tokenProperty = new ApiTokenProperty()
+    cliUser.addProperty(tokenProperty)
+    cliUser.save()
+}
+
+try {
+    // 既存のトークンをすべてクリア
+    tokenProperty.tokenStore.getTokenListSortedByName().each { token ->
+        tokenProperty.tokenStore.revokeToken(token.getUuid())
+    }
+    
+    // 新しいトークンを生成
+    def tokenName = "cli-automation-token-" + System.currentTimeMillis()
+    def tokenResult = tokenProperty.tokenStore.generateNewToken(tokenName)
+    def apiToken = tokenResult.plainValue
+    
+    // トークンが正しく生成されたか確認
+    if (apiToken == null || apiToken.isEmpty()) {
+        throw new Exception("Generated token is null or empty")
+    }
+    
+    println("API token generated successfully")
+    println("  Token name: ${tokenName}")
+    println("  Token length: ${apiToken.length()}")
+    println("  Token UUID: ${tokenResult.tokenUuid}")
+    
+    // ユーザーを保存してトークンを永続化
+    cliUser.save()
+    
+    // Jenkinsのクレデンシャルストアに保存
+    def credentials = new UsernamePasswordCredentialsImpl(
+        CredentialsScope.GLOBAL,
+        CREDENTIAL_ID,
+        CREDENTIAL_DESCRIPTION,
+        CLI_USERNAME,
+        apiToken
+    )
+    
+    credentialsStore.addCredentials(globalDomain, credentials)
+    println("API token stored in Jenkins credentials as '${CREDENTIAL_ID}'")
+    
+    // Jenkins全体を保存
+    instance.save()
+    
+} catch (Exception e) {
+    println("ERROR: Failed to generate or store API token: ${e.message}")
+    e.printStackTrace()
+}
+
+// 保存されたクレデンシャルの確認
+println("\n=== Verifying stored credentials ===")
+def verifyCredentials = credentialsStore.getCredentials(globalDomain)
+def savedCredential = verifyCredentials.find { it.id == CREDENTIAL_ID }
+if (savedCredential != null) {
+    println("✓ Credential '${CREDENTIAL_ID}' found in store")
+    println("  Type: ${savedCredential.getClass().getSimpleName()}")
+    println("  Description: ${savedCredential.description}")
+    if (savedCredential instanceof UsernamePasswordCredentialsImpl) {
+        println("  Username: ${savedCredential.username}")
+        println("  Password stored: ${savedCredential.password != null ? 'Yes' : 'No'}")
+    }
+} else {
+    println("✗ Credential '${CREDENTIAL_ID}' NOT found in store")
+}
+
+// トークンの一覧を表示（デバッグ用）
+println("\n=== API Tokens for user ${CLI_USERNAME} ===")
+def tokenProp = cliUser.getProperty(ApiTokenProperty.class)
+if (tokenProp != null) {
+    def tokens = tokenProp.tokenStore.getTokenListSortedByName()
+    tokens.each { token ->
+        println("  - ${token.name} (created: ${token.creationDate})")
+    }
+} else {
+    println("  No API token property found")
+}
+
+println("\n=== CLI User Setup Completed ===")
