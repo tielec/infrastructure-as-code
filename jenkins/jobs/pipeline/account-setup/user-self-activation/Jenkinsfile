@@ -4,7 +4,10 @@ def userId = ''
 def userEmail = ''
 
 pipeline {
-    agent any
+    
+    agent { 
+        label 'ec2-fleet' 
+    }
     
     environment {
         SCRIPT_PATH = 'jenkins/jobs/pipeline/account-setup/user-self-activation/scripts'

@@ -190,7 +190,9 @@ println("2. The Jenkinsfile should use Job DSL to create other jobs")
 println("\nExample Jenkinsfile content:")
 println("""
 pipeline {
-    agent any
+    agent { 
+        label 'ec2-fleet' 
+    }
     
     stages {
         stage('Create Jobs') {
