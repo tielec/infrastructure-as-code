@@ -230,69 +230,73 @@ fi
 
 echo "NAT instance configuration completed!"`;
     } else {
-        // Amazon Linux 2023用のnftablesベースのNAT設定
+        // Amazon Linux 2023用のnftablesベースのNAT設定（CloudFormationベースの実装）
         userDataScript = `#!/bin/bash
 # NAT Instance Setup Script for Amazon Linux 2023 with nftables
-set -e
+# Based on proven CloudFormation implementation
+
+# スクリプトの実行ログを記録
 exec > >(tee /var/log/user-data.log|logger -t user-data -s 2>/dev/console) 2>&1
 
 echo "Starting NAT instance configuration for Amazon Linux 2023..."
 
-# システムアップデート
-dnf update -y
+# ネットワークインターフェースが完全に初期化されるまで待機
+echo "Waiting for network initialization..."
+sleep 10
 
-# 必要なパッケージのインストール
-echo "Installing required packages..."
-dnf install -y nftables amazon-ssm-agent
-
-# IP転送を有効化
+# IP forwardingの有効化
 echo "Enabling IP forwarding..."
-echo "net.ipv4.ip_forward = 1" > /etc/sysctl.d/90-nat-instance.conf
-sysctl -p /etc/sysctl.d/90-nat-instance.conf
+sudo sysctl -w net.ipv4.ip_forward=1
+echo "net.ipv4.ip_forward=1" | sudo tee -a /etc/sysctl.conf
 
-# プライマリネットワークインターフェースを動的に取得
-echo "Detecting primary network interface..."
-PRIMARY_INTERFACE=$(ip -o link show device-number-0 | awk -F': ' '{print $2}')
-echo "Primary interface detected: $PRIMARY_INTERFACE"
+# システムアップデートとnftablesのインストール
+echo "Updating system and installing nftables..."
+sudo yum -y upgrade
+sudo yum install -y nftables
 
-# nftablesでNAT設定
-echo "Configuring nftables NAT rules..."
-nft add table nat
-nft -- add chain nat prerouting { type nat hook prerouting priority -100 \\; }
-nft add chain nat postrouting { type nat hook postrouting priority 100 \\; }
-nft add rule nat postrouting oifname "$PRIMARY_INTERFACE" masquerade
+# nftablesの設定
+echo "Configuring nftables..."
+sudo nft flush ruleset
+sudo nft add table nat
+sudo nft add chain nat prerouting { type nat hook prerouting priority -100 \\; }
+sudo nft add chain nat postrouting { type nat hook postrouting priority 100 \\; }
 
-# 設定の確認
-echo "Current nftables configuration:"
-nft list table nat
+# インターフェース名を取得（CloudFormationの方法を採用）
+echo "Detecting network interface..."
+IFACE=$(ip route get 8.8.8.8 | grep -oP 'dev \\K\\S+')
+echo "Primary interface detected: $IFACE"
 
-# nftables設定を永続化
+# masqueradeルールの設定
+echo "Adding masquerade rule..."
+sudo nft add rule nat postrouting oifname "$IFACE" masquerade
+
+# 設定の永続化
 echo "Persisting nftables configuration..."
-mkdir -p /etc/nftables
-nft list table nat > /etc/nftables/al2023-nat.nft
-
-# systemd用の設定ファイルを作成
-cat > /etc/sysconfig/nftables.conf << 'EOF'
-# Load NAT configuration
-include "/etc/nftables/al2023-nat.nft"
-EOF
+sudo mkdir -p /etc/nftables
+sudo nft list ruleset > /etc/nftables/al2023-nat.nft
+echo 'include "/etc/nftables/al2023-nat.nft"' | sudo tee /etc/sysconfig/nftables.conf
 
 # nftablesサービスの有効化と起動
 echo "Enabling and starting nftables service..."
-systemctl enable nftables
-systemctl start nftables
+sudo systemctl enable nftables
+sudo systemctl restart nftables
 
-# SSMエージェントの起動
+# 設定の確認
+echo "Current nftables rules:"
+sudo nft list ruleset
+
+# SSMエージェントの起動（既にインストール済みの場合）
 echo "Starting SSM agent..."
-systemctl enable amazon-ssm-agent
-systemctl start amazon-ssm-agent
+sudo systemctl enable amazon-ssm-agent
+sudo systemctl start amazon-ssm-agent
 
-# CloudWatchエージェントのインストール
+# CloudWatchエージェントのインストール（オプション）
 echo "Installing CloudWatch agent..."
 wget -q https://s3.amazonaws.com/amazoncloudwatch-agent/amazon_linux/amd64/latest/amazon-cloudwatch-agent.rpm
-rpm -U ./amazon-cloudwatch-agent.rpm
+sudo rpm -U ./amazon-cloudwatch-agent.rpm || echo "CloudWatch agent installation skipped"
 
-# CloudWatch設定
+# CloudWatch設定（オプション）
+if [ -f /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl ]; then
 cat > /opt/aws/amazon-cloudwatch-agent/etc/config.json << 'EOF'
 {
   "metrics": {
@@ -336,35 +340,39 @@ EOF
     -a fetch-config \
     -m ec2 \
     -s \
-    -c file:/opt/aws/amazon-cloudwatch-agent/etc/config.json
+    -c file:/opt/aws/amazon-cloudwatch-agent/etc/config.json || echo "CloudWatch agent start skipped"
+fi
 
 # 動作確認
+echo ""
 echo "=== NAT Configuration Status ==="
 echo "IP Forwarding: $(cat /proc/sys/net/ipv4/ip_forward)"
-echo "Primary Interface: $PRIMARY_INTERFACE"
-echo "nftables rules:"
-nft list table nat
-echo ""
+echo "Network Interface: $IFACE"
 echo "nftables service status:"
-systemctl status nftables --no-pager
+sudo systemctl status nftables --no-pager || true
 echo ""
-
-echo "NAT instance configuration completed successfully!"
+echo "nftables rules:"
+sudo nft list ruleset
+echo ""
 
 # 接続性テスト用のスクリプトを作成
 cat > /usr/local/bin/test-nat.sh << 'SCRIPT_EOF'
 #!/bin/bash
 echo "=== NAT Instance Test ==="
-echo "Primary Interface: $(ip -o link show device-number-0 | awk -F': ' '{print $2}')"
 echo "IP Forwarding: $(cat /proc/sys/net/ipv4/ip_forward)"
+echo "Network Interface: $(ip route get 8.8.8.8 | grep -oP 'dev \\K\\S+')"
 echo "Active connections: $(ss -nat | grep ESTABLISHED | wc -l)"
 echo ""
-echo "nftables NAT rules:"
-nft list table nat
+echo "nftables rules:"
+sudo nft list ruleset
+echo ""
+echo "Route to internet:"
+ip route get 8.8.8.8
 SCRIPT_EOF
-chmod +x /usr/local/bin/test-nat.sh
+sudo chmod +x /usr/local/bin/test-nat.sh
 
-echo "Test script created at /usr/local/bin/test-nat.sh"`;
+echo "NAT instance configuration completed successfully!"
+echo "Test script available at: /usr/local/bin/test-nat.sh"`;
     }
 
     // NATインスタンス
