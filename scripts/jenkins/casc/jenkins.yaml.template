@@ -1,6 +1,6 @@
 jenkins:
   systemMessage: "Jenkins is configured automatically using JCasC"
-  numExecutors: 0
+  numExecutors: 1
   mode: NORMAL
   authorizationStrategy:
     loggedInUsersCanDoAnything:
