@@ -43,10 +43,8 @@
     
     - name: Configure controller stack
       ansible.builtin.shell: |
+        {{ scripts_dir }}/aws-env.sh
         cd {{ pulumi_path }}/jenkins-controller
-        source {{ scripts_dir }}/aws-env.sh 
-        eval $({{ scripts_dir }}/aws-env.sh)
-        
         sudo -E /root/.pulumi/bin/pulumi config set aws:region {{ aws_region_name }}
         sudo -E /root/.pulumi/bin/pulumi config set {{ controller_project_name }}:projectName {{ project_name }}
         sudo -E /root/.pulumi/bin/pulumi config set {{ controller_project_name }}:networkStackName {{ network_project_name }}

@@ -54,7 +54,7 @@ jenkins:
   version: "latest"
   color: "blue"
   recovery_mode: false
-  instance_type: "t3.medium"
+  instance_type: "t4g.medium"
   key_name: ""  # 必要に応じて設定
   git:
     repo: "https://github.com/tielec/infrastructure-as-code.git"

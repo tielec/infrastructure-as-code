@@ -8,7 +8,7 @@ pulumi_path: "{{ playbook_dir }}/../../pulumi"
 env_name: "dev"
 
 # インスタンス設定のデフォルト値
-instance_type: "t3.medium"
+instance_type: "t4g.medium"
 key_name: ""  # プレイブック変数またはall.ymlから取得
 
 # Jenkinsバージョン設定
