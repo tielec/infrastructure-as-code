@@ -44,13 +44,13 @@
     - jenkins_instance_id is not defined or jenkins_instance_id == ""
     - jenkins_instance_id_output is defined
     - jenkins_instance_id_output.rc == 0
-    - jenkins_instance_id_output.stdout | trim | regex_search('^i-[a-f0-9]+)
+    - jenkins_instance_id_output.stdout | trim | regex_search('^i-[a-f0-9]+$')
 
 - name: Verify Jenkins instance ID
   ansible.builtin.fail:
     msg: "Unable to determine Jenkins instance ID. Please specify jenkins_instance_id or ensure controller is deployed."
   when: 
-    - jenkins_instance_id is not defined or jenkins_instance_id == "" or not (jenkins_instance_id | regex_search('^i-[a-f0-9]+))
+    - jenkins_instance_id is not defined or jenkins_instance_id == "" or not (jenkins_instance_id | regex_search('^i-[a-f0-9]+$'))
 
 - name: Display Jenkins instance ID
   ansible.builtin.debug:
@@ -74,7 +74,7 @@
     - efs_file_system_id is not defined or efs_file_system_id == ""
     - efs_file_system_id_output is defined
     - efs_file_system_id_output.rc == 0
-    - efs_file_system_id_output.stdout | trim | regex_search('^fs-[a-f0-9]+)
+    - efs_file_system_id_output.stdout | trim | regex_search('^fs-[a-f0-9]+$')
 
 # ファイル権限設定
 - name: Ensure aws-env.sh has execute permissions
