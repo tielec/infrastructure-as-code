@@ -5,7 +5,7 @@ common-settings:
   # Jenkinsパイプラインリポジトリ設定
   jenkins-pipeline-repo:
     url: 'https://github.com/tielec/infrastructure-as-code'
-    credentials: 'your-github-app-credentials-id'
+    credentials: 'github-app-credentials'
     branch: '*/main'
 
 # Jenkinsジョブ定義
