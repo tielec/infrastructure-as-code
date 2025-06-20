@@ -3,7 +3,7 @@
  * 
  * JenkinsインフラのNATリソースを構築するPulumiスクリプト
  * ハイアベイラビリティモード: NATゲートウェイ（2つ）
- * ノーマルモード: NATインスタンス（1つ）- AWS NAT AMI使用
+ * ノーマルモード: NATインスタンス（1つ）- Amazon Linux 2023使用
  */
 import * as pulumi from "@pulumi/pulumi";
 import * as aws from "@pulumi/aws";
@@ -17,6 +17,8 @@ const environment = pulumi.getStack();
 const highAvailabilityMode = config.getBoolean("highAvailabilityMode") || false;
 const natInstanceType = config.get("natInstanceType") || "t3.nano";
 const keyName = config.get("keyName");
+// NAT AMIの選択（デフォルトはAmazon Linux 2023）
+const useAwsNatAmi = config.getBoolean("useAwsNatAmi") || false;
 
 // スタック参照名を設定から取得
 const networkStackName = config.get("networkStackName") || "jenkins-network";
@@ -113,37 +115,50 @@ if (highAvailabilityMode) {
 
 } else {
     // ノーマルモード: NATインスタンス x1
-    pulumi.log.info("Deploying NAT Instance in Normal mode");
+    pulumi.log.info(`Deploying NAT Instance in Normal mode (AMI: ${useAwsNatAmi ? 'AWS NAT AMI' : 'Amazon Linux 2023'})`);
     natType = "instance";
 
-    // AWS公式のNATインスタンス用AMIを取得
-    // amzn-ami-vpc-nat-*のパターンでNAT用に最適化されたAMIを検索
-    const natAmi = aws.ec2.getAmi({
-        mostRecent: true,
-        owners: ["amazon"],
-        filters: [
-            {
+    // AMIの選択
+    let natAmi;
+    if (useAwsNatAmi) {
+        // AWS公式のNATインスタンス用AMI（古いが動作確認済み）
+        natAmi = aws.ec2.getAmi({
+            mostRecent: true,
+            owners: ["amazon"],
+            filters: [
+                {
+                    name: "name",
+                    values: ["amzn-ami-vpc-nat-*"],
+                },
+                {
+                    name: "architecture",
+                    values: ["x86_64"],
+                },
+                {
+                    name: "virtualization-type",
+                    values: ["hvm"],
+                },
+                {
+                    name: "root-device-type",
+                    values: ["ebs"],
+                },
+                {
+                    name: "state",
+                    values: ["available"],
+                },
+            ],
+        });
+    } else {
+        // 最新のAmazon Linux 2023 AMI（推奨）
+        natAmi = aws.ec2.getAmi({
+            mostRecent: true,
+            owners: ["amazon"],
+            filters: [{
                 name: "name",
-                values: ["amzn-ami-vpc-nat-*"],
-            },
-            {
-                name: "architecture",
-                values: ["x86_64"],
-            },
-            {
-                name: "virtualization-type",
-                values: ["hvm"],
-            },
-            {
-                name: "root-device-type",
-                values: ["ebs"],
-            },
-            {
-                name: "state",
-                values: ["available"],
-            },
-        ],
-    });
+                values: ["al2023-ami-*-kernel-*-x86_64"],
+            }],
+        });
+    }
 
     // NATインスタンス用のIAMロール
     const natInstanceRole = new aws.iam.Role(`${projectName}-nat-instance-role`, {
@@ -191,17 +206,11 @@ if (highAvailabilityMode) {
         },
     });
 
-    // NATインスタンス
-    const natInstance = new aws.ec2.Instance(`${projectName}-nat-instance`, {
-        ami: natAmi.then(ami => ami.id),
-        instanceType: natInstanceType,
-        keyName: keyName,
-        subnetId: publicSubnetAId,
-        vpcSecurityGroupIds: [natInstanceSecurityGroupId],
-        iamInstanceProfile: natInstanceProfile.name,
-        sourceDestCheck: false, // NATとして機能するために必要
-        // AWS NAT AMIは事前設定済みなので、追加の設定は最小限に
-        userData: Buffer.from(`#!/bin/bash
+    // ユーザーデータの選択
+    let userDataScript: string;
+    if (useAwsNatAmi) {
+        // AWS NAT AMI用の最小限の設定
+        userDataScript = `#!/bin/bash
 # AWS NAT AMI追加設定スクリプト
 set -e
 exec > >(tee /var/log/user-data.log|logger -t user-data -s 2>/dev/console) 2>&1
@@ -219,12 +228,68 @@ if ! systemctl is-active amazon-ssm-agent > /dev/null 2>&1; then
     systemctl start amazon-ssm-agent
 fi
 
-# CloudWatchエージェントインストール（モニタリング用）
-if [ ! -f /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl ]; then
-    echo "Installing CloudWatch agent..."
-    wget -q https://s3.amazonaws.com/amazoncloudwatch-agent/amazon_linux/amd64/latest/amazon-cloudwatch-agent.rpm
-    rpm -U ./amazon-cloudwatch-agent.rpm
-fi
+echo "NAT instance configuration completed!"`;
+    } else {
+        // Amazon Linux 2023用の完全なNAT設定
+        userDataScript = `#!/bin/bash
+# NAT Instance Setup Script for Amazon Linux 2023
+set -e
+exec > >(tee /var/log/user-data.log|logger -t user-data -s 2>/dev/console) 2>&1
+
+echo "Starting NAT instance configuration for Amazon Linux 2023..."
+
+# システムアップデート
+dnf update -y
+
+# 必要なパッケージのインストール
+dnf install -y iptables-services amazon-ssm-agent
+
+# IP転送を有効化
+echo "Enabling IP forwarding..."
+echo 1 > /proc/sys/net/ipv4/ip_forward
+echo "net.ipv4.ip_forward = 1" >> /etc/sysctl.conf
+sysctl -p
+
+# iptablesサービスの有効化
+systemctl enable iptables
+systemctl start iptables
+
+# iptablesルールの設定（AWS NAT AMIと同じ設定を適用）
+echo "Configuring iptables rules..."
+
+# 既存のルールをクリア
+iptables -F
+iptables -t nat -F
+iptables -t mangle -F
+
+# デフォルトポリシーの設定
+iptables -P INPUT ACCEPT
+iptables -P FORWARD ACCEPT
+iptables -P OUTPUT ACCEPT
+
+# NAT設定
+VPC_CIDR="${vpcCidr}"
+iptables -t nat -A POSTROUTING -o eth0 -s $VPC_CIDR -j MASQUERADE
+
+# フォワーディングルール
+# 確立された接続を許可
+iptables -A FORWARD -m state --state RELATED,ESTABLISHED -j ACCEPT
+# VPC内からのすべてのトラフィックを許可
+iptables -A FORWARD -s $VPC_CIDR -j ACCEPT
+# インターネットから戻ってくるトラフィックを許可
+iptables -A FORWARD -d $VPC_CIDR -m state --state RELATED,ESTABLISHED -j ACCEPT
+
+# ルールを保存
+service iptables save
+
+# SSMエージェントの起動
+systemctl enable amazon-ssm-agent
+systemctl start amazon-ssm-agent
+
+# CloudWatchエージェントのインストール
+echo "Installing CloudWatch agent..."
+wget -q https://s3.amazonaws.com/amazoncloudwatch-agent/amazon_linux/amd64/latest/amazon-cloudwatch-agent.rpm
+rpm -U ./amazon-cloudwatch-agent.rpm
 
 # CloudWatch設定
 cat > /opt/aws/amazon-cloudwatch-agent/etc/config.json << 'EOF'
@@ -272,32 +337,33 @@ EOF
     -s \
     -c file:/opt/aws/amazon-cloudwatch-agent/etc/config.json
 
-# IP転送が有効になっていることを確認（AWS NAT AMIでは通常有効）
-if [ "$(cat /proc/sys/net/ipv4/ip_forward)" != "1" ]; then
-    echo "Enabling IP forwarding..."
-    echo 1 > /proc/sys/net/ipv4/ip_forward
-fi
+# 動作確認
+echo "Verifying NAT configuration..."
+echo "IP Forwarding: $(cat /proc/sys/net/ipv4/ip_forward)"
+echo "iptables NAT rules:"
+iptables -t nat -L POSTROUTING -n -v
+echo "iptables FORWARD rules:"
+iptables -L FORWARD -n -v
 
-# VPCのCIDRを使用してiptables設定を最適化（必要な場合）
-VPC_CIDR="${vpcCidr}"
-if [ ! -z "$VPC_CIDR" ]; then
-    # 既存のMASQUERADEルールがあるか確認
-    iptables -t nat -C POSTROUTING -s $VPC_CIDR -o eth0 -j MASQUERADE 2>/dev/null
-    if [ $? -ne 0 ]; then
-        echo "Adding MASQUERADE rule for VPC CIDR: $VPC_CIDR"
-        iptables -t nat -A POSTROUTING -s $VPC_CIDR -o eth0 -j MASQUERADE
-        service iptables save
-    fi
-fi
+echo "NAT instance configuration completed successfully!"`;
+    }
 
-echo "NAT instance additional configuration completed successfully!"
-echo "AMI ID: $(curl -s http://169.254.169.254/latest/meta-data/ami-id)"
-`).toString("base64"),
+    // NATインスタンス
+    const natInstance = new aws.ec2.Instance(`${projectName}-nat-instance`, {
+        ami: natAmi.then(ami => ami.id),
+        instanceType: natInstanceType,
+        keyName: keyName,
+        subnetId: publicSubnetAId,
+        vpcSecurityGroupIds: [natInstanceSecurityGroupId],
+        iamInstanceProfile: natInstanceProfile.name,
+        sourceDestCheck: false, // NATとして機能するために必要
+        userData: Buffer.from(userDataScript).toString("base64"),
         tags: {
             Name: `${projectName}-nat-instance-${environment}`,
             Environment: environment,
             Role: "nat-instance",
             InstanceType: natInstanceType,
+            AMIType: useAwsNatAmi ? "aws-nat-ami" : "amazon-linux-2023",
         },
     });
 
@@ -375,6 +441,7 @@ echo "AMI ID: $(curl -s http://169.254.169.254/latest/meta-data/ami-id)"
 export const natTypeExport = natType;
 export const natResourceIdsExport = natResourceIds;
 export const highAvailabilityEnabled = highAvailabilityMode;
+export const natAmiType = useAwsNatAmi ? "aws-nat-ami" : "amazon-linux-2023";
 
 // 条件付きエクスポート（NAT Gateway用）
 export const natGatewayAIdExport = natGatewayAId;
@@ -396,6 +463,7 @@ const natConfigParameter = new aws.ssm.Parameter(`${projectName}-nat-config`, {
         type: natType,
         highAvailability: highAvailabilityMode,
         instanceType: natInstanceType,
+        amiType: useAwsNatAmi ? "aws-nat-ami" : "amazon-linux-2023",
         createdAt: new Date().toISOString(),
     }),
     description: "NAT configuration for Jenkins infrastructure",
