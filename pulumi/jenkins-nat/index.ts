@@ -173,8 +173,9 @@ if (highAvailabilityMode) {
     });
 
     // Amazon Linux 2023用の改善されたNAT設定スクリプト
-    const userDataScript = `#!/bin/bash
+    const userDataScript = pulumi.interpolate`#!/bin/bash
 # NAT Instance Setup Script for Amazon Linux 2023 with nftables
+# 改善版: nftablesインストールを含む完全な設定
 
 # スクリプトの実行ログを記録
 exec > >(tee /var/log/user-data.log|logger -t user-data -s 2>/dev/console) 2>&1
@@ -356,14 +357,14 @@ echo "============================================"`;
 
     // NATインスタンス
     const natInstance = new aws.ec2.Instance(`${projectName}-nat-instance`, {
-        ami: natAmi.then(ami => ami.id),
+        ami: natAmi.then((ami: any) => ami.id),
         instanceType: natInstanceType,
         keyName: keyName,
         subnetId: publicSubnetAId,
         vpcSecurityGroupIds: [natInstanceSecurityGroupId],
         iamInstanceProfile: natInstanceProfile.name,
         sourceDestCheck: false, // NATとして機能するために必要
-        userData: Buffer.from(userDataScript).toString("base64"),
+        userData: userDataScript,
         tags: {
             Name: `${projectName}-nat-instance-${environment}`,
             Environment: environment,
