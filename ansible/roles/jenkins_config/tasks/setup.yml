@@ -74,12 +74,29 @@
     jenkins_instance_id: "{{ stack_output_result.stdout | trim }}"
   when: 
     - jenkins_instance_id is not defined or jenkins_instance_id == ""
-    - stack_output_result is defined and stack_output_result.stdout is defined
+    - stack_output_result is defined 
+    - stack_output_result.stdout is defined
+    - stack_output_result.stdout | trim != ""
+    - stack_output_result.stdout | trim != "mock-jenkins-instance-id"
+
+# stack_output_resultが失敗した場合のフォールバック
+- name: Set Jenkins instance ID from debug output
+  ansible.builtin.set_fact:
+    jenkins_instance_id: "{{ pulumi_instance_id_direct.stdout | trim }}"
+  when:
+    - jenkins_instance_id is not defined or jenkins_instance_id == ""
+    - pulumi_instance_id_direct is defined
+    - pulumi_instance_id_direct.stdout is defined
+    - pulumi_instance_id_direct.rc == 0
+    - pulumi_instance_id_direct.stdout | trim != ""
 
 - name: Verify Jenkins instance ID
   ansible.builtin.fail:
     msg: "Unable to determine Jenkins instance ID. Please specify jenkins_instance_id or ensure controller is deployed."
-  when: jenkins_instance_id is not defined or jenkins_instance_id == ""
+  when: 
+    - jenkins_instance_id is not defined or jenkins_instance_id == ""
+    - jenkins_instance_id == "mock-jenkins-instance-id"
+    - not (jenkins_instance_id | default('') | regex_search('^i-[a-f0-9]+$'))
 
 - name: Display Jenkins instance ID
   ansible.builtin.debug:
@@ -99,7 +116,12 @@
 - name: Set EFS file system ID from storage stack
   ansible.builtin.set_fact:
     efs_file_system_id: "{{ stack_output_result.stdout | trim }}"
-  when: efs_file_system_id is not defined or efs_file_system_id == ""
+  when: 
+    - efs_file_system_id is not defined or efs_file_system_id == ""
+    - stack_output_result is defined
+    - stack_output_result.stdout is defined
+    - stack_output_result.stdout | trim != ""
+    - stack_output_result.stdout | trim != "mock-efs-id"
 
 # ファイル権限設定
 - name: Ensure aws-env.sh has execute permissions
@@ -165,7 +187,10 @@
     - name: Set SSM document names
       ansible.builtin.set_fact:
         ssm_documents: "{{ ssm_documents_direct.stdout | from_json }}"
-      when: ssm_documents_direct.stdout | length > 0
+      when: 
+        - ssm_documents_direct.stdout | length > 0
+        - ssm_documents_direct.stdout != '{}'
+      failed_when: false
 
     # フォールバック: デフォルト値を設定
     - name: Set default SSM document names if not found
@@ -174,13 +199,14 @@
           updateRepo: "jenkins-infra-jenkins-update-repo-{{ env_name }}"
           executeScript: "jenkins-infra-jenkins-config-execute-script-{{ env_name }}"
       when: ssm_documents is not defined or ssm_documents | length == 0
- 
+      
     - name: Display SSM document names
       ansible.builtin.debug:
         msg: |
           SSM Documents available:
           - Update Repo: {{ ssm_documents.updateRepo }}
           - Execute Script: {{ ssm_documents.executeScript }}
+  
   rescue:
     - name: Display error on config deployment
       ansible.builtin.debug:
@@ -201,7 +227,7 @@
   block:
     # ステップ0: Gitリポジトリの更新
     - name: Update Git repository
-      ansible.builtin.include_tasks: tasks/execute_ssm_command.yml
+      ansible.builtin.include_tasks: execute_ssm_command.yml
       vars:
         ssm_document_name: "{{ ssm_documents.updateRepo }}"
         ssm_parameters: "ProjectName={{ project_name }},Environment={{ env_name }},GitBranch={{ git_branch }},GitRepo={{ git_repo }}"
@@ -210,7 +236,7 @@
     
     # ステップ1: EFSマウント
     - name: Mount EFS
-      ansible.builtin.include_tasks: tasks/execute_ssm_command.yml
+      ansible.builtin.include_tasks: execute_ssm_command.yml
       vars:
         ssm_document_name: "{{ ssm_documents.executeScript }}"
         ssm_parameters: "ScriptPath=scripts/jenkins/shell/controller-mount-efs.sh,EfsId={{ efs_file_system_id }},AwsRegion={{ aws_region_name }}"
@@ -219,7 +245,7 @@
     
     # ステップ2: Jenkinsインストール
     - name: Install Jenkins
-      ansible.builtin.include_tasks: tasks/execute_ssm_command.yml
+      ansible.builtin.include_tasks: execute_ssm_command.yml
       vars:
         ssm_document_name: "{{ ssm_documents.executeScript }}"
         ssm_parameters: "ScriptPath=scripts/jenkins/shell/controller-install.sh,JenkinsVersion={{ jenkins_version }},JenkinsColor={{ jenkins_color }}"
@@ -228,7 +254,7 @@
     
     # ステップ3: Jenkins設定
     - name: Configure Jenkins
-      ansible.builtin.include_tasks: tasks/execute_ssm_command.yml
+      ansible.builtin.include_tasks: execute_ssm_command.yml
       vars:
         ssm_document_name: "{{ ssm_documents.executeScript }}"
         ssm_parameters: "ScriptPath=scripts/jenkins/shell/controller-configure.sh,JenkinsMode={{ recovery_mode | ternary('recovery', 'normal') }},JenkinsColor={{ jenkins_color }}"
@@ -237,7 +263,7 @@
     
     # ステップ4: Jenkins起動
     - name: Start Jenkins
-      ansible.builtin.include_tasks: tasks/execute_ssm_command.yml
+      ansible.builtin.include_tasks: execute_ssm_command.yml
       vars:
         ssm_document_name: "{{ ssm_documents.executeScript }}"
         ssm_parameters: "ScriptPath=scripts/jenkins/shell/controller-startup.sh,JenkinsColor={{ jenkins_color }}"
