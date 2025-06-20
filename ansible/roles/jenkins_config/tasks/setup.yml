@@ -37,6 +37,38 @@
     mock_output: "mock-jenkins-instance-id"
   when: jenkins_instance_id is not defined or jenkins_instance_id == ""
 
+# デバッグ: 直接Pulumiコマンドを実行して確認
+- name: Debug - Get all Pulumi outputs directly
+  ansible.builtin.shell: |
+    cd {{ pulumi_path }}/jenkins-controller
+    export PULUMI_ACCESS_TOKEN="{{ lookup('env', 'PULUMI_ACCESS_TOKEN') }}"
+    sudo -E /root/.pulumi/bin/pulumi stack output --json
+  register: pulumi_all_outputs
+  when: jenkins_instance_id is not defined or jenkins_instance_id == ""
+
+- name: Debug - Display all Pulumi outputs
+  ansible.builtin.debug:
+    msg: "All Pulumi outputs: {{ pulumi_all_outputs.stdout | from_json if pulumi_all_outputs.stdout else 'No outputs' }}"
+  when: pulumi_all_outputs is defined
+
+# デバッグ: 特定の出力を直接取得
+- name: Debug - Get specific jenkinsInstanceId output
+  ansible.builtin.shell: |
+    cd {{ pulumi_path }}/jenkins-controller
+    export PULUMI_ACCESS_TOKEN="{{ lookup('env', 'PULUMI_ACCESS_TOKEN') }}"
+    sudo -E /root/.pulumi/bin/pulumi stack output jenkinsInstanceId 2>&1
+  register: pulumi_instance_id_direct
+  when: jenkins_instance_id is not defined or jenkins_instance_id == ""
+
+- name: Debug - Display direct output result
+  ansible.builtin.debug:
+    msg: |
+      Direct command result:
+      stdout: {{ pulumi_instance_id_direct.stdout | default('None') }}
+      stderr: {{ pulumi_instance_id_direct.stderr | default('None') }}
+      rc: {{ pulumi_instance_id_direct.rc | default('None') }}
+  when: pulumi_instance_id_direct is defined
+
 - name: Set Jenkins instance ID from controller stack
   ansible.builtin.set_fact:
     jenkins_instance_id: "{{ stack_output_result.stdout | trim }}"
