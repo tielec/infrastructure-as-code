@@ -179,29 +179,53 @@
             ssm_comment: "Setting up CLI user and credentials"
             instance_id: "{{ jenkins_instance_id }}"
     
-    # 4. シードジョブの作成
-        - name: Create seed job
-          when: create_seed_job | default(true) | bool
-          block:
-            - name: Execute seed job creation
-              ansible.builtin.include_tasks: tasks/execute_ssm_command.yml
-              vars:
-                ssm_document_name: "{{ ssm_documents.executeScript }}"
-                ssm_parameters: "ScriptPath=scripts/jenkins/shell/application-create-seed-job.sh"
-                ssm_comment: "Creating Jenkins seed job"
-                instance_id: "{{ jenkins_instance_id }}"
-        
-        # 5. Jenkins再起動
-        - name: Restart Jenkins if required
-          when: restart_jenkins | bool
-          block:
-            - name: Execute Jenkins restart
-              ansible.builtin.include_tasks: tasks/execute_ssm_command.yml
-              vars:
-                ssm_document_name: "{{ ssm_documents.restart }}"
-                ssm_parameters: ""  # 空文字列に設定
-                ssm_comment: "Restarting Jenkins"
-                instance_id: "{{ jenkins_instance_id }}"
+    # 4. SSHクレデンシャルの設定（パラメータストアから）
+    - name: Setup SSH credentials from Parameter Store
+      when: setup_ssh_credentials | default(true) | bool
+      block:
+        - name: Execute SSH credentials setup
+          ansible.builtin.include_tasks: tasks/execute_ssm_command.yml
+          vars:
+            ssm_document_name: "{{ ssm_documents.executeScript }}"
+            ssm_parameters: "ScriptPath=scripts/jenkins/shell/application-setup-ssh-credentials.sh"
+            ssm_comment: "Setting up SSH credentials from Parameter Store"
+            instance_id: "{{ jenkins_instance_id }}"
+    
+    # 5. JCasCによる統合設定（EC2 Fleet、Shared Library、セキュリティ、Workterminalノード）
+    - name: Configure Jenkins using JCasC
+      when: configure_with_casc | default(true) | bool
+      block:
+        - name: Execute JCasC configuration
+          ansible.builtin.include_tasks: tasks/execute_ssm_command.yml
+          vars:
+            ssm_document_name: "{{ ssm_documents.executeScript }}"
+            ssm_parameters: "ScriptPath=scripts/jenkins/shell/application-configure-with-casc.sh"
+            ssm_comment: "Configuring Jenkins with JCasC"
+            instance_id: "{{ jenkins_instance_id }}"
+    
+    # 6. シードジョブの作成（JCasC後に実行）
+    - name: Create seed job
+      when: create_seed_job | default(true) | bool
+      block:
+        - name: Execute seed job creation
+          ansible.builtin.include_tasks: tasks/execute_ssm_command.yml
+          vars:
+            ssm_document_name: "{{ ssm_documents.executeScript }}"
+            ssm_parameters: "ScriptPath=scripts/jenkins/shell/application-create-seed-job.sh"
+            ssm_comment: "Creating Jenkins seed job"
+            instance_id: "{{ jenkins_instance_id }}"
+    
+    # 7. Jenkins再起動
+    - name: Restart Jenkins if required
+      when: restart_jenkins | bool
+      block:
+        - name: Execute Jenkins restart
+          ansible.builtin.include_tasks: tasks/execute_ssm_command.yml
+          vars:
+            ssm_document_name: "{{ ssm_documents.restart }}"
+            ssm_parameters: ""  # 空文字列に設定
+            ssm_comment: "Restarting Jenkins"
+            instance_id: "{{ jenkins_instance_id }}"
 
 # 設定完了を示す変数設定
 - name: Set application deployment status
@@ -217,5 +241,8 @@
       - Jenkins Version: {{ jenkins_version }}
       - Plugins Installed: {{ install_plugins }}
       - CLI User Setup: {{ setup_cli_user | default(true) }}
+      - SSH Credentials Setup: {{ setup_ssh_credentials | default(true) }}
+      - JCasC Configuration Applied: {{ configure_with_casc | default(true) }}
+      - Seed Job Created: {{ create_seed_job | default(true) }}
       - Jenkins Restarted: {{ restart_jenkins }}
       - Configuration Status: {{ application_deployed | ternary('Success', 'Failed') }}

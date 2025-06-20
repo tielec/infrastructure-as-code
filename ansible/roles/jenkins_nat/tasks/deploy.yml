@@ -1,0 +1,162 @@
+---
+# NAT リソースデプロイタスク
+
+- name: Display NAT deployment information
+  ansible.builtin.debug:
+    msg: |
+      Deploying NAT Infrastructure:
+      - Project: {{ project_name }}
+      - NAT Pulumi Project: {{ nat_project_name }}
+      - Environment: {{ env_name }}
+      - Mode: {{ 'High Availability (NAT Gateway)' if high_availability_mode else 'Normal (NAT Instance)' }}
+      {% if not high_availability_mode %}
+      - NAT Instance Type: {{ nat_instance_type }}
+      {% endif %}
+
+# ファイル権限設定
+- name: Ensure aws-env.sh has execute permissions
+  ansible.builtin.file:
+    path: "{{ scripts_dir }}/aws-env.sh"
+    mode: '0755'
+  register: aws_env_script_permission
+  no_log: true  # 詳細なログを抑制
+  
+- name: Report permission update
+  ansible.builtin.debug:
+    msg: "aws-env.sh スクリプトに実行権限を付与しました"
+  when: aws_env_script_permission.changed
+
+# Pulumiデプロイ
+- name: Deploy NAT Infrastructure with Pulumi
+  block:
+    # Pulumiヘルパータスクを呼び出す
+    - name: Initialize NAT stack
+      ansible.builtin.include_role:
+        name: pulumi_helper
+        tasks_from: init_stack
+      vars:
+        pulumi_project_path: "{{ pulumi_path }}/jenkins-nat"
+        stack_name: "{{ env_name }}"
+    
+    - name: Configure NAT stack
+      ansible.builtin.shell: |
+        cd {{ pulumi_path }}/jenkins-nat
+        source {{ scripts_dir }}/aws-env.sh 
+        eval $({{ scripts_dir }}/aws-env.sh)
+        
+        sudo -E /root/.pulumi/bin/pulumi config set aws:region {{ aws_region_name }}
+        sudo -E /root/.pulumi/bin/pulumi config set {{ nat_project_name }}:projectName {{ project_name }}
+        sudo -E /root/.pulumi/bin/pulumi config set {{ nat_project_name }}:networkStackName {{ network_project_name }}
+        sudo -E /root/.pulumi/bin/pulumi config set {{ nat_project_name }}:securityStackName {{ security_project_name }}
+        sudo -E /root/.pulumi/bin/pulumi config set {{ nat_project_name }}:highAvailabilityMode {{ high_availability_mode | lower }}
+        sudo -E /root/.pulumi/bin/pulumi config set {{ nat_project_name }}:natInstanceType {{ nat_instance_type }}
+        {% if key_name %}
+        sudo -E /root/.pulumi/bin/pulumi config set {{ nat_project_name }}:keyName {{ key_name }}
+        {% endif %}
+      register: pulumi_config_result
+      changed_when: pulumi_config_result.rc == 0
+
+    # Pulumiプレビュー
+    - name: Preview NAT deployment
+      ansible.builtin.include_role:
+        name: pulumi_helper
+        tasks_from: preview
+      vars:
+        pulumi_project_path: "{{ pulumi_path }}/jenkins-nat"
+    
+    # Pulumiデプロイ
+    - name: Deploy NAT stack
+      ansible.builtin.include_role:
+        name: pulumi_helper
+        tasks_from: deploy
+      vars:
+        pulumi_project_path: "{{ pulumi_path }}/jenkins-nat"
+    
+    # デプロイ後に少し待機
+    - name: Wait for stack outputs to be available
+      ansible.builtin.pause:
+        seconds: 10
+      when: not ansible_check_mode
+    
+    # スタック出力の取得
+    - name: Get NAT type from stack outputs
+      ansible.builtin.shell: |
+        cd {{ pulumi_path }}/jenkins-nat
+        # aws-env.shの出力を変数に格納し、標準出力には出さない
+        AWS_ENV=$({{ scripts_dir }}/aws-env.sh 2>/dev/null)
+        eval "$AWS_ENV"
+        
+        sudo -E /root/.pulumi/bin/pulumi stack output natTypeExport 2>/dev/null || echo "unknown"
+      register: nat_type_result
+      changed_when: false
+      ignore_errors: true
+    
+    - name: Set NAT type
+      ansible.builtin.set_fact:
+        nat_type: "{{ nat_type_result.stdout | trim }}"
+    
+    # NAT リソース ID の取得
+    - name: Get NAT resource IDs
+      ansible.builtin.shell: |
+        cd {{ pulumi_path }}/jenkins-nat
+        # aws-env.shの出力を変数に格納し、標準出力には出さない
+        AWS_ENV=$({{ scripts_dir }}/aws-env.sh 2>/dev/null)
+        eval "$AWS_ENV"
+        
+        sudo -E /root/.pulumi/bin/pulumi stack output natResourceIdsExport 2>/dev/null || 
+          echo "['mock-nat-resource-id']"
+      register: nat_resource_ids_result
+      changed_when: false
+      ignore_errors: true
+    
+    - name: Set NAT resource IDs
+      ansible.builtin.set_fact:
+        nat_resource_ids: "{{ nat_resource_ids_result.stdout | trim }}"
+    
+    # NAT Instance の場合、追加情報を取得
+    - name: Get NAT instance public IP (if applicable)
+      ansible.builtin.shell: |
+        cd {{ pulumi_path }}/jenkins-nat
+        # aws-env.shの出力を変数に格納し、標準出力には出さない
+        AWS_ENV=$({{ scripts_dir }}/aws-env.sh 2>/dev/null)
+        eval "$AWS_ENV"
+        
+        sudo -E /root/.pulumi/bin/pulumi stack output natInstancePublicIpExport 2>/dev/null || echo "N/A"
+      register: nat_instance_ip_result
+      changed_when: false
+      ignore_errors: true
+      when: not high_availability_mode
+    
+    - name: Set NAT instance IP
+      ansible.builtin.set_fact:
+        nat_instance_public_ip: "{{ nat_instance_ip_result.stdout | trim }}"
+      when: not high_availability_mode
+    
+    - name: Set NAT facts for use in other playbooks
+      ansible.builtin.set_fact:
+        nat_deployed: true
+        nat_stack_name: "{{ nat_project_name }}"
+      
+    - name: Summary of NAT deployment
+      ansible.builtin.debug:
+        msg: |
+          NAT Infrastructure Deployed Successfully:
+          Stack Name: {{ nat_project_name }}
+          NAT Type: {{ nat_type }}
+          NAT Resource IDs: {{ nat_resource_ids }}
+          {% if not high_availability_mode and nat_instance_public_ip is defined %}
+          NAT Instance Public IP: {{ nat_instance_public_ip }}
+          {% endif %}
+  
+  rescue:
+    - name: Set NAT deployment status on failure
+      ansible.builtin.set_fact:
+        nat_deployed: false
+      
+    - name: Display error
+      ansible.builtin.debug:
+        msg: "Failed to deploy NAT infrastructure. See error details above."
+      
+    - name: Fail the playbook
+      ansible.builtin.fail:
+        msg: "NAT deployment failed."

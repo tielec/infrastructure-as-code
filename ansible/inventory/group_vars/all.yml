@@ -9,7 +9,8 @@ infra:
   # Pulumiプロジェクト名（スタック参照に使用）
   pulumi:
     network_project: "jenkins-network"
-    security_project: "jenkins-security" 
+    security_project: "jenkins-security"
+    nat_project: "jenkins-nat"  # 追加
     storage_project: "jenkins-storage"
     loadbalancer_project: "jenkins-loadbalancer"
     controller_project: "jenkins-controller"
@@ -21,6 +22,20 @@ infra:
   aws:
     default_region: "ap-northeast-1"
     vpc_cidr: "10.0.0.0/16"
+    key_name: ""  # EC2インスタンス用のキーペア名（必要に応じて設定）
+
+  # NAT設定（追加）
+  nat:
+    # High Availability モード
+    # true: NAT Gateway x2 (高可用性、月額約$90)
+    # false: NAT Instance x1 (低コスト、月額約$5)
+    high_availability_mode: false  # 開発環境はfalse推奨
+    
+    # NAT Instance使用時のインスタンスタイプ
+    # t4g.nano: 最小構成（月額約$3-5）
+    # t4g.micro: 小規模環境向け（月額約$7-10）
+    # t4g.small: 中規模環境向け（月額約$15-20）
+    instance_type: "t4g.nano"
 
   # 環境設定
   environments:
@@ -44,4 +59,3 @@ jenkins:
   git:
     repo: "https://github.com/tielec/infrastructure-as-code.git"
     branch: "main"  # デフォルトのブランチ
-
