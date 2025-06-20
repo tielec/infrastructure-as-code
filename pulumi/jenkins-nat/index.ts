@@ -15,7 +15,7 @@ const environment = pulumi.getStack();
 
 // NATモード設定
 const highAvailabilityMode = config.getBoolean("highAvailabilityMode") || false;
-const natInstanceType = config.get("natInstanceType") || "t3.nano";
+const natInstanceType = config.get("natInstanceType") || "t4g.nano";
 const keyName = config.get("keyName");
 
 // スタック参照名を設定から取得

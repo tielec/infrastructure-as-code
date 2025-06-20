@@ -27,7 +27,7 @@
         security_project_name: "{{ infra.pulumi.security_project }}"
         # NAT設定
         high_availability_mode: "{{ infra.nat.high_availability_mode | default(false) }}"
-        nat_instance_type: "{{ infra.nat.instance_type | default('t3.nano') }}"
+        nat_instance_type: "{{ infra.nat.instance_type | default('t4g.nano') }}"
         key_name: "{{ infra.aws.key_name | default('') }}"
   
   roles:

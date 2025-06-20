@@ -32,9 +32,9 @@ infra:
     high_availability_mode: false  # 開発環境はfalse推奨
     
     # NAT Instance使用時のインスタンスタイプ
-    # t3.nano: 最小構成（月額約$3-5）
-    # t3.micro: 小規模環境向け（月額約$7-10）
-    # t3.small: 中規模環境向け（月額約$15-20）
+    # t4g.nano: 最小構成（月額約$3-5）
+    # t4g.micro: 小規模環境向け（月額約$7-10）
+    # t4g.small: 中規模環境向け（月額約$15-20）
     instance_type: "t4g.nano"
 
   # 環境設定
