@@ -8,7 +8,6 @@
       - Project: {{ project_name }}
       - Config Pulumi Project: {{ config_project_name }}
       - Environment: {{ env_name }}
-      - Jenkins Instance ID: {{ jenkins_instance_id | default('未設定') }}
       - Jenkins Color: {{ jenkins_color | default('blue') }}
 
 # 既存のSSMドキュメントを削除（クリーンアップ）
@@ -27,53 +26,25 @@
   ignore_errors: true
 
 # JenkinsインスタンスIDの取得（Parameter Storeから）
-- name: Get Jenkins instance ID from Parameter Store
-  block:
-    - name: Get Jenkins instance ID from SSM Parameter Store
-      ansible.builtin.shell: |
-        eval $({{ scripts_dir }}/aws-env.sh)
-        aws ssm get-parameter \
-          --name "/${project_name}/${env_name}/jenkins/instanceId" \
-          --region {{ aws_region_name }} \
-          --query "Parameter.Value" \
-          --output text 2>/dev/null
-      register: jenkins_instance_id_param
-      changed_when: false
-      failed_when: false
-    
-    - name: Set Jenkins instance ID from Parameter Store
-      ansible.builtin.set_fact:
-        jenkins_instance_id: "{{ jenkins_instance_id_param.stdout | trim }}"
-      when: 
-        - jenkins_instance_id is not defined or jenkins_instance_id == ""
-        - jenkins_instance_id_param.rc == 0
-        - jenkins_instance_id_param.stdout | trim | regex_search('^i-[a-f0-9]+$')
-
-# フォールバック: コントローラースタックからJenkinsインスタンスIDを取得（Parameter Storeに無い場合）
-- name: Get Jenkins instance ID directly from Pulumi (fallback)
+- name: Get Jenkins instance ID from SSM Parameter Store
   ansible.builtin.shell: |
-    cd {{ pulumi_path }}/jenkins-controller
-    export PULUMI_ACCESS_TOKEN="{{ lookup('env', 'PULUMI_ACCESS_TOKEN') }}"
-    sudo -E /root/.pulumi/bin/pulumi stack output jenkinsInstanceId 2>/dev/null
-  register: jenkins_instance_id_output
+    eval $({{ scripts_dir }}/aws-env.sh)
+    aws ssm get-parameter \
+      --name "/${project_name}}/{env_name}/jenkins/instanceId" \
+      --region {{ aws_region_name }} \
+      --query "Parameter.Value" \
+      --output text
+  register: jenkins_instance_id_param
   changed_when: false
-  failed_when: false
-  when: jenkins_instance_id is not defined or jenkins_instance_id == ""
 
-- name: Set Jenkins instance ID from Pulumi output
+- name: Set Jenkins instance ID
   ansible.builtin.set_fact:
-    jenkins_instance_id: "{{ jenkins_instance_id_output.stdout | trim }}"
-  when: 
-    - jenkins_instance_id is not defined or jenkins_instance_id == ""
-    - jenkins_instance_id_output is defined
-    - jenkins_instance_id_output.rc == 0
-    - jenkins_instance_id_output.stdout | trim | regex_search('^i-[a-f0-9]+$')
+    jenkins_instance_id: "{{ jenkins_instance_id_param.stdout | trim }}"
 
 - name: Verify Jenkins instance ID
   ansible.builtin.fail:
-    msg: "Unable to determine Jenkins instance ID. Please specify jenkins_instance_id or ensure controller is deployed."
-  when: 
-    - jenkins_instance_id is not defined or jenkins_instance_id == "" or not (jenkins_instance_id | regex_search('^i-[a-f0-9]+$'))
+    msg: "Invalid Jenkins instance ID format: {{ jenkins_instance_id }}"
+  when: not (jenkins_instance_id | regex_search('^i-[a-f0-9]+$'))
 
 - name: Display Jenkins instance ID
   ansible.builtin.debug:
