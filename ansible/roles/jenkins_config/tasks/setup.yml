@@ -30,7 +30,7 @@
   ansible.builtin.shell: |
     eval $({{ scripts_dir }}/aws-env.sh)
     aws ssm get-parameter \
-      --name "/${project_name}}/{env_name}/jenkins/instanceId" \
+      --name "/{{ project_name }}/{{ env_name }}/jenkins/instanceId" \
       --region {{ aws_region_name }} \
       --query "Parameter.Value" \
       --output text
