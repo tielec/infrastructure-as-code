@@ -58,33 +58,60 @@
       vars:
         pulumi_project_path: "{{ pulumi_path }}/jenkins-application"
     
-    # SSMドキュメント名の取得
+    # SSMドキュメント名の取得（jenkins_configと同様の実装）
     - name: Get SSM document names
-      ansible.builtin.include_role:
-        name: pulumi_helper
-        tasks_from: get_outputs
-      vars:
-        pulumi_project_path: "{{ pulumi_path }}/jenkins-application"
-        output_name: "ssmDocuments"
-        mock_output: '{"executeScript":"mock-execute-script","restart":"mock-restart"}'
-    
+      ansible.builtin.shell: |
+        cd {{ pulumi_path }}/jenkins-application
+        export PULUMI_ACCESS_TOKEN="{{ lookup('env', 'PULUMI_ACCESS_TOKEN') }}"
+        sudo -E /root/.pulumi/bin/pulumi stack output ssmDocuments --json 2>/dev/null || echo '{}'
+      register: ssm_documents_output
+      changed_when: false
+
     - name: Set SSM document names
       ansible.builtin.set_fact:
-        ssm_documents: "{{ stack_output_result.stdout | from_json }}"
+        ssm_documents: "{{ ssm_documents_output.stdout | from_json }}"
+      when: 
+        - ssm_documents_output.stdout | length > 0
+        - ssm_documents_output.stdout != '{}'
+
+    # フォールバック: デフォルト値を設定
+    - name: Set default SSM document names if not found
+      ansible.builtin.set_fact:
+        ssm_documents:
+          executeScript: "jenkins-infra-jenkins-execute-script"
+          restart: "jenkins-infra-jenkins-restart"
+      when: ssm_documents is not defined or ssm_documents | length == 0
     
-    # jenkins_configのSSMドキュメントも取得
+    # jenkins_configのSSMドキュメントも取得（同様の実装）
     - name: Get config SSM document names
-      ansible.builtin.include_role:
-        name: pulumi_helper
-        tasks_from: get_outputs
-      vars:
-        pulumi_project_path: "{{ pulumi_path }}/jenkins-config"
-        output_name: "ssmDocuments"
-        mock_output: '{"updateRepo":"mock-update-repo-doc"}'
-    
+      ansible.builtin.shell: |
+        cd {{ pulumi_path }}/jenkins-config
+        export PULUMI_ACCESS_TOKEN="{{ lookup('env', 'PULUMI_ACCESS_TOKEN') }}"
+        sudo -E /root/.pulumi/bin/pulumi stack output ssmDocuments --json 2>/dev/null || echo '{}'
+      register: config_ssm_documents_output
+      changed_when: false
+
     - name: Set config SSM document names
       ansible.builtin.set_fact:
-        config_ssm_documents: "{{ stack_output_result.stdout | from_json }}"
+        config_ssm_documents: "{{ config_ssm_documents_output.stdout | from_json }}"
+      when: 
+        - config_ssm_documents_output.stdout | length > 0
+        - config_ssm_documents_output.stdout != '{}'
+
+    # フォールバック: デフォルト値を設定
+    - name: Set default config SSM document names if not found
+      ansible.builtin.set_fact:
+        config_ssm_documents:
+          updateRepo: "jenkins-infra-jenkins-update-repo-{{ env_name }}"
+      when: config_ssm_documents is not defined or config_ssm_documents | length == 0
+      
+    - name: Display SSM document names
+      ansible.builtin.debug:
+        msg: |
+          SSM Documents available:
+          - Execute Script: {{ ssm_documents.executeScript }}
+          - Restart: {{ ssm_documents.restart }}
+          - Update Repo: {{ config_ssm_documents.updateRepo }}
   
   rescue:
     - name: Display error on application deployment
@@ -95,36 +122,32 @@
       ansible.builtin.fail:
         msg: "Jenkins application deployment failed."
 
-# Jenkinsインスタンスの取得
+# Jenkinsインスタンスの取得（Parameter Storeから）
 - name: Get active Jenkins instance
   block:
-    - name: Determine active Jenkins color
+    - name: Get Jenkins instance ID from SSM Parameter Store
       ansible.builtin.shell: |
         eval $({{ scripts_dir }}/aws-env.sh)
         aws ssm get-parameter \
-          --name "/${project_name}/${env_name}/jenkins/active-environment" \
+          --name "/{{ project_name }}/{{ env_name }}/jenkins/instanceId" \
           --region {{ aws_region_name }} \
           --query "Parameter.Value" \
-          --output text 2>/dev/null || echo "{{ jenkins_color }}"
-      register: active_color_result
+          --output text
+      register: jenkins_instance_id_param
       changed_when: false
-    
-    - name: Set active Jenkins color
-      ansible.builtin.set_fact:
-        active_jenkins_color: "{{ active_color_result.stdout | trim }}"
-    
-    - name: Get Jenkins instance ID from controller stack
-      ansible.builtin.include_role:
-        name: pulumi_helper
-        tasks_from: get_outputs
-      vars:
-        pulumi_project_path: "{{ pulumi_path }}/jenkins-controller"
-        output_name: "jenkinsInstanceId"
-        mock_output: "mock-jenkins-instance-id"
     
     - name: Set Jenkins instance ID
       ansible.builtin.set_fact:
-        jenkins_instance_id: "{{ stack_output_result.stdout | trim }}"
+        jenkins_instance_id: "{{ jenkins_instance_id_param.stdout | trim }}"
+    
+    - name: Verify Jenkins instance ID
+      ansible.builtin.fail:
+        msg: "Invalid Jenkins instance ID format: {{ jenkins_instance_id }}"
+      when: not (jenkins_instance_id | regex_search('^i-[a-f0-9]+$'))
+    
+    - name: Display Jenkins instance ID
+      ansible.builtin.debug:
+        msg: "Using Jenkins Instance ID: {{ jenkins_instance_id }}"
 
 # アプリケーション設定の実行
 - name: Execute application configuration tasks
