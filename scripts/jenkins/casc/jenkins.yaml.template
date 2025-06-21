@@ -96,8 +96,12 @@ unclassified:
                 remote: "${SHARED_LIBRARY_REPO:-https://github.com/tielec/infrastructure-as-code/}"
                 traits:
                   - "gitBranchDiscovery"
-  gitSCM:
+  scmGit:
+    addGitTagAction: false
+    allowSecondFetch: false
     createAccountBasedOnEmail: false
+    disableGitToolChooser: false
+    hideCredentials: false
     showEntireCommitSummaryInChanges: false
     useExistingAccountWithSameEmail: false
   gitHubPluginConfig:
@@ -109,6 +113,10 @@ unclassified:
     skipDuplicateHistory: true
   pollSCM:
     pollingThreadCount: 10
+  scheduleBuild:
+    defaultScheduleTime: "22:00:00"
+    defaultStartTime: "22:00:00"
+    timeZone: "Asia/Tokyo"
   timestamper:
     allPipelines: false
     elapsedTimeFormat: "'<b>'HH:mm:ss.S'</b> '"
