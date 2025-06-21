@@ -28,7 +28,7 @@ pipelineJob(fullJobName) {
         choiceParam('AUTH_TYPE', ['GITHUB_APP', 'PAT'], 'GitHub認証タイプの選択')
         stringParam('PAT_CREDENTIALS_ID', 'your-github-pat-credentials-id', 'PAT認証用のJenkins認証情報ID')
         stringParam('GITHUB_APP_CREDENTIALS_ID', 'github-app-credentials', 'GitHub App認証用のJenkins認証情報ID')
-        stringParam('REPO_OWNER', 'your-owg-name', 'リポジトリオーナー名')
+        stringParam('REPO_OWNER', 'tielec', 'リポジトリオーナー名')
         stringParam('REPO_NAME', 'infrastructure-as-code', 'リポジトリ名')
     }
 

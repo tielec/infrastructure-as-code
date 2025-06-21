@@ -169,10 +169,9 @@ jenkins-jobs:
 docs-generator-repositories:
   infrastructure-as-code:
     httpsUrl: https://github.com/tielec/infrastructure-as-code
-    sshUrl: git@github.com:tielec/infrastructure-as-code
     mainBranch: main
     docBranch: document
-    credentialsId: github-deploy-key-tielec-infrastructure-as-code
+    credentialsId: github-app-credentials
     technicalDocsStartDate: '2025-01-01'
     technicalDocsFile: REPODOC.md
     updatePullRequestTitle: 'true'

@@ -26,9 +26,9 @@ pipeline {
         PROJECT_HOME_DIR = "project-repo"
 
         // Githubリポジトリ設定
-        GIT_JENKINS_REPO_URL = 'git@github.com:tielec/infrastructure-as-code.git'
+        GIT_JENKINS_REPO_URL = 'https://github.com/tielec/infrastructure-as-code.git'
         GIT_JENKINS_REPO_BRANCH = 'main'
-        GIT_JENKINS_CREDENTIALS_ID = 'github-deploy-key-tielec-jenkins-pipeline'
+        GIT_JENKINS_CREDENTIALS_ID = 'github-app-credentials'
         
         // ツールのパス
         PROJECT_BASE_DIR = "${PROJECT_HOME_DIR}/jenkins/jobs/pipeline/docs-generator/pull-request-comment-builder"

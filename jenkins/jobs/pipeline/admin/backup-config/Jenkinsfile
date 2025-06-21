@@ -8,8 +8,8 @@ pipeline {
 
     environment {
         JENKINS_PAT = credentials('cli-user-token')
-        REPO_URL = "git@github.com:tielec/infrastructure-as-code.git"
-        GITHUB_CREDENTIALS_ID = 'github-deploy-key-tielec-jenkins-pipeline'
+        REPO_URL = "https://github.com/tielec/infrastructure-as-code.git"
+        GITHUB_CREDENTIALS_ID = 'github-app-credentials'
         TIMESTAMP = sh(script: 'date "+%Y%m%d-%H%M%S"', returnStdout: true).trim()
         BRANCH_NAME = "config_backup/${TIMESTAMP}"
         CONFIG_DIR = "jenkins/config/casc"

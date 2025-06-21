@@ -2,7 +2,7 @@
 def repositories = docsGeneratorRepositories.collect { name, repo ->
     [
         name: name,
-        url: repo.sshUrl,  // SSH URLを使用
+        url: repo.httpsUrl,
         targetBranch: repo.mainBranch,  // mainBranchをtargetBranchとして使用
         docBranch: repo.docBranch,
         credentialsId: repo.credentialsId,
