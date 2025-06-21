@@ -21,9 +21,9 @@ pipeline {
         
         // API/リポジトリ設定
         OPENAI_API_ENDPOINT = "https://your-open-ai-endpoint"
-        GIT_JENKINS_REPO_URL = 'git@github.com:tielec/infrastructure-as-code.git'
+        GIT_JENKINS_REPO_URL = 'https://github.com/tielec/infrastructure-as-code.git'
         GIT_JENKINS_REPO_BRANCH = 'main'
-        GIT_JENKINS_REPO_CREDENTIALS_ID = 'github-deploy-key-tielec-jenkins-pipeline'
+        GIT_JENKINS_REPO_CREDENTIALS_ID = 'github-app-credentials'
         
         // ディレクトリ構造
         COMMENTS_DIR = "pr-comments"

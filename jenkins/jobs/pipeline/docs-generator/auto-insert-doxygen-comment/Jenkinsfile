@@ -20,9 +20,9 @@ pipeline {
         OPENAI_DEPLOYMENT_NAME = "gpt-4o-mini"
         
         // GitHub関連の設定
-        GIT_JENKINS_REPO_URL = 'git@github.com:tielec/infrastructure-as-code.git'
+        GIT_JENKINS_REPO_URL = 'https://github.com/tielec/infrastructure-as-code.git'
         GIT_JENKINS_REPO_BRANCH = 'main'
-        GIT_JENKINS_CREDENTIALS_ID = 'github-deploy-key-tielec-jenkins-pipeline'
+        GIT_JENKINS_CREDENTIALS_ID = 'github-app-credentials'
         
         // 作業ディレクトリ構造
         ORIGINAL_CODE_DIR = "original-code"      // ドキュメント生成の対象となるコード
