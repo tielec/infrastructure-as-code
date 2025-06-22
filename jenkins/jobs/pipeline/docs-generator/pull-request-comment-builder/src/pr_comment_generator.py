@@ -13,7 +13,7 @@ from dataclasses import dataclass, field, asdict
 from typing import Any, Dict, List, Optional, Tuple
 
 # サードパーティライブラリ
-from openai import AzureOpenAI  
+from openai import OpenAI  
 
 # ローカルモジュール
 from github_utils import GitHubClient
@@ -198,19 +198,14 @@ class OpenAIClient:
         
         # 環境変数から認証情報を取得
         api_key = os.getenv('OPENAI_API_KEY')
-        endpoint = os.getenv('OPENAI_API_ENDPOINT')
-        deployment_name = os.getenv('OPENAI_DEPLOYMENT_NAME')
+        model_name = os.getenv('OPENAI_MODEL_NAME', 'gpt-4o')  # デフォルトモデル名
 
-        if not all([api_key, endpoint, deployment_name]):
-            missing = []
-            if not api_key: missing.append('OPENAI_API_KEY')
-            if not endpoint: missing.append('OPENAI_API_ENDPOINT')
-            if not deployment_name: missing.append('OPENAI_DEPLOYMENT_NAME')
-            raise ValueError(f"Missing required environment variables: {', '.join(missing)}")
+        if not api_key:
+            raise ValueError("Missing required environment variable: OPENAI_API_KEY")
 
-        print(f"Debug: Using endpoint {endpoint} and deployment {deployment_name}")
+        print(f"Debug: Using OpenAI model {model_name}")
 
-        self.model = deployment_name
+        self.model = model_name
         self.prompt_manager = prompt_manager
         
         # 再試行設定
@@ -220,12 +215,10 @@ class OpenAIClient:
             'max_backoff': self.DEFAULT_MAX_BACKOFF
         }
         
-        # Azure OpenAI用のクライアント初期化
+        # OpenAI用のクライアント初期化
         try:
-            self.client = AzureOpenAI(
+            self.client = OpenAI(
                 api_key=api_key,
-                api_version="2024-02-15-preview",
-                azure_endpoint=endpoint.rstrip('/'),
             )
             self.usage_stats = {
                 'prompt_tokens': 0,
@@ -234,7 +227,7 @@ class OpenAIClient:
                 'skipped_files': 0
             }
             
-            print(f"Debug: Client initialized with endpoint: {self.client.base_url}")
+            print(f"Debug: OpenAI client initialized successfully")
             
         except Exception as e:
             raise ValueError(f"Failed to initialize OpenAI client: {str(e)}")
@@ -349,8 +342,8 @@ class OpenAIClient:
                     max_tokens=max_tokens,
                     top_p=0.1,
                     frequency_penalty=0.0,
-                    presence_penalty=0.0,
-                    response_format={"type": "text"}
+                    presence_penalty=0.0
+                    # response_format={"type": "text"} を削除（OpenAI APIでは不要）
                 )
 
                 # トークン使用量の記録
