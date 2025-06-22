@@ -16,7 +16,6 @@ pipeline {
     environment {
         // OpenAI API設定
         OPENAI_API_KEY = credentials('openai-api-key')
-        OPENAI_API_ENDPOINT = "https://your-open-ai-endpoint"
         OPENAI_DEPLOYMENT_NAME = "gpt-4o"
         
         // 作業ディレクトリ構造（WORKSPACEからの相対パス）
