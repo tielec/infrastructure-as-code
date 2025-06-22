@@ -20,7 +20,6 @@ pipeline {
         OPENAI_API_KEY = credentials('openai-api-key')
         
         // API/リポジトリ設定
-        OPENAI_API_ENDPOINT = "https://your-open-ai-endpoint"
         GIT_JENKINS_REPO_URL = 'https://github.com/tielec/infrastructure-as-code.git'
         GIT_JENKINS_REPO_BRANCH = 'main'
         GIT_JENKINS_REPO_CREDENTIALS_ID = 'github-app-credentials'

@@ -17,7 +17,6 @@ pipeline {
     environment {
         // OpenAI用のキー (JenkinsのCredentialsで "openai-api-key" IDのシークレットテキストを使用)
         OPENAI_API_KEY = credentials('openai-api-key')
-        OPENAI_API_ENDPOINT = "https://your-open-ai-endpoint/"
 
         // 出力物保存先のディレクトリ
         REPORTS_DIR = 'reports'
