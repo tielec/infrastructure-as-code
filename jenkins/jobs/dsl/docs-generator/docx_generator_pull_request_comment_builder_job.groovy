@@ -26,7 +26,7 @@ repositories.each { repo ->
             |リポジトリ: ${repo.name}
             |
             |## 処理内容
-            |- OpenAI API（GPT-4o）を使用してPRの内容を分析
+            |- OpenAI API（GPT-4.1）を使用してPRの内容を分析
             |- PR情報と差分の取得・解析
             |- コメントの自動生成とPRへの投稿
             |- オプションでPRタイトルの更新も可能

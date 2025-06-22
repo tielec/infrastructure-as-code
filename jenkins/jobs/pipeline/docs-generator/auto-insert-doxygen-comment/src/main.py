@@ -29,7 +29,7 @@ def parse_args():
     parser.add_argument('--file', required=True, help='Source file to process')
     parser.add_argument('--language', choices=['python', 'shell', 'rust', 'typescript'], required=True, help='Source language')
     parser.add_argument('--overwrite-docstring', action='store_true', help='Overwrite existing documentation')
-    parser.add_argument('--model', default='gpt-4o-mini', help='OpenAI model to use (default: gpt-4o-mini)')
+    parser.add_argument('--model', default='gpt-4.1-mini', help='OpenAI model to use (default: gpt-4.1-mini)')
     
     # Python用の引数
     python_group = parser.add_argument_group('Python')

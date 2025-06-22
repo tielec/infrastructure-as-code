@@ -110,7 +110,7 @@ class FileExtensions:
 
 # デフォルト設定値
 DEFAULT_CONFIG = {
-    "openai_model": "gpt-4o-mini",
+    "openai_model": "gpt-4.1-mini",
     "api_version": "2024-02-15-preview",
     "temperature": 0.1,
     "max_tokens": 10000,

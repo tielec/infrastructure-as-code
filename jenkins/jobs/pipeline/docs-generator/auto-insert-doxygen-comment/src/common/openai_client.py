@@ -2,25 +2,22 @@
 OpenAI API とのインタラクションを管理する共通クライアント
 """
 from typing import Dict, List, Optional, Any
-from openai import AzureOpenAI
+from openai import OpenAI
 
 class OpenAIClient:
     """OpenAI APIとのインタラクションを管理するクラス"""
     
-    def __init__(self, endpoint: str, api_key: str, deployment_name: str):
+    def __init__(self, api_key: str, model_name: Optional[str] = None):
         """
         Args:
-            endpoint (str): Azure OpenAI APIのエンドポイント
-            api_key (str): APIキー
-            deployment_name (str): デプロイメント名
+            api_key (str): OpenAI APIキー
+            model_name (Optional[str]): 使用するモデル名（デフォルト: gpt-4.1）
         """
-        self.client = AzureOpenAI(
-            api_key=api_key,
-            api_version="2024-02-15-preview",
-            azure_endpoint=endpoint
+        self.client = OpenAI(
+            api_key=api_key
         )
-        self.deployment_name = deployment_name
-        self.fallback_deployment_name = "gpt-4o"  # フォールバック用のモデル
+        self.model_name = model_name or "gpt-4.1"
+        self.fallback_model_name = "gpt-4o"  # フォールバック用のモデル
         self.usage_stats = {
             'prompt_tokens': 0,
             'completion_tokens': 0
@@ -49,7 +46,7 @@ class OpenAIClient:
         ]
 
         # まず主要なモデルで試す
-        current_model = self.deployment_name
+        current_model = self.model_name
         max_retries = 1  # リトライ回数（フォールバックモデルを1回だけ試す）
         retry_count = 0
         
@@ -62,8 +59,7 @@ class OpenAIClient:
                     max_tokens=1000,
                     top_p=0.1,
                     frequency_penalty=0.0,
-                    presence_penalty=0.0,
-                    response_format={"type": "text"}
+                    presence_penalty=0.0
                 )
                 
                 # トークン使用量の記録と表示
@@ -76,16 +72,18 @@ class OpenAIClient:
                 return response.choices[0].message.content.strip()
                 
             except Exception as e:
-                # RateLimitErrorかどうかを判断
-                if hasattr(e, '__class__') and e.__class__.__name__ == 'RateLimitError':
+                error_message = str(e).lower()
+                
+                # レート制限エラーまたはモデルが利用できないエラーの場合
+                if "rate_limit_exceeded" in error_message or "429" in error_message or "model_not_found" in error_message:
                     if retry_count < max_retries:
                         # フォールバックモデルに切り替え
-                        print(f"\nRate limit exceeded with model {current_model}. Falling back to {self.fallback_deployment_name}.")
-                        current_model = self.fallback_deployment_name
+                        print(f"\nError with model {current_model}: {str(e)}. Falling back to {self.fallback_model_name}.")
+                        current_model = self.fallback_model_name
                         retry_count += 1
                     else:
                         # リトライ回数を超えた場合はエラーを再発生
-                        print(f"\nRate limit exceeded with fallback model too. Giving up.")
+                        print(f"\nError with fallback model too. Giving up.")
                         raise
                 else:
                     # その他のエラーはそのまま再発生

@@ -1,13 +1,13 @@
 """!
-Azure OpenAI API クライアントモジュール
+OpenAI API クライアントモジュール
 
-Azure OpenAI APIとの通信を管理し、エラー処理とフォールバック処理を提供します。
+OpenAI APIとの通信を管理し、エラー処理とフォールバック処理を提供します。
 """
 
 import os
 from typing import Dict, Any, List, Optional, Tuple
 from datetime import datetime
-from openai import AzureOpenAI
+from openai import OpenAI
 
 from utils.logger import logger
 from config import SectionType
@@ -15,34 +15,29 @@ from config import SectionType
 
 class OpenAIClient:
     """!
-    Azure OpenAI APIとのインタラクションを管理するクラス
+    OpenAI APIとのインタラクションを管理するクラス
 
     APIへの接続、プロンプト送信、レスポンス処理を担当します。
     エラー発生時のフォールバック処理も実装しています。
     """
 
-    def __init__(self, endpoint: str, api_key: str, deployment_name: str,
-                api_version: str = "2024-02-15-preview",
+    def __init__(self, api_key: str, model_name: Optional[str] = None,
                 save_reflection: bool = False,
                 template_manager = None):  # template_manager パラメータを追加
         """!
         OpenAIClientを初期化します
 
         Args:
-            endpoint: Azure OpenAI APIのエンドポイントURL
-            api_key: APIキー
-            deployment_name: 使用するデプロイメント名（モデル名）
-            api_version: APIバージョン
+            api_key: OpenAI APIキー
+            model_name: 使用するモデル名（デフォルト: gpt-4.1）
             save_reflection: 省察プロセスを保存するかどうか
             template_manager: テンプレート管理クラスのインスタンス（オプション）
         """
-        self.client = AzureOpenAI(
-            api_key=api_key,
-            api_version=api_version,
-            azure_endpoint=endpoint
+        self.client = OpenAI(
+            api_key=api_key
         )
-        self.deployment_name = deployment_name
-        self.fallback_deployment_name = "gpt-4o"  # フォールバック用のモデル
+        self.model_name = model_name or "gpt-4.1"
+        self.fallback_model_name = "gpt-4o"  # フォールバック用のモデル
         self.usage_stats = {'prompt_tokens': 0, 'completion_tokens': 0}
         self.save_reflection = save_reflection
         self.template_manager = template_manager  # template_manager をインスタンス変数として保存
@@ -50,7 +45,7 @@ class OpenAIClient:
         # プロンプト履歴を保存するリスト
         self.prompt_history = []
 
-        logger.info(f"OpenAIClient initialized with model: {deployment_name}")
+        logger.info(f"OpenAIClient initialized with model: {self.model_name}")
 
     def generate_content(self, system_prompt: str, user_prompt: str,
                     temperature: float = 0.1, max_tokens: int = 10000,
@@ -74,7 +69,7 @@ class OpenAIClient:
             {"role": "user", "content": user_prompt}
         ]
 
-        current_model = self.deployment_name
+        current_model = self.model_name
         max_retries = 1  # リトライ回数（フォールバックモデルを1回だけ試す）
         retry_count = 0
         
@@ -101,7 +96,7 @@ class OpenAIClient:
                 prompt_info["completion_tokens"] = response.usage.completion_tokens
                 prompt_info["prompt_tokens"] = response.usage.prompt_tokens
                 prompt_info["total_tokens"] = response.usage.total_tokens
-                prompt_info["is_fallback"] = current_model != self.deployment_name
+                prompt_info["is_fallback"] = current_model != self.model_name
                 
                 # プロンプト履歴に追加
                 self.prompt_history.append(prompt_info)
@@ -120,14 +115,14 @@ class OpenAIClient:
                 # エラー情報をプロンプト情報に追加
                 prompt_info["error"] = str(e)
                 prompt_info["error_type"] = e.__class__.__name__ if hasattr(e, '__class__') else "Unknown"
-                prompt_info["is_fallback"] = current_model != self.deployment_name
+                prompt_info["is_fallback"] = current_model != self.model_name
                 
                 # プロンプト履歴に追加（エラーでも記録）
                 self.prompt_history.append(prompt_info)
                 
                 if self._should_retry_with_fallback(e, retry_count, max_retries):
-                    logger.warning(f"Error with model {current_model}: {str(e)}. Retrying with {self.fallback_deployment_name}...")
-                    current_model = self.fallback_deployment_name
+                    logger.warning(f"Error with model {current_model}: {str(e)}. Retrying with {self.fallback_model_name}...")
+                    current_model = self.fallback_model_name
                     retry_count += 1
                     # フォールバックの情報を次のプロンプト情報に設定
                     prompt_info = prompt_info.copy()
@@ -438,7 +433,6 @@ class OpenAIClient:
             top_p=0.9,                # より確実な選択肢に集中させる
             frequency_penalty=0.1,    # 若干の多様性を促進
             presence_penalty=0.0,     # 同じままでOK
-            response_format={"type": "text"},
             stream=False              # 長い応答でも一度に取得するため
         )
 
@@ -464,8 +458,11 @@ class OpenAIClient:
         Returns:
             bool: リトライすべき場合はTrue
         """
-        is_rate_limit = hasattr(error, '__class__') and error.__class__.__name__ == 'RateLimitError'
-        return is_rate_limit and retry_count < max_retries
+        error_message = str(error).lower()
+        # レート制限エラーまたはモデルが利用できないエラーの場合
+        is_rate_limit = "rate_limit_exceeded" in error_message or "429" in error_message
+        is_model_error = "model_not_found" in error_message or "model not available" in error_message
+        return (is_rate_limit or is_model_error) and retry_count < max_retries
 
     def _get_error_message(self, error: Exception, retry_count: int) -> str:
         """
@@ -478,8 +475,11 @@ class OpenAIClient:
         Returns:
             str: エラーメッセージ
         """
-        if hasattr(error, '__class__') and error.__class__.__name__ == 'RateLimitError':
+        error_message = str(error).lower()
+        if "rate_limit_exceeded" in error_message or "429" in error_message:
             return "Rate limit exceeded with fallback model too. Giving up."
+        elif "model_not_found" in error_message:
+            return "Model not found with fallback model too. Giving up."
         return f"Error calling OpenAI API: {str(error)}"
 
     def get_usage_stats(self) -> Dict[str, int]:

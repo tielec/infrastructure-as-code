@@ -24,7 +24,7 @@ pipeline {
     environment {
         // APIキーと認証情報
         OPENAI_API_KEY = credentials('openai-api-key')
-        OPENAI_DEPLOYMENT_NAME = "gpt-4o-mini"
+        OPENAI_DEPLOYMENT_NAME = "gpt-4.1-mini"
         
         // 作業ディレクトリ構造
         PROJECT_HOME_DIR = "project-repo"        // ツールのコード
