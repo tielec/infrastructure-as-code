@@ -7,7 +7,7 @@ import subprocess
 import re
 from typing import List, Dict, Any
 
-from openai import AzureOpenAI
+from openai import OpenAI
 
 # ------------------------------------------------------------------------------
 # Mermaid 用の共通メッセージ・テンプレートを定義
@@ -166,8 +166,7 @@ def parse_arguments() -> argparse.Namespace:
         help='Path to a file containing existing diagram.mmd code (if empty, will create new)'
     )
     parser.add_argument('--output-dir', default='reports/images', help='Directory to store the generated diagram')
-    parser.add_argument('--deployment-name', default='gpt-4o-mini', help='Azure OpenAI deployment name')
-    parser.add_argument('--api-version', default='2024-02-15-preview', help='Azure OpenAI API version')
+    parser.add_argument('--model-name', default='gpt-4.1', help='OpenAI model name')
     parser.add_argument('--diagram-type', default='', help='If specified, override the auto-detected diagram type')
     return parser.parse_args()
 
@@ -183,22 +182,22 @@ def load_existing_diagram_code(filepath: str) -> str:
 
 
 def generate_mermaid_code(
-    client: AzureOpenAI,
+    client: OpenAI,
     messages: List[Dict[str, Any]],
     model: str
 ) -> str:
     """
-    AzureOpenAI に会話メッセージを送り、生成されたMermaidコードを取得して返す。
+    OpenAI に会話メッセージを送り、生成されたMermaidコードを取得して返す。
     """
     # デバッグ用にメッセージ内容を出力
-    print("===== Prompt to Azure OpenAI =====")
+    print("===== Prompt to OpenAI =====")
     for i, msg in enumerate(messages, start=1):
         print(f"\nMessage {i} - Role: {msg['role']}")
         print("Content:")
         print(msg["content"])
     print("===================================")
 
-    print("[INFO] Sending request to AzureOpenAI...")
+    print("[INFO] Sending request to OpenAI...")
     response = client.chat.completions.create(
         model=model,
         messages=messages,
@@ -208,7 +207,7 @@ def generate_mermaid_code(
         frequency_penalty=0.0,
         presence_penalty=0.0,
     )
-    print("[INFO] Received response from AzureOpenAI.")
+    print("[INFO] Received response from OpenAI.")
 
     # Mermaidコードだけを抜き出す（不要な ``` などを取り除く）
     generated_code = (
@@ -303,7 +302,7 @@ def run_mermaid_and_fix_if_needed(
     max_retry: int,
     mmd_filename: str,
     chat_history: List[Dict[str, str]],
-    client: AzureOpenAI,
+    client: OpenAI,
     model: str
 ) -> None:
     """
@@ -373,17 +372,12 @@ def main() -> None:
     args = parse_arguments()
 
     openai_key = os.environ.get("OPENAI_API_KEY", "")
-    openai_endpoint = os.environ.get("OPENAI_API_ENDPOINT", "")
 
     if not openai_key:
         raise SystemExit("[ERROR] OPENAI_API_KEY is not set.")
-    if not openai_endpoint:
-        raise SystemExit("[ERROR] OPENAI_API_ENDPOINT is not set.")
 
-    client = AzureOpenAI(
-        api_key=openai_key,
-        azure_endpoint=openai_endpoint,
-        api_version=args.api_version
+    client = OpenAI(
+        api_key=openai_key
     )
 
     # 既存の Mermaid コードを読み込み
@@ -407,7 +401,7 @@ def main() -> None:
     chat_history.append(initial_message)
 
     # 1. コードを生成して書き込み (初回)
-    code = generate_mermaid_code(client, chat_history, args.deployment_name)
+    code = generate_mermaid_code(client, chat_history, args.model_name)
     code = sanitize_code(code)
     write_code_to_file("diagram.mmd", code)
 
@@ -417,7 +411,7 @@ def main() -> None:
         mmd_filename="diagram.mmd",
         chat_history=chat_history,
         client=client,
-        model=args.deployment_name
+        model=args.model_name
     )
 
     # 3. 出力された画像を指定ディレクトリへ移動

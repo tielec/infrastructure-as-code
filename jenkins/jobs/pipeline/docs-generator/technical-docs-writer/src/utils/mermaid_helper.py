@@ -560,7 +560,7 @@ def main():
     parser.add_argument('--file', required=True, help='Markdown file containing Mermaid diagrams')
     parser.add_argument('--api-key', help='OpenAI API Key')
     parser.add_argument('--api-endpoint', help='OpenAI API Endpoint')
-    parser.add_argument('--model', default='gpt-4o-mini', help='OpenAI model name')
+    parser.add_argument('--model', default='gpt-4.1-mini', help='OpenAI model name')
     args = parser.parse_args()
     
     # OpenAI クライアントを初期化

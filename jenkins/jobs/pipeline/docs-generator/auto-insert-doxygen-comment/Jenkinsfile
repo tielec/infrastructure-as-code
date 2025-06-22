@@ -16,7 +16,7 @@ pipeline {
     environment {
         // APIキーと認証情報
         OPENAI_API_KEY = credentials('openai-api-key')
-        OPENAI_DEPLOYMENT_NAME = "gpt-4o-mini"
+        OPENAI_DEPLOYMENT_NAME = "gpt-4.1-mini"
         
         // GitHub関連の設定
         GIT_JENKINS_REPO_URL = 'https://github.com/tielec/infrastructure-as-code.git'

@@ -72,7 +72,7 @@ def createDocumentGeneratorJob(repoConfig) {
             stringParam('GIT_DOCUMENT_BRANCH', repoConfig.docBranch, 'ドキュメント用ブランチ')
             stringParam('START_DATE', repoConfig.startDate, '処理開始日 (YYYY-MM-DD形式)')
             stringParam('END_DATE', '', '処理終了日 (YYYY-MM-DD形式、空の場合は現在日時まで)')
-            stringParam('OPENAI_MODEL', 'gpt-4o-mini', '使用するOpenAIモデル')
+            stringParam('OPENAI_MODEL', 'gpt-4.1-mini', '使用するOpenAIモデル')
             stringParam('DOC_FILENAME', repoConfig.docFile, '生成するドキュメントのファイル名（拡張子は.md固定）')
             
             // 真偽値パラメータ

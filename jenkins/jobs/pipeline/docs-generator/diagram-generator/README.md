@@ -13,7 +13,7 @@
 
 - **generate_diagram.py**  
   Python側のメインスクリプト。  
-  - GPT (例: `gpt-4o-mini`) に ChatCompletion API でプロンプトを送り、`diagram.py` (diagramsコード) を生成  
+  - GPT (例: `gpt-4.1-mini`) に ChatCompletion API でプロンプトを送り、`diagram.py` (diagramsコード) を生成  
   - `diagram.py` を実行してエラーがあればエラー内容を再度 Chat API に投げ、修正されたコードを再度実行 → PNGが正常に生成されるまで繰り返す
 
 - **requirements.txt**  
