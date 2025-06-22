@@ -240,7 +240,6 @@ infrastructure-as-code/
         ├─ groovy/          # Jenkins初期化用Groovyスクリプト
         │  ├─ basic-settings.groovy
         │  ├─ create-seed-job.groovy           # シードジョブ作成
-        │  ├─ disable-cli.groovy
         │  ├─ install-plugins.groovy
         │  ├─ recovery-mode.groovy
         │  └─ setup-cli-user-and-credentials.groovy  # CLIユーザー作成

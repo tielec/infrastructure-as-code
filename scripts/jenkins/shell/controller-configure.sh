@@ -79,14 +79,6 @@ GROOVY_SOURCE_DIR="$REPO_PATH/scripts/jenkins/groovy"
 
 log "Groovyスクリプトをコピー中..."
 
-# 基本的なGroovyスクリプトをコピー
-if [ -f "$GROOVY_SOURCE_DIR/disable-cli.groovy" ]; then
-  cp "$GROOVY_SOURCE_DIR/disable-cli.groovy" "$GROOVY_DIR/"
-  log "✓ disable-cli.groovy をコピーしました"
-else
-  log "警告: disable-cli.groovy が見つかりません"
-fi
-
 if [ -f "$GROOVY_SOURCE_DIR/basic-settings.groovy" ]; then
   cp "$GROOVY_SOURCE_DIR/basic-settings.groovy" "$GROOVY_DIR/"
   log "✓ basic-settings.groovy をコピーしました"
