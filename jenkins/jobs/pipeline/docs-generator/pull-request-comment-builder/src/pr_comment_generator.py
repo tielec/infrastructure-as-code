@@ -198,7 +198,7 @@ class OpenAIClient:
         
         # 環境変数から認証情報を取得
         api_key = os.getenv('OPENAI_API_KEY')
-        model_name = os.getenv('OPENAI_MODEL_NAME', 'gpt-4o')  # デフォルトモデル名
+        model_name = os.getenv('OPENAI_MODEL_NAME', 'gpt-4.1')  # デフォルトモデル名
 
         if not api_key:
             raise ValueError("Missing required environment variable: OPENAI_API_KEY")
