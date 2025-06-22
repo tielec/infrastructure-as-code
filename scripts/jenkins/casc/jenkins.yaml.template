@@ -12,6 +12,11 @@ jenkins:
     markdownFormatter:
       disableSyntaxHighlighting: false
   disableRememberMe: false
+  globalNodeProperties:
+  - envVars:
+      env:
+      - key: "OPENAI_API_ENDPOINT"
+        value: "https://api.openai.com/v1/models"
   clouds:
     - eC2Fleet:
         name: "ec2-fleet"
