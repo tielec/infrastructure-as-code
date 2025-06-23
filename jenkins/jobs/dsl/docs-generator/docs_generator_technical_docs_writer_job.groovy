@@ -1,5 +1,5 @@
-// YAMLから渡されたdocsGeneratorRepositoriesを使用してリポジトリ情報を構築
-def repositories = docsGeneratorRepositories.collect { name, repo ->
+// YAMLから渡されたjenkinsManagedRepositoriesを使用してリポジトリ情報を構築
+def repositories = jenkinsManagedRepositories.collect { name, repo ->
     [
         name: name,
         url: repo.httpsUrl,

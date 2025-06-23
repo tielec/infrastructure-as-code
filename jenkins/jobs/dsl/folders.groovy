@@ -73,7 +73,7 @@ folder('Document_Generator') {
 
 
 // 各リポジトリ用のフォルダを作成
-docsGeneratorRepositories.each { name, repo ->
+jenkinsManagedRepositories.each { name, repo ->
     folder("Document_Generator/${name}") {
         displayName("Document Generator - ${name}")
         description("""\
