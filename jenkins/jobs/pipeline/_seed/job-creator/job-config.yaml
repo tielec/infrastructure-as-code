@@ -166,7 +166,7 @@ jenkins-jobs:
     jenkinsfile: jenkins/jobs/pipeline/shared-library/test-jenkins-utils/credentials-operation/Jenkinsfile
 
 # docs-generator 生成対象リポジトリ設定
-docs-generator-repositories:
+jenkins-managed-repositories:
   infrastructure-as-code:
     httpsUrl: https://github.com/tielec/infrastructure-as-code
     mainBranch: main

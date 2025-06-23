@@ -116,9 +116,9 @@ pipeline {
                     ]
                     
                     // 他の設定が存在する場合は追加
-                    if (config['docs-generator-repositories']) {
-                        echo "Repositories configured: ${config['docs-generator-repositories'].size()}"
-                        additionalParams['docsGeneratorRepositories'] = config['docs-generator-repositories']
+                    if (config['jenkins-managed-repositories']) {
+                        echo "Repositories configured: ${config['jenkins-managed-repositories'].size()}"
+                        additionalParams['jenkinsManagedRepositories'] = config['jenkins-managed-repositories']
                     }
                     
                     if (config['common-settings']) {
