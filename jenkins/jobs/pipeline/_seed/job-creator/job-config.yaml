@@ -73,6 +73,19 @@ jenkins-jobs:
     dslfile: jenkins/jobs/dsl/admin/admin_user_management_job.groovy
     jenkinsfile: jenkins/jobs/pipeline/admin/user-management/Jenkinsfile
 
+  # Code Quality Checker Jobs
+  code_quality_rust_code_analysis_check_job:
+    name: 'rust-code-analysis-check'
+    displayName: 'Repository Code Quality Check'
+    dslfile: jenkins/jobs/dsl/code-quality-checker/code_quality_rust_code_analysis_check_job.groovy
+    jenkinsfile: jenkins/jobs/pipeline/code-quality-checker/rust-code-analysis-check/Jenkinsfile
+
+  code_quality_rust_code_analysis_check_github_trigger_job:
+    name: 'rust-code-analysis-check-github-trigger'
+    displayName: 'GitHub Trigger - Repository Code Quality Check'
+    dslfile: jenkins/jobs/dsl/code-quality-checker/code_quality_rust_code_analysis_check_github_trigger_job.groovy
+    downstreamJob: 'rust-code-analysis-check'
+
   # Docs Generator Jobs
   docs_generator_auto_insert_doxygen_comment_job:
     name: 'auto_insert_doxygen_comment'
