@@ -52,6 +52,58 @@ folder('Playgrounds') {
         |'''.stripMargin())
 }
 
+// Code_Quality_Checkerフォルダの作成
+folder('Code_Quality_Checker') {
+    displayName('Code Quality Checker Jobs')
+    description('''\
+        |このフォルダーには、コード品質チェックを行うジョブが含まれています。
+        |
+        |### 概要
+        |各プロジェクトのソースコードの品質を自動的に分析・評価します。
+        |循環的複雑度（Cyclomatic Complexity）の測定など、コード品質の向上と技術的負債の
+        |管理に必要なジョブを集約しています。
+        |
+        |### 主な機能
+        |* **循環的複雑度分析** - 関数の複雑さを数値化し、リファクタリング対象を特定
+        |
+        |### メトリクスの解釈
+        |* **複雑度 1-10**: シンプルで理解しやすい（推奨）
+        |* **複雑度 11-15**: やや複雑（要注意）
+        |* **複雑度 16以上**: 複雑でリスクが高い（リファクタリング推奨）
+        |
+        |### 実行方法
+        |* 定期実行: 毎週月曜日の朝9時に自動実行
+        |* 手動実行: 各ジョブの「Build with Parameters」から実行
+        |'''.stripMargin())
+}
+
+// 各リポジトリ用のCode Quality Checkerフォルダを作成
+jenkinsManagedRepositories.each { name, repo ->
+    folder("Code_Quality_Checker/${name}") {
+        displayName("Code Quality - ${name}")
+        description("""\
+            |${name}リポジトリのコード品質チェックジョブ
+            |
+            |### 提供機能
+            |* **循環的複雑度分析** - 複雑度の測定とレポート生成
+            |* **閾値チェック** - 設定した閾値を超える関数の自動検出
+            |* **HTMLレポート** - 視覚的に分かりやすい分析結果の表示
+            |
+            |### レポート内容
+            |* 全関数の複雑度一覧（上位300件）
+            |* 統計情報（総関数数、平均複雑度、最大複雑度など）
+            |* 問題のある関数のハイライト（色分け表示）
+            |
+            |### カスタマイズ可能な閾値
+            |* **複雑度閾値**: デフォルト15（変更可能）
+            |* **最小コード行数**: デフォルト100行
+            |
+            |### 除外設定
+            |テストコード、ビルド成果物、外部ライブラリなどを自動的に除外
+            |""".stripMargin())
+    }
+}
+
 // Docs_Generatorフォルダの作成
 folder('Document_Generator') {
     displayName('Document Generator Jobs')
