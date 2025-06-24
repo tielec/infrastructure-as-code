@@ -1,0 +1,208 @@
+{
+  "analysis": {
+    "default_cyclomatic_threshold": 15,
+    "default_cognitive_threshold": 20,
+    "default_min_code_length": 100,
+    "default_exclude_patterns": [
+      "*/test/*",
+      "*/tests/*",
+      "*/node_modules/*",
+      "*/target/*",
+      "*/venv/*",
+      "*/__pycache__/*",
+      "*/vendor/*",
+      "*/.git/*",
+      "*/build/*",
+      "*/dist/*",
+      "*/.cargo/*"
+    ],
+    "metrics": {
+      "cyclomatic": true,
+      "cognitive": true,
+      "halstead": true,
+      "maintainability_index": true,
+      "loc": true,
+      "nom": true,
+      "nexits": true,
+      "nargs": true
+    }
+  },
+  "languages": {
+    "rust": {
+      "extensions": ["rs"],
+      "name": "Rust",
+      "features": ["cyclomatic", "cognitive", "halstead", "mi", "loc"]
+    },
+    "python": {
+      "extensions": ["py"],
+      "name": "Python",
+      "features": ["cyclomatic", "cognitive", "halstead", "mi", "loc"]
+    },
+    "javascript": {
+      "extensions": ["js", "jsx"],
+      "name": "JavaScript",
+      "features": ["cyclomatic", "cognitive", "halstead", "mi", "loc"]
+    },
+    "typescript": {
+      "extensions": ["ts", "tsx"],
+      "name": "TypeScript",
+      "features": ["cyclomatic", "cognitive", "halstead", "mi", "loc"]
+    },
+    "cpp": {
+      "extensions": ["cpp", "cc", "cxx", "c++", "hpp", "hxx"],
+      "name": "C++",
+      "features": ["cyclomatic", "cognitive", "halstead", "mi", "loc"]
+    },
+    "c": {
+      "extensions": ["c", "h"],
+      "name": "C",
+      "features": ["cyclomatic", "cognitive", "halstead", "mi", "loc"]
+    },
+    "java": {
+      "extensions": ["java"],
+      "name": "Java",
+      "features": ["cyclomatic", "cognitive", "halstead", "mi", "loc"]
+    },
+    "csharp": {
+      "extensions": ["cs"],
+      "name": "C#",
+      "features": ["cyclomatic", "cognitive", "halstead", "mi", "loc"]
+    },
+    "go": {
+      "extensions": ["go"],
+      "name": "Go",
+      "features": ["cyclomatic", "cognitive", "halstead", "mi", "loc"]
+    },
+    "php": {
+      "extensions": ["php"],
+      "name": "PHP",
+      "features": ["cyclomatic", "cognitive", "loc"]
+    },
+    "ruby": {
+      "extensions": ["rb"],
+      "name": "Ruby",
+      "features": ["cyclomatic", "cognitive", "loc"]
+    },
+    "kotlin": {
+      "extensions": ["kt", "kts"],
+      "name": "Kotlin",
+      "features": ["cyclomatic", "cognitive", "loc"]
+    },
+    "swift": {
+      "extensions": ["swift"],
+      "name": "Swift",
+      "features": ["cyclomatic", "loc"]
+    },
+    "scala": {
+      "extensions": ["scala"],
+      "name": "Scala",
+      "features": ["cyclomatic", "loc"]
+    }
+  },
+  "report": {
+    "max_display_functions": 300,
+    "complexity_levels": {
+      "cyclomatic": {
+        "low": {
+          "max": 10,
+          "class": "complexity-low",
+          "description": "シンプルで理解しやすい"
+        },
+        "medium": {
+          "max": 15,
+          "class": "complexity-medium",
+          "description": "やや複雑（要注意）"
+        },
+        "high": {
+          "max": null,
+          "class": "complexity-high",
+          "description": "複雑でリスクが高い（リファクタリング推奨）"
+        }
+      },
+      "cognitive": {
+        "low": {
+          "max": 10,
+          "class": "complexity-low",
+          "description": "理解しやすい"
+        },
+        "medium": {
+          "max": 20,
+          "class": "complexity-medium",
+          "description": "理解にやや時間がかかる"
+        },
+        "high": {
+          "max": null,
+          "class": "complexity-high",
+          "description": "理解が困難（リファクタリング推奨）"
+        }
+      },
+      "maintainability_index": {
+        "high": {
+          "min": 65,
+          "class": "mi-high",
+          "description": "高い保守性"
+        },
+        "medium": {
+          "min": 20,
+          "max": 65,
+          "class": "mi-medium",
+          "description": "中程度の保守性"
+        },
+        "low": {
+          "max": 20,
+          "class": "mi-low",
+          "description": "低い保守性（要改善）"
+        }
+      }
+    },
+    "metrics_guidance": {
+      "cyclomatic": {
+        "ideal": 5,
+        "acceptable": 10,
+        "description": "関数内の独立した実行パスの数"
+      },
+      "cognitive": {
+        "ideal": 7,
+        "acceptable": 15,
+        "description": "コードを理解する際の認知的負荷"
+      },
+      "lines": {
+        "ideal": 50,
+        "acceptable": 100,
+        "description": "関数内の実行可能なコード行数"
+      },
+      "halstead_volume": {
+        "ideal": 1000,
+        "acceptable": 3000,
+        "description": "プログラムのサイズを表す指標"
+      },
+      "halstead_difficulty": {
+        "ideal": 10,
+        "acceptable": 25,
+        "description": "プログラムの理解や修正の難しさ"
+      },
+      "maintainability_index": {
+        "ideal": 85,
+        "acceptable": 65,
+        "description": "コードの保守性を示す総合指標（0-100）"
+      }
+    }
+  },
+  "output_formats": {
+    "json": {
+      "enabled": true,
+      "pretty_print": true,
+      "include_source": false
+    },
+    "csv": {
+      "enabled": true,
+      "delimiter": ",",
+      "include_headers": true
+    },
+    "html": {
+      "enabled": true,
+      "include_charts": true,
+      "include_source_links": true
+    }
+  }
+}
