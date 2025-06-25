@@ -15,12 +15,7 @@ pipeline {
         
         // バージョン設定
         DOXYGEN_AWESOME_VERSION = 'v2.3.4'
-        
-        // Jenkins用Gitリポジトリ設定（定数）
-        GIT_JENKINS_REPO_URL = 'https://github.com/tielec/infrastructure-as-code.git'
-        GIT_JENKINS_REPO_BRANCH = 'main'
-        GIT_JENKINS_CREDENTIALS_ID = 'github-app-credentials'
-        
+                
         // Dockerコンテナ設定
         DOCKER_BASE_IMAGE = 'ubuntu:22.04'
         DOXYGEN_VERSION = '1.13.2'
