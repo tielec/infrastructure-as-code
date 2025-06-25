@@ -39,6 +39,7 @@ def createPRCommentTriggerJob(repoConfig) {
         
         // ジョブの基本設定
         keepDependencies(false)
+        disabled(false) 
         
         // ログローテーション設定
         logRotator {
