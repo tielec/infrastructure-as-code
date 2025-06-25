@@ -32,64 +32,6 @@ pipeline {
         ).trim()
     }
 
-    parameters {
-        string(
-            name: 'GIT_SOURCE_REPO_URL',
-            description: 'Git repository URL to analyze',
-            trim: true
-        )
-        string(
-            name: 'GIT_SOURCE_REPO_BRANCH',
-            defaultValue: 'main',
-            description: 'Git branch to analyze',
-            trim: true
-        )
-        string(
-            name: 'GIT_SOURCE_REPO_CREDENTIALS_ID',
-            description: 'Jenkins credentials ID for Git authentication',
-            trim: true
-        )
-        string(
-            name: 'COMPLEXITY_THRESHOLD',
-            defaultValue: '15',
-            description: 'Cyclomatic complexity threshold',
-            trim: true
-        )
-        string(
-            name: 'COGNITIVE_THRESHOLD',
-            defaultValue: '20',
-            description: 'Cognitive complexity threshold',
-            trim: true
-        )
-        string(
-            name: 'MIN_CODE_LENGTH',
-            defaultValue: '100',
-            description: 'Minimum lines of code to analyze',
-            trim: true
-        )
-        string(
-            name: 'EXCLUDE_PATTERNS',
-            defaultValue: '*/test/*,*/tests/*,*/node_modules/*,*/target/*,*/vendor/*,*/.git/*',
-            description: 'Comma-separated list of patterns to exclude',
-            trim: true
-        )
-        booleanParam(
-            name: 'INCLUDE_HALSTEAD',
-            defaultValue: true,
-            description: 'Include Halstead metrics in analysis'
-        )
-        booleanParam(
-            name: 'INCLUDE_MI',
-            defaultValue: true,
-            description: 'Include Maintainability Index in analysis'
-        )
-        choice(
-            name: 'RUST_VERSION',
-            choices: ['1.76', '1.77', '1.78', 'latest'],
-            description: 'Rust version to use (minimum 1.76 required)'
-        )
-    }
-
     options {
         timeout(time: 1, unit: 'HOURS')
         disableConcurrentBuilds()
