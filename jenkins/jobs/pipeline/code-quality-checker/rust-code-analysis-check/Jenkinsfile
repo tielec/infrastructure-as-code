@@ -18,9 +18,9 @@ pipeline {
         VENV_PATH = "${WORKSPACE}/venv"
         
         // Jenkins用Gitリポジトリ設定（定数）
-        GIT_JENKINS_REPO_URL = 'git@github.com:plan-b-co-jp/sw-chocobo-jenkins-pipeline'
+        GIT_JENKINS_REPO_URL = 'https://github.com/tielec/infrastructure-as-code.git'
         GIT_JENKINS_REPO_BRANCH = 'main'
-        GIT_JENKINS_CREDENTIALS_ID = 'github-deploy-key-sw-chocobo-jenkins-pipeline'
+        GIT_JENKINS_CREDENTIALS_ID = 'github-app-credentials'
         
         // スクリプトとテンプレートのパス
         SCRIPT_PATH = 'jenkins/jobs/pipeline/code-quality-checker/rust-code-analysis-check/scripts'
