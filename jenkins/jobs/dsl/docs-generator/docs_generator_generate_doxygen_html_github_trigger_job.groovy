@@ -55,6 +55,7 @@ def createDoxygenHtmlTriggerJob(repoConfig) {
         
         // 依存関係の保持設定
         keepDependencies(false)
+        disabled(true) // 初期状態では無効化
         
         // ログローテーション設定
         logRotator {
