@@ -58,10 +58,10 @@ job(fullJobName) {
             |# ディスク情報（サイズと使用量を表示）
             |echo "ディスク情報:"
             |df -h / | awk 'NR==2 {
-            |    printf "  総容量: %s\n", $2
-            |    printf "  使用量: %s\n", $3
-            |    printf "  空き容量: %s\n", $4
-            |    printf "  使用率: %s\n", $5
+            |    printf "  総容量: %s\\n", $2
+            |    printf "  使用量: %s\\n", $3
+            |    printf "  空き容量: %s\\n", $4
+            |    printf "  使用率: %s\\n", $5
             |}'
             |
             |# ネットワーク情報
