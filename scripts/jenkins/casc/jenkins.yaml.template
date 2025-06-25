@@ -15,8 +15,12 @@ jenkins:
   globalNodeProperties:
   - envVars:
       env:
-      - key: "OPENAI_API_ENDPOINT"
-        value: "https://api.openai.com/v1/models"
+      - key: "GIT_JENKINS_CREDENTIALS_ID"
+        value: "github-app-credentials"
+      - key: "GIT_JENKINS_REPO_BRANCH"
+        value: "main"
+      - key: "GIT_JENKINS_REPO_URL"
+        value: "https://github.com/tielec/infrastructure-as-code.git"
   clouds:
     - eC2Fleet:
         name: "ec2-fleet"

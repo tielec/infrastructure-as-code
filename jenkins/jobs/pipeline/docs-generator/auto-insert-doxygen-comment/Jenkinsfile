@@ -17,12 +17,7 @@ pipeline {
         // APIキーと認証情報
         OPENAI_API_KEY = credentials('openai-api-key')
         OPENAI_DEPLOYMENT_NAME = "gpt-4.1-mini"
-        
-        // GitHub関連の設定
-        GIT_JENKINS_REPO_URL = 'https://github.com/tielec/infrastructure-as-code.git'
-        GIT_JENKINS_REPO_BRANCH = 'main'
-        GIT_JENKINS_CREDENTIALS_ID = 'github-app-credentials'
-        
+                
         // 作業ディレクトリ構造
         ORIGINAL_CODE_DIR = "original-code"      // ドキュメント生成の対象となるコード
         BASE_BRANCH_DIR = "base-branch"          // PRの作成元となるブランチ

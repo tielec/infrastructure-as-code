@@ -16,12 +16,7 @@ pipeline {
         
         // Python仮想環境
         VENV_PATH = "${WORKSPACE}/venv"
-        
-        // Jenkins用Gitリポジトリ設定（定数）
-        GIT_JENKINS_REPO_URL = 'https://github.com/tielec/infrastructure-as-code.git'
-        GIT_JENKINS_REPO_BRANCH = 'main'
-        GIT_JENKINS_CREDENTIALS_ID = 'github-app-credentials'
-        
+                
         // スクリプトとテンプレートのパス
         SCRIPT_PATH = 'jenkins/jobs/pipeline/code-quality-checker/rust-code-analysis-check/scripts'
         TEMPLATE_PATH = 'jenkins/jobs/pipeline/code-quality-checker/rust-code-analysis-check/templates'
