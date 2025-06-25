@@ -55,7 +55,14 @@ job(fullJobName) {
             |echo "カーネル: $(uname -r)"
             |echo "CPU: $(lscpu | grep 'Model name' | cut -d':' -f2 | xargs)"
             |echo "メモリ: $(free -h | awk '/^Mem:/ {print $2}')"
-            |echo "ディスク使用量: $(df -h / | awk 'NR==2 {print $5}')"
+            |# ディスク情報（サイズと使用量を表示）
+            |echo "ディスク情報:"
+            |df -h / | awk 'NR==2 {
+            |    printf "  総容量: %s\n", $2
+            |    printf "  使用量: %s\n", $3
+            |    printf "  空き容量: %s\n", $4
+            |    printf "  使用率: %s\n", $5
+            |}'
             |
             |# ネットワーク情報
             |echo "IPアドレス: $(hostname -I | awk '{print $1}')"
