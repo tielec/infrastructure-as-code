@@ -583,7 +583,7 @@ class OpenAIClient:
 
     def _analyze_chunk(self, pr_info: PRInfo, changes: List[FileChange], chunk_index: int = 0) -> str:
         """
-        チャンク単位での分析を実行（チャンク番号を追加。デフォルト値を設定）
+        チャンク単位での分析を実行
         
         Args:
             pr_info: PR情報
@@ -593,14 +593,41 @@ class OpenAIClient:
         Returns:
             str: 生成された分析結果
         """
-        # チャンク番号と処理フェーズを記録（_call_openai_apiで使用）
+        # チャンク番号と処理フェーズを記録
         self._current_chunk_index = chunk_index
         self._current_phase = "chunk"
+        
         # 単一ファイルの場合と複数ファイルの場合で戦略を変える
         is_single_file = len(changes) == 1
         
+        # JSON入力データを準備
+        input_json = self._prepare_input_json(pr_info, changes, is_single_file)
+        
+        # トークン数を管理しながら入力サイズを調整
+        input_json = self._manage_input_size(input_json, is_single_file)
+        
+        # プロンプトを生成してAPI呼び出し
+        return self._execute_chunk_analysis(pr_info, input_json)
+
+    def _prepare_input_json(self, pr_info: PRInfo, changes: List[FileChange], is_single_file: bool) -> Dict[str, Any]:
+        """チャンク分析用のJSON入力データを準備"""
         # PR情報のJSON形式
-        pr_json = {
+        pr_json = self._create_pr_json(pr_info)
+        
+        # 変更ファイル情報のJSON形式
+        changes_json = []
+        for change in changes:
+            change_obj = self._create_change_json(change, is_single_file)
+            changes_json.append(change_obj)
+        
+        return {
+            "pr_info": pr_json,
+            "changes": changes_json
+        }
+
+    def _create_pr_json(self, pr_info: PRInfo) -> Dict[str, Any]:
+        """PR情報のJSONを作成"""
+        return {
             'title': pr_info.title,
             'number': pr_info.number,
             'body': (pr_info.body or '')[:500] if pr_info.body else '',
@@ -609,117 +636,82 @@ class OpenAIClient:
             'head_branch': pr_info.head_branch
         }
 
-        # 変更ファイル情報のJSON形式
-        changes_json = []
-        for change in changes:
-            # 単一ファイルの場合はパッチ情報をできるだけ保持する
-            if is_single_file:
-                # パッチ情報の処理（最大サイズを緩和）
-                if change.patch:
-                    # 単一ファイルの場合は、より多くのパッチ情報を保持
-                    patch_limit = 8000 if change.changes > 400 else 5000
-                    if len(change.patch) > patch_limit:
-                        # 重要な部分を保持するため、前半をより多く取得
-                        front_part = int(patch_limit * 0.7)  # 前半70%
-                        back_part = patch_limit - front_part  # 残り30%
-                        patch = change.patch[:front_part] + "\n...[中略]...\n" + change.patch[-back_part:]
-                    else:
-                        patch = change.patch
-                else:
-                    patch = ''
-                    
-                # コンテキスト情報は単一ファイルの場合は減らす
-                context = {
-                    'before': None,  # 単一大きなファイルの場合はbeforeは除外
-                    'after': None,   # 単一大きなファイルの場合はafterは除外
-                    'diff_context': self._limit_diff_context(change.context_diff)
-                }
-            else:
-                # 複数ファイルの場合は従来通りパッチ情報を調整
-                if change.patch:
-                    if len(change.patch) > 3000:
-                        patch = change.patch[:1500] + "\n...[中略]...\n" + change.patch[-1500:]
-                    else:
-                        patch = change.patch
-                else:
-                    patch = ''
-                    
-                # 複数ファイルの場合はコンテキスト情報も保持
-                context = {
-                    'before': self._truncate_content(change.content_before, 1000) if change.content_before else None,
-                    'after': self._truncate_content(change.content_after, 1000) if change.content_after else None,
-                    'diff_context': self._limit_diff_context(change.context_diff)
-                }
-
-            # 変更ファイルのJSONデータ作成
-            change_obj = {
-                'filename': change.filename,
-                'status': change.status,
-                'additions': change.additions,
-                'deletions': change.deletions,
-                'changes': change.changes,
-                'patch': patch,
-                'context': context
-            }
-            changes_json.append(change_obj)
-
-        # チャンク全体を含むJSONの作成
-        input_json = {
-            "pr_info": pr_json,
-            "changes": changes_json
-        }
+    def _create_change_json(self, change: FileChange, is_single_file: bool) -> Dict[str, Any]:
+        """変更ファイルのJSONを作成"""
+        # パッチ情報の処理
+        patch = self._process_patch(change, is_single_file)
         
-        # JSONをテキストに変換してトークン数を推定
+        # コンテキスト情報の処理
+        context = self._process_context(change, is_single_file)
+        
+        return {
+            'filename': change.filename,
+            'status': change.status,
+            'additions': change.additions,
+            'deletions': change.deletions,
+            'changes': change.changes,
+            'patch': patch,
+            'context': context
+        }
+
+    def _process_patch(self, change: FileChange, is_single_file: bool) -> str:
+        """パッチ情報を処理"""
+        if not change.patch:
+            return ''
+        
+        if is_single_file:
+            # 単一ファイルの場合はより多くのパッチ情報を保持
+            patch_limit = 8000 if change.changes > 400 else 5000
+            return self._truncate_patch(change.patch, patch_limit)
+        else:
+            # 複数ファイルの場合は制限を厳しく
+            max_patch_length = 3000
+            return self._truncate_patch(change.patch, max_patch_length)
+
+    def _truncate_patch(self, patch: str, limit: int) -> str:
+        """パッチを指定された制限に切り詰める"""
+        if len(patch) <= limit:
+            return patch
+        
+        # 前半と後半から重要な部分を取得
+        if limit > 3000:
+            front_part = int(limit * 0.7)  # 前半70%
+            back_part = limit - front_part  # 残り30%
+        else:
+            front_part = limit // 2
+            back_part = limit // 2
+        
+        return patch[:front_part] + "\n...[中略]...\n" + patch[-back_part:]
+
+    def _process_context(self, change: FileChange, is_single_file: bool) -> Dict[str, Any]:
+        """コンテキスト情報を処理"""
+        if is_single_file:
+            # 単一大きなファイルの場合はコンテキストを最小限に
+            return {
+                'before': None,
+                'after': None,
+                'diff_context': self._limit_diff_context(change.context_diff)
+            }
+        else:
+            # 複数ファイルの場合はコンテキスト情報も保持
+            return {
+                'before': self._truncate_content(change.content_before, 1000) if change.content_before else None,
+                'after': self._truncate_content(change.content_after, 1000) if change.content_after else None,
+                'diff_context': self._limit_diff_context(change.context_diff)
+            }
+
+    def _manage_input_size(self, input_json: Dict[str, Any], is_single_file: bool) -> Dict[str, Any]:
+        """入力サイズをトークン制限内に調整"""
+        # 初回のトークン数推定
         input_json_text = json.dumps(input_json, ensure_ascii=False, indent=2)
         estimated_tokens = TokenEstimator.estimate_tokens(input_json_text)
         
-        # トークン数が多すぎる場合は徐々に削減
-        if estimated_tokens > self.MAX_TOKENS_PER_REQUEST * 0.8:  # 80%のマージンを取る
+        # 80%のマージンを超えている場合は削減
+        if estimated_tokens > self.MAX_TOKENS_PER_REQUEST * 0.8:
             self.logger.warning(f"Input size ({estimated_tokens} est. tokens) exceeds limit. Reducing context...")
-            
-            # 単一ファイルの場合のトークン削減戦略
-            if is_single_file:
-                # まずパッチ情報を調整（大幅に削減せず重要部分を残す）
-                for change_obj in changes_json:
-                    # パッチ情報の調整（まだ大きいが、完全には削除しない）
-                    patch_size = len(change_obj['patch'])
-                    if patch_size > 6000:
-                        # 追加/削除行数の情報を元にパッチの重要部分を特定
-                        patch_lines = change_obj['patch'].split('\n')
-                        
-                        # 追加行（+で始まる）と削除行（-で始まる）を優先的に保持
-                        important_lines = []
-                        other_lines = []
-                        
-                        for line in patch_lines:
-                            if line.startswith('+') or line.startswith('-'):
-                                important_lines.append(line)
-                            else:
-                                other_lines.append(line)
-                        
-                        # 重要な行を優先的に保持（最大3000行）
-                        preserved_important = important_lines[:3000]
-                        
-                        # コンテキスト行も少し保持（最大1000行）
-                        preserved_context = other_lines[:1000]
-                        
-                        # 結合して新しいパッチを作成
-                        new_patch = "\n".join(preserved_important + ["\n...[コンテキスト省略]...\n"] + preserved_context)
-                        change_obj['patch'] = new_patch
-                    
-                    # コンテキスト情報は完全に削除
-                    change_obj['context'] = {"note": "大きなファイルのためコンテキスト情報省略"}
-            else:
-                # 複数ファイルの場合は通常の削減戦略
-                for change_obj in changes_json:
-                    change_obj['context']['before'] = None
-                    change_obj['context']['after'] = None
-                    # パッチの削減
-                    if change_obj['patch'] and len(change_obj['patch']) > 1000:
-                        change_obj['patch'] = change_obj['patch'][:500] + "\n...[中略]...\n" + change_obj['patch'][-500:]
+            input_json = self._reduce_input_size_phase1(input_json, is_single_file)
             
             # 再度サイズを確認
-            input_json = {"pr_info": pr_json, "changes": changes_json}
             input_json_text = json.dumps(input_json, ensure_ascii=False, indent=2)
             new_estimated_tokens = TokenEstimator.estimate_tokens(input_json_text)
             self.logger.info(f"Reduced input size to {new_estimated_tokens} est. tokens")
@@ -727,63 +719,129 @@ class OpenAIClient:
             # それでも大きすぎる場合はさらに削減
             if new_estimated_tokens > self.MAX_TOKENS_PER_REQUEST * 0.9:
                 self.logger.warning("Input still too large, further reducing patches...")
+                input_json = self._reduce_input_size_phase2(input_json, is_single_file)
                 
-                if is_single_file:
-                    # 単一ファイルの場合は、パッチを部分的に保持
-                    for change_obj in changes_json:
-                        # パッチを1500行程度に削減
-                        if len(change_obj['patch']) > 1500:
-                            # 最初と最後の部分を保持
-                            change_obj['patch'] = change_obj['patch'][:1000] + "\n...[大部分省略]...\n" + change_obj['patch'][-500:]
-                else:
-                    # 複数ファイルの場合はパッチ情報を完全に除去
-                    for change_obj in changes_json:
-                        change_obj['patch'] = f"[パッチ情報省略: {change_obj['additions']} 行追加, {change_obj['deletions']} 行削除]"
-                        change_obj['context'] = {"note": "コンテキスト情報省略"}
-                
-                input_json = {"pr_info": pr_json, "changes": changes_json}
+                # 最終チェック
                 input_json_text = json.dumps(input_json, ensure_ascii=False, indent=2)
                 final_tokens = TokenEstimator.estimate_tokens(input_json_text)
                 
-                # 最終チェック
                 if final_tokens > self.MAX_TOKENS_PER_REQUEST * 0.95:
-                    if is_single_file:
-                        # 単一ファイルの場合でも最終手段としてパッチを大幅削減
-                        for change_obj in changes_json:
-                            # ファイル名と変更統計情報のみ残し、最小限のパッチを表示
-                            change_obj['patch'] = f"[パッチ大部分省略: {change_obj['additions']} 行追加, {change_obj['deletions']} 行削除]\n"
-                            # 追加/削除行のサンプルを少し残す（各50行程度）
-                            if change.patch:
-                                sample_lines = []
-                                lines = change.patch.split('\n')
-                                add_count = del_count = 0
-                                for line in lines:
-                                    if line.startswith('+') and add_count < 50:
-                                        sample_lines.append(line)
-                                        add_count += 1
-                                    elif line.startswith('-') and del_count < 50:
-                                        sample_lines.append(line)
-                                        del_count += 1
-                                    if add_count >= 50 and del_count >= 50:
-                                        break
-                                if sample_lines:
-                                    change_obj['patch'] += "\nサンプル変更内容:\n" + "\n".join(sample_lines)
-                    else:
-                        # 複数ファイルの場合は完全に情報を削減
-                        for change_obj in changes_json:
-                            change_obj['patch'] = f"[パッチ情報省略: {change_obj['additions']} 行追加, {change_obj['deletions']} 行削除]"
-                            change_obj['context'] = {"note": "トークン制限のため省略"}
+                    input_json = self._reduce_input_size_final(input_json, is_single_file)
                     
-                    input_json = {"pr_info": pr_json, "changes": changes_json}
+                    # 最終的なトークン数確認
                     input_json_text = json.dumps(input_json, ensure_ascii=False, indent=2)
                     very_final_tokens = TokenEstimator.estimate_tokens(input_json_text)
                     
                     if very_final_tokens > self.MAX_TOKENS_PER_REQUEST * 0.98:
                         raise ValueError(f"Input still too large for API ({very_final_tokens} est. tokens) even after maximum reduction")
-                
-                self.logger.info(f"Final input size after maximum reduction: {final_tokens} est. tokens")
+                    
+                    self.logger.info(f"Final input size after maximum reduction: {final_tokens} est. tokens")
+        
+        return input_json
 
+    def _reduce_input_size_phase1(self, input_json: Dict[str, Any], is_single_file: bool) -> Dict[str, Any]:
+        """入力サイズ削減フェーズ1: 基本的な削減"""
+        changes_json = input_json["changes"]
+        
+        if is_single_file:
+            # 単一ファイル: パッチの重要部分を保持しながら削減
+            for change_obj in changes_json:
+                if len(change_obj['patch']) > 6000:
+                    change_obj['patch'] = self._extract_important_patch_lines(change_obj['patch'])
+                change_obj['context'] = {"note": "大きなファイルのためコンテキスト情報省略"}
+        else:
+            # 複数ファイル: コンテキストを削除してパッチを削減
+            for change_obj in changes_json:
+                change_obj['context']['before'] = None
+                change_obj['context']['after'] = None
+                if change_obj['patch'] and len(change_obj['patch']) > 1000:
+                    change_obj['patch'] = self._truncate_patch(change_obj['patch'], 1000)
+        
+        return input_json
+
+    def _extract_important_patch_lines(self, patch: str) -> str:
+        """パッチから重要な行を抽出"""
+        patch_lines = patch.split('\n')
+        
+        # 追加行（+で始まる）と削除行（-で始まる）を優先的に保持
+        important_lines = []
+        other_lines = []
+        
+        for line in patch_lines:
+            if line.startswith('+') or line.startswith('-'):
+                important_lines.append(line)
+            else:
+                other_lines.append(line)
+        
+        # 重要な行を優先的に保持
+        preserved_important = important_lines[:3000]
+        preserved_context = other_lines[:1000]
+        
+        return "\n".join(preserved_important + ["\n...[コンテキスト省略]...\n"] + preserved_context)
+
+    def _reduce_input_size_phase2(self, input_json: Dict[str, Any], is_single_file: bool) -> Dict[str, Any]:
+        """入力サイズ削減フェーズ2: より積極的な削減"""
+        changes_json = input_json["changes"]
+        
+        if is_single_file:
+            # 単一ファイル: パッチを1500行程度に削減
+            for change_obj in changes_json:
+                if len(change_obj['patch']) > 1500:
+                    change_obj['patch'] = change_obj['patch'][:1000] + "\n...[大部分省略]...\n" + change_obj['patch'][-500:]
+        else:
+            # 複数ファイル: パッチ情報を完全に除去
+            for change_obj in changes_json:
+                change_obj['patch'] = f"[パッチ情報省略: {change_obj['additions']} 行追加, {change_obj['deletions']} 行削除]"
+                change_obj['context'] = {"note": "コンテキスト情報省略"}
+        
+        return input_json
+
+    def _reduce_input_size_final(self, input_json: Dict[str, Any], is_single_file: bool) -> Dict[str, Any]:
+        """入力サイズ削減最終フェーズ: 最小限の情報のみ残す"""
+        changes_json = input_json["changes"]
+        
+        for change_obj in changes_json:
+            # 基本的な統計情報のみ残す
+            base_info = f"[パッチ大部分省略: {change_obj['additions']} 行追加, {change_obj['deletions']} 行削除]\n"
+            
+            if is_single_file and 'patch' in change_obj:
+                # 単一ファイルの場合は最小限のサンプルを残す
+                sample_lines = self._extract_sample_lines(change_obj.get('patch', ''))
+                if sample_lines:
+                    change_obj['patch'] = base_info + "\nサンプル変更内容:\n" + "\n".join(sample_lines)
+                else:
+                    change_obj['patch'] = base_info
+            else:
+                change_obj['patch'] = base_info
+            
+            change_obj['context'] = {"note": "トークン制限のため省略"}
+        
+        return input_json
+
+    def _extract_sample_lines(self, patch: str) -> List[str]:
+        """パッチからサンプル行を抽出"""
+        sample_lines = []
+        lines = patch.split('\n')
+        add_count = del_count = 0
+        
+        for line in lines:
+            if line.startswith('+') and add_count < 50:
+                sample_lines.append(line)
+                add_count += 1
+            elif line.startswith('-') and del_count < 50:
+                sample_lines.append(line)
+                del_count += 1
+            if add_count >= 50 and del_count >= 50:
+                break
+        
+        return sample_lines
+
+    def _execute_chunk_analysis(self, pr_info: PRInfo, input_json: Dict[str, Any]) -> str:
+        """チャンク分析を実行してAPIを呼び出す"""
         # 入力形式の作成
+        pr_json = input_json["pr_info"]
+        changes_json = input_json["changes"]
+        
         input_format = (
             "### pr_info.json\n"
             f"{json.dumps(pr_json, indent=2)}\n\n"
@@ -793,7 +851,7 @@ class OpenAIClient:
         
         # プロンプトの取得
         chunk_prompt = self.prompt_manager.get_chunk_analysis_prompt(input_format)
-
+        
         # APIリクエスト用のメッセージ作成
         messages = [
             {
@@ -805,7 +863,7 @@ class OpenAIClient:
                 "content": chunk_prompt
             }
         ]
-
+        
         # API呼び出し
         return self._call_openai_api(messages)
 
