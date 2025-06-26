@@ -29,7 +29,7 @@
 
 2. **Graphvizのインストール**  
    - `diagrams` は内部で Graphviz が必要になります。  
-   - Jenkinsfile で `apt-get install graphviz` を実行しているため、Dockerコンテナ内で利用可能となります。  
+   - Jenkinsfile で `apt-get install -qq graphviz` を実行しているため、Dockerコンテナ内で利用可能となります。  
    - カスタムのDockerイメージを使う場合はイメージに含めておくのもあり。
 
 3. **実行方法**  

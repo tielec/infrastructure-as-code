@@ -153,8 +153,8 @@ pipeline {
 def installDependencies() {
     sh """
         export DEBIAN_FRONTEND=noninteractive
-        apt-get update
-        apt-get install -y wget graphviz python3
+        apt-get update -qq
+        apt-get install -qq -y wget graphviz python3
 
         cd /tmp
         wget https://github.com/doxygen/doxygen/releases/download/Release_${env.DOXYGEN_VERSION.replace('.', '_')}/doxygen-${env.DOXYGEN_VERSION}.linux.bin.tar.gz

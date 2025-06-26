@@ -221,7 +221,7 @@ def prepareExcludeArgs(patterns) {
 def installRustCodeAnalysis() {
     sh """
         # 必要なパッケージのインストール
-        apt-get update && apt-get install -y \\
+        apt-get update -qq && apt-get install -qq -y \\
             build-essential \\
             pkg-config \\
             libssl-dev \\

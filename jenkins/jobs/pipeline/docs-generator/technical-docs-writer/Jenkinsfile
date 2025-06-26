@@ -69,13 +69,13 @@ pipeline {
                     // 必要なツールのインストール
                     sh '''
                     # 必要最小限のパッケージのみインストール
-                    apt-get update && apt-get install -y git curl jq
+                    apt-get update -qq && apt-get install -qq -y git curl jq
 
                     # Puppeteer依存関係のインストール
-                    apt-get install -y chromium libatk-bridge2.0-0 libatk1.0-0 libcups2 libdrm2 libgbm1 libnspr4 libnss3 libxcomposite1 libxdamage1 libxfixes3 libxkbcommon0 libxrandr2 xvfb
+                    apt-get install -qq -y chromium libatk-bridge2.0-0 libatk1.0-0 libcups2 libdrm2 libgbm1 libnspr4 libnss3 libxcomposite1 libxdamage1 libxfixes3 libxkbcommon0 libxrandr2 xvfb
 
                     # Mermaid CLIのインストール
-                    npm install -g @mermaid-js/mermaid-cli
+                    npm install --quiet --no-progress --no-fund -g @mermaid-js/mermaid-cli
 
                     # インストールの確認
                     echo "Node.js version: $(node --version)"

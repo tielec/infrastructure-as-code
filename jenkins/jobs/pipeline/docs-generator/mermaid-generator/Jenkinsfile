@@ -67,7 +67,7 @@ pipeline {
             steps {
                 script {
                     sh """
-                        apt-get update && apt-get install -y --no-install-recommends \\
+                        apt-get update -qq && apt-get install -qq -y --no-install-recommends \\
                             ca-certificates \\
                             libglib2.0-0 \\
                             libnss3 \\
@@ -93,7 +93,7 @@ pipeline {
                             python3-venv
 
                         # Mermaid CLI のインストール
-                        npm install -g @mermaid-js/mermaid-cli
+                        npm install --quiet --no-progress --no-fund -g @mermaid-js/mermaid-cli
 
                         # venv を作成してライブラリをインストール
                         python3 -m venv /tmp/venv

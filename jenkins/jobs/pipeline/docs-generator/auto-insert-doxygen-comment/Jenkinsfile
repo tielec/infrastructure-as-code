@@ -51,7 +51,7 @@ pipeline {
             steps {
                 script {   
                     // 必要なツールのインストール
-                    sh "apt-get update && apt-get install -y git curl jq"
+                    sh "apt-get update -qq && apt-get install -qq -y git curl jq"
 
                     // 1. ドキュメント生成対象のコードをチェックアウト
                     dir(ORIGINAL_CODE_DIR) {
