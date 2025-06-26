@@ -75,7 +75,7 @@ pipeline {
                     apt-get install -qq -y chromium libatk-bridge2.0-0 libatk1.0-0 libcups2 libdrm2 libgbm1 libnspr4 libnss3 libxcomposite1 libxdamage1 libxfixes3 libxkbcommon0 libxrandr2 xvfb
 
                     # Mermaid CLIのインストール
-                    npm install -g @mermaid-js/mermaid-cli
+                    npm install --quiet --no-progress --no-fund -g @mermaid-js/mermaid-cli
 
                     # インストールの確認
                     echo "Node.js version: $(node --version)"

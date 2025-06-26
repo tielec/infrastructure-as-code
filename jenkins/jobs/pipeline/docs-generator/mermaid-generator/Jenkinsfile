@@ -93,7 +93,7 @@ pipeline {
                             python3-venv
 
                         # Mermaid CLI のインストール
-                        npm install -g @mermaid-js/mermaid-cli
+                        npm install --quiet --no-progress --no-fund -g @mermaid-js/mermaid-cli
 
                         # venv を作成してライブラリをインストール
                         python3 -m venv /tmp/venv
