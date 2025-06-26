@@ -133,7 +133,6 @@ unclassified:
   casCGlobalConfig:
     configurationPath: "/mnt/efs/jenkins/jenkins.yaml"
     disableAutoReload: true
-    skipApplyOnStartup: true
 
 tool:
   git:
