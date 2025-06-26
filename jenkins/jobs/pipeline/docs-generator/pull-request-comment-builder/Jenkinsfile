@@ -88,7 +88,7 @@ pipeline {
                 script {
                     // 必要なツールのインストール
                     sh """
-                        apt-get update && apt-get install -y git curl jq
+                        apt-get update -qq && apt-get install -qq -y git curl jq
                     """
                     
                     // 作業ディレクトリの準備
