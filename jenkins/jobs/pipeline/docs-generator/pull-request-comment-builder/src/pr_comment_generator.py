@@ -327,78 +327,184 @@ class OpenAIClient:
         Returns:
             str: 生成されたテキスト
         """
+        prompt_content = self._prepare_prompt_content(messages)
+        
         retries = 0
         backoff = self.retry_config['initial_backoff']
         
-        # 送信するプロンプトの内容（システムメッセージとユーザーメッセージの結合）
-        prompt_content = "\n\n".join([f"[{msg['role']}]\n{msg['content']}" for msg in messages])
-        
         while retries <= self.retry_config['max_retries']:
             try:
-                response = self.client.chat.completions.create(
-                    model=self.model,
-                    messages=messages,
-                    temperature=0.0,
-                    max_tokens=max_tokens,
-                    top_p=0.1,
-                    frequency_penalty=0.0,
-                    presence_penalty=0.0
-                    # response_format={"type": "text"} を削除（OpenAI APIでは不要）
-                )
-
-                # トークン使用量の記録
-                usage = response.usage
-                self.usage_stats['prompt_tokens'] += usage.prompt_tokens
-                self.usage_stats['completion_tokens'] += usage.completion_tokens
-
-                generated_content = response.choices[0].message.content.strip()
-                
-                # ログ出力（一部省略）
-                self.logger.info("\nReceived response from OpenAI API:")
-                self.logger.info("=" * 80)
-                self.logger.info(generated_content[:500] + ("..." if len(generated_content) > 500 else ""))
-                self.logger.info("=" * 80)
-                self.logger.info(f"Token usage - Prompt: {usage.prompt_tokens}, Completion: {usage.completion_tokens}, Total: {usage.total_tokens}")
-
-                # プロンプトと結果を保存
-                # チャンク番号などのコンテキスト情報は呼び出し側から提供される必要がある
-                if hasattr(self, '_current_chunk_index') and hasattr(self, '_current_phase'):
-                    self._save_prompt_and_result(
-                        prompt_content, 
-                        generated_content, 
-                        getattr(self, '_current_chunk_index', 0),
-                        getattr(self, '_current_phase', 'unknown')
-                    )
-
-                return generated_content
+                response = self._make_api_request(messages, max_tokens)
+                return self._process_successful_response(response, prompt_content)
                     
             except Exception as e:
                 retries += 1
                 self.usage_stats['retries'] += 1
                 
-                # レート制限エラーの場合の特別処理
-                if hasattr(e, 'status_code') and e.status_code == 429:
-                    # エラーメッセージから待機時間を抽出
-                    wait_time = self._extract_wait_time_from_error(str(e))
-                    if wait_time and wait_time > 600:  # 10分以上の待機が必要な場合
-                        self.logger.error(f"Rate limit exceeded. API requires {wait_time} seconds wait. Skipping this request.")
-                        raise ValueError(f"Rate limit exceeded. Required wait time too long: {wait_time} seconds")
-                    
-                    # 待機時間が指定されていればそれを使用、なければバックオフを計算
-                    sleep_time = wait_time if wait_time else backoff
-                    self.logger.warning(f"Rate limit exceeded. Retrying in {sleep_time} seconds... (Attempt {retries}/{self.retry_config['max_retries']})")
-                else:
-                    self.logger.error(f"API error: {str(e)}. Retrying in {backoff} seconds... (Attempt {retries}/{self.retry_config['max_retries']})")
-                    sleep_time = backoff
+                # 再試行戦略を決定
+                should_retry, sleep_time = self._determine_retry_strategy(
+                    e, retries, backoff
+                )
                 
-                # 指数バックオフ + ジッター
-                if retries < self.retry_config['max_retries']:
-                    time.sleep(sleep_time + random.uniform(0, 1))
-                    backoff = min(backoff * 2, self.retry_config['max_backoff'])
-                else:
-                    self.logger.error(f"Maximum retries reached. Failed to get response from API.")
+                if not should_retry:
                     raise
+                
+                # 待機して再試行
+                self._wait_before_retry(sleep_time)
+                backoff = min(backoff * 2, self.retry_config['max_backoff'])
+        
+        # 最大再試行回数に達した
+        self.logger.error("Maximum retries reached. Failed to get response from API.")
+        raise RuntimeError("Maximum retries exceeded for API call")
     
+    def _prepare_prompt_content(self, messages: List[Dict[str, str]]) -> str:
+        """プロンプトコンテンツを準備する"""
+        return "\n\n".join([
+            f"[{msg['role']}]\n{msg['content']}" 
+            for msg in messages
+        ])
+    
+    def _make_api_request(self, messages: List[Dict[str, str]], max_tokens: int) -> Any:
+        """OpenAI APIリクエストを実行する"""
+        # リクエスト情報をログ出力
+        self.logger.info(f"Making API request to model: {self.model}")
+        self.logger.info(f"Request parameters:")
+        self.logger.info(f"  - Max tokens: {max_tokens}")
+        self.logger.info(f"  - Temperature: 0.0")
+        self.logger.info(f"  - Top-p: 0.1")
+        self.logger.info(f"  - Messages count: {len(messages)}")
+        
+        # メッセージの概要をログ出力（長すぎる場合は省略）
+        for i, msg in enumerate(messages):
+            role = msg['role']
+            content_preview = msg['content'][:100] + "..." if len(msg['content']) > 100 else msg['content']
+            self.logger.info(f"  - Message {i+1} [{role}]: {content_preview}")
+        
+        # API呼び出し
+        self.logger.info("Sending request to OpenAI API...")
+        
+        return self.client.chat.completions.create(
+            model=self.model,
+            messages=messages,
+            temperature=0.0,
+            max_tokens=max_tokens,
+            top_p=0.1,
+            frequency_penalty=0.0,
+            presence_penalty=0.0,
+            response_format={"type": "text"}
+        )
+    
+    def _process_successful_response(self, response: Any, prompt_content: str) -> str:
+        """成功したレスポンスを処理する"""
+        # トークン使用量を記録
+        self._record_token_usage(response.usage)
+        
+        # レスポンス内容を取得
+        generated_content = response.choices[0].message.content.strip()
+        
+        # ログ出力
+        self._log_response_info(response, generated_content)
+        
+        # プロンプトと結果を保存
+        self._save_prompt_and_result_if_needed(prompt_content, generated_content)
+        
+        return generated_content
+    
+    def _record_token_usage(self, usage: Any) -> None:
+        """トークン使用量を記録する"""
+        self.usage_stats['prompt_tokens'] += usage.prompt_tokens
+        self.usage_stats['completion_tokens'] += usage.completion_tokens
+    
+    def _log_response_info(self, response: Any, content: str) -> None:
+        """レスポンス情報をログに記録する"""
+        self.logger.info("\nReceived response from OpenAI API:")
+        self.logger.info("=" * 80)
+        
+        # 長いコンテンツは省略
+        display_content = content[:500] + ("..." if len(content) > 500 else "")
+        self.logger.info(display_content)
+        
+        self.logger.info("=" * 80)
+        
+        usage = response.usage
+        self.logger.info(
+            f"Token usage - Prompt: {usage.prompt_tokens}, "
+            f"Completion: {usage.completion_tokens}, "
+            f"Total: {usage.total_tokens}"
+        )
+    
+    def _save_prompt_and_result_if_needed(self, prompt_content: str, generated_content: str) -> None:
+        """必要に応じてプロンプトと結果を保存する"""
+        if hasattr(self, '_current_chunk_index') and hasattr(self, '_current_phase'):
+            self._save_prompt_and_result(
+                prompt_content, 
+                generated_content, 
+                getattr(self, '_current_chunk_index', 0),
+                getattr(self, '_current_phase', 'unknown')
+            )
+    
+    def _determine_retry_strategy(self, error: Exception, retries: int, 
+                                backoff: float) -> Tuple[bool, float]:
+        """
+        エラーに基づいて再試行戦略を決定する
+        
+        Returns:
+            Tuple[bool, float]: (再試行すべきか, 待機時間)
+        """
+        if retries >= self.retry_config['max_retries']:
+            return False, 0
+        
+        # レート制限エラーの場合
+        if self._is_rate_limit_error(error):
+            wait_time = self._handle_rate_limit_error(error, backoff)
+            if wait_time is None:
+                return False, 0
+            return True, wait_time
+        
+        # その他のエラー
+        self.logger.error(
+            f"API error: {str(error)}. Retrying in {backoff} seconds... "
+            f"(Attempt {retries}/{self.retry_config['max_retries']})"
+        )
+        return True, backoff
+    
+    def _is_rate_limit_error(self, error: Exception) -> bool:
+        """レート制限エラーかどうかを判定する"""
+        return hasattr(error, 'status_code') and error.status_code == 429
+    
+    def _handle_rate_limit_error(self, error: Exception, default_backoff: float) -> Optional[float]:
+        """
+        レート制限エラーを処理する
+        
+        Returns:
+            Optional[float]: 待機時間（秒）。None の場合は再試行しない
+        """
+        wait_time = self._extract_wait_time_from_error(str(error))
+        
+        # 待機時間が長すぎる場合はスキップ
+        if wait_time and wait_time > 600:  # 10分以上
+            self.logger.error(
+                f"Rate limit exceeded. API requires {wait_time} seconds wait. "
+                f"Skipping this request."
+            )
+            raise ValueError(
+                f"Rate limit exceeded. Required wait time too long: {wait_time} seconds"
+            )
+        
+        # 待機時間が指定されていればそれを使用、なければデフォルトのバックオフ
+        actual_wait_time = wait_time if wait_time else default_backoff
+        
+        self.logger.warning(
+            f"Rate limit exceeded. Retrying in {actual_wait_time} seconds..."
+        )
+        
+        return actual_wait_time
+    
+    def _wait_before_retry(self, sleep_time: float) -> None:
+        """再試行前に待機する（ジッター付き）"""
+        jitter = random.uniform(0, 1)
+        time.sleep(sleep_time + jitter)
+
     def _extract_wait_time_from_error(self, error_message: str) -> Optional[int]:
         """エラーメッセージから待機時間を抽出"""
         
@@ -410,55 +516,205 @@ class OpenAIClient:
             return int(match.group(1))
         return None
 
-    def generate_comment(self, pr_info: PRInfo, changes: List[FileChange]) -> tuple[str, str, List[FileChange]]:
-        """
-        PRの内容を分析してコメントを生成（チャンク分割と最大サイズ制限）
+    def generate_comment(self, pr_info_path: str, pr_diff_path: str) -> Dict[str, Any]:
+        """PRコメントを生成する（スキップファイルを確実に含める）
         
         Args:
-            pr_info: PR情報
-            changes: ファイル変更リスト
+            pr_info_path: PR情報のJSONファイルパス
+            pr_diff_path: PR差分情報のJSONファイルパス
             
         Returns:
-            tuple[str, str, List[FileChange]]: (生成されたサマリー, 生成されたタイトル, スキップされたファイルリスト)
+            Dict[str, Any]: 生成されたコメント、タイトル、使用統計などを含む辞書
         """
-        # 大きなファイルのフィルタリングと前処理
-        filtered_changes, skipped_files = self._preprocess_file_changes(changes)
+        start_time = time.time()
         
-        if skipped_files:
-            self.logger.info(f"Skipped {len(skipped_files)} large files: {', '.join(f.filename for f in skipped_files)}")
-            self.usage_stats['skipped_files'] += len(skipped_files)
+        try:
+            # データの読み込みと検証
+            load_result = self._load_and_validate_data(pr_info_path, pr_diff_path)
+            if load_result.get('error'):
+                return load_result
+            
+            pr_info = load_result['pr_info']
+            changes = load_result['changes']
+            all_files = load_result['all_files']
+            skipped_file_names = load_result['skipped_file_names']
+            
+            # ファイルが空の場合の処理
+            if not changes:
+                return self._create_empty_files_result(pr_info, all_files, skipped_file_names)
+            
+            # チャンク分析の実行
+            chunk_analyses = self._perform_chunk_analyses(pr_info, changes)
+            
+            # サマリーとタイトルの生成
+            comment, generated_title = self._generate_summary_and_title(
+                pr_info, chunk_analyses, changes, skipped_file_names
+            )
+            
+            # 実行時間の計算
+            execution_time = time.time() - start_time
+            
+            # 結果の作成
+            return self._create_success_result(
+                comment, generated_title, pr_info, changes, 
+                all_files, skipped_file_names, execution_time
+            )
         
-        if not filtered_changes:
-            return "No files to analyze or all files were skipped due to size limitations.", "PRの分析結果", skipped_files
+        except Exception as e:
+            return self._create_error_result(e, start_time)
+    
+    def _load_and_validate_data(self, pr_info_path: str, pr_diff_path: str) -> Dict[str, Any]:
+        """データの読み込みと検証"""
+        try:
+            self.logger.info(f"Loading PR data from {pr_info_path} and {pr_diff_path}")
+            
+            # データの読み込み
+            pr_info, changes, skipped_file_names = self.load_pr_data(pr_info_path, pr_diff_path)
+            
+            # クラス属性として保存
+            self.pr_info = pr_info
+            self.skipped_file_names = skipped_file_names
+            
+            # 全ファイルリストを取得
+            all_files = self._get_all_files_from_diff(pr_diff_path)
+            
+            # ログ出力
+            self._log_load_results(all_files, changes, skipped_file_names)
+            
+            return {
+                'pr_info': pr_info,
+                'changes': changes,
+                'all_files': all_files,
+                'skipped_file_names': skipped_file_names,
+                'error': None
+            }
+            
+        except Exception as e:
+            self.logger.error(f"Failed to load PR data: {str(e)}")
+            return {'error': str(e)}
+    
+    def _get_all_files_from_diff(self, pr_diff_path: str) -> List[str]:
+        """差分ファイルから全ファイルリストを取得"""
+        with open(pr_diff_path, 'r', encoding='utf-8') as f:
+            original_files = json.load(f)
+            return [file_data.get('filename') for file_data in original_files]
+    
+    def _log_load_results(self, all_files: List[str], changes: List[FileChange], 
+                         skipped_file_names: List[str]) -> None:
+        """読み込み結果をログ出力"""
+        self.logger.info(f"Total files in PR: {len(all_files)}")
+        self.logger.info(f"Processed files: {len(changes)}")
+        self.logger.info(f"Skipped files: {len(skipped_file_names)}")
+        if skipped_file_names:
+            self.logger.info(f"Skipped file list: {', '.join(skipped_file_names)}")
+    
+    def _create_empty_files_result(self, pr_info: PRInfo, all_files: List[str], 
+                                  skipped_file_names: List[str]) -> Dict[str, Any]:
+        """ファイルが空の場合の結果を作成"""
+        self.logger.warning("No valid files to analyze")
+        return {
+            'comment': "変更されたファイルがないか、すべてのファイルが大きすぎるためスキップされました。",
+            'suggested_title': "変更内容の分析",
+            'usage': self.openai_client.get_usage_stats(),
+            'pr_number': pr_info.number,
+            'file_count': len(all_files),
+            'processed_file_count': 0,
+            'skipped_file_count': len(skipped_file_names),
+            'skipped_files': skipped_file_names,
+            'error': "No valid files to analyze"
+        }
+    
+    def _perform_chunk_analyses(self, pr_info: PRInfo, changes: List[FileChange]) -> List[str]:
+        """チャンク分析を実行"""
+        # チャンクサイズの計算
+        chunk_size = self.openai_client._calculate_optimal_chunk_size(changes)
+        chunks = self.openai_client._split_changes_into_chunks(changes, chunk_size)
         
-        # 動的なチャンクサイズ計算
-        chunk_size = self._calculate_optimal_chunk_size(filtered_changes)
-        print(f"Using dynamic chunk size: {chunk_size} files per chunk")
+        self.logger.info(f"Analyzing {len(chunks)} chunks with chunk size {chunk_size}")
         
-        # チャンクに分割
-        chunks = self._split_changes_into_chunks(filtered_changes, chunk_size=chunk_size)
-        
-        # 各チャンクの分析結果を保存
+        # 各チャンクの分析
         chunk_analyses = []
-        
         for i, chunk in enumerate(chunks, 1):
-            print(f"\nAnalyzing chunk {i}/{len(chunks)} ({len(chunk)} files)...")
-            try:
-                chunk_analysis = self._analyze_chunk(pr_info, chunk)
-                chunk_analyses.append(chunk_analysis)
-            except ValueError as e:
-                self.logger.error(f"Error analyzing chunk {i}: {str(e)}")
-                # エラーが発生したチャンクをスキップして続行
-                chunk_analyses.append(f"[チャンク {i} の分析に失敗しました: {str(e)}]")
+            analysis = self._analyze_single_chunk(pr_info, chunk, i, len(chunks))
+            chunk_analyses.append(analysis)
         
-        # 最終的なサマリーを生成
-        final_summary = self._generate_final_summary(pr_info, chunk_analyses, skipped_files)
+        return chunk_analyses
+    
+    def _analyze_single_chunk(self, pr_info: PRInfo, chunk: List[FileChange], 
+                            chunk_num: int, total_chunks: int) -> str:
+        """単一チャンクを分析"""
+        self.logger.info(f"Analyzing chunk {chunk_num}/{total_chunks} ({len(chunk)} files)...")
         
-        # サマリーを基にタイトルを生成
-        generated_title = self._generate_title_from_summary(final_summary)
-        self.logger.info(f"\nGenerated Title: {generated_title}")
-
-        return final_summary, generated_title, skipped_files
+        try:
+            return self.openai_client._analyze_chunk(pr_info, chunk, chunk_num)
+        except Exception as e:
+            self.logger.error(f"Error analyzing chunk {chunk_num}: {str(e)}")
+            return f"[チャンク {chunk_num} の分析に失敗しました: {str(e)}]"
+    
+    def _generate_summary_and_title(self, pr_info: PRInfo, chunk_analyses: List[str],
+                                   changes: List[FileChange], skipped_file_names: List[str]) -> Tuple[str, str]:
+        """サマリーとタイトルを生成"""
+        # 最終サマリー生成
+        self.logger.info("Generating final summary from chunk analyses")
+        comment = self.openai_client._generate_final_summary(pr_info, chunk_analyses)
+        
+        # タイトル生成
+        self.logger.info("Generating title from summary")
+        generated_title = self.openai_client._generate_title_from_summary(comment)
+        
+        # ファイルリストの重複を修正
+        self.logger.info("Fixing file path duplicates")
+        original_paths = [change.filename for change in changes] + skipped_file_names
+        comment = self._rebuild_file_section(comment, original_paths)
+        
+        return comment, generated_title
+    
+    def _create_success_result(self, comment: str, generated_title: str, pr_info: PRInfo,
+                             changes: List[FileChange], all_files: List[str],
+                             skipped_file_names: List[str], execution_time: float) -> Dict[str, Any]:
+        """成功時の結果を作成"""
+        return {
+            'comment': comment,
+            'suggested_title': generated_title,
+            'usage': self.openai_client.get_usage_stats(),
+            'pr_number': pr_info.number,
+            'file_count': len(all_files),
+            'processed_file_count': len(changes),
+            'skipped_file_count': len(skipped_file_names),
+            'skipped_files': skipped_file_names,
+            'total_changes': sum(c.changes for c in changes),
+            'execution_time_seconds': round(execution_time, 2)
+        }
+    
+    def _create_error_result(self, error: Exception, start_time: float) -> Dict[str, Any]:
+        """エラー時の結果を作成"""
+        self.logger.error(f"Error generating PR comment: {str(error)}")
+        traceback.print_exc()
+        
+        # 利用可能な情報を収集
+        pr_number = getattr(self.pr_info, 'number', 0) if hasattr(self, 'pr_info') else 0
+        usage_stats = self.openai_client.get_usage_stats() if hasattr(self, 'openai_client') else {}
+        
+        # 部分的な結果を含める
+        result = {
+            'comment': f"PRの分析中にエラーが発生しました: {str(error)}",
+            'suggested_title': "エラー: PRの分析に失敗",
+            'usage': usage_stats,
+            'pr_number': pr_number,
+            'file_count': 0,
+            'processed_file_count': 0,
+            'skipped_file_count': 0,
+            'skipped_files': [],
+            'error': str(error),
+            'traceback': traceback.format_exc()
+        }
+        
+        # 利用可能な追加情報を含める
+        if hasattr(self, 'skipped_file_names'):
+            result['skipped_file_count'] = len(self.skipped_file_names)
+            result['skipped_files'] = self.skipped_file_names
+        
+        return result
 
     def _preprocess_file_changes(self, changes: List[FileChange]) -> Tuple[List[FileChange], List[FileChange]]:
         """ファイル変更リストを前処理し、大きすぎるファイルをフィルタリング"""
@@ -933,19 +1189,45 @@ class OpenAIClient:
 
     def _generate_final_summary(self, pr_info: PRInfo, chunk_analyses: List[str], skipped_files: List[FileChange] = None) -> str:
         """各チャンクの分析結果を統合して最終的なサマリーを生成"""
-        # チャンクが1つしかない場合は、そのまま使用
-        if len(chunk_analyses) == 1 and not skipped_files:
+        # 単一チャンクの場合は早期リターン
+        if self._is_single_chunk_without_skipped_files(chunk_analyses, skipped_files):
             return self._clean_markdown_format(chunk_analyses[0])
 
+        # ログ出力
+        self._log_summary_generation_info(chunk_analyses, skipped_files)
+        
+        # 全ファイル情報を収集
+        all_files = self._collect_all_file_names(chunk_analyses, skipped_files)
+        
+        # チャンク分析を準備
+        kept_analyses = self._prepare_chunk_analyses(chunk_analyses)
+        
+        # 分析テキストを構築
+        analyses_text = self._build_analyses_text(kept_analyses, all_files, skipped_files)
+        
+        # トークン数を管理
+        analyses_text = self._manage_analyses_token_size(analyses_text, kept_analyses, all_files, skipped_files)
+        
+        # 最終サマリーを生成
+        return self._generate_summary_from_analyses(pr_info, analyses_text, all_files, skipped_files)
+    
+    def _is_single_chunk_without_skipped_files(self, chunk_analyses: List[str], skipped_files: List[FileChange]) -> bool:
+        """単一チャンクでスキップファイルがない場合をチェック"""
+        return len(chunk_analyses) == 1 and not skipped_files
+    
+    def _log_summary_generation_info(self, chunk_analyses: List[str], skipped_files: List[FileChange]) -> None:
+        """サマリー生成の情報をログ出力"""
         self.logger.info("\nGenerating final summary")
         self.logger.info(f"Number of chunk analyses: {len(chunk_analyses)}")
         if skipped_files:
             self.logger.info(f"Number of skipped files: {len(skipped_files)}")
+    
+    def _collect_all_file_names(self, chunk_analyses: List[str], skipped_files: List[FileChange]) -> set:
+        """全てのファイル名を収集する"""
+        all_files = set()
         
         # 分析結果からファイル名を抽出
-        all_files = set()
         for analysis in chunk_analyses:
-            # 正規表現でファイル名を抽出（`のついたファイルパスを探す）
             file_matches = re.findall(r'`([^`]+\.[^`]+)`', analysis)
             all_files.update(file_matches)
         
@@ -955,85 +1237,147 @@ class OpenAIClient:
             all_files.update(skipped_file_names)
         
         self.logger.info(f"Total files mentioned in analyses: {len(all_files)}")
-        
-        # チャンク分析が多すぎる場合は削減
+        return all_files
+    
+    def _prepare_chunk_analyses(self, chunk_analyses: List[str]) -> List[str]:
+        """チャンク分析を準備（多すぎる場合は削減）"""
         if len(chunk_analyses) > 10:
-            self.logger.warning(f"Too many chunk analyses ({len(chunk_analyses)}). Keeping only the first 5 and last 5.")
-            kept_analyses = chunk_analyses[:5] + ['...中略...'] + chunk_analyses[-5:]
-        else:
-            kept_analyses = chunk_analyses
+            self.logger.warning(
+                f"Too many chunk analyses ({len(chunk_analyses)}). "
+                f"Keeping only the first 5 and last 5."
+            )
+            return chunk_analyses[:5] + ['...中略...'] + chunk_analyses[-5:]
+        return chunk_analyses
+    
+    def _build_analyses_text(self, kept_analyses: List[str], all_files: set, 
+                           skipped_files: List[FileChange]) -> str:
+        """分析テキストを構築する"""
+        # チャンク分析を結合
+        analyses_text = self._format_chunk_analyses(kept_analyses)
         
-        # 分析結果を結合
-        analyses_text = "\n\n".join([
+        # ファイル一覧を追加
+        analyses_text += self._format_file_list(all_files)
+        
+        # スキップファイル情報を追加
+        if skipped_files:
+            analyses_text += self._format_skipped_files_info(skipped_files)
+        
+        return analyses_text
+    
+    def _format_chunk_analyses(self, kept_analyses: List[str]) -> str:
+        """チャンク分析をフォーマット"""
+        return "\n\n".join([
             f"=== チャンク {i+1} ===\n{analysis}"
             for i, analysis in enumerate(kept_analyses)
         ])
+    
+    def _format_file_list(self, all_files: set) -> str:
+        """ファイル一覧をフォーマット"""
+        return f"\n\n## 全ファイル一覧\n{', '.join(sorted(all_files))}"
+    
+    def _format_skipped_files_info(self, skipped_files: List[FileChange]) -> str:
+        """スキップファイル情報をフォーマット"""
+        info = "\n\n## スキップされたファイル\n"
+        info += "以下のファイルはサイズが大きすぎるため詳細分析からスキップされましたが、変更内容に含まれています：\n"
         
-        # ファイル一覧を追加
-        analyses_text += f"\n\n## 全ファイル一覧\n{', '.join(sorted(all_files))}"
+        for f in skipped_files:
+            info += f"- `{f.filename}` ({f.additions} 行追加, {f.deletions} 行削除, 合計 {f.changes} 行変更)\n"
         
-        # スキップされたファイルがあれば情報を追加
-        if skipped_files:
-            skipped_info = "\n\n## スキップされたファイル\n"
-            skipped_info += "以下のファイルはサイズが大きすぎるため詳細分析からスキップされましたが、変更内容に含まれています：\n"
-            for f in skipped_files:
-                skipped_info += f"- `{f.filename}` ({f.additions} 行追加, {f.deletions} 行削除, 合計 {f.changes} 行変更)\n"
-            analyses_text += skipped_info
-        
-        # 総トークン数を見積もる
+        return info
+    
+    def _manage_analyses_token_size(self, analyses_text: str, kept_analyses: List[str], 
+                                  all_files: set, skipped_files: List[FileChange]) -> str:
+        """分析テキストのトークンサイズを管理"""
         est_tokens = TokenEstimator.estimate_tokens(analyses_text)
-        if est_tokens > self.MAX_TOKENS_PER_REQUEST * 0.7:  # 70%制限で安全マージン
-            self.logger.warning(f"Summary too large ({est_tokens} est. tokens). Truncating.")
-            # チャンク数に応じて各チャンクの内容を削減
-            if len(kept_analyses) > 2:
-                max_tokens_per_chunk = (self.MAX_TOKENS_PER_REQUEST * 0.6) / len(kept_analyses)
-                truncated_analyses = []
-                for i, analysis in enumerate(kept_analyses):
-                    truncated = TokenEstimator.truncate_to_token_limit(analysis, int(max_tokens_per_chunk))
-                    truncated_analyses.append(truncated)
-                
-                analyses_text = "\n\n".join([
-                    f"=== チャンク {i+1} ===\n{analysis}"
-                    for i, analysis in enumerate(truncated_analyses)
-                ])
-                
-                # ファイル一覧とスキップファイル情報を再度追加（これは保持する）
-                analyses_text += f"\n\n## 全ファイル一覧\n{', '.join(sorted(all_files))}"
-                
-                if skipped_files:
-                    skipped_info = "\n\n## スキップされたファイル\n"
-                    skipped_info += "以下のファイルはサイズが大きすぎるため詳細分析からスキップされましたが、変更内容に含まれています：\n"
-                    for f in skipped_files:
-                        skipped_info += f"- `{f.filename}` ({f.additions} 行追加, {f.deletions} 行削除, 合計 {f.changes} 行変更)\n"
-                    analyses_text += skipped_info
-
+        token_limit = self.MAX_TOKENS_PER_REQUEST * 0.7
+        
+        if est_tokens <= token_limit:
+            return analyses_text
+        
+        self.logger.warning(f"Summary too large ({est_tokens} est. tokens). Truncating.")
+        
+        # 各チャンクを切り詰め
+        truncated_analyses = self._truncate_chunk_analyses(kept_analyses)
+        
+        # 再構築
+        return self._rebuild_truncated_analyses_text(truncated_analyses, all_files, skipped_files)
+    
+    def _truncate_chunk_analyses(self, kept_analyses: List[str]) -> List[str]:
+        """チャンク分析を切り詰める"""
+        if len(kept_analyses) <= 2:
+            return kept_analyses
+        
+        max_tokens_per_chunk = (self.MAX_TOKENS_PER_REQUEST * 0.6) / len(kept_analyses)
+        truncated_analyses = []
+        
+        for analysis in kept_analyses:
+            truncated = TokenEstimator.truncate_to_token_limit(
+                analysis, int(max_tokens_per_chunk)
+            )
+            truncated_analyses.append(truncated)
+        
+        return truncated_analyses
+    
+    def _rebuild_truncated_analyses_text(self, truncated_analyses: List[str], 
+                                       all_files: set, skipped_files: List[FileChange]) -> str:
+        """切り詰められた分析テキストを再構築"""
+        analyses_text = self._format_chunk_analyses(truncated_analyses)
+        analyses_text += self._format_file_list(all_files)
+        
+        if skipped_files:
+            analyses_text += self._format_skipped_files_info(skipped_files)
+        
+        return analyses_text
+    
+    def _generate_summary_from_analyses(self, pr_info: PRInfo, analyses_text: str, 
+                                      all_files: set, skipped_files: List[FileChange]) -> str:
+        """分析結果から最終サマリーを生成"""
         # プロンプトを生成
+        summary_prompt = self._prepare_summary_prompt(pr_info, analyses_text, all_files, skipped_files)
+        
+        # メッセージを構築
+        messages = self._build_summary_messages(summary_prompt)
+        
+        # API呼び出し
+        result = self._call_openai_api(messages)
+        
+        return self._clean_markdown_format(result)
+    
+    def _prepare_summary_prompt(self, pr_info: PRInfo, analyses_text: str, 
+                              all_files: set, skipped_files: List[FileChange]) -> str:
+        """サマリー生成用のプロンプトを準備"""
+        # 基本プロンプトを生成
         summary_prompt = self.prompt_manager.get_summary_prompt(pr_info, analyses_text)
         
-        # ファイル一覧を明示的にプロンプトに追加
-        file_list_prompt = f"\n\n## 必ず含めるべきファイル一覧\n{', '.join(sorted(all_files))}\n\n"
-        file_list_prompt += "最終サマリーには、上記のすべてのファイル（スキップされたファイルを含む）を「修正されたファイル」セクションに含めてください。"
+        # ファイル一覧の指示を追加
+        file_list_prompt = self._build_file_list_instructions(all_files, skipped_files)
+        
+        return summary_prompt + file_list_prompt
+    
+    def _build_file_list_instructions(self, all_files: set, skipped_files: List[FileChange]) -> str:
+        """ファイル一覧に関する指示を構築"""
+        instructions = f"\n\n## 必ず含めるべきファイル一覧\n{', '.join(sorted(all_files))}\n\n"
+        instructions += "最終サマリーには、上記のすべてのファイル（スキップされたファイルを含む）を「修正されたファイル」セクションに含めてください。"
         
         if skipped_files:
-            file_list_prompt += "\n\nスキップされたファイルも必ず「修正されたファイル」セクションに含めてください。"
-            file_list_prompt += "\n\nスキップされたファイル: " + ", ".join(f"`{f.filename}`" for f in skipped_files)
+            instructions += "\n\nスキップされたファイルも必ず「修正されたファイル」セクションに含めてください。"
+            instructions += "\n\nスキップされたファイル: " + ", ".join(f"`{f.filename}`" for f in skipped_files)
         
-        summary_prompt += file_list_prompt
-
-        messages = [
+        return instructions
+    
+    def _build_summary_messages(self, summary_prompt: str) -> List[Dict[str, str]]:
+        """サマリー生成用のメッセージを構築"""
+        return [
             {
                 "role": "system",
                 "content": "あなたは変更内容を分かりやすく説明する技術ライターです。"
-                "与えられたフォーマットに厳密に従ってドキュメントを作成してください。"
+                          "与えられたフォーマットに厳密に従ってドキュメントを作成してください。"
             },
             {
                 "role": "user",
                 "content": summary_prompt
             }
         ]
-
-        result = self._call_openai_api(messages)
-        return self._clean_markdown_format(result)
 
     def _generate_title_from_summary(self, summary: str) -> str:
         """サマリーからPRのタイトルを生成"""
@@ -1341,148 +1685,108 @@ class PRCommentGenerator:
         """
         self.logger.info("Rebuilding file section to remove duplicates")
         
-        # マークダウンのファイルリストセクションを探す
-        file_section_pattern = r"## 修正されたファイル\n(.*?)(?:\n##|\Z)"
-        file_section_match = re.search(file_section_pattern, comment, re.DOTALL)
-        
-        if not file_section_match:
+        # ファイルセクションを抽出
+        section_info = self._extract_file_section(comment)
+        if not section_info:
             self.logger.warning("File section not found in summary, cannot fix duplicates")
             return comment
-            
-        # 現在のファイルセクションとその位置を取得
-        file_section = file_section_match.group(1)
-        section_start = file_section_match.start()
-        section_end = file_section_match.end()
         
-        # ファイルパスと説明文のマップを作成
-        file_infos = {}
+        file_section, section_start, section_end = section_info
         
-        # 行ごとに処理
-        for line in file_section.split('\n'):
-            if not line.strip():
-                continue
-                
-            # 正規表現でファイルパスを抽出（`のついたファイルパス）
-            file_match = re.search(r'`([^`]+)`', line)
-            if file_match:
-                file_path = file_match.group(1)
-                
-                # ファイルのベース名（拡張子付き）を取得
-                base_name = os.path.basename(file_path)
-                
-                # オリジナルのパスで完全なパスを見つける
-                full_path = None
-                for orig_path in original_file_paths:
-                    if orig_path.endswith(base_name):
-                        full_path = orig_path
-                        break
-                
-                # 完全なパスが見つかった場合は置き換え、見つからなければそのまま使用
-                normalized_path = full_path if full_path else file_path
-                
-                # すでに同じパスの情報があるか確認
-                if normalized_path not in file_infos:
-                    file_infos[normalized_path] = line.replace(f"`{file_path}`", f"`{normalized_path}`")
+        # ファイル情報を収集
+        file_infos = self._collect_file_infos(file_section, original_file_paths)
         
-        # 新しいファイルセクションを構築
-        new_file_section = "## 修正されたファイル\n"
-        for file_path, info in file_infos.items():
-            new_file_section += info + "\n"
+        # 新しいセクションを構築
+        new_file_section = self._build_new_file_section(file_infos)
         
-        # スキップされたファイルを確認して追加
-        skipped_files = getattr(self, 'skipped_file_names', [])
-        for skipped_file in skipped_files:
-            if not any(skipped_file in path for path in file_infos.keys()):
-                new_file_section += f"- `{skipped_file}`: スキップされました（ファイルサイズが大きいか特殊形式のため）\n"
-        
-        # コメント内のファイルリストセクションを置換
+        # コメントを再構築
         new_comment = comment[:section_start] + new_file_section + "\n" + comment[section_end:]
         
         return new_comment
-
-    def _rebuild_file_section(self, comment: str, original_file_paths: List[str]) -> str:
-        """
-        「修正されたファイル」セクションを再構築して重複を排除する
-        
-        Args:
-            comment: 元のコメント
-            original_file_paths: オリジナルのファイルパスリスト
-            
-        Returns:
-            str: 重複を排除した新しいコメント
-        """
-        self.logger.info("Rebuilding file section to remove duplicates")
-        
-        # マークダウンのファイルリストセクションを探す
+    
+    def _extract_file_section(self, comment: str) -> Optional[Tuple[str, int, int]]:
+        """ファイルセクションを抽出する"""
         file_section_pattern = r"## 修正されたファイル\n(.*?)(?:\n##|\Z)"
         file_section_match = re.search(file_section_pattern, comment, re.DOTALL)
         
         if not file_section_match:
-            self.logger.warning("File section not found in summary, cannot fix duplicates")
-            return comment
+            return None
             
-        # 現在のファイルセクションとその位置を取得
-        file_section = file_section_match.group(1)
-        section_start = file_section_match.start()
-        section_end = file_section_match.end()
-        
-        # ファイルパスと説明文のマップを作成
+        return (
+            file_section_match.group(1),
+            file_section_match.start(),
+            file_section_match.end()
+        )
+    
+    def _collect_file_infos(self, file_section: str, original_file_paths: List[str]) -> Dict[str, str]:
+        """ファイル情報を収集して正規化する"""
         file_infos = {}
-        
-        # 実際のファイルパスのリスト
         actual_file_paths = set(original_file_paths)
         
-        # 行ごとに処理
         for line in file_section.split('\n'):
             if not line.strip():
                 continue
-                
-            # 正規表現でファイルパスを抽出（`のついたファイルパス）
-            file_match = re.search(r'`([^`]+)`', line)
-            if file_match:
-                file_path = file_match.group(1)
-                
-                # ライブラリ名など、実際には存在しないファイルパスをスキップ
-                # 実際のファイルパスかどうかをチェック
-                is_real_file = False
-                
-                # 完全一致のチェック
-                if file_path in actual_file_paths:
-                    is_real_file = True
-                else:
-                    # ファイル名だけの部分一致チェック
-                    base_name = os.path.basename(file_path)
-                    for orig_path in original_file_paths:
-                        if orig_path.endswith(base_name):
-                            file_path = orig_path  # 完全なパスに置き換え
-                            is_real_file = True
-                            break
-                
-                # 実際のファイルでない場合はスキップ
-                if not is_real_file:
-                    self.logger.info(f"Skipping non-file item: {file_path}")
-                    continue
-                
-                # すでに同じパスの情報があるか確認
+            
+            file_info = self._parse_file_line(line, original_file_paths, actual_file_paths)
+            if file_info:
+                file_path, normalized_line = file_info
                 if file_path not in file_infos:
-                    # 元のファイルパスを正規化されたパスに置き換え
-                    file_infos[file_path] = line.replace(f"`{file_match.group(1)}`", f"`{file_path}`")
+                    file_infos[file_path] = normalized_line
         
-        # 新しいファイルセクションを構築
+        return file_infos
+    
+    def _parse_file_line(self, line: str, original_file_paths: List[str], 
+                         actual_file_paths: set) -> Optional[Tuple[str, str]]:
+        """ファイル行を解析して正規化する"""
+        file_match = re.search(r'`([^`]+)`', line)
+        if not file_match:
+            return None
+        
+        file_path = file_match.group(1)
+        
+        # 実際のファイルパスかチェック
+        normalized_path = self._normalize_single_file_path(file_path, original_file_paths, actual_file_paths)
+        if not normalized_path:
+            self.logger.info(f"Skipping non-file item: {file_path}")
+            return None
+        
+        # 元のファイルパスを正規化されたパスに置き換え
+        normalized_line = line.replace(f"`{file_path}`", f"`{normalized_path}`")
+        return normalized_path, normalized_line
+    
+    def _normalize_single_file_path(self, file_path: str, original_file_paths: List[str], 
+                                   actual_file_paths: set) -> Optional[str]:
+        """単一のファイルパスを正規化する"""
+        # 完全一致のチェック
+        if file_path in actual_file_paths:
+            return file_path
+        
+        # ファイル名だけの部分一致チェック
+        base_name = os.path.basename(file_path)
+        for orig_path in original_file_paths:
+            if orig_path.endswith(base_name):
+                return orig_path
+        
+        return None
+    
+    def _build_new_file_section(self, file_infos: Dict[str, str]) -> str:
+        """新しいファイルセクションを構築する"""
         new_file_section = "## 修正されたファイル\n"
+        
+        # 既存のファイル情報を追加
         for file_path, info in file_infos.items():
             new_file_section += info + "\n"
         
-        # スキップされたファイルを確認して追加
+        # スキップされたファイルを追加
         skipped_files = getattr(self, 'skipped_file_names', [])
+        existing_paths = set(file_infos.keys())
+        
         for skipped_file in skipped_files:
-            if not any(skipped_file in path for path in file_infos.keys()):
+            if not any(skipped_file in path for path in existing_paths):
                 new_file_section += f"- `{skipped_file}`: スキップされました（ファイルサイズが大きいか特殊形式のため）\n"
         
-        # コメント内のファイルリストセクションを置換
-        new_comment = comment[:section_start] + new_file_section + "\n" + comment[section_end:]
-        
-        return new_comment
+        return new_file_section
+
 
 
     def generate_comment(self, pr_info_path: str, pr_diff_path: str) -> Dict[str, Any]:
