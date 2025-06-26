@@ -36,7 +36,42 @@ class JenkinsCliClient {
     }
     
     /**
-     * Jenkins CLIコマンドを実行する
+     * CSRF crumbを取得する
+     * @param jenkinsUrl JenkinsのURL
+     * @param credentialsId 認証情報ID
+     * @return crumbヘッダー文字列
+     */
+    private String getCrumb(String jenkinsUrl, String credentialsId) {
+        return steps.withCredentials([steps.usernamePassword(
+            credentialsId: credentialsId,
+            usernameVariable: 'USER',
+            passwordVariable: 'PASS'
+        )]) {
+            try {
+                def crumb = steps.sh(
+                    script: """
+                        curl -s -u "\$USER:\$PASS" \\
+                            '${jenkinsUrl}/crumbIssuer/api/xml?xpath=concat(//crumbRequestField,":",//crumb)'
+                    """,
+                    returnStdout: true
+                ).trim()
+                
+                if (crumb && crumb.contains(':')) {
+                    steps.echo "Successfully obtained CSRF crumb"
+                    return crumb
+                } else {
+                    steps.echo "CSRF protection might be disabled"
+                    return null
+                }
+            } catch (Exception e) {
+                steps.echo "Failed to get CSRF crumb: ${e.message}"
+                return null
+            }
+        }
+    }
+    
+    /**
+     * Jenkins CLIコマンドを実行する（リトライ機能付き）
      * @param command 実行するコマンド
      * @param config 設定オプション
      *        - jenkinsUrl: JenkinsのURL
@@ -44,6 +79,8 @@ class JenkinsCliClient {
      *        - inputFile: 入力ファイルのパス
      *        - outputFile: 出力ファイルのパス
      *        - timeout: タイムアウト時間（分）
+     *        - maxRetries: 最大リトライ回数
+     *        - retryDelay: リトライ間隔（秒）
      */
     def executeCommand(String command, Map config = [:]) {
         if (!command?.trim()) {
@@ -53,7 +90,9 @@ class JenkinsCliClient {
         def defaultConfig = [
             jenkinsUrl: env.JENKINS_URL,
             credentialsId: 'cli-user-token',
-            timeout: 5
+            timeout: 5,
+            maxRetries: 3,
+            retryDelay: 5
         ]
         config = defaultConfig + config
 
@@ -65,15 +104,44 @@ class JenkinsCliClient {
             setupCli(config.jenkinsUrl)
         }
 
-        return steps.withCredentials([steps.usernamePassword(
-            credentialsId: config.credentialsId,
-            usernameVariable: 'USER',
-            passwordVariable: 'PASS'
-        )]) {
-            steps.timeout(time: config.timeout, unit: 'MINUTES') {
-                executeCliCommand(command, config)
+        // リトライロジックを実装
+        def lastException = null
+        for (int attempt = 1; attempt <= config.maxRetries; attempt++) {
+            try {
+                steps.echo "Executing Jenkins CLI command (attempt ${attempt}/${config.maxRetries}): ${command}"
+                
+                def result = steps.withCredentials([steps.usernamePassword(
+                    credentialsId: config.credentialsId,
+                    usernameVariable: 'USER',
+                    passwordVariable: 'PASS'
+                )]) {
+                    steps.timeout(time: config.timeout, unit: 'MINUTES') {
+                        executeCliCommand(command, config)
+                    }
+                }
+                
+                steps.echo "Command executed successfully"
+                return result
+                
+            } catch (Exception e) {
+                lastException = e
+                
+                // 401エラーをチェック
+                if (e.message?.contains('401') || e.message?.contains('handshake failed')) {
+                    steps.echo "Authentication error detected. Retrying after ${config.retryDelay} seconds..."
+                    if (attempt < config.maxRetries) {
+                        steps.sleep(time: config.retryDelay, unit: 'SECONDS')
+                        continue
+                    }
+                }
+                
+                // その他のエラーは即座に再スロー
+                throw e
             }
         }
+        
+        // すべてのリトライが失敗した場合
+        throw new JenkinsCliException("Failed after ${config.maxRetries} attempts: ${lastException?.message}")
     }
     
     /**
@@ -405,7 +473,10 @@ class JenkinsCliClient {
     }
     
     private def executeCliCommand(String command, Map config) {
-        def cliCommand = buildCliCommand(command, config)
+        // CSRF crumbを取得
+        def crumb = getCrumb(config.jenkinsUrl, config.credentialsId)
+        
+        def cliCommand = buildCliCommand(command, config, crumb)
         
         try {
             if (config.inputFile) {
@@ -439,13 +510,21 @@ class JenkinsCliClient {
         }
     }
     
-    private String buildCliCommand(String command, Map config) {
-        return """java -jar jenkins-cli.jar \\
+    private String buildCliCommand(String command, Map config, String crumb = null) {
+        def cliCmd = """java -jar jenkins-cli.jar \\
             -s '${config.jenkinsUrl}' \\
-            -auth "\$USER:\$PASS" \\
-            -noKeyAuth \\
-            ${command}
-        """.stripIndent()
+            -auth "\$USER:\$PASS\""""
+        
+        // CSRF crumbがある場合はヘッダーに追加
+        if (crumb) {
+            cliCmd += """ \\
+            -http-header "${crumb}\""""
+        }
+        
+        cliCmd += """ \\
+            ${command}"""
+        
+        return cliCmd.stripIndent()
     }
 }
 
