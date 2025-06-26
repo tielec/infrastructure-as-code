@@ -139,7 +139,7 @@ class GitClientBase implements Serializable {
                 
                 # Gitクローンで明示的に鍵ファイルを指定する
                 GIT_SSH_COMMAND="ssh -i \${SSH_KEY_FILE} -o UserKnownHostsFile=~/.ssh/known_hosts -o StrictHostKeyChecking=no" \\
-                git clone --verbose --progress --depth=1 --branch=${branch} ${repoUrl} .
+                git clone --depth=1 --branch=${branch} ${repoUrl} .
             """
         }
     }
