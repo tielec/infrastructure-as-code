@@ -130,6 +130,10 @@ unclassified:
     allPipelines: false
     elapsedTimeFormat: "'<b>'HH:mm:ss.S'</b> '"
     systemTimeFormat: "'<b>'HH:mm:ss'</b> '"
+  casCGlobalConfig:
+    configurationPath: "/mnt/efs/jenkins/jenkins.yaml"
+    disableAutoReload: true
+    skipApplyOnStartup: true
 
 tool:
   git:
