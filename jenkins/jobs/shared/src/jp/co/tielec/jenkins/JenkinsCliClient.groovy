@@ -443,6 +443,7 @@ class JenkinsCliClient {
         return """java -jar jenkins-cli.jar \\
             -s '${config.jenkinsUrl}' \\
             -auth "\$USER:\$PASS" \\
+            -noKeyAuth \\
             ${command}
         """.stripIndent()
     }
