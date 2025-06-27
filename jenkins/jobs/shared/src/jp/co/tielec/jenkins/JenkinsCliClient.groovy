@@ -48,7 +48,7 @@ class JenkinsCliClient {
      *        - outputFile: 出力ファイルのパス
      *        - timeout: タイムアウト時間（分）
      *        - useHttp: HTTP接続を使用するか（デフォルト: true）
-     *        - authMethod: 認証方式 ('token', 'password', 'ssh')（デフォルト: 'token'）
+     *        - authMethod: 認証方式 ('auto', 'token', 'password')（デフォルト: 'auto'）
      *        - username: APIトークン使用時のユーザー名
      */
     def executeCommand(String command, Map config = [:]) {
@@ -61,7 +61,7 @@ class JenkinsCliClient {
             credentialsId: 'cli-user-token',
             timeout: 5,
             useHttp: true,  // デフォルトでHTTP接続を使用
-            authMethod: 'token'  // デフォルトでAPIトークン認証
+            authMethod: 'auto'  // デフォルトで自動判定
         ]
         config = defaultConfig + config
 
@@ -73,14 +73,44 @@ class JenkinsCliClient {
             setupCli(config.jenkinsUrl)
         }
 
-        // 認証方式に応じて適切な認証情報を取得
-        if (config.authMethod == 'token') {
-            // APIトークンの場合
+        // authMethod が 'auto' の場合、Credentialの型を自動判定
+        if (config.authMethod == 'auto') {
+            try {
+                // まずUsernamePasswordとして試す
+                return steps.withCredentials([steps.usernamePassword(
+                    credentialsId: config.credentialsId,
+                    usernameVariable: 'USER',
+                    passwordVariable: 'PASS'
+                )]) {
+                    steps.echo "Using UsernamePassword credential type"
+                    config.authMethod = 'password'
+                    steps.timeout(time: config.timeout, unit: 'MINUTES') {
+                        executeCliCommand(command, config)
+                    }
+                }
+            } catch (Exception e) {
+                // UsernamePasswordで失敗したら、Secret textとして試す
+                steps.echo "UsernamePassword failed, trying Secret text: ${e.message}"
+                return steps.withCredentials([steps.string(
+                    credentialsId: config.credentialsId,
+                    variable: 'JENKINS_API_TOKEN'
+                )]) {
+                    steps.echo "Using Secret text credential type"
+                    config.authMethod = 'token'
+                    def username = config.username ?: 'cli-user'
+                    steps.withEnv(["JENKINS_USER=${username}"]) {
+                        steps.timeout(time: config.timeout, unit: 'MINUTES') {
+                            executeCliCommand(command, config)
+                        }
+                    }
+                }
+            }
+        } else if (config.authMethod == 'token') {
+            // 明示的にAPIトークンの場合
             return steps.withCredentials([steps.string(
                 credentialsId: config.credentialsId,
                 variable: 'JENKINS_API_TOKEN'
             )]) {
-                // APIトークンの場合、ユーザー名も必要
                 def username = config.username ?: 'cli-user'
                 steps.withEnv(["JENKINS_USER=${username}"]) {
                     steps.timeout(time: config.timeout, unit: 'MINUTES') {
@@ -89,7 +119,7 @@ class JenkinsCliClient {
                 }
             }
         } else {
-            // ユーザー名/パスワードの場合
+            // 明示的にユーザー名/パスワードの場合
             return steps.withCredentials([steps.usernamePassword(
                 credentialsId: config.credentialsId,
                 usernameVariable: 'USER',
