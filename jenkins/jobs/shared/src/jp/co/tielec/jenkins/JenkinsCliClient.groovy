@@ -69,7 +69,6 @@ class JenkinsCliClient {
         
         // Jenkins CLIがセットアップされているか確認
         if (!steps.fileExists('jenkins-cli.jar')) {
-            steps.echo "Jenkins CLI not found. Setting up..."
             setupCli(config.jenkinsUrl)
         }
 
@@ -82,7 +81,6 @@ class JenkinsCliClient {
                     usernameVariable: 'USER',
                     passwordVariable: 'PASS'
                 )]) {
-                    steps.echo "Using UsernamePassword credential type"
                     config.authMethod = 'password'
                     steps.timeout(time: config.timeout, unit: 'MINUTES') {
                         executeCliCommand(command, config)
@@ -90,12 +88,10 @@ class JenkinsCliClient {
                 }
             } catch (Exception e) {
                 // UsernamePasswordで失敗したら、Secret textとして試す
-                steps.echo "UsernamePassword failed, trying Secret text: ${e.message}"
                 return steps.withCredentials([steps.string(
                     credentialsId: config.credentialsId,
                     variable: 'JENKINS_API_TOKEN'
                 )]) {
-                    steps.echo "Using Secret text credential type"
                     config.authMethod = 'token'
                     def username = config.username ?: 'cli-user'
                     steps.withEnv(["JENKINS_USER=${username}"]) {
@@ -389,16 +385,10 @@ class JenkinsCliClient {
         def xmlContent = buildCredentialXml(credentialData)
         def tempFile = "temp_credential_${System.currentTimeMillis()}.xml"
         
-        steps.echo "Creating credential with XML content:"
-        steps.echo xmlContent
-        
         steps.writeFile(file: tempFile, text: xmlContent)
         
         // ファイルが正しく作成されたか確認
-        if (steps.fileExists(tempFile)) {
-            def fileContent = steps.readFile(file: tempFile)
-            steps.echo "Temp file created successfully. Content length: ${fileContent.length()}"
-        } else {
+        if (!steps.fileExists(tempFile)) {
             throw new JenkinsCliException("Failed to create temporary XML file")
         }
         
@@ -465,31 +455,30 @@ class JenkinsCliClient {
     private def executeCliCommand(String command, Map config) {
         def cliCommand = buildCliCommand(command, config)
         
-        // エラーをより詳細にキャプチャするために、returnStatus: trueを使用
         def exitCode = 0
         def output = ""
         def errorOutput = ""
         
         try {
             if (config.inputFile) {
-                // ファイルの存在と内容を確認
+                // ファイルの存在を確認
                 if (!steps.fileExists(config.inputFile)) {
                     throw new JenkinsCliException("Input file does not exist: ${config.inputFile}")
                 }
                 
-                // ファイルサイズを確認
-                def fileInfo = steps.sh(script: "ls -la ${config.inputFile}", returnStdout: true)
-                steps.echo "Input file info: ${fileInfo}"
-                
-                // 一時ファイルを使用してエラーをキャプチャ
+                // 一時エラーファイルを使用
                 def tempErrorFile = "cli_error_${System.currentTimeMillis()}.txt"
                 exitCode = steps.sh(
                     script: "cat '${config.inputFile}' | ${cliCommand} 2>${tempErrorFile}",
                     returnStatus: true
                 )
-                output = steps.sh(script: "cat '${config.inputFile}' | ${cliCommand} 2>/dev/null || true", returnStdout: true)
+                
+                if (exitCode == 0) {
+                    output = steps.sh(script: "cat '${config.inputFile}' | ${cliCommand} 2>/dev/null", returnStdout: true)
+                }
+                
                 if (steps.fileExists(tempErrorFile)) {
-                    errorOutput = steps.readFile(file: tempErrorFile)
+                    errorOutput = steps.readFile(file: tempErrorFile).trim()
                     steps.sh "rm -f ${tempErrorFile}"
                 }
             } else if (config.outputFile) {
@@ -498,76 +487,57 @@ class JenkinsCliClient {
                     script: "${cliCommand} > '${config.outputFile}' 2>${tempErrorFile}",
                     returnStatus: true
                 )
+                
                 if (steps.fileExists(tempErrorFile)) {
-                    errorOutput = steps.readFile(file: tempErrorFile)
+                    errorOutput = steps.readFile(file: tempErrorFile).trim()
                     steps.sh "rm -f ${tempErrorFile}"
                 }
-                output = "Output saved to ${config.outputFile}"
+                
+                if (exitCode == 0) {
+                    output = "Output saved to ${config.outputFile}"
+                }
             } else {
                 def tempErrorFile = "cli_error_${System.currentTimeMillis()}.txt"
                 exitCode = steps.sh(
                     script: "${cliCommand} 2>${tempErrorFile}",
                     returnStatus: true
                 )
-                output = steps.sh(script: "${cliCommand} 2>/dev/null || true", returnStdout: true)
+                
+                if (exitCode == 0) {
+                    output = steps.sh(script: "${cliCommand} 2>/dev/null", returnStdout: true)
+                }
+                
                 if (steps.fileExists(tempErrorFile)) {
-                    errorOutput = steps.readFile(file: tempErrorFile)
+                    errorOutput = steps.readFile(file: tempErrorFile).trim()
                     steps.sh "rm -f ${tempErrorFile}"
                 }
             }
             
             // エラーチェック
             if (exitCode != 0) {
-                steps.echo "CLI command failed with exit code: ${exitCode}"
-                steps.echo "Error output: ${errorOutput}"
-                steps.echo "Standard output: ${output}"
+                def errorMessage = "Jenkins CLI command failed: ${command}"
                 
-                // リトライロジック（認証エラーの場合）
-                if (errorOutput.contains("401") || errorOutput.contains("Unauthorized")) {
-                    steps.echo "Authentication error detected. Trying different authentication approaches..."
-                    
-                    // 1. まず、ユーザー名を明示的に指定して再試行
-                    if (config.authMethod == 'token' && !config.retryAttempted) {
-                        steps.echo "Retrying with explicit username format..."
-                        config.retryAttempted = true
-                        def retryCommand = buildCliCommand(command, config)
-                        
-                        // cURLでデバッグ情報を出力
-                        steps.sh """
-                            echo "=== Debug: Testing API access with curl ==="
-                            curl -I -u "\$JENKINS_USER:\$JENKINS_API_TOKEN" ${config.jenkinsUrl}/cli?remoting=false || true
-                            echo "=== End Debug ==="
-                        """
-                        
-                        output = steps.sh(script: retryCommand, returnStdout: true)
-                        return output
-                    }
-                    
-                    // 2. Jenkinsの認証設定を確認
-                    steps.echo """
-                    Authentication failed. Please verify:
-                    1. The credential ID '${config.credentialsId}' exists and is valid
-                    2. The user has 'Overall/Read' permission in Jenkins
-                    3. If using API token, ensure it's not expired
-                    4. Jenkins security realm is properly configured
-                    
-                    Current Jenkins URL: ${config.jenkinsUrl}
-                    """
+                if (errorOutput) {
+                    errorMessage += "\nError output: ${errorOutput}"
                 }
                 
-                throw new JenkinsCliException("CLI command failed with exit code ${exitCode}")
+                if (errorOutput.contains("401") || errorOutput.contains("Unauthorized")) {
+                    errorMessage += "\n\nAuthentication failed. Please verify:"
+                    errorMessage += "\n1. The credential ID '${config.credentialsId}' exists and is valid"
+                    errorMessage += "\n2. The user has 'Overall/Read' permission in Jenkins"
+                    errorMessage += "\n3. If using API token, ensure it's not expired"
+                    errorMessage += "\n4. Jenkins security realm is properly configured"
+                }
+                
+                throw new JenkinsCliException(errorMessage)
             }
             
             return output
             
+        } catch (JenkinsCliException e) {
+            throw e
         } catch (Exception e) {
-            def errorMessage = """Failed to execute Jenkins CLI command: ${command}
-Exit Code: ${exitCode}
-Error: ${e.message}
-Standard Output: ${output}
-Error Output: ${errorOutput}"""
-            
-            throw new JenkinsCliException(errorMessage)
+            throw new JenkinsCliException("Failed to execute Jenkins CLI command: ${command}\nError: ${e.message}")
         }
     }
     
