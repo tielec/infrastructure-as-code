@@ -20,6 +20,7 @@ repositories.each { repo ->
     def jobName = "Code_Quality_Checker/${repo.name}/${jobConfig.name}"
     
     pipelineJob(jobName) {
+        displayName(jobConfig.displayName)
         // 基本情報
         description("""\
             |# 概要

@@ -22,6 +22,7 @@ def createPRComplexityAnalyzerTriggerJob(repoConfig) {
     def tokenValue = "${repoConfig.name.replaceAll('-', '')}-pr-complexity-webhook"
     
     job(jobName) {
+        displayName(jobConfig.displayName)
         description("""\
         |# GitHub PR 複雑度分析自動化トリガー
         |
