@@ -102,7 +102,11 @@ else
     log "  - Both will be stored in Jenkins configuration"
 fi
 
-log "CLI user and credentials setup ${RESTART_JENKINS == 'true' ? 'completed' : 'prepared'}"
+if [ "$RESTART_JENKINS" = "true" ]; then
+    log "CLI user and credentials setup completed"
+else
+    log "CLI user and credentials setup prepared"
+fi
 
 if [ "$RESTART_JENKINS" != "true" ]; then
     log ""

@@ -162,7 +162,11 @@ else
     fi
 fi
 
-log "SSH credentials setup ${RESTART_JENKINS == 'true' ? 'completed' : 'prepared'}"
+if [ "$RESTART_JENKINS" = "true" ]; then
+    log "SSH credentials setup completed"
+else
+    log "SSH credentials setup prepared"
+fi
 
 if [ "$RESTART_JENKINS" != "true" ]; then
     log ""
