@@ -28,6 +28,9 @@ class JenkinsCliClient {
             throw new IllegalArgumentException("Jenkins URL is required")
         }
 
+        // URLの末尾のスラッシュを除去
+        jenkinsUrl = jenkinsUrl.replaceAll('/+$', '')
+
         steps.sh """
             curl -O '${jenkinsUrl}/jnlpJars/jenkins-cli.jar'
             chmod +x jenkins-cli.jar
@@ -44,6 +47,7 @@ class JenkinsCliClient {
      *        - inputFile: 入力ファイルのパス
      *        - outputFile: 出力ファイルのパス
      *        - timeout: タイムアウト時間（分）
+     *        - useHttp: HTTP接続を使用するか（デフォルト: true）
      */
     def executeCommand(String command, Map config = [:]) {
         if (!command?.trim()) {
@@ -53,7 +57,8 @@ class JenkinsCliClient {
         def defaultConfig = [
             jenkinsUrl: env.JENKINS_URL,
             credentialsId: 'cli-user-token',
-            timeout: 5
+            timeout: 5,
+            useHttp: true  // デフォルトでHTTP接続を使用
         ]
         config = defaultConfig + config
 
@@ -402,10 +407,17 @@ class JenkinsCliClient {
         if (!config.jenkinsUrl?.trim()) {
             throw new IllegalArgumentException("Jenkins URL is required")
         }
+        // URLの末尾のスラッシュを除去
+        config.jenkinsUrl = config.jenkinsUrl.replaceAll('/+$', '')
     }
     
     private def executeCliCommand(String command, Map config) {
         def cliCommand = buildCliCommand(command, config)
+        
+        // エラーをより詳細にキャプチャするために、returnStatus: trueを使用
+        def exitCode = 0
+        def output = ""
+        def errorOutput = ""
         
         try {
             if (config.inputFile) {
@@ -418,34 +430,91 @@ class JenkinsCliClient {
                 def fileInfo = steps.sh(script: "ls -la ${config.inputFile}", returnStdout: true)
                 steps.echo "Input file info: ${fileInfo}"
                 
-                def result = steps.sh(script: "cat '${config.inputFile}' | ${cliCommand}", returnStdout: true)
-                return result
+                // 一時ファイルを使用してエラーをキャプチャ
+                def tempErrorFile = "cli_error_${System.currentTimeMillis()}.txt"
+                exitCode = steps.sh(
+                    script: "cat '${config.inputFile}' | ${cliCommand} 2>${tempErrorFile}",
+                    returnStatus: true
+                )
+                output = steps.sh(script: "cat '${config.inputFile}' | ${cliCommand} 2>/dev/null || true", returnStdout: true)
+                if (steps.fileExists(tempErrorFile)) {
+                    errorOutput = steps.readFile(file: tempErrorFile)
+                    steps.sh "rm -f ${tempErrorFile}"
+                }
             } else if (config.outputFile) {
-                steps.sh "${cliCommand} > '${config.outputFile}'"
-                return "Output saved to ${config.outputFile}"
+                def tempErrorFile = "cli_error_${System.currentTimeMillis()}.txt"
+                exitCode = steps.sh(
+                    script: "${cliCommand} > '${config.outputFile}' 2>${tempErrorFile}",
+                    returnStatus: true
+                )
+                if (steps.fileExists(tempErrorFile)) {
+                    errorOutput = steps.readFile(file: tempErrorFile)
+                    steps.sh "rm -f ${tempErrorFile}"
+                }
+                output = "Output saved to ${config.outputFile}"
             } else {
-                def result = steps.sh(script: cliCommand, returnStdout: true)
-                return result
+                def tempErrorFile = "cli_error_${System.currentTimeMillis()}.txt"
+                exitCode = steps.sh(
+                    script: "${cliCommand} 2>${tempErrorFile}",
+                    returnStatus: true
+                )
+                output = steps.sh(script: "${cliCommand} 2>/dev/null || true", returnStdout: true)
+                if (steps.fileExists(tempErrorFile)) {
+                    errorOutput = steps.readFile(file: tempErrorFile)
+                    steps.sh "rm -f ${tempErrorFile}"
+                }
             }
+            
+            // エラーチェック
+            if (exitCode != 0) {
+                steps.echo "CLI command failed with exit code: ${exitCode}"
+                steps.echo "Error output: ${errorOutput}"
+                steps.echo "Standard output: ${output}"
+                
+                // リトライロジック（認証エラーの場合）
+                if (errorOutput.contains("401") || errorOutput.contains("Unauthorized")) {
+                    steps.echo "Authentication error detected. Retrying with different parameters..."
+                    // HTTP接続モードで再試行
+                    config.useHttp = true
+                    def retryCommand = buildCliCommand(command, config)
+                    output = steps.sh(script: retryCommand, returnStdout: true)
+                    return output
+                }
+                
+                throw new JenkinsCliException("CLI command failed with exit code ${exitCode}")
+            }
+            
+            return output
+            
         } catch (Exception e) {
-            // CLIコマンドのエラー詳細を取得
-            def errorOutput = ""
-            try {
-                errorOutput = steps.sh(script: "${cliCommand} 2>&1 || true", returnStdout: true)
-            } catch (ignored) {
-                // エラー出力の取得に失敗した場合は無視
-            }
-            throw new JenkinsCliException("Failed to execute Jenkins CLI command: ${command}\nError: ${e.message}\nOutput: ${errorOutput}")
+            def errorMessage = """Failed to execute Jenkins CLI command: ${command}
+Exit Code: ${exitCode}
+Error: ${e.message}
+Standard Output: ${output}
+Error Output: ${errorOutput}"""
+            
+            throw new JenkinsCliException(errorMessage)
         }
     }
     
     private String buildCliCommand(String command, Map config) {
-        return """java -jar jenkins-cli.jar \\
-            -s '${config.jenkinsUrl}' \\
-            -auth "\$USER:\$PASS" \\
-            -noKeyAuth \\
-            ${command}
-        """.stripIndent()
+        // URLの末尾のスラッシュを確実に除去
+        def jenkinsUrl = config.jenkinsUrl.replaceAll('/+$', '')
+        
+        // 基本的なCLIコマンドを構築
+        def cliCommand = """java -jar jenkins-cli.jar \\
+            -s '${jenkinsUrl}' \\
+            -auth "\$USER:\$PASS\""""
+        
+        // HTTP接続モードを使用（WebSocketの問題を回避）
+        if (config.useHttp) {
+            cliCommand += " \\\n            -http"
+        }
+        
+        // コマンドを追加
+        cliCommand += " \\\n            ${command}"
+        
+        return cliCommand.stripIndent()
     }
 }
 
