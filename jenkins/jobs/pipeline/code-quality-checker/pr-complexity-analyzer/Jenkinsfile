@@ -795,7 +795,7 @@ def processAnalysisResults() {
 def generatePRComment() {
     try {
         withCredentials([
-            usernamePassword(credentialsId: 'SW-Jenkins-Pipeline-App', 
+            usernamePassword(credentialsId: 'github-app-credentials', 
                             usernameVariable: 'GITHUB_APP_ID',
                             passwordVariable: 'GITHUB_ACCESS_TOKEN'),
             string(credentialsId: 'openai-api-key', 
