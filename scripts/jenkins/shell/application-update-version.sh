@@ -19,9 +19,13 @@ error_exit() {
 # 環境変数
 JENKINS_VERSION="${JENKINS_VERSION:-latest}"
 JENKINS_HOME_DIR="/mnt/efs/jenkins"
+RESTART_JENKINS="${RESTART_JENKINS:-false}"
+CREATE_BACKUP="${CREATE_BACKUP:-true}"
 
 log "===== Starting Jenkins Version Update ====="
 log "Target version: $JENKINS_VERSION"
+log "Restart Jenkins: $RESTART_JENKINS"
+log "Create backup: $CREATE_BACKUP"
 
 # 現在のバージョンを確認
 CURRENT_VERSION=$(rpm -q jenkins --queryformat '%{VERSION}' 2>/dev/null || echo 'not installed')
@@ -38,25 +42,28 @@ if [ "$JENKINS_VERSION" != "latest" ] && [ "$CURRENT_VERSION" = "$JENKINS_VERSIO
     exit 0
 fi
 
-# Jenkinsサービスを停止
-log "Stopping Jenkins service..."
-systemctl stop jenkins
-
-# 停止確認
-TIMEOUT=60
-ELAPSED=0
-while systemctl is-active jenkins >/dev/null 2>&1; do
-    if [ $ELAPSED -ge $TIMEOUT ]; then
-        error_exit "Failed to stop Jenkins service within timeout"
-    fi
-    sleep 5
-    ELAPSED=$((ELAPSED + 5))
-    log "Waiting for Jenkins to stop... ($ELAPSED seconds)"
-done
-log "Jenkins service stopped"
+# 再起動が必要な場合のみJenkinsサービスを停止
+if [ "$RESTART_JENKINS" = "true" ]; then
+    # Jenkinsサービスを停止
+    log "Stopping Jenkins service..."
+    systemctl stop jenkins
+    
+    # 停止確認
+    TIMEOUT=60
+    ELAPSED=0
+    while systemctl is-active jenkins >/dev/null 2>&1; do
+        if [ $ELAPSED -ge $TIMEOUT ]; then
+            error_exit "Failed to stop Jenkins service within timeout"
+        fi
+        sleep 5
+        ELAPSED=$((ELAPSED + 5))
+        log "Waiting for Jenkins to stop... ($ELAPSED seconds)"
+    done
+    log "Jenkins service stopped"
+fi
 
 # バックアップ作成（オプショナル）
-if [ -d "$JENKINS_HOME_DIR" ]; then
+if [ "$CREATE_BACKUP" = "true" ] && [ -d "$JENKINS_HOME_DIR" ]; then
     BACKUP_FILE="/mnt/efs/jenkins-backup-$(date +%Y%m%d%H%M%S).tar.gz"
     log "Creating configuration backup: $BACKUP_FILE"
     tar -czf "$BACKUP_FILE" \
@@ -96,35 +103,42 @@ if [ -f "/usr/share/java/jenkins.war" ]; then
     log "Jenkins WAR file permissions set"
 fi
 
-# Jenkinsサービスを開始
-log "Starting Jenkins service..."
-systemctl start jenkins
-
-# 起動確認
-log "Waiting for Jenkins to start..."
-TIMEOUT=300
-ELAPSED=0
-while [ $ELAPSED -lt $TIMEOUT ]; do
-    if systemctl is-active jenkins >/dev/null && curl -s -f http://localhost:8080/login >/dev/null 2>&1; then
-        log "Jenkins started successfully (elapsed: $ELAPSED seconds)"
-        break
-    fi
+# 再起動が必要な場合のみJenkinsサービスを開始
+if [ "$RESTART_JENKINS" = "true" ]; then
+    # Jenkinsサービスを開始
+    log "Starting Jenkins service..."
+    systemctl start jenkins
     
-    if ! systemctl is-active jenkins >/dev/null; then
-        log "WARNING: Jenkins service is not active. Checking logs..."
-        journalctl -u jenkins --no-pager -n 50
+    # 起動確認
+    log "Waiting for Jenkins to start..."
+    TIMEOUT=300
+    ELAPSED=0
+    while [ $ELAPSED -lt $TIMEOUT ]; do
+        if systemctl is-active jenkins >/dev/null && curl -s -f http://localhost:8080/login >/dev/null 2>&1; then
+            log "Jenkins started successfully (elapsed: $ELAPSED seconds)"
+            break
+        fi
         
-        log "Attempting to restart Jenkins..."
-        systemctl restart jenkins
-    fi
+        if ! systemctl is-active jenkins >/dev/null; then
+            log "WARNING: Jenkins service is not active. Checking logs..."
+            journalctl -u jenkins --no-pager -n 50
+            
+            log "Attempting to restart Jenkins..."
+            systemctl restart jenkins
+        fi
+        
+        sleep 10
+        ELAPSED=$((ELAPSED + 10))
+        log "Still waiting... (elapsed: $ELAPSED seconds)"
+    done
     
-    sleep 10
-    ELAPSED=$((ELAPSED + 10))
-    log "Still waiting... (elapsed: $ELAPSED seconds)"
-done
-
-if [ $ELAPSED -ge $TIMEOUT ]; then
-    error_exit "Jenkins failed to start within timeout"
+    if [ $ELAPSED -ge $TIMEOUT ]; then
+        error_exit "Jenkins failed to start within timeout"
+    fi
+else
+    log "Jenkins update completed. Service restart skipped."
+    log "Jenkins is still running with the old version."
+    log "To apply the update, restart Jenkins manually: systemctl restart jenkins"
 fi
 
 # 更新完了情報を記録
@@ -151,3 +165,10 @@ aws ssm put-parameter \
 log "Jenkins version update completed successfully"
 log "Previous version: $CURRENT_VERSION"
 log "New version: $NEW_VERSION"
+
+if [ "$RESTART_JENKINS" != "true" ]; then
+    log ""
+    log "IMPORTANT: Jenkins is still running with the old version."
+    log "The new version will be active after the next restart."
+    log "To restart now: systemctl restart jenkins"
+fi
