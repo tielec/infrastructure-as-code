@@ -298,6 +298,193 @@ def replace_mermaid_diagrams(markdown_text: str) -> str:
     # mermaidブロックを処理
     return re.sub(mermaid_pattern, process_mermaid, markdown_text)
 
+
+class MarkdownSectionSplitter:
+    """Markdownドキュメントをセクションに分割するクラス"""
+    
+    def __init__(self, section_headings_config: Dict[SectionType, str]):
+        """
+        Args:
+            section_headings_config: セクションタイプと見出し文字列の対応辞書
+        """
+        self.section_headings_config = section_headings_config
+        self.heading_to_section = self._create_heading_mapping()
+        
+    def _create_heading_mapping(self) -> Dict[str, SectionType]:
+        """見出しテキストとセクションタイプのマッピングを作成"""
+        mapping = {}
+        for section_type, heading_text in self.section_headings_config.items():
+            mapping[heading_text.lower()] = section_type
+        return mapping
+    
+    def _is_toc_heading(self, line: str) -> bool:
+        """目次の見出しかどうかを判定"""
+        return line.strip().lower() == "## 目次"
+    
+    def _is_level1_heading(self, line: str) -> bool:
+        """レベル1の見出しかどうかを判定"""
+        stripped = line.strip()
+        return stripped.startswith("# ") and not stripped.startswith("## ")
+    
+    def _is_level2_heading(self, line: str) -> bool:
+        """レベル2の見出しかどうかを判定"""
+        return line.strip().startswith("## ")
+    
+    def _extract_heading_text(self, line: str) -> str:
+        """見出し行から見出しテキストを抽出"""
+        return line.strip()[3:].strip()  # "## " を除去
+    
+    def _find_section_type(self, heading_text: str) -> Optional[SectionType]:
+        """見出しテキストから対応するセクションタイプを探す"""
+        heading_lower = heading_text.lower()
+        return self.heading_to_section.get(heading_lower)
+    
+    def _is_end_of_toc(self, line: str, next_line: Optional[str], in_toc: bool) -> bool:
+        """目次セクションの終了を判定"""
+        if not in_toc:
+            return False
+            
+        stripped = line.strip()
+        
+        # 次のレベル2見出しで終了
+        if stripped.startswith("## "):
+            return True
+            
+        # 空行の後の非インデント行で終了
+        if not stripped and next_line:
+            next_stripped = next_line.strip()
+            if next_stripped and not next_line.startswith((' ', '\t', '-', '*')):
+                return True
+                
+        return False
+    
+    def _save_section(self, sections: Dict[SectionType, str], 
+                     section_type: Optional[SectionType], 
+                     lines: List[str]) -> None:
+        """セクションを辞書に保存"""
+        if not section_type or not lines:
+            return
+            
+        content = '\n'.join(lines).strip()
+        if content:
+            sections[section_type] = content
+            logger.debug(f"Saved section: {section_type.value} ({len(content)} chars)")
+    
+    def split(self, markdown_text: str) -> Dict[SectionType, str]:
+        """
+        Markdownドキュメントをセクションごとに分割します。
+        
+        Args:
+            markdown_text: 結合済みのMarkdownテキスト全体
+            
+        Returns:
+            Dict[SectionType, str]: セクションタイプをキー、対応するセクションのMarkdown文字列を値とする辞書
+        """
+        logger.info("Starting to split markdown document into sections")
+        
+        sections = {}
+        state = self._create_parsing_state(markdown_text)
+        
+        for i, line in enumerate(state.lines):
+            state.current_line_index = i
+            self._process_line(line, state, sections)
+        
+        # 最後のセクションを保存
+        self._save_section(sections, state.current_section_type, state.current_section_lines)
+        self._log_results(sections)
+        
+        return sections
+    
+    def _create_parsing_state(self, markdown_text: str):
+        """パース状態を管理するオブジェクトを作成"""
+        class ParsingState:
+            def __init__(self, lines):
+                self.lines = lines
+                self.current_section_type = None
+                self.current_section_lines = []
+                self.in_toc = False
+                self.current_line_index = 0
+                
+            def get_next_line(self):
+                """次の行を取得（存在しない場合はNone）"""
+                next_index = self.current_line_index + 1
+                return self.lines[next_index] if next_index < len(self.lines) else None
+        
+        return ParsingState(markdown_text.split('\n'))
+    
+    def _process_line(self, line: str, state, sections: Dict[SectionType, str]) -> None:
+        """1行を処理"""
+        # 目次セクションの処理
+        if self._handle_toc_section(line, state):
+            return
+        
+        # レベル1の見出しはスキップ
+        if self._is_level1_heading(line):
+            return
+        
+        # レベル2の見出しを処理
+        if self._is_level2_heading(line):
+            self._handle_section_heading(line, state, sections)
+        else:
+            # セクション内容を収集
+            self._collect_section_content(line, state)
+    
+    def _handle_toc_section(self, line: str, state) -> bool:
+        """目次セクションの処理を行い、処理した場合はTrueを返す"""
+        if self._is_toc_heading(line):
+            state.in_toc = True
+            return True
+        
+        if state.in_toc:
+            next_line = state.get_next_line()
+            if self._is_end_of_toc(line, next_line, state.in_toc):
+                state.in_toc = False
+                # レベル2見出しでない場合はスキップ
+                return not self._is_level2_heading(line)
+            return True
+        
+        return False
+    
+    def _handle_section_heading(self, line: str, state, sections: Dict[SectionType, str]) -> None:
+        """セクション見出しを処理"""
+        # 前のセクションを保存
+        self._save_section(sections, state.current_section_type, state.current_section_lines)
+        
+        # 新しいセクションの開始
+        heading_text = self._extract_heading_text(line)
+        found_section_type = self._find_section_type(heading_text)
+        
+        if found_section_type:
+            state.current_section_type = found_section_type
+            state.current_section_lines = []
+            logger.debug(f"Found section heading: {heading_text} -> {found_section_type.value}")
+        else:
+            # 未知の見出しは現在のセクションに含める
+            self._handle_unknown_heading(line, heading_text, state)
+    
+    def _handle_unknown_heading(self, line: str, heading_text: str, state) -> None:
+        """未知の見出しを処理"""
+        if state.current_section_type:
+            state.current_section_lines.append(line)
+        logger.warning(f"Unknown section heading: {heading_text}")
+    
+    def _collect_section_content(self, line: str, state) -> None:
+        """セクション内容を収集"""
+        if state.current_section_type:
+            state.current_section_lines.append(line)
+    
+    def _log_results(self, sections: Dict[SectionType, str]) -> None:
+        """処理結果のログ出力"""
+        section_names = ', '.join([s.value for s in sections.keys()])
+        logger.info(f"Successfully split document into {len(sections)} sections: {section_names}")
+        
+        # 存在しないセクションについて警告
+        missing_sections = set(self.section_headings_config.keys()) - set(sections.keys())
+        if missing_sections:
+            missing_names = ', '.join([s.value for s in missing_sections])
+            logger.warning(f"Following sections were not found in the document: {missing_names}")
+
+
 def split_markdown_into_sections(markdown_text: str, section_headings_config: Dict[SectionType, str]) -> Dict[SectionType, str]:
     """
     結合済みのMarkdownドキュメントをセクションごとに分割します。
@@ -309,87 +496,5 @@ def split_markdown_into_sections(markdown_text: str, section_headings_config: Di
     Returns:
         Dict[SectionType, str]: セクションタイプをキー、対応するセクションのMarkdown文字列を値とする辞書
     """
-    logger.info("Starting to split markdown document into sections")
-    
-    sections = {}
-    lines = markdown_text.split('\n')
-    
-    # セクション見出しとSectionTypeのマッピングを作成
-    heading_to_section = {}
-    for section_type, heading_text in section_headings_config.items():
-        # 見出しのバリエーションを考慮（## 概要、##概要 など）
-        heading_to_section[heading_text.lower()] = section_type
-    
-    current_section_type = None
-    current_section_lines = []
-    in_toc = False
-    
-    for i, line in enumerate(lines):
-        stripped_line = line.strip()
-        
-        # 目次セクションのスキップ処理
-        if stripped_line.lower() == "## 目次":
-            in_toc = True
-            continue
-        
-        # 目次の終了を検出（次のレベル2見出しまたは空行の後の非インデント行）
-        if in_toc:
-            if stripped_line.startswith("## ") or (not stripped_line and i + 1 < len(lines) and lines[i + 1].strip() and not lines[i + 1].startswith((' ', '\t', '-', '*'))):
-                in_toc = False
-            else:
-                continue
-        
-        # レベル1の見出し（ドキュメントタイトル）はスキップ
-        if stripped_line.startswith("# ") and not stripped_line.startswith("## "):
-            continue
-        
-        # レベル2の見出しを検出
-        if stripped_line.startswith("## "):
-            # 前のセクションを保存
-            if current_section_type and current_section_lines:
-                # 先頭と末尾の空行を削除
-                section_content = '\n'.join(current_section_lines).strip()
-                if section_content:
-                    sections[current_section_type] = section_content
-                    logger.debug(f"Saved section: {current_section_type.value} ({len(section_content)} chars)")
-            
-            # 新しいセクションの開始を検出
-            heading_text = stripped_line[3:].strip()  # "## " を除去
-            heading_text_lower = heading_text.lower()
-            
-            # セクションタイプを特定
-            found_section_type = None
-            for known_heading, section_type in heading_to_section.items():
-                if heading_text_lower == known_heading:
-                    found_section_type = section_type
-                    break
-            
-            if found_section_type:
-                current_section_type = found_section_type
-                current_section_lines = []
-                logger.debug(f"Found section heading: {heading_text} -> {current_section_type.value}")
-            else:
-                # 未知の見出しの場合は、現在のセクションに含める
-                if current_section_type:
-                    current_section_lines.append(line)
-                logger.warning(f"Unknown section heading: {heading_text}")
-        else:
-            # セクション内容を収集
-            if current_section_type:
-                current_section_lines.append(line)
-    
-    # 最後のセクションを保存
-    if current_section_type and current_section_lines:
-        section_content = '\n'.join(current_section_lines).strip()
-        if section_content:
-            sections[current_section_type] = section_content
-            logger.debug(f"Saved final section: {current_section_type.value} ({len(section_content)} chars)")
-    
-    logger.info(f"Successfully split document into {len(sections)} sections: {', '.join([s.value for s in sections.keys()])}")
-    
-    # 存在しないセクションについて警告
-    missing_sections = set(section_headings_config.keys()) - set(sections.keys())
-    if missing_sections:
-        logger.warning(f"Following sections were not found in the document: {', '.join([s.value for s in missing_sections])}")
-    
-    return sections
+    splitter = MarkdownSectionSplitter(section_headings_config)
+    return splitter.split(markdown_text)
