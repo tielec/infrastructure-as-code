@@ -32,7 +32,7 @@ pipeline {
     environment {
         // OpenAI API設定
         OPENAI_API_KEY = credentials('openai-api-key')
-        OPENAI_DEPLOYMENT_NAME = "gpt-4o"
+        OPENAI_MODEL = "gpt-4o"
         // GIT_JENKINS_REPO_BRANCH = "main"  // 開発時に必要な場合はコメントを外して使用
         
         // 作業ディレクトリ

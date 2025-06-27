@@ -10,7 +10,7 @@ import argparse
 import logging
 import re
 from typing import Dict, Any, List, Tuple, Optional
-from openai import AzureOpenAI
+from openai import OpenAI
 from datetime import datetime
 from dataclasses import dataclass
 import time
@@ -63,9 +63,7 @@ class ComplexityStatistics:
 class OpenAIConfig:
     """OpenAI API設定"""
     api_key: str
-    endpoint: str
-    deployment_name: str
-    api_version: str = "2024-02-01"
+    model: str = "gpt-4o"
     temperature: float = 0.7
     max_tokens: int = 3000
     debug_mode: bool = False
@@ -236,16 +234,13 @@ class PRComplexityCommentGenerator:
         # OpenAI設定を構築
         self.config = OpenAIConfig(
             api_key=os.getenv("OPENAI_API_KEY"),
-            endpoint=os.getenv("OPENAI_API_ENDPOINT"),
-            deployment_name=os.getenv("OPENAI_DEPLOYMENT_NAME", "gpt-4o"),
+            model=os.getenv("OPENAI_MODEL", "gpt-4o"),
             debug_mode=debug_mode
         )
         
-        # Azure OpenAIクライアントを初期化
-        self.client = AzureOpenAI(
-            api_key=self.config.api_key,
-            api_version=self.config.api_version,
-            azure_endpoint=self.config.endpoint
+        # OpenAIクライアントを初期化
+        self.client = OpenAI(
+            api_key=self.config.api_key
         )
         
         self.stats_calculator = StatisticsCalculator()
@@ -259,9 +254,7 @@ class PRComplexityCommentGenerator:
     def _log_configuration(self):
         """現在の設定をログ出力"""
         logger.info("=== OpenAI API Configuration ===")
-        logger.info(f"Endpoint: {self.config.endpoint}")
-        logger.info(f"Deployment/Model: {self.config.deployment_name}")
-        logger.info(f"API Version: {self.config.api_version}")
+        logger.info(f"Model: {self.config.model}")
         logger.info(f"Temperature: {self.config.temperature}")
         logger.info(f"Max Tokens: {self.config.max_tokens}")
         logger.info(f"Debug Mode: {self.config.debug_mode}")
@@ -333,7 +326,7 @@ class PRComplexityCommentGenerator:
             logger.debug(f"Messages: {json.dumps(messages, ensure_ascii=False, indent=2)}")
         
         response = self.client.chat.completions.create(
-            model=self.config.deployment_name,
+            model=self.config.model,
             messages=messages,
             temperature=self.config.temperature,
             max_tokens=self.config.max_tokens
@@ -374,7 +367,7 @@ class PRComplexityCommentGenerator:
             with open(filename, 'w', encoding='utf-8') as f:
                 f.write("=== OpenAI API Prompt ===\n")
                 f.write(f"Timestamp: {datetime.now().isoformat()}\n")
-                f.write(f"Model: {self.config.deployment_name}\n")
+                f.write(f"Model: {self.config.model}\n")
                 f.write(f"Temperature: {self.config.temperature}\n")
                 f.write(f"Max Tokens: {self.config.max_tokens}\n")
                 f.write("========================\n\n")
@@ -834,10 +827,9 @@ def main():
             'high_complexity_cognitive': analysis_result.get('high_complexity_functions_cognitive', 0)
         },
         'generation_metadata': {
-            'model': generator.config.deployment_name,
+            'model': generator.config.model,
             'temperature': generator.config.temperature,
-            'max_tokens': generator.config.max_tokens,
-            'api_version': generator.config.api_version
+            'max_tokens': generator.config.max_tokens
         }
     }
     
@@ -856,7 +848,7 @@ def main():
     
     # サマリーを表示
     print(f"\nComment generated successfully!")
-    print(f"- Model used: {generator.config.deployment_name}")
+    print(f"- Model used: {generator.config.model}")
     print(f"- Files analyzed: {result['analysis_summary']['total_files_analyzed']}")
     print(f"- Total functions: {result['analysis_summary']['total_functions']}")
     print(f"- High complexity functions (cyclomatic): {result['analysis_summary']['high_complexity_cyclomatic']}")
