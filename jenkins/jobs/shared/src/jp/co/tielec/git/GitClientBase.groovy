@@ -4,7 +4,7 @@ package jp.co.tielec.git
  * Git操作の基本機能を提供するクラス
  */
 class GitClientBase implements Serializable {
-    private static final long serialVersionUID = 1L;
+    private static final long serialVersionUID = 1L
 
     // 認証方式の列挙型
     enum AuthMethod {
@@ -95,8 +95,20 @@ class GitClientBase implements Serializable {
         logCheckoutInfo(repoUrl, branch, authMethod, effectiveConfig)
         
         try {
-            // ワークスペースをクリーンアップ
+            // ワークスペースをクリーンアップ（強化版）
+            script.echo "ワークスペースをクリーンアップ中..."
             cleanupWorkspace()
+            
+            // ディレクトリの権限を確保
+            script.sh """
+                # カレントディレクトリの権限を確保
+                chmod 777 . 2>/dev/null || {
+                    echo "Warning: Could not change directory permissions"
+                    # 親ディレクトリの情報を表示
+                    echo "Parent directory info:"
+                    ls -la ../ || true
+                }
+            """
             
             // Gitセキュリティ設定
             setupGitSecurity()
@@ -112,6 +124,18 @@ class GitClientBase implements Serializable {
             script.echo "リポジトリ '${repoUrl}' (ブランチ: '${branch}') が正常にチェックアウトされました"
         } catch (Exception e) {
             script.echo "チェックアウトエラー: ${e.message}"
+            
+            // エラー時の追加診断情報
+            script.sh """
+                echo "=== Error Diagnostics ==="
+                echo "Current directory: \$(pwd)"
+                echo "Directory permissions: \$(ls -la . 2>/dev/null || echo 'Cannot list directory')"
+                echo "User info: \$(id)"
+                echo "Git config:"
+                git config --list | grep safe.directory || echo "No safe.directory config"
+                echo "======================"
+            """ 
+            
             throw new GitOperationException("リポジトリ '${repoUrl}' (ブランチ: '${branch}') をチェックアウトできませんでした。エラー: ${e.message}", e)
         }
     }
@@ -151,16 +175,32 @@ class GitClientBase implements Serializable {
         // まずディレクトリをクリーンアップ
         cleanupWorkspace()
         
+        // ワークスペースの権限を確保
+        script.sh """
+            # 現在のディレクトリに書き込み権限があることを確認
+            touch .test-write-permission 2>/dev/null && rm -f .test-write-permission || {
+                echo "Warning: No write permission in current directory"
+                # 親ディレクトリから権限を修正
+                chmod 777 . 2>/dev/null || true
+            }
+        """
+        
+        // チェックアウト前にクリーンアップを含む拡張設定を追加
+        def enhancedExtensions = extensions + [
+            [$class: 'CleanBeforeCheckout', deleteUntrackedNestedRepositories: true],
+            [$class: 'CheckoutOption', timeout: 60]
+        ]
+        
         // より詳細な設定でチェックアウト
         script.checkout([
             $class: 'GitSCM',
             branches: [[name: "*/${branch}"]],
             userRemoteConfigs: [[
-                url: url, // PAT認証の場合、このURLはHTTPS形式
+                url: url,
                 credentialsId: credentialsId,
                 refspec: '+refs/heads/*:refs/remotes/origin/*'
             ]],
-            extensions: extensions,
+            extensions: enhancedExtensions,
             doGenerateSubmoduleConfigurations: false,
             browser: null,
             gitTool: 'Default'
@@ -538,8 +578,26 @@ class GitClientBase implements Serializable {
      */
     private def cleanupWorkspace() {
         script.sh '''
+            # 現在のディレクトリの情報を出力（デバッグ用）
+            echo "Current directory: $(pwd)"
+            echo "Current user: $(whoami) (UID: $(id -u), GID: $(id -g))"
+            
+            # .gitディレクトリを含むすべてのファイルを強制削除
+            # 権限エラーを回避するため、まず権限を変更してから削除
+            if [ -d .git ]; then
+                chmod -R 777 .git 2>/dev/null || true
+            fi
+            
             # すべてのファイルを削除（隠しファイルも含む）
-            rm -rf * .[!.]* ..?* || true
+            rm -rf * .[!.]* ..?* 2>/dev/null || true
+            
+            # 削除できなかったファイルがある場合は、権限を変更して再試行
+            if [ "$(ls -A 2>/dev/null)" ]; then
+                echo "Some files remain, attempting forced cleanup..."
+                find . -type d -exec chmod 777 {} + 2>/dev/null || true
+                find . -type f -exec chmod 666 {} + 2>/dev/null || true
+                rm -rf * .[!.]* ..?* 2>/dev/null || true
+            fi
         '''
     }
     
@@ -560,14 +618,15 @@ class GitClientBase implements Serializable {
     private def setupGitSecurity() {
         script.sh """
             # Git 2.35.2以降の所有権チェックに対応
-            git config --global --unset-all safe.directory || true
+            git config --global --unset-all safe.directory 2>/dev/null || true
             git config --global --add safe.directory '*'
             
-            # 現在のGitバージョンを確認
-            git --version
+            # 作業ディレクトリも明示的に追加
+            git config --global --add safe.directory \$(pwd)
+            git config --global --add safe.directory ${script.env.WORKSPACE ?: '/workspace'}
             
-            # 適用されたGit設定を確認
-            git config --list
+            # 現在のGitバージョンを確認
+            echo "Git version: \$(git --version)"
         """
     }
     
@@ -677,6 +736,9 @@ class GitClientBase implements Serializable {
     private List getCheckoutExtensions(Map config) {
         def extensions = []
         
+        // 常にクリーンアップを含める
+        extensions.add([$class: 'CleanBeforeCheckout', deleteUntrackedNestedRepositories: true])
+        
         if (config.wipeWorkspace) {
             extensions.add([$class: 'WipeWorkspace'])
         }
@@ -686,6 +748,9 @@ class GitClientBase implements Serializable {
         } else {
             extensions.add([$class: 'CloneOption', noTags: true, shallow: false, timeout: config.checkoutTimeout])
         }
+        
+        // タイムアウト設定を追加
+        extensions.add([$class: 'CheckoutOption', timeout: config.checkoutTimeout])
         
         return extensions
     }
