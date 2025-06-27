@@ -155,11 +155,24 @@ class JenkinsCliClient {
         if (!steps.fileExists(configFile)) {
             throw new JenkinsCliException("Configuration file not found: ${configFile}")
         }
-
+        
+        steps.echo "=== DEBUG: checkConfiguration開始 ==="
+        steps.echo "Config file: ${configFile}"
+        steps.echo "Config parameters: ${config}"
+        
         config.inputFile = configFile
-        executeCommand('check-configuration', config)
+        
+        try {
+            def result = executeCommand('check-configuration', config)
+            steps.echo "=== DEBUG: checkConfiguration正常終了 ==="
+            return result
+        } catch (Exception e) {
+            steps.echo "=== DEBUG: checkConfiguration失敗 ==="
+            steps.echo "Error: ${e.message}"
+            throw e
+        }
     }
-    
+        
     /**
      * JCasCの設定をリロードする
      * @param config 設定オプション
