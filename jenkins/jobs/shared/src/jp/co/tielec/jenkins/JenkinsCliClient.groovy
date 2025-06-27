@@ -142,8 +142,40 @@ class JenkinsCliClient {
             throw new IllegalArgumentException("Output file path is required")
         }
 
+        steps.echo "=== DEBUG: exportConfiguration開始 ==="
+        steps.echo "Output file: ${outputFile}"
+        steps.echo "Config: ${config}"
+        
         config.outputFile = outputFile
-        executeCommand('export-configuration', config)
+        
+        // デバッグ用：直接コマンドを実行してみる
+        if (config.debug == true) {
+            def directCommand = buildCliCommand('export-configuration', config)
+            steps.echo "Direct command: ${directCommand}"
+            
+            // 直接実行して出力を確認
+            def testOutput = steps.sh(
+                script: "${directCommand.replace("> '${outputFile}'", "")} | head -20",
+                returnStdout: true
+            )
+            steps.echo "Command output preview:\n${testOutput}"
+        }
+        
+        def result = executeCommand('export-configuration', config)
+        
+        // ファイルが作成されたか確認
+        if (!steps.fileExists(outputFile)) {
+            throw new JenkinsCliException("Export failed: output file was not created")
+        }
+        
+        // ファイルサイズを確認
+        def fileInfo = steps.sh(
+            script: "ls -la '${outputFile}'",
+            returnStdout: true
+        ).trim()
+        steps.echo "Exported file info: ${fileInfo}"
+        
+        return result
     }
     
     /**
