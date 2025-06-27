@@ -28,6 +28,9 @@ class JenkinsCliClient {
             throw new IllegalArgumentException("Jenkins URL is required")
         }
 
+        // URLの末尾のスラッシュを除去
+        jenkinsUrl = jenkinsUrl.replaceAll('/+$', '')
+
         steps.sh """
             curl -O '${jenkinsUrl}/jnlpJars/jenkins-cli.jar'
             chmod +x jenkins-cli.jar
@@ -44,6 +47,9 @@ class JenkinsCliClient {
      *        - inputFile: 入力ファイルのパス
      *        - outputFile: 出力ファイルのパス
      *        - timeout: タイムアウト時間（分）
+     *        - useHttp: HTTP接続を使用するか（デフォルト: true）
+     *        - authMethod: 認証方式 ('auto', 'token', 'password')（デフォルト: 'auto'）
+     *        - username: APIトークン使用時のユーザー名
      */
     def executeCommand(String command, Map config = [:]) {
         if (!command?.trim()) {
@@ -53,7 +59,9 @@ class JenkinsCliClient {
         def defaultConfig = [
             jenkinsUrl: env.JENKINS_URL,
             credentialsId: 'cli-user-token',
-            timeout: 5
+            timeout: 5,
+            useHttp: true,  // デフォルトでHTTP接続を使用
+            authMethod: 'auto'  // デフォルトで自動判定
         ]
         config = defaultConfig + config
 
@@ -65,13 +73,61 @@ class JenkinsCliClient {
             setupCli(config.jenkinsUrl)
         }
 
-        return steps.withCredentials([steps.usernamePassword(
-            credentialsId: config.credentialsId,
-            usernameVariable: 'USER',
-            passwordVariable: 'PASS'
-        )]) {
-            steps.timeout(time: config.timeout, unit: 'MINUTES') {
-                executeCliCommand(command, config)
+        // authMethod が 'auto' の場合、Credentialの型を自動判定
+        if (config.authMethod == 'auto') {
+            try {
+                // まずUsernamePasswordとして試す
+                return steps.withCredentials([steps.usernamePassword(
+                    credentialsId: config.credentialsId,
+                    usernameVariable: 'USER',
+                    passwordVariable: 'PASS'
+                )]) {
+                    steps.echo "Using UsernamePassword credential type"
+                    config.authMethod = 'password'
+                    steps.timeout(time: config.timeout, unit: 'MINUTES') {
+                        executeCliCommand(command, config)
+                    }
+                }
+            } catch (Exception e) {
+                // UsernamePasswordで失敗したら、Secret textとして試す
+                steps.echo "UsernamePassword failed, trying Secret text: ${e.message}"
+                return steps.withCredentials([steps.string(
+                    credentialsId: config.credentialsId,
+                    variable: 'JENKINS_API_TOKEN'
+                )]) {
+                    steps.echo "Using Secret text credential type"
+                    config.authMethod = 'token'
+                    def username = config.username ?: 'cli-user'
+                    steps.withEnv(["JENKINS_USER=${username}"]) {
+                        steps.timeout(time: config.timeout, unit: 'MINUTES') {
+                            executeCliCommand(command, config)
+                        }
+                    }
+                }
+            }
+        } else if (config.authMethod == 'token') {
+            // 明示的にAPIトークンの場合
+            return steps.withCredentials([steps.string(
+                credentialsId: config.credentialsId,
+                variable: 'JENKINS_API_TOKEN'
+            )]) {
+                def username = config.username ?: 'cli-user'
+                steps.withEnv(["JENKINS_USER=${username}"]) {
+                    steps.timeout(time: config.timeout, unit: 'MINUTES') {
+                        executeCliCommand(command, config)
+                    }
+                }
+            }
+        } else {
+            // 明示的にユーザー名/パスワードの場合
+            return steps.withCredentials([steps.usernamePassword(
+                credentialsId: config.credentialsId,
+                usernameVariable: 'USER',
+                passwordVariable: 'PASS'
+            )]) {
+                steps.timeout(time: config.timeout, unit: 'MINUTES') {
+                    executeCliCommand(command, config)
+                }
             }
         }
     }
@@ -402,10 +458,17 @@ class JenkinsCliClient {
         if (!config.jenkinsUrl?.trim()) {
             throw new IllegalArgumentException("Jenkins URL is required")
         }
+        // URLの末尾のスラッシュを除去
+        config.jenkinsUrl = config.jenkinsUrl.replaceAll('/+$', '')
     }
     
     private def executeCliCommand(String command, Map config) {
         def cliCommand = buildCliCommand(command, config)
+        
+        // エラーをより詳細にキャプチャするために、returnStatus: trueを使用
+        def exitCode = 0
+        def output = ""
+        def errorOutput = ""
         
         try {
             if (config.inputFile) {
@@ -418,34 +481,129 @@ class JenkinsCliClient {
                 def fileInfo = steps.sh(script: "ls -la ${config.inputFile}", returnStdout: true)
                 steps.echo "Input file info: ${fileInfo}"
                 
-                def result = steps.sh(script: "cat '${config.inputFile}' | ${cliCommand}", returnStdout: true)
-                return result
+                // 一時ファイルを使用してエラーをキャプチャ
+                def tempErrorFile = "cli_error_${System.currentTimeMillis()}.txt"
+                exitCode = steps.sh(
+                    script: "cat '${config.inputFile}' | ${cliCommand} 2>${tempErrorFile}",
+                    returnStatus: true
+                )
+                output = steps.sh(script: "cat '${config.inputFile}' | ${cliCommand} 2>/dev/null || true", returnStdout: true)
+                if (steps.fileExists(tempErrorFile)) {
+                    errorOutput = steps.readFile(file: tempErrorFile)
+                    steps.sh "rm -f ${tempErrorFile}"
+                }
             } else if (config.outputFile) {
-                steps.sh "${cliCommand} > '${config.outputFile}'"
-                return "Output saved to ${config.outputFile}"
+                def tempErrorFile = "cli_error_${System.currentTimeMillis()}.txt"
+                exitCode = steps.sh(
+                    script: "${cliCommand} > '${config.outputFile}' 2>${tempErrorFile}",
+                    returnStatus: true
+                )
+                if (steps.fileExists(tempErrorFile)) {
+                    errorOutput = steps.readFile(file: tempErrorFile)
+                    steps.sh "rm -f ${tempErrorFile}"
+                }
+                output = "Output saved to ${config.outputFile}"
             } else {
-                def result = steps.sh(script: cliCommand, returnStdout: true)
-                return result
+                def tempErrorFile = "cli_error_${System.currentTimeMillis()}.txt"
+                exitCode = steps.sh(
+                    script: "${cliCommand} 2>${tempErrorFile}",
+                    returnStatus: true
+                )
+                output = steps.sh(script: "${cliCommand} 2>/dev/null || true", returnStdout: true)
+                if (steps.fileExists(tempErrorFile)) {
+                    errorOutput = steps.readFile(file: tempErrorFile)
+                    steps.sh "rm -f ${tempErrorFile}"
+                }
             }
+            
+            // エラーチェック
+            if (exitCode != 0) {
+                steps.echo "CLI command failed with exit code: ${exitCode}"
+                steps.echo "Error output: ${errorOutput}"
+                steps.echo "Standard output: ${output}"
+                
+                // リトライロジック（認証エラーの場合）
+                if (errorOutput.contains("401") || errorOutput.contains("Unauthorized")) {
+                    steps.echo "Authentication error detected. Trying different authentication approaches..."
+                    
+                    // 1. まず、ユーザー名を明示的に指定して再試行
+                    if (config.authMethod == 'token' && !config.retryAttempted) {
+                        steps.echo "Retrying with explicit username format..."
+                        config.retryAttempted = true
+                        def retryCommand = buildCliCommand(command, config)
+                        
+                        // cURLでデバッグ情報を出力
+                        steps.sh """
+                            echo "=== Debug: Testing API access with curl ==="
+                            curl -I -u "\$JENKINS_USER:\$JENKINS_API_TOKEN" ${config.jenkinsUrl}/cli?remoting=false || true
+                            echo "=== End Debug ==="
+                        """
+                        
+                        output = steps.sh(script: retryCommand, returnStdout: true)
+                        return output
+                    }
+                    
+                    // 2. Jenkinsの認証設定を確認
+                    steps.echo """
+                    Authentication failed. Please verify:
+                    1. The credential ID '${config.credentialsId}' exists and is valid
+                    2. The user has 'Overall/Read' permission in Jenkins
+                    3. If using API token, ensure it's not expired
+                    4. Jenkins security realm is properly configured
+                    
+                    Current Jenkins URL: ${config.jenkinsUrl}
+                    """
+                }
+                
+                throw new JenkinsCliException("CLI command failed with exit code ${exitCode}")
+            }
+            
+            return output
+            
         } catch (Exception e) {
-            // CLIコマンドのエラー詳細を取得
-            def errorOutput = ""
-            try {
-                errorOutput = steps.sh(script: "${cliCommand} 2>&1 || true", returnStdout: true)
-            } catch (ignored) {
-                // エラー出力の取得に失敗した場合は無視
-            }
-            throw new JenkinsCliException("Failed to execute Jenkins CLI command: ${command}\nError: ${e.message}\nOutput: ${errorOutput}")
+            def errorMessage = """Failed to execute Jenkins CLI command: ${command}
+Exit Code: ${exitCode}
+Error: ${e.message}
+Standard Output: ${output}
+Error Output: ${errorOutput}"""
+            
+            throw new JenkinsCliException(errorMessage)
         }
     }
     
     private String buildCliCommand(String command, Map config) {
-        return """java -jar jenkins-cli.jar \\
-            -s '${config.jenkinsUrl}' \\
-            -auth "\$USER:\$PASS" \\
-            -noKeyAuth \\
-            ${command}
-        """.stripIndent()
+        // URLの末尾のスラッシュを確実に除去
+        def jenkinsUrl = config.jenkinsUrl.replaceAll('/+$', '')
+        
+        // 基本的なCLIコマンドを構築
+        def cliCommand = "java -jar jenkins-cli.jar"
+        
+        // 認証方式に応じて認証パラメータを設定
+        if (config.authMethod == 'token') {
+            // APIトークン認証の場合
+            cliCommand += " -auth \"\$JENKINS_USER:\$JENKINS_API_TOKEN\""
+        } else {
+            // ユーザー名/パスワード認証の場合
+            cliCommand += " -auth \"\$USER:\$PASS\""
+        }
+        
+        // URLを追加
+        cliCommand += " -s '${jenkinsUrl}'"
+        
+        // HTTP接続モードを使用（WebSocketの問題を回避）
+        if (config.useHttp) {
+            cliCommand += " -http"
+        }
+        
+        // CSRF保護を無効化（必要に応じて）
+        if (config.disableCsrf) {
+            cliCommand += " -noCertificateCheck"
+        }
+        
+        // コマンドを追加
+        cliCommand += " ${command}"
+        
+        return cliCommand
     }
 }
 
