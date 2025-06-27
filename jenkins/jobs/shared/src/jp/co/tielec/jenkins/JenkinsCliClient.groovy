@@ -581,29 +581,29 @@ Error Output: ${errorOutput}"""
         // 認証方式に応じて認証パラメータを設定
         if (config.authMethod == 'token') {
             // APIトークン認証の場合
-            cliCommand += " \\\n            -auth \"\$JENKINS_USER:\$JENKINS_API_TOKEN\""
+            cliCommand += " -auth \"\$JENKINS_USER:\$JENKINS_API_TOKEN\""
         } else {
             // ユーザー名/パスワード認証の場合
-            cliCommand += " \\\n            -auth \"\$USER:\$PASS\""
+            cliCommand += " -auth \"\$USER:\$PASS\""
         }
         
         // URLを追加
-        cliCommand += " \\\n            -s '${jenkinsUrl}'"
+        cliCommand += " -s '${jenkinsUrl}'"
         
         // HTTP接続モードを使用（WebSocketの問題を回避）
         if (config.useHttp) {
-            cliCommand += " \\\n            -http"
+            cliCommand += " -http"
         }
         
         // CSRF保護を無効化（必要に応じて）
         if (config.disableCsrf) {
-            cliCommand += " \\\n            -noCertificateCheck"
+            cliCommand += " -noCertificateCheck"
         }
         
         // コマンドを追加
-        cliCommand += " \\\n            ${command}"
+        cliCommand += " ${command}"
         
-        return cliCommand.stripIndent()
+        return cliCommand
     }
 }
 
