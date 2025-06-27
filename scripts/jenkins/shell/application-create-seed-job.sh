@@ -260,7 +260,11 @@ else
     fi
 fi
 
-log "===== Seed Job Setup Completed ====="
+if [ "$RESTART_JENKINS" = "true" ]; then
+    log "===== Seed Job Setup Completed ====="
+else
+    log "===== Seed Job Setup Prepared ====="
+fi
 log ""
 if [ "$RESTART_JENKINS" = "true" ]; then
     log "Next steps:"

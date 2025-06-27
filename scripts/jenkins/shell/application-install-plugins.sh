@@ -114,7 +114,11 @@ for plugin in "${IMPORTANT_PLUGINS[@]}"; do
     fi
 done
 
-log "Plugin installation ${RESTART_JENKINS == 'true' ? 'completed' : 'prepared'}"
+if [ "$RESTART_JENKINS" = "true" ]; then
+    log "Plugin installation completed"
+else
+    log "Plugin installation prepared"
+fi
 
 if [ "$RESTART_JENKINS" != "true" ]; then
     log ""

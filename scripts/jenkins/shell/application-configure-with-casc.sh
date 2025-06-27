@@ -180,7 +180,11 @@ fi
 
 log "JCasC configuration completed"
 log ""
-log "Configuration ${RESTART_JENKINS == 'true' ? 'applied' : 'prepared'}:"
+if [ "$RESTART_JENKINS" = "true" ]; then
+    log "Configuration applied:"
+else
+    log "Configuration prepared:"
+fi
 log "  - EC2 Fleet Cloud configured (Fleet ID: ${EC2_FLEET_ID:-Not set})"
 log "  - Shared Library configured"
 log "  - Security settings applied (Markdown formatter)"
