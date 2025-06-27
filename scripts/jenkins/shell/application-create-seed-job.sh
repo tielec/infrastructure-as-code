@@ -20,6 +20,7 @@ log "===== Setting up Jenkins Seed Job ====="
 
 # 環境変数の設定
 JENKINS_HOME="${JENKINS_HOME:-/mnt/efs/jenkins}"
+RESTART_JENKINS="${RESTART_JENKINS:-false}"
 
 # SSM実行時のGitリポジトリパスを取得
 if [ -n "$REPO_PATH" ]; then
@@ -44,6 +45,7 @@ log "Environment:"
 log "  JENKINS_HOME: $JENKINS_HOME"
 log "  GIT_REPO_PATH: $GIT_REPO_PATH"
 log "  SCRIPTS_DIR: $SCRIPTS_DIR"
+log "  RESTART_JENKINS: $RESTART_JENKINS"
 log "  Current directory: $(pwd)"
 
 # プロジェクト情報を取得（環境変数またはSSMパラメータから）
@@ -173,42 +175,48 @@ cp "$GROOVY_SCRIPT" "$GROOVY_DIR/create-seed-job.groovy"
 chown jenkins:jenkins "$GROOVY_DIR/create-seed-job.groovy"
 chmod 644 "$GROOVY_DIR/create-seed-job.groovy"
 
-# Jenkinsを再起動して実行
-log "Restarting Jenkins to create seed job..."
-systemctl restart jenkins
-
-# 起動を待機
-log "Waiting for Jenkins to start..."
-TIMEOUT=300
-ELAPSED=0
-while [ $ELAPSED -lt $TIMEOUT ]; do
-    if curl -sf http://localhost:8080/login > /dev/null 2>&1; then
-        log "Jenkins is running"
-        break
+if [ "$RESTART_JENKINS" = "true" ]; then
+    # Jenkinsを再起動して実行
+    log "Restarting Jenkins to create seed job..."
+    systemctl restart jenkins
+    
+    # 起動を待機
+    log "Waiting for Jenkins to start..."
+    TIMEOUT=300
+    ELAPSED=0
+    while [ $ELAPSED -lt $TIMEOUT ]; do
+        if curl -sf http://localhost:8080/login > /dev/null 2>&1; then
+            log "Jenkins is running"
+            break
+        fi
+        sleep 5
+        ELAPSED=$((ELAPSED + 5))
+    done
+    
+    if [ $ELAPSED -ge $TIMEOUT ]; then
+        error_exit "Jenkins failed to start within timeout"
     fi
-    sleep 5
-    ELAPSED=$((ELAPSED + 5))
-done
-
-if [ $ELAPSED -ge $TIMEOUT ]; then
-    error_exit "Jenkins failed to start within timeout"
+    
+    # セットアップの完了を待機
+    log "Waiting for seed job creation to complete..."
+    sleep 30
+    
+    # スクリプトを削除
+    rm -f "$GROOVY_DIR/create-seed-job.groovy"
+    rm -f /tmp/seed-job.xml
+else
+    log "Seed job creation script prepared. Jenkins restart skipped."
+    log "The seed job will be created on the next Jenkins restart."
+    log "Note: The Groovy script remains in place at: $GROOVY_DIR/create-seed-job.groovy"
 fi
 
-# セットアップの完了を待機
-log "Waiting for seed job creation to complete..."
-sleep 30
-
 # Groovyスクリプトの実行ログを確認
-log "Checking Groovy script execution logs..."
-if [ -f "/var/log/jenkins/jenkins.log" ]; then
+if [ "$RESTART_JENKINS" = "true" ] && [ -f "/var/log/jenkins/jenkins.log" ]; then
+    log "Checking Groovy script execution logs..."
     log "Recent Jenkins logs related to seed job:"
     grep -i "seed" /var/log/jenkins/jenkins.log | tail -20 || true
     grep -i "groovy" /var/log/jenkins/jenkins.log | tail -20 || true
 fi
-
-# スクリプトを削除
-rm -f "$GROOVY_DIR/create-seed-job.groovy"
-rm -f /tmp/seed-job.xml
 
 # 結果の確認
 log "Verifying seed job creation..."
@@ -245,14 +253,23 @@ if [ -d "${JENKINS_HOME}/jobs/${SEED_JOB_NAME}" ]; then
         log "✗ WARNING: Seed job config.xml not found"
     fi
 else
-    log "✗ WARNING: Seed job directory not found"
+    if [ "$RESTART_JENKINS" = "true" ]; then
+        log "✗ WARNING: Seed job directory not found"
+    else
+        log "Seed job directory not found (expected - Jenkins not restarted)"
+    fi
 fi
 
 log "===== Seed Job Setup Completed ====="
 log ""
-log "Next steps:"
-log "1. Ensure your Git repository ($JENKINS_JOBS_REPO) contains:"
-log "   - Jenkinsfile at: $JOB_DSL_SCRIPTS_PATH"
-log "   - Job DSL scripts in the structure defined by your Jenkinsfile"
-log "2. Run the '$SEED_JOB_NAME' job in Jenkins to create all other jobs"
-log "3. The seed job will automatically manage job lifecycle (create/update/delete)"
+if [ "$RESTART_JENKINS" = "true" ]; then
+    log "Next steps:"
+    log "1. Ensure your Git repository ($JENKINS_JOBS_REPO) contains:"
+    log "   - Jenkinsfile at: $JOB_DSL_SCRIPTS_PATH"
+    log "   - Job DSL scripts in the structure defined by your Jenkinsfile"
+    log "2. Run the '$SEED_JOB_NAME' job in Jenkins to create all other jobs"
+    log "3. The seed job will automatically manage job lifecycle (create/update/delete)"
+else
+    log "Seed job creation script is prepared and will execute on next Jenkins restart."
+    log "To apply now, restart Jenkins manually: systemctl restart jenkins"
+fi

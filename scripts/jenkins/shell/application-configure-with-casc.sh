@@ -23,6 +23,7 @@ JENKINS_HOME="${JENKINS_HOME:-/mnt/efs/jenkins}"
 REPO_PATH="${REPO_PATH:-/root/infrastructure-as-code}"
 PROJECT_NAME="${PROJECT_NAME:-jenkins-infra}"
 ENVIRONMENT="${ENVIRONMENT:-dev}"
+RESTART_JENKINS="${RESTART_JENKINS:-false}"
 
 # インスタンスメタデータ取得（IMDSv2対応）
 TOKEN=$(curl -s -X PUT "http://169.254.169.254/latest/api/token" -H "X-aws-ec2-metadata-token-ttl-seconds: 21600")
@@ -38,6 +39,7 @@ log "  REPO_PATH: $REPO_PATH"
 log "  PROJECT_NAME: $PROJECT_NAME"
 log "  ENVIRONMENT: $ENVIRONMENT"
 log "  AWS_REGION: $AWS_REGION"
+log "  RESTART_JENKINS: $RESTART_JENKINS"
 
 # JCasCプラグインの確認
 if [ -d "${JENKINS_HOME}/plugins/configuration-as-code" ]; then
@@ -145,36 +147,45 @@ if [ "${DEBUG_CASC:-false}" = "true" ]; then
     done
 fi
 
-# JCasC設定を適用（Jenkinsを再起動）
-log "Applying JCasC configuration by restarting Jenkins..."
-systemctl restart jenkins
-
-# 起動を待機
-log "Waiting for Jenkins to apply configuration..."
-TIMEOUT=300
-ELAPSED=0
-while [ $ELAPSED -lt $TIMEOUT ]; do
-    if curl -sf http://localhost:8080/login > /dev/null 2>&1; then
-        log "Jenkins is running"
-        break
+# JCasC設定を適用
+if [ "$RESTART_JENKINS" = "true" ]; then
+    log "Applying JCasC configuration by restarting Jenkins..."
+    systemctl restart jenkins
+    
+    # 起動を待機
+    log "Waiting for Jenkins to apply configuration..."
+    TIMEOUT=300
+    ELAPSED=0
+    while [ $ELAPSED -lt $TIMEOUT ]; do
+        if curl -sf http://localhost:8080/login > /dev/null 2>&1; then
+            log "Jenkins is running"
+            break
+        fi
+        sleep 5
+        ELAPSED=$((ELAPSED + 5))
+    done
+    
+    if [ $ELAPSED -ge $TIMEOUT ]; then
+        error_exit "Jenkins failed to start within timeout"
     fi
-    sleep 5
-    ELAPSED=$((ELAPSED + 5))
-done
-
-if [ $ELAPSED -ge $TIMEOUT ]; then
-    error_exit "Jenkins failed to start within timeout"
+    
+    # 設定の適用を待機
+    sleep 30
+else
+    log "JCasC configuration file generated. Jenkins restart skipped."
+    log "To apply the configuration, either:"
+    log "  1. Restart Jenkins manually: systemctl restart jenkins"
+    log "  2. Reload configuration from Jenkins UI: Manage Jenkins > Configuration as Code > Reload existing configuration"
 fi
-
-# 設定の適用を待機
-sleep 30
 
 log "JCasC configuration completed"
 log ""
-log "Configuration applied:"
+log "Configuration ${RESTART_JENKINS == 'true' ? 'applied' : 'prepared'}:"
 log "  - EC2 Fleet Cloud configured (Fleet ID: ${EC2_FLEET_ID:-Not set})"
 log "  - Shared Library configured"
 log "  - Security settings applied (Markdown formatter)"
 log "  - Workterminal node added (Host: ${WORKTERMINAL_HOST:-Not set})"
 log ""
-log "Check Jenkins UI to verify all settings are properly applied"
+if [ "$RESTART_JENKINS" != "true" ]; then
+    log "Note: Configuration will be applied on next Jenkins restart or manual reload"
+fi
