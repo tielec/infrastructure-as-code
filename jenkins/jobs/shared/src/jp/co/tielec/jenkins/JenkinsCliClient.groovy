@@ -48,6 +48,8 @@ class JenkinsCliClient {
      *        - outputFile: 出力ファイルのパス
      *        - timeout: タイムアウト時間（分）
      *        - useHttp: HTTP接続を使用するか（デフォルト: true）
+     *        - authMethod: 認証方式 ('token', 'password', 'ssh')（デフォルト: 'token'）
+     *        - username: APIトークン使用時のユーザー名
      */
     def executeCommand(String command, Map config = [:]) {
         if (!command?.trim()) {
@@ -58,7 +60,8 @@ class JenkinsCliClient {
             jenkinsUrl: env.JENKINS_URL,
             credentialsId: 'cli-user-token',
             timeout: 5,
-            useHttp: true  // デフォルトでHTTP接続を使用
+            useHttp: true,  // デフォルトでHTTP接続を使用
+            authMethod: 'token'  // デフォルトでAPIトークン認証
         ]
         config = defaultConfig + config
 
@@ -70,13 +73,31 @@ class JenkinsCliClient {
             setupCli(config.jenkinsUrl)
         }
 
-        return steps.withCredentials([steps.usernamePassword(
-            credentialsId: config.credentialsId,
-            usernameVariable: 'USER',
-            passwordVariable: 'PASS'
-        )]) {
-            steps.timeout(time: config.timeout, unit: 'MINUTES') {
-                executeCliCommand(command, config)
+        // 認証方式に応じて適切な認証情報を取得
+        if (config.authMethod == 'token') {
+            // APIトークンの場合
+            return steps.withCredentials([steps.string(
+                credentialsId: config.credentialsId,
+                variable: 'JENKINS_API_TOKEN'
+            )]) {
+                // APIトークンの場合、ユーザー名も必要
+                def username = config.username ?: 'cli-user'
+                steps.withEnv(["JENKINS_USER=${username}"]) {
+                    steps.timeout(time: config.timeout, unit: 'MINUTES') {
+                        executeCliCommand(command, config)
+                    }
+                }
+            }
+        } else {
+            // ユーザー名/パスワードの場合
+            return steps.withCredentials([steps.usernamePassword(
+                credentialsId: config.credentialsId,
+                usernameVariable: 'USER',
+                passwordVariable: 'PASS'
+            )]) {
+                steps.timeout(time: config.timeout, unit: 'MINUTES') {
+                    executeCliCommand(command, config)
+                }
             }
         }
     }
@@ -473,12 +494,35 @@ class JenkinsCliClient {
                 
                 // リトライロジック（認証エラーの場合）
                 if (errorOutput.contains("401") || errorOutput.contains("Unauthorized")) {
-                    steps.echo "Authentication error detected. Retrying with different parameters..."
-                    // HTTP接続モードで再試行
-                    config.useHttp = true
-                    def retryCommand = buildCliCommand(command, config)
-                    output = steps.sh(script: retryCommand, returnStdout: true)
-                    return output
+                    steps.echo "Authentication error detected. Trying different authentication approaches..."
+                    
+                    // 1. まず、ユーザー名を明示的に指定して再試行
+                    if (config.authMethod == 'token' && !config.retryAttempted) {
+                        steps.echo "Retrying with explicit username format..."
+                        config.retryAttempted = true
+                        def retryCommand = buildCliCommand(command, config)
+                        
+                        // cURLでデバッグ情報を出力
+                        steps.sh """
+                            echo "=== Debug: Testing API access with curl ==="
+                            curl -I -u "\$JENKINS_USER:\$JENKINS_API_TOKEN" ${config.jenkinsUrl}/cli?remoting=false || true
+                            echo "=== End Debug ==="
+                        """
+                        
+                        output = steps.sh(script: retryCommand, returnStdout: true)
+                        return output
+                    }
+                    
+                    // 2. Jenkinsの認証設定を確認
+                    steps.echo """
+                    Authentication failed. Please verify:
+                    1. The credential ID '${config.credentialsId}' exists and is valid
+                    2. The user has 'Overall/Read' permission in Jenkins
+                    3. If using API token, ensure it's not expired
+                    4. Jenkins security realm is properly configured
+                    
+                    Current Jenkins URL: ${config.jenkinsUrl}
+                    """
                 }
                 
                 throw new JenkinsCliException("CLI command failed with exit code ${exitCode}")
@@ -502,13 +546,28 @@ Error Output: ${errorOutput}"""
         def jenkinsUrl = config.jenkinsUrl.replaceAll('/+$', '')
         
         // 基本的なCLIコマンドを構築
-        def cliCommand = """java -jar jenkins-cli.jar \\
-            -s '${jenkinsUrl}' \\
-            -auth "\$USER:\$PASS\""""
+        def cliCommand = "java -jar jenkins-cli.jar"
+        
+        // 認証方式に応じて認証パラメータを設定
+        if (config.authMethod == 'token') {
+            // APIトークン認証の場合
+            cliCommand += " \\\n            -auth \"\$JENKINS_USER:\$JENKINS_API_TOKEN\""
+        } else {
+            // ユーザー名/パスワード認証の場合
+            cliCommand += " \\\n            -auth \"\$USER:\$PASS\""
+        }
+        
+        // URLを追加
+        cliCommand += " \\\n            -s '${jenkinsUrl}'"
         
         // HTTP接続モードを使用（WebSocketの問題を回避）
         if (config.useHttp) {
             cliCommand += " \\\n            -http"
+        }
+        
+        // CSRF保護を無効化（必要に応じて）
+        if (config.disableCsrf) {
+            cliCommand += " \\\n            -noCertificateCheck"
         }
         
         // コマンドを追加
