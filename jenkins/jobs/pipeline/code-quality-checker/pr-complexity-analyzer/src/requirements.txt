@@ -1,0 +1,24 @@
+# OpenAI API
+openai>=1.56.0
+
+# GitHub API
+PyGithub>=2.1.1
+
+# データ処理
+pandas>=2.0.0
+
+# 基本ユーティリティ
+requests>=2.31.0
+urllib3>=2.2.1
+
+# JSON Schema
+jsonschema>=4.21.1
+
+# 型ヒント
+typing-extensions>=4.11.0
+
+# ファイルパス処理
+pathlib>=1.0.1
+
+# ロギング拡張
+rich>=13.7.1
