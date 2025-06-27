@@ -1,0 +1,1009 @@
+@Library('jenkins-shared-lib') _
+
+/**
+ * PR複雑度解析・コメント自動生成パイプライン
+ * rust-code-analysisとOpenAI APIを使用してPRの複雑度を分析し、コメントを自動生成・投稿します
+ */
+
+// グローバル定数
+def CONSTANTS = [
+    RUST_CODE_ANALYSIS_VERSION: '0.0.25',
+    DOCKER_IMAGE: 'rust:1.76-slim',
+    VENV_PATH: '/venv',
+    MAX_ARTIFACT_SIZE: 10485760 // 10MB
+]
+
+// ディレクトリ構造
+def DIRECTORIES = [
+    ANALYSIS: 'complexity-analysis',
+    SOURCE: 'pr-source-code', 
+    CONFIG: 'complexity-config'
+]
+
+pipeline {
+    agent {
+        docker {
+            label 'ec2-fleet'
+            image CONSTANTS.DOCKER_IMAGE
+            args '-v ${WORKSPACE}:/workspace -w /workspace -u root'
+        }
+    }
+        
+    environment {
+        // OpenAI API設定
+        OPENAI_API_KEY = credentials('openai-api-key')
+        OPENAI_MODEL = "gpt-4o"
+        // GIT_JENKINS_REPO_BRANCH = "main"  // 開発時に必要な場合はコメントを外して使用
+        
+        // 作業ディレクトリ
+        ANALYSIS_DIR = "${DIRECTORIES.ANALYSIS}"
+        SOURCE_DIR = "${DIRECTORIES.SOURCE}"
+        CONFIG_DIR = "${DIRECTORIES.CONFIG}"
+                
+        // ツールのパス
+        PROJECT_BASE_DIR = "jenkins/jobs/pipeline/code-quality-checker/pr-complexity-analyzer"
+        PYTHON_PROJECT_DIR = "${CONFIG_DIR}/${PROJECT_BASE_DIR}/src"
+        
+        // rust-code-analysis設定
+        RUST_CODE_ANALYSIS_VERSION = "${CONSTANTS.RUST_CODE_ANALYSIS_VERSION}"
+        VENV_PATH = "${CONSTANTS.VENV_PATH}"
+        
+        // タイムスタンプ
+        TIME_STAMP = sh(script: 'TZ="Asia/Tokyo" date "+%Y/%m/%d %H:%M:%S"', returnStdout: true).trim()
+    }
+    
+    stages {
+        stage('初期化とPR解析') {
+            steps {
+                script {
+                    echo "\n📋 初期化とPR解析を開始します..."
+                    // パラメータ検証
+                    validateParameters()
+                    
+                    // 既存コメントの確認
+                    checkExistingComments()
+                    
+                    if (env.SKIP_ANALYSIS == 'false') {
+                        // PR情報と差分の取得
+                        fetchPRInformation()
+                        
+                        // 解析対象ファイルの確認
+                        checkAnalyzableFiles()
+                    }
+                }
+            }
+        }
+        
+        stage('環境準備') {
+            when {
+                expression { env.SKIP_ANALYSIS == 'false' && env.HAS_CODE_FILES == 'true' }
+            }
+            steps {
+                script {
+                    echo "\n🔧 環境セットアップを開始します..."
+                    setupEnvironment()
+                }
+            }
+        }
+
+        stage('複雑度解析とコメント生成') {
+            when {
+                expression { env.SKIP_ANALYSIS == 'false' && env.HAS_CODE_FILES == 'true' }
+            }
+            steps {
+                script {
+                    echo "\n🔍 コード複雑度解析とAIコメント生成を開始します..."
+                    
+                    // 複雑度解析の実行
+                    analyzeComplexity()
+                    
+                    // 解析結果に基づいてAIコメントを生成
+                    generatePRComment()
+                }
+            }
+        }
+        
+        stage('PRコメントの投稿') {
+            when {
+                expression { env.SKIP_ANALYSIS == 'false' && env.HAS_CODE_FILES == 'true' }
+            }
+            steps {
+                script {
+                    echo "\n💬 PRへのコメント投稿を開始します..."
+                    postPRComment()
+                }
+            }
+        }
+    }
+    
+    post {
+        always {
+            script {
+                postProcessing()
+            }
+        }
+        
+        success {
+            echo "PR複雑度解析が正常に完了しました。"
+        }
+        
+        failure {
+            echo "PR複雑度解析に失敗しました。ログを確認してください。"
+        }
+        
+        cleanup {
+            cleanWs()
+        }
+    }
+}
+
+// ====================== ステージ関数の定義 ======================
+
+def validateParameters() {
+    // リポジトリ情報の設定
+    def (repoOwner, repoName) = gitUtils.extractRepoInfo(params.REPO_URL)
+    env.REPO_OWNER = repoOwner
+    env.REPO_NAME = repoName
+    
+    if (!env.REPO_OWNER?.trim() || !env.REPO_NAME?.trim()) {
+        error "リポジトリ情報が不足しています。"
+    }
+    
+    // PR番号の検証と設定
+    def prNumber = env.CHANGE_ID?.trim() ?: params.PR_NUMBER?.trim()
+    
+    if (!prNumber) {
+        error "PR番号が指定されていません。"
+    }
+    
+    // "Latest"の場合は最新のPRを取得
+    if (prNumber.equalsIgnoreCase('Latest')) {
+        prNumber = getLatestPRNumber()
+    }
+    
+    // PR番号が数値であることを確認
+    try {
+        env.PR_NUMBER = prNumber
+        Integer.parseInt(prNumber)
+    } catch (NumberFormatException e) {
+        error "PR番号は数値である必要があります: ${prNumber}"
+    }
+}
+
+def getLatestPRNumber() {
+    try {
+        def latestPR = gitUtils.getLatestPullRequest([
+            repoOwner: env.REPO_OWNER,
+            repoName: env.REPO_NAME,
+            state: 'open'
+        ])
+        
+        if (!latestPR) {
+            error "オープンなPRが見つかりませんでした。"
+        }
+        
+        echo "最新のPR: #${latestPR.number} - ${latestPR.title}"
+        return latestPR.number.toString()
+        
+    } catch (Exception e) {
+        error "最新のPR情報の取得に失敗しました: ${e.message}"
+    }
+}
+
+def checkExistingComments() {
+    env.SKIP_ANALYSIS = 'false'
+    
+    try {
+        // PR上の全コメントを取得
+        def existingComments = gitUtils.getPullRequestComments(
+            env.PR_NUMBER as Integer,
+            [
+                repoOwner: env.REPO_OWNER,
+                repoName: env.REPO_NAME
+            ]
+        )
+        
+        echo "既存コメント数: ${existingComments?.size() ?: 0}"
+        
+        // 自動生成コメントを探す
+        def autoGenComment = findAutoGeneratedComment(existingComments)
+        
+        if (autoGenComment && !params.FORCE_ANALYSIS) {
+            echo "ℹ️  既存の複雑度解析コメントが見つかりました（ID: ${autoGenComment.id}）"
+            echo "   FORCE_ANALYSISがfalseのため、以降の処理をスキップします"
+            
+            env.SKIP_ANALYSIS = 'true'
+            env.EXISTING_COMMENT_ID = autoGenComment.id.toString()
+        } else if (autoGenComment && params.FORCE_ANALYSIS) {
+            echo "ℹ️  既存の複雑度解析コメントが見つかりました（ID: ${autoGenComment.id}）"
+            echo "   FORCE_ANALYSISがtrueのため、コメントを更新します"
+            env.EXISTING_COMMENT_ID = autoGenComment.id.toString()
+        } else {
+            echo "✓ 既存の複雑度解析コメントは見つかりませんでした"
+        }
+    } catch (Exception e) {
+        echo "⚠️  既存コメントの確認中にエラーが発生しました: ${e.message}"
+        echo "   処理を続行します"
+    }
+}
+
+def findAutoGeneratedComment(comments) {
+    return comments?.findAll { comment ->
+        comment.body?.contains('<!-- auto-generated-complexity-comment')
+    }?.sort { it.created_at }?.reverse()?.find()
+}
+
+def fetchPRInformation() {
+    try {
+        echo "\n📋 PR情報を取得中..."
+        
+        // PR情報の取得
+        def prInfo = gitUtils.getPullRequestInfo(
+            env.PR_NUMBER as Integer,
+            [
+                repoOwner: env.REPO_OWNER,
+                repoName: env.REPO_NAME
+            ]
+        )
+
+        // PR差分の取得
+        def prDiff = gitUtils.getPullRequestDiff(
+            env.PR_NUMBER as Integer,
+            [
+                repoOwner: env.REPO_OWNER,
+                repoName: env.REPO_NAME
+            ]
+        )
+
+        // JSONファイルとして保存
+        writeJSON(file: "pr_info.json", json: prInfo, pretty: 4)
+        writeJSON(file: "pr_diff.json", json: prDiff, pretty: 4)
+                                
+        // PR情報を環境変数に保存
+        env.PR_HEAD_REF = prInfo.head.ref
+        env.PR_HEAD_SHA = prInfo.head.sha
+        env.PR_BASE_REF = prInfo.base.ref
+        env.PR_BASE_SHA = prInfo.base.sha
+        
+        // 変更されたファイルの抽出
+        def changedFiles = prDiff.collect { it.filename }
+        env.CHANGED_FILES = changedFiles.join('\n')
+        env.CHANGED_FILES_COUNT = changedFiles.size().toString()
+        
+        // デバッグ情報の出力
+        printPRInfo(prInfo, changedFiles)
+        
+    } catch (Exception e) {
+        error "PR情報・差分の取得に失敗しました: ${e.message}"
+    }
+}
+
+def checkAnalyzableFiles() {
+    """解析対象となるコードファイルが存在するかチェック"""
+    
+    def changedFiles = env.CHANGED_FILES?.split('\n') ?: []
+    
+    // 解析対象ファイルの種類を確認
+    def codeFiles = changedFiles.findAll { file ->
+        file.endsWith('.py') || file.endsWith('.js') || file.endsWith('.ts') || 
+        file.endsWith('.java') || file.endsWith('.go') || file.endsWith('.rs') ||
+        file.endsWith('.cpp') || file.endsWith('.c') || file.endsWith('.jsx') ||
+        file.endsWith('.tsx') || file.endsWith('.rb') || file.endsWith('.php') ||
+        file.endsWith('.cs') || file.endsWith('.swift') || file.endsWith('.kt') ||
+        file.endsWith('.scala') || file.endsWith('.m') || file.endsWith('.h')
+    }
+    
+    env.CODE_FILES_COUNT = codeFiles.size().toString()
+    env.HAS_CODE_FILES = (codeFiles.size() > 0).toString()
+    
+    echo "\n📊 ファイル解析結果:"
+    echo "  - 変更ファイル総数: ${changedFiles.size()}"
+    echo "  - 解析対象コードファイル: ${codeFiles.size()}"
+    
+    if (codeFiles.size() == 0) {
+        echo """
+╔═══════════════════════════════════════════════════════════
+║ ℹ️  解析対象ファイルなし
+╠═══════════════════════════════════════════════════════════
+║ このPRには複雑度解析の対象となるコードファイルが
+║ 含まれていません。
+║ 
+║ 変更内容:
+║ - 設定ファイル、ドキュメント、画像ファイルなど
+║ 
+║ 処理をスキップします。
+╚═══════════════════════════════════════════════════════════
+        """.stripIndent()
+        
+        // 必要に応じてPRにコメントを投稿
+        if (params.FORCE_ANALYSIS || !env.EXISTING_COMMENT_ID) {
+            postNoCodeFilesComment()
+        }
+    } else {
+        echo "\n解析対象のコードファイル:"
+        if (codeFiles.size() <= 20) {
+            codeFiles.each { file ->
+                def ext = file.substring(file.lastIndexOf('.'))
+                echo "  • ${file} (${getLanguageFromExtension(ext)})"
+            }
+        } else {
+            // 言語別に集計
+            def langCount = [:]
+            codeFiles.each { file ->
+                def ext = file.substring(file.lastIndexOf('.'))
+                def lang = getLanguageFromExtension(ext)
+                langCount[lang] = (langCount[lang] ?: 0) + 1
+            }
+            
+            echo "  言語別ファイル数:"
+            langCount.each { lang, count ->
+                echo "    - ${lang}: ${count}個"
+            }
+            echo "  合計: ${codeFiles.size()}個のファイル"
+        }
+    }
+}
+
+def getLanguageFromExtension(ext) {
+    def langMap = [
+        '.py': 'Python',
+        '.js': 'JavaScript',
+        '.jsx': 'JavaScript/React',
+        '.ts': 'TypeScript',
+        '.tsx': 'TypeScript/React',
+        '.java': 'Java',
+        '.go': 'Go',
+        '.rs': 'Rust',
+        '.cpp': 'C++',
+        '.c': 'C',
+        '.rb': 'Ruby',
+        '.php': 'PHP',
+        '.cs': 'C#',
+        '.swift': 'Swift',
+        '.kt': 'Kotlin',
+        '.scala': 'Scala',
+        '.m': 'Objective-C',
+        '.h': 'C/C++/Obj-C Header'
+    ]
+    return langMap[ext] ?: 'Unknown'
+}
+
+def postNoCodeFilesComment() {
+    """コードファイルがない場合のコメントを投稿"""
+    
+    def comment = """
+<!-- auto-generated-complexity-comment
+timestamp: ${env.TIME_STAMP}
+jenkins-job: ${env.JOB_NAME}
+build-number: ${env.BUILD_NUMBER}
+-->
+
+# 📋 複雑度解析スキップ
+
+このPRには複雑度解析の対象となるコードファイルが含まれていません。
+
+## 変更内容
+- 変更ファイル数: ${env.CHANGED_FILES_COUNT}
+- 解析対象コードファイル: 0
+
+設定ファイル、ドキュメント、画像ファイルなどの変更のみのため、複雑度解析をスキップしました。
+    """.stripIndent()
+    
+    try {
+        if (env.EXISTING_COMMENT_ID) {
+            // 既存コメントを更新
+            gitUtils.updatePullRequestComment(
+                env.EXISTING_COMMENT_ID,
+                comment,
+                [
+                    repoOwner: env.REPO_OWNER,
+                    repoName: env.REPO_NAME
+                ]
+            )
+            echo "✓ 既存のコメントを更新しました"
+        } else {
+            // 新規コメントを作成
+            gitUtils.createPullRequestComment(
+                env.PR_NUMBER as Integer,
+                comment,
+                [
+                    repoOwner: env.REPO_OWNER,
+                    repoName: env.REPO_NAME
+                ]
+            )
+            echo "✓ コメントを投稿しました"
+        }
+    } catch (Exception e) {
+        echo "⚠️  コメントの投稿に失敗しました: ${e.message}"
+    }
+}
+
+def printPRInfo(prInfo, changedFiles) {
+    echo """
+╔═══════════════════════════════════════════════════════════
+║ PR情報
+╠═══════════════════════════════════════════════════════════
+║ PR番号: #${env.PR_NUMBER}
+║ タイトル: ${prInfo.title}
+║ ブランチ: ${env.PR_BASE_REF} ← ${env.PR_HEAD_REF}
+║ 変更ファイル数: ${env.CHANGED_FILES_COUNT}
+╚═══════════════════════════════════════════════════════════
+    """.stripIndent()
+    
+    if (changedFiles.size() <= 10) {
+        echo "変更されたファイル:"
+        changedFiles.each { file ->
+            echo "  • ${file}"
+        }
+    } else {
+        echo "変更されたファイル: ${changedFiles.size()}個のファイル（最初の10個を表示）"
+        changedFiles.take(10).each { file ->
+            echo "  • ${file}"
+        }
+        echo "  ... 他 ${changedFiles.size() - 10} ファイル"
+    }
+}
+
+def setupEnvironment() {
+    // システムパッケージのインストール
+    installSystemPackages()
+    
+    // ディレクトリ作成
+    createDirectories()
+    
+    // Gitリポジトリのチェックアウト（並列実行）
+    echo "\n📦 必要なリポジトリをチェックアウト中..."
+    parallel(
+        'jenkinsRepo': {
+            checkoutJenkinsRepo()
+        },
+        'sourceRepo': {
+            checkoutSourceRepo()
+        }
+    )
+    
+    // 必要なファイルの確認
+    verifyRequiredFiles()
+    
+    // Python環境とRustツールのセットアップ（並列実行）
+    echo "\n🛠️  開発ツールをセットアップ中..."
+    parallel(
+        'pythonEnv': {
+            setupPythonEnvironment()
+        },
+        'rustTools': {
+            installRustTools()
+        }
+    )
+    
+    // 最終確認
+    finalEnvironmentCheck()
+}
+
+def installSystemPackages() {
+    echo "システムパッケージをインストール中..."
+    sh """
+        # 必要なパッケージがすでにインストールされているかチェック
+        if ! command -v jq &> /dev/null || ! command -v curl &> /dev/null || ! command -v ssh &> /dev/null || ! command -v python3-venv &> /dev/null; then
+            apt-get update -qq && apt-get install -qq -y \\
+                build-essential \\
+                pkg-config \\
+                libssl-dev \\
+                git \\
+                openssh-client \\
+                python3 \\
+                python3-pip \\
+                python3-venv \\
+                curl \\
+                jq > /dev/null 2>&1
+            echo "✓ システムパッケージのインストールが完了しました"
+        else
+            echo "✓ 必要なシステムパッケージは既にインストール済みです"
+        fi
+    """
+}
+
+def createDirectories() {
+    sh """
+        mkdir -p ${ANALYSIS_DIR} ${SOURCE_DIR} ${CONFIG_DIR}
+    """
+    echo "✓ 作業ディレクトリを作成しました"
+}
+
+def checkoutJenkinsRepo() {
+    echo "Jenkinsリポジトリをチェックアウト中..."
+    dir(CONFIG_DIR) {
+        // GIT_JENKINS_REPO_BRANCHが設定されていない場合はmainを使用
+        def branch = env.GIT_JENKINS_REPO_BRANCH ?: 'main'
+        gitUtils.checkoutRepository(
+            env.GIT_JENKINS_REPO_URL,
+            branch,
+            env.GIT_JENKINS_CREDENTIALS_ID
+        )
+    }
+    echo "✓ Jenkinsリポジトリのチェックアウトが完了しました"
+}
+
+def checkoutSourceRepo() {
+    echo "PR対象リポジトリをチェックアウト中... (${env.PR_HEAD_REF})"
+    dir(SOURCE_DIR) {
+        gitUtils.checkoutRepository(
+            params.REPO_URL,
+            env.PR_HEAD_REF,
+            params.GIT_SOURCE_REPO_CREDENTIALS_ID
+        )
+        
+        // チェックアウト後の簡易確認
+        def currentBranch = sh(
+            script: 'git branch --show-current',
+            returnStdout: true
+        ).trim()
+        
+        def latestCommit = sh(
+            script: 'git log -1 --oneline',
+            returnStdout: true
+        ).trim()
+        
+        echo "✓ ブランチ '${currentBranch}' をチェックアウトしました"
+        echo "  最新コミット: ${latestCommit}"
+    }
+}
+
+def verifyRequiredFiles() {
+    // 静かに検証を実行
+    def pythonScriptsExist = sh(
+        script: "find ${CONFIG_DIR} -name '*.py' -type f | head -1",
+        returnStatus: true
+    ) == 0
+    
+    def sourceFilesExist = sh(
+        script: "find ${SOURCE_DIR} -type f \\( -name '*.rs' -o -name '*.py' -o -name '*.js' \\) | head -1",
+        returnStatus: true
+    ) == 0
+    
+    if (!pythonScriptsExist) {
+        error "必要なPythonスクリプトが見つかりません"
+    }
+    
+    if (!sourceFilesExist) {
+        echo "⚠️  ソースコードファイルが見つかりません。空のPRの可能性があります。"
+    }
+}
+
+def setupPythonEnvironment() {
+    echo "Python環境をセットアップ中..."
+    sh """
+        # 仮想環境の作成（詳細ログを抑制）
+        python3 -m venv ${VENV_PATH} > /dev/null 2>&1
+        
+        # アクティベートとパッケージインストール（詳細ログを抑制）
+        set +x
+        . ${VENV_PATH}/bin/activate
+        pip install --upgrade pip --quiet
+        
+        # requirements.txt のインストール
+        pip install -r ${PYTHON_PROJECT_DIR}/requirements.txt --no-cache-dir --quiet
+        set -x
+        
+        # 主要パッケージの確認
+        echo "  インストールされたパッケージを確認中..."
+        if pip list 2>/dev/null | grep -qE "(openai|PyGithub|pandas)"; then
+            echo "  ✓ 必要なPythonパッケージがインストールされました"
+            echo "    - openai (OpenAI API用)"
+            echo "    - PyGithub (GitHub API用)"
+            echo "    - pandas (データ処理用)"
+        else
+            echo "  ⚠️  一部のパッケージがインストールされていない可能性があります"
+            pip list | grep -E "(openai|PyGithub|pandas)" || true
+        fi
+    """
+}
+
+def installRustTools() {
+    echo "Rustツールをインストール中..."
+    sh """
+        # CARGO_HOMEを確認して適切なPATHを設定
+        if [ -n "\${CARGO_HOME}" ]; then
+            export PATH="\${CARGO_HOME}/bin:\$PATH"
+        else
+            export PATH="\$HOME/.cargo/bin:/root/.cargo/bin:\$PATH"
+        fi
+        
+        # rust-code-analysisがすでにインストールされているかチェック
+        if command -v rust-code-analysis-cli > /dev/null 2>&1; then
+            INSTALLED_VERSION=\$(rust-code-analysis-cli --version | cut -d' ' -f2)
+            
+            # バージョンが異なる場合は再インストール
+            if [ "\${INSTALLED_VERSION}" != "${RUST_CODE_ANALYSIS_VERSION}" ]; then
+                echo "バージョンが異なるため再インストール中..."
+                echo "  現在: v\${INSTALLED_VERSION}"
+                echo "  必要: v${RUST_CODE_ANALYSIS_VERSION}"
+                cargo install rust-code-analysis-cli --version ${RUST_CODE_ANALYSIS_VERSION} --locked --force --quiet
+                echo "✓ rust-code-analysis-cli v${RUST_CODE_ANALYSIS_VERSION} に更新しました"
+            else
+                echo "✓ rust-code-analysis-cli v\${INSTALLED_VERSION} は既にインストール済みです"
+            fi
+        else
+            echo "rust-code-analysis-cliをインストール中..."
+            echo "CARGO_HOME: \${CARGO_HOME:-未設定}"
+            echo "インストール先: \${CARGO_HOME:-\$HOME/.cargo}/bin"
+            
+            # インストール実行
+            cargo install rust-code-analysis-cli --version ${RUST_CODE_ANALYSIS_VERSION} --locked --quiet
+            
+            echo "✓ rust-code-analysis-cli v${RUST_CODE_ANALYSIS_VERSION} のインストールが完了しました"
+        fi
+    """
+}
+
+def finalEnvironmentCheck() {
+    echo "✓ 環境準備が完了しました"
+}
+
+def analyzeComplexity() {
+    try {
+        // 変更されたファイルをファイルに保存（最後に改行を追加）
+        writeFile file: 'changed_files.txt', text: env.CHANGED_FILES + '\n'
+        
+        // 解析スクリプトを実行
+        runComplexityAnalysisScript()
+        
+        // 解析可能なファイルがあるか確認
+        def metricsSize = sh(
+            script: "wc -c < ${ANALYSIS_DIR}/complexity_metrics.json 2>/dev/null || echo 0",
+            returnStdout: true
+        ).trim() as Integer
+        
+        if (metricsSize < 10) {
+            echo "⚠️  解析可能なコードファイルが見つかりませんでした"
+            echo "   （非コードファイルのみの変更の可能性があります）"
+            
+            // 空の結果を作成
+            writeJSON file: "${ANALYSIS_DIR}/analysis_result.json", json: [
+                pr_number: env.PR_NUMBER,
+                pr_title: 'N/A',
+                total_files_analyzed: 0,
+                total_functions: 0,
+                high_complexity_functions_cyclomatic: 0,
+                high_complexity_functions_cognitive: 0,
+                thresholds: [
+                    cyclomatic: params.CYCLOMATIC_THRESHOLD as Integer,
+                    cognitive: params.COGNITIVE_THRESHOLD as Integer
+                ],
+                file_analyses: [:],
+                high_complexity_functions: []
+            ]
+        } else {
+            // Pythonスクリプトで解析結果を処理
+            processAnalysisResults()
+        }
+        
+    } catch (Exception e) {
+        error "複雑度解析に失敗しました: ${e.message}"
+    }
+}
+
+def runComplexityAnalysisScript() {
+    echo "複雑度解析を実行中..."
+    
+    // 変更ファイル数を事前に確認
+    def fileCount = sh(
+        script: "wc -l < changed_files.txt",
+        returnStdout: true
+    ).trim()
+    
+    echo "解析対象: ${fileCount}個のファイル"
+    
+    // 解析スクリプトを実行（標準出力をそのまま表示）
+    sh """
+        # CARGO_HOMEを確認して適切なPATHを設定
+        if [ -n "\${CARGO_HOME}" ]; then
+            export PATH="\${CARGO_HOME}/bin:\$PATH"
+        else
+            export PATH="\$HOME/.cargo/bin:/root/.cargo/bin:\$PATH"
+        fi
+        
+        # rust-code-analysis-cliの存在確認
+        if ! command -v rust-code-analysis-cli > /dev/null 2>&1; then
+            echo "エラー: rust-code-analysis-cliが見つかりません"
+            echo "PATH: \$PATH"
+            echo "CARGO_HOME: \${CARGO_HOME:-未設定}"
+            exit 1
+        fi
+        
+        # スクリプトに実行権限を付与
+        chmod +x ${CONFIG_DIR}/${PROJECT_BASE_DIR}/scripts/analyze_complexity.sh
+        
+        # 解析スクリプトを実行
+        ${CONFIG_DIR}/${PROJECT_BASE_DIR}/scripts/analyze_complexity.sh \\
+            "${SOURCE_DIR}" \\
+            "${ANALYSIS_DIR}" \\
+            "changed_files.txt"
+    """
+    
+    // 結果ファイルのサイズを確認
+    def resultSize = sh(
+        script: "wc -c < ${ANALYSIS_DIR}/complexity_metrics.json 2>/dev/null || echo 0",
+        returnStdout: true
+    ).trim()
+    
+    echo "✓ 解析結果ファイルサイズ: ${resultSize} bytes"
+}
+
+def processAnalysisResults() {
+    echo "解析結果を処理中..."
+    echo "  rust-code-analysisの生データを構造化データに変換します..."
+    
+    def output = sh(
+        script: """
+            # 仮想環境のアクティベート（詳細ログを抑制）
+            set +x
+            . ${VENV_PATH}/bin/activate
+            set -x
+            
+            # Pythonスクリプトを実行
+            echo "  統合スクリプトを実行中..."
+            python ${PYTHON_PROJECT_DIR}/integrate_complexity_analysis.py \\
+                --metrics-file ${ANALYSIS_DIR}/complexity_metrics.json \\
+                --pr-info pr_info.json \\
+                --pr-diff pr_diff.json \\
+                --output ${ANALYSIS_DIR}/analysis_result.json \\
+                --cyclomatic-threshold ${params.CYCLOMATIC_THRESHOLD} \\
+                --cognitive-threshold ${params.COGNITIVE_THRESHOLD}
+        """,
+        returnStdout: true
+    ).trim()
+    
+    if (output) {
+        // 重要な情報のみを抽出して表示
+        def importantLines = output.split('\n').findAll { line ->
+            line.contains('Total functions') || 
+            line.contains('Analysis complete:') ||
+            line.contains('Files analyzed:') ||
+            line.contains('High complexity functions')
+        }
+        
+        if (importantLines) {
+            echo importantLines.join('\n')
+        }
+    }
+    
+    // 解析結果の概要を表示
+    if (fileExists("${ANALYSIS_DIR}/analysis_result.json")) {
+        def result = readJSON file: "${ANALYSIS_DIR}/analysis_result.json"
+        echo "  ✓ 解析完了: ${result.total_files_analyzed}個のファイル、${result.total_functions ?: 0}個の関数を処理"
+        
+        // 高複雑度関数の詳細を表示
+        def highComplexityFuncs = result.high_complexity_functions ?: []
+        if (highComplexityFuncs.size() > 0) {
+            echo "\n  ⚠️  高複雑度関数が検出されました:"
+            highComplexityFuncs.take(5).each { func ->
+                echo "    • ${func.name}"
+                echo "      認知的: ${func.cognitive} (閾値: ${params.COGNITIVE_THRESHOLD})"
+                echo "      循環的: ${func.cyclomatic} (閾値: ${params.CYCLOMATIC_THRESHOLD})"
+                echo "      場所: ${func.file}:${func.start_line}-${func.end_line}"
+            }
+            if (highComplexityFuncs.size() > 5) {
+                echo "    ... 他 ${highComplexityFuncs.size() - 5}個の高複雑度関数"
+            }
+        } else {
+            echo "  ✅ すべての関数が複雑度の閾値内に収まっています"
+        }
+    }
+}
+
+def generatePRComment() {
+    try {
+        withCredentials([
+            usernamePassword(credentialsId: 'SW-Jenkins-Pipeline-App', 
+                            usernameVariable: 'GITHUB_APP_ID',
+                            passwordVariable: 'GITHUB_ACCESS_TOKEN'),
+            string(credentialsId: 'openai-api-key', 
+                variable: 'OPENAI_API_KEY')
+        ]) {
+            withEnv(['GITHUB_AUTH_METHOD=app']) {
+                runCommentGeneratorScript()
+            }
+        }
+        
+        echo "複雑度解析コメントの生成が完了しました。"
+    } catch (Exception e) {
+        error "OpenAIによるコメント生成に失敗しました: ${e.message}"
+    }
+}
+
+def runCommentGeneratorScript() {
+    echo "AIコメントを生成中..."
+    
+    // OpenAI APIを使用することを明示
+    echo "  OpenAI APIを呼び出してコメントを生成します..."
+    
+    sh """
+        # 仮想環境のアクティベート（詳細ログを抑制）
+        set +x
+        . ${VENV_PATH}/bin/activate
+        set -x
+        
+        # Pythonスクリプトの場所を確認
+        SCRIPT_PATH="${PYTHON_PROJECT_DIR}/pr_complexity_comment_generator.py"
+        if [ ! -f "\${SCRIPT_PATH}" ]; then
+            echo "Error: Python script not found at \${SCRIPT_PATH}"
+            exit 1
+        fi
+        
+        # コメント生成スクリプトを実行（--save-promptオプション付き）
+        echo "  解析結果を基にコメントを生成中..."
+        python \${SCRIPT_PATH} \\
+            --analysis-result ${ANALYSIS_DIR}/analysis_result.json \\
+            --output ${ANALYSIS_DIR}/pr_comment.json \\
+            --save-prompt
+    """
+    
+    // 生成されたコメントとプロンプトの概要を表示
+    if (fileExists("${ANALYSIS_DIR}/pr_comment.json")) {
+        def commentData = readJSON file: "${ANALYSIS_DIR}/pr_comment.json"
+        def commentLength = commentData.comment?.length() ?: 0
+        echo "  ✓ ${commentLength}文字のコメントが生成されました"
+        
+        // プロンプト情報も表示
+        def metadata = commentData.generation_metadata
+        if (metadata) {
+            echo "  📋 生成メタデータ:"
+            echo "    - モデル: ${metadata.model ?: 'N/A'}"
+            echo "    - Temperature: ${metadata.temperature ?: 'N/A'}"
+            echo "    - 最大トークン数: ${metadata.max_tokens ?: 'N/A'}"
+            if (metadata.prompt_length) {
+                echo "    - プロンプト長: ${metadata.prompt_length}文字 (推定${metadata.estimated_prompt_tokens ?: 'N/A'}トークン)"
+            }
+        }
+    }
+    
+    // 保存されたプロンプトファイルを探してアーティファクトに含める
+    sh """
+        # プロンプトファイルを解析ディレクトリに移動
+        if ls openai_prompt_*.txt 1> /dev/null 2>&1; then
+            mv openai_prompt_*.txt ${ANALYSIS_DIR}/
+            echo "  ✓ プロンプトファイルを保存しました"
+        fi
+    """
+}
+
+def postPRComment() {
+    try {
+        // 生成されたコメントの読み込み
+        def commentResult = readJSON file: "${ANALYSIS_DIR}/pr_comment.json"
+        def comment = commentResult.comment
+        
+        // 自動生成タグの作成
+        def autoGenTag = createAutoGeneratedTag()
+        
+        // タグをコメントの先頭に追加
+        comment = autoGenTag + comment
+        
+        // 既存コメントの更新または新規作成
+        if (env.EXISTING_COMMENT_ID) {
+            updateExistingComment(comment)
+        } else {
+            createNewComment(comment)
+        }
+    } catch (Exception e) {
+        error "PRコメントの投稿に失敗しました: ${e.message}"
+    }
+}
+
+def createAutoGeneratedTag() {
+    return """
+        <!-- auto-generated-complexity-comment
+        timestamp: ${env.TIME_STAMP}
+        jenkins-job: ${env.JOB_NAME}
+        build-number: ${env.BUILD_NUMBER}
+        -->
+        
+    """.stripIndent()
+}
+
+def updateExistingComment(comment) {
+    echo "既存のコメント（ID: ${env.EXISTING_COMMENT_ID}）を更新中..."
+    gitUtils.updatePullRequestComment(
+        env.EXISTING_COMMENT_ID,
+        comment,
+        [
+            repoOwner: env.REPO_OWNER,
+            repoName: env.REPO_NAME
+        ]
+    )
+    echo "✓ PRコメントを更新しました"
+}
+
+def createNewComment(comment) {
+    echo "新規コメントを作成中..."
+    gitUtils.createPullRequestComment(
+        env.PR_NUMBER as Integer,
+        comment,
+        [
+            repoOwner: env.REPO_OWNER,
+            repoName: env.REPO_NAME
+        ]
+    )
+    echo "✓ PRコメントを投稿しました"
+}
+
+def postProcessing() {
+    // アーティファクトのアーカイブ
+    if (env.ANALYSIS_DIR && env.HAS_CODE_FILES == 'true') {
+        archiveArtifacts artifacts: """
+            ${ANALYSIS_DIR}/*.json,
+            ${ANALYSIS_DIR}/openai_prompt_*.txt
+        """, allowEmptyArchive: true
+    }
+    
+    // 結果サマリーの表示
+    if (env.SKIP_ANALYSIS == 'true') {
+        displaySkippedAnalysisSummary()
+    } else if (env.HAS_CODE_FILES == 'false') {
+        displayNoCodeFilesSummary()
+    } else if (env.ANALYSIS_DIR) {
+        displayAnalysisSummary()
+    }
+}
+
+def displaySkippedAnalysisSummary() {
+    echo """
+╔═══════════════════════════════════════════════════════════
+║ ℹ️  PR複雑度解析スキップ
+╠═══════════════════════════════════════════════════════════
+║ PR番号: #${env.PR_NUMBER}
+║ 理由: 既存の複雑度解析コメントが存在します
+║ 
+║ ※再分析を実行するには FORCE_ANALYSIS パラメータを
+║   有効にしてください
+╚═══════════════════════════════════════════════════════════
+    """.stripIndent()
+}
+
+def displayNoCodeFilesSummary() {
+    echo """
+╔═══════════════════════════════════════════════════════════
+║ ℹ️  PR複雑度解析スキップ
+╠═══════════════════════════════════════════════════════════
+║ PR番号: #${env.PR_NUMBER}
+║ 理由: 解析対象となるコードファイルが含まれていません
+║ 
+║ 変更ファイル数: ${env.CHANGED_FILES_COUNT ?: 'N/A'}
+║ コードファイル数: 0
+║ 
+║ ※設定ファイルやドキュメントのみの変更です
+╚═══════════════════════════════════════════════════════════
+    """.stripIndent()
+}
+
+def displayAnalysisSummary() {
+    def analysisFile = "${ANALYSIS_DIR}/analysis_result.json"
+    if (fileExists(analysisFile)) {
+        def result = readJSON file: analysisFile
+        
+        def cycloComplexFuncs = result.high_complexity_functions_cyclomatic ?: 0
+        def cognComplexFuncs = result.high_complexity_functions_cognitive ?: 0
+        
+        echo """
+╔═══════════════════════════════════════════════════════════
+║ 📊 PR複雑度解析結果
+╠═══════════════════════════════════════════════════════════
+║ PR番号: #${env.PR_NUMBER}
+║ 変更ファイル数: ${env.CHANGED_FILES_COUNT ?: 'N/A'}
+║ 解析されたコードファイル数: ${env.CODE_FILES_COUNT ?: 'N/A'}
+║ 解析された関数数: ${result.total_functions ?: 0}
+╠═══════════════════════════════════════════════════════════
+║ 高複雑度関数:
+║   • 循環的複雑度 > ${params.CYCLOMATIC_THRESHOLD}: ${cycloComplexFuncs}個
+║   • 認知的複雑度 > ${params.COGNITIVE_THRESHOLD}: ${cognComplexFuncs}個
+╚═══════════════════════════════════════════════════════════
+        """.stripIndent()
+        
+        if (cycloComplexFuncs > 0 || cognComplexFuncs > 0) {
+            echo "⚠️  高複雑度の関数が検出されました。PRコメントを確認してください。"
+        } else {
+            echo "✅ すべての関数の複雑度が適切な範囲内です。"
+        }
+    }
+}

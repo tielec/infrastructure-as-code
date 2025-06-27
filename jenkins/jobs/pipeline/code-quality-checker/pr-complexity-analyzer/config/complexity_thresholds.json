@@ -1,0 +1,104 @@
+{
+  "thresholds": {
+    "cyclomatic": {
+      "default": 15,
+      "warning": 10,
+      "error": 20,
+      "description": "循環的複雑度の閾値設定"
+    },
+    "cognitive": {
+      "default": 20,
+      "warning": 15,
+      "error": 30,
+      "description": "認知的複雑度の閾値設定（最重要）"
+    },
+    "lines_of_code": {
+      "default": 100,
+      "warning": 75,
+      "error": 150,
+      "description": "関数の行数制限"
+    },
+    "halstead_difficulty": {
+      "default": 25,
+      "warning": 20,
+      "error": 35,
+      "description": "Halstead難易度の閾値"
+    },
+    "maintainability_index": {
+      "default": 65,
+      "warning": 75,
+      "error": 50,
+      "description": "保守性指標（高いほど良い）"
+    }
+  },
+  "file_patterns": {
+    "exclude": [
+      "*/test/*",
+      "*/tests/*",
+      "*/node_modules/*",
+      "*/target/*",
+      "*/vendor/*",
+      "*/.git/*",
+      "*/build/*",
+      "*/dist/*"
+    ],
+    "include_only": []
+  },
+  "languages": {
+    "rust": {
+      "enabled": true,
+      "cyclomatic_threshold": 15,
+      "cognitive_threshold": 20
+    },
+    "python": {
+      "enabled": true,
+      "cyclomatic_threshold": 12,
+      "cognitive_threshold": 15
+    },
+    "javascript": {
+      "enabled": true,
+      "cyclomatic_threshold": 10,
+      "cognitive_threshold": 15
+    },
+    "typescript": {
+      "enabled": true,
+      "cyclomatic_threshold": 10,
+      "cognitive_threshold": 15
+    },
+    "java": {
+      "enabled": true,
+      "cyclomatic_threshold": 15,
+      "cognitive_threshold": 20
+    },
+    "go": {
+      "enabled": true,
+      "cyclomatic_threshold": 10,
+      "cognitive_threshold": 15
+    }
+  },
+  "reporting": {
+    "max_functions_to_display": 20,
+    "include_metrics": [
+      "cyclomatic",
+      "cognitive",
+      "lines_of_code",
+      "halstead_volume",
+      "halstead_difficulty",
+      "maintainability_index"
+    ],
+    "sort_by": "cognitive",
+    "sort_order": "desc"
+  },
+  "pr_policies": {
+    "block_merge_conditions": {
+      "any_function_exceeds_double_cognitive_threshold": true,
+      "high_complexity_functions_count_exceeds": 5,
+      "average_cognitive_complexity_exceeds": 25
+    },
+    "warning_conditions": {
+      "any_function_exceeds_cognitive_threshold": true,
+      "high_complexity_functions_count_exceeds": 3,
+      "average_cognitive_complexity_exceeds": 15
+    }
+  }
+}
