@@ -349,7 +349,7 @@ if ! rpm -q amazon-cloudwatch-agent &>/dev/null; then
     else
         CW_ARCH="amd64"
     fi
-    wget -q https://s3.amazonaws.com/amazoncloudwatch-agent/amazon_linux/${CW_ARCH}/latest/amazon-cloudwatch-agent.rpm
+    wget -q https://s3.amazonaws.com/amazoncloudwatch-agent/amazon_linux/\${CW_ARCH}/latest/amazon-cloudwatch-agent.rpm
     sudo rpm -U ./amazon-cloudwatch-agent.rpm || echo "CloudWatch agent installation skipped"
     rm -f ./amazon-cloudwatch-agent.rpm
 fi
