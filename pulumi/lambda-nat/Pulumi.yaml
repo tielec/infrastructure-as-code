@@ -1,0 +1,3 @@
+name: lambda-nat
+runtime: nodejs
+description: Lambda API NAT Infrastructure - NAT Gateway or Instance based on environment
