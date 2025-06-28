@@ -2,7 +2,8 @@
  * pulumi/lambda-network/index.ts
  * 
  * Lambda APIインフラのネットワークリソースを構築するPulumiスクリプト
- * VPC、サブネット、ルートテーブル、VPCエンドポイントを作成
+ * VPC、サブネット、ルートテーブルを作成
+ * VPCエンドポイントは lambda-vpce スタックに移動
  */
 import * as pulumi from "@pulumi/pulumi";
 import * as aws from "@pulumi/aws";
@@ -13,12 +14,6 @@ interface NetworkConfig {
     vpcCidr: string;
     enableFlowLogs?: boolean;
     createIsolatedSubnets?: boolean;  // Phase 2で true
-    vpcEndpoints: {
-        s3: boolean;
-        dynamodb?: boolean;
-        secretsManager?: boolean;
-        kms?: boolean;
-    };
 }
 
 // コンフィグから設定を取得
@@ -30,12 +25,6 @@ const environment = pulumi.getStack();
 // Phase 1/2 の判定
 const createIsolatedSubnets = config.getBoolean("createIsolatedSubnets") || false;
 const enableFlowLogs = config.getBoolean("enableFlowLogs") || false;
-
-// VPCエンドポイント設定
-const enableS3Endpoint = config.getBoolean("enableS3Endpoint") !== false; // デフォルトtrue
-const enableDynamoDBEndpoint = config.getBoolean("enableDynamoDBEndpoint") || false;
-const enableSecretsManagerEndpoint = config.getBoolean("enableSecretsManagerEndpoint") || false;
-const enableKMSEndpoint = config.getBoolean("enableKMSEndpoint") || false;
 
 // VPC作成
 const vpc = new aws.ec2.Vpc(`${projectName}-vpc`, {
@@ -231,86 +220,6 @@ const privateRtAssociationB = new aws.ec2.RouteTableAssociation(`${projectName}-
     routeTableId: privateRouteTableB.id,
 });
 
-// ===== VPC Endpoints =====
-// S3エンドポイント（Phase 1で必須）
-let s3Endpoint: aws.ec2.VpcEndpoint | undefined;
-if (enableS3Endpoint) {
-    s3Endpoint = new aws.ec2.VpcEndpoint(`${projectName}-vpce-s3`, {
-        vpcId: vpc.id,
-        serviceName: pulumi.interpolate`com.amazonaws.${aws.config.region}.s3`,
-        routeTableIds: [
-            privateRouteTableA.id,
-            privateRouteTableB.id,
-            ...(isolatedRouteTableA ? [isolatedRouteTableA.id] : []),
-            ...(isolatedRouteTableB ? [isolatedRouteTableB.id] : []),
-        ],
-        policy: JSON.stringify({
-            Version: "2012-10-17",
-            Statement: [{
-                Effect: "Allow",
-                Principal: "*",
-                Action: "*",
-                Resource: "*",
-            }],
-        }),
-        tags: {
-            Name: `${projectName}-vpce-s3-${environment}`,
-            Environment: environment,
-        },
-    });
-}
-
-// DynamoDBエンドポイント（Phase 2）
-let dynamodbEndpoint: aws.ec2.VpcEndpoint | undefined;
-if (enableDynamoDBEndpoint) {
-    dynamodbEndpoint = new aws.ec2.VpcEndpoint(`${projectName}-vpce-dynamodb`, {
-        vpcId: vpc.id,
-        serviceName: pulumi.interpolate`com.amazonaws.${aws.config.region}.dynamodb`,
-        routeTableIds: [
-            privateRouteTableA.id,
-            privateRouteTableB.id,
-            ...(isolatedRouteTableA ? [isolatedRouteTableA.id] : []),
-            ...(isolatedRouteTableB ? [isolatedRouteTableB.id] : []),
-        ],
-        tags: {
-            Name: `${projectName}-vpce-dynamodb-${environment}`,
-            Environment: environment,
-        },
-    });
-}
-
-// Secrets Managerエンドポイント（本番環境推奨）
-let secretsManagerEndpoint: aws.ec2.VpcEndpoint | undefined;
-if (enableSecretsManagerEndpoint) {
-    secretsManagerEndpoint = new aws.ec2.VpcEndpoint(`${projectName}-vpce-secretsmanager`, {
-        vpcId: vpc.id,
-        serviceName: pulumi.interpolate`com.amazonaws.${aws.config.region}.secretsmanager`,
-        vpcEndpointType: "Interface",
-        subnetIds: [privateSubnetA.id, privateSubnetB.id],
-        privateDnsEnabled: true,
-        tags: {
-            Name: `${projectName}-vpce-secretsmanager-${environment}`,
-            Environment: environment,
-        },
-    });
-}
-
-// KMSエンドポイント（本番環境推奨）
-let kmsEndpoint: aws.ec2.VpcEndpoint | undefined;
-if (enableKMSEndpoint) {
-    kmsEndpoint = new aws.ec2.VpcEndpoint(`${projectName}-vpce-kms`, {
-        vpcId: vpc.id,
-        serviceName: pulumi.interpolate`com.amazonaws.${aws.config.region}.kms`,
-        vpcEndpointType: "Interface",
-        subnetIds: [privateSubnetA.id, privateSubnetB.id],
-        privateDnsEnabled: true,
-        tags: {
-            Name: `${projectName}-vpce-kms-${environment}`,
-            Environment: environment,
-        },
-    });
-}
-
 // ===== VPC Flow Logs (オプション) =====
 let flowLogGroup: aws.cloudwatch.LogGroup | undefined;
 let flowLog: aws.ec2.FlowLog | undefined;
@@ -401,12 +310,6 @@ export const isolatedSubnetBId = isolatedSubnetB?.id;
 export const isolatedRouteTableAId = isolatedRouteTableA?.id;
 export const isolatedRouteTableBId = isolatedRouteTableB?.id;
 
-// VPCエンドポイントのエクスポート
-export const s3EndpointId = s3Endpoint?.id;
-export const dynamodbEndpointId = dynamodbEndpoint?.id;
-export const secretsManagerEndpointId = secretsManagerEndpoint?.id;
-export const kmsEndpointId = kmsEndpoint?.id;
-
 // Flow LogsのエクスポートID
 export const flowLogId = flowLog?.id;
 export const flowLogGroupName = flowLogGroup?.name;
@@ -417,11 +320,55 @@ export const networkConfig = {
     environment: environment,
     vpcCidr: vpcCidrBlock,
     phase2Enabled: createIsolatedSubnets,
-    vpcEndpoints: {
-        s3: enableS3Endpoint,
-        dynamodb: enableDynamoDBEndpoint,
-        secretsManager: enableSecretsManagerEndpoint,
-        kms: enableKMSEndpoint,
-    },
     flowLogsEnabled: enableFlowLogs,
 };
+
+// SSMパラメータに設定を保存
+const networkConfigParameter = new aws.ssm.Parameter(`${projectName}-network-config`, {
+    name: `/${projectName}/${environment}/network/config`,
+    type: "String",
+    value: JSON.stringify({
+        vpc: {
+            id: vpc.id,
+            cidr: vpcCidrBlock,
+        },
+        subnets: {
+            public: {
+                a: publicSubnetA.id,
+                b: publicSubnetB.id,
+            },
+            private: {
+                a: privateSubnetA.id,
+                b: privateSubnetB.id,
+            },
+            isolated: createIsolatedSubnets ? {
+                a: isolatedSubnetA?.id,
+                b: isolatedSubnetB?.id,
+            } : undefined,
+        },
+        routeTables: {
+            public: publicRouteTable.id,
+            private: {
+                a: privateRouteTableA.id,
+                b: privateRouteTableB.id,
+            },
+            isolated: createIsolatedSubnets ? {
+                a: isolatedRouteTableA?.id,
+                b: isolatedRouteTableB?.id,
+            } : undefined,
+        },
+        internetGateway: igw.id,
+        phase2Enabled: createIsolatedSubnets,
+        flowLogsEnabled: enableFlowLogs,
+        deployment: {
+            environment: environment,
+            lastUpdated: new Date().toISOString(),
+        },
+    }),
+    description: "Network configuration for Lambda API infrastructure",
+    tags: {
+        Environment: environment,
+    },
+});
+
+export const networkConfigParameterName = networkConfigParameter.name;
