@@ -1,0 +1,3 @@
+name: lambda-functions
+runtime: nodejs
+description: Lambda API Functions Infrastructure - Lambda functions, Layers, IAM roles, and DLQ
