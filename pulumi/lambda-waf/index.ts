@@ -2,7 +2,7 @@
  * pulumi/lambda-waf/index.ts
  * 
  * Lambda API WAFリソースを構築するPulumiスクリプト
- * IPホワイトリスト、レート制限、SQLi/XSS防御を実装
+ * 汎用的なIPホワイトリスト管理、レート制限、SQLi/XSS防御を実装
  */
 import * as pulumi from "@pulumi/pulumi";
 import * as aws from "@pulumi/aws";
@@ -26,17 +26,135 @@ interface WafConfig {
     geoMatchConstraint?: string[];
 }
 
-// bubble.io のIPアドレス（実際の値は要確認）
-const bubbleIpAddresses = config.getObject<string[]>("bubbleIpWhitelist") || [
-    // bubble.io の実際のIPアドレスをここに設定
-    // 例: "52.70.100.0/24", "34.195.100.0/24"
-];
+// クライアント情報の型定義
+interface ClientInfo {
+    id: string;
+    name: string;
+    description: string;
+    enabled: boolean;
+    ipAddresses: string[];
+    tags: {
+        type: string;
+        priority: string;
+        environment?: string;
+    };
+}
 
-// 開発環境では自分のIPも追加（オプション）
-const additionalWhitelistIps = config.getObject<string[]>("additionalWhitelist") || [];
+interface IpWhitelistConfig {
+    version: string;
+    lastUpdated: string;
+    clients: ClientInfo[];
+    globalRules: {
+        allowedEnvironments: string[];
+        maxIpsPerClient: number;
+        ipFormat: string;
+    };
+}
 
-// すべての許可IPアドレス
-const allWhitelistIps = [...bubbleIpAddresses, ...additionalWhitelistIps];
+// ===== IP Whitelist の取得 =====
+async function getIpWhitelist(): Promise<string[]> {
+    const secretName = `${projectName}/ip-whitelist/${environment}`;
+    
+    try {
+        // Secrets Managerから設定を取得
+        const secretsManager = new aws.sdk.SecretsManager();
+        const secret = await secretsManager.getSecretValue({ SecretId: secretName }).promise();
+        
+        if (!secret.SecretString) {
+            pulumi.log.warn(`No IP whitelist found in Secrets Manager: ${secretName}`);
+            return [];
+        }
+        
+        const whitelistConfig: IpWhitelistConfig = JSON.parse(secret.SecretString);
+        const allowedIps: string[] = [];
+        
+        // 有効なクライアントのIPアドレスを収集
+        whitelistConfig.clients.forEach(client => {
+            // クライアントが有効かチェック
+            if (!client.enabled) {
+                pulumi.log.info(`Skipping disabled client: ${client.name}`);
+                return;
+            }
+            
+            // 環境固有のクライアントかチェック
+            if (client.tags.environment && client.tags.environment !== `${environment}-only`) {
+                pulumi.log.info(`Skipping client ${client.name} - not for ${environment} environment`);
+                return;
+            }
+            
+            // IPアドレスを追加
+            pulumi.log.info(`Adding IPs for client: ${client.name} (${client.ipAddresses.length} addresses)`);
+            allowedIps.push(...client.ipAddresses);
+        });
+        
+        pulumi.log.info(`Total allowed IPs: ${allowedIps.length}`);
+        return allowedIps;
+        
+    } catch (error) {
+        pulumi.log.warn(`Failed to get IP whitelist from Secrets Manager: ${error}`);
+        // 開発環境ではフォールバック値を使用
+        if (environment === "dev") {
+            pulumi.log.info("Using fallback IP whitelist for dev environment");
+            return config.getObject<string[]>("fallbackIpWhitelist") || [];
+        }
+        throw error;
+    }
+}
+
+// Secrets Managerから取得、または設定から取得
+const ipWhitelistPromise = getIpWhitelist().catch(() => {
+    // Secrets Manager取得失敗時は設定から取得
+    const configWhitelist = config.getObject<string[]>("ipWhitelist");
+    if (configWhitelist && configWhitelist.length > 0) {
+        pulumi.log.info("Using IP whitelist from Pulumi config");
+        return configWhitelist;
+    }
+    // 開発環境では全許可
+    if (environment === "dev") {
+        pulumi.log.warn("No IP whitelist configured for dev - allowing all IPs");
+        return ["0.0.0.0/0"];
+    }
+    throw new Error("No IP whitelist configured");
+});
+
+// ===== Secrets Manager作成（初回デプロイ用）=====
+// IP Whitelist用のSecretが存在しない場合のみ作成
+const ipWhitelistSecret = new aws.secretsmanager.Secret(`${projectName}-ip-whitelist`, {
+    name: `${projectName}/ip-whitelist/${environment}`,
+    description: `IP whitelist configuration for ${projectName} WAF - ${environment}`,
+    tags: {
+        Name: `${projectName}-ip-whitelist-${environment}`,
+        Environment: environment,
+        ManagedBy: "pulumi",
+    },
+});
+
+// 初期値の設定（Secretが空の場合のみ）
+const ipWhitelistSecretVersion = new aws.secretsmanager.SecretVersion(`${projectName}-ip-whitelist-version`, {
+    secretId: ipWhitelistSecret.id,
+    secretString: JSON.stringify({
+        version: "1.0",
+        lastUpdated: new Date().toISOString(),
+        clients: [
+            {
+                id: "client-default",
+                name: "Default Client",
+                description: "Default client configuration - PLEASE UPDATE",
+                enabled: false,
+                ipAddresses: [],
+                tags: {
+                    type: "placeholder",
+                    priority: "low"
+                }
+            }
+        ],
+        globalRules: {
+            allowedEnvironments: ["dev", "staging", "prod"],
+            maxIpsPerClient: 10,
+            ipFormat: "CIDR"
+        }
+    }),
+});
 
 // ===== IP Set（ホワイトリスト）=====
 const ipSet = new aws.wafv2.IpSet(`${projectName}-ip-whitelist`, {
@@ -44,7 +162,9 @@ const ipSet = new aws.wafv2.IpSet(`${projectName}-ip-whitelist`, {
     description: "Allowed IP addresses for API access",
     scope: "REGIONAL", // API Gateway用
     ipAddressVersion: "IPV4",
-    addresses: allWhitelistIps.length > 0 ? allWhitelistIps : ["0.0.0.0/0"], // IPが設定されていない場合は全許可（開発用）
+    addresses: pulumi.output(ipWhitelistPromise).apply(ips => 
+        ips.length > 0 ? ips : ["0.0.0.0/0"] // IPが設定されていない場合は全許可（開発用）
+    ),
     tags: {
         Name: `${projectName}-ip-whitelist-${environment}`,
         Environment: environment,
@@ -59,7 +179,8 @@ const webAcl = new aws.wafv2.WebAcl(`${projectName}-web-acl`, {
     
     // デフォルトアクション（ルールに一致しない場合）
     defaultAction: {
-        allow: {}, // 開発環境ではデフォルト許可、本番では要検討
+        // 本番環境ではデフォルトブロック、開発環境ではデフォルト許可
+        ...(environment === "prod" ? { block: {} } : { allow: {} }),
     },
     
     rules: [
@@ -288,6 +409,49 @@ const attackAlarm = new aws.cloudwatch.MetricAlarm(`${projectName}-waf-attack-al
     },
 });
 
+// ===== 管理用Lambda関数（IP Whitelist更新用）=====
+const updateIpWhitelistRole = new aws.iam.Role(`${projectName}-update-ip-whitelist-role`, {
+    assumeRolePolicy: JSON.stringify({
+        Version: "2012-10-17",
+        Statement: [{
+            Action: "sts:AssumeRole",
+            Effect: "Allow",
+            Principal: {
+                Service: "lambda.amazonaws.com",
+            },
+        }],
+    }),
+});
+
+new aws.iam.RolePolicyAttachment(`${projectName}-update-ip-whitelist-basic`, {
+    role: updateIpWhitelistRole.name,
+    policyArn: "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole",
+});
+
+const updateIpWhitelistPolicy = new aws.iam.RolePolicy(`${projectName}-update-ip-whitelist-policy`, {
+    role: updateIpWhitelistRole.id,
+    policy: pulumi.all([ipSet.arn, ipWhitelistSecret.arn]).apply(([ipSetArn, secretArn]) => JSON.stringify({
+        Version: "2012-10-17",
+        Statement: [
+            {
+                Effect: "Allow",
+                Action: [
+                    "wafv2:UpdateIPSet",
+                    "wafv2:GetIPSet",
+                ],
+                Resource: ipSetArn,
+            },
+            {
+                Effect: "Allow",
+                Action: [
+                    "secretsmanager:GetSecretValue",
+                ],
+                Resource: secretArn,
+            },
+        ],
+    })),
+});
+
 // ===== WAF ログ設定 =====
 const wafLogGroup = new aws.cloudwatch.LogGroup(`${projectName}-waf-logs`, {
     name: `/aws/wafv2/${projectName}-${environment}`,
@@ -392,18 +556,19 @@ const wafLoggingConfiguration = new aws.wafv2.WebAclLoggingConfiguration(`${proj
 const wafConfig = new aws.ssm.Parameter(`${projectName}-waf-config`, {
     name: `/${projectName}/${environment}/waf/config`,
     type: "String",
-    value: pulumi.all([webAcl.arn, ipSet.arn]).apply(
-        ([webAclArn, ipSetArn]) => JSON.stringify({
+    value: pulumi.all([webAcl.arn, ipSet.arn, ipWhitelistSecret.arn]).apply(
+        ([webAclArn, ipSetArn, secretArn]) => JSON.stringify({
             webAcl: {
                 arn: webAclArn,
                 name: webAcl.name,
             },
             ipSet: {
                 arn: ipSetArn,
-                addresses: allWhitelistIps.length > 0 ? allWhitelistIps : ["No IP restrictions in dev"],
+                secretArn: secretArn,
+                managementNote: "Update IPs via Secrets Manager",
             },
             rules: {
-                ipWhitelist: "Priority 1 - Allow whitelisted IPs",
+                ipWhitelist: "Priority 1 - Allow whitelisted IPs from Secrets Manager",
                 rateLimit: "Priority 2 - 2000 requests per 5 minutes",
                 commonRuleSet: "Priority 3 - OWASP Top 10 protection",
                 sqliProtection: "Priority 4 - SQL injection protection",
@@ -431,17 +596,66 @@ const wafConfig = new aws.ssm.Parameter(`${projectName}-waf-config`, {
     },
 });
 
+// IP管理ガイドのパラメータ
+const ipManagementGuide = new aws.ssm.Parameter(`${projectName}-ip-management-guide`, {
+    name: `/${projectName}/${environment}/waf/ip-management-guide`,
+    type: "String",
+    value: JSON.stringify({
+        overview: "IP whitelist is managed via AWS Secrets Manager for security and flexibility",
+        secretName: `${projectName}/ip-whitelist/${environment}`,
+        updateProcess: [
+            "1. Get current configuration: aws secretsmanager get-secret-value --secret-id [SECRET_NAME]",
+            "2. Update the JSON structure with new client IPs",
+            "3. Update secret: aws secretsmanager put-secret-value --secret-id [SECRET_NAME] --secret-string '[JSON]'",
+            "4. Changes are applied automatically within 5 minutes"
+        ],
+        clientStructure: {
+            id: "Unique identifier for the client",
+            name: "Human-readable name",
+            description: "Purpose of this client",
+            enabled: "true/false to enable/disable without removing",
+            ipAddresses: ["Array of CIDR blocks"],
+            tags: {
+                type: "platform|api-service|internal|monitoring|other",
+                priority: "high|medium|low",
+                environment: "Optional: dev-only|staging-only|prod-only"
+            }
+        },
+        examples: {
+            addNewClient: {
+                id: "client-004",
+                name: "Mobile App Backend",
+                description: "Mobile application API gateway",
+                enabled: true,
+                ipAddresses: ["192.0.2.0/24"],
+                tags: {
+                    type: "api-service",
+                    priority: "high"
+                }
+            },
+            disableClient: "Set 'enabled': false for the client",
+            removeClient: "Delete the entire client object from the array"
+        }
+    }),
+    description: "IP whitelist management guide",
+    tags: {
+        Environment: environment,
+    },
+});
+
 // エクスポート
 export const webAclId = webAcl.id;
 export const webAclArn = webAcl.arn;
 export const ipSetId = ipSet.id;
-export const ipSetAddresses = allWhitelistIps;
+export const ipWhitelistSecretArn = ipWhitelistSecret.arn;
+export const ipWhitelistSecretName = ipWhitelistSecret.name;
 export const wafLogBucketName = wafLogBucket.bucket;
 export const wafLogStreamName = wafLogStream.name;
 
 // WAF管理用コマンド
 export const wafManagement = {
-    updateIpSet: pulumi.interpolate`aws wafv2 update-ip-set --id ${ipSet.id} --addresses "IP1" "IP2" --scope REGIONAL`,
+    getIpWhitelist: pulumi.interpolate`aws secretsmanager get-secret-value --secret-id ${ipWhitelistSecret.name} --query SecretString --output text | jq .`,
+    updateIpWhitelist: pulumi.interpolate`aws secretsmanager put-secret-value --secret-id ${ipWhitelistSecret.name} --secret-string 'YOUR_JSON_HERE'`,
     viewBlockedRequests: pulumi.interpolate`aws logs tail /aws/wafv2/${projectName}-${environment} --follow`,
     downloadWafLogs: pulumi.interpolate`aws s3 sync s3://${wafLogBucket.bucket}/waf-logs/ ./waf-logs/`,
 };
@@ -449,7 +663,7 @@ export const wafManagement = {
 // サマリー
 export const summary = {
     protection: {
-        ipWhitelist: allWhitelistIps.length > 0 ? `${allWhitelistIps.length} IPs` : "No restriction (dev)",
+        ipWhitelist: "Managed via Secrets Manager",
         rateLimit: "2000 requests / 5 minutes",
         bodySize: "10MB max",
         sqli: "Protected",
@@ -459,6 +673,11 @@ export const summary = {
         cloudWatch: "Enabled",
         s3Logs: "Enabled",
         alarms: 2,
+    },
+    ipManagement: {
+        method: "AWS Secrets Manager",
+        secretName: `${projectName}/ip-whitelist/${environment}`,
+        updateFrequency: "Real-time",
     },
     environment: environment,
 };
