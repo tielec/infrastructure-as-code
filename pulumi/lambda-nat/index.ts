@@ -197,15 +197,43 @@ if (highAvailabilityMode) {
     });
 
     // NAT Instance用のユーザーデータスクリプトを外部ファイルから読み込み
-    const scriptPath = path.join(__dirname, '../../scripts/aws-nat-instance-setup.sh');
+    // パスを確実に解決
+    const scriptPath = path.resolve(__dirname, '..', '..', 'scripts', 'aws-nat-instance-setup.sh');
     let userDataTemplate: string;
     
     try {
-        userDataTemplate = fs.readFileSync(scriptPath, 'utf8');
-        pulumi.log.info(`Successfully loaded NAT instance setup script from: ${scriptPath}`);
+        // ファイルの存在確認
+        if (!fs.existsSync(scriptPath)) {
+            // 別の可能なパスを試す
+            const alternativePath = path.resolve(process.cwd(), 'scripts', 'aws-nat-instance-setup.sh');
+            if (fs.existsSync(alternativePath)) {
+                userDataTemplate = fs.readFileSync(alternativePath, 'utf8');
+                pulumi.log.info(`Successfully loaded NAT instance setup script from alternative path: ${alternativePath}`);
+            } else {
+                throw new Error(`Script not found at ${scriptPath} or ${alternativePath}`);
+            }
+        } else {
+            userDataTemplate = fs.readFileSync(scriptPath, 'utf8');
+            pulumi.log.info(`Successfully loaded NAT instance setup script from: ${scriptPath}`);
+        }
     } catch (error) {
-        pulumi.log.error(`Failed to read NAT instance setup script: ${error}`);
-        throw new Error(`Cannot read NAT instance setup script from ${scriptPath}`);
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        pulumi.log.error(`Failed to read NAT instance setup script`);
+        pulumi.log.error(`Attempted path: ${scriptPath}`);
+        pulumi.log.error(`Current directory: ${process.cwd()}`);
+        pulumi.log.error(`__dirname: ${__dirname}`);
+        pulumi.log.error(`Error: ${errorMessage}`);
+        
+        // より詳細なヘルプメッセージ
+        pulumi.log.error(`
+Please ensure the NAT instance setup script exists at one of these locations:
+1. ${scriptPath}
+2. ${path.resolve(process.cwd(), 'scripts', 'aws-nat-instance-setup.sh')}
+
+The script should be located in the 'scripts' directory relative to your project root.
+        `);
+        
+        throw new Error(`Cannot read NAT instance setup script: ${errorMessage}`);
     }
 
     // テンプレート変数を実際の値に置換

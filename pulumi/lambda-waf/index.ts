@@ -51,76 +51,12 @@ interface IpWhitelistConfig {
     };
 }
 
-// ===== IP Whitelist の取得 =====
-async function getIpWhitelist(): Promise<string[]> {
-    const secretName = `${projectName}/ip-whitelist/${environment}`;
-    
-    try {
-        // Secrets Managerから設定を取得
-        const secretsManager = new aws.sdk.SecretsManager();
-        const secret = await secretsManager.getSecretValue({ SecretId: secretName }).promise();
-        
-        if (!secret.SecretString) {
-            pulumi.log.warn(`No IP whitelist found in Secrets Manager: ${secretName}`);
-            return [];
-        }
-        
-        const whitelistConfig: IpWhitelistConfig = JSON.parse(secret.SecretString);
-        const allowedIps: string[] = [];
-        
-        // 有効なクライアントのIPアドレスを収集
-        whitelistConfig.clients.forEach(client => {
-            // クライアントが有効かチェック
-            if (!client.enabled) {
-                pulumi.log.info(`Skipping disabled client: ${client.name}`);
-                return;
-            }
-            
-            // 環境固有のクライアントかチェック
-            if (client.tags.environment && client.tags.environment !== `${environment}-only`) {
-                pulumi.log.info(`Skipping client ${client.name} - not for ${environment} environment`);
-                return;
-            }
-            
-            // IPアドレスを追加
-            pulumi.log.info(`Adding IPs for client: ${client.name} (${client.ipAddresses.length} addresses)`);
-            allowedIps.push(...client.ipAddresses);
-        });
-        
-        pulumi.log.info(`Total allowed IPs: ${allowedIps.length}`);
-        return allowedIps;
-        
-    } catch (error) {
-        pulumi.log.warn(`Failed to get IP whitelist from Secrets Manager: ${error}`);
-        // 開発環境ではフォールバック値を使用
-        if (environment === "dev") {
-            pulumi.log.info("Using fallback IP whitelist for dev environment");
-            return config.getObject<string[]>("fallbackIpWhitelist") || [];
-        }
-        throw error;
-    }
-}
+// ===== Secrets Manager Secret の作成（初回デプロイ対応）=====
+const secretName = `${projectName}/ip-whitelist/${environment}`;
 
-// Secrets Managerから取得、または設定から取得
-const ipWhitelistPromise = getIpWhitelist().catch(() => {
-    // Secrets Manager取得失敗時は設定から取得
-    const configWhitelist = config.getObject<string[]>("ipWhitelist");
-    if (configWhitelist && configWhitelist.length > 0) {
-        pulumi.log.info("Using IP whitelist from Pulumi config");
-        return configWhitelist;
-    }
-    // 開発環境では全許可
-    if (environment === "dev") {
-        pulumi.log.warn("No IP whitelist configured for dev - allowing all IPs");
-        return ["0.0.0.0/0"];
-    }
-    throw new Error("No IP whitelist configured");
-});
-
-// ===== Secrets Manager作成（初回デプロイ用）=====
-// IP Whitelist用のSecretが存在しない場合のみ作成
+// まずSecretの存在を確認し、なければ作成
 const ipWhitelistSecret = new aws.secretsmanager.Secret(`${projectName}-ip-whitelist`, {
-    name: `${projectName}/ip-whitelist/${environment}`,
+    name: secretName,
     description: `IP whitelist configuration for ${projectName} WAF - ${environment}`,
     tags: {
         Name: `${projectName}-ip-whitelist-${environment}`,
@@ -129,32 +65,120 @@ const ipWhitelistSecret = new aws.secretsmanager.Secret(`${projectName}-ip-white
     },
 });
 
-// 初期値の設定（Secretが空の場合のみ）
+// デフォルトの初期設定を作成
+const defaultWhitelistConfig: IpWhitelistConfig = {
+    version: "1.0",
+    lastUpdated: new Date().toISOString(),
+    clients: environment === "dev" ? [
+        {
+            id: "dev-default",
+            name: "Development Default Access",
+            description: "Default access for development - PLEASE UPDATE WITH ACTUAL IPs",
+            enabled: true,
+            ipAddresses: ["0.0.0.0/0"], // 開発環境では一時的に全許可
+            tags: {
+                type: "internal",
+                priority: "low",
+                environment: "dev-only"
+            }
+        }
+    ] : [],
+    globalRules: {
+        allowedEnvironments: ["dev", "staging", "prod"],
+        maxIpsPerClient: 10,
+        ipFormat: "CIDR"
+    }
+};
+
+// Secret Versionの作成（初期値を設定）
 const ipWhitelistSecretVersion = new aws.secretsmanager.SecretVersion(`${projectName}-ip-whitelist-version`, {
     secretId: ipWhitelistSecret.id,
-    secretString: JSON.stringify({
-        version: "1.0",
-        lastUpdated: new Date().toISOString(),
-        clients: [
-            {
-                id: "client-default",
-                name: "Default Client",
-                description: "Default client configuration - PLEASE UPDATE",
-                enabled: false,
-                ipAddresses: [],
-                tags: {
-                    type: "placeholder",
-                    priority: "low"
-                }
-            }
-        ],
-        globalRules: {
-            allowedEnvironments: ["dev", "staging", "prod"],
-            maxIpsPerClient: 10,
-            ipFormat: "CIDR"
-        }
-    }),
+    secretString: JSON.stringify(defaultWhitelistConfig),
+    // このバージョンは初期値なので、既存の値がある場合は上書きしない
+    lifecycle: {
+        ignoreChanges: ["secretString"], // 初回以降は手動更新を優先
+    },
 });
+
+// ===== IP Whitelist の取得（改善版）=====
+async function getIpWhitelist(): Promise<string[]> {
+    try {
+        // Secrets Manager SDKクライアントの作成
+        const secretsManager = new aws.sdk.SecretsManager();
+        
+        // 少し待機してSecretが作成されるのを待つ（初回デプロイ時）
+        await new Promise(resolve => setTimeout(resolve, 2000));
+        
+        try {
+            // Secretの値を取得
+            const result = await secretsManager.getSecretValue({ SecretId: secretName }).promise();
+            
+            if (result.SecretString) {
+                const whitelistConfig: IpWhitelistConfig = JSON.parse(result.SecretString);
+                const allowedIps: string[] = [];
+                
+                // 有効なクライアントのIPアドレスを収集
+                whitelistConfig.clients.forEach(client => {
+                    if (!client.enabled) {
+                        pulumi.log.info(`Skipping disabled client: ${client.name}`);
+                        return;
+                    }
+                    
+                    if (client.tags.environment && client.tags.environment !== `${environment}-only`) {
+                        pulumi.log.info(`Skipping client ${client.name} - not for ${environment} environment`);
+                        return;
+                    }
+                    
+                    pulumi.log.info(`Adding IPs for client: ${client.name} (${client.ipAddresses.length} addresses)`);
+                    allowedIps.push(...client.ipAddresses);
+                });
+                
+                pulumi.log.info(`Total allowed IPs from Secrets Manager: ${allowedIps.length}`);
+                return allowedIps.length > 0 ? allowedIps : getDefaultIps();
+            }
+        } catch (secretError: any) {
+            // Secretが見つからない、またはアクセスできない場合
+            if (secretError.code === 'ResourceNotFoundException') {
+                pulumi.log.warn(`Secret not found: ${secretName}. Using default configuration.`);
+                pulumi.log.info(`Run 'scripts/init-ip-whitelist.sh' or update the secret manually.`);
+            } else if (secretError.code === 'AccessDeniedException') {
+                pulumi.log.warn(`Access denied to secret: ${secretName}. Check IAM permissions.`);
+            } else {
+                pulumi.log.warn(`Error retrieving secret: ${secretError.message}`);
+            }
+        }
+        
+        // Secretが取得できない場合はデフォルト値を返す
+        return getDefaultIps();
+        
+    } catch (error) {
+        pulumi.log.error(`Unexpected error in getIpWhitelist: ${error}`);
+        return getDefaultIps();
+    }
+}
+
+// デフォルトIPの取得
+function getDefaultIps(): string[] {
+    // 環境別のデフォルト値
+    if (environment === "dev") {
+        pulumi.log.warn("Using default IP whitelist for development (0.0.0.0/0 - ALL IPs allowed)");
+        pulumi.log.warn("SECURITY WARNING: Please configure actual IP whitelist via Secrets Manager");
+        return ["0.0.0.0/0"];
+    }
+    
+    // Pulumi設定からフォールバックIPを取得
+    const fallbackIps = config.getObject<string[]>("fallbackIpWhitelist");
+    if (fallbackIps && fallbackIps.length > 0) {
+        pulumi.log.info(`Using fallback IP whitelist from Pulumi config: ${fallbackIps.length} IPs`);
+        return fallbackIps;
+    }
+    
+    // ステージング/本番で設定がない場合はエラー
+    throw new Error(`No IP whitelist configured for ${environment} environment. Please run 'scripts/init-ip-whitelist.sh' or configure fallbackIpWhitelist in Pulumi config.`);
+}
+
+// IP Whitelistの取得（非同期処理をPromiseとして扱う）
+const ipWhitelistPromise = getIpWhitelist();
 
 // ===== IP Set（ホワイトリスト）=====
 const ipSet = new aws.wafv2.IpSet(`${projectName}-ip-whitelist`, {
@@ -162,13 +186,14 @@ const ipSet = new aws.wafv2.IpSet(`${projectName}-ip-whitelist`, {
     description: "Allowed IP addresses for API access",
     scope: "REGIONAL", // API Gateway用
     ipAddressVersion: "IPV4",
-    addresses: pulumi.output(ipWhitelistPromise).apply(ips => 
-        ips.length > 0 ? ips : ["0.0.0.0/0"] // IPが設定されていない場合は全許可（開発用）
-    ),
+    addresses: pulumi.output(ipWhitelistPromise),
     tags: {
         Name: `${projectName}-ip-whitelist-${environment}`,
         Environment: environment,
     },
+}, {
+    // Secret作成後に実行されるよう依存関係を設定
+    dependsOn: [ipWhitelistSecretVersion],
 });
 
 // ===== Web ACL =====
@@ -602,7 +627,12 @@ const ipManagementGuide = new aws.ssm.Parameter(`${projectName}-ip-management-gu
     type: "String",
     value: JSON.stringify({
         overview: "IP whitelist is managed via AWS Secrets Manager for security and flexibility",
-        secretName: `${projectName}/ip-whitelist/${environment}`,
+        secretName: secretName,
+        initialSetup: [
+            "Option 1: Run 'scripts/init-ip-whitelist.sh' before deploying WAF stack",
+            "Option 2: Deploy WAF stack first (uses default config), then update the secret",
+            "Option 3: Set 'fallbackIpWhitelist' in Pulumi config"
+        ],
         updateProcess: [
             "1. Get current configuration: aws secretsmanager get-secret-value --secret-id [SECRET_NAME]",
             "2. Update the JSON structure with new client IPs",
@@ -635,6 +665,11 @@ const ipManagementGuide = new aws.ssm.Parameter(`${projectName}-ip-management-gu
             },
             disableClient: "Set 'enabled': false for the client",
             removeClient: "Delete the entire client object from the array"
+        },
+        securityNotes: {
+            dev: environment === "dev" ? "WARNING: Currently using 0.0.0.0/0 (all IPs). Update immediately!" : null,
+            production: "Always use specific IP ranges in production environments",
+            monitoring: "Check WAF logs regularly for blocked legitimate requests"
         }
     }),
     description: "IP whitelist management guide",
@@ -676,8 +711,12 @@ export const summary = {
     },
     ipManagement: {
         method: "AWS Secrets Manager",
-        secretName: `${projectName}/ip-whitelist/${environment}`,
+        secretName: secretName,
         updateFrequency: "Real-time",
+        defaultBehavior: environment === "dev" ? "Allow all (0.0.0.0/0)" : "Block all (configure required)",
     },
     environment: environment,
+    setupStatus: pulumi.output(ipWhitelistPromise).apply(ips => 
+        ips.includes("0.0.0.0/0") ? "Using default configuration - UPDATE REQUIRED" : "Configured"
+    ),
 };
