@@ -28,7 +28,7 @@
         cd {{ pulumi_path }}/lambda-api-gateway
         sudo -E /root/.pulumi/bin/pulumi config set aws:region {{ aws_region_name }}
         sudo -E /root/.pulumi/bin/pulumi config set {{ api_gateway_project_name }}:projectName {{ project_name }}
-        sudo -E /root/.pulumi/bin/pulumi config set {{ api_gateway_project_name }}:functionsStackName {{ functions_project_name }}.{{ env_name }}
+        sudo -E /root/.pulumi/bin/pulumi config set {{ api_gateway_project_name }}:functionsStackName {{ functions_project_name }}
         sudo -E /root/.pulumi/bin/pulumi config set {{ api_gateway_project_name }}:rateLimit {{ api_rate_limit | string }}
         sudo -E /root/.pulumi/bin/pulumi config set {{ api_gateway_project_name }}:stageName v1
       register: pulumi_config_result

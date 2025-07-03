@@ -28,8 +28,8 @@
         cd {{ pulumi_path }}/lambda-vpce
         sudo -E /root/.pulumi/bin/pulumi config set aws:region {{ aws_region_name }}
         sudo -E /root/.pulumi/bin/pulumi config set {{ vpce_project_name }}:projectName {{ project_name }}
-        sudo -E /root/.pulumi/bin/pulumi config set {{ vpce_project_name }}:networkStackName {{ network_project_name }}.{{ env_name }}
-        sudo -E /root/.pulumi/bin/pulumi config set {{ vpce_project_name }}:securityStackName {{ security_project_name }}.{{ env_name }}
+        sudo -E /root/.pulumi/bin/pulumi config set {{ vpce_project_name }}:networkStackName {{ network_project_name }}
+        sudo -E /root/.pulumi/bin/pulumi config set {{ vpce_project_name }}:securityStackName {{ security_project_name }}
         
         # エンドポイント設定（オブジェクトパスとして設定）
         sudo -E /root/.pulumi/bin/pulumi config set --path {{ vpce_project_name }}:vpcEndpoints.s3 {{ ('s3' in vpc_endpoints) | string | lower }}

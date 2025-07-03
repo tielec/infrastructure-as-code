@@ -28,7 +28,7 @@
         cd {{ pulumi_path }}/lambda-security
         sudo -E /root/.pulumi/bin/pulumi config set aws:region {{ aws_region_name }}
         sudo -E /root/.pulumi/bin/pulumi config set {{ security_project_name }}:projectName {{ project_name }}
-        sudo -E /root/.pulumi/bin/pulumi config set {{ security_project_name }}:networkStackName {{ network_project_name }}.{{ env_name }}
+        sudo -E /root/.pulumi/bin/pulumi config set {{ security_project_name }}:networkStackName {{ network_project_name }}
         sudo -E /root/.pulumi/bin/pulumi config set {{ security_project_name }}:enableDatabaseSecurityGroups {{ enable_database | string | lower }}
       register: pulumi_config_result
       changed_when: pulumi_config_result.rc == 0

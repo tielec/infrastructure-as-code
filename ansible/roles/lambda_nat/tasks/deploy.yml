@@ -31,8 +31,8 @@
         cd {{ pulumi_path }}/lambda-nat
         sudo -E /root/.pulumi/bin/pulumi config set aws:region {{ aws_region_name }}
         sudo -E /root/.pulumi/bin/pulumi config set {{ nat_project_name }}:projectName {{ project_name }}
-        sudo -E /root/.pulumi/bin/pulumi config set {{ nat_project_name }}:networkStackName {{ network_project_name }}.{{ env_name }}
-        sudo -E /root/.pulumi/bin/pulumi config set {{ nat_project_name }}:securityStackName {{ security_project_name }}.{{ env_name }}
+        sudo -E /root/.pulumi/bin/pulumi config set {{ nat_project_name }}:networkStackName {{ network_project_name }}
+        sudo -E /root/.pulumi/bin/pulumi config set {{ nat_project_name }}:securityStackName {{ security_project_name }}
         sudo -E /root/.pulumi/bin/pulumi config set {{ nat_project_name }}:highAvailabilityMode {{ high_availability_mode | string | lower }}
         {% if not high_availability_mode %}
         sudo -E /root/.pulumi/bin/pulumi config set {{ nat_project_name }}:natInstanceType {{ nat_instance_type }}
