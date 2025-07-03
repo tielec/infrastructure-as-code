@@ -1,3 +1,4 @@
 name: jenkins-security
+organization: tielec
 runtime: nodejs
 description: Jenkins Security Groups Infrastructure
