@@ -1,0 +1,15 @@
+# lambda_api_gateway ロールのデフォルト変数
+
+# パスがプレイブックからの相対パスになるよう修正
+scripts_dir: "{{ playbook_dir }}/../../scripts"
+pulumi_path: "{{ playbook_dir }}/../../pulumi"
+
+# 環境名のデフォルト値
+env_name: "dev"
+
+# API Gateway設定のデフォルト値
+api_rate_limit: 1000
+stage_name: "v1"
+
+# プレビューモード
+preview_only: false
