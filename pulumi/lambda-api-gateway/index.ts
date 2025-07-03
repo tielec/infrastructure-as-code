@@ -74,6 +74,7 @@ const healthResponse = new aws.apigateway.IntegrationResponse(`${projectName}-he
             timestamp: "$context.requestTime",
         }),
     },
+}, {
     dependsOn: [healthIntegration],
 });
 
@@ -85,6 +86,7 @@ const healthMethodResponse = new aws.apigateway.MethodResponse(`${projectName}-h
     responseModels: {
         "application/json": "Empty",
     },
+}, {
     dependsOn: [healthMethod],
 });
 
@@ -130,6 +132,7 @@ const lambdaIntegration = new aws.apigateway.Integration(`${projectName}-lambda-
     type: "AWS_PROXY", // Lambda Proxy統合
     integrationHttpMethod: "POST",
     uri: pulumi.interpolate`arn:aws:apigateway:${aws.config.region}:lambda:path/2015-03-31/functions/${lambdaFunctionArn}/invocations`,
+}, {
     dependsOn: [lambdaPermission],
 });
 
@@ -157,6 +160,7 @@ const apiIntegration = new aws.apigateway.Integration(`${projectName}-api-integr
 // ===== API デプロイメント =====
 const deployment = new aws.apigateway.Deployment(`${projectName}-deployment`, {
     restApi: api.id,
+}, {
     // 依存関係を明示的に設定
     dependsOn: [
         healthMethod,
@@ -312,7 +316,7 @@ const apiConfig = new aws.ssm.Parameter(`${projectName}-api-config`, {
 });
 
 // APIキー情報を別のパラメータに保存（セキュリティのため）
-const apiKeyInfo = new aws.ssm.Parameter(`${projectName}-api-keys`, {
+const apiKeyInfoParam = new aws.ssm.Parameter(`${projectName}-api-keys`, {
     name: `/${projectName}/${environment}/api-gateway/keys`,
     type: "SecureString", // 暗号化
     value: pulumi.all([bubbleApiKey.value, externalApiKey.value]).apply(
@@ -344,7 +348,7 @@ export const apiEndpoints = {
     api: pulumi.interpolate`${stage.invokeUrl}api`,
 };
 
-// APIキー情報（値は出力しない）
+// APIキー情報（値は出力しない）- 名前を変更
 export const apiKeyInfo = {
     bubbleKeyId: bubbleApiKey.id,
     externalKeyId: externalApiKey.id,
