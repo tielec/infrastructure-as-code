@@ -1,0 +1,111 @@
+---
+# Lambda APIネットワークインフラのデプロイタスク
+
+- name: Display network deployment information
+  ansible.builtin.debug:
+    msg: |
+      Deploying Lambda API Network Infrastructure:
+      - Project: {{ project_name }}
+      - Network Pulumi Project: {{ network_project_name }}
+      - Environment: {{ env_name }}
+      - VPC CIDR: {{ lambda_api_infra.aws.vpc_cidr }}
+      - Create Isolated Subnets: {{ enable_isolated_subnets }}
+
+# ファイル権限設定
+- name: Ensure aws-env.sh has execute permissions
+  ansible.builtin.file:
+    path: "{{ scripts_dir }}/aws-env.sh"
+    mode: '0755'
+  register: aws_env_script_permission
+  no_log: true
+
+# Pulumiデプロイ
+- name: Deploy Network Infrastructure with Pulumi
+  block:
+    # Pulumiヘルパータスクを呼び出す
+    - name: Initialize network stack
+      ansible.builtin.include_role:
+        name: pulumi_helper
+        tasks_from: init_stack
+      vars:
+        pulumi_project_path: "{{ pulumi_path }}/lambda-network"
+        stack_name: "{{ env_name }}"
+    
+    - name: Configure network stack
+      ansible.builtin.shell: |
+        {{ scripts_dir }}/aws-env.sh
+        cd {{ pulumi_path }}/lambda-network
+        sudo -E /root/.pulumi/bin/pulumi config set aws:region {{ aws_region_name }}
+        sudo -E /root/.pulumi/bin/pulumi config set {{ network_project_name }}:projectName {{ project_name }}
+        sudo -E /root/.pulumi/bin/pulumi config set {{ network_project_name }}:vpcCidr {{ lambda_api_infra.aws.vpc_cidr }}
+        sudo -E /root/.pulumi/bin/pulumi config set {{ network_project_name }}:createIsolatedSubnets {{ enable_isolated_subnets | string | lower }}
+        sudo -E /root/.pulumi/bin/pulumi config set {{ network_project_name }}:enableFlowLogs {{ (env_name == 'prod') | string | lower }}
+      register: pulumi_config_result
+      changed_when: pulumi_config_result.rc == 0
+    
+    # Pulumiプレビュー
+    - name: Preview network deployment
+      ansible.builtin.include_role:
+        name: pulumi_helper
+        tasks_from: preview
+      vars:
+        pulumi_project_path: "{{ pulumi_path }}/lambda-network"
+      when: preview_only | default(false) | bool
+    
+    # Pulumiデプロイ
+    - name: Deploy network stack
+      ansible.builtin.include_role:
+        name: pulumi_helper
+        tasks_from: deploy
+      vars:
+        pulumi_project_path: "{{ pulumi_path }}/lambda-network"
+      when: not preview_only | default(false) | bool
+    
+    # ネットワーク情報の取得
+    - name: Get network outputs
+      ansible.builtin.shell: |
+        cd {{ pulumi_path }}/lambda-network
+        export PULUMI_ACCESS_TOKEN="{{ lookup('env', 'PULUMI_ACCESS_TOKEN') }}"
+        sudo -E /root/.pulumi/bin/pulumi stack output --json
+      register: network_outputs_raw
+      changed_when: false
+      when: not preview_only | default(false) | bool
+    
+    - name: Parse network outputs
+      ansible.builtin.set_fact:
+        network_outputs: "{{ network_outputs_raw.stdout | from_json }}"
+      when: 
+        - not preview_only | default(false) | bool
+        - network_outputs_raw.stdout is defined
+    
+    # デプロイ成功を示す変数設定
+    - name: Set network deployment status
+      ansible.builtin.set_fact:
+        network_deployed: true
+      when: not preview_only | default(false) | bool
+    
+    # ネットワーク情報の表示
+    - name: Display network deployment summary
+      ansible.builtin.debug:
+        msg: |
+          Network deployment successful:
+          - VPC ID: {{ network_outputs.vpcId | default('N/A') }}
+          - Public Subnets: {{ network_outputs.publicSubnetIds | default([]) | length }}
+          - Private Subnets: {{ network_outputs.privateSubnetIds | default([]) | length }}
+          - Isolated Subnets: {{ network_outputs.isolatedSubnetIds | default([]) | length }}
+      when: 
+        - network_deployed is defined and network_deployed
+        - network_outputs is defined
+  
+  rescue:
+    - name: Display error on network deployment
+      ansible.builtin.debug:
+        msg: "Failed to deploy Lambda API network infrastructure. See error details above."
+      
+    - name: Set network deployment failure
+      ansible.builtin.set_fact:
+        network_deployed: false
+      
+    - name: Fail the playbook
+      ansible.builtin.fail:
+        msg: "Lambda API network deployment failed."
