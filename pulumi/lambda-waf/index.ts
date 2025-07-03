@@ -7,6 +7,9 @@
 import * as pulumi from "@pulumi/pulumi";
 import * as aws from "@pulumi/aws";
 
+// Node.jsグローバル変数の型定義を確実にするため（VSCode対応）
+declare const process: NodeJS.Process;
+
 // コンフィグから設定を取得
 const config = new pulumi.Config();
 const projectName = config.get("projectName") || "lambda-api";

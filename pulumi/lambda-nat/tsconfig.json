@@ -12,8 +12,7 @@
         "noImplicitReturns": true,
         "forceConsistentCasingInFileNames": true,
         "types": ["node"],
-        "esModuleInterop": true,
-        "skipLibCheck": true
+        "lib": ["es2016"]
     },
     "files": [
         "index.ts"

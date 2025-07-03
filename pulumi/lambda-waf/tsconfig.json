@@ -10,7 +10,9 @@
         "pretty": true,
         "noFallthroughCasesInSwitch": true,
         "noImplicitReturns": true,
-        "forceConsistentCasingInFileNames": true
+        "forceConsistentCasingInFileNames": true,
+        "types": ["node"],
+        "lib": ["es2016"]
     },
     "files": [
         "index.ts"

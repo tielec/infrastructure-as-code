@@ -10,6 +10,10 @@ import * as aws from "@pulumi/aws";
 import * as fs from "fs";
 import * as path from "path";
 
+// Node.jsグローバル変数の型定義を確実にするため
+declare const __dirname: string;
+declare const process: NodeJS.Process;
+
 // 設計書に基づいたNatConfig interface
 interface NatConfig {
     projectName: string;
