@@ -1,0 +1,116 @@
+---
+# Lambda API NATインフラのデプロイタスク
+
+- name: Display NAT deployment information
+  ansible.builtin.debug:
+    msg: |
+      Deploying Lambda API NAT Infrastructure:
+      - Project: {{ project_name }}
+      - NAT Pulumi Project: {{ nat_project_name }}
+      - Environment: {{ env_name }}
+      - High Availability Mode: {{ high_availability_mode }}
+      {% if not high_availability_mode %}
+      - NAT Instance Type: {{ nat_instance_type }}
+      {% endif %}
+
+# Pulumiデプロイ
+- name: Deploy NAT Infrastructure with Pulumi
+  block:
+    # Pulumiヘルパータスクを呼び出す
+    - name: Initialize NAT stack
+      ansible.builtin.include_role:
+        name: pulumi_helper
+        tasks_from: init_stack
+      vars:
+        pulumi_project_path: "{{ pulumi_path }}/lambda-nat"
+        stack_name: "{{ env_name }}"
+    
+    - name: Configure NAT stack
+      ansible.builtin.shell: |
+        {{ scripts_dir }}/aws-env.sh
+        cd {{ pulumi_path }}/lambda-nat
+        sudo -E /root/.pulumi/bin/pulumi config set aws:region {{ aws_region_name }}
+        sudo -E /root/.pulumi/bin/pulumi config set {{ nat_project_name }}:projectName {{ project_name }}
+        sudo -E /root/.pulumi/bin/pulumi config set {{ nat_project_name }}:networkStackName {{ network_project_name }}.{{ env_name }}
+        sudo -E /root/.pulumi/bin/pulumi config set {{ nat_project_name }}:securityStackName {{ security_project_name }}.{{ env_name }}
+        sudo -E /root/.pulumi/bin/pulumi config set {{ nat_project_name }}:highAvailabilityMode {{ high_availability_mode | string | lower }}
+        {% if not high_availability_mode %}
+        sudo -E /root/.pulumi/bin/pulumi config set {{ nat_project_name }}:natInstanceType {{ nat_instance_type }}
+        {% endif %}
+        {% if key_name %}
+        sudo -E /root/.pulumi/bin/pulumi config set {{ nat_project_name }}:keyName {{ key_name }}
+        {% endif %}
+        sudo -E /root/.pulumi/bin/pulumi config set {{ nat_project_name }}:userDataScript scripts/aws-nat-instance-setup.sh
+      register: pulumi_config_result
+      changed_when: pulumi_config_result.rc == 0
+    
+    # Pulumiプレビュー
+    - name: Preview NAT deployment
+      ansible.builtin.include_role:
+        name: pulumi_helper
+        tasks_from: preview
+      vars:
+        pulumi_project_path: "{{ pulumi_path }}/lambda-nat"
+      when: preview_only | default(false) | bool
+    
+    # Pulumiデプロイ
+    - name: Deploy NAT stack
+      ansible.builtin.include_role:
+        name: pulumi_helper
+        tasks_from: deploy
+      vars:
+        pulumi_project_path: "{{ pulumi_path }}/lambda-nat"
+      when: not preview_only | default(false) | bool
+    
+    # NAT情報の取得
+    - name: Get NAT outputs
+      ansible.builtin.shell: |
+        cd {{ pulumi_path }}/lambda-nat
+        export PULUMI_ACCESS_TOKEN="{{ lookup('env', 'PULUMI_ACCESS_TOKEN') }}"
+        sudo -E /root/.pulumi/bin/pulumi stack output --json
+      register: nat_outputs_raw
+      changed_when: false
+      when: not preview_only | default(false) | bool
+    
+    - name: Parse NAT outputs
+      ansible.builtin.set_fact:
+        nat_outputs: "{{ nat_outputs_raw.stdout | from_json }}"
+      when: 
+        - not preview_only | default(false) | bool
+        - nat_outputs_raw.stdout is defined
+    
+    # デプロイ成功を示す変数設定
+    - name: Set NAT deployment status
+      ansible.builtin.set_fact:
+        nat_deployed: true
+        nat_type: "{{ 'NAT Gateway' if high_availability_mode else 'NAT Instance' }}"
+      when: not preview_only | default(false) | bool
+    
+    # NAT情報の表示
+    - name: Display NAT deployment summary
+      ansible.builtin.debug:
+        msg: |
+          NAT deployment successful:
+          - Type: {{ nat_type }}
+          {% if high_availability_mode %}
+          - NAT Gateway IDs: {{ nat_outputs.natGatewayIds | default([]) | join(', ') }}
+          {% else %}
+          - NAT Instance ID: {{ nat_outputs.natInstanceId | default('N/A') }}
+          - NAT Instance IP: {{ nat_outputs.natInstancePrivateIp | default('N/A') }}
+          {% endif %}
+      when: 
+        - nat_deployed is defined and nat_deployed
+        - nat_outputs is defined
+  
+  rescue:
+    - name: Display error on NAT deployment
+      ansible.builtin.debug:
+        msg: "Failed to deploy Lambda API NAT infrastructure. See error details above."
+      
+    - name: Set NAT deployment failure
+      ansible.builtin.set_fact:
+        nat_deployed: false
+      
+    - name: Fail the playbook
+      ansible.builtin.fail:
+        msg: "Lambda API NAT deployment failed."
