@@ -1,0 +1,32 @@
+# スタックの存在を確認する専用タスク
+# 入力: resolved_stack_name
+# 出力: stack_exists (true/false)
+
+- name: List all available stacks
+  ansible.builtin.shell: |
+    cd {{ pulumi_project_path }}
+    export PULUMI_ACCESS_TOKEN="{{ lookup('env', 'PULUMI_ACCESS_TOKEN') }}"
+    sudo -E {{ pulumi_bin_path }} stack ls --json 2>/dev/null || echo '[]'
+  register: stack_list
+  changed_when: false
+  when: not ansible_check_mode
+
+- name: Check if stack exists
+  ansible.builtin.set_fact:
+    stack_exists: >-
+      {{
+        stack_list.stdout | from_json | 
+        selectattr('name', 'search', stack_name + '$') | 
+        list | length > 0
+      }}
+  when: not ansible_check_mode
+
+- name: Set mock stack existence (check mode)
+  ansible.builtin.set_fact:
+    stack_exists: false
+  when: ansible_check_mode
+
+- name: Display stack existence check result
+  ansible.builtin.debug:
+    msg: "Stack '{{ resolved_stack_name }}' exists: {{ stack_exists }}"
+  when: ansible_verbosity > 0

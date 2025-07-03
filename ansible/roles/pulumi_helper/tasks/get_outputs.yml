@@ -2,55 +2,55 @@
 
 - name: Get stack outputs
   block:
-    - name: Run Pulumi stack output command
+    # スタックが選択されているか確認し、されていない場合は選択
+    - name: Ensure stack is selected
       ansible.builtin.shell: |
         cd {{ pulumi_project_path }}
         export PULUMI_ACCESS_TOKEN="{{ lookup('env', 'PULUMI_ACCESS_TOKEN') }}"
         
-        # スタックが選択されているか確認
-        sudo -E {{ pulumi_bin_path }} stack --show-name 2>/dev/null || {
-          echo "ERROR: No stack selected"
-          exit 1
-        }
+        # 現在のスタックを確認
+        if ! sudo -E {{ pulumi_bin_path }} stack --show-name >/dev/null 2>&1; then
+          # スタック名を解決してから選択
+          sudo -E {{ pulumi_bin_path }} stack select {{ stack_name }} 2>/dev/null || \
+          sudo -E {{ pulumi_bin_path }} stack select $(sudo -E {{ pulumi_bin_path }} stack ls --json | jq -r '.[].name | select(endswith("/{{ stack_name }}"))' | head -1)
+        fi
+      register: stack_ensure
+      changed_when: false
+      failed_when: false
+      when: not ansible_check_mode
+    
+    # スタック出力を取得
+    - name: Get stack output
+      ansible.builtin.shell: |
+        cd {{ pulumi_project_path }}
+        export PULUMI_ACCESS_TOKEN="{{ lookup('env', 'PULUMI_ACCESS_TOKEN') }}"
         
-        # 出力を取得
         if [ -n "{{ output_name | default('') }}" ]; then
-          # 特定の出力を取得
-          sudo -E {{ pulumi_bin_path }} stack output {{ output_name }} 2>&1
+          sudo -E {{ pulumi_bin_path }} stack output {{ output_name }}
         else
-          # すべての出力を取得
-          sudo -E {{ pulumi_bin_path }} stack output --json 2>&1
+          sudo -E {{ pulumi_bin_path }} stack output --json
         fi
       register: stack_output_result
       changed_when: false
       when: not ansible_check_mode
-  
-    - name: Display stack output debug info (verbose mode)
-      ansible.builtin.debug:
-        msg: |
-          Attempted to get output: {{ output_name | default('all') }}
-          Result: {{ 'Success' if stack_output_result.rc | default(0) == 0 else 'Failed' }}
-          Output: {{ stack_output_result.stdout | default('None') }}
-      when: not ansible_check_mode and ansible_verbosity > 1
       
-    - name: Set output retrieval status on success
+    - name: Set output success status
       ansible.builtin.set_fact:
         stack_output_succeeded: true
+        
   rescue:
-    - name: Set output failure status
-      ansible.builtin.set_fact:
-        stack_output_failed: true
-    
     - name: Handle output retrieval failure
       ansible.builtin.debug:
-        msg: "Failed to retrieve Pulumi stack outputs. Using mock value."
+        msg: "Failed to retrieve stack outputs. Using fallback value."
     
-    - name: Set fallback output value
+    - name: Set fallback output
       ansible.builtin.set_fact:
         stack_output_result:
           stdout: "{{ mock_output | default('mock-output-for-error') }}"
           rc: 1
+        stack_output_failed: true
 
+# チェックモード用のモック出力
 - name: Set mock outputs (check mode)
   ansible.builtin.set_fact:
     stack_output_result:
