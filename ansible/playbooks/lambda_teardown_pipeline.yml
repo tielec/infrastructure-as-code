@@ -1,8 +1,8 @@
 ---
-# lambda_destroy_pipeline.yml
+# lambda_teardown_pipeline.yml
 # Lambda API環境の削除を管理するプレイブック
 
-- name: Lambda API Infrastructure Destroy Pipeline
+- name: Lambda API Infrastructure Teardown Pipeline
   hosts: localhost
   connection: local
   gather_facts: yes
