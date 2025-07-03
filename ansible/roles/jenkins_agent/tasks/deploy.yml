@@ -79,6 +79,7 @@
         tasks_from: get_outputs
       vars:
         pulumi_project_path: "{{ pulumi_path }}/jenkins-network"
+        stack_name: "{{ env_name }}"
         output_name: "vpcId"
         mock_output: "mock-vpc-id-for-check-mode"
     
@@ -92,6 +93,7 @@
         tasks_from: get_outputs
       vars:
         pulumi_project_path: "{{ pulumi_path }}/jenkins-security"
+        stack_name: "{{ env_name }}"
         output_name: "jenkinsAgentSecurityGroupId"
         mock_output: "mock-agent-sg-id"
     
@@ -135,6 +137,7 @@
         tasks_from: get_outputs
       vars:
         pulumi_project_path: "{{ pulumi_path }}/jenkins-agent"
+        stack_name: "{{ env_name }}"
         output_name: "spotFleetRequestId"
         mock_output: "mock-spot-fleet-request-id"
     
@@ -148,6 +151,7 @@
         tasks_from: get_outputs
       vars:
         pulumi_project_path: "{{ pulumi_path }}/jenkins-agent"
+        stack_name: "{{ env_name }}"
         output_name: "launchTemplateId"
         mock_output: "mock-launch-template-id"
     

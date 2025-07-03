@@ -12,34 +12,59 @@
       changed_when: false
       when: not ansible_check_mode
     
-    # スタックが選択されていない場合、利用可能なスタックから選択
+    # スタックが選択されていない場合の処理
     - name: Select stack if not selected
       when:
         - not ansible_check_mode
         - current_stack_check.stdout == "NO_STACK_SELECTED"
       block:
-        - name: List available stacks
+        # stack_nameが指定されている場合は、それを使用
+        - name: Select specified stack
           ansible.builtin.shell: |
             cd {{ pulumi_project_path }}
             export PULUMI_ACCESS_TOKEN="{{ lookup('env', 'PULUMI_ACCESS_TOKEN') }}"
-            sudo -E {{ pulumi_bin_path }} stack ls --json 2>/dev/null || echo '[]'
-          register: available_stacks
-          changed_when: false
+            
+            # まず単純な名前で試す
+            if sudo -E {{ pulumi_bin_path }} stack select {{ stack_name }} 2>/dev/null; then
+              echo "Selected stack: {{ stack_name }}"
+            else
+              # 失敗したら、スタック名を含むものを検索
+              MATCHING_STACK=$(sudo -E {{ pulumi_bin_path }} stack ls --json | jq -r '.[].name | select(endswith("/{{ stack_name }}"))' | head -1)
+              if [ -n "$MATCHING_STACK" ]; then
+                sudo -E {{ pulumi_bin_path }} stack select "$MATCHING_STACK"
+                echo "Selected stack: $MATCHING_STACK"
+              else
+                echo "Stack {{ stack_name }} not found" >&2
+                exit 1
+              fi
+            fi
+          when: stack_name is defined
+          register: stack_selection_by_name
+          failed_when: false
         
-        - name: Select first available stack
+        # stack_nameが未指定の場合は、警告を出して最初のスタックを選択
+        - name: Select first available stack (fallback)
           ansible.builtin.shell: |
             cd {{ pulumi_project_path }}
             export PULUMI_ACCESS_TOKEN="{{ lookup('env', 'PULUMI_ACCESS_TOKEN') }}"
-            # 最初の利用可能なスタックを選択
-            FIRST_STACK=$(echo '{{ available_stacks.stdout }}' | jq -r '.[0].name // empty')
+            
+            echo "WARNING: No stack_name specified, selecting first available stack" >&2
+            
+            # 利用可能なスタックをリスト
+            STACKS=$(sudo -E {{ pulumi_bin_path }} stack ls --json)
+            FIRST_STACK=$(echo "$STACKS" | jq -r '.[0].name // empty')
+            
             if [ -n "$FIRST_STACK" ]; then
               sudo -E {{ pulumi_bin_path }} stack select "$FIRST_STACK"
+              echo "Selected first available stack: $FIRST_STACK"
             else
               echo "No stacks available" >&2
               exit 1
             fi
-          register: stack_selection
-          failed_when: false
+          when: 
+            - stack_name is not defined
+            - (stack_selection_by_name is not defined or stack_selection_by_name.rc | default(0) != 0)
+          register: stack_selection_fallback
     
     # スタック出力を取得
     - name: Get stack output
