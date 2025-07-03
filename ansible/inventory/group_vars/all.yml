@@ -10,7 +10,7 @@ infra:
   pulumi:
     network_project: "jenkins-network"
     security_project: "jenkins-security"
-    nat_project: "jenkins-nat"  # 追加
+    nat_project: "jenkins-nat"
     storage_project: "jenkins-storage"
     loadbalancer_project: "jenkins-loadbalancer"
     controller_project: "jenkins-controller"
@@ -24,7 +24,7 @@ infra:
     vpc_cidr: "10.0.0.0/16"
     key_name: ""  # EC2インスタンス用のキーペア名（必要に応じて設定）
 
-  # NAT設定（追加）
+  # NAT設定
   nat:
     # High Availability モード
     # true: NAT Gateway x2 (高可用性、月額約$90)
@@ -49,7 +49,66 @@ infra:
       name: "prod"
       domain: "jenkins.example.com"
 
-# Jenkinsコントローラー設定
+# Lambda API プロジェクト設定
+lambda_api_infra:
+  # メインのプロジェクト名
+  project_name: "lambda-api"
+  
+  # Pulumiプロジェクト名
+  pulumi:
+    network_project: "lambda-network"
+    security_project: "lambda-security"
+    vpce_project: "lambda-vpce"
+    nat_project: "lambda-nat"
+    functions_project: "lambda-functions"
+    api_gateway_project: "lambda-api-gateway"
+    waf_project: "lambda-waf"
+    websocket_project: "lambda-websocket"
+    database_project: "lambda-database"  # Phase 2用
+
+  # AWS設定
+  aws:
+    default_region: "ap-northeast-1"
+    vpc_cidr: "10.1.0.0/16"  # Jenkinsとは異なるCIDR
+    key_name: ""  # NAT Instance用（必要に応じて設定）
+
+  # NAT設定
+  nat:
+    # 環境別の設定は各環境のvarsファイルで上書き
+    high_availability_mode: false
+    instance_type: "t4g.nano"
+
+  # 環境設定
+  environments:
+    dev:
+      name: "dev"
+      nat_instance_type: "t4g.nano"
+      lambda_memory: 256
+      log_level: "DEBUG"
+      api_rate_limit: 1000
+      enable_vpc_endpoints:
+        - "s3"
+    staging:
+      name: "staging"
+      nat_instance_type: "t4g.micro"
+      lambda_memory: 256
+      log_level: "INFO"
+      api_rate_limit: 500
+      enable_vpc_endpoints:
+        - "s3"
+        - "secretsmanager"
+    prod:
+      name: "prod"
+      nat_high_availability: true
+      lambda_memory: 512
+      log_level: "ERROR"
+      api_rate_limit: 2000
+      enable_vpc_endpoints:
+        - "s3"
+        - "secretsmanager"
+        - "kms"
+
+# Jenkins設定
 jenkins:
   version: "latest"
   color: "blue"
@@ -58,4 +117,25 @@ jenkins:
   key_name: ""  # 必要に応じて設定
   git:
     repo: "https://github.com/tielec/infrastructure-as-code.git"
-    branch: "main"  # デフォルトのブランチ
+    branch: "main"
+
+# Lambda API設定
+lambda_api:
+  runtime: "nodejs18.x"
+  default_memory: 256
+  default_timeout: 30
+  log_retention_days:
+    dev: 3
+    staging: 7
+    prod: 14
+  # IP Whitelist設定
+  ip_whitelist:
+    secret_name_pattern: "lambda-api/ip-whitelist/{environment}"
+    rate_limit_per_5min: 2000
+    block_duration_seconds: 240
+  # DLQ設定
+  dlq:
+    max_retry_count: 3
+    visibility_timeout_multiplier: 6
+    retention_days: 14
+    handler_interval_minutes: 5

@@ -1,0 +1,203 @@
+---
+# lambda_destroy_pipeline.yml
+# Lambda API環境の削除を管理するプレイブック
+
+- name: Lambda API Infrastructure Destroy Pipeline
+  hosts: localhost
+  connection: local
+  gather_facts: yes
+  
+  vars:
+    # 環境名はコマンドラインから指定可能
+    env_name: "{{ env | default('dev') }}"
+    # パスを明示的に定義
+    scripts_dir: "{{ playbook_dir }}/../../scripts"
+    pulumi_path: "{{ playbook_dir }}/../../pulumi"
+    # スタック自体も削除するかどうか
+    remove_stacks: "{{ remove_stack | default(false) }}"
+  
+  pre_tasks:
+    # all.yml から変数を読み込む
+    - name: Include group_vars/all.yml
+      ansible.builtin.include_vars:
+        file: "{{ playbook_dir }}/../inventory/group_vars/all.yml"
+        
+    # 必要な変数を設定
+    - name: Set required variables from all.yml
+      ansible.builtin.set_fact:
+        project_name: "{{ lambda_api_infra.project_name }}"
+        aws_region_name: "{{ lambda_api_infra.aws.default_region }}"
+        network_project_name: "{{ lambda_api_infra.pulumi.network_project }}"
+        security_project_name: "{{ lambda_api_infra.pulumi.security_project }}"
+        vpce_project_name: "{{ lambda_api_infra.pulumi.vpce_project }}"
+        nat_project_name: "{{ lambda_api_infra.pulumi.nat_project }}"
+        functions_project_name: "{{ lambda_api_infra.pulumi.functions_project }}"
+        api_gateway_project_name: "{{ lambda_api_infra.pulumi.api_gateway_project }}"
+        waf_project_name: "{{ lambda_api_infra.pulumi.waf_project }}"
+        websocket_project_name: "{{ lambda_api_infra.pulumi.websocket_project }}"
+        database_project_name: "{{ lambda_api_infra.pulumi.database_project }}"
+
+  roles:
+    - aws_setup
+    - pulumi_helper
+    
+  tasks:
+    - name: Confirm destruction
+      ansible.builtin.pause:
+        prompt: |
+          ⚠️  WARNING: You are about to destroy Lambda API infrastructure!
+          
+          Environment: {{ env_name }}
+          Project: {{ project_name }}
+          Remove stacks after destruction: {{ remove_stacks }}
+          
+          This will destroy:
+          - WAF and IP whitelists
+          - API Gateway and endpoints
+          - WebSocket API (if exists)
+          - Lambda functions and layers
+          - VPC endpoints
+          - NAT infrastructure
+          - Security groups
+          - Network infrastructure
+          - Database resources (if exists)
+          
+          Type 'yes' to continue or 'no' to abort
+      register: confirm_destroy
+      
+    - name: Abort if not confirmed
+      ansible.builtin.fail:
+        msg: "Destruction aborted by user"
+      when: confirm_destroy.user_input | lower != 'yes'
+    
+    - name: Display destruction plan
+      ansible.builtin.debug:
+        msg: |
+          Lambda API Infrastructure Destruction Plan
+          ========================================
+          Project: {{ project_name }}
+          Environment: {{ env_name }}
+          AWS Region: {{ aws_region_name }}
+          
+          Destruction order (reverse of creation):
+          1. Database (if exists)
+          2. WebSocket API (if exists)
+          3. WAF
+          4. API Gateway
+          5. Lambda Functions
+          6. NAT Infrastructure
+          7. VPC Endpoints
+          8. Security Groups
+          9. Network Infrastructure
+    
+    # データベースの削除（存在する場合）
+    - name: Check if database stack exists
+      ansible.builtin.shell: |
+        cd {{ pulumi_path }}/lambda-database
+        export PULUMI_ACCESS_TOKEN="{{ lookup('env', 'PULUMI_ACCESS_TOKEN') }}"
+        sudo -E /root/.pulumi/bin/pulumi stack ls --json | jq -r '.[].name' | grep -E "(^|/){{ env_name }}$" || echo ""
+      register: database_stack_check
+      changed_when: false
+      failed_when: false
+    
+    - name: Destroy Database Infrastructure
+      ansible.builtin.include_role:
+        name: lambda_database
+      vars:
+        operation: "destroy"
+      when: 
+        - database_stack_check.stdout | trim != ""
+        - destroy_database | default(true) | bool
+    
+    # WebSocket APIの削除（存在する場合）
+    - name: Check if WebSocket stack exists
+      ansible.builtin.shell: |
+        cd {{ pulumi_path }}/lambda-websocket
+        export PULUMI_ACCESS_TOKEN="{{ lookup('env', 'PULUMI_ACCESS_TOKEN') }}"
+        sudo -E /root/.pulumi/bin/pulumi stack ls --json | jq -r '.[].name' | grep -E "(^|/){{ env_name }}$" || echo ""
+      register: websocket_stack_check
+      changed_when: false
+      failed_when: false
+    
+    - name: Destroy WebSocket API
+      ansible.builtin.include_role:
+        name: lambda_websocket
+      vars:
+        operation: "destroy"
+      when: 
+        - websocket_stack_check.stdout | trim != ""
+        - destroy_websocket | default(true) | bool
+    
+    # WAFの削除
+    - name: Destroy WAF
+      ansible.builtin.include_role:
+        name: lambda_waf
+      vars:
+        operation: "destroy"
+      when: destroy_waf | default(true) | bool
+    
+    # API Gatewayの削除
+    - name: Destroy API Gateway
+      ansible.builtin.include_role:
+        name: lambda_api_gateway
+      vars:
+        operation: "destroy"
+      when: destroy_api_gateway | default(true) | bool
+    
+    # Lambda関数の削除
+    - name: Destroy Lambda Functions
+      ansible.builtin.include_role:
+        name: lambda_functions
+      vars:
+        operation: "destroy"
+      when: destroy_functions | default(true) | bool
+    
+    # NATの削除
+    - name: Destroy NAT Infrastructure
+      ansible.builtin.include_role:
+        name: lambda_nat
+      vars:
+        operation: "destroy"
+      when: destroy_nat | default(true) | bool
+    
+    # VPCエンドポイントの削除
+    - name: Destroy VPC Endpoints
+      ansible.builtin.include_role:
+        name: lambda_vpce
+      vars:
+        operation: "destroy"
+      when: destroy_vpce | default(true) | bool
+    
+    # セキュリティグループの削除
+    - name: Destroy Security Groups
+      ansible.builtin.include_role:
+        name: lambda_security
+      vars:
+        operation: "destroy"
+      when: destroy_security | default(true) | bool
+    
+    # ネットワークの削除
+    - name: Destroy Network Infrastructure
+      ansible.builtin.include_role:
+        name: lambda_network
+      vars:
+        operation: "destroy"
+      when: destroy_network | default(true) | bool
+
+    # 削除結果サマリー
+    - name: Destruction Summary
+      ansible.builtin.debug:
+        msg: |
+          Lambda API Infrastructure Destruction Summary
+          ===========================================
+          Network: {{ network_destroyed | default(false) | ternary('Destroyed', 'Skipped/Failed') }}
+          Security: {{ security_destroyed | default(false) | ternary('Destroyed', 'Skipped/Failed') }}
+          VPC Endpoints: {{ vpce_destroyed | default(false) | ternary('Destroyed', 'Skipped/Failed') }}
+          NAT: {{ nat_destroyed | default(false) | ternary('Destroyed', 'Skipped/Failed') }}
+          Lambda Functions: {{ functions_destroyed | default(false) | ternary('Destroyed', 'Skipped/Failed') }}
+          API Gateway: {{ api_gateway_destroyed | default(false) | ternary('Destroyed', 'Skipped/Failed') }}
+          WAF: {{ waf_destroyed | default(false) | ternary('Destroyed', 'Skipped/Failed') }}
+          WebSocket API: {{ websocket_destroyed | default(false) | ternary('Destroyed', 'Skipped/Failed') }}
+          Database: {{ database_destroyed | default(false) | ternary('Destroyed', 'Skipped/Failed') }}
+          
+          Stacks removed: {{ remove_stacks }}
