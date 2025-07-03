@@ -42,9 +42,14 @@
     - pulumi_helper
     
   tasks:
-    - name: Confirm destruction
-      ansible.builtin.pause:
-        prompt: |
+    # 対話モードと非対話モードの処理
+    - name: Check if running interactively
+      ansible.builtin.set_fact:
+        is_interactive: "{{ ansible_connection == 'local' and lookup('env', 'CI') == '' and lookup('env', 'JENKINS_HOME') == '' }}"
+    
+    - name: Display destruction warning
+      ansible.builtin.debug:
+        msg: |
           ⚠️  WARNING: You are about to destroy Lambda API infrastructure!
           
           Environment: {{ env_name }}
@@ -61,14 +66,40 @@
           - Security groups
           - Network infrastructure
           - Database resources (if exists)
-          
-          Type 'yes' to continue or 'no' to abort
+    
+    # 対話モードの場合のみ確認
+    - name: Confirm destruction (interactive mode)
+      ansible.builtin.pause:
+        prompt: "Type 'yes' to continue or 'no' to abort"
       register: confirm_destroy
+      when: 
+        - is_interactive | bool
+        - force_destroy is not defined or not force_destroy | bool
       
-    - name: Abort if not confirmed
+    - name: Abort if not confirmed (interactive mode)
       ansible.builtin.fail:
         msg: "Destruction aborted by user"
-      when: confirm_destroy.user_input | lower != 'yes'
+      when: 
+        - is_interactive | bool
+        - force_destroy is not defined or not force_destroy | bool
+        - confirm_destroy.user_input | default('no') | lower != 'yes'
+    
+    # 非対話モードでforce_destroyが設定されていない場合は停止
+    - name: Check force_destroy in non-interactive mode
+      ansible.builtin.fail:
+        msg: |
+          Running in non-interactive mode (CI/Jenkins).
+          To destroy resources, you must explicitly set 'force_destroy=true'
+          Example: ansible-playbook lambda_destroy_pipeline.yml -e "env=dev force_destroy=true"
+      when:
+        - not is_interactive | bool
+        - force_destroy is not defined or not force_destroy | bool
+    
+    - name: Proceeding with destruction
+      ansible.builtin.debug:
+        msg: |
+          {{ '✅ Destruction confirmed by user' if is_interactive | bool else '✅ Force destroy enabled' }}
+          Proceeding with infrastructure destruction...
     
     - name: Display destruction plan
       ansible.builtin.debug:
