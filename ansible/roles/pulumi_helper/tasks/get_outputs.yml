@@ -2,8 +2,18 @@
 
 - name: Get stack outputs
   block:
+    # 開始ログ
+    - name: Display operation start
+      ansible.builtin.debug:
+        msg: |
+          ========== Pulumi Get Outputs Start ==========
+          Project Path: {{ pulumi_project_path }}
+          Requested Stack: {{ stack_name | default('not specified') }}
+          Output Name: {{ output_name | default('all outputs') }}
+          ==============================================
+    
     # スタックが選択されているか確認
-    - name: Check if stack is selected
+    - name: Check current stack selection
       ansible.builtin.shell: |
         cd {{ pulumi_project_path }}
         export PULUMI_ACCESS_TOKEN="{{ lookup('env', 'PULUMI_ACCESS_TOKEN') }}"
@@ -12,59 +22,114 @@
       changed_when: false
       when: not ansible_check_mode
     
+    - name: Display current stack status
+      ansible.builtin.debug:
+        msg: |
+          Current stack status: {{ current_stack_check.stdout }}
+          Stack selected: {{ 'Yes' if current_stack_check.stdout != 'NO_STACK_SELECTED' else 'No' }}
+    
     # スタックが選択されていない場合の処理
     - name: Select stack if not selected
       when:
         - not ansible_check_mode
         - current_stack_check.stdout == "NO_STACK_SELECTED"
       block:
-        # stack_nameが指定されている場合は、それを使用
-        - name: Select specified stack
-          ansible.builtin.shell: |
-            cd {{ pulumi_project_path }}
-            export PULUMI_ACCESS_TOKEN="{{ lookup('env', 'PULUMI_ACCESS_TOKEN') }}"
-            
-            # まず単純な名前で試す
-            if sudo -E {{ pulumi_bin_path }} stack select {{ stack_name }} 2>/dev/null; then
-              echo "Selected stack: {{ stack_name }}"
-            else
-              # 失敗したら、スタック名を含むものを検索
-              MATCHING_STACK=$(sudo -E {{ pulumi_bin_path }} stack ls --json | jq -r '.[].name | select(endswith("/{{ stack_name }}"))' | head -1)
-              if [ -n "$MATCHING_STACK" ]; then
-                sudo -E {{ pulumi_bin_path }} stack select "$MATCHING_STACK"
-                echo "Selected stack: $MATCHING_STACK"
-              else
-                echo "Stack {{ stack_name }} not found" >&2
-                exit 1
-              fi
-            fi
+        # stack_nameが指定されている場合
+        - name: Attempt to select specified stack
           when: stack_name is defined
-          register: stack_selection_by_name
-          failed_when: false
+          block:
+            - name: Display stack selection attempt
+              ansible.builtin.debug:
+                msg: "Attempting to select stack: {{ stack_name }}"
+            
+            - name: Select specified stack
+              ansible.builtin.shell: |
+                cd {{ pulumi_project_path }}
+                export PULUMI_ACCESS_TOKEN="{{ lookup('env', 'PULUMI_ACCESS_TOKEN') }}"
+                
+                # まず単純な名前で試す
+                if sudo -E {{ pulumi_bin_path }} stack select {{ stack_name }} 2>/dev/null; then
+                  echo "SELECTED: {{ stack_name }}"
+                else
+                  # 失敗したら、スタック名を含むものを検索
+                  echo "Simple name failed, searching for matching stacks..."
+                  MATCHING_STACK=$(sudo -E {{ pulumi_bin_path }} stack ls --json | jq -r '.[].name | select(endswith("/{{ stack_name }}"))' | head -1)
+                  if [ -n "$MATCHING_STACK" ]; then
+                    sudo -E {{ pulumi_bin_path }} stack select "$MATCHING_STACK"
+                    echo "SELECTED: $MATCHING_STACK"
+                  else
+                    echo "ERROR: Stack {{ stack_name }} not found"
+                    exit 1
+                  fi
+                fi
+              register: stack_selection_result
+              failed_when: false
+            
+            - name: Display stack selection result
+              ansible.builtin.debug:
+                msg: |
+                  Stack selection result: {{ stack_selection_result.stdout_lines | default(['No output']) | join('\n') }}
+                  Success: {{ 'Yes' if stack_selection_result.rc == 0 else 'No' }}
         
-        # stack_nameが未指定の場合は、警告を出して最初のスタックを選択
-        - name: Select first available stack (fallback)
-          ansible.builtin.shell: |
-            cd {{ pulumi_project_path }}
-            export PULUMI_ACCESS_TOKEN="{{ lookup('env', 'PULUMI_ACCESS_TOKEN') }}"
-            
-            echo "WARNING: No stack_name specified, selecting first available stack" >&2
-            
-            # 利用可能なスタックをリスト
-            STACKS=$(sudo -E {{ pulumi_bin_path }} stack ls --json)
-            FIRST_STACK=$(echo "$STACKS" | jq -r '.[0].name // empty')
-            
-            if [ -n "$FIRST_STACK" ]; then
-              sudo -E {{ pulumi_bin_path }} stack select "$FIRST_STACK"
-              echo "Selected first available stack: $FIRST_STACK"
-            else
-              echo "No stacks available" >&2
-              exit 1
-            fi
+        # stack_nameが未指定の場合（フォールバック）
+        - name: Fallback - Select first available stack
           when: 
-            - stack_name is not defined
-            - (stack_selection_by_name is not defined or stack_selection_by_name.rc | default(0) != 0)
-          register: stack_selection_fallback
+            - stack_name is not defined or (stack_selection_result is defined and stack_selection_result.rc != 0)
+          block:
+            - name: Display fallback warning
+              ansible.builtin.debug:
+                msg: |
+                  WARNING: No stack_name specified or selection failed.
+                  Will select the first available stack.
+            
+            - name: List all available stacks
+              ansible.builtin.shell: |
+                cd {{ pulumi_project_path }}
+                export PULUMI_ACCESS_TOKEN="{{ lookup('env', 'PULUMI_ACCESS_TOKEN') }}"
+                sudo -E {{ pulumi_bin_path }} stack ls --json 2>/dev/null || echo '[]'
+              register: available_stacks_list
+            
+            - name: Display available stacks
+              ansible.builtin.debug:
+                msg: |
+                  Available stacks:
+                  {{ available_stacks_list.stdout | from_json | map(attribute='name') | list | to_nice_yaml }}
+            
+            - name: Select first available stack
+              ansible.builtin.shell: |
+                cd {{ pulumi_project_path }}
+                export PULUMI_ACCESS_TOKEN="{{ lookup('env', 'PULUMI_ACCESS_TOKEN') }}"
+                
+                FIRST_STACK=$(echo '{{ available_stacks_list.stdout }}' | jq -r '.[0].name // empty')
+                if [ -n "$FIRST_STACK" ]; then
+                  sudo -E {{ pulumi_bin_path }} stack select "$FIRST_STACK"
+                  echo "SELECTED: $FIRST_STACK"
+                else
+                  echo "ERROR: No stacks available"
+                  exit 1
+                fi
+              register: fallback_selection_result
+            
+            - name: Display fallback selection result
+              ansible.builtin.debug:
+                msg: "Fallback selection: {{ fallback_selection_result.stdout }}"
+    
+    # 最終的に選択されたスタックを確認
+    - name: Verify final stack selection
+      ansible.builtin.shell: |
+        cd {{ pulumi_project_path }}
+        export PULUMI_ACCESS_TOKEN="{{ lookup('env', 'PULUMI_ACCESS_TOKEN') }}"
+        sudo -E {{ pulumi_bin_path }} stack --show-name
+      register: final_stack_check
+      changed_when: false
+      when: not ansible_check_mode
+    
+    - name: Display final stack
+      ansible.builtin.debug:
+        msg: |
+          ========== Stack Selection Complete ==========
+          Final selected stack: {{ final_stack_check.stdout | default('Unknown') }}
+          ==============================================
     
     # スタック出力を取得
     - name: Get stack output
@@ -72,30 +137,41 @@
         cd {{ pulumi_project_path }}
         export PULUMI_ACCESS_TOKEN="{{ lookup('env', 'PULUMI_ACCESS_TOKEN') }}"
         
-        # 再度スタックが選択されているか確認
-        if ! sudo -E {{ pulumi_bin_path }} stack --show-name >/dev/null 2>&1; then
-          echo "ERROR: No stack selected" >&2
-          exit 1
-        fi
-        
-        # 出力を取得
         if [ -n "{{ output_name | default('') }}" ]; then
+          echo "Fetching specific output: {{ output_name }}"
           sudo -E {{ pulumi_bin_path }} stack output {{ output_name }}
         else
+          echo "Fetching all outputs"
           sudo -E {{ pulumi_bin_path }} stack output --json
         fi
       register: stack_output_result
       changed_when: false
       when: not ansible_check_mode
+    
+    - name: Display output retrieval result
+      ansible.builtin.debug:
+        msg: |
+          ========== Output Retrieval Complete ==========
+          Requested: {{ output_name | default('all outputs') }}
+          Success: Yes
+          Result preview: {{ stack_output_result.stdout | truncate(200) }}
+          ==============================================
+      when: ansible_verbosity > 0
       
     - name: Set output success status
       ansible.builtin.set_fact:
         stack_output_succeeded: true
         
   rescue:
-    - name: Handle output retrieval failure
+    - name: Display error details
       ansible.builtin.debug:
-        msg: "Failed to retrieve stack outputs. Using fallback value."
+        msg: |
+          ========== Output Retrieval Failed ==========
+          Error: {{ ansible_failed_result.msg | default('Unknown error') }}
+          Project: {{ pulumi_project_path }}
+          Stack: {{ stack_name | default('not specified') }}
+          Using fallback value: {{ mock_output | default('mock-output-for-error') }}
+          =============================================
     
     - name: Set fallback output
       ansible.builtin.set_fact:
