@@ -2,22 +2,44 @@
 
 - name: Get stack outputs
   block:
-    # スタックが選択されているか確認し、されていない場合は選択
-    - name: Ensure stack is selected
+    # スタックが選択されているか確認
+    - name: Check if stack is selected
       ansible.builtin.shell: |
         cd {{ pulumi_project_path }}
         export PULUMI_ACCESS_TOKEN="{{ lookup('env', 'PULUMI_ACCESS_TOKEN') }}"
-        
-        # 現在のスタックを確認
-        if ! sudo -E {{ pulumi_bin_path }} stack --show-name >/dev/null 2>&1; then
-          # スタック名を解決してから選択
-          sudo -E {{ pulumi_bin_path }} stack select {{ stack_name }} 2>/dev/null || \
-          sudo -E {{ pulumi_bin_path }} stack select $(sudo -E {{ pulumi_bin_path }} stack ls --json | jq -r '.[].name | select(endswith("/{{ stack_name }}"))' | head -1)
-        fi
-      register: stack_ensure
+        sudo -E {{ pulumi_bin_path }} stack --show-name 2>/dev/null || echo "NO_STACK_SELECTED"
+      register: current_stack_check
       changed_when: false
-      failed_when: false
       when: not ansible_check_mode
+    
+    # スタックが選択されていない場合、利用可能なスタックから選択
+    - name: Select stack if not selected
+      when:
+        - not ansible_check_mode
+        - current_stack_check.stdout == "NO_STACK_SELECTED"
+      block:
+        - name: List available stacks
+          ansible.builtin.shell: |
+            cd {{ pulumi_project_path }}
+            export PULUMI_ACCESS_TOKEN="{{ lookup('env', 'PULUMI_ACCESS_TOKEN') }}"
+            sudo -E {{ pulumi_bin_path }} stack ls --json 2>/dev/null || echo '[]'
+          register: available_stacks
+          changed_when: false
+        
+        - name: Select first available stack
+          ansible.builtin.shell: |
+            cd {{ pulumi_project_path }}
+            export PULUMI_ACCESS_TOKEN="{{ lookup('env', 'PULUMI_ACCESS_TOKEN') }}"
+            # 最初の利用可能なスタックを選択
+            FIRST_STACK=$(echo '{{ available_stacks.stdout }}' | jq -r '.[0].name // empty')
+            if [ -n "$FIRST_STACK" ]; then
+              sudo -E {{ pulumi_bin_path }} stack select "$FIRST_STACK"
+            else
+              echo "No stacks available" >&2
+              exit 1
+            fi
+          register: stack_selection
+          failed_when: false
     
     # スタック出力を取得
     - name: Get stack output
@@ -25,6 +47,13 @@
         cd {{ pulumi_project_path }}
         export PULUMI_ACCESS_TOKEN="{{ lookup('env', 'PULUMI_ACCESS_TOKEN') }}"
         
+        # 再度スタックが選択されているか確認
+        if ! sudo -E {{ pulumi_bin_path }} stack --show-name >/dev/null 2>&1; then
+          echo "ERROR: No stack selected" >&2
+          exit 1
+        fi
+        
+        # 出力を取得
         if [ -n "{{ output_name | default('') }}" ]; then
           sudo -E {{ pulumi_bin_path }} stack output {{ output_name }}
         else
