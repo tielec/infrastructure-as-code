@@ -58,6 +58,24 @@
     - pulumi_helper
     
   tasks:
+    - name: Check for check mode
+      ansible.builtin.debug:
+        msg: |
+          ⚠️  WARNING: Check mode is not supported for Pulumi deployments.
+          Pulumi has its own preview functionality. Use one of these instead:
+          
+          1. For Ansible dry-run equivalent:
+             ansible-playbook playbooks/lambda_setup_pipeline.yml -e "env=dev preview_only=true"
+          
+          2. For Pulumi preview directly:
+             cd pulumi/lambda-network && pulumi preview
+      when: ansible_check_mode
+
+    - name: Fail if check mode
+      ansible.builtin.fail:
+        msg: "Check mode is not supported. Use 'preview_only=true' instead."
+      when: ansible_check_mode
+
     - name: Check scripts directory exists
       ansible.builtin.stat:
         path: "{{ scripts_dir }}"
@@ -140,7 +158,7 @@
       ansible.builtin.include_role:
         name: lambda_security
       when: 
-        - network_deployed is defined and network_deployed
+        - network_deployed is defined and (network_deployed or ansible_check_mode)
         - run_security | default(true) | bool
     
     # VPCエンドポイントのデプロイ
@@ -148,8 +166,8 @@
       ansible.builtin.include_role:
         name: lambda_vpce
       when: 
-        - network_deployed is defined and network_deployed
-        - security_deployed is defined and security_deployed
+        - network_deployed is defined and (network_deployed or ansible_check_mode)
+        - security_deployed is defined and (security_deployed or ansible_check_mode)
         - run_vpce | default(true) | bool
     
     # NATのデプロイ

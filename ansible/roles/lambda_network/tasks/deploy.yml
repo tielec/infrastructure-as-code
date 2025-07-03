@@ -19,6 +19,16 @@
   register: aws_env_script_permission
   no_log: true
 
+# checkモード時は早期終了
+- name: Skip deployment in check mode
+  ansible.builtin.debug:
+    msg: "Check mode is not supported for Pulumi deployments. Please run without --check."
+  when: ansible_check_mode
+
+- name: End play in check mode
+  ansible.builtin.meta: end_play
+  when: ansible_check_mode
+
 # Pulumiデプロイ
 - name: Deploy Network Infrastructure with Pulumi
   block:
@@ -77,12 +87,25 @@
       when: 
         - not preview_only | default(false) | bool
         - network_outputs_raw.stdout is defined
+        - network_outputs_raw.stdout | length > 0
     
     # デプロイ成功を示す変数設定
     - name: Set network deployment status
       ansible.builtin.set_fact:
         network_deployed: true
-      when: not preview_only | default(false) | bool
+      when: 
+        - not preview_only | default(false) | bool
+        - not ansible_check_mode
+    
+    # checkモード用のモック設定
+    - name: Set mock network deployment status (check mode)
+      ansible.builtin.set_fact:
+        network_deployed: false
+        network_outputs:
+          vpcId: "mock-vpc-id"
+          publicSubnetIds: ["mock-subnet-1", "mock-subnet-2"]
+          privateSubnetIds: ["mock-subnet-3", "mock-subnet-4"]
+      when: ansible_check_mode
     
     # ネットワーク情報の表示
     - name: Display network deployment summary
