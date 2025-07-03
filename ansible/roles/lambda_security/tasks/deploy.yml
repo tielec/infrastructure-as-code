@@ -1,0 +1,104 @@
+---
+# Lambda APIセキュリティグループのデプロイタスク
+
+- name: Display security deployment information
+  ansible.builtin.debug:
+    msg: |
+      Deploying Lambda API Security Infrastructure:
+      - Project: {{ project_name }}
+      - Security Pulumi Project: {{ security_project_name }}
+      - Environment: {{ env_name }}
+      - Phase: {{ 'Phase 2' if enable_database else 'Phase 1' }}
+
+# Pulumiデプロイ
+- name: Deploy Security Infrastructure with Pulumi
+  block:
+    # Pulumiヘルパータスクを呼び出す
+    - name: Initialize security stack
+      ansible.builtin.include_role:
+        name: pulumi_helper
+        tasks_from: init_stack
+      vars:
+        pulumi_project_path: "{{ pulumi_path }}/lambda-security"
+        stack_name: "{{ env_name }}"
+    
+    - name: Configure security stack
+      ansible.builtin.shell: |
+        {{ scripts_dir }}/aws-env.sh
+        cd {{ pulumi_path }}/lambda-security
+        sudo -E /root/.pulumi/bin/pulumi config set aws:region {{ aws_region_name }}
+        sudo -E /root/.pulumi/bin/pulumi config set {{ security_project_name }}:projectName {{ project_name }}
+        sudo -E /root/.pulumi/bin/pulumi config set {{ security_project_name }}:networkStackName {{ network_project_name }}.{{ env_name }}
+        sudo -E /root/.pulumi/bin/pulumi config set {{ security_project_name }}:enableDatabaseSecurityGroups {{ enable_database | string | lower }}
+      register: pulumi_config_result
+      changed_when: pulumi_config_result.rc == 0
+    
+    # Pulumiプレビュー
+    - name: Preview security deployment
+      ansible.builtin.include_role:
+        name: pulumi_helper
+        tasks_from: preview
+      vars:
+        pulumi_project_path: "{{ pulumi_path }}/lambda-security"
+      when: preview_only | default(false) | bool
+    
+    # Pulumiデプロイ
+    - name: Deploy security stack
+      ansible.builtin.include_role:
+        name: pulumi_helper
+        tasks_from: deploy
+      vars:
+        pulumi_project_path: "{{ pulumi_path }}/lambda-security"
+      when: not preview_only | default(false) | bool
+    
+    # セキュリティグループ情報の取得
+    - name: Get security outputs
+      ansible.builtin.shell: |
+        cd {{ pulumi_path }}/lambda-security
+        export PULUMI_ACCESS_TOKEN="{{ lookup('env', 'PULUMI_ACCESS_TOKEN') }}"
+        sudo -E /root/.pulumi/bin/pulumi stack output --json
+      register: security_outputs_raw
+      changed_when: false
+      when: not preview_only | default(false) | bool
+    
+    - name: Parse security outputs
+      ansible.builtin.set_fact:
+        security_outputs: "{{ security_outputs_raw.stdout | from_json }}"
+      when: 
+        - not preview_only | default(false) | bool
+        - security_outputs_raw.stdout is defined
+    
+    # デプロイ成功を示す変数設定
+    - name: Set security deployment status
+      ansible.builtin.set_fact:
+        security_deployed: true
+      when: not preview_only | default(false) | bool
+    
+    # セキュリティグループ情報の表示
+    - name: Display security deployment summary
+      ansible.builtin.debug:
+        msg: |
+          Security deployment successful:
+          - Lambda Security Group: {{ security_outputs.lambdaSecurityGroupId | default('N/A') }}
+          - VPC Endpoint Security Group: {{ security_outputs.vpceSecurityGroupId | default('N/A') }}
+          - NAT Security Group: {{ security_outputs.natSecurityGroupId | default('N/A') }}
+          - DLQ Security Group: {{ security_outputs.dlqSecurityGroupId | default('N/A') }}
+          {% if enable_database %}
+          - Database Security Group: {{ security_outputs.databaseSecurityGroupId | default('N/A') }}
+          {% endif %}
+      when: 
+        - security_deployed is defined and security_deployed
+        - security_outputs is defined
+  
+  rescue:
+    - name: Display error on security deployment
+      ansible.builtin.debug:
+        msg: "Failed to deploy Lambda API security infrastructure. See error details above."
+      
+    - name: Set security deployment failure
+      ansible.builtin.set_fact:
+        security_deployed: false
+      
+    - name: Fail the playbook
+      ansible.builtin.fail:
+        msg: "Lambda API security deployment failed."
