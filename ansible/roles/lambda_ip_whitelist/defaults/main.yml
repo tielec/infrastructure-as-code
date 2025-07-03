@@ -1,0 +1,13 @@
+# lambda_ip_whitelist ロールのデフォルト変数
+
+# パスがプレイブックからの相対パスになるよう修正
+scripts_dir: "{{ playbook_dir }}/../../scripts"
+
+# 環境名のデフォルト値
+env_name: "dev"
+
+# IP Whitelist管理のデフォルト値
+client_enabled: true
+client_type: "platform"
+client_priority: "normal"
+client_description: "Added via Ansible"

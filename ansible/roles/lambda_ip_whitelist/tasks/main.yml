@@ -1,0 +1,9 @@
+# lambda_ip_whitelist ロールのメインタスク
+
+- name: Validate operation
+  ansible.builtin.fail:
+    msg: "Invalid operation: {{ operation }}. Valid operations: init, list, add, remove, update"
+  when: operation not in ['init', 'list', 'add', 'remove', 'update']
+
+- name: Include operation tasks
+  ansible.builtin.include_tasks: "{{ operation }}.yml"
