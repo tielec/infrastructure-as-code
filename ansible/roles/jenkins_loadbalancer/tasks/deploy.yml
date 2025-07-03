@@ -54,6 +54,7 @@
         tasks_from: get_outputs
       vars:
         pulumi_project_path: "{{ pulumi_path }}/jenkins-network"
+        stack_name: "{{ env_name }}"
         output_name: "vpcId"
         mock_output: "mock-vpc-id-for-check-mode"
     
@@ -67,6 +68,7 @@
         tasks_from: get_outputs
       vars:
         pulumi_project_path: "{{ pulumi_path }}/jenkins-security"
+        stack_name: "{{ env_name }}"
         output_name: "albSecurityGroupId"
         mock_output: "mock-alb-sg-id"
     
@@ -110,6 +112,7 @@
         tasks_from: get_outputs
       vars:
         pulumi_project_path: "{{ pulumi_path }}/jenkins-loadbalancer"
+        stack_name: "{{ env_name }}"
         output_name: "albDnsName"
         mock_output: "mock-alb-dns-name"
     
@@ -124,6 +127,7 @@
         tasks_from: get_outputs
       vars:
         pulumi_project_path: "{{ pulumi_path }}/jenkins-loadbalancer"
+        stack_name: "{{ env_name }}"
         output_name: "blueTargetGroupArn"
         mock_output: "mock-blue-tg-arn"
     
@@ -138,6 +142,7 @@
         tasks_from: get_outputs
       vars:
         pulumi_project_path: "{{ pulumi_path }}/jenkins-loadbalancer"
+        stack_name: "{{ env_name }}"
         output_name: "greenTargetGroupArn"
         mock_output: "mock-green-tg-arn"
     

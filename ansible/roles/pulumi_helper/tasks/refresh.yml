@@ -1,29 +1,44 @@
-# Pulumiスタックを更新するヘルパータスク
+# Pulumiスタックをリフレッシュするヘルパータスク
 
 - name: Refresh Pulumi stack
   block:
-    - name: Run Pulumi refresh command
+    # スタックが選択されているか確認
+    - name: Ensure stack is selected
+      ansible.builtin.shell: |
+        cd {{ pulumi_project_path }}
+        export PULUMI_ACCESS_TOKEN="{{ lookup('env', 'PULUMI_ACCESS_TOKEN') }}"
+        sudo -E {{ pulumi_bin_path }} stack --show-name || exit 1
+      register: current_stack
+      changed_when: false
+      failed_when: current_stack.rc != 0
+      when: not ansible_check_mode
+    
+    # リフレッシュを実行
+    - name: Run refresh
       ansible.builtin.shell: |
         cd {{ pulumi_project_path }}
         {{ pulumi_commands.refresh }}
       register: pulumi_refresh_result
-      changed_when: "'No changes required' not in pulumi_refresh_result.stdout"
+      changed_when: "'No changes' not in pulumi_refresh_result.stdout"
       when: not ansible_check_mode
-  
-    - name: Display Pulumi refresh results
+    
+    # リフレッシュ結果を表示
+    - name: Display refresh results
       ansible.builtin.debug:
         msg: "{{ pulumi_refresh_result.stdout_lines }}"
       when: not ansible_check_mode and ansible_verbosity > 0
+        
   rescue:
-    - name: Display error message on refresh failure
+    - name: Display error message
       ansible.builtin.debug:
-        msg: "Failed to refresh Pulumi stack. Check error message above."
+        msg: "Failed to refresh Pulumi stack"
     
-    - name: Set refresh status on failure
+    - name: Set failure status
       ansible.builtin.set_fact:
         pulumi_refresh_failed: true
-        
+
+# チェックモード
 - name: Mock refresh (check mode)
   ansible.builtin.debug:
-    msg: "Would refresh stack with Pulumi (check mode active)"
+    msg: "Would refresh Pulumi stack (check mode active)"
   when: ansible_check_mode

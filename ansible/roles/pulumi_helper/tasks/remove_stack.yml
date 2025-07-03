@@ -2,74 +2,64 @@
 
 - name: Remove Pulumi stack
   block:
-    # スタック名が指定されているか確認
+    # スタック名の検証
     - name: Verify stack name is provided
       ansible.builtin.fail:
         msg: "Required variable 'stack_name' is not defined"
       when: stack_name is not defined or stack_name | length == 0
     
-    # スタックの存在を確認
-    - name: Check if stack exists
+    # スタック名を解決
+    - name: Resolve stack name
+      ansible.builtin.include_tasks: resolve_stack_name.yml
+    
+    # 削除対象のスタックを検索
+    - name: Find stack to remove
       ansible.builtin.shell: |
         cd {{ pulumi_project_path }}
-        source {{ playbook_dir }}/../../scripts/aws-env.sh > /dev/null
-        eval $({{ playbook_dir }}/../../scripts/aws-env.sh) > /dev/null
-        sudo -E {{ pulumi_bin_path }} stack ls | grep {{ stack_name }} || echo "stack_not_found"
-      register: stack_check_result
+        export PULUMI_ACCESS_TOKEN="{{ lookup('env', 'PULUMI_ACCESS_TOKEN') }}"
+        # スタック名で終わるものを検索
+        sudo -E {{ pulumi_bin_path }} stack ls --json | jq -r '.[].name | select(endswith("/{{ stack_name }}") or . == "{{ stack_name }}")' | head -1
+      register: found_stack
       changed_when: false
-      failed_when: false
       when: not ansible_check_mode
     
-    # スタックが存在しない場合は警告を表示して終了
-    - name: Skip if stack does not exist
+    # スタックが見つからない場合
+    - name: Skip if stack not found
       ansible.builtin.debug:
-        msg: "Stack '{{ stack_name }}' does not exist in project {{ pulumi_project_path }}. Skipping removal."
+        msg: "Stack '{{ stack_name }}' not found. Skipping removal."
       when: 
         - not ansible_check_mode
-        - stack_check_result is defined 
-        - "'stack_not_found' in stack_check_result.stdout"
+        - found_stack.stdout | default('') | trim == ''
     
-    # スタックの削除（rm）を実行
-    - name: Remove stack with Pulumi
+    # スタックを削除
+    - name: Remove stack
       ansible.builtin.shell: |
         cd {{ pulumi_project_path }}
         source {{ playbook_dir }}/../../scripts/aws-env.sh > /dev/null
         eval $({{ playbook_dir }}/../../scripts/aws-env.sh) > /dev/null
-        sudo -E {{ pulumi_bin_path }} stack rm --yes {{ stack_name }}
+        export PULUMI_ACCESS_TOKEN="{{ lookup('env', 'PULUMI_ACCESS_TOKEN') }}"
+        sudo -E {{ pulumi_bin_path }} stack rm --yes "{{ found_stack.stdout | trim }}"
       register: stack_rm_result
       changed_when: stack_rm_result.rc == 0
-      failed_when: false
       when: 
         - not ansible_check_mode
-        - stack_check_result is defined
-        - "'stack_not_found' not in stack_check_result.stdout"
+        - found_stack.stdout | default('') | trim != ''
     
-    # スタック削除の結果を表示
-    - name: Display stack removal result
+    - name: Report removal success
       ansible.builtin.debug:
-        msg: "Successfully removed stack '{{ stack_name }}' from project {{ pulumi_project_path }}"
+        msg: "Successfully removed stack '{{ found_stack.stdout | trim }}'"
       when: 
         - not ansible_check_mode
         - stack_rm_result is defined
-        - stack_rm_result.rc is defined
         - stack_rm_result.rc == 0
-
-    # スタック削除に失敗した場合のメッセージ
-    - name: Display stack removal failure
-      ansible.builtin.debug:
-        msg: "Failed to remove stack '{{ stack_name }}'. Return code: {{ stack_rm_result.rc | default('N/A') }}"
-      when:
-        - not ansible_check_mode
-        - stack_rm_result is defined
-        - stack_rm_result.rc is defined
-        - stack_rm_result.rc != 0
   
   rescue:
-    - name: Display error message on stack removal failure
+    - name: Display error message
       ansible.builtin.debug:
-        msg: "Failed to remove Pulumi stack '{{ stack_name }}'. Check error message above."
+        msg: "Failed to remove Pulumi stack '{{ stack_name }}'"
 
+# チェックモード
 - name: Mock stack removal (check mode)
   ansible.builtin.debug:
-    msg: "Would remove Pulumi stack '{{ stack_name }}' from project {{ pulumi_project_path }} (check mode active)"
+    msg: "Would remove Pulumi stack '{{ stack_name }}' (check mode active)"
   when: ansible_check_mode

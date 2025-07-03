@@ -1,12 +1,40 @@
 # Pulumiのプレビュー実行ヘルパータスク
 
 - name: Preview Pulumi deployment
-  ansible.builtin.shell: |
-    cd {{ pulumi_project_path }}
-    {{ pulumi_commands.preview }}
-  register: pulumi_preview_result
-  changed_when: false
-  
-- name: Display Pulumi preview
+  block:
+    # スタックが選択されているか確認
+    - name: Ensure stack is selected
+      ansible.builtin.shell: |
+        cd {{ pulumi_project_path }}
+        export PULUMI_ACCESS_TOKEN="{{ lookup('env', 'PULUMI_ACCESS_TOKEN') }}"
+        sudo -E {{ pulumi_bin_path }} stack --show-name || exit 1
+      register: current_stack
+      changed_when: false
+      failed_when: current_stack.rc != 0
+      when: not ansible_check_mode
+    
+    # プレビューを実行
+    - name: Run preview
+      ansible.builtin.shell: |
+        cd {{ pulumi_project_path }}
+        {{ pulumi_commands.preview }}
+      register: pulumi_preview_result
+      changed_when: false
+      when: not ansible_check_mode
+    
+    # プレビュー結果を表示
+    - name: Display preview
+      ansible.builtin.debug:
+        msg: "{{ pulumi_preview_result.stdout_lines }}"
+      when: not ansible_check_mode
+      
+  rescue:
+    - name: Display error message
+      ansible.builtin.debug:
+        msg: "Failed to preview Pulumi deployment"
+
+# チェックモード
+- name: Mock preview (check mode)
   ansible.builtin.debug:
-    msg: "{{ pulumi_preview_result.stdout_lines }}"
+    msg: "Would preview Pulumi deployment (check mode active)"
+  when: ansible_check_mode

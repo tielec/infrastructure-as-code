@@ -1,3 +1,4 @@
 name: jenkins-nat
+organization: tielec
 runtime: nodejs
 description: Jenkins NAT Infrastructure (Gateway or Instance based on mode)

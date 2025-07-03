@@ -2,35 +2,51 @@
 
 - name: Configure Pulumi stack
   block:
-    - name: Check if config variable is defined
+    # 必須変数の確認
+    - name: Verify required variables
       ansible.builtin.fail:
         msg: "Required variables 'config_key' and 'config_value' are not defined"
       when: config_key is not defined or config_value is not defined
+    
+    # スタックが選択されているか確認
+    - name: Ensure stack is selected
+      ansible.builtin.shell: |
+        cd {{ pulumi_project_path }}
+        export PULUMI_ACCESS_TOKEN="{{ lookup('env', 'PULUMI_ACCESS_TOKEN') }}"
+        sudo -E {{ pulumi_bin_path }} stack --show-name || exit 1
+      register: current_stack
+      changed_when: false
+      failed_when: current_stack.rc != 0
+      when: not ansible_check_mode
   
-    - name: Set Pulumi config value
+    # 設定値をセット
+    - name: Set config value
       ansible.builtin.shell: |
         cd {{ pulumi_project_path }}
         source {{ playbook_dir }}/../../scripts/aws-env.sh > /dev/null
         eval $({{ playbook_dir }}/../../scripts/aws-env.sh) > /dev/null
-        sudo -E /root/.pulumi/bin/pulumi config set {{ config_key }} "{{ config_value }}" {{ '--secret' if config_secret | default(false) else '' }}
-      register: pulumi_config_result
-      changed_when: pulumi_config_result.rc == 0
+        export PULUMI_ACCESS_TOKEN="{{ lookup('env', 'PULUMI_ACCESS_TOKEN') }}"
+        sudo -E {{ pulumi_bin_path }} config set {{ config_key }} "{{ config_value }}" {{ '--secret' if config_secret | default(false) else '' }}
+      register: config_result
+      changed_when: config_result.rc == 0
       when: not ansible_check_mode
   
-    - name: Display Pulumi config set result
+    - name: Display config result
       ansible.builtin.debug:
-        msg: "Set config '{{ config_key }}' to {{ 'secret value' if config_secret | default(false) else config_value }}"
+        msg: "Set config '{{ config_key }}' = {{ 'secret' if config_secret | default(false) else config_value }}"
       when: not ansible_check_mode and ansible_verbosity > 0
+      
   rescue:
-    - name: Display error message on config failure
+    - name: Display error message
       ansible.builtin.debug:
-        msg: "Failed to set Pulumi config. Check error message above."
+        msg: "Failed to set Pulumi config '{{ config_key }}'"
     
-    - name: Set config status on failure
+    - name: Set failure status
       ansible.builtin.set_fact:
         pulumi_config_failed: true
-        
+
+# チェックモード
 - name: Mock config set (check mode)
   ansible.builtin.debug:
-    msg: "Would set config key '{{ config_key | default('unknown') }}' to {{ 'secret value' if config_secret | default(false) else config_value | default('unknown') }} (check mode active)"
+    msg: "Would set config '{{ config_key | default('unknown') }}' = {{ 'secret' if config_secret | default(false) else config_value | default('unknown') }} (check mode active)"
   when: ansible_check_mode

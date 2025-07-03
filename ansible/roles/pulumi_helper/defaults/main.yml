@@ -1,2 +1,14 @@
 # Pulumiヘルパーのデフォルト変数
 pulumi_base_path: "{{ playbook_dir }}/../../pulumi"
+
+# ログ出力の制御
+pulumi_helper_verbose: "{{ ansible_verbosity > 0 }}"
+pulumi_helper_debug: "{{ ansible_verbosity > 1 }}"
+
+# セパレータのスタイル
+pulumi_helper_separator: "=========================================="
+pulumi_helper_separator_short: "----------"
+
+# デフォルトのタイムアウト設定
+pulumi_operation_timeout: 600  # 10分
+pulumi_operation_poll: 10      # 10秒ごとにポーリング
