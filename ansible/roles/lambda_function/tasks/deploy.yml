@@ -26,14 +26,23 @@
         pulumi_project_path: "{{ pulumi_path }}/lambda-functions"
         stack_name: "{{ env_name }}"
     
+    - name: Get stack reference names
+      ansible.builtin.shell: |
+        cd {{ pulumi_path }}/lambda-functions
+        export PULUMI_ACCESS_TOKEN="{{ lookup('env', 'PULUMI_ACCESS_TOKEN') }}"
+        # organizationを含む完全な名前を使用
+        echo "tielec/{{ network_project_name }}/{{ env_name }}"
+      register: network_stack_ref
+      changed_when: false
+
     - name: Configure functions stack
       ansible.builtin.shell: |
         {{ scripts_dir }}/aws-env.sh
         cd {{ pulumi_path }}/lambda-functions
         sudo -E /root/.pulumi/bin/pulumi config set aws:region {{ aws_region_name }}
         sudo -E /root/.pulumi/bin/pulumi config set {{ functions_project_name }}:projectName {{ project_name }}
-        sudo -E /root/.pulumi/bin/pulumi config set {{ functions_project_name }}:networkStackName {{ network_project_name }}.{{ env_name }}
-        sudo -E /root/.pulumi/bin/pulumi config set {{ functions_project_name }}:securityStackName {{ security_project_name }}.{{ env_name }}
+        sudo -E /root/.pulumi/bin/pulumi config set {{ functions_project_name }}:networkStackName {{ network_project_name }}
+        sudo -E /root/.pulumi/bin/pulumi config set {{ functions_project_name }}:securityStackName {{ security_project_name }}
         sudo -E /root/.pulumi/bin/pulumi config set {{ functions_project_name }}:runtime {{ lambda_api.runtime }}
         sudo -E /root/.pulumi/bin/pulumi config set {{ functions_project_name }}:memorySize {{ lambda_memory | string }}
         sudo -E /root/.pulumi/bin/pulumi config set {{ functions_project_name }}:timeout {{ lambda_timeout | string }}

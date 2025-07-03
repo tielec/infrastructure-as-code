@@ -31,10 +31,17 @@
         sudo -E /root/.pulumi/bin/pulumi config set {{ vpce_project_name }}:networkStackName {{ network_project_name }}.{{ env_name }}
         sudo -E /root/.pulumi/bin/pulumi config set {{ vpce_project_name }}:securityStackName {{ security_project_name }}.{{ env_name }}
         
-        # エンドポイント設定
-        {% for endpoint in vpc_endpoints %}
-        sudo -E /root/.pulumi/bin/pulumi config set {{ vpce_project_name }}:vpcEndpoints.{{ endpoint }} true
-        {% endfor %}
+        # エンドポイント設定（オブジェクトパスとして設定）
+        sudo -E /root/.pulumi/bin/pulumi config set --path {{ vpce_project_name }}:vpcEndpoints.s3 {{ ('s3' in vpc_endpoints) | string | lower }}
+        {% if 'secretsmanager' in vpc_endpoints %}
+        sudo -E /root/.pulumi/bin/pulumi config set --path {{ vpce_project_name }}:vpcEndpoints.secretsManager true
+        {% endif %}
+        {% if 'kms' in vpc_endpoints %}
+        sudo -E /root/.pulumi/bin/pulumi config set --path {{ vpce_project_name }}:vpcEndpoints.kms true
+        {% endif %}
+        {% if 'dynamodb' in vpc_endpoints %}
+        sudo -E /root/.pulumi/bin/pulumi config set --path {{ vpce_project_name }}:vpcEndpoints.dynamodb true
+        {% endif %}
       register: pulumi_config_result
       changed_when: pulumi_config_result.rc == 0
     

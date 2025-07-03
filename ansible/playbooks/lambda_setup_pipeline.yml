@@ -1,3 +1,4 @@
+---
 # lambda_setup_pipeline.yml
 # Lambda API環境構築の全体フローを管理するプレイブック
 
@@ -206,15 +207,16 @@
         - enable_database | bool
         - run_database | default(true) | bool
 
-    # IP Whitelist初期化
+    # IP Whitelist初期化（WAFデプロイ前に実行）
     - name: Initialize IP Whitelist
       ansible.builtin.include_role:
         name: lambda_ip_whitelist
       vars:
         operation: "init"
       when: 
-        - waf_deployed is defined and waf_deployed
-        - init_ip_whitelist | default(false) | bool
+        - api_gateway_deployed is defined and api_gateway_deployed
+        - init_ip_whitelist | default(true) | bool
+        - not waf_deployed | default(false)
 
     # デプロイメント結果サマリー
     - name: Deployment Summary
