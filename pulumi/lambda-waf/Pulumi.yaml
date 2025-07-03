@@ -1,3 +1,4 @@
 name: lambda-waf
+organization: tielec
 runtime: nodejs
 description: Lambda API WAF Infrastructure - Web Application Firewall for API Gateway

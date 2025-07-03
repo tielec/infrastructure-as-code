@@ -1,3 +1,4 @@
 name: lambda-security
+organization: tielec
 runtime: nodejs
 description: Lambda API Security Groups Infrastructure

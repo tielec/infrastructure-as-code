@@ -1,3 +1,4 @@
 name: lambda-nat
+organization: tielec
 runtime: nodejs
 description: Lambda API NAT Infrastructure - NAT Gateway or Instance based on environment

@@ -1,3 +1,4 @@
 name: lambda-vpce
+organization: tielec
 runtime: nodejs
 description: Lambda API VPC Endpoints Infrastructure - Gateway and Interface endpoints for AWS services
