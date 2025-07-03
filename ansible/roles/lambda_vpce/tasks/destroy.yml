@@ -1,0 +1,72 @@
+---
+# Lambda API VPCエンドポイントの削除タスク
+
+- name: Display VPC endpoints destruction information
+  ansible.builtin.debug:
+    msg: |
+      Destroying Lambda API VPC Endpoints:
+      - Project: {{ project_name }}
+      - VPC Endpoints Pulumi Project: {{ vpce_project_name }}
+      - Environment: {{ env_name }}
+      - Remove Stack: {{ remove_stacks | default(false) }}
+
+# ファイル権限設定
+- name: Ensure aws-env.sh has execute permissions
+  ansible.builtin.file:
+    path: "{{ scripts_dir }}/aws-env.sh"
+    mode: '0755'
+  register: aws_env_script_permission
+  no_log: true
+
+# Pulumiによる削除
+- name: Destroy VPC Endpoints with Pulumi
+  block:
+    # Pulumiヘルパータスクを呼び出す
+    - name: Initialize VPC endpoints stack
+      ansible.builtin.include_role:
+        name: pulumi_helper
+        tasks_from: init_stack
+      vars:
+        pulumi_project_path: "{{ pulumi_path }}/lambda-vpce"
+        stack_name: "{{ env_name }}"
+    
+    # Pulumiリソースの削除
+    - name: Destroy VPC endpoints resources with Pulumi
+      ansible.builtin.include_role:
+        name: pulumi_helper
+        tasks_from: destroy
+      vars:
+        pulumi_project_path: "{{ pulumi_path }}/lambda-vpce"
+    
+    # スタック自体の削除（オプション）
+    - name: Remove VPC endpoints stack (if requested)
+      ansible.builtin.include_role:
+        name: pulumi_helper
+        tasks_from: remove_stack
+      vars:
+        pulumi_project_path: "{{ pulumi_path }}/lambda-vpce"
+        stack_name: "{{ env_name }}"
+      when: remove_stacks | default(false) | bool
+    
+    # 削除ステータスの設定
+    - name: Set VPC endpoints destruction status on success
+      ansible.builtin.set_fact:
+        vpce_destroyed: true
+  
+  rescue:
+    # エラーハンドリング
+    - name: Set VPC endpoints destruction status on failure
+      ansible.builtin.set_fact:
+        vpce_destroyed: false
+    
+    - name: Display error
+      ansible.builtin.debug:
+        msg: "Failed to destroy VPC endpoints resources. See error details above."
+
+# 削除結果のサマリー表示
+- name: Display VPC endpoints destruction summary
+  ansible.builtin.debug:
+    msg: |
+      VPC Endpoints destruction summary:
+      - VPC Endpoints Resources: {{ vpce_destroyed | ternary('Destroyed', 'Failed') }}
+      - Stack Removed: {{ (remove_stacks | default(false) | bool and vpce_destroyed) | ternary('Yes', 'No') }}
