@@ -350,8 +350,10 @@ const webAcl = new aws.wafv2.WebAcl(`${projectName}-web-acl`, {
             },
             statement: {
                 notStatement: {
-                    geoMatchStatement: {
-                        countryCodes: config.getObject<string[]>("allowedCountries") || ["JP", "US"],
+                    statement: {  // statementプロパティが必要
+                        geoMatchStatement: {
+                            countryCodes: config.getObject<string[]>("allowedCountries") || ["JP", "US"],
+                        },
                     },
                 },
             },
@@ -377,14 +379,13 @@ const webAcl = new aws.wafv2.WebAcl(`${projectName}-web-acl`, {
 
 // ===== API Gateway との関連付け =====
 // API Gateway のステージARNを構築
-const region = aws.config.region;
+const region = aws.config.region || "ap-northeast-1";  // デフォルト値を設定
 const accountId = aws.getCallerIdentity().then(identity => identity.accountId);
 
 const apiGatewayArn = pulumi.all([accountId, apiGatewayStack.getOutput("apiId"), apiStage]).apply(
     ([account, apiId, stage]) => 
         `arn:aws:apigateway:${region}::/restapis/${apiId}/stages/${stage}`
 );
-
 const webAclAssociation = new aws.wafv2.WebAclAssociation(`${projectName}-web-acl-association`, {
     resourceArn: apiGatewayArn,
     webAclArn: webAcl.arn,
@@ -405,7 +406,7 @@ const rateLimitAlarm = new aws.cloudwatch.MetricAlarm(`${projectName}-waf-rate-l
     dimensions: {
         Rule: "RateLimitRule",
         WebACL: webAcl.name,
-        Region: region,
+        Region: region || "ap-northeast-1",  // デフォルト値を設定
     },
     treatMissingData: "notBreaching",
     tags: {
@@ -426,7 +427,7 @@ const attackAlarm = new aws.cloudwatch.MetricAlarm(`${projectName}-waf-attack-al
     comparisonOperator: "GreaterThanThreshold",
     dimensions: {
         WebACL: webAcl.name,
-        Region: region,
+        Region: region || "ap-northeast-1",  // デフォルト値を設定
     },
     treatMissingData: "notBreaching",
     tags: {

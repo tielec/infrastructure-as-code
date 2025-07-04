@@ -249,8 +249,8 @@ export const natInstanceSecurityGroupId = natInstanceSecurityGroup.id;
 export const dlqSecurityGroupId = dlqSecurityGroup.id;
 
 // Phase 2のエクスポート（条件付き）
-export const rdsSecurityGroupId = rdsSecurityGroup?.id;
-export const dynamodbVpceSecurityGroupId = dynamodbVpceSecurityGroup?.id;
+export const rdsSecurityGroupId = rdsSecurityGroup ? rdsSecurityGroup.id : pulumi.output(undefined);
+export const dynamodbVpceSecurityGroupId = dynamodbVpceSecurityGroup ? dynamodbVpceSecurityGroup.id : pulumi.output(undefined);
 
 // セキュリティグループの詳細情報
 export const securityGroupInfo = {
