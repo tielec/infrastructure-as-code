@@ -97,10 +97,9 @@ const defaultWhitelistConfig: IpWhitelistConfig = {
 const ipWhitelistSecretVersion = new aws.secretsmanager.SecretVersion(`${projectName}-ip-whitelist-version`, {
     secretId: ipWhitelistSecret.id,
     secretString: JSON.stringify(defaultWhitelistConfig),
+}, {
     // このバージョンは初期値なので、既存の値がある場合は上書きしない
-    lifecycle: {
-        ignoreChanges: ["secretString"], // 初回以降は手動更新を優先
-    },
+    ignoreChanges: ["secretString"], // 初回以降は手動更新を優先
 });
 
 // ===== IP Whitelist の取得（改善版）=====
@@ -351,10 +350,8 @@ const webAcl = new aws.wafv2.WebAcl(`${projectName}-web-acl`, {
             },
             statement: {
                 notStatement: {
-                    statement: {
-                        geoMatchStatement: {
-                            countryCodes: config.getObject<string[]>("allowedCountries") || ["JP", "US"],
-                        },
+                    geoMatchStatement: {
+                        countryCodes: config.getObject<string[]>("allowedCountries") || ["JP", "US"],
                     },
                 },
             },
