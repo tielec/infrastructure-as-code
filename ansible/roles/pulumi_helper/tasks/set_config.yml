@@ -39,11 +39,39 @@
   rescue:
     - name: Display error message
       ansible.builtin.debug:
-        msg: "Failed to set Pulumi config '{{ config_key }}'"
+        msg: |
+          ========== Pulumi Config Failed ==========
+          Failed to set Pulumi config '{{ config_key }}'
+          {% if config_result is defined %}
+          Error code: {{ config_result.rc | default('unknown') }}
+          {% if config_result.stdout is defined %}
+          Output:
+          {{ config_result.stdout }}
+          {% endif %}
+          {% if config_result.stderr is defined and config_result.stderr %}
+          Error:
+          {{ config_result.stderr }}
+          {% endif %}
+          {% endif %}
+          =========================================
     
     - name: Set failure status
       ansible.builtin.set_fact:
         pulumi_config_failed: true
+    
+    # エラー時にAnsibleの実行を停止
+    - name: Fail the playbook
+      ansible.builtin.fail:
+        msg: |
+          Failed to set Pulumi configuration.
+          Key: {{ config_key }}
+          {% if 'no stack named' in config_result.stderr | default('') %}
+          No stack is selected. Please select a stack first.
+          {% elif 'invalid configuration key' in config_result.stderr | default('') %}
+          Invalid configuration key format. Use namespace:key format (e.g., aws:region).
+          {% else %}
+          Check the output above for details.
+          {% endif %}
 
 # チェックモード
 - name: Mock config set (check mode)

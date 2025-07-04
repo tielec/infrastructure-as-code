@@ -1,0 +1,112 @@
+---
+# Lambda API VPCエンドポイントのデプロイタスク
+
+- name: Display VPC endpoints deployment information
+  ansible.builtin.debug:
+    msg: |
+      Deploying Lambda API VPC Endpoints:
+      - Project: {{ project_name }}
+      - VPC Endpoints Pulumi Project: {{ vpce_project_name }}
+      - Environment: {{ env_name }}
+      - Endpoints to create: {{ vpc_endpoints | join(', ') }}
+
+# Pulumiデプロイ
+- name: Deploy VPC Endpoints with Pulumi
+  block:
+    # Pulumiヘルパータスクを呼び出す
+    - name: Initialize VPC endpoints stack
+      ansible.builtin.include_role:
+        name: pulumi_helper
+        tasks_from: init_stack
+      vars:
+        pulumi_project_path: "{{ pulumi_path }}/lambda-vpce"
+        stack_name: "{{ env_name }}"
+    
+    - name: Configure VPC endpoints stack
+      ansible.builtin.shell: |
+        {{ scripts_dir }}/aws-env.sh
+        cd {{ pulumi_path }}/lambda-vpce
+        sudo -E /root/.pulumi/bin/pulumi config set aws:region {{ aws_region_name }}
+        sudo -E /root/.pulumi/bin/pulumi config set {{ vpce_project_name }}:projectName {{ project_name }}
+        sudo -E /root/.pulumi/bin/pulumi config set {{ vpce_project_name }}:networkStackName {{ network_project_name }}
+        sudo -E /root/.pulumi/bin/pulumi config set {{ vpce_project_name }}:securityStackName {{ security_project_name }}
+        
+        # エンドポイント設定（オブジェクトパスとして設定）
+        sudo -E /root/.pulumi/bin/pulumi config set --path {{ vpce_project_name }}:vpcEndpoints.s3 {{ ('s3' in vpc_endpoints) | string | lower }}
+        {% if 'secretsmanager' in vpc_endpoints %}
+        sudo -E /root/.pulumi/bin/pulumi config set --path {{ vpce_project_name }}:vpcEndpoints.secretsManager true
+        {% endif %}
+        {% if 'kms' in vpc_endpoints %}
+        sudo -E /root/.pulumi/bin/pulumi config set --path {{ vpce_project_name }}:vpcEndpoints.kms true
+        {% endif %}
+        {% if 'dynamodb' in vpc_endpoints %}
+        sudo -E /root/.pulumi/bin/pulumi config set --path {{ vpce_project_name }}:vpcEndpoints.dynamodb true
+        {% endif %}
+      register: pulumi_config_result
+      changed_when: pulumi_config_result.rc == 0
+    
+    # Pulumiプレビュー
+    - name: Preview VPC endpoints deployment
+      ansible.builtin.include_role:
+        name: pulumi_helper
+        tasks_from: preview
+      vars:
+        pulumi_project_path: "{{ pulumi_path }}/lambda-vpce"
+      when: preview_only | default(false) | bool
+    
+    # Pulumiデプロイ
+    - name: Deploy VPC endpoints stack
+      ansible.builtin.include_role:
+        name: pulumi_helper
+        tasks_from: deploy
+      vars:
+        pulumi_project_path: "{{ pulumi_path }}/lambda-vpce"
+      when: not preview_only | default(false) | bool
+    
+    # VPCエンドポイント情報の取得
+    - name: Get VPC endpoints outputs
+      ansible.builtin.shell: |
+        cd {{ pulumi_path }}/lambda-vpce
+        export PULUMI_ACCESS_TOKEN="{{ lookup('env', 'PULUMI_ACCESS_TOKEN') }}"
+        sudo -E /root/.pulumi/bin/pulumi stack output --json
+      register: vpce_outputs_raw
+      changed_when: false
+      when: not preview_only | default(false) | bool
+    
+    - name: Parse VPC endpoints outputs
+      ansible.builtin.set_fact:
+        vpce_outputs: "{{ vpce_outputs_raw.stdout | from_json }}"
+      when: 
+        - not preview_only | default(false) | bool
+        - vpce_outputs_raw.stdout is defined
+    
+    # デプロイ成功を示す変数設定
+    - name: Set VPC endpoints deployment status
+      ansible.builtin.set_fact:
+        vpce_deployed: true
+      when: not preview_only | default(false) | bool
+    
+    # VPCエンドポイント情報の表示
+    - name: Display VPC endpoints deployment summary
+      ansible.builtin.debug:
+        msg: |
+          VPC Endpoints deployment successful:
+          {% for endpoint in vpc_endpoints %}
+          - {{ endpoint | upper }} Endpoint: {{ vpce_outputs[endpoint + 'EndpointId'] | default('N/A') }}
+          {% endfor %}
+      when: 
+        - vpce_deployed is defined and vpce_deployed
+        - vpce_outputs is defined
+  
+  rescue:
+    - name: Display error on VPC endpoints deployment
+      ansible.builtin.debug:
+        msg: "Failed to deploy Lambda API VPC endpoints. See error details above."
+      
+    - name: Set VPC endpoints deployment failure
+      ansible.builtin.set_fact:
+        vpce_deployed: false
+      
+    - name: Fail the playbook
+      ansible.builtin.fail:
+        msg: "Lambda API VPC endpoints deployment failed."

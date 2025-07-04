@@ -42,11 +42,37 @@
   rescue:
     - name: Display error message
       ansible.builtin.debug:
-        msg: "Failed to build TypeScript project"
+        msg: |
+          ========== TypeScript Build Failed ==========
+          Failed to build TypeScript project
+          {% if build_result is defined and build_result.stdout is defined %}
+          Build output:
+          {{ build_result.stdout }}
+          {% endif %}
+          {% if build_result is defined and build_result.stderr is defined and build_result.stderr %}
+          Build errors:
+          {{ build_result.stderr }}
+          {% endif %}
+          {% if syntax_check is defined and syntax_check.stdout is defined %}
+          Syntax check output:
+          {{ syntax_check.stdout }}
+          {% endif %}
+          ============================================
     
     - name: Set failure status
       ansible.builtin.set_fact:
         pulumi_build_failed: true
+    
+    # エラー時にAnsibleの実行を停止
+    - name: Fail the playbook
+      ansible.builtin.fail:
+        msg: |
+          TypeScript build failed.
+          {% if 'error TS' in build_result.stdout | default('') or 'error TS' in build_result.stderr | default('') %}
+          TypeScript compilation errors detected. Please fix the TypeScript errors and try again.
+          {% else %}
+          Check the output above for details.
+          {% endif %}
 
 # チェックモード
 - name: Mock build (check mode)

@@ -31,11 +31,38 @@
   rescue:
     - name: Display error message
       ansible.builtin.debug:
-        msg: "Failed to refresh Pulumi stack"
+        msg: |
+          ========== Pulumi Refresh Failed ==========
+          Failed to refresh Pulumi stack
+          {% if pulumi_refresh_result is defined %}
+          Error code: {{ pulumi_refresh_result.rc | default('unknown') }}
+          {% if pulumi_refresh_result.stdout is defined %}
+          Output:
+          {{ pulumi_refresh_result.stdout }}
+          {% endif %}
+          {% if pulumi_refresh_result.stderr is defined and pulumi_refresh_result.stderr %}
+          Error:
+          {{ pulumi_refresh_result.stderr }}
+          {% endif %}
+          {% endif %}
+          ==========================================
     
     - name: Set failure status
       ansible.builtin.set_fact:
         pulumi_refresh_failed: true
+    
+    # エラー時にAnsibleの実行を停止
+    - name: Fail the playbook
+      ansible.builtin.fail:
+        msg: |
+          Pulumi refresh operation failed.
+          {% if 'no stack named' in pulumi_refresh_result.stderr | default('') %}
+          No stack is selected. Please select a stack first.
+          {% elif 'unauthorized' in pulumi_refresh_result.stderr | default('') | lower %}
+          Authentication failed. Please check your Pulumi access token.
+          {% else %}
+          Check the output above for details.
+          {% endif %}
 
 # チェックモード
 - name: Mock refresh (check mode)

@@ -1,0 +1,4 @@
+name: lambda-network
+organization: tielec
+runtime: nodejs
+description: Lambda API Network Infrastructure - VPC, Subnets, Route Tables, VPC Endpoints

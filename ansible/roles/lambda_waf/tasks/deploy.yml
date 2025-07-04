@@ -1,0 +1,110 @@
+---
+# WAFのデプロイタスク
+
+- name: Display WAF deployment information
+  ansible.builtin.debug:
+    msg: |
+      Deploying WAF:
+      - Project: {{ project_name }}
+      - WAF Pulumi Project: {{ waf_project_name }}
+      - Environment: {{ env_name }}
+      - IP Whitelist Source: Secrets Manager
+      - Rate Limit: {{ lambda_api.ip_whitelist.rate_limit_per_5min }} requests per 5 minutes
+      - Block Duration: {{ lambda_api.ip_whitelist.block_duration_seconds }} seconds
+
+# Pulumiデプロイ
+- name: Deploy WAF with Pulumi
+  block:
+    # Pulumiヘルパータスクを呼び出す
+    - name: Initialize WAF stack
+      ansible.builtin.include_role:
+        name: pulumi_helper
+        tasks_from: init_stack
+      vars:
+        pulumi_project_path: "{{ pulumi_path }}/lambda-waf"
+        stack_name: "{{ env_name }}"
+    
+    - name: Configure WAF stack
+      ansible.builtin.shell: |
+        {{ scripts_dir }}/aws-env.sh
+        cd {{ pulumi_path }}/lambda-waf
+        sudo -E /root/.pulumi/bin/pulumi config set aws:region {{ aws_region_name }}
+        sudo -E /root/.pulumi/bin/pulumi config set {{ waf_project_name }}:projectName {{ project_name }}
+        sudo -E /root/.pulumi/bin/pulumi config set {{ waf_project_name }}:apiGatewayStackName {{ api_gateway_project_name }}
+        sudo -E /root/.pulumi/bin/pulumi config set {{ waf_project_name }}:ipWhitelistSource secretsManager
+        sudo -E /root/.pulumi/bin/pulumi config set {{ waf_project_name }}:secretName {{ lambda_api.ip_whitelist.secret_name_pattern | replace('{environment}', env_name) }}
+        sudo -E /root/.pulumi/bin/pulumi config set {{ waf_project_name }}:rateLimit {{ lambda_api.ip_whitelist.rate_limit_per_5min | string }}
+        sudo -E /root/.pulumi/bin/pulumi config set {{ waf_project_name }}:blockPeriod {{ lambda_api.ip_whitelist.block_duration_seconds | string }}
+      register: pulumi_config_result
+      changed_when: pulumi_config_result.rc == 0
+    
+    # Pulumiプレビュー
+    - name: Preview WAF deployment
+      ansible.builtin.include_role:
+        name: pulumi_helper
+        tasks_from: preview
+      vars:
+        pulumi_project_path: "{{ pulumi_path }}/lambda-waf"
+      when: preview_only | default(false) | bool
+    
+    # Pulumiデプロイ
+    - name: Deploy WAF stack
+      ansible.builtin.include_role:
+        name: pulumi_helper
+        tasks_from: deploy
+      vars:
+        pulumi_project_path: "{{ pulumi_path }}/lambda-waf"
+      when: not preview_only | default(false) | bool
+    
+    # WAF情報の取得
+    - name: Get WAF outputs
+      ansible.builtin.shell: |
+        cd {{ pulumi_path }}/lambda-waf
+        export PULUMI_ACCESS_TOKEN="{{ lookup('env', 'PULUMI_ACCESS_TOKEN') }}"
+        sudo -E /root/.pulumi/bin/pulumi stack output --json
+      register: waf_outputs_raw
+      changed_when: false
+      when: not preview_only | default(false) | bool
+    
+    - name: Parse WAF outputs
+      ansible.builtin.set_fact:
+        waf_outputs: "{{ waf_outputs_raw.stdout | from_json }}"
+      when: 
+        - not preview_only | default(false) | bool
+        - waf_outputs_raw.stdout is defined
+    
+    # デプロイ成功を示す変数設定
+    - name: Set WAF deployment status
+      ansible.builtin.set_fact:
+        waf_deployed: true
+      when: not preview_only | default(false) | bool
+    
+    # WAF情報の表示
+    - name: Display WAF deployment summary
+      ansible.builtin.debug:
+        msg: |
+          WAF deployment successful:
+          - Web ACL ID: {{ waf_outputs.webAclId | default('N/A') }}
+          - Web ACL ARN: {{ waf_outputs.webAclArn | default('N/A') }}
+          - IP Set ID: {{ waf_outputs.ipSetId | default('N/A') }}
+          - Secret ARN: {{ waf_outputs.secretArn | default('N/A') }}
+          
+          IP Whitelist management:
+          - Secret Name: {{ lambda_api.ip_whitelist.secret_name_pattern | replace('{environment}', env_name) }}
+          - Use 'ansible-playbook playbooks/lambda_ip_whitelist.yml' to manage IPs
+      when: 
+        - waf_deployed is defined and waf_deployed
+        - waf_outputs is defined
+  
+  rescue:
+    - name: Display error on WAF deployment
+      ansible.builtin.debug:
+        msg: "Failed to deploy WAF. See error details above."
+      
+    - name: Set WAF deployment failure
+      ansible.builtin.set_fact:
+        waf_deployed: false
+      
+    - name: Fail the playbook
+      ansible.builtin.fail:
+        msg: "WAF deployment failed."

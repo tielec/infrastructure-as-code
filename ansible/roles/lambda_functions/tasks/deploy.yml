@@ -1,0 +1,128 @@
+---
+# Lambda関数のデプロイタスク
+
+- name: Display Lambda functions deployment information
+  ansible.builtin.debug:
+    msg: |
+      Deploying Lambda Functions:
+      - Project: {{ project_name }}
+      - Functions Pulumi Project: {{ functions_project_name }}
+      - Environment: {{ env_name }}
+      - Runtime: {{ lambda_api.runtime }}
+      - Memory: {{ lambda_memory }}MB
+      - Timeout: {{ lambda_timeout }}s
+      - Log Level: {{ log_level }}
+      - Log Retention: {{ log_retention_days }} days
+
+# Pulumiデプロイ
+- name: Deploy Lambda Functions with Pulumi
+  block:
+    # Pulumiヘルパータスクを呼び出す
+    - name: Initialize functions stack
+      ansible.builtin.include_role:
+        name: pulumi_helper
+        tasks_from: init_stack
+      vars:
+        pulumi_project_path: "{{ pulumi_path }}/lambda-functions"
+        stack_name: "{{ env_name }}"
+    
+    - name: Get stack reference names
+      ansible.builtin.shell: |
+        cd {{ pulumi_path }}/lambda-functions
+        export PULUMI_ACCESS_TOKEN="{{ lookup('env', 'PULUMI_ACCESS_TOKEN') }}"
+        # organizationを含む完全な名前を使用
+        echo "tielec/{{ network_project_name }}/{{ env_name }}"
+      register: network_stack_ref
+      changed_when: false
+
+    - name: Configure functions stack
+      ansible.builtin.shell: |
+        {{ scripts_dir }}/aws-env.sh
+        cd {{ pulumi_path }}/lambda-functions
+        sudo -E /root/.pulumi/bin/pulumi config set aws:region {{ aws_region_name }}
+        sudo -E /root/.pulumi/bin/pulumi config set {{ functions_project_name }}:projectName {{ project_name }}
+        sudo -E /root/.pulumi/bin/pulumi config set {{ functions_project_name }}:networkStackName {{ network_project_name }}
+        sudo -E /root/.pulumi/bin/pulumi config set {{ functions_project_name }}:securityStackName {{ security_project_name }}
+        sudo -E /root/.pulumi/bin/pulumi config set {{ functions_project_name }}:runtime {{ lambda_api.runtime }}
+        sudo -E /root/.pulumi/bin/pulumi config set {{ functions_project_name }}:memorySize {{ lambda_memory | string }}
+        sudo -E /root/.pulumi/bin/pulumi config set {{ functions_project_name }}:timeout {{ lambda_timeout | string }}
+        sudo -E /root/.pulumi/bin/pulumi config set {{ functions_project_name }}:logLevel {{ log_level }}
+        sudo -E /root/.pulumi/bin/pulumi config set {{ functions_project_name }}:logRetentionDays {{ log_retention_days | string }}
+        
+        # DLQ設定
+        sudo -E /root/.pulumi/bin/pulumi config set {{ functions_project_name }}:dlqMaxRetryCount {{ lambda_api.dlq.max_retry_count | string }}
+        sudo -E /root/.pulumi/bin/pulumi config set {{ functions_project_name }}:dlqVisibilityTimeoutMultiplier {{ lambda_api.dlq.visibility_timeout_multiplier | string }}
+        sudo -E /root/.pulumi/bin/pulumi config set {{ functions_project_name }}:dlqRetentionDays {{ lambda_api.dlq.retention_days | string }}
+      register: pulumi_config_result
+      changed_when: pulumi_config_result.rc == 0
+    
+    # Pulumiプレビュー
+    - name: Preview functions deployment
+      ansible.builtin.include_role:
+        name: pulumi_helper
+        tasks_from: preview
+      vars:
+        pulumi_project_path: "{{ pulumi_path }}/lambda-functions"
+      when: preview_only | default(false) | bool
+    
+    # Pulumiデプロイ
+    - name: Deploy functions stack
+      ansible.builtin.include_role:
+        name: pulumi_helper
+        tasks_from: deploy
+      vars:
+        pulumi_project_path: "{{ pulumi_path }}/lambda-functions"
+      when: not preview_only | default(false) | bool
+    
+    # Lambda関数情報の取得
+    - name: Get functions outputs
+      ansible.builtin.shell: |
+        cd {{ pulumi_path }}/lambda-functions
+        export PULUMI_ACCESS_TOKEN="{{ lookup('env', 'PULUMI_ACCESS_TOKEN') }}"
+        sudo -E /root/.pulumi/bin/pulumi stack output --json
+      register: functions_outputs_raw
+      changed_when: false
+      when: not preview_only | default(false) | bool
+    
+    - name: Parse functions outputs
+      ansible.builtin.set_fact:
+        functions_outputs: "{{ functions_outputs_raw.stdout | from_json }}"
+      when: 
+        - not preview_only | default(false) | bool
+        - functions_outputs_raw.stdout is defined
+    
+    # デプロイ成功を示す変数設定
+    - name: Set functions deployment status
+      ansible.builtin.set_fact:
+        functions_deployed: true
+      when: not preview_only | default(false) | bool
+    
+    # Lambda関数情報の表示
+    - name: Display functions deployment summary
+      ansible.builtin.debug:
+        msg: |
+          Lambda Functions deployment successful:
+          - Functions deployed: {{ functions_outputs.functionArns | default({}) | length }}
+          - DLQ ARN: {{ functions_outputs.dlqArn | default('N/A') }}
+          - DLQ Handler ARN: {{ functions_outputs.dlqHandlerArn | default('N/A') }}
+          
+          Functions:
+          {% for name, arn in (functions_outputs.functionArns | default({})).items() %}
+          - {{ name }}: {{ arn }}
+          {% endfor %}
+      when: 
+        - functions_deployed is defined and functions_deployed
+        - functions_outputs is defined
+  
+  rescue:
+    - name: Display error on functions deployment
+      ansible.builtin.debug:
+        msg: "Failed to deploy Lambda functions. See error details above."
+      
+    - name: Set functions deployment failure
+      ansible.builtin.set_fact:
+        functions_deployed: false
+      
+    - name: Fail the playbook
+      ansible.builtin.fail:
+        msg: "Lambda functions deployment failed."

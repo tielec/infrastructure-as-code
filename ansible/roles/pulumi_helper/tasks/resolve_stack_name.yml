@@ -53,4 +53,3 @@
       - Input: {{ stack_name }}
       - Resolved: {{ resolved_stack_name }}
       - Organization used: {{ 'Yes' if resolved_stack_name != stack_name else 'No' }}
-

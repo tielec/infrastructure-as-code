@@ -1,0 +1,4 @@
+name: lambda-api-gateway
+organization: tielec
+runtime: nodejs
+description: Lambda API Gateway Infrastructure - REST API, Usage Plans, and API Keys

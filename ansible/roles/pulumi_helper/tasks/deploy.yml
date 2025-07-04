@@ -35,11 +35,36 @@
   rescue:
     - name: Display error message
       ansible.builtin.debug:
-        msg: "Failed to deploy Pulumi stack"
+        msg: |
+          ========== Pulumi Deployment Failed ==========
+          Failed to deploy Pulumi stack
+          Error code: {{ pulumi_up_result.rc | default('unknown') }}
+          {% if pulumi_up_result.stdout is defined %}
+          Output:
+          {{ pulumi_up_result.stdout }}
+          {% endif %}
+          {% if pulumi_up_result.stderr is defined and pulumi_up_result.stderr %}
+          Error:
+          {{ pulumi_up_result.stderr }}
+          {% endif %}
+          ==============================================
     
     - name: Set failure status
       ansible.builtin.set_fact:
         pulumi_deployment_failed: true
+    
+    # エラー時にAnsibleの実行を停止
+    - name: Fail the playbook
+      ansible.builtin.fail:
+        msg: |
+          Pulumi deployment failed. 
+          {% if 'TypeScript' in pulumi_up_result.stdout | default('') %}
+          TypeScript compilation errors detected. Please fix the code and try again.
+          {% elif 'unhandled exception' in pulumi_up_result.stdout | default('') %}
+          An unhandled exception occurred during deployment.
+          {% else %}
+          Check the output above for details.
+          {% endif %}
 
 # チェックモード
 - name: Mock deploy (check mode)

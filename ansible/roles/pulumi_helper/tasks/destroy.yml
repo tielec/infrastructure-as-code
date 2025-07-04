@@ -54,11 +54,27 @@
     
     - name: Display error message
       ansible.builtin.debug:
-        msg: "Failed to destroy Pulumi stack"
-    
+        msg: |
+          ========== Pulumi Destroy Failed ==========
+          Failed to destroy Pulumi stack
+          {% if pulumi_destroy_result is defined %}
+          Error code: {{ pulumi_destroy_result.rc | default('unknown') }}
+          {% endif %}
+          ==========================================    
     - name: Set failure status
       ansible.builtin.set_fact:
         pulumi_destroy_failed: true
+    
+    # エラー時にAnsibleの実行を停止
+    - name: Fail the playbook
+      ansible.builtin.fail:
+        msg: |
+          Pulumi destroy operation failed.
+          {% if 'Another update is currently in progress' in pulumi_destroy_result.stderr | default('') %}
+          Another Pulumi operation is in progress. The retry also failed.
+          {% else %}
+          Check the output above for details.
+          {% endif %}
 
 # チェックモード
 - name: Mock destroy (check mode)

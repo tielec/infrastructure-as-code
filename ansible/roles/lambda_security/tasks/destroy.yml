@@ -1,0 +1,72 @@
+---
+# Lambda APIセキュリティグループの削除タスク
+
+- name: Display security destruction information
+  ansible.builtin.debug:
+    msg: |
+      Destroying Lambda API Security Infrastructure:
+      - Project: {{ project_name }}
+      - Security Pulumi Project: {{ security_project_name }}
+      - Environment: {{ env_name }}
+      - Remove Stack: {{ remove_stacks | default(false) }}
+
+# ファイル権限設定
+- name: Ensure aws-env.sh has execute permissions
+  ansible.builtin.file:
+    path: "{{ scripts_dir }}/aws-env.sh"
+    mode: '0755'
+  register: aws_env_script_permission
+  no_log: true
+
+# Pulumiによる削除
+- name: Destroy Security Infrastructure with Pulumi
+  block:
+    # Pulumiヘルパータスクを呼び出す
+    - name: Initialize security stack
+      ansible.builtin.include_role:
+        name: pulumi_helper
+        tasks_from: init_stack
+      vars:
+        pulumi_project_path: "{{ pulumi_path }}/lambda-security"
+        stack_name: "{{ env_name }}"
+    
+    # Pulumiリソースの削除
+    - name: Destroy security resources with Pulumi
+      ansible.builtin.include_role:
+        name: pulumi_helper
+        tasks_from: destroy
+      vars:
+        pulumi_project_path: "{{ pulumi_path }}/lambda-security"
+    
+    # スタック自体の削除（オプション）
+    - name: Remove security stack (if requested)
+      ansible.builtin.include_role:
+        name: pulumi_helper
+        tasks_from: remove_stack
+      vars:
+        pulumi_project_path: "{{ pulumi_path }}/lambda-security"
+        stack_name: "{{ env_name }}"
+      when: remove_stacks | default(false) | bool
+    
+    # 削除ステータスの設定
+    - name: Set security destruction status on success
+      ansible.builtin.set_fact:
+        security_destroyed: true
+  
+  rescue:
+    # エラーハンドリング
+    - name: Set security destruction status on failure
+      ansible.builtin.set_fact:
+        security_destroyed: false
+    
+    - name: Display error
+      ansible.builtin.debug:
+        msg: "Failed to destroy security resources. See error details above."
+
+# 削除結果のサマリー表示
+- name: Display security destruction summary
+  ansible.builtin.debug:
+    msg: |
+      Security destruction summary:
+      - Security Resources: {{ security_destroyed | ternary('Destroyed', 'Failed') }}
+      - Stack Removed: {{ (remove_stacks | default(false) | bool and security_destroyed) | ternary('Yes', 'No') }}
