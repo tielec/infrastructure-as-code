@@ -12,6 +12,9 @@ import * as aws from "@pulumi/aws";
 const config = new pulumi.Config();
 const projectName = config.get("projectName") || "lambda-api";
 
+// アカウントID取得
+const callerIdentity = aws.getCallerIdentity();
+
 // ===== API Gateway CloudWatch Logs Role =====
 const apiGatewayCloudWatchRole = new aws.iam.Role("api-gateway-cloudwatch-role", {
     name: "ApiGatewayCloudWatchLogsRole",
@@ -46,7 +49,7 @@ const apiGatewayAccount = new aws.apigateway.Account("api-gateway-account", {
 // ===== Cost and Usage Report (オプション) =====
 // コスト監視用のS3バケット
 const costReportBucket = new aws.s3.Bucket(`${projectName}-cost-reports`, {
-    bucket: `${projectName}-cost-reports-${aws.getAccountId()}`,
+    bucket: pulumi.interpolate`${projectName}-cost-reports-${callerIdentity.accountId}`,
     acl: "private",
     lifecycleRules: [{
         enabled: true,
@@ -63,7 +66,7 @@ const costReportBucket = new aws.s3.Bucket(`${projectName}-cost-reports`, {
 // バケットポリシー（AWS Cost and Usage Report用）
 const costReportBucketPolicy = new aws.s3.BucketPolicy("cost-report-bucket-policy", {
     bucket: costReportBucket.id,
-    policy: pulumi.all([costReportBucket.arn, aws.getCallerIdentity()]).apply(([bucketArn, identity]) => JSON.stringify({
+    policy: pulumi.all([costReportBucket.arn, callerIdentity.accountId]).apply(([bucketArn, accountId]) => JSON.stringify({
         Version: "2012-10-17",
         Statement: [
             {
@@ -78,7 +81,7 @@ const costReportBucketPolicy = new aws.s3.BucketPolicy("cost-report-bucket-polic
                 Resource: bucketArn,
                 Condition: {
                     StringEquals: {
-                        "aws:SourceAccount": identity.accountId
+                        "aws:SourceAccount": accountId
                     }
                 }
             },
@@ -91,7 +94,7 @@ const costReportBucketPolicy = new aws.s3.BucketPolicy("cost-report-bucket-polic
                 Resource: `${bucketArn}/*`,
                 Condition: {
                     StringEquals: {
-                        "aws:SourceAccount": identity.accountId
+                        "aws:SourceAccount": accountId
                     }
                 }
             }
