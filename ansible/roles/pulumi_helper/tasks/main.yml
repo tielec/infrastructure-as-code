@@ -123,16 +123,16 @@
 - name: Set Pulumi standard tasks
   ansible.builtin.set_fact:
     pulumi_commands:
-      preview: "export PULUMI_ACCESS_TOKEN=\"{{ lookup('env', 'PULUMI_ACCESS_TOKEN') }}\"; source {{ playbook_dir }}/../../scripts/aws-env.sh > /dev/null && eval $({{ playbook_dir }}/../../scripts/aws-env.sh) > /dev/null && sudo -E {{ pulumi_bin_path }} preview"
-      up: "export PULUMI_ACCESS_TOKEN=\"{{ lookup('env', 'PULUMI_ACCESS_TOKEN') }}\"; source {{ playbook_dir }}/../../scripts/aws-env.sh > /dev/null && eval $({{ playbook_dir }}/../../scripts/aws-env.sh) > /dev/null && sudo -E {{ pulumi_bin_path }} up --yes"
-      destroy: "export PULUMI_ACCESS_TOKEN=\"{{ lookup('env', 'PULUMI_ACCESS_TOKEN') }}\"; source {{ playbook_dir }}/../../scripts/aws-env.sh > /dev/null && eval $({{ playbook_dir }}/../../scripts/aws-env.sh) > /dev/null && sudo -E {{ pulumi_bin_path }} destroy --yes"
-      refresh: "export PULUMI_ACCESS_TOKEN=\"{{ lookup('env', 'PULUMI_ACCESS_TOKEN') }}\"; source {{ playbook_dir }}/../../scripts/aws-env.sh > /dev/null && eval $({{ playbook_dir }}/../../scripts/aws-env.sh) > /dev/null && sudo -E {{ pulumi_bin_path }} refresh --yes"
+      preview:      "export PULUMI_ACCESS_TOKEN=\"{{ lookup('env', 'PULUMI_ACCESS_TOKEN') }}\"; source {{ playbook_dir }}/../../scripts/aws-env.sh > /dev/null && eval $({{ playbook_dir }}/../../scripts/aws-env.sh) > /dev/null && sudo -E {{ pulumi_bin_path }} preview"
+      up:           "export PULUMI_ACCESS_TOKEN=\"{{ lookup('env', 'PULUMI_ACCESS_TOKEN') }}\"; source {{ playbook_dir }}/../../scripts/aws-env.sh > /dev/null && eval $({{ playbook_dir }}/../../scripts/aws-env.sh) > /dev/null && sudo -E {{ pulumi_bin_path }} up --yes"
+      destroy:      "export PULUMI_ACCESS_TOKEN=\"{{ lookup('env', 'PULUMI_ACCESS_TOKEN') }}\"; source {{ playbook_dir }}/../../scripts/aws-env.sh > /dev/null && eval $({{ playbook_dir }}/../../scripts/aws-env.sh) > /dev/null && sudo -E {{ pulumi_bin_path }} destroy --yes"
+      refresh:      "export PULUMI_ACCESS_TOKEN=\"{{ lookup('env', 'PULUMI_ACCESS_TOKEN') }}\"; source {{ playbook_dir }}/../../scripts/aws-env.sh > /dev/null && eval $({{ playbook_dir }}/../../scripts/aws-env.sh) > /dev/null && sudo -E {{ pulumi_bin_path }} refresh --yes"
       stack_output: "export PULUMI_ACCESS_TOKEN=\"{{ lookup('env', 'PULUMI_ACCESS_TOKEN') }}\"; source {{ playbook_dir }}/../../scripts/aws-env.sh > /dev/null && eval $({{ playbook_dir }}/../../scripts/aws-env.sh) > /dev/null && sudo -E {{ pulumi_bin_path }} stack output"
-      stack_ls: "export PULUMI_ACCESS_TOKEN=\"{{ lookup('env', 'PULUMI_ACCESS_TOKEN') }}\"; source {{ playbook_dir }}/../../scripts/aws-env.sh > /dev/null && eval $({{ playbook_dir }}/../../scripts/aws-env.sh) > /dev/null && sudo -E {{ pulumi_bin_path }} stack ls"
-      stack_rm: "export PULUMI_ACCESS_TOKEN=\"{{ lookup('env', 'PULUMI_ACCESS_TOKEN') }}\"; source {{ playbook_dir }}/../../scripts/aws-env.sh > /dev/null && eval $({{ playbook_dir }}/../../scripts/aws-env.sh) > /dev/null && sudo -E {{ pulumi_bin_path }} stack rm --yes"
-      config_set: "export PULUMI_ACCESS_TOKEN=\"{{ lookup('env', 'PULUMI_ACCESS_TOKEN') }}\"; source {{ playbook_dir }}/../../scripts/aws-env.sh > /dev/null && eval $({{ playbook_dir }}/../../scripts/aws-env.sh) > /dev/null && sudo -E {{ pulumi_bin_path }} config set"
-      build: "npm run build"
-      tsc: "npx tsc"
+      stack_ls:     "export PULUMI_ACCESS_TOKEN=\"{{ lookup('env', 'PULUMI_ACCESS_TOKEN') }}\"; source {{ playbook_dir }}/../../scripts/aws-env.sh > /dev/null && eval $({{ playbook_dir }}/../../scripts/aws-env.sh) > /dev/null && sudo -E {{ pulumi_bin_path }} stack ls"
+      stack_rm:     "export PULUMI_ACCESS_TOKEN=\"{{ lookup('env', 'PULUMI_ACCESS_TOKEN') }}\"; source {{ playbook_dir }}/../../scripts/aws-env.sh > /dev/null && eval $({{ playbook_dir }}/../../scripts/aws-env.sh) > /dev/null && sudo -E {{ pulumi_bin_path }} stack rm --yes"
+      config_set:   "export PULUMI_ACCESS_TOKEN=\"{{ lookup('env', 'PULUMI_ACCESS_TOKEN') }}\"; source {{ playbook_dir }}/../../scripts/aws-env.sh > /dev/null && eval $({{ playbook_dir }}/../../scripts/aws-env.sh) > /dev/null && sudo -E {{ pulumi_bin_path }} config set"
+      build:        "npm run build"
+      tsc:          "npx tsc"
 
 # 結果変数の初期化
 - name: Initialize result variables

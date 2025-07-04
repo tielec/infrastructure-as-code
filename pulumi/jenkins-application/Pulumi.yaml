@@ -1,3 +1,4 @@
 name: jenkins-application
+organization: tielec
 runtime: nodejs
 description: Jenkins Application Configuration Resources (Updates, Plugins, Jobs)

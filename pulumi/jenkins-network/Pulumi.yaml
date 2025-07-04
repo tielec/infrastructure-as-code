@@ -1,3 +1,4 @@
 name: jenkins-network
+organization: tielec
 runtime: nodejs
 description: Jenkins Network Infrastructure

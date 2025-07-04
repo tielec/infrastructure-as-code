@@ -54,6 +54,7 @@
         tasks_from: get_outputs
       vars:
         pulumi_project_path: "{{ pulumi_path }}/jenkins-network"
+        stack_name: "{{ env_name }}"
         output_name: "vpcId"
         mock_output: "mock-vpc-id-for-check-mode"
     
@@ -67,6 +68,7 @@
         tasks_from: get_outputs
       vars:
         pulumi_project_path: "{{ pulumi_path }}/jenkins-security"
+        stack_name: "{{ env_name }}"
         output_name: "efsSecurityGroupId"
         mock_output: "mock-efs-sg-id"
     
@@ -110,6 +112,7 @@
         tasks_from: get_outputs
       vars:
         pulumi_project_path: "{{ pulumi_path }}/jenkins-storage"
+        stack_name: "{{ env_name }}"
         output_name: "efsFileSystemId"
         mock_output: "mock-efs-id"
     
@@ -124,6 +127,7 @@
         tasks_from: get_outputs
       vars:
         pulumi_project_path: "{{ pulumi_path }}/jenkins-storage"
+        stack_name: "{{ env_name }}"
         output_name: "jenkinsAccessPointId"
         mock_output: "mock-jenkins-ap-id"
     
