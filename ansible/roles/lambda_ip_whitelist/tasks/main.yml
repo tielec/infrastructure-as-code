@@ -1,9 +1,9 @@
-# lambda_ip_whitelist ロールのメインタスク
+# Pulumiスタックとしてのデプロイ/削除を管理
 
-- name: Validate operation
-  ansible.builtin.fail:
-    msg: "Invalid operation: {{ operation }}. Valid operations: init, list, add, remove, update"
-  when: operation not in ['init', 'list', 'add', 'remove', 'update']
+- name: Include deploy tasks
+  ansible.builtin.include_tasks: deploy.yml
+  when: operation | default('deploy') == 'deploy'
 
-- name: Include operation tasks
-  ansible.builtin.include_tasks: "{{ operation }}.yml"
+- name: Include destroy tasks
+  ansible.builtin.include_tasks: destroy.yml
+  when: operation | default('deploy') == 'destroy'

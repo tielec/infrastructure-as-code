@@ -1,0 +1,108 @@
+---
+# IP Whitelist Pulumiスタックのデプロイタスク
+
+- name: Display IP Whitelist deployment information
+  ansible.builtin.debug:
+    msg: |
+      Deploying IP Whitelist Configuration:
+      - Project: {{ project_name }}
+      - Environment: {{ env_name }}
+      - Stack: {{ ip_whitelist_project_name }}
+
+# Pulumiデプロイ
+- name: Deploy IP Whitelist with Pulumi
+  block:
+    # Pulumiヘルパータスクを呼び出す
+    - name: Initialize IP whitelist stack
+      ansible.builtin.include_role:
+        name: pulumi_helper
+        tasks_from: init_stack
+      vars:
+        pulumi_project_path: "{{ pulumi_path }}/{{ ip_whitelist_project_name }}"
+        stack_name: "{{ env_name }}"
+    
+    - name: Configure IP whitelist stack
+      ansible.builtin.shell: |
+        {{ scripts_dir }}/aws-env.sh
+        cd {{ pulumi_path }}/{{ ip_whitelist_project_name }}
+        sudo -E /root/.pulumi/bin/pulumi config set aws:region {{ aws_region_name }}
+        sudo -E /root/.pulumi/bin/pulumi config set {{ ip_whitelist_project_name }}:projectName {{ project_name }}
+      register: pulumi_config_result
+      changed_when: pulumi_config_result.rc == 0
+    
+    # Pulumiプレビュー
+    - name: Preview IP whitelist deployment
+      ansible.builtin.include_role:
+        name: pulumi_helper
+        tasks_from: preview
+      vars:
+        pulumi_project_path: "{{ pulumi_path }}/{{ ip_whitelist_project_name }}"
+      when: preview_only | default(false) | bool
+    
+    # Pulumiデプロイ
+    - name: Deploy IP whitelist stack
+      ansible.builtin.include_role:
+        name: pulumi_helper
+        tasks_from: deploy
+      vars:
+        pulumi_project_path: "{{ pulumi_path }}/{{ ip_whitelist_project_name }}"
+      when: not preview_only | default(false) | bool
+    
+    # デプロイ後の情報取得
+    - name: Get IP whitelist outputs
+      ansible.builtin.shell: |
+        cd {{ pulumi_path }}/{{ ip_whitelist_project_name }}
+        export PULUMI_ACCESS_TOKEN="{{ lookup('env', 'PULUMI_ACCESS_TOKEN') }}"
+        sudo -E /root/.pulumi/bin/pulumi stack output --json
+      register: whitelist_outputs_raw
+      changed_when: false
+      when: not preview_only | default(false) | bool
+    
+    - name: Parse IP whitelist outputs
+      ansible.builtin.set_fact:
+        whitelist_outputs: "{{ whitelist_outputs_raw.stdout | from_json }}"
+      when: 
+        - not preview_only | default(false) | bool
+        - whitelist_outputs_raw.stdout is defined
+    
+    # デプロイ成功を示す変数設定
+    - name: Set IP whitelist deployment status
+      ansible.builtin.set_fact:
+        ip_whitelist_deployed: true
+      when: not preview_only | default(false) | bool
+    
+    # デプロイ後の指示を表示
+    - name: Display post-deployment instructions
+      ansible.builtin.debug:
+        msg: "{{ whitelist_outputs.postDeployInstructions | default('') }}"
+      when: 
+        - ip_whitelist_deployed is defined and ip_whitelist_deployed
+        - whitelist_outputs is defined
+    
+    # 管理コマンドの表示
+    - name: Display management commands
+      ansible.builtin.debug:
+        msg: |
+          IP Whitelist Management Commands:
+          - Get current whitelist: {{ whitelist_outputs.managementCommands.getWhitelist | default('N/A') }}
+          - Secret Name: {{ whitelist_outputs.secretName | default('N/A') }}
+          
+          Summary:
+          - Environment: {{ whitelist_outputs.summary.environment | default('N/A') }}
+          - Default Behavior: {{ whitelist_outputs.summary.defaultBehavior | default('N/A') }}
+      when: 
+        - ip_whitelist_deployed is defined and ip_whitelist_deployed
+        - whitelist_outputs is defined
+  
+  rescue:
+    - name: Display error on IP whitelist deployment
+      ansible.builtin.debug:
+        msg: "Failed to deploy IP whitelist configuration. See error details above."
+      
+    - name: Set IP whitelist deployment failure
+      ansible.builtin.set_fact:
+        ip_whitelist_deployed: false
+      
+    - name: Fail the playbook
+      ansible.builtin.fail:
+        msg: "IP whitelist deployment failed."

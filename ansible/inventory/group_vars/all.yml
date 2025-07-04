@@ -56,11 +56,12 @@ lambda_api_infra:
   
   # Pulumiプロジェクト名
   pulumi:
-    account_setup_project: "lambda-account-setup"  # アカウントレベル設定（追加）
+    account_setup_project: "lambda-account-setup"  # アカウントレベル設定
     network_project: "lambda-network"
     security_project: "lambda-security"
     vpce_project: "lambda-vpce"
     nat_project: "lambda-nat"
+    ip_whitelist_project: "lambda-ip-whitelist"  # IP Whitelist管理
     functions_project: "lambda-functions"
     api_gateway_project: "lambda-api-gateway"
     waf_project: "lambda-waf"
@@ -109,7 +110,7 @@ lambda_api_infra:
         - "secretsmanager"
         - "kms"
 
-  # アラート設定（追加）
+  # アラート設定
   alerts:
     # 通常のアラート通知先
     email: "dev-team@example.com"

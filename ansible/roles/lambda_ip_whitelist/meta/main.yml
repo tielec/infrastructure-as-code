@@ -1,2 +1,3 @@
 dependencies:
   - role: aws_setup
+  - role: pulumi_helper

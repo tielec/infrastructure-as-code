@@ -2,7 +2,7 @@
  * pulumi/lambda-waf/index.ts
  * 
  * Lambda API WAFリソースを構築するPulumiスクリプト
- * 汎用的なIPホワイトリスト管理、レート制限、SQLi/XSS防御を実装
+ * IP Whitelistは独立したスタックから参照
  */
 import * as pulumi from "@pulumi/pulumi";
 import * as aws from "@pulumi/aws";
@@ -17,8 +17,15 @@ const environment = pulumi.getStack();
 
 // スタック参照
 const apiGatewayStackName = config.get("apiGatewayStackName") || "lambda-api-gateway";
+const ipWhitelistStackName = config.get("ipWhitelistStackName") || "lambda-ip-whitelist";
+
+// 既存スタックから値を取得
 const apiGatewayStack = new pulumi.StackReference(`${pulumi.getOrganization()}/${apiGatewayStackName}/${environment}`);
+const ipWhitelistStack = new pulumi.StackReference(`${pulumi.getOrganization()}/${ipWhitelistStackName}/${environment}`);
+
 const apiStage = apiGatewayStack.getOutput("apiStage");
+const ipWhitelistSecretArn = ipWhitelistStack.getOutput("secretArn");
+const ipWhitelistSecretName = ipWhitelistStack.getOutput("secretName");
 
 // WAF設定（設計書に基づく）
 interface WafConfig {
@@ -29,7 +36,7 @@ interface WafConfig {
     geoMatchConstraint?: string[];
 }
 
-// クライアント情報の型定義
+// クライアント情報の型定義（IP Whitelistスタックと共通）
 interface ClientInfo {
     id: string;
     name: string;
@@ -54,62 +61,14 @@ interface IpWhitelistConfig {
     };
 }
 
-// ===== Secrets Manager Secret の作成（初回デプロイ対応）=====
-const secretName = `${projectName}/ip-whitelist/${environment}`;
-
-// まずSecretの存在を確認し、なければ作成
-const ipWhitelistSecret = new aws.secretsmanager.Secret(`${projectName}-ip-whitelist`, {
-    name: secretName,
-    description: `IP whitelist configuration for ${projectName} WAF - ${environment}`,
-    tags: {
-        Name: `${projectName}-ip-whitelist-${environment}`,
-        Environment: environment,
-        ManagedBy: "pulumi",
-    },
-});
-
-// デフォルトの初期設定を作成
-const defaultWhitelistConfig: IpWhitelistConfig = {
-    version: "1.0",
-    lastUpdated: new Date().toISOString(),
-    clients: environment === "dev" ? [
-        {
-            id: "dev-default",
-            name: "Development Default Access",
-            description: "Default access for development - PLEASE UPDATE WITH ACTUAL IPs",
-            enabled: true,
-            ipAddresses: ["0.0.0.0/0"], // 開発環境では一時的に全許可
-            tags: {
-                type: "internal",
-                priority: "low",
-                environment: "dev-only"
-            }
-        }
-    ] : [],
-    globalRules: {
-        allowedEnvironments: ["dev", "staging", "prod"],
-        maxIpsPerClient: 10,
-        ipFormat: "CIDR"
-    }
-};
-
-// Secret Versionの作成（初期値を設定）
-const ipWhitelistSecretVersion = new aws.secretsmanager.SecretVersion(`${projectName}-ip-whitelist-version`, {
-    secretId: ipWhitelistSecret.id,
-    secretString: JSON.stringify(defaultWhitelistConfig),
-}, {
-    // このバージョンは初期値なので、既存の値がある場合は上書きしない
-    ignoreChanges: ["secretString"], // 初回以降は手動更新を優先
-});
-
-// ===== IP Whitelist の取得（改善版）=====
+// ===== IP Whitelist の取得（独立スタックから）=====
 async function getIpWhitelist(): Promise<string[]> {
     try {
         // Secrets Manager SDKクライアントの作成
         const secretsManager = new aws.sdk.SecretsManager();
         
-        // 少し待機してSecretが作成されるのを待つ（初回デプロイ時）
-        await new Promise(resolve => setTimeout(resolve, 2000));
+        // Secrets Managerから取得（スタック参照経由）
+        const secretName = await ipWhitelistSecretName.promise();
         
         try {
             // Secretの値を取得
@@ -142,7 +101,6 @@ async function getIpWhitelist(): Promise<string[]> {
             // Secretが見つからない、またはアクセスできない場合
             if (secretError.code === 'ResourceNotFoundException') {
                 pulumi.log.warn(`Secret not found: ${secretName}. Using default configuration.`);
-                pulumi.log.info(`Run 'scripts/init-ip-whitelist.sh' or update the secret manually.`);
             } else if (secretError.code === 'AccessDeniedException') {
                 pulumi.log.warn(`Access denied to secret: ${secretName}. Check IAM permissions.`);
             } else {
@@ -164,7 +122,7 @@ function getDefaultIps(): string[] {
     // 環境別のデフォルト値
     if (environment === "dev") {
         pulumi.log.warn("Using default IP whitelist for development (0.0.0.0/0 - ALL IPs allowed)");
-        pulumi.log.warn("SECURITY WARNING: Please configure actual IP whitelist via Secrets Manager");
+        pulumi.log.warn("SECURITY WARNING: Please configure actual IP whitelist via lambda-ip-whitelist stack");
         return ["0.0.0.0/0"];
     }
     
@@ -176,7 +134,7 @@ function getDefaultIps(): string[] {
     }
     
     // ステージング/本番で設定がない場合はエラー
-    throw new Error(`No IP whitelist configured for ${environment} environment. Please run 'scripts/init-ip-whitelist.sh' or configure fallbackIpWhitelist in Pulumi config.`);
+    throw new Error(`No IP whitelist configured for ${environment} environment. Please deploy lambda-ip-whitelist stack first.`);
 }
 
 // IP Whitelistの取得（非同期処理をPromiseとして扱う）
@@ -185,17 +143,15 @@ const ipWhitelistPromise = getIpWhitelist();
 // ===== IP Set（ホワイトリスト）=====
 const ipSet = new aws.wafv2.IpSet(`${projectName}-ip-whitelist`, {
     name: `${projectName}-ip-whitelist-${environment}`,
-    description: "Allowed IP addresses for API access",
+    description: "Allowed IP addresses for API access (managed by lambda-ip-whitelist stack)",
     scope: "REGIONAL", // API Gateway用
     ipAddressVersion: "IPV4",
     addresses: pulumi.output(ipWhitelistPromise),
     tags: {
         Name: `${projectName}-ip-whitelist-${environment}`,
         Environment: environment,
+        ManagedBy: "lambda-ip-whitelist-stack",
     },
-}, {
-    // Secret作成後に実行されるよう依存関係を設定
-    dependsOn: [ipWhitelistSecretVersion],
 });
 
 // ===== Web ACL =====
@@ -453,7 +409,7 @@ new aws.iam.RolePolicyAttachment(`${projectName}-update-ip-whitelist-basic`, {
 
 const updateIpWhitelistPolicy = new aws.iam.RolePolicy(`${projectName}-update-ip-whitelist-policy`, {
     role: updateIpWhitelistRole.id,
-    policy: pulumi.all([ipSet.arn, ipWhitelistSecret.arn]).apply(([ipSetArn, secretArn]) => JSON.stringify({
+    policy: pulumi.all([ipSet.arn, ipWhitelistSecretArn]).apply(([ipSetArn, secretArn]) => JSON.stringify({
         Version: "2012-10-17",
         Statement: [
             {
@@ -579,19 +535,21 @@ const wafLoggingConfiguration = new aws.wafv2.WebAclLoggingConfiguration(`${proj
 const wafConfig = new aws.ssm.Parameter(`${projectName}-waf-config`, {
     name: `/${projectName}/${environment}/waf/config`,
     type: "String",
-    value: pulumi.all([webAcl.arn, ipSet.arn, ipWhitelistSecret.arn]).apply(
-        ([webAclArn, ipSetArn, secretArn]) => JSON.stringify({
+    value: pulumi.all([webAcl.arn, ipSet.arn, ipWhitelistSecretArn, ipWhitelistSecretName]).apply(
+        ([webAclArn, ipSetArn, secretArn, secretName]) => JSON.stringify({
             webAcl: {
                 arn: webAclArn,
                 name: webAcl.name,
             },
             ipSet: {
                 arn: ipSetArn,
+                managedBy: "lambda-ip-whitelist stack",
                 secretArn: secretArn,
-                managementNote: "Update IPs via Secrets Manager",
+                secretName: secretName,
+                updateInstructions: "Update via lambda-ip-whitelist stack or Secrets Manager",
             },
             rules: {
-                ipWhitelist: "Priority 1 - Allow whitelisted IPs from Secrets Manager",
+                ipWhitelist: "Priority 1 - Allow whitelisted IPs from lambda-ip-whitelist stack",
                 rateLimit: "Priority 2 - 2000 requests per 5 minutes",
                 commonRuleSet: "Priority 3 - OWASP Top 10 protection",
                 sqliProtection: "Priority 4 - SQL injection protection",
@@ -623,19 +581,17 @@ const wafConfig = new aws.ssm.Parameter(`${projectName}-waf-config`, {
 const ipManagementGuide = new aws.ssm.Parameter(`${projectName}-ip-management-guide`, {
     name: `/${projectName}/${environment}/waf/ip-management-guide`,
     type: "String",
-    value: JSON.stringify({
-        overview: "IP whitelist is managed via AWS Secrets Manager for security and flexibility",
+    value: pulumi.all([ipWhitelistSecretName]).apply(([secretName]) => JSON.stringify({
+        overview: "IP whitelist is managed via lambda-ip-whitelist stack",
         secretName: secretName,
-        initialSetup: [
-            "Option 1: Run 'scripts/init-ip-whitelist.sh' before deploying WAF stack",
-            "Option 2: Deploy WAF stack first (uses default config), then update the secret",
-            "Option 3: Set 'fallbackIpWhitelist' in Pulumi config"
-        ],
+        managementMethod: "Pulumi stack (lambda-ip-whitelist)",
         updateProcess: [
-            "1. Get current configuration: aws secretsmanager get-secret-value --secret-id [SECRET_NAME]",
-            "2. Update the JSON structure with new client IPs",
-            "3. Update secret: aws secretsmanager put-secret-value --secret-id [SECRET_NAME] --secret-string '[JSON]'",
-            "4. Changes are applied automatically within 5 minutes"
+            "Option 1: Update via lambda-ip-whitelist stack",
+            "Option 2: Direct Secrets Manager update",
+            `aws secretsmanager get-secret-value --secret-id ${secretName} --query SecretString --output text > whitelist.json`,
+            "Edit whitelist.json",
+            `aws secretsmanager put-secret-value --secret-id ${secretName} --secret-string file://whitelist.json`,
+            "Changes are applied automatically within 5 minutes"
         ],
         clientStructure: {
             id: "Unique identifier for the client",
@@ -665,11 +621,12 @@ const ipManagementGuide = new aws.ssm.Parameter(`${projectName}-ip-management-gu
             removeClient: "Delete the entire client object from the array"
         },
         securityNotes: {
-            dev: environment === "dev" ? "WARNING: Currently using 0.0.0.0/0 (all IPs). Update immediately!" : null,
+            dev: environment === "dev" ? "WARNING: May be using 0.0.0.0/0 (all IPs). Check lambda-ip-whitelist stack." : null,
             production: "Always use specific IP ranges in production environments",
-            monitoring: "Check WAF logs regularly for blocked legitimate requests"
+            monitoring: "Check WAF logs regularly for blocked legitimate requests",
+            stackManagement: "IP whitelist is managed by lambda-ip-whitelist stack"
         }
-    }),
+    })),
     description: "IP whitelist management guide",
     tags: {
         Environment: environment,
@@ -680,23 +637,29 @@ const ipManagementGuide = new aws.ssm.Parameter(`${projectName}-ip-management-gu
 export const webAclId = webAcl.id;
 export const webAclArn = webAcl.arn;
 export const ipSetId = ipSet.id;
-export const ipWhitelistSecretArn = ipWhitelistSecret.arn;
-export const ipWhitelistSecretName = ipWhitelistSecret.name;
+export const ipWhitelistSource = "lambda-ip-whitelist stack";
 export const wafLogBucketName = wafLogBucket.bucket;
 export const wafLogStreamName = wafLogStream.name;
 
 // WAF管理用コマンド
 export const wafManagement = {
-    getIpWhitelist: pulumi.interpolate`aws secretsmanager get-secret-value --secret-id ${ipWhitelistSecret.name} --query SecretString --output text | jq .`,
-    updateIpWhitelist: pulumi.interpolate`aws secretsmanager put-secret-value --secret-id ${ipWhitelistSecret.name} --secret-string 'YOUR_JSON_HERE'`,
+    getIpWhitelist: pulumi.interpolate`aws secretsmanager get-secret-value --secret-id ${ipWhitelistSecretName} --query SecretString --output text | jq .`,
+    updateIpWhitelist: pulumi.interpolate`Use lambda-ip-whitelist stack or: aws secretsmanager put-secret-value --secret-id ${ipWhitelistSecretName} --secret-string 'YOUR_JSON_HERE'`,
     viewBlockedRequests: pulumi.interpolate`aws logs tail /aws/wafv2/${projectName}-${environment} --follow`,
     downloadWafLogs: pulumi.interpolate`aws s3 sync s3://${wafLogBucket.bucket}/waf-logs/ ./waf-logs/`,
+};
+
+// IP管理情報
+export const ipManagement = {
+    source: "Managed by lambda-ip-whitelist stack",
+    secretName: ipWhitelistSecretName,
+    updateCommand: pulumi.interpolate`cd ../lambda-ip-whitelist && pulumi stack output managementCommands`,
 };
 
 // サマリー
 export const summary = {
     protection: {
-        ipWhitelist: "Managed via Secrets Manager",
+        ipWhitelist: "Managed via lambda-ip-whitelist stack",
         rateLimit: "2000 requests / 5 minutes",
         bodySize: "10MB max",
         sqli: "Protected",
@@ -708,10 +671,10 @@ export const summary = {
         alarms: 2,
     },
     ipManagement: {
-        method: "AWS Secrets Manager",
-        secretName: secretName,
+        method: "lambda-ip-whitelist Pulumi stack",
+        secretName: ipWhitelistSecretName,
         updateFrequency: "Real-time",
-        defaultBehavior: environment === "dev" ? "Allow all (0.0.0.0/0)" : "Block all (configure required)",
+        stackReference: `${pulumi.getOrganization()}/${ipWhitelistStackName}/${environment}`,
     },
     environment: environment,
     setupStatus: pulumi.output(ipWhitelistPromise).apply(ips => 
