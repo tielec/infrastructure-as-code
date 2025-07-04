@@ -12,9 +12,6 @@ import * as aws from "@pulumi/aws";
 const config = new pulumi.Config();
 const projectName = config.get("projectName") || "lambda-api";
 
-// アカウントID取得
-const callerIdentity = aws.getCallerIdentity();
-
 // ===== API Gateway CloudWatch Logs Role =====
 const apiGatewayCloudWatchRole = new aws.iam.Role("api-gateway-cloudwatch-role", {
     name: "ApiGatewayCloudWatchLogsRole",
@@ -47,9 +44,10 @@ const apiGatewayAccount = new aws.apigateway.Account("api-gateway-account", {
 });
 
 // ===== Cost and Usage Report (オプション) =====
-// コスト監視用のS3バケット
+// タイムスタンプを使ってユニークなバケット名を生成
+const timestamp = new Date().getTime();
 const costReportBucket = new aws.s3.Bucket(`${projectName}-cost-reports`, {
-    bucket: pulumi.interpolate`${projectName}-cost-reports-${callerIdentity.accountId}`,
+    bucket: `${projectName}-cost-reports-${timestamp}`,
     acl: "private",
     lifecycleRules: [{
         enabled: true,
@@ -64,9 +62,10 @@ const costReportBucket = new aws.s3.Bucket(`${projectName}-cost-reports`, {
 });
 
 // バケットポリシー（AWS Cost and Usage Report用）
+const currentAccountId = aws.getCallerIdentity();
 const costReportBucketPolicy = new aws.s3.BucketPolicy("cost-report-bucket-policy", {
     bucket: costReportBucket.id,
-    policy: pulumi.all([costReportBucket.arn, callerIdentity.accountId]).apply(([bucketArn, accountId]) => JSON.stringify({
+    policy: pulumi.all([costReportBucket.arn, currentAccountId]).apply(([bucketArn, identity]) => JSON.stringify({
         Version: "2012-10-17",
         Statement: [
             {
@@ -81,7 +80,7 @@ const costReportBucketPolicy = new aws.s3.BucketPolicy("cost-report-bucket-polic
                 Resource: bucketArn,
                 Condition: {
                     StringEquals: {
-                        "aws:SourceAccount": accountId
+                        "aws:SourceAccount": identity.accountId
                     }
                 }
             },
@@ -94,7 +93,7 @@ const costReportBucketPolicy = new aws.s3.BucketPolicy("cost-report-bucket-polic
                 Resource: `${bucketArn}/*`,
                 Condition: {
                     StringEquals: {
-                        "aws:SourceAccount": accountId
+                        "aws:SourceAccount": identity.accountId
                     }
                 }
             }
