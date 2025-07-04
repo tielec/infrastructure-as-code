@@ -60,8 +60,7 @@
           {% if pulumi_destroy_result is defined %}
           Error code: {{ pulumi_destroy_result.rc | default('unknown') }}
           {% endif %}
-          ==========================================
-    
+          ==========================================    
     - name: Set failure status
       ansible.builtin.set_fact:
         pulumi_destroy_failed: true

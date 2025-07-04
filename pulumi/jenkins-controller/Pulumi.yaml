@@ -1,3 +1,4 @@
 name: jenkins-controller
+organization: tielec
 runtime: nodejs
 description: Jenkins Controller Infrastructure
