@@ -6,6 +6,7 @@
   hosts: localhost
   connection: local
   gather_facts: yes
+  any_errors_fatal: true
   
   vars:
     # 環境名はコマンドラインから指定可能
@@ -27,6 +28,7 @@
       ansible.builtin.set_fact:
         project_name: "{{ lambda_api_infra.project_name }}"
         aws_region_name: "{{ lambda_api_infra.aws.default_region }}"
+        account_setup_project_name: "{{ lambda_api_infra.pulumi.account_setup_project }}"
         network_project_name: "{{ lambda_api_infra.pulumi.network_project }}"
         security_project_name: "{{ lambda_api_infra.pulumi.security_project }}"
         vpce_project_name: "{{ lambda_api_infra.pulumi.vpce_project }}"
@@ -65,6 +67,7 @@
           - NAT infrastructure
           - Security groups
           - Network infrastructure
+          - Account-level setup (if remove_account_setup=true)
           - Database resources (if exists)
     
     # 対話モードの場合のみ確認
@@ -120,6 +123,7 @@
           7. VPC Endpoints
           8. Security Groups
           9. Network Infrastructure
+          10. Account Setup (if remove_account_setup=true)
     
     # データベースの削除（存在する場合）
     - name: Check if database stack exists
@@ -214,6 +218,16 @@
       vars:
         operation: "destroy"
       when: destroy_network | default(true) | bool
+    
+    # アカウント設定の削除（最後、オプション）
+    - name: Destroy Account Setup (if requested)
+      ansible.builtin.include_role:
+        name: lambda_account_setup
+      vars:
+        operation: "destroy"
+      when: 
+        - destroy_account_setup | default(false) | bool
+        - remove_account_setup | default(false) | bool
 
     # 削除結果サマリー
     - name: Destruction Summary
@@ -230,5 +244,11 @@
           WAF: {{ waf_destroyed | default(false) | ternary('Destroyed', 'Skipped/Failed') }}
           WebSocket API: {{ websocket_destroyed | default(false) | ternary('Destroyed', 'Skipped/Failed') }}
           Database: {{ database_destroyed | default(false) | ternary('Destroyed', 'Skipped/Failed') }}
+          Account Setup: {{ account_setup_destroyed | default(false) | ternary('Destroyed', 'Skipped/Failed') }}
           
           Stacks removed: {{ remove_stacks }}
+          
+          {% if not destroy_account_setup | default(false) %}
+          Note: Account setup was NOT destroyed. To remove it, use:
+          ansible-playbook lambda_teardown_pipeline.yml -e "env=dev force_destroy=true remove_account_setup=true"
+          {% endif %}

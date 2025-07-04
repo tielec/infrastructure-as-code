@@ -146,7 +146,13 @@
           {% if not high_availability_mode %}
           - Instance Type: {{ nat_instance_type }}
           {% endif %}
-    
+
+    # アカウントレベル設定（最初に実行）
+    - name: Setup Account-level Configuration
+      ansible.builtin.include_role:
+        name: lambda_account_setup
+      when: run_account_setup | default(true) | bool
+
     # ネットワークインフラのデプロイ
     - name: Deploy Network Infrastructure
       ansible.builtin.include_role:

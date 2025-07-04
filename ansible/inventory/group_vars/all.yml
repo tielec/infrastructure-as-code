@@ -56,6 +56,7 @@ lambda_api_infra:
   
   # Pulumiプロジェクト名
   pulumi:
+    account_setup_project: "lambda-account-setup"  # アカウントレベル設定（追加）
     network_project: "lambda-network"
     security_project: "lambda-security"
     vpce_project: "lambda-vpce"
@@ -107,6 +108,28 @@ lambda_api_infra:
         - "s3"
         - "secretsmanager"
         - "kms"
+
+  # アラート設定（追加）
+  alerts:
+    # 通常のアラート通知先
+    email: "dev-team@example.com"
+    # 重要なアラート通知先（本番環境の予算超過など）
+    critical_email: "cto@example.com"
+    # Budget設定
+    budgets:
+      dev:
+        limit: 25  # USD
+        threshold: 80  # %
+      staging:
+        limit: 55  # USD
+        threshold: 80  # %
+      prod:
+        limit: 160  # USD
+        thresholds:  # 複数の閾値
+          - percent: 80
+            email: "ops-team@example.com"
+          - percent: 100
+            email: "cto@example.com"
 
 # Jenkins設定
 jenkins:

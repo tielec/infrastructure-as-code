@@ -1,0 +1,81 @@
+---
+# アカウントレベル設定のデプロイタスク
+
+- name: Display account setup information
+  ansible.builtin.debug:
+    msg: |
+      Setting up account-level configuration:
+      - Project: {{ project_name }}
+      - API Gateway CloudWatch Logs Role
+      - Budget Alerts
+      - Cost Monitoring
+
+# Pulumiデプロイ
+- name: Deploy Account Setup with Pulumi
+  block:
+    # Pulumiヘルパータスクを呼び出す
+    - name: Initialize account setup stack
+      ansible.builtin.include_role:
+        name: pulumi_helper
+        tasks_from: init_stack
+      vars:
+        pulumi_project_path: "{{ pulumi_path }}/lambda-account-setup"
+        stack_name: "account"  # アカウントレベルなので環境に依存しない
+    
+    - name: Configure account setup stack
+      ansible.builtin.shell: |
+        {{ scripts_dir }}/aws-env.sh
+        cd {{ pulumi_path }}/lambda-account-setup
+        sudo -E /root/.pulumi/bin/pulumi config set aws:region {{ aws_region_name }}
+        sudo -E /root/.pulumi/bin/pulumi config set lambda-account-setup:projectName {{ project_name }}
+        sudo -E /root/.pulumi/bin/pulumi config set lambda-account-setup:alertEmail {{ alert_email }}
+        sudo -E /root/.pulumi/bin/pulumi config set lambda-account-setup:criticalAlertEmail {{ critical_alert_email }}
+      register: pulumi_config_result
+      changed_when: pulumi_config_result.rc == 0
+    
+    # Pulumiプレビュー
+    - name: Preview account setup deployment
+      ansible.builtin.include_role:
+        name: pulumi_helper
+        tasks_from: preview
+      vars:
+        pulumi_project_path: "{{ pulumi_path }}/lambda-account-setup"
+      when: preview_only | default(false) | bool
+    
+    # Pulumiデプロイ
+    - name: Deploy account setup stack
+      ansible.builtin.include_role:
+        name: pulumi_helper
+        tasks_from: deploy
+      vars:
+        pulumi_project_path: "{{ pulumi_path }}/lambda-account-setup"
+      when: not preview_only | default(false) | bool
+    
+    # デプロイ成功を示す変数設定
+    - name: Set account setup deployment status
+      ansible.builtin.set_fact:
+        account_setup_deployed: true
+      when: not preview_only | default(false) | bool
+    
+    # 設定情報の表示
+    - name: Display account setup summary
+      ansible.builtin.debug:
+        msg: |
+          Account setup successful:
+          - API Gateway CloudWatch Logs: Configured
+          - Budget Alerts: Created (dev=$25, staging=$55, prod=$160)
+          - Cost Reports Bucket: Created
+      when: account_setup_deployed is defined and account_setup_deployed
+  
+  rescue:
+    - name: Display error on account setup
+      ansible.builtin.debug:
+        msg: "Failed to setup account-level configuration. See error details above."
+      
+    - name: Set account setup failure
+      ansible.builtin.set_fact:
+        account_setup_deployed: false
+      
+    - name: Fail the playbook
+      ansible.builtin.fail:
+        msg: "Account setup failed."
