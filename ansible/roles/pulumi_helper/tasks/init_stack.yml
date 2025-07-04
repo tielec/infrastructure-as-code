@@ -2,7 +2,16 @@
 
 - name: Initialize and set up Pulumi stack
   block:
-    - name: Check if project directory exists
+    # 開始ログ
+    - name: Display operation start
+      ansible.builtin.debug:
+        msg: |
+          ========== Pulumi Stack Init Start ==========
+          Project Path: {{ pulumi_project_path }}
+          Stack Name: {{ stack_name }}
+          =============================================
+    
+    - name: Verify project directory exists
       ansible.builtin.stat:
         path: "{{ pulumi_project_path }}"
       register: project_dir
@@ -13,84 +22,176 @@
         msg: "Required variable 'stack_name' is not defined"
       when: stack_name is not defined or stack_name | length == 0
     
-    - name: Check if Pulumi stack exists
-      ansible.builtin.shell: |
-        cd {{ pulumi_project_path }}
-        {{ pulumi_commands.stack_ls }} | grep {{ stack_name }} || echo "stack_not_found"
-      register: stack_select_result
-      changed_when: false
-      failed_when: false
-      when: not ansible_check_mode
+    # スタック名を解決（組織名を含む完全な名前を取得）
+    - name: Resolve stack name
+      ansible.builtin.include_tasks: resolve_stack_name.yml
     
-    - name: Initialize Pulumi stack if not exists
+    - name: Display resolved stack information
+      ansible.builtin.debug:
+        msg: |
+          Stack Resolution:
+          - Input stack name: {{ stack_name }}
+          - Resolved full name: {{ resolved_stack_name }}
+          - Organization detected: {{ 'Yes' if resolved_stack_name != stack_name else 'No' }}
+    
+    # スタックの存在確認
+    - name: Check if stack exists
+      ansible.builtin.include_tasks: check_stack_exists.yml
+    
+    - name: Display stack existence check
+      ansible.builtin.debug:
+        msg: |
+          Stack '{{ resolved_stack_name }}' exists: {{ stack_exists }}
+          Action: {{ 'Select existing stack' if stack_exists else 'Create new stack' }}
+    
+    # スタックが存在しない場合は作成
+    - name: Initialize new stack if not exists
       ansible.builtin.shell: |
         cd {{ pulumi_project_path }}
         source {{ playbook_dir }}/../../scripts/aws-env.sh > /dev/null
         eval $({{ playbook_dir }}/../../scripts/aws-env.sh) > /dev/null
-        sudo -E {{ pulumi_bin_path }} stack init {{ stack_name }}
+        export PULUMI_ACCESS_TOKEN="{{ lookup('env', 'PULUMI_ACCESS_TOKEN') }}"
+        
+        echo "Creating new stack: {{ resolved_stack_name }}"
+        sudo -E {{ pulumi_bin_path }} stack init {{ resolved_stack_name }}
       register: stack_init_result
       changed_when: stack_init_result.rc == 0
       when: 
         - not ansible_check_mode
-        - stack_select_result is defined
-        - "'stack_not_found' in stack_select_result.stdout"
+        - not stack_exists
     
-    - name: Display stack initialization result
+    - name: Display stack creation result
       ansible.builtin.debug:
-        msg: "Initialized new Pulumi stack: {{ stack_name }}"
-      when: 
+        msg: "New stack '{{ resolved_stack_name }}' created successfully"
+      when:
         - not ansible_check_mode
-        - stack_init_result is defined
-        - stack_init_result.changed
+        - not stack_exists
+        - stack_init_result.rc == 0
     
-    - name: Check if package.json exists
+    # NPMの依存関係をインストール
+    - name: Check for package.json
       ansible.builtin.stat:
         path: "{{ pulumi_project_path }}/package.json"
       register: package_json_check
-      when: not ansible_check_mode
     
-    - name: Install npm dependencies
+    - name: Display npm dependency status
+      ansible.builtin.debug:
+        msg: "package.json found: {{ 'Yes' if package_json_check.stat.exists else 'No' }}"
+    
+    - name: Install npm dependencies if package.json exists
       ansible.builtin.shell: |
         cd {{ pulumi_project_path }}
+        echo "Running npm install..."
         npm install
       register: npm_install_result
       changed_when: "'up to date' not in npm_install_result.stdout"
       when: 
         - not ansible_check_mode
-        - package_json_check.stat.exists | default(false)
+        - package_json_check.stat.exists
     
     - name: Display npm install result
       ansible.builtin.debug:
-        msg: "npm install completed: {{ 'packages updated' if npm_install_result.changed else 'already up to date' }}"
+        msg: "npm install: {{ 'Updated packages' if npm_install_result.changed else 'Already up to date' }}"
       when:
         - not ansible_check_mode
-        - npm_install_result is defined
-        - ansible_verbosity > 0
+        - package_json_check.stat.exists
     
+    # スタックを選択
     - name: Select stack
       ansible.builtin.shell: |
         cd {{ pulumi_project_path }}
         source {{ playbook_dir }}/../../scripts/aws-env.sh > /dev/null
         eval $({{ playbook_dir }}/../../scripts/aws-env.sh) > /dev/null
-        sudo -E {{ pulumi_bin_path }} stack select {{ stack_name }}
+        export PULUMI_ACCESS_TOKEN="{{ lookup('env', 'PULUMI_ACCESS_TOKEN') }}"
+        
+        echo "Attempting to select stack..."
+        # まず単純な名前で試し、失敗したら解決済み名前を使用
+        if sudo -E {{ pulumi_bin_path }} stack select {{ stack_name }} 2>/dev/null; then
+          echo "Selected with simple name: {{ stack_name }}"
+        else
+          echo "Simple name failed, trying resolved name: {{ resolved_stack_name }}"
+          sudo -E {{ pulumi_bin_path }} stack select {{ resolved_stack_name }}
+          echo "Selected with resolved name: {{ resolved_stack_name }}"
+        fi
       register: stack_select_result
       changed_when: false
       when: not ansible_check_mode
     
-    - name: Set stack initialization success status
+    - name: Display stack selection result
+      ansible.builtin.debug:
+        msg: |
+          Stack selection output:
+          {{ stack_select_result.stdout_lines | join('\n') }}
+    
+    # 最終確認
+    - name: Verify current stack
+      ansible.builtin.shell: |
+        cd {{ pulumi_project_path }}
+        export PULUMI_ACCESS_TOKEN="{{ lookup('env', 'PULUMI_ACCESS_TOKEN') }}"
+        sudo -E {{ pulumi_bin_path }} stack --show-name
+      register: current_stack_verify
+      changed_when: false
+      when: not ansible_check_mode
+    
+    - name: Display final status
+      ansible.builtin.debug:
+        msg: |
+          ========== Stack Init Complete ==========
+          Current stack: {{ current_stack_verify.stdout }}
+          Success: Yes
+          =========================================
+    
+    - name: Set success status
       ansible.builtin.set_fact:
         stack_init_succeeded: true
-        current_stack_name: "{{ stack_name }}"
+        current_stack_name: "{{ resolved_stack_name }}"
+        
   rescue:
-    - name: Display error message on stack initialization failure
+    - name: Display error details
       ansible.builtin.debug:
-        msg: "Failed to initialize Pulumi stack. Check error message above."
+        msg: |
+          ========== Stack Init Failed ==========
+          Error: {{ ansible_failed_result.msg | default('Unknown error') }}
+          Project: {{ pulumi_project_path }}
+          Stack: {{ stack_name }}
+          {% if stack_init_result is defined and stack_init_result.stderr is defined and stack_init_result.stderr %}
+          Stack init error:
+          {{ stack_init_result.stderr }}
+          {% endif %}
+          {% if npm_install_result is defined and npm_install_result.stderr is defined and npm_install_result.stderr %}
+          NPM install error:
+          {{ npm_install_result.stderr }}
+          {% endif %}
+          {% if stack_select_result is defined and stack_select_result.stderr is defined and stack_select_result.stderr %}
+          Stack select error:
+          {{ stack_select_result.stderr }}
+          {% endif %}
+          =======================================
     
-    - name: Set stack initialization failure status
+    - name: Set failure status
       ansible.builtin.set_fact:
         stack_init_failed: true
+    
+    # エラー時にAnsibleの実行を停止
+    - name: Fail the playbook
+      ansible.builtin.fail:
+        msg: |
+          Stack initialization failed.
+          {% if 'already exists' in stack_init_result.stderr | default('') %}
+          A stack with this name already exists. Use a different stack name or select the existing stack.
+          {% elif 'npm ERR!' in npm_install_result.stderr | default('') %}
+          npm dependency installation failed. Check your package.json and network connectivity.
+          {% elif 'no stack named' in stack_select_result.stderr | default('') %}
+          Failed to select the stack. The stack may not exist or you may not have access to it.
+          {% else %}
+          Check the output above for details.
+          {% endif %}
 
 - name: Mock stack initialization (check mode)
   ansible.builtin.debug:
-    msg: "Would initialize and select Pulumi stack: {{ stack_name | default('undefined') }} (check mode active)"
+    msg: |
+      ========== Mock Stack Init (Check Mode) ==========
+      Would initialize stack: {{ stack_name }}
+      Project: {{ pulumi_project_path }}
+      ==================================================
   when: ansible_check_mode

@@ -2,61 +2,79 @@
 
 - name: Build Pulumi TypeScript project
   block:
-    - name: Check for package.json
+    # package.jsonの存在確認
+    - name: Verify package.json exists
       ansible.builtin.stat:
         path: "{{ pulumi_project_path }}/package.json"
-      register: package_json_check
-
-    - name: Fail if package.json not found
-      ansible.builtin.fail:
-        msg: "package.json not found in {{ pulumi_project_path }}"
-      when: not package_json_check.stat.exists
-
-    - name: Check if build script exists
+      register: package_json
+      failed_when: not package_json.stat.exists
+    
+    # ビルドスクリプトの存在確認とビルド実行
+    - name: Build project
       ansible.builtin.shell: |
         cd {{ pulumi_project_path }}
-        grep -q '"build"' package.json
-      register: build_script_check
-      failed_when: false
-      changed_when: false
-
-    - name: Run npm build if build script exists
-      ansible.builtin.shell: |
-        cd {{ pulumi_project_path }}
-        npm run build
-      register: npm_build_result
-      changed_when: npm_build_result.rc == 0
-      when: not ansible_check_mode and build_script_check.rc == 0
-  
-    - name: Run tsc directly if no build script
-      ansible.builtin.shell: |
-        cd {{ pulumi_project_path }}
-        npx tsc
-      register: tsc_build_result
-      changed_when: tsc_build_result.rc == 0
-      when: not ansible_check_mode and build_script_check.rc != 0
-  
-    - name: Run tsc syntax check
+        # package.jsonにbuildスクリプトがあるか確認
+        if grep -q '"build"' package.json; then
+          npm run build
+        else
+          # buildスクリプトがない場合は直接tscを実行
+          npx tsc
+        fi
+      register: build_result
+      changed_when: build_result.rc == 0
+      when: not ansible_check_mode
+    
+    # 構文チェック
+    - name: Run TypeScript syntax check
       ansible.builtin.shell: |
         cd {{ pulumi_project_path }}
         npx tsc --noEmit
-      register: tsc_check_result
+      register: syntax_check
       changed_when: false
       when: not ansible_check_mode
-  
-    - name: Display build results
+    
+    # ビルド成功メッセージ
+    - name: Display success message
       ansible.builtin.debug:
         msg: "TypeScript build completed successfully"
       when: not ansible_check_mode and ansible_verbosity > 0
+      
   rescue:
-    - name: Display error message on build failure
+    - name: Display error message
       ansible.builtin.debug:
-        msg: "Failed to build Pulumi TypeScript project. Check error message above."
+        msg: |
+          ========== TypeScript Build Failed ==========
+          Failed to build TypeScript project
+          {% if build_result is defined and build_result.stdout is defined %}
+          Build output:
+          {{ build_result.stdout }}
+          {% endif %}
+          {% if build_result is defined and build_result.stderr is defined and build_result.stderr %}
+          Build errors:
+          {{ build_result.stderr }}
+          {% endif %}
+          {% if syntax_check is defined and syntax_check.stdout is defined %}
+          Syntax check output:
+          {{ syntax_check.stdout }}
+          {% endif %}
+          ============================================
     
-    - name: Set build status on failure
+    - name: Set failure status
       ansible.builtin.set_fact:
         pulumi_build_failed: true
-        
+    
+    # エラー時にAnsibleの実行を停止
+    - name: Fail the playbook
+      ansible.builtin.fail:
+        msg: |
+          TypeScript build failed.
+          {% if 'error TS' in build_result.stdout | default('') or 'error TS' in build_result.stderr | default('') %}
+          TypeScript compilation errors detected. Please fix the TypeScript errors and try again.
+          {% else %}
+          Check the output above for details.
+          {% endif %}
+
+# チェックモード
 - name: Mock build (check mode)
   ansible.builtin.debug:
     msg: "Would build TypeScript project in {{ pulumi_project_path }} (check mode active)"
