@@ -1,5 +1,5 @@
 AWSTemplateFormatVersion: '2010-09-09'
-Description: 'Bootstrap EC2 Instance with minimal setup (Git and Ansible only)'
+Description: 'Bootstrap EC2 Instance with minimal setup (Git and Ansible only) and Pulumi Backend S3 Bucket'
 
 Parameters:
   KeyName:
@@ -10,10 +10,11 @@ Parameters:
   InstanceType:
     Description: EC2 instance type
     Type: String
-    Default: t3.medium
+    Default: t4g.medium
     AllowedValues:
-      - t3.medium
-      - t3.large
+      - t4g.medium
+      - t4g.large
+      - t4g.xlarge
     ConstraintDescription: Must be a valid EC2 instance type.
 
   AllowedIP:
@@ -23,11 +24,54 @@ Parameters:
     ConstraintDescription: Must be a valid IP CIDR range of the form x.x.x.x/x.
 
   LatestAmiId:
-    Description: Latest Amazon Linux 2 AMI ID
+    Description: Latest Amazon Linux 2 ARM64 AMI ID
     Type: AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>
-    Default: /aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2
+    Default: /aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-arm64-gp2
 
 Resources:
+  # S3 Bucket for Pulumi Backend
+  PulumiStateBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub 'pulumi-state-${AWS::AccountId}-${AWS::Region}'
+      VersioningConfiguration:
+        Status: Enabled
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      LifecycleConfiguration:
+        Rules:
+          - Id: DeleteOldVersions
+            Status: Enabled
+            NoncurrentVersionExpirationInDays: 90
+      Tags:
+        - Key: Name
+          Value: Pulumi-State-Bucket
+        - Key: Purpose
+          Value: Pulumi-Backend
+
+  PulumiStateBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref PulumiStateBucket
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: DenyUnencryptedObjectUploads
+            Effect: Deny
+            Principal: '*'
+            Action: 's3:PutObject'
+            Resource: !Sub '${PulumiStateBucket.Arn}/*'
+            Condition:
+              StringNotEquals:
+                's3:x-amz-server-side-encryption': 'AES256'
+
   VPC:
     Type: AWS::EC2::VPC
     Properties:
@@ -156,6 +200,10 @@ Resources:
           systemctl enable amazon-ssm-agent
           systemctl start amazon-ssm-agent
           
+          # Pulumiのインストール
+          curl -fsSL https://get.pulumi.com | sh
+          echo 'export PATH=$PATH:$HOME/.pulumi/bin' >> /home/ec2-user/.bashrc
+          
           # スタートアップガイドの作成
           cat > /home/ec2-user/SETUP_GUIDE.txt << 'EOF'
           === Bootstrap Environment Setup Guide ===
@@ -168,6 +216,20 @@ Resources:
           
           2. Run the bootstrap setup script:
              ./scripts/setup-bootstrap.sh
+          
+          === Pulumi Backend Configuration ===
+          
+          A Pulumi state backend S3 bucket has been created for you:
+          Bucket Name: ${PulumiStateBucket}
+          
+          To configure Pulumi to use this backend, run:
+          pulumi login s3://${PulumiStateBucket}
+          
+          The bucket has the following features enabled:
+          - Versioning (for state history)
+          - Encryption (AES256)
+          - Public access blocking
+          - Lifecycle policy (90 days retention for old versions)
           
           That's it! The setup script will install all necessary tools and configure your environment.
           EOF
@@ -204,3 +266,13 @@ Outputs:
   PublicSubnetID:
     Description: Public Subnet ID
     Value: !Ref PublicSubnet
+
+  PulumiStateBucketName:
+    Description: Name of the S3 bucket for Pulumi state storage
+    Value: !Ref PulumiStateBucket
+    Export:
+      Name: !Sub '${AWS::StackName}-PulumiStateBucket'
+
+  PulumiBackendURL:
+    Description: Pulumi backend URL for login
+    Value: !Sub 's3://${PulumiStateBucket}'
