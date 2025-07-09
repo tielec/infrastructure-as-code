@@ -200,10 +200,6 @@ Resources:
           systemctl enable amazon-ssm-agent
           systemctl start amazon-ssm-agent
           
-          # Pulumiのインストール
-          curl -fsSL https://get.pulumi.com | sh
-          echo 'export PATH=$PATH:$HOME/.pulumi/bin' >> /home/ec2-user/.bashrc
-          
           # スタートアップガイドの作成
           cat > /home/ec2-user/SETUP_GUIDE.txt << 'EOF'
           === Bootstrap Environment Setup Guide ===
