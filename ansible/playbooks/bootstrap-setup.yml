@@ -1,6 +1,7 @@
 ---
 # bootstrap-setup.yml
 # Jenkinsインフラをデプロイするためのブートストラップ環境の設定
+# ARM64 (t4g) インスタンス対応版
 
 - name: Bootstrap Environment Setup
   hosts: localhost
@@ -13,13 +14,14 @@
     user_home: "/home/ec2-user"
     aws_credentials_script_path: "{{ playbook_dir }}/../scripts/aws-credentials.sh"
     java_version: "21"
+    arch: "{{ ansible_architecture }}"
   
   tasks:
     - name: Display start message
       ansible.builtin.debug:
-        msg: "Starting Bootstrap Environment Setup"
+        msg: "Starting Bootstrap Environment Setup for {{ arch }} architecture"
         
-    # AWS CLI v2のインストール
+    # AWS CLI v2のインストール (ARM64対応)
     - name: Check if AWS CLI v2 is installed
       ansible.builtin.shell: aws --version
       register: aws_cli_check
@@ -29,9 +31,13 @@
     - name: Install AWS CLI v2
       when: aws_cli_check.rc != 0 or 'aws-cli/2' not in aws_cli_check.stdout
       block:
+        - name: Set AWS CLI download URL based on architecture
+          ansible.builtin.set_fact:
+            aws_cli_url: "{{ 'https://awscli.amazonaws.com/awscli-exe-linux-aarch64.zip' if arch == 'aarch64' else 'https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip' }}"
+            
         - name: Download AWS CLI v2 installer
           ansible.builtin.get_url:
-            url: "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip"
+            url: "{{ aws_cli_url }}"
             dest: "/tmp/awscliv2.zip"
             mode: '0644'
           
@@ -54,7 +60,7 @@
             - "/tmp/awscliv2.zip"
             - "/tmp/aws"
             
-    # Node.jsのインストール
+    # Node.jsのインストール (ARM64対応)
     - name: Check if Node.js is installed
       ansible.builtin.shell: node --version
       register: node_check
@@ -64,6 +70,13 @@
     - name: Install Node.js {{ nodejs_version }}
       when: node_check.rc != 0
       block:
+        - name: Install development tools for Node.js
+          ansible.builtin.yum:
+            name:
+              - gcc-c++
+              - make
+            state: present
+            
         - name: Configure Node.js repository
           ansible.builtin.shell: |
             curl -sL https://rpm.nodesource.com/setup_{{ nodejs_version }} | bash -
@@ -75,7 +88,7 @@
             name: nodejs
             state: present
             
-    # Java 21のインストール (Amazon Corretto)
+    # Java 21のインストール (Amazon Corretto - ARM64対応)
     - name: Check if Java {{ java_version }} is installed
       ansible.builtin.shell: java -version 2>&1 | grep -E 'version "{{ java_version }}'
       register: java_check
@@ -85,9 +98,13 @@
     - name: Install Java {{ java_version }} (Amazon Corretto)
       when: java_check.rc != 0
       block:
+        - name: Set Java package architecture
+          ansible.builtin.set_fact:
+            java_arch: "{{ 'aarch64' if arch == 'aarch64' else 'x64' }}"
+            
         - name: Download Amazon Corretto {{ java_version }} RPM
           ansible.builtin.get_url:
-            url: "https://corretto.aws/downloads/latest/amazon-corretto-{{ java_version }}-x64-linux-jdk.rpm"
+            url: "https://corretto.aws/downloads/latest/amazon-corretto-{{ java_version }}-{{ java_arch }}-linux-jdk.rpm"
             dest: "/tmp/amazon-corretto-{{ java_version }}.rpm"
             mode: '0644'
             
@@ -130,6 +147,8 @@
           ansible.builtin.shell: /tmp/pulumi-installer.sh
           args:
             creates: "/root/.pulumi/bin/pulumi"
+          environment:
+            PULUMI_INSTALL_ARCH: "{{ 'arm64' if arch == 'aarch64' else 'amd64' }}"
             
         - name: Create Pulumi symbolic link
           ansible.builtin.file:
@@ -150,6 +169,9 @@
         dest: "{{ user_home }}/verify-installation.sh"
         content: |
           #!/bin/bash
+          echo "=== System Information ==="
+          echo "Architecture: $(uname -m)"
+          echo "OS: $(cat /etc/os-release | grep PRETTY_NAME | cut -d= -f2 | tr -d '"')"
           echo "=== Installed Tools ==="
           echo "Node.js: $(node --version 2>/dev/null || echo 'Not installed')"
           echo "npm: $(npm --version 2>/dev/null || echo 'Not installed')"
@@ -202,17 +224,17 @@
         content: |
           === Bootstrap Environment Setup Complete ===
           
-          Your EC2 bootstrap instance has been configured with the following tools:
-          - AWS CLI v2
+          Your EC2 bootstrap instance ({{ arch }}) has been configured with the following tools:
+          - AWS CLI v2 (ARM64 optimized)
           - Node.js {{ nodejs_version }}
-          - Java {{ java_version }} (Amazon Corretto)
+          - Java {{ java_version }} (Amazon Corretto for ARM64)
           - Python 3 and pip3
           - Ansible
           - Pulumi
           - Git
           
           === Jenkins Agent Setup ===
-          This instance is configured to work as a Jenkins Agent with:
+          This ARM64 instance is configured to work as a Jenkins Agent with:
           - Java {{ java_version }} for Jenkins agent execution
           - Build tools (gcc, make, etc.)
           
@@ -235,6 +257,9 @@
              - Use the EC2 instance's private IP or hostname
              - Set Remote root directory to: /home/ec2-user/jenkins-agent
           
+          Note: This is an ARM64 (t4g) instance. Ensure your Jenkins controller
+          and any Docker images you use are compatible with ARM64 architecture.
+          
           For more details, refer to the project documentation.
         owner: ec2-user
         group: ec2-user
@@ -243,5 +268,5 @@
     - name: Display completion message
       ansible.builtin.debug:
         msg: |
-          Bootstrap environment setup completed successfully!
+          Bootstrap environment setup completed successfully on {{ arch }}!
           Java {{ java_version }} has been installed for Jenkins Agent compatibility.
