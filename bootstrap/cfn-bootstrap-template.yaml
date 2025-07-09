@@ -67,7 +67,10 @@ Resources:
           - Sid: AllowBootstrapRolePulumiAccess
             Effect: Allow
             Principal:
-              AWS: !GetAtt BootstrapIAMRole.Arn
+              AWS: 
+                - !GetAtt BootstrapIAMRole.Arn
+                - !Sub '${BootstrapIAMRole.Arn}/*'
+                - !Sub 'arn:aws:sts::${AWS::AccountId}:assumed-role/${BootstrapIAMRole}/*'
             Action:
               - 's3:GetObject'
               - 's3:GetObjectVersion'
@@ -80,16 +83,6 @@ Resources:
             Resource:
               - !Sub '${PulumiStateBucket.Arn}'
               - !Sub '${PulumiStateBucket.Arn}/*'
-          # Deny unencrypted uploads from other principals
-          - Sid: DenyUnencryptedObjectUploadsFromOthers
-            Effect: Deny
-            NotPrincipal:
-              AWS: !GetAtt BootstrapIAMRole.Arn
-            Action: 's3:PutObject'
-            Resource: !Sub '${PulumiStateBucket.Arn}/*'
-            Condition:
-              StringNotEquals:
-                's3:x-amz-server-side-encryption': 'AES256'
           # Deny insecure transport
           - Sid: DenyInsecureTransport
             Effect: Deny
