@@ -1,5 +1,5 @@
 AWSTemplateFormatVersion: '2010-09-09'
-Description: 'Bootstrap EC2 Instance with minimal setup (Git and Ansible only) and Pulumi Backend S3 Bucket'
+Description: 'Bootstrap EC2 Instance with minimal setup (Git and Ansible only) and Pulumi Backend S3 Bucket - Fixed for Jenkins Agent'
 
 Parameters:
   KeyName:
@@ -56,6 +56,7 @@ Resources:
         - Key: Purpose
           Value: Pulumi-Backend
 
+  # S3 Bucket Policy - Simplified to use IAM Role directly
   PulumiStateBucketPolicy:
     Type: AWS::S3::BucketPolicy
     Properties:
@@ -67,10 +68,7 @@ Resources:
           - Sid: AllowBootstrapRolePulumiAccess
             Effect: Allow
             Principal:
-              AWS: 
-                - !GetAtt BootstrapIAMRole.Arn
-                - !Sub '${BootstrapIAMRole.Arn}/*'
-                - !Sub 'arn:aws:sts::${AWS::AccountId}:assumed-role/${BootstrapIAMRole}/*'
+              AWS: !GetAtt BootstrapIAMRole.Arn
             Action:
               - 's3:GetObject'
               - 's3:GetObjectVersion'
@@ -154,12 +152,17 @@ Resources:
   BootstrapSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupDescription: Enable SSH access
+      GroupDescription: Enable SSH access and Jenkins agent connectivity
       VpcId: !Ref VPC
       SecurityGroupIngress:
         - IpProtocol: tcp
           FromPort: 22
           ToPort: 22
+          CidrIp: !Ref AllowedIP
+        # Jenkins JNLP port (if needed)
+        - IpProtocol: tcp
+          FromPort: 50000
+          ToPort: 50000
           CidrIp: !Ref AllowedIP
       SecurityGroupEgress:
         - IpProtocol: -1
@@ -168,9 +171,34 @@ Resources:
         - Key: Name
           Value: Bootstrap-SG
 
+  # S3 Access Policy for Pulumi State Bucket
+  PulumiS3AccessPolicy:
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyName: PulumiS3Access
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Action:
+              - 's3:GetObject'
+              - 's3:GetObjectVersion'
+              - 's3:PutObject'
+              - 's3:DeleteObject'
+              - 's3:ListBucket'
+              - 's3:ListBucketVersions'
+              - 's3:GetBucketLocation'
+              - 's3:GetBucketVersioning'
+            Resource:
+              - !Sub '${PulumiStateBucket.Arn}'
+              - !Sub '${PulumiStateBucket.Arn}/*'
+      Roles:
+        - !Ref BootstrapIAMRole
+
   BootstrapIAMRole:
     Type: AWS::IAM::Role
     Properties:
+      RoleName: !Sub '${AWS::StackName}-BootstrapIAMRole'
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -183,6 +211,8 @@ Resources:
       Tags:
         - Key: Name
           Value: Bootstrap-IAM-Role
+        - Key: Purpose
+          Value: Jenkins-Agent
 
   BootstrapInstanceProfile:
     Type: AWS::IAM::InstanceProfile
@@ -193,6 +223,9 @@ Resources:
 
   BootstrapInstance:
     Type: AWS::EC2::Instance
+    DependsOn: 
+      - PulumiStateBucketPolicy
+      - PulumiS3AccessPolicy
     Properties:
       InstanceType: !Ref InstanceType
       SecurityGroupIds:
@@ -211,14 +244,14 @@ Resources:
         Fn::Base64: !Sub |
           #!/bin/bash -xe
           
-          # 最小限の更新とパッケージのインストール
+          # システムの更新
           yum update -y
           yum install -y git python3 python3-pip jq
           
           # Ansibleのインストール
           pip3 install ansible
           
-          # SSMエージェントの確認（すでにインストール済みかもしれませんが念のため）
+          # SSMエージェントのインストールと起動（リモート管理用）
           yum install -y amazon-ssm-agent
           systemctl enable amazon-ssm-agent
           systemctl start amazon-ssm-agent
@@ -227,7 +260,13 @@ Resources:
           curl -fsSL https://get.pulumi.com | sh
           echo 'export PATH=$PATH:$HOME/.pulumi/bin' >> /home/ec2-user/.bashrc
           
-          # スタートアップガイドの作成
+          # Jenkins用Java（OpenJDK）のインストール
+          yum install -y java-11-amazon-corretto-headless
+          
+          # AWS CLIの設定（インスタンスロールを使用）
+          echo 'export AWS_DEFAULT_REGION=${AWS::Region}' >> /home/ec2-user/.bashrc
+          
+          # セットアップガイドの作成
           cat > /home/ec2-user/SETUP_GUIDE.txt << 'EOF'
           === Bootstrap Environment Setup Guide ===
           
@@ -254,23 +293,63 @@ Resources:
           - Public access blocking
           - Lifecycle policy (90 days retention for old versions)
           
-          Note: The Bootstrap IAM role has full access to this bucket.
-          The bucket has default encryption enabled, so all objects will be automatically encrypted.
+          === Jenkins Agent Configuration ===
+          
+          This instance is configured to work as a Jenkins agent with:
+          - Java 11 (Corretto) installed
+          - SSH access enabled
+          - SSM Agent for remote management
+          - Full access to the Pulumi state S3 bucket
+          
+          Note: The Bootstrap IAM role has AdministratorAccess plus explicit permissions to the Pulumi state bucket.
+          
+          === Testing S3 Access ===
+          
+          To verify S3 bucket access, run:
+          aws s3 ls s3://${PulumiStateBucket}/
           
           That's it! The setup script will install all necessary tools and configure your environment.
           EOF
           
           chown ec2-user:ec2-user /home/ec2-user/SETUP_GUIDE.txt
           
-          # セットアップガイドを表示するように設定 
+          # S3アクセステストスクリプトの作成
+          cat > /home/ec2-user/test-s3-access.sh << 'EOF'
+          #!/bin/bash
+          echo "Testing S3 bucket access..."
+          BUCKET_NAME="${PulumiStateBucket}"
+          
+          echo "1. Listing bucket contents:"
+          aws s3 ls s3://$BUCKET_NAME/ 2>&1
+          
+          echo -e "\n2. Testing write access:"
+          echo "test" > /tmp/test-file.txt
+          aws s3 cp /tmp/test-file.txt s3://$BUCKET_NAME/test-file.txt 2>&1
+          
+          echo -e "\n3. Testing read access:"
+          aws s3 cp s3://$BUCKET_NAME/test-file.txt /tmp/test-file-downloaded.txt 2>&1
+          
+          echo -e "\n4. Cleaning up test file:"
+          aws s3 rm s3://$BUCKET_NAME/test-file.txt 2>&1
+          
+          echo -e "\nS3 access test completed!"
+          EOF
+          
+          chmod +x /home/ec2-user/test-s3-access.sh
+          chown ec2-user:ec2-user /home/ec2-user/test-s3-access.sh
+          
+          # 起動時にセットアップガイドを表示
           echo "if [ -t 1 ]; then" >> /home/ec2-user/.bashrc
           echo "cat /home/ec2-user/SETUP_GUIDE.txt" >> /home/ec2-user/.bashrc
           echo "fi" >> /home/ec2-user/.bashrc
+          
           echo "Bootstrap minimal setup complete!"
 
       Tags:
         - Key: Name
-          Value: Bootstrap-Instance
+          Value: Bootstrap-Jenkins-Agent
+        - Key: Purpose
+          Value: Jenkins-Agent
 
 Outputs:
   BootstrapInstanceId:
@@ -308,3 +387,11 @@ Outputs:
     Value: !GetAtt BootstrapIAMRole.Arn
     Export:
       Name: !Sub '${AWS::StackName}-BootstrapIAMRoleArn'
+  
+  SSHCommand:
+    Description: SSH command to connect to the instance
+    Value: !Sub 'ssh -i <your-key.pem> ec2-user@${BootstrapInstance.PublicIp}'
+  
+  TestS3AccessCommand:
+    Description: Command to test S3 bucket access
+    Value: './test-s3-access.sh'
