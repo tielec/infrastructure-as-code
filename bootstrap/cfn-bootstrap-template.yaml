@@ -12,10 +12,9 @@ Parameters:
     Type: String
     Default: t4g.small
     AllowedValues:
-    　- t4g.small
+      - t4g.small
       - t4g.medium
       - t4g.large
-      - t4g.xlarge
     ConstraintDescription: Must be a valid EC2 instance type.
 
   AllowedIP:
@@ -200,6 +199,10 @@ Resources:
           yum install -y amazon-ssm-agent
           systemctl enable amazon-ssm-agent
           systemctl start amazon-ssm-agent
+          
+          # Pulumiのインストール
+          curl -fsSL https://get.pulumi.com | sh
+          echo 'export PATH=$PATH:$HOME/.pulumi/bin' >> /home/ec2-user/.bashrc
           
           # スタートアップガイドの作成
           cat > /home/ec2-user/SETUP_GUIDE.txt << 'EOF'
