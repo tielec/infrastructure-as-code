@@ -63,14 +63,44 @@ Resources:
       PolicyDocument:
         Version: '2012-10-17'
         Statement:
-          - Sid: DenyUnencryptedObjectUploads
+          # Allow Bootstrap IAM Role to access Pulumi state
+          - Sid: AllowBootstrapRolePulumiAccess
+            Effect: Allow
+            Principal:
+              AWS: !GetAtt BootstrapIAMRole.Arn
+            Action:
+              - 's3:GetObject'
+              - 's3:GetObjectVersion'
+              - 's3:PutObject'
+              - 's3:DeleteObject'
+              - 's3:ListBucket'
+              - 's3:ListBucketVersions'
+              - 's3:GetBucketLocation'
+              - 's3:GetBucketVersioning'
+            Resource:
+              - !Sub '${PulumiStateBucket.Arn}'
+              - !Sub '${PulumiStateBucket.Arn}/*'
+          # Deny unencrypted uploads from other principals
+          - Sid: DenyUnencryptedObjectUploadsFromOthers
             Effect: Deny
-            Principal: '*'
+            NotPrincipal:
+              AWS: !GetAtt BootstrapIAMRole.Arn
             Action: 's3:PutObject'
             Resource: !Sub '${PulumiStateBucket.Arn}/*'
             Condition:
               StringNotEquals:
                 's3:x-amz-server-side-encryption': 'AES256'
+          # Deny insecure transport
+          - Sid: DenyInsecureTransport
+            Effect: Deny
+            Principal: '*'
+            Action: 's3:*'
+            Resource:
+              - !Sub '${PulumiStateBucket.Arn}'
+              - !Sub '${PulumiStateBucket.Arn}/*'
+            Condition:
+              Bool:
+                'aws:SecureTransport': 'false'
 
   VPC:
     Type: AWS::EC2::VPC
@@ -231,6 +261,9 @@ Resources:
           - Public access blocking
           - Lifecycle policy (90 days retention for old versions)
           
+          Note: The Bootstrap IAM role has full access to this bucket.
+          The bucket has default encryption enabled, so all objects will be automatically encrypted.
+          
           That's it! The setup script will install all necessary tools and configure your environment.
           EOF
           
@@ -276,3 +309,9 @@ Outputs:
   PulumiBackendURL:
     Description: Pulumi backend URL for login
     Value: !Sub 's3://${PulumiStateBucket}'
+  
+  BootstrapIAMRoleArn:
+    Description: ARN of the Bootstrap IAM Role
+    Value: !GetAtt BootstrapIAMRole.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-BootstrapIAMRoleArn'
