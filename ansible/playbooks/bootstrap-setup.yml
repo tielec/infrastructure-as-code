@@ -98,25 +98,33 @@
     - name: Install Java {{ java_version }} (Amazon Corretto)
       when: java_check.rc != 0
       block:
-        - name: Set Java package architecture
-          ansible.builtin.set_fact:
-            java_arch: "{{ 'aarch64' if arch == 'aarch64' else 'x64' }}"
+        - name: Debug architecture info
+          ansible.builtin.debug:
+            msg: "Detected architecture: {{ arch }}"
             
-        - name: Download Amazon Corretto {{ java_version }} RPM
+        - name: Download Amazon Corretto {{ java_version }} RPM for ARM64
           ansible.builtin.get_url:
-            url: "https://corretto.aws/downloads/latest/amazon-corretto-{{ java_version }}-{{ java_arch }}-linux-jdk.rpm"
-            dest: "/tmp/amazon-corretto-{{ java_version }}.rpm"
+            url: "https://corretto.aws/downloads/latest/amazon-corretto-{{ java_version }}-aarch64-linux-jdk.rpm"
+            dest: "/tmp/amazon-corretto-{{ java_version }}-aarch64.rpm"
             mode: '0644'
+          when: arch == 'aarch64'
+          
+        - name: Download Amazon Corretto {{ java_version }} RPM for x86_64
+          ansible.builtin.get_url:
+            url: "https://corretto.aws/downloads/latest/amazon-corretto-{{ java_version }}-x64-linux-jdk.rpm"
+            dest: "/tmp/amazon-corretto-{{ java_version }}-x64.rpm"
+            mode: '0644'
+          when: arch != 'aarch64'
             
         - name: Install Amazon Corretto {{ java_version }}
           ansible.builtin.yum:
-            name: "/tmp/amazon-corretto-{{ java_version }}.rpm"
+            name: "/tmp/amazon-corretto-{{ java_version }}-{{ 'aarch64' if arch == 'aarch64' else 'x64' }}.rpm"
             state: present
             disable_gpg_check: yes
             
         - name: Clean up Corretto RPM file
           ansible.builtin.file:
-            path: "/tmp/amazon-corretto-{{ java_version }}.rpm"
+            path: "/tmp/amazon-corretto-{{ java_version }}-{{ 'aarch64' if arch == 'aarch64' else 'x64' }}.rpm"
             state: absent
             
         - name: Set JAVA_HOME environment variable
