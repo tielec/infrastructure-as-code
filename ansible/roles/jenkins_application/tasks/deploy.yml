@@ -80,7 +80,7 @@
         ssm_documents:
           executeScript: "jenkins-infra-jenkins-execute-script-{{ env_name }}"
           updateRepo: "jenkins-infra-jenkins-update-repo-{{ env_name }}"
-          restart: "jenkins-infra-jenkins-restart"
+          restart: "jenkins-infra-jenkins-restart-{{ env_name }}"
       when: ssm_documents is not defined or ssm_documents | length == 0
     
     # jenkins_configのSSMドキュメントも取得（同様の実装）
