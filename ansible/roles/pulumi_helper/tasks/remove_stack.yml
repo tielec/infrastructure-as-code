@@ -2,6 +2,11 @@
 
 - name: Remove Pulumi stack
   block:
+    # プロジェクト固有のログインを確認（login.ymlで実行済みでない場合）
+    - name: Ensure proper backend login
+      ansible.builtin.include_tasks: login.yml
+      when: _pulumi_login_needed is not defined
+    
     # スタック名の検証
     - name: Verify stack name is provided
       ansible.builtin.fail:

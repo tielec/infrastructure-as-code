@@ -34,7 +34,7 @@
 - name: Set resolved stack name
   ansible.builtin.set_fact:
     resolved_stack_name: >-
-      {%- if pulumi_config.organization is defined and pulumi_config.organization -%}
+      {%- if pulumi_backend_type == 'cloud' and pulumi_config.organization is defined and pulumi_config.organization -%}
         {{ pulumi_config.organization }}/{{ pulumi_config.name }}/{{ stack_name }}
       {%- else -%}
         {{ stack_name }}
@@ -53,3 +53,4 @@
       - Input: {{ stack_name }}
       - Resolved: {{ resolved_stack_name }}
       - Organization used: {{ 'Yes' if resolved_stack_name != stack_name else 'No' }}
+      - Backend: {{ backend_display_name | default(pulumi_backend_type) }}

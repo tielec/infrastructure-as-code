@@ -1,7 +1,7 @@
 # Pulumiプロジェクト操作の共通ヘルパータスク
 # 
 # このロールは以下の機能を提供します：
-# - Pulumiの設定と認証
+# - Pulumiの設定と認証（Pulumi Cloud / S3バックエンド両対応）
 # - スタックの初期化と選択（init_stack.yml）
 # - スタックのプレビュー（preview.yml）
 # - スタックのデプロイ（deploy.yml）
@@ -63,74 +63,70 @@
     msg: "Using Pulumi version: {{ pulumi_version.stdout }}"
   when: ansible_verbosity > 0
 
-# Pulumiのログイン状態確認
-- name: Check Pulumi login status
-  ansible.builtin.shell: |
-    export PULUMI_ACCESS_TOKEN="{{ lookup('env', 'PULUMI_ACCESS_TOKEN') }}"
-    sudo -E {{ pulumi_bin_path }} whoami
-  register: pulumi_login_check
-  changed_when: false
-  failed_when: false
-  ignore_errors: true
-  
-- name: Display Pulumi login status
-  ansible.builtin.debug:
-    msg: "Pulumi login status: {{ 'Logged in as ' + pulumi_login_check.stdout if pulumi_login_check.rc == 0 else 'Not logged in' }}"
-
-# Pulumiログイン処理
-- name: Check for PULUMI_ACCESS_TOKEN in environment
+# バックエンドタイプの判定と表示
+- name: Determine backend type
   ansible.builtin.set_fact:
-    pulumi_token_set: "{{ lookup('env', 'PULUMI_ACCESS_TOKEN') | length > 0 }}"
-
-- name: Login to Pulumi using access token from environment
-  ansible.builtin.shell: |
-    export PULUMI_ACCESS_TOKEN="{{ lookup('env', 'PULUMI_ACCESS_TOKEN') }}"
-    sudo -E {{ pulumi_bin_path }} login
-  when: 
-    - pulumi_token_set 
-    - pulumi_login_check.rc != 0
-  register: pulumi_login_result
-  changed_when: pulumi_login_result.rc == 0
-  no_log: true  # 認証情報が含まれる可能性があるため、ログに出力しない
-
-- name: Warn about Pulumi login requirement
+    backend_display_name: "{{ 'S3 Backend' if pulumi_backend_type == 's3' else 'Pulumi Cloud' }}"
+    
+- name: Display backend information
   ansible.builtin.debug:
-    msg: >
-      WARNING: Pulumi is not logged in and no PULUMI_ACCESS_TOKEN environment variable was found.
-      Please set the PULUMI_ACCESS_TOKEN environment variable before running this playbook:
-      export PULUMI_ACCESS_TOKEN="pul-YOUR_ACCESS_TOKEN"
+    msg: |
+      ========== Pulumi Backend Configuration ==========
+      Backend Type: {{ backend_display_name }}
+      {% if pulumi_backend_type == 's3' %}
+      S3 Bucket: {{ pulumi_s3_backend.bucket }}
+      Region: {{ pulumi_s3_backend.region }}
+      Project: {{ pulumi_project_name | default(project_name) | default('default') }}
+      {% endif %}
+      ==================================================
+  when: ansible_verbosity > 0
+
+# パスフレーズの確認（S3バックエンドの場合）
+- name: Check for PULUMI_CONFIG_PASSPHRASE in environment (S3 backend)
+  ansible.builtin.set_fact:
+    pulumi_passphrase_set: "{{ lookup('env', 'PULUMI_CONFIG_PASSPHRASE') | length > 0 }}"
+  when: pulumi_backend_type == 's3'
+
+- name: Warn about missing passphrase (S3 backend)
+  ansible.builtin.fail:
+    msg: |
+      ERROR: S3 backend requires PULUMI_CONFIG_PASSPHRASE environment variable.
+      Please set it before running this playbook:
+      export PULUMI_CONFIG_PASSPHRASE="your-secure-passphrase"
   when: 
-    - not pulumi_token_set 
-    - pulumi_login_check.rc != 0
+    - pulumi_backend_type == 's3'
+    - not pulumi_passphrase_set
 
-- name: Verify Pulumi login after attempts
-  ansible.builtin.shell: |
-    export PULUMI_ACCESS_TOKEN="{{ lookup('env', 'PULUMI_ACCESS_TOKEN') }}"
-    sudo -E {{ pulumi_bin_path }} whoami
-  register: pulumi_verify_login
-  failed_when: 
-    - pulumi_token_set 
-    - pulumi_verify_login.rc != 0
-  changed_when: false
-  when: pulumi_token_set
-  
-- name: Display Pulumi login verification
-  ansible.builtin.debug:
-    msg: "Pulumi login verified: {{ pulumi_verify_login.stdout if pulumi_verify_login.rc == 0 else 'Failed to verify login' }}"
-  when: pulumi_token_set
+# プロジェクトパスが設定されている場合、プロジェクト固有のログインを実行
+- name: Login to Pulumi backend for specific project
+  ansible.builtin.include_tasks: login.yml
+  when: 
+    - pulumi_project_path is defined
+    - pulumi_project_path | length > 0
 
-# Pulumiコマンド定義（PULUMI_ACCESS_TOKENを含むように修正）
+# Pulumiコマンド定義（バックエンドタイプに応じて環境変数を設定）
+- name: Set environment export command based on backend
+  ansible.builtin.set_fact:
+    pulumi_env_export: >-
+      {%- if pulumi_backend_type == 's3' -%}
+      export PULUMI_CONFIG_PASSPHRASE="{{ lookup('env', 'PULUMI_CONFIG_PASSPHRASE') }}";
+      export AWS_REGION={{ pulumi_s3_backend.region }};
+      export AWS_DEFAULT_REGION={{ pulumi_s3_backend.region }};
+      {%- else -%}
+      export PULUMI_ACCESS_TOKEN="{{ lookup('env', 'PULUMI_ACCESS_TOKEN') }}";
+      {%- endif -%}
+
 - name: Set Pulumi standard tasks
   ansible.builtin.set_fact:
     pulumi_commands:
-      preview:      "export PULUMI_ACCESS_TOKEN=\"{{ lookup('env', 'PULUMI_ACCESS_TOKEN') }}\"; source {{ playbook_dir }}/../../scripts/aws-env.sh > /dev/null && eval $({{ playbook_dir }}/../../scripts/aws-env.sh) > /dev/null && sudo -E {{ pulumi_bin_path }} preview"
-      up:           "export PULUMI_ACCESS_TOKEN=\"{{ lookup('env', 'PULUMI_ACCESS_TOKEN') }}\"; source {{ playbook_dir }}/../../scripts/aws-env.sh > /dev/null && eval $({{ playbook_dir }}/../../scripts/aws-env.sh) > /dev/null && sudo -E {{ pulumi_bin_path }} up --yes"
-      destroy:      "export PULUMI_ACCESS_TOKEN=\"{{ lookup('env', 'PULUMI_ACCESS_TOKEN') }}\"; source {{ playbook_dir }}/../../scripts/aws-env.sh > /dev/null && eval $({{ playbook_dir }}/../../scripts/aws-env.sh) > /dev/null && sudo -E {{ pulumi_bin_path }} destroy --yes"
-      refresh:      "export PULUMI_ACCESS_TOKEN=\"{{ lookup('env', 'PULUMI_ACCESS_TOKEN') }}\"; source {{ playbook_dir }}/../../scripts/aws-env.sh > /dev/null && eval $({{ playbook_dir }}/../../scripts/aws-env.sh) > /dev/null && sudo -E {{ pulumi_bin_path }} refresh --yes"
-      stack_output: "export PULUMI_ACCESS_TOKEN=\"{{ lookup('env', 'PULUMI_ACCESS_TOKEN') }}\"; source {{ playbook_dir }}/../../scripts/aws-env.sh > /dev/null && eval $({{ playbook_dir }}/../../scripts/aws-env.sh) > /dev/null && sudo -E {{ pulumi_bin_path }} stack output"
-      stack_ls:     "export PULUMI_ACCESS_TOKEN=\"{{ lookup('env', 'PULUMI_ACCESS_TOKEN') }}\"; source {{ playbook_dir }}/../../scripts/aws-env.sh > /dev/null && eval $({{ playbook_dir }}/../../scripts/aws-env.sh) > /dev/null && sudo -E {{ pulumi_bin_path }} stack ls"
-      stack_rm:     "export PULUMI_ACCESS_TOKEN=\"{{ lookup('env', 'PULUMI_ACCESS_TOKEN') }}\"; source {{ playbook_dir }}/../../scripts/aws-env.sh > /dev/null && eval $({{ playbook_dir }}/../../scripts/aws-env.sh) > /dev/null && sudo -E {{ pulumi_bin_path }} stack rm --yes"
-      config_set:   "export PULUMI_ACCESS_TOKEN=\"{{ lookup('env', 'PULUMI_ACCESS_TOKEN') }}\"; source {{ playbook_dir }}/../../scripts/aws-env.sh > /dev/null && eval $({{ playbook_dir }}/../../scripts/aws-env.sh) > /dev/null && sudo -E {{ pulumi_bin_path }} config set"
+      preview:      "{{ pulumi_env_export }} source {{ playbook_dir }}/../../scripts/aws-env.sh > /dev/null && eval $({{ playbook_dir }}/../../scripts/aws-env.sh) > /dev/null && sudo -E {{ pulumi_bin_path }} preview"
+      up:           "{{ pulumi_env_export }} source {{ playbook_dir }}/../../scripts/aws-env.sh > /dev/null && eval $({{ playbook_dir }}/../../scripts/aws-env.sh) > /dev/null && sudo -E {{ pulumi_bin_path }} up --yes"
+      destroy:      "{{ pulumi_env_export }} source {{ playbook_dir }}/../../scripts/aws-env.sh > /dev/null && eval $({{ playbook_dir }}/../../scripts/aws-env.sh) > /dev/null && sudo -E {{ pulumi_bin_path }} destroy --yes"
+      refresh:      "{{ pulumi_env_export }} source {{ playbook_dir }}/../../scripts/aws-env.sh > /dev/null && eval $({{ playbook_dir }}/../../scripts/aws-env.sh) > /dev/null && sudo -E {{ pulumi_bin_path }} refresh --yes"
+      stack_output: "{{ pulumi_env_export }} source {{ playbook_dir }}/../../scripts/aws-env.sh > /dev/null && eval $({{ playbook_dir }}/../../scripts/aws-env.sh) > /dev/null && sudo -E {{ pulumi_bin_path }} stack output"
+      stack_ls:     "{{ pulumi_env_export }} source {{ playbook_dir }}/../../scripts/aws-env.sh > /dev/null && eval $({{ playbook_dir }}/../../scripts/aws-env.sh) > /dev/null && sudo -E {{ pulumi_bin_path }} stack ls"
+      stack_rm:     "{{ pulumi_env_export }} source {{ playbook_dir }}/../../scripts/aws-env.sh > /dev/null && eval $({{ playbook_dir }}/../../scripts/aws-env.sh) > /dev/null && sudo -E {{ pulumi_bin_path }} stack rm --yes"
+      config_set:   "{{ pulumi_env_export }} source {{ playbook_dir }}/../../scripts/aws-env.sh > /dev/null && eval $({{ playbook_dir }}/../../scripts/aws-env.sh) > /dev/null && sudo -E {{ pulumi_bin_path }} config set"
       build:        "npm run build"
       tsc:          "npx tsc"
 

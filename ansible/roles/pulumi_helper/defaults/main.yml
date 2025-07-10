@@ -12,3 +12,23 @@ pulumi_helper_separator_short: "----------"
 # デフォルトのタイムアウト設定
 pulumi_operation_timeout: 600  # 10分
 pulumi_operation_poll: 10      # 10秒ごとにポーリング
+
+# Pulumiバックエンド設定
+# backend_type: "cloud" (Pulumi Cloud) または "s3" (S3バックエンド)
+pulumi_backend_type: "{{ lookup('env', 'PULUMI_BACKEND_TYPE') | default('cloud', true) }}"
+
+# S3バックエンド設定
+pulumi_s3_backend:
+  bucket: "pulumi-state-621593801728-ap-northeast-1"
+  region: "ap-northeast-1"
+  # パスフレーズは環境変数から取得（PULUMI_CONFIG_PASSPHRASE）
+  
+# バックエンドのログインURL生成
+# Pulumi Cloud: https://app.pulumi.com
+# S3: s3://bucket-name/project-name
+pulumi_backend_url: >-
+  {%- if pulumi_backend_type == 's3' -%}
+    s3://{{ pulumi_s3_backend.bucket }}/{{ pulumi_project_name | default(project_name) | default('default') }}
+  {%- else -%}
+    https://app.pulumi.com
+  {%- endif -%}

@@ -9,6 +9,7 @@
           ========== Pulumi Stack Init Start ==========
           Project Path: {{ pulumi_project_path }}
           Stack Name: {{ stack_name }}
+          Backend Type: {{ backend_display_name | default(pulumi_backend_type) }}
           =============================================
     
     - name: Verify project directory exists
@@ -21,6 +22,11 @@
       ansible.builtin.fail:
         msg: "Required variable 'stack_name' is not defined"
       when: stack_name is not defined or stack_name | length == 0
+    
+    # プロジェクト固有のログインを確認（login.ymlで実行済みでない場合）
+    - name: Ensure proper backend login
+      ansible.builtin.include_tasks: login.yml
+      when: _pulumi_login_needed is not defined
     
     # スタック名を解決（組織名を含む完全な名前を取得）
     - name: Resolve stack name
@@ -50,10 +56,22 @@
         cd {{ pulumi_project_path }}
         source {{ playbook_dir }}/../../scripts/aws-env.sh > /dev/null
         eval $({{ playbook_dir }}/../../scripts/aws-env.sh) > /dev/null
+        {% if pulumi_backend_type == 's3' %}
+        export PULUMI_CONFIG_PASSPHRASE="{{ lookup('env', 'PULUMI_CONFIG_PASSPHRASE') }}"
+        export AWS_REGION={{ pulumi_s3_backend.region }}
+        export AWS_DEFAULT_REGION={{ pulumi_s3_backend.region }}
+        {% else %}
         export PULUMI_ACCESS_TOKEN="{{ lookup('env', 'PULUMI_ACCESS_TOKEN') }}"
+        {% endif %}
         
         echo "Creating new stack: {{ resolved_stack_name }}"
+        {% if pulumi_backend_type == 's3' %}
+        # S3バックエンドの場合、secrets-providerを指定
+        sudo -E {{ pulumi_bin_path }} stack init {{ resolved_stack_name }} --secrets-provider=passphrase
+        {% else %}
+        # Pulumi Cloudの場合
         sudo -E {{ pulumi_bin_path }} stack init {{ resolved_stack_name }}
+        {% endif %}
       register: stack_init_result
       changed_when: stack_init_result.rc == 0
       when: 
@@ -102,7 +120,13 @@
         cd {{ pulumi_project_path }}
         source {{ playbook_dir }}/../../scripts/aws-env.sh > /dev/null
         eval $({{ playbook_dir }}/../../scripts/aws-env.sh) > /dev/null
+        {% if pulumi_backend_type == 's3' %}
+        export PULUMI_CONFIG_PASSPHRASE="{{ lookup('env', 'PULUMI_CONFIG_PASSPHRASE') }}"
+        export AWS_REGION={{ pulumi_s3_backend.region }}
+        export AWS_DEFAULT_REGION={{ pulumi_s3_backend.region }}
+        {% else %}
         export PULUMI_ACCESS_TOKEN="{{ lookup('env', 'PULUMI_ACCESS_TOKEN') }}"
+        {% endif %}
         
         echo "Attempting to select stack..."
         # まず単純な名前で試し、失敗したら解決済み名前を使用
@@ -127,7 +151,11 @@
     - name: Verify current stack
       ansible.builtin.shell: |
         cd {{ pulumi_project_path }}
+        {% if pulumi_backend_type == 's3' %}
+        export PULUMI_CONFIG_PASSPHRASE="{{ lookup('env', 'PULUMI_CONFIG_PASSPHRASE') }}"
+        {% else %}
         export PULUMI_ACCESS_TOKEN="{{ lookup('env', 'PULUMI_ACCESS_TOKEN') }}"
+        {% endif %}
         sudo -E {{ pulumi_bin_path }} stack --show-name
       register: current_stack_verify
       changed_when: false
@@ -138,6 +166,7 @@
         msg: |
           ========== Stack Init Complete ==========
           Current stack: {{ current_stack_verify.stdout }}
+          Backend: {{ backend_display_name | default(pulumi_backend_type) }}
           Success: Yes
           =========================================
     
@@ -154,6 +183,7 @@
           Error: {{ ansible_failed_result.msg | default('Unknown error') }}
           Project: {{ pulumi_project_path }}
           Stack: {{ stack_name }}
+          Backend: {{ backend_display_name | default(pulumi_backend_type) }}
           {% if stack_init_result is defined and stack_init_result.stderr is defined and stack_init_result.stderr %}
           Stack init error:
           {{ stack_init_result.stderr }}
@@ -183,6 +213,8 @@
           npm dependency installation failed. Check your package.json and network connectivity.
           {% elif 'no stack named' in stack_select_result.stderr | default('') %}
           Failed to select the stack. The stack may not exist or you may not have access to it.
+          {% elif 'passphrase' in stack_init_result.stderr | default('') %}
+          Passphrase error. Make sure PULUMI_CONFIG_PASSPHRASE is set correctly.
           {% else %}
           Check the output above for details.
           {% endif %}
@@ -193,5 +225,6 @@
       ========== Mock Stack Init (Check Mode) ==========
       Would initialize stack: {{ stack_name }}
       Project: {{ pulumi_project_path }}
+      Backend: {{ backend_display_name | default(pulumi_backend_type) }}
       ==================================================
   when: ansible_check_mode

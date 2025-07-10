@@ -1,0 +1,203 @@
+# Pulumiバックエンドへのログイン処理
+# 
+# 使用方法:
+#   include_tasks: login.yml
+#
+# 必須変数:
+#   - pulumi_project_path: プロジェクトのパス
+# 
+# オプション変数:
+#   - pulumi_project_name: プロジェクト名（S3バックエンド用、デフォルトはパスから自動取得）
+#   - force_login: 強制的に再ログイン（デフォルト: false）
+
+- name: Pulumi Backend Login
+  block:
+    # プロジェクト名の決定
+    - name: Set project name from path if not provided
+      ansible.builtin.set_fact:
+        _pulumi_project_name: "{{ pulumi_project_name | default(pulumi_project_path | basename) }}"
+    
+    # ログイン状態のチェック用変数
+    - name: Initialize login check variable
+      ansible.builtin.set_fact:
+        _pulumi_login_needed: false
+        _pulumi_current_backend: ""
+    
+    # 現在のログイン状態を確認
+    - name: Check current Pulumi backend
+      ansible.builtin.shell: |
+        cd {{ pulumi_project_path }}
+        {% if pulumi_backend_type == 's3' %}
+        export PULUMI_CONFIG_PASSPHRASE="{{ lookup('env', 'PULUMI_CONFIG_PASSPHRASE') }}"
+        {% else %}
+        export PULUMI_ACCESS_TOKEN="{{ lookup('env', 'PULUMI_ACCESS_TOKEN') }}"
+        {% endif %}
+        # 現在のバックエンドURLを取得
+        sudo -E {{ pulumi_bin_path }} whoami -v 2>/dev/null | grep -E "Backend|User" || echo "NOT_LOGGED_IN"
+      register: current_backend_check
+      changed_when: false
+      failed_when: false
+    
+    - name: Parse current backend status
+      ansible.builtin.set_fact:
+        _pulumi_current_backend: >-
+          {%- if 'NOT_LOGGED_IN' in current_backend_check.stdout -%}
+            not_logged_in
+          {%- elif 's3://' in current_backend_check.stdout -%}
+            {{ current_backend_check.stdout | regex_search('s3://[^\\s]+') | default('') }}
+          {%- elif 'app.pulumi.com' in current_backend_check.stdout -%}
+            pulumi_cloud
+          {%- else -%}
+            unknown
+          {%- endif -%}
+    
+    # 期待されるバックエンドURL
+    - name: Set expected backend URL
+      ansible.builtin.set_fact:
+        _pulumi_expected_backend: >-
+          {%- if pulumi_backend_type == 's3' -%}
+            s3://{{ pulumi_s3_backend.bucket }}/{{ _pulumi_project_name }}
+          {%- else -%}
+            pulumi_cloud
+          {%- endif -%}
+    
+    # ログインが必要かどうかを判定
+    - name: Determine if login is needed
+      ansible.builtin.set_fact:
+        _pulumi_login_needed: >-
+          {{ 
+            force_login | default(false) | bool or
+            _pulumi_current_backend == 'not_logged_in' or
+            _pulumi_current_backend == 'unknown' or
+            (pulumi_backend_type == 's3' and _pulumi_current_backend != _pulumi_expected_backend) or
+            (pulumi_backend_type == 'cloud' and _pulumi_current_backend != 'pulumi_cloud')
+          }}
+    
+    - name: Display login status
+      ansible.builtin.debug:
+        msg: |
+          ========== Pulumi Login Status ==========
+          Project: {{ _pulumi_project_name }}
+          Current Backend: {{ _pulumi_current_backend }}
+          Expected Backend: {{ _pulumi_expected_backend }}
+          Login Needed: {{ _pulumi_login_needed }}
+          Force Login: {{ force_login | default(false) }}
+          =========================================
+      when: ansible_verbosity > 0
+    
+    # Pulumi Cloudへのログイン
+    - name: Login to Pulumi Cloud
+      when:
+        - pulumi_backend_type == 'cloud'
+        - _pulumi_login_needed | bool
+      block:
+        - name: Verify PULUMI_ACCESS_TOKEN is set
+          ansible.builtin.fail:
+            msg: |
+              ERROR: PULUMI_ACCESS_TOKEN is not set.
+              Please export PULUMI_ACCESS_TOKEN="pul-YOUR_ACCESS_TOKEN"
+          when: lookup('env', 'PULUMI_ACCESS_TOKEN') | length == 0
+        
+        - name: Login to Pulumi Cloud
+          ansible.builtin.shell: |
+            cd {{ pulumi_project_path }}
+            export PULUMI_ACCESS_TOKEN="{{ lookup('env', 'PULUMI_ACCESS_TOKEN') }}"
+            sudo -E {{ pulumi_bin_path }} login
+          register: cloud_login_result
+          changed_when: cloud_login_result.rc == 0
+          no_log: true  # 認証情報を含む可能性があるため
+        
+        - name: Report Pulumi Cloud login success
+          ansible.builtin.debug:
+            msg: "Successfully logged in to Pulumi Cloud"
+    
+    # S3バックエンドへのログイン
+    - name: Login to S3 backend
+      when:
+        - pulumi_backend_type == 's3'
+        - _pulumi_login_needed | bool
+      block:
+        - name: Verify PULUMI_CONFIG_PASSPHRASE is set
+          ansible.builtin.fail:
+            msg: |
+              ERROR: PULUMI_CONFIG_PASSPHRASE is not set.
+              Please export PULUMI_CONFIG_PASSPHRASE="your-secure-passphrase"
+          when: lookup('env', 'PULUMI_CONFIG_PASSPHRASE') | length == 0
+        
+        - name: Login to S3 backend
+          ansible.builtin.shell: |
+            cd {{ pulumi_project_path }}
+            export PULUMI_CONFIG_PASSPHRASE="{{ lookup('env', 'PULUMI_CONFIG_PASSPHRASE') }}"
+            export AWS_REGION={{ pulumi_s3_backend.region }}
+            export AWS_DEFAULT_REGION={{ pulumi_s3_backend.region }}
+            source {{ playbook_dir }}/../../scripts/aws-env.sh > /dev/null 2>&1 || true
+            eval $({{ playbook_dir }}/../../scripts/aws-env.sh) > /dev/null 2>&1 || true
+            
+            echo "Logging into S3 backend: {{ _pulumi_expected_backend }}"
+            sudo -E {{ pulumi_bin_path }} login {{ _pulumi_expected_backend }}
+          register: s3_login_result
+          changed_when: s3_login_result.rc == 0
+        
+        - name: Report S3 backend login success
+          ansible.builtin.debug:
+            msg: |
+              Successfully logged in to S3 backend
+              Project: {{ _pulumi_project_name }}
+              Backend: {{ _pulumi_expected_backend }}
+    
+    # ログイン不要の場合
+    - name: Skip login - already logged in
+      ansible.builtin.debug:
+        msg: |
+          Login not needed - already logged in to correct backend
+          Current: {{ _pulumi_current_backend }}
+      when: not _pulumi_login_needed | bool
+    
+    # 最終確認
+    - name: Verify login success
+      ansible.builtin.shell: |
+        cd {{ pulumi_project_path }}
+        {% if pulumi_backend_type == 's3' %}
+        export PULUMI_CONFIG_PASSPHRASE="{{ lookup('env', 'PULUMI_CONFIG_PASSPHRASE') }}"
+        {% else %}
+        export PULUMI_ACCESS_TOKEN="{{ lookup('env', 'PULUMI_ACCESS_TOKEN') }}"
+        {% endif %}
+        sudo -E {{ pulumi_bin_path }} whoami
+      register: login_verify
+      changed_when: false
+      failed_when: login_verify.rc != 0
+      when: _pulumi_login_needed | bool
+    
+    - name: Display final login status
+      ansible.builtin.debug:
+        msg: |
+          ========== Login Complete ==========
+          Logged in as: {{ login_verify.stdout | default('Already logged in') }}
+          Backend: {{ _pulumi_expected_backend }}
+          ====================================
+      when: ansible_verbosity > 0
+      
+  rescue:
+    - name: Display login error
+      ansible.builtin.debug:
+        msg: |
+          ========== Pulumi Login Failed ==========
+          Project: {{ _pulumi_project_name }}
+          Backend Type: {{ pulumi_backend_type }}
+          Error: {{ ansible_failed_result.msg | default('Unknown error') }}
+          
+          {% if pulumi_backend_type == 's3' %}
+          Please ensure:
+          1. PULUMI_CONFIG_PASSPHRASE is set
+          2. AWS credentials are configured
+          3. You have access to S3 bucket: {{ pulumi_s3_backend.bucket }}
+          {% else %}
+          Please ensure:
+          1. PULUMI_ACCESS_TOKEN is set correctly
+          2. The token has not expired
+          {% endif %}
+          =========================================
+      
+    - name: Fail with error
+      ansible.builtin.fail:
+        msg: "Failed to login to Pulumi backend"

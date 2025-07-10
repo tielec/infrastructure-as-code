@@ -2,11 +2,20 @@
 
 - name: Destroy Pulumi stack
   block:
+    # プロジェクト固有のログインを確認（login.ymlで実行済みでない場合）
+    - name: Ensure proper backend login
+      ansible.builtin.include_tasks: login.yml
+      when: _pulumi_login_needed is not defined
+    
     # スタックが選択されているか確認
     - name: Ensure stack is selected
       ansible.builtin.shell: |
         cd {{ pulumi_project_path }}
+        {% if pulumi_backend_type == 's3' %}
+        export PULUMI_CONFIG_PASSPHRASE="{{ lookup('env', 'PULUMI_CONFIG_PASSPHRASE') }}"
+        {% else %}
         export PULUMI_ACCESS_TOKEN="{{ lookup('env', 'PULUMI_ACCESS_TOKEN') }}"
+        {% endif %}
         sudo -E {{ pulumi_bin_path }} stack --show-name || exit 1
       register: current_stack
       changed_when: false
