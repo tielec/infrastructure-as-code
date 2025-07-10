@@ -103,6 +103,7 @@
       ansible.builtin.set_fact:
         config_ssm_documents:
           updateRepo: "jenkins-infra-jenkins-update-repo-{{ env_name }}"
+          executeScript: "jenkins-infra-jenkins-config-execute-script-{{ env_name }}"
       when: config_ssm_documents is not defined or config_ssm_documents | length == 0
       
     - name: Display SSM document names
