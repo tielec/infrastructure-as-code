@@ -7,35 +7,30 @@
     _pulumi_common_vars_loaded: true
   when: _pulumi_common_vars_loaded is not defined
 
-# 共通変数が未定義の場合のみ実行
-- name: Define Pulumi common variables
-  when: pulumi_env_export is not defined
+# すべての変数を一度に定義（条件なし）
+- name: Define all Pulumi common variables
+  when: pulumi_commands is not defined
   block:
-    # Pulumiパスの設定
-    - name: Set Pulumi path
+    # Pulumiバイナリパス
+    - name: Set Pulumi binary path
       ansible.builtin.set_fact:
         pulumi_bin_path: "/root/.pulumi/bin/pulumi"
-      when: pulumi_bin_path is not defined
     
-    # バックエンドタイプの設定
-    - name: Determine backend type
+    # バックエンドタイプの判定
+    - name: Set backend type
       ansible.builtin.set_fact:
         pulumi_backend_type: "{{ lookup('env', 'PULUMI_BACKEND_TYPE') | default('cloud', true) }}"
         backend_display_name: "{{ 'S3 Backend' if lookup('env', 'PULUMI_BACKEND_TYPE') | default('cloud', true) == 's3' else 'Pulumi Cloud' }}"
-      when: pulumi_backend_type is not defined
     
-    # S3バックエンド設定のデフォルト値
-    - name: Set S3 backend defaults
+    # S3バックエンド設定（常に定義）
+    - name: Set S3 backend configuration
       ansible.builtin.set_fact:
         pulumi_s3_backend:
           bucket: "{{ lookup('env', 'PULUMI_S3_BUCKET') | default('', true) }}"
           region: "{{ lookup('env', 'PULUMI_S3_REGION') | default('ap-northeast-1', true) }}"
-      when: 
-        - pulumi_s3_backend is not defined
-        - pulumi_backend_type == 's3'
     
-    # 環境変数エクスポートコマンドの設定
-    - name: Set environment export command based on backend
+    # 環境変数エクスポートコマンド
+    - name: Set environment export commands
       ansible.builtin.set_fact:
         pulumi_env_export: >-
           {%- if pulumi_backend_type == 's3' -%}
@@ -45,13 +40,13 @@
           {%- else -%}
           export PULUMI_ACCESS_TOKEN="{{ lookup('env', 'PULUMI_ACCESS_TOKEN') }}";
           {%- endif -%}
-        
-        # AWS認証スクリプトの実行コマンド
         pulumi_aws_auth: >-
           source {{ playbook_dir }}/../../scripts/aws-env.sh > /dev/null 2>&1 || true;
           eval $({{ playbook_dir }}/../../scripts/aws-env.sh) > /dev/null 2>&1 || true;
-        
-        # Pulumiコマンド実行時の共通プレフィックス
+    
+    # Pulumiコマンド実行プレフィックス
+    - name: Set Pulumi execution prefix
+      ansible.builtin.set_fact:
         pulumi_exec_prefix: >-
           {%- if pulumi_backend_type == 's3' -%}
           export PULUMI_CONFIG_PASSPHRASE="{{ lookup('env', 'PULUMI_CONFIG_PASSPHRASE') }}";
@@ -65,7 +60,7 @@
           sudo -E {{ pulumi_bin_path }}
     
     # Pulumiコマンド定義
-    - name: Set Pulumi standard tasks
+    - name: Set Pulumi commands
       ansible.builtin.set_fact:
         pulumi_commands:
           preview:      "{{ pulumi_exec_prefix }} preview"
@@ -79,13 +74,16 @@
           build:        "npm run build"
           tsc:          "npx tsc"
     
-    # バックエンドURLの設定
+    # バックエンドURL
     - name: Set backend URL
       ansible.builtin.set_fact:
         pulumi_backend_url: >-
           {%- if pulumi_backend_type == 's3' -%}
-            s3://{{ pulumi_s3_backend.bucket }}/{{ pulumi_project_name | default(pulumi_project_path | basename) | default('default') }}
+            {%- if pulumi_project_path is defined -%}
+              s3://{{ pulumi_s3_backend.bucket }}/{{ pulumi_project_name | default(pulumi_project_path | basename) }}
+            {%- else -%}
+              s3://{{ pulumi_s3_backend.bucket }}/{{ pulumi_project_name | default('default') }}
+            {%- endif -%}
           {%- else -%}
             https://app.pulumi.com
           {%- endif -%}
-      when: pulumi_backend_url is not defined
