@@ -78,7 +78,8 @@
     - name: Set default SSM document names if not found
       ansible.builtin.set_fact:
         ssm_documents:
-          executeScript: "jenkins-infra-jenkins-execute-script"
+          executeScript: "jenkins-infra-jenkins-execute-script-{{ env_name }}"
+          updateRepo: "jenkins-infra-jenkins-update-repo-{{ env_name }}"
           restart: "jenkins-infra-jenkins-restart"
       when: ssm_documents is not defined or ssm_documents | length == 0
     
@@ -103,7 +104,7 @@
       ansible.builtin.set_fact:
         config_ssm_documents:
           updateRepo: "jenkins-infra-jenkins-update-repo-{{ env_name }}"
-          executeScript: "jenkins-infra-jenkins-config-execute-script-{{ env_name }}"
+          executeScript: "jenkins-infra-jenkins-execute-script-{{ env_name }}"
       when: config_ssm_documents is not defined or config_ssm_documents | length == 0
       
     - name: Display SSM document names
