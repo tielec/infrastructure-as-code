@@ -28,8 +28,8 @@
     - name: Set S3 backend defaults
       ansible.builtin.set_fact:
         pulumi_s3_backend:
-          bucket: "pulumi-state-621593801728-ap-northeast-1"
-          region: "ap-northeast-1"
+          bucket: "{{ lookup('env', 'PULUMI_S3_BUCKET') | default('', true) }}"
+          region: "{{ lookup('env', 'PULUMI_S3_REGION') | default('ap-northeast-1', true) }}"
       when: 
         - pulumi_s3_backend is not defined
         - pulumi_backend_type == 's3'
