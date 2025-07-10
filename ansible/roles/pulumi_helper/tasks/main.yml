@@ -73,14 +73,44 @@
       S3 Bucket: {{ pulumi_s3_backend.bucket }}
       Region: {{ pulumi_s3_backend.region }}
       Project: {{ pulumi_project_name | default(project_name) | default('default') }}
+      {% else %}
+      Using Pulumi Cloud (https://app.pulumi.com)
       {% endif %}
+      
+      Authentication Status:
+      - Access Token: {{ 'Set' if _pulumi_access_token | default('') != '' else 'Not set' }}
+      - Config Passphrase: {{ 'Set' if _pulumi_config_passphrase | default('') != '' else 'Not set' }}
       ==================================================
   when: ansible_verbosity > 0
+
+# Pulumi Cloud認証の確認
+- name: Check for PULUMI_ACCESS_TOKEN in environment (Pulumi Cloud)
+  ansible.builtin.set_fact:
+    pulumi_access_token_set: "{{ _pulumi_access_token | default('') | length > 0 }}"
+  when: pulumi_backend_type == 'cloud'
+
+- name: Warn about missing access token (Pulumi Cloud)
+  ansible.builtin.fail:
+    msg: |
+      ERROR: Pulumi Cloud requires PULUMI_ACCESS_TOKEN environment variable.
+      Please set it before running this playbook:
+      
+      export PULUMI_ACCESS_TOKEN="pul-YOUR_ACCESS_TOKEN"
+      
+      To get your access token:
+      1. Visit https://app.pulumi.com/account/tokens
+      2. Click "Create token"
+      3. Copy the token and set it as shown above
+      
+      Note: Some stacks may also require PULUMI_CONFIG_PASSPHRASE for decryption.
+  when: 
+    - pulumi_backend_type == 'cloud'
+    - not pulumi_access_token_set
 
 # パスフレーズの確認（S3バックエンドの場合）
 - name: Check for PULUMI_CONFIG_PASSPHRASE in environment (S3 backend)
   ansible.builtin.set_fact:
-    pulumi_passphrase_set: "{{ lookup('env', 'PULUMI_CONFIG_PASSPHRASE') | length > 0 }}"
+    pulumi_passphrase_set: "{{ _pulumi_config_passphrase | default('') | length > 0 }}"
   when: pulumi_backend_type == 's3'
 
 - name: Warn about missing passphrase (S3 backend)
@@ -96,7 +126,7 @@
 # S3バケット名の確認（S3バックエンドの場合）
 - name: Check for PULUMI_S3_BUCKET in environment (S3 backend)
   ansible.builtin.set_fact:
-    pulumi_s3_bucket_set: "{{ lookup('env', 'PULUMI_S3_BUCKET') | length > 0 }}"
+    pulumi_s3_bucket_set: "{{ pulumi_s3_backend.bucket | length > 0 }}"
   when: pulumi_backend_type == 's3'
 
 - name: Warn about missing S3 bucket (S3 backend)
@@ -111,6 +141,17 @@
   when: 
     - pulumi_backend_type == 's3'
     - not pulumi_s3_bucket_set
+
+# パスフレーズの情報表示（Pulumi Cloudでパスフレーズが設定されている場合）
+- name: Display passphrase info for Pulumi Cloud
+  ansible.builtin.debug:
+    msg: |
+      INFO: PULUMI_CONFIG_PASSPHRASE is set.
+      This will be used for stacks that require passphrase encryption.
+  when:
+    - pulumi_backend_type == 'cloud'
+    - _pulumi_config_passphrase | default('') != ''
+    - ansible_verbosity > 0
 
 # 結果変数の初期化
 - name: Initialize result variables

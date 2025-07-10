@@ -82,6 +82,8 @@
           Expected Backend: {{ _pulumi_expected_backend }}
           Login Needed: {{ _pulumi_login_needed }}
           Force Login: {{ force_login | default(false) }}
+          Access Token Set: {{ 'Yes' if _pulumi_access_token | default('') != '' else 'No' }}
+          Passphrase Set: {{ 'Yes' if _pulumi_config_passphrase | default('') != '' else 'No' }}
           =========================================
       when: ansible_verbosity > 0
     
@@ -94,14 +96,22 @@
         - name: Verify PULUMI_ACCESS_TOKEN is set
           ansible.builtin.fail:
             msg: |
-              ERROR: PULUMI_ACCESS_TOKEN is not set.
+              ERROR: PULUMI_ACCESS_TOKEN is not set or empty.
               Please export PULUMI_ACCESS_TOKEN="pul-YOUR_ACCESS_TOKEN"
-          when: lookup('env', 'PULUMI_ACCESS_TOKEN') | length == 0
+              
+              To get your access token:
+              1. Visit https://app.pulumi.com/account/tokens
+              2. Click "Create token"
+              3. Copy the token and set it as an environment variable
+          when: _pulumi_access_token | default('') | length == 0
         
         - name: Login to Pulumi Cloud
           ansible.builtin.shell: |
             cd {{ pulumi_project_path }}
-            export PULUMI_ACCESS_TOKEN="{{ lookup('env', 'PULUMI_ACCESS_TOKEN') }}"
+            export PULUMI_ACCESS_TOKEN="{{ _pulumi_access_token }}"
+            {% if _pulumi_config_passphrase != '' %}
+            export PULUMI_CONFIG_PASSPHRASE="{{ _pulumi_config_passphrase }}"
+            {% endif %}
             sudo -E {{ pulumi_bin_path }} login
           register: cloud_login_result
           changed_when: cloud_login_result.rc == 0
@@ -109,7 +119,11 @@
         
         - name: Report Pulumi Cloud login success
           ansible.builtin.debug:
-            msg: "Successfully logged in to Pulumi Cloud"
+            msg: |
+              Successfully logged in to Pulumi Cloud
+              {% if _pulumi_config_passphrase != '' %}
+              Note: Passphrase is also set for encrypted stacks
+              {% endif %}
     
     # S3バックエンドへのログイン
     - name: Login to S3 backend
@@ -122,7 +136,7 @@
             msg: |
               ERROR: PULUMI_CONFIG_PASSPHRASE is not set.
               Please export PULUMI_CONFIG_PASSPHRASE="your-secure-passphrase"
-          when: lookup('env', 'PULUMI_CONFIG_PASSPHRASE') | length == 0
+          when: _pulumi_config_passphrase | default('') | length == 0
         
         - name: Login to S3 backend
           ansible.builtin.shell: |
@@ -188,6 +202,12 @@
           Please ensure:
           1. PULUMI_ACCESS_TOKEN is set correctly
           2. The token has not expired
+          3. You have internet connectivity to app.pulumi.com
+          
+          {% if 'passphrase must be set' in ansible_failed_result.msg | default('') %}
+          Note: This stack may require a passphrase even with Pulumi Cloud.
+          Try setting: export PULUMI_CONFIG_PASSPHRASE="your-passphrase"
+          {% endif %}
           {% endif %}
           =========================================
       

@@ -22,6 +22,51 @@
       failed_when: current_stack.rc != 0
       when: not ansible_check_mode
     
+    # 現在のスタック設定を確認（デバッグ用）
+    - name: Check stack configuration (debug)
+      ansible.builtin.shell: |
+        cd {{ pulumi_project_path }}
+        {{ pulumi_env_export }}
+        sudo -E {{ pulumi_bin_path }} stack export | jq -r '.deployment.secrets_providers.type // "default"'
+      register: secrets_provider_check
+      changed_when: false
+      failed_when: false
+      when: 
+        - not ansible_check_mode
+        - ansible_verbosity > 0
+    
+    - name: Display secrets provider type
+      ansible.builtin.debug:
+        msg: |
+          Current stack secrets provider: {{ secrets_provider_check.stdout | default('unknown') }}
+          Backend type: {{ pulumi_backend_type }}
+          Passphrase set: {{ 'Yes' if _pulumi_config_passphrase | default('') != '' else 'No' }}
+      when: 
+        - not ansible_check_mode
+        - ansible_verbosity > 0
+        - secrets_provider_check is defined
+    
+    # 認証情報の確認
+    - name: Verify authentication is properly set
+      ansible.builtin.fail:
+        msg: |
+          ERROR: Authentication not properly configured.
+          {% if pulumi_backend_type == 'cloud' %}
+          PULUMI_ACCESS_TOKEN is not set or empty.
+          Please export PULUMI_ACCESS_TOKEN="pul-YOUR_ACCESS_TOKEN"
+          {% if secrets_provider_check.stdout | default('') == 'passphrase' %}
+          
+          Note: This stack appears to use passphrase encryption.
+          You may also need to set PULUMI_CONFIG_PASSPHRASE.
+          {% endif %}
+          {% else %}
+          PULUMI_CONFIG_PASSPHRASE is not set.
+          Please export PULUMI_CONFIG_PASSPHRASE="your-secure-passphrase"
+          {% endif %}
+      when:
+        - pulumi_backend_type == 'cloud' and _pulumi_access_token | default('') == ''
+        - not ansible_check_mode
+    
     # デプロイを実行
     - name: Run deployment
       ansible.builtin.shell: |
@@ -56,6 +101,12 @@
           Error:
           {{ pulumi_up_result.stderr }}
           {% endif %}
+          
+          {% if 'passphrase must be set' in pulumi_up_result.stderr | default('') %}
+          IMPORTANT: This stack requires a passphrase for decryption.
+          Please set PULUMI_CONFIG_PASSPHRASE environment variable:
+          export PULUMI_CONFIG_PASSPHRASE="your-secure-passphrase"
+          {% endif %}
           ==============================================
     
     - name: Set failure status
@@ -67,7 +118,11 @@
       ansible.builtin.fail:
         msg: |
           Pulumi deployment failed. 
-          {% if 'TypeScript' in pulumi_up_result.stdout | default('') %}
+          {% if 'passphrase must be set' in pulumi_up_result.stderr | default('') %}
+          This stack uses passphrase encryption. Set PULUMI_CONFIG_PASSPHRASE environment variable.
+          {% elif 'PULUMI_ACCESS_TOKEN' in pulumi_up_result.stderr | default('') %}
+          Pulumi access token is missing or invalid. Set PULUMI_ACCESS_TOKEN environment variable.
+          {% elif 'TypeScript' in pulumi_up_result.stdout | default('') %}
           TypeScript compilation errors detected. Please fix the code and try again.
           {% elif 'unhandled exception' in pulumi_up_result.stdout | default('') %}
           An unhandled exception occurred during deployment.
