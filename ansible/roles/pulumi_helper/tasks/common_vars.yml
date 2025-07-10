@@ -29,47 +29,37 @@
           bucket: "{{ lookup('env', 'PULUMI_S3_BUCKET') | default('', true) }}"
           region: "{{ lookup('env', 'PULUMI_S3_REGION') | default('ap-northeast-1', true) }}"
     
-    # アクセストークンとパスフレーズの取得
-    - name: Get authentication credentials
-      ansible.builtin.set_fact:
-        _pulumi_access_token: "{{ lookup('env', 'PULUMI_ACCESS_TOKEN') | default('', true) }}"
-        _pulumi_config_passphrase: "{{ lookup('env', 'PULUMI_CONFIG_PASSPHRASE') | default('', true) }}"
-    
-    # 環境変数エクスポートコマンド（改善版）
+    # 環境変数エクスポートコマンド（バックエンドタイプに応じて適切な環境変数のみを設定）
     - name: Set environment export commands
       ansible.builtin.set_fact:
         pulumi_env_export: >-
           {%- if pulumi_backend_type == 's3' -%}
-          export PULUMI_CONFIG_PASSPHRASE="{{ _pulumi_config_passphrase }}";
+          unset PULUMI_ACCESS_TOKEN;
+          export PULUMI_CONFIG_PASSPHRASE="{{ lookup('env', 'PULUMI_CONFIG_PASSPHRASE') }}";
           export AWS_REGION={{ pulumi_s3_backend.region }};
           export AWS_DEFAULT_REGION={{ pulumi_s3_backend.region }};
           {%- else -%}
-          {%- if _pulumi_access_token != '' -%}
-          export PULUMI_ACCESS_TOKEN="{{ _pulumi_access_token }}";
-          {%- endif -%}
-          {%- if _pulumi_config_passphrase != '' -%}
-          export PULUMI_CONFIG_PASSPHRASE="{{ _pulumi_config_passphrase }}";
-          {%- endif -%}
+          unset PULUMI_CONFIG_PASSPHRASE;
+          unset PULUMI_BACKEND_TYPE;
+          export PULUMI_ACCESS_TOKEN="{{ lookup('env', 'PULUMI_ACCESS_TOKEN') }}";
           {%- endif -%}
         pulumi_aws_auth: >-
           source {{ playbook_dir }}/../../scripts/aws-env.sh > /dev/null 2>&1 || true;
           eval $({{ playbook_dir }}/../../scripts/aws-env.sh) > /dev/null 2>&1 || true;
     
-    # Pulumiコマンド実行プレフィックス（改善版）
+    # Pulumiコマンド実行プレフィックス
     - name: Set Pulumi execution prefix
       ansible.builtin.set_fact:
         pulumi_exec_prefix: >-
           {%- if pulumi_backend_type == 's3' -%}
-          export PULUMI_CONFIG_PASSPHRASE="{{ _pulumi_config_passphrase }}";
+          unset PULUMI_ACCESS_TOKEN;
+          export PULUMI_CONFIG_PASSPHRASE="{{ lookup('env', 'PULUMI_CONFIG_PASSPHRASE') }}";
           export AWS_REGION={{ pulumi_s3_backend.region }};
           export AWS_DEFAULT_REGION={{ pulumi_s3_backend.region }};
           {%- else -%}
-          {%- if _pulumi_access_token != '' -%}
-          export PULUMI_ACCESS_TOKEN="{{ _pulumi_access_token }}";
-          {%- endif -%}
-          {%- if _pulumi_config_passphrase != '' -%}
-          export PULUMI_CONFIG_PASSPHRASE="{{ _pulumi_config_passphrase }}";
-          {%- endif -%}
+          unset PULUMI_CONFIG_PASSPHRASE;
+          unset PULUMI_BACKEND_TYPE;
+          export PULUMI_ACCESS_TOKEN="{{ lookup('env', 'PULUMI_ACCESS_TOKEN') }}";
           {%- endif -%}
           source {{ playbook_dir }}/../../scripts/aws-env.sh > /dev/null 2>&1 || true;
           eval $({{ playbook_dir }}/../../scripts/aws-env.sh) > /dev/null 2>&1 || true;

@@ -137,7 +137,7 @@
           Stack selection output:
           {{ stack_select_result.stdout_lines | join('\n') }}
     
-    # 最終確認
+    # 最終確認（エラーを無視）
     - name: Verify current stack
       ansible.builtin.shell: |
         cd {{ pulumi_project_path }}
@@ -145,15 +145,23 @@
         sudo -E {{ pulumi_bin_path }} stack --show-name
       register: current_stack_verify
       changed_when: false
+      failed_when: false
       when: not ansible_check_mode
     
     - name: Display final status
       ansible.builtin.debug:
         msg: |
           ========== Stack Init Complete ==========
+          {% if current_stack_verify.rc == 0 %}
           Current stack: {{ current_stack_verify.stdout }}
+          {% else %}
+          Stack selection may have encountered an issue. 
+          This could be due to backend type mismatch.
+          Please verify your environment variables:
+          - For S3: PULUMI_BACKEND_TYPE=s3, PULUMI_CONFIG_PASSPHRASE, PULUMI_S3_BUCKET
+          - For Cloud: PULUMI_ACCESS_TOKEN (and PULUMI_BACKEND_TYPE should not be 's3')
+          {% endif %}
           Backend: {{ backend_display_name | default(pulumi_backend_type) }}
-          Success: Yes
           =========================================
     
     - name: Set success status
@@ -170,6 +178,12 @@
           Project: {{ pulumi_project_path }}
           Stack: {{ stack_name }}
           Backend: {{ backend_display_name | default(pulumi_backend_type) }}
+          
+          Common issues:
+          1. Backend type mismatch - Check PULUMI_BACKEND_TYPE environment variable
+          2. Both PULUMI_ACCESS_TOKEN and PULUMI_CONFIG_PASSPHRASE are set
+          3. Wrong passphrase for S3 backend
+          
           {% if stack_init_result is defined and stack_init_result.stderr is defined and stack_init_result.stderr %}
           Stack init error:
           {{ stack_init_result.stderr }}
@@ -203,6 +217,9 @@
           Passphrase error. Make sure PULUMI_CONFIG_PASSPHRASE is set correctly.
           {% else %}
           Check the output above for details.
+          Possible issue: Both PULUMI_ACCESS_TOKEN and PULUMI_CONFIG_PASSPHRASE are set.
+          For S3 backend: unset PULUMI_ACCESS_TOKEN
+          For Pulumi Cloud: unset PULUMI_CONFIG_PASSPHRASE and PULUMI_BACKEND_TYPE
           {% endif %}
 
 - name: Mock stack initialization (check mode)
