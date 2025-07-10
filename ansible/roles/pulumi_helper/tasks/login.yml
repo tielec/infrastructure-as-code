@@ -27,11 +27,7 @@
     - name: Check current Pulumi backend
       ansible.builtin.shell: |
         cd {{ pulumi_project_path }}
-        {% if pulumi_backend_type == 's3' %}
-        export PULUMI_CONFIG_PASSPHRASE="{{ lookup('env', 'PULUMI_CONFIG_PASSPHRASE') }}"
-        {% else %}
-        export PULUMI_ACCESS_TOKEN="{{ lookup('env', 'PULUMI_ACCESS_TOKEN') }}"
-        {% endif %}
+        {{ pulumi_env_export }}
         # 現在のバックエンドURLを取得
         sudo -E {{ pulumi_bin_path }} whoami -v 2>/dev/null | grep -E "Backend|User" || echo "NOT_LOGGED_IN"
       register: current_backend_check
@@ -127,11 +123,8 @@
         - name: Login to S3 backend
           ansible.builtin.shell: |
             cd {{ pulumi_project_path }}
-            export PULUMI_CONFIG_PASSPHRASE="{{ lookup('env', 'PULUMI_CONFIG_PASSPHRASE') }}"
-            export AWS_REGION={{ pulumi_s3_backend.region }}
-            export AWS_DEFAULT_REGION={{ pulumi_s3_backend.region }}
-            source {{ playbook_dir }}/../../scripts/aws-env.sh > /dev/null 2>&1 || true
-            eval $({{ playbook_dir }}/../../scripts/aws-env.sh) > /dev/null 2>&1 || true
+            {{ pulumi_env_export }}
+            {{ pulumi_aws_auth }}
             
             echo "Logging into S3 backend: {{ _pulumi_expected_backend }}"
             sudo -E {{ pulumi_bin_path }} login {{ _pulumi_expected_backend }}
@@ -157,11 +150,7 @@
     - name: Verify login success
       ansible.builtin.shell: |
         cd {{ pulumi_project_path }}
-        {% if pulumi_backend_type == 's3' %}
-        export PULUMI_CONFIG_PASSPHRASE="{{ lookup('env', 'PULUMI_CONFIG_PASSPHRASE') }}"
-        {% else %}
-        export PULUMI_ACCESS_TOKEN="{{ lookup('env', 'PULUMI_ACCESS_TOKEN') }}"
-        {% endif %}
+        {{ pulumi_env_export }}
         sudo -E {{ pulumi_bin_path }} whoami
       register: login_verify
       changed_when: false

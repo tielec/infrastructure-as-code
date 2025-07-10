@@ -97,13 +97,6 @@
     - pulumi_backend_type == 's3'
     - not pulumi_passphrase_set
 
-# プロジェクトパスが設定されている場合、プロジェクト固有のログインを実行
-- name: Login to Pulumi backend for specific project
-  ansible.builtin.include_tasks: login.yml
-  when: 
-    - pulumi_project_path is defined
-    - pulumi_project_path | length > 0
-
 # Pulumiコマンド定義（バックエンドタイプに応じて環境変数を設定）
 - name: Set environment export command based on backend
   ansible.builtin.set_fact:
@@ -115,18 +108,29 @@
       {%- else -%}
       export PULUMI_ACCESS_TOKEN="{{ lookup('env', 'PULUMI_ACCESS_TOKEN') }}";
       {%- endif -%}
+    
+    # AWS認証スクリプトの実行コマンド
+    pulumi_aws_auth: >-
+      source {{ playbook_dir }}/../../scripts/aws-env.sh > /dev/null 2>&1 || true;
+      eval $({{ playbook_dir }}/../../scripts/aws-env.sh) > /dev/null 2>&1 || true;
+    
+    # Pulumiコマンド実行時の共通プレフィックス
+    pulumi_exec_prefix: >-
+      {{ pulumi_env_export }}
+      {{ pulumi_aws_auth }}
+      sudo -E {{ pulumi_bin_path }}
 
 - name: Set Pulumi standard tasks
   ansible.builtin.set_fact:
     pulumi_commands:
-      preview:      "{{ pulumi_env_export }} source {{ playbook_dir }}/../../scripts/aws-env.sh > /dev/null && eval $({{ playbook_dir }}/../../scripts/aws-env.sh) > /dev/null && sudo -E {{ pulumi_bin_path }} preview"
-      up:           "{{ pulumi_env_export }} source {{ playbook_dir }}/../../scripts/aws-env.sh > /dev/null && eval $({{ playbook_dir }}/../../scripts/aws-env.sh) > /dev/null && sudo -E {{ pulumi_bin_path }} up --yes"
-      destroy:      "{{ pulumi_env_export }} source {{ playbook_dir }}/../../scripts/aws-env.sh > /dev/null && eval $({{ playbook_dir }}/../../scripts/aws-env.sh) > /dev/null && sudo -E {{ pulumi_bin_path }} destroy --yes"
-      refresh:      "{{ pulumi_env_export }} source {{ playbook_dir }}/../../scripts/aws-env.sh > /dev/null && eval $({{ playbook_dir }}/../../scripts/aws-env.sh) > /dev/null && sudo -E {{ pulumi_bin_path }} refresh --yes"
-      stack_output: "{{ pulumi_env_export }} source {{ playbook_dir }}/../../scripts/aws-env.sh > /dev/null && eval $({{ playbook_dir }}/../../scripts/aws-env.sh) > /dev/null && sudo -E {{ pulumi_bin_path }} stack output"
-      stack_ls:     "{{ pulumi_env_export }} source {{ playbook_dir }}/../../scripts/aws-env.sh > /dev/null && eval $({{ playbook_dir }}/../../scripts/aws-env.sh) > /dev/null && sudo -E {{ pulumi_bin_path }} stack ls"
-      stack_rm:     "{{ pulumi_env_export }} source {{ playbook_dir }}/../../scripts/aws-env.sh > /dev/null && eval $({{ playbook_dir }}/../../scripts/aws-env.sh) > /dev/null && sudo -E {{ pulumi_bin_path }} stack rm --yes"
-      config_set:   "{{ pulumi_env_export }} source {{ playbook_dir }}/../../scripts/aws-env.sh > /dev/null && eval $({{ playbook_dir }}/../../scripts/aws-env.sh) > /dev/null && sudo -E {{ pulumi_bin_path }} config set"
+      preview:      "{{ pulumi_exec_prefix }} preview"
+      up:           "{{ pulumi_exec_prefix }} up --yes"
+      destroy:      "{{ pulumi_exec_prefix }} destroy --yes"
+      refresh:      "{{ pulumi_exec_prefix }} refresh --yes"
+      stack_output: "{{ pulumi_exec_prefix }} stack output"
+      stack_ls:     "{{ pulumi_exec_prefix }} stack ls"
+      stack_rm:     "{{ pulumi_exec_prefix }} stack rm --yes"
+      config_set:   "{{ pulumi_exec_prefix }} config set"
       build:        "npm run build"
       tsc:          "npx tsc"
 
@@ -143,3 +147,10 @@
     stack_output_failed: false
     stack_rm_failed: false
     stack_init_failed: false
+
+# プロジェクトパスが設定されている場合、プロジェクト固有のログインを実行
+- name: Login to Pulumi backend for specific project
+  ansible.builtin.include_tasks: login.yml
+  when: 
+    - pulumi_project_path is defined
+    - pulumi_project_path | length > 0

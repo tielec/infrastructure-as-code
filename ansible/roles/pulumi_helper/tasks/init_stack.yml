@@ -54,15 +54,8 @@
     - name: Initialize new stack if not exists
       ansible.builtin.shell: |
         cd {{ pulumi_project_path }}
-        source {{ playbook_dir }}/../../scripts/aws-env.sh > /dev/null
-        eval $({{ playbook_dir }}/../../scripts/aws-env.sh) > /dev/null
-        {% if pulumi_backend_type == 's3' %}
-        export PULUMI_CONFIG_PASSPHRASE="{{ lookup('env', 'PULUMI_CONFIG_PASSPHRASE') }}"
-        export AWS_REGION={{ pulumi_s3_backend.region }}
-        export AWS_DEFAULT_REGION={{ pulumi_s3_backend.region }}
-        {% else %}
-        export PULUMI_ACCESS_TOKEN="{{ lookup('env', 'PULUMI_ACCESS_TOKEN') }}"
-        {% endif %}
+        {{ pulumi_env_export }}
+        {{ pulumi_aws_auth }}
         
         echo "Creating new stack: {{ resolved_stack_name }}"
         {% if pulumi_backend_type == 's3' %}
@@ -118,15 +111,8 @@
     - name: Select stack
       ansible.builtin.shell: |
         cd {{ pulumi_project_path }}
-        source {{ playbook_dir }}/../../scripts/aws-env.sh > /dev/null
-        eval $({{ playbook_dir }}/../../scripts/aws-env.sh) > /dev/null
-        {% if pulumi_backend_type == 's3' %}
-        export PULUMI_CONFIG_PASSPHRASE="{{ lookup('env', 'PULUMI_CONFIG_PASSPHRASE') }}"
-        export AWS_REGION={{ pulumi_s3_backend.region }}
-        export AWS_DEFAULT_REGION={{ pulumi_s3_backend.region }}
-        {% else %}
-        export PULUMI_ACCESS_TOKEN="{{ lookup('env', 'PULUMI_ACCESS_TOKEN') }}"
-        {% endif %}
+        {{ pulumi_env_export }}
+        {{ pulumi_aws_auth }}
         
         echo "Attempting to select stack..."
         # まず単純な名前で試し、失敗したら解決済み名前を使用
@@ -151,11 +137,7 @@
     - name: Verify current stack
       ansible.builtin.shell: |
         cd {{ pulumi_project_path }}
-        {% if pulumi_backend_type == 's3' %}
-        export PULUMI_CONFIG_PASSPHRASE="{{ lookup('env', 'PULUMI_CONFIG_PASSPHRASE') }}"
-        {% else %}
-        export PULUMI_ACCESS_TOKEN="{{ lookup('env', 'PULUMI_ACCESS_TOKEN') }}"
-        {% endif %}
+        {{ pulumi_env_export }}
         sudo -E {{ pulumi_bin_path }} stack --show-name
       register: current_stack_verify
       changed_when: false

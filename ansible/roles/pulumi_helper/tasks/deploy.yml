@@ -2,11 +2,16 @@
 
 - name: Deploy with Pulumi
   block:
+    # プロジェクト固有のログインを確認（login.ymlで実行済みでない場合）
+    - name: Ensure proper backend login
+      ansible.builtin.include_tasks: login.yml
+      when: _pulumi_login_needed is not defined
+    
     # スタックが選択されているか確認
     - name: Ensure stack is selected
       ansible.builtin.shell: |
         cd {{ pulumi_project_path }}
-        export PULUMI_ACCESS_TOKEN="{{ lookup('env', 'PULUMI_ACCESS_TOKEN') }}"
+        {{ pulumi_env_export }}
         sudo -E {{ pulumi_bin_path }} stack --show-name || exit 1
       register: current_stack
       changed_when: false

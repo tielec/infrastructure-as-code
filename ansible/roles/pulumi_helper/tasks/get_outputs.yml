@@ -22,11 +22,7 @@
     - name: Check current stack selection
       ansible.builtin.shell: |
         cd {{ pulumi_project_path }}
-        {% if pulumi_backend_type == 's3' %}
-        export PULUMI_CONFIG_PASSPHRASE="{{ lookup('env', 'PULUMI_CONFIG_PASSPHRASE') }}"
-        {% else %}
-        export PULUMI_ACCESS_TOKEN="{{ lookup('env', 'PULUMI_ACCESS_TOKEN') }}"
-        {% endif %}
+        {{ pulumi_env_export }}
         sudo -E {{ pulumi_bin_path }} stack --show-name 2>/dev/null || echo "NO_STACK_SELECTED"
       register: current_stack_check
       changed_when: false
@@ -55,11 +51,7 @@
             - name: Select specified stack
               ansible.builtin.shell: |
                 cd {{ pulumi_project_path }}
-                {% if pulumi_backend_type == 's3' %}
-                export PULUMI_CONFIG_PASSPHRASE="{{ lookup('env', 'PULUMI_CONFIG_PASSPHRASE') }}"
-                {% else %}
-                export PULUMI_ACCESS_TOKEN="{{ lookup('env', 'PULUMI_ACCESS_TOKEN') }}"
-                {% endif %}
+                {{ pulumi_env_export }}
                 
                 # まず単純な名前で試す
                 if sudo -E {{ pulumi_bin_path }} stack select {{ stack_name }} 2>/dev/null; then
@@ -99,11 +91,7 @@
             - name: List all available stacks
               ansible.builtin.shell: |
                 cd {{ pulumi_project_path }}
-                {% if pulumi_backend_type == 's3' %}
-                export PULUMI_CONFIG_PASSPHRASE="{{ lookup('env', 'PULUMI_CONFIG_PASSPHRASE') }}"
-                {% else %}
-                export PULUMI_ACCESS_TOKEN="{{ lookup('env', 'PULUMI_ACCESS_TOKEN') }}"
-                {% endif %}
+                {{ pulumi_env_export }}
                 sudo -E {{ pulumi_bin_path }} stack ls --json 2>/dev/null || echo '[]'
               register: available_stacks_list
             
@@ -116,11 +104,7 @@
             - name: Select first available stack
               ansible.builtin.shell: |
                 cd {{ pulumi_project_path }}
-                {% if pulumi_backend_type == 's3' %}
-                export PULUMI_CONFIG_PASSPHRASE="{{ lookup('env', 'PULUMI_CONFIG_PASSPHRASE') }}"
-                {% else %}
-                export PULUMI_ACCESS_TOKEN="{{ lookup('env', 'PULUMI_ACCESS_TOKEN') }}"
-                {% endif %}
+                {{ pulumi_env_export }}
                 
                 FIRST_STACK=$(echo '{{ available_stacks_list.stdout }}' | jq -r '.[0].name // empty')
                 if [ -n "$FIRST_STACK" ]; then
@@ -140,11 +124,7 @@
     - name: Verify final stack selection
       ansible.builtin.shell: |
         cd {{ pulumi_project_path }}
-        {% if pulumi_backend_type == 's3' %}
-        export PULUMI_CONFIG_PASSPHRASE="{{ lookup('env', 'PULUMI_CONFIG_PASSPHRASE') }}"
-        {% else %}
-        export PULUMI_ACCESS_TOKEN="{{ lookup('env', 'PULUMI_ACCESS_TOKEN') }}"
-        {% endif %}
+        {{ pulumi_env_export }}
         sudo -E {{ pulumi_bin_path }} stack --show-name
       register: final_stack_check
       changed_when: false
@@ -161,11 +141,7 @@
     - name: Get stack output
       ansible.builtin.shell: |
         cd {{ pulumi_project_path }}
-        {% if pulumi_backend_type == 's3' %}
-        export PULUMI_CONFIG_PASSPHRASE="{{ lookup('env', 'PULUMI_CONFIG_PASSPHRASE') }}"
-        {% else %}
-        export PULUMI_ACCESS_TOKEN="{{ lookup('env', 'PULUMI_ACCESS_TOKEN') }}"
-        {% endif %}
+        {{ pulumi_env_export }}
         
         if [ -n "{{ output_name | default('') }}" ]; then
           echo "Fetching specific output: {{ output_name }}"
