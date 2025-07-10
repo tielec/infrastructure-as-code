@@ -10,6 +10,10 @@
 #   - pulumi_project_name: プロジェクト名（S3バックエンド用、デフォルトはパスから自動取得）
 #   - force_login: 強制的に再ログイン（デフォルト: false）
 
+# 共通変数の読み込み
+- name: Load common variables
+  ansible.builtin.include_tasks: common_vars.yml
+
 - name: Pulumi Backend Login
   block:
     # プロジェクト名の決定

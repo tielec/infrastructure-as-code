@@ -2,6 +2,11 @@
 # 入力: stack_name (例: dev)
 # 出力: resolved_stack_name (例: myorg/jenkins-agent/dev または dev)
 
+# 共通変数の読み込み（念のため）
+- name: Load common variables if needed
+  ansible.builtin.include_tasks: common_vars.yml
+  when: pulumi_backend_type is not defined
+
 - name: Display resolution start
   ansible.builtin.debug:
     msg: |

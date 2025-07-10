@@ -1,5 +1,9 @@
 # Pulumiプロジェクトのビルドを実行するヘルパータスク
 
+# 共通変数の読み込み（ビルドには最小限の変数のみ必要）
+- name: Load common variables
+  ansible.builtin.include_tasks: common_vars.yml
+
 - name: Build Pulumi TypeScript project
   block:
     # package.jsonの存在確認

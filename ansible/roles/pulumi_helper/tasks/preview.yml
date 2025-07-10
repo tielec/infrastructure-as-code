@@ -1,5 +1,9 @@
 # Pulumiのプレビュー実行ヘルパータスク
 
+# 共通変数の読み込み
+- name: Load common variables
+  ansible.builtin.include_tasks: common_vars.yml
+
 - name: Preview Pulumi deployment
   block:
     # プロジェクト固有のログインを確認（login.ymlで実行済みでない場合）

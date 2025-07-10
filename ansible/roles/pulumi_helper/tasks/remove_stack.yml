@@ -1,5 +1,9 @@
 # Pulumiスタックを削除するヘルパータスク
 
+# 共通変数の読み込み
+- name: Load common variables
+  ansible.builtin.include_tasks: common_vars.yml
+
 - name: Remove Pulumi stack
   block:
     # プロジェクト固有のログインを確認（login.ymlで実行済みでない場合）
@@ -21,7 +25,7 @@
     - name: Find stack to remove
       ansible.builtin.shell: |
         cd {{ pulumi_project_path }}
-        export PULUMI_ACCESS_TOKEN="{{ lookup('env', 'PULUMI_ACCESS_TOKEN') }}"
+        {{ pulumi_env_export }}
         # スタック名で終わるものを検索
         sudo -E {{ pulumi_bin_path }} stack ls --json | jq -r '.[].name | select(endswith("/{{ stack_name }}") or . == "{{ stack_name }}")' | head -1
       register: found_stack
@@ -40,9 +44,8 @@
     - name: Remove stack
       ansible.builtin.shell: |
         cd {{ pulumi_project_path }}
-        source {{ playbook_dir }}/../../scripts/aws-env.sh > /dev/null
-        eval $({{ playbook_dir }}/../../scripts/aws-env.sh) > /dev/null
-        export PULUMI_ACCESS_TOKEN="{{ lookup('env', 'PULUMI_ACCESS_TOKEN') }}"
+        {{ pulumi_env_export }}
+        {{ pulumi_aws_auth }}
         sudo -E {{ pulumi_bin_path }} stack rm --yes "{{ found_stack.stdout | trim }}"
       register: stack_rm_result
       changed_when: stack_rm_result.rc == 0

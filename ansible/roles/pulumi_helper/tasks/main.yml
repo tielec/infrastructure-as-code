@@ -48,13 +48,9 @@
     msg: "Pulumi is not installed. Please run bootstrap setup first."
   when: not pulumi_check.stat.exists and not pulumi_root_check.stat.exists
 
-- name: Set Pulumi path
-  ansible.builtin.set_fact:
-    pulumi_bin_path: "/root/.pulumi/bin/pulumi"
-
 # Pulumiのバージョン確認
 - name: Check Pulumi version
-  ansible.builtin.command: "{{ pulumi_bin_path }} version"
+  ansible.builtin.command: "/root/.pulumi/bin/pulumi version"
   register: pulumi_version
   changed_when: false
   
@@ -63,11 +59,11 @@
     msg: "Using Pulumi version: {{ pulumi_version.stdout }}"
   when: ansible_verbosity > 0
 
-# バックエンドタイプの判定と表示
-- name: Determine backend type
-  ansible.builtin.set_fact:
-    backend_display_name: "{{ 'S3 Backend' if pulumi_backend_type == 's3' else 'Pulumi Cloud' }}"
-    
+# 共通変数の読み込み
+- name: Load common variables
+  ansible.builtin.include_tasks: common_vars.yml
+
+# バックエンドタイプの表示
 - name: Display backend information
   ansible.builtin.debug:
     msg: |
@@ -96,43 +92,6 @@
   when: 
     - pulumi_backend_type == 's3'
     - not pulumi_passphrase_set
-
-# Pulumiコマンド定義（バックエンドタイプに応じて環境変数を設定）
-- name: Set environment export command based on backend
-  ansible.builtin.set_fact:
-    pulumi_env_export: >-
-      {%- if pulumi_backend_type == 's3' -%}
-      export PULUMI_CONFIG_PASSPHRASE="{{ lookup('env', 'PULUMI_CONFIG_PASSPHRASE') }}";
-      export AWS_REGION={{ pulumi_s3_backend.region }};
-      export AWS_DEFAULT_REGION={{ pulumi_s3_backend.region }};
-      {%- else -%}
-      export PULUMI_ACCESS_TOKEN="{{ lookup('env', 'PULUMI_ACCESS_TOKEN') }}";
-      {%- endif -%}
-    
-    # AWS認証スクリプトの実行コマンド
-    pulumi_aws_auth: >-
-      source {{ playbook_dir }}/../../scripts/aws-env.sh > /dev/null 2>&1 || true;
-      eval $({{ playbook_dir }}/../../scripts/aws-env.sh) > /dev/null 2>&1 || true;
-    
-    # Pulumiコマンド実行時の共通プレフィックス
-    pulumi_exec_prefix: >-
-      {{ pulumi_env_export }}
-      {{ pulumi_aws_auth }}
-      sudo -E {{ pulumi_bin_path }}
-
-- name: Set Pulumi standard tasks
-  ansible.builtin.set_fact:
-    pulumi_commands:
-      preview:      "{{ pulumi_exec_prefix }} preview"
-      up:           "{{ pulumi_exec_prefix }} up --yes"
-      destroy:      "{{ pulumi_exec_prefix }} destroy --yes"
-      refresh:      "{{ pulumi_exec_prefix }} refresh --yes"
-      stack_output: "{{ pulumi_exec_prefix }} stack output"
-      stack_ls:     "{{ pulumi_exec_prefix }} stack ls"
-      stack_rm:     "{{ pulumi_exec_prefix }} stack rm --yes"
-      config_set:   "{{ pulumi_exec_prefix }} config set"
-      build:        "npm run build"
-      tsc:          "npx tsc"
 
 # 結果変数の初期化
 - name: Initialize result variables

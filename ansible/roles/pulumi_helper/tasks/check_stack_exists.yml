@@ -2,6 +2,11 @@
 # 入力: resolved_stack_name, stack_name
 # 出力: stack_exists (true/false)
 
+# 共通変数の読み込み（念のため）
+- name: Load common variables if needed
+  ansible.builtin.include_tasks: common_vars.yml
+  when: pulumi_env_export is not defined
+
 - name: List all available stacks
   ansible.builtin.shell: |
     cd {{ pulumi_project_path }}

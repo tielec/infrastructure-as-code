@@ -1,5 +1,9 @@
 # Pulumiスタックを削除するヘルパータスク
 
+# 共通変数の読み込み
+- name: Load common variables
+  ansible.builtin.include_tasks: common_vars.yml
+
 - name: Destroy Pulumi stack
   block:
     # プロジェクト固有のログインを確認（login.ymlで実行済みでない場合）
@@ -43,7 +47,7 @@
         - name: Cancel current operation
           ansible.builtin.shell: |
             cd {{ pulumi_project_path }}
-            export PULUMI_ACCESS_TOKEN="{{ lookup('env', 'PULUMI_ACCESS_TOKEN') }}"
+            {{ pulumi_env_export }}
             sudo -E {{ pulumi_bin_path }} cancel
           ignore_errors: true
         

@@ -1,5 +1,9 @@
 # スタックの初期化とセットアップのヘルパータスク
 
+# 共通変数の読み込み
+- name: Load common variables
+  ansible.builtin.include_tasks: common_vars.yml
+
 - name: Initialize and set up Pulumi stack
   block:
     # 開始ログ

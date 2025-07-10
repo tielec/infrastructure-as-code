@@ -1,5 +1,9 @@
 # Pulumiスタックの設定値を管理するヘルパータスク
 
+# 共通変数の読み込み
+- name: Load common variables
+  ansible.builtin.include_tasks: common_vars.yml
+
 - name: Configure Pulumi stack
   block:
     # プロジェクト固有のログインを確認（login.ymlで実行済みでない場合）
@@ -28,9 +32,8 @@
     - name: Set config value
       ansible.builtin.shell: |
         cd {{ pulumi_project_path }}
-        source {{ playbook_dir }}/../../scripts/aws-env.sh > /dev/null
-        eval $({{ playbook_dir }}/../../scripts/aws-env.sh) > /dev/null
-        export PULUMI_ACCESS_TOKEN="{{ lookup('env', 'PULUMI_ACCESS_TOKEN') }}"
+        {{ pulumi_env_export }}
+        {{ pulumi_aws_auth }}
         sudo -E {{ pulumi_bin_path }} config set {{ config_key }} "{{ config_value }}" {{ '--secret' if config_secret | default(false) else '' }}
       register: config_result
       changed_when: config_result.rc == 0

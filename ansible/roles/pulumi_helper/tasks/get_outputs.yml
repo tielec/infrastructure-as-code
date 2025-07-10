@@ -1,5 +1,9 @@
 # Pulumiスタックの出力を取得するヘルパータスク
 
+# 共通変数の読み込み
+- name: Load common variables
+  ansible.builtin.include_tasks: common_vars.yml
+
 - name: Get stack outputs
   block:
     # 開始ログ
