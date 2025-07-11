@@ -1,5 +1,5 @@
 AWSTemplateFormatVersion: '2010-09-09'
-Description: 'Bootstrap EC2 Instance with minimal setup (Git and Ansible only) and Pulumi Backend S3 Bucket - Fixed for Jenkins Agent'
+Description: 'Bootstrap EC2 Instance with minimal setup and force recreation'
 
 Parameters:
   KeyName:
@@ -27,6 +27,12 @@ Parameters:
     Description: Latest Amazon Linux 2 ARM64 AMI ID
     Type: AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>
     Default: /aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-arm64-gp2
+  
+  # インスタンス再作成用パラメータ（更新時にこの値を変更する）
+  InstanceVersion:
+    Description: Change this value to force instance recreation (e.g., v1, v2, v3, or timestamp)
+    Type: String
+    Default: 'v1'
 
 Resources:
   # S3 Bucket for Pulumi Backend
@@ -56,7 +62,19 @@ Resources:
         - Key: Purpose
           Value: Pulumi-Backend
 
-  # S3 Bucket Policy - Simplified to use IAM Role directly
+  # SSM Parameter Store に Pulumi S3 バケット名を保存
+  PulumiS3BucketParameter:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: /bootstrap/pulumi/s3bucket-name
+      Type: String
+      Value: !Ref PulumiStateBucket
+      Description: Pulumi state backend S3 bucket name
+      Tags:
+        Name: Pulumi-S3-Bucket-Name
+        Purpose: Pulumi-Backend
+
+  # S3 Bucket Policy
   PulumiStateBucketPolicy:
     Type: AWS::S3::BucketPolicy
     Properties:
@@ -64,7 +82,6 @@ Resources:
       PolicyDocument:
         Version: '2012-10-17'
         Statement:
-          # Allow Bootstrap IAM Role to access Pulumi state
           - Sid: AllowBootstrapRolePulumiAccess
             Effect: Allow
             Principal:
@@ -81,7 +98,6 @@ Resources:
             Resource:
               - !Sub '${PulumiStateBucket.Arn}'
               - !Sub '${PulumiStateBucket.Arn}/*'
-          # Deny insecure transport
           - Sid: DenyInsecureTransport
             Effect: Deny
             Principal: '*'
@@ -159,7 +175,6 @@ Resources:
           FromPort: 22
           ToPort: 22
           CidrIp: !Ref AllowedIP
-        # Jenkins JNLP port (if needed)
         - IpProtocol: tcp
           FromPort: 50000
           ToPort: 50000
@@ -195,6 +210,24 @@ Resources:
       Roles:
         - !Ref BootstrapIAMRole
 
+  # SSM Parameter Store へのアクセス権限
+  SSMAccessPolicy:
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyName: SSMParameterAccess
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Action:
+              - 'ssm:GetParameter'
+              - 'ssm:GetParameters'
+              - 'ssm:GetParametersByPath'
+            Resource:
+              - !Sub 'arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/bootstrap/*'
+      Roles:
+        - !Ref BootstrapIAMRole
+
   BootstrapIAMRole:
     Type: AWS::IAM::Role
     Properties:
@@ -221,135 +254,102 @@ Resources:
       Roles:
         - !Ref BootstrapIAMRole
 
+  # Launch Template でUserDataを共通化
+  BootstrapLaunchTemplate:
+    Type: AWS::EC2::LaunchTemplate
+    Properties:
+      LaunchTemplateName: !Sub '${AWS::StackName}-LaunchTemplate'
+      LaunchTemplateData:
+        ImageId: !Ref LatestAmiId
+        InstanceType: !Ref InstanceType
+        KeyName: !Ref KeyName
+        IamInstanceProfile:
+          Arn: !GetAtt BootstrapInstanceProfile.Arn
+        SecurityGroupIds:
+          - !Ref BootstrapSecurityGroup
+        BlockDeviceMappings:
+          - DeviceName: /dev/xvda
+            Ebs:
+              VolumeSize: 20
+              VolumeType: gp3
+              DeleteOnTermination: true
+        UserData:
+          Fn::Base64: !Sub |
+            #!/bin/bash -xe
+            
+            # Instance Version: ${InstanceVersion}
+            echo "Instance Version: ${InstanceVersion}" > /tmp/deployment-info.txt
+            echo "Stack update time: $(date)" >> /tmp/deployment-info.txt
+            
+            # システムの更新
+            yum update -y
+            yum install -y git python3 python3-pip jq amazon-ssm-agent java-11-amazon-corretto-headless
+            
+            # Ansible/Pulumi
+            pip3 install ansible
+            curl -fsSL https://get.pulumi.com | sh
+            
+            # 環境設定
+            systemctl enable amazon-ssm-agent
+            systemctl start amazon-ssm-agent
+            echo 'export PATH=$PATH:$HOME/.pulumi/bin' >> /home/ec2-user/.bashrc
+            echo 'export AWS_DEFAULT_REGION=${AWS::Region}' >> /home/ec2-user/.bashrc
+            
+            # ヘルパースクリプト
+            cat > /home/ec2-user/get-pulumi-bucket.sh << 'EOF'
+            #!/bin/bash
+            aws ssm get-parameter --name /bootstrap/pulumi/s3bucket-name --query 'Parameter.Value' --output text
+            EOF
+            chmod +x /home/ec2-user/get-pulumi-bucket.sh
+            
+            cat > /home/ec2-user/test-s3-access.sh << 'EOF'
+            #!/bin/bash
+            BUCKET=$(aws ssm get-parameter --name /bootstrap/pulumi/s3bucket-name --query 'Parameter.Value' --output text)
+            echo "Testing bucket: $BUCKET"
+            echo "test" > /tmp/test.txt
+            aws s3 cp /tmp/test.txt s3://$BUCKET/test.txt && aws s3 rm s3://$BUCKET/test.txt
+            echo "Test completed!"
+            EOF
+            chmod +x /home/ec2-user/test-s3-access.sh
+            
+            # セットアップガイド
+            cat > /home/ec2-user/SETUP_GUIDE.txt << 'EOF'
+            === Bootstrap Environment Setup Guide ===
+            Instance Version: ${InstanceVersion}
+            
+            1. Clone your repository: git clone <REPO_URL>
+            2. Run: ./scripts/setup-bootstrap.sh
+            
+            Pulumi Backend: s3://${PulumiStateBucket}
+            Get bucket name: ./get-pulumi-bucket.sh
+            Test S3 access: ./test-s3-access.sh
+            
+            To recreate this instance, update CloudFormation with new InstanceVersion parameter.
+            EOF
+            
+            chown -R ec2-user:ec2-user /home/ec2-user/*.sh /home/ec2-user/*.txt
+            echo "Bootstrap setup complete!"
+
+  # EC2 Instance
   BootstrapInstance:
     Type: AWS::EC2::Instance
     DependsOn: 
       - PulumiStateBucketPolicy
       - PulumiS3AccessPolicy
+      - SSMAccessPolicy
+      - PulumiS3BucketParameter
     Properties:
-      InstanceType: !Ref InstanceType
-      SecurityGroupIds:
-        - !Ref BootstrapSecurityGroup
-      KeyName: !Ref KeyName
-      ImageId: !Ref LatestAmiId
+      LaunchTemplate:
+        LaunchTemplateId: !Ref BootstrapLaunchTemplate
+        Version: !GetAtt BootstrapLaunchTemplate.LatestVersionNumber
       SubnetId: !Ref PublicSubnet
-      IamInstanceProfile: !Ref BootstrapInstanceProfile
-      BlockDeviceMappings:
-        - DeviceName: /dev/xvda
-          Ebs:
-            VolumeSize: 20
-            VolumeType: gp3
-            DeleteOnTermination: true
-      UserData:
-        Fn::Base64: !Sub |
-          #!/bin/bash -xe
-          
-          # システムの更新
-          yum update -y
-          yum install -y git python3 python3-pip jq
-          
-          # Ansibleのインストール
-          pip3 install ansible
-          
-          # SSMエージェントのインストールと起動（リモート管理用）
-          yum install -y amazon-ssm-agent
-          systemctl enable amazon-ssm-agent
-          systemctl start amazon-ssm-agent
-          
-          # Pulumiのインストール
-          curl -fsSL https://get.pulumi.com | sh
-          echo 'export PATH=$PATH:$HOME/.pulumi/bin' >> /home/ec2-user/.bashrc
-          
-          # Jenkins用Java（OpenJDK）のインストール
-          yum install -y java-11-amazon-corretto-headless
-          
-          # AWS CLIの設定（インスタンスロールを使用）
-          echo 'export AWS_DEFAULT_REGION=${AWS::Region}' >> /home/ec2-user/.bashrc
-          
-          # セットアップガイドの作成
-          cat > /home/ec2-user/SETUP_GUIDE.txt << 'EOF'
-          === Bootstrap Environment Setup Guide ===
-          
-          This EC2 instance has been configured with the minimum required tools.
-          To complete the setup, follow these two simple steps:
-          
-          1. Clone your Git repository:
-             git clone <YOUR_REPOSITORY_URL> && cd <YOUR_REPOSITORY_DIRECTORY>
-          
-          2. Run the bootstrap setup script:
-             ./scripts/setup-bootstrap.sh
-          
-          === Pulumi Backend Configuration ===
-          
-          A Pulumi state backend S3 bucket has been created for you:
-          Bucket Name: ${PulumiStateBucket}
-          
-          To configure Pulumi to use this backend, run:
-          pulumi login s3://${PulumiStateBucket}
-          
-          The bucket has the following features enabled:
-          - Versioning (for state history)
-          - Encryption (AES256)
-          - Public access blocking
-          - Lifecycle policy (90 days retention for old versions)
-          
-          === Jenkins Agent Configuration ===
-          
-          This instance is configured to work as a Jenkins agent with:
-          - Java 11 (Corretto) installed
-          - SSH access enabled
-          - SSM Agent for remote management
-          - Full access to the Pulumi state S3 bucket
-          
-          Note: The Bootstrap IAM role has AdministratorAccess plus explicit permissions to the Pulumi state bucket.
-          
-          === Testing S3 Access ===
-          
-          To verify S3 bucket access, run:
-          aws s3 ls s3://${PulumiStateBucket}/
-          
-          That's it! The setup script will install all necessary tools and configure your environment.
-          EOF
-          
-          chown ec2-user:ec2-user /home/ec2-user/SETUP_GUIDE.txt
-          
-          # S3アクセステストスクリプトの作成
-          cat > /home/ec2-user/test-s3-access.sh << 'EOF'
-          #!/bin/bash
-          echo "Testing S3 bucket access..."
-          BUCKET_NAME="${PulumiStateBucket}"
-          
-          echo "1. Listing bucket contents:"
-          aws s3 ls s3://$BUCKET_NAME/ 2>&1
-          
-          echo -e "\n2. Testing write access:"
-          echo "test" > /tmp/test-file.txt
-          aws s3 cp /tmp/test-file.txt s3://$BUCKET_NAME/test-file.txt 2>&1
-          
-          echo -e "\n3. Testing read access:"
-          aws s3 cp s3://$BUCKET_NAME/test-file.txt /tmp/test-file-downloaded.txt 2>&1
-          
-          echo -e "\n4. Cleaning up test file:"
-          aws s3 rm s3://$BUCKET_NAME/test-file.txt 2>&1
-          
-          echo -e "\nS3 access test completed!"
-          EOF
-          
-          chmod +x /home/ec2-user/test-s3-access.sh
-          chown ec2-user:ec2-user /home/ec2-user/test-s3-access.sh
-          
-          # 起動時にセットアップガイドを表示
-          echo "if [ -t 1 ]; then" >> /home/ec2-user/.bashrc
-          echo "cat /home/ec2-user/SETUP_GUIDE.txt" >> /home/ec2-user/.bashrc
-          echo "fi" >> /home/ec2-user/.bashrc
-          
-          echo "Bootstrap minimal setup complete!"
-
       Tags:
         - Key: Name
           Value: Bootstrap-Jenkins-Agent
         - Key: Purpose
           Value: Jenkins-Agent
+        - Key: InstanceVersion
+          Value: !Ref InstanceVersion
 
 Outputs:
   BootstrapInstanceId:
@@ -360,38 +360,14 @@ Outputs:
     Description: Public IP address of the bootstrap EC2 instance
     Value: !GetAtt BootstrapInstance.PublicIp
 
-  BootstrapPublicDnsName:
-    Description: Public DNS name of the bootstrap EC2 instance
-    Value: !GetAtt BootstrapInstance.PublicDnsName
-
-  VPCID:
-    Description: VPC ID
-    Value: !Ref VPC
-
-  PublicSubnetID:
-    Description: Public Subnet ID
-    Value: !Ref PublicSubnet
+  SSHCommand:
+    Description: SSH command to connect to the instance
+    Value: !Sub 'ssh -i <your-key.pem> ec2-user@${BootstrapInstance.PublicIp}'
 
   PulumiStateBucketName:
     Description: Name of the S3 bucket for Pulumi state storage
     Value: !Ref PulumiStateBucket
-    Export:
-      Name: !Sub '${AWS::StackName}-PulumiStateBucket'
 
-  PulumiBackendURL:
-    Description: Pulumi backend URL for login
-    Value: !Sub 's3://${PulumiStateBucket}'
-  
-  BootstrapIAMRoleArn:
-    Description: ARN of the Bootstrap IAM Role
-    Value: !GetAtt BootstrapIAMRole.Arn
-    Export:
-      Name: !Sub '${AWS::StackName}-BootstrapIAMRoleArn'
-  
-  SSHCommand:
-    Description: SSH command to connect to the instance
-    Value: !Sub 'ssh -i <your-key.pem> ec2-user@${BootstrapInstance.PublicIp}'
-  
-  TestS3AccessCommand:
-    Description: Command to test S3 bucket access
-    Value: './test-s3-access.sh'
+  RecreateInstanceCommand:
+    Description: Command to recreate the instance
+    Value: !Sub 'aws cloudformation update-stack --stack-name ${AWS::StackName} --use-previous-template --parameters ParameterKey=InstanceVersion,ParameterValue=$(date +%s) --capabilities CAPABILITY_NAMED_IAM'
