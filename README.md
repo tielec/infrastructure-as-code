@@ -57,7 +57,20 @@
    ssh -i bootstrap-environment-key.pem ec2-user@<BootstrapPublicIP>
    ```
 
-2. 接続すると、リポジトリは既にクローンされています。以下のコマンドでセットアップを完了します：
+2. 接続後、まずuser dataの実行が完了していることを確認します：
+   ```bash
+   # ログをリアルタイムで確認
+   sudo less +F /var/log/cloud-init-output.log
+   ```
+   
+   以下のメッセージが表示されていれば、セットアップが完了しています：
+   ```
+   Bootstrap setup complete!
+   ```
+   
+   ※ `Ctrl+C`でリアルタイム表示を終了し、`q`でlessを終了します
+
+3. セットアップが完了していたら、以下のコマンドでブートストラップセットアップを実行します：
 
    ```bash
    # ブートストラップセットアップスクリプトを実行
@@ -275,6 +288,10 @@ infrastructure-as-code/
 
 ## トラブルシューティング
 
+- **EC2インスタンス起動後の初期化エラー**: 
+  - `sudo less +F /var/log/cloud-init-output.log`でuser data実行ログを確認
+  - `Bootstrap setup complete!`が表示されていない場合は、エラー内容を確認
+  - よくあるエラー：インターネット接続不可、IAMロール権限不足
 - **Pulumiデプロイエラー**: `pulumi logs`でエラー詳細を確認
 - **Ansibleエラー**: `-vvv`オプションを追加して詳細なログを確認（例: `ansible-playbook -vvv playbooks/jenkins_setup_pipeline.yml`）
 - **AWS認証エラー**: `source scripts/aws-credentials.sh`を実行して認証情報を更新
