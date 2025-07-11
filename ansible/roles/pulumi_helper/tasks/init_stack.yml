@@ -5,6 +5,11 @@
   ansible.builtin.include_tasks: login.yml
   when: pulumi_authenticated is not defined
 
+# S3バックエンドの場合、プロジェクト別ログイン
+- name: Handle S3 backend project login
+  ansible.builtin.include_tasks: s3_backend_login.yml
+  when: pulumi_backend_type == 's3'
+
 - name: Initialize and set up Pulumi stack
   block:
     # 操作内容を表示
@@ -14,6 +19,9 @@
           Initializing Pulumi stack:
           Project: {{ pulumi_project_path | basename }}
           Stack: {{ stack_name }}
+          {% if pulumi_backend_type == 's3' %}
+          Backend: {{ pulumi_s3_backend_url }}
+          {% endif %}
     
     - name: Verify project directory exists
       ansible.builtin.stat:

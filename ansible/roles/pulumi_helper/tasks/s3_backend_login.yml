@@ -1,0 +1,62 @@
+# ansible/roles/pulumi_helper/tasks/s3_backend_login.yml
+
+# S3バックエンドへのプロジェクト別ログイン処理
+# 各タスクからincludeして使用する共通処理
+
+- name: Login to S3 backend for current project
+  when: 
+    - pulumi_backend_type == 's3'
+    - pulumi_project_path is defined
+  block:
+    # プロジェクト名を取得（未定義の場合）
+    - name: Get project name if not already set
+      when: pulumi_project_name is not defined
+      block:
+        - name: Read Pulumi.yaml for project name
+          ansible.builtin.slurp:
+            src: "{{ pulumi_project_path }}/Pulumi.yaml"
+          register: pulumi_yaml_raw
+
+        - name: Parse project name
+          ansible.builtin.set_fact:
+            pulumi_project_name: "{{ (pulumi_yaml_raw.content | b64decode | from_yaml).name }}"
+
+    # S3バックエンドURLを構築
+    - name: Set S3 backend URL
+      ansible.builtin.set_fact:
+        pulumi_s3_backend_url: "s3://{{ pulumi_s3_bucket }}/{{ pulumi_project_name }}"
+
+    # 現在のバックエンドを確認
+    - name: Check current backend
+      ansible.builtin.shell: |
+        cd {{ pulumi_project_path }}
+        {{ pulumi_env_prefix }} && {{ pulumi_sudo_cmd }} whoami 2>&1 || echo "NOT_LOGGED_IN"
+      register: current_backend_check
+      changed_when: false
+      failed_when: false
+
+    # 正しいバックエンドにログインしているか確認
+    - name: Determine if login is needed
+      ansible.builtin.set_fact:
+        s3_login_needed: >-
+          {{ 
+            'NOT_LOGGED_IN' in current_backend_check.stdout or 
+            pulumi_s3_backend_url not in current_backend_check.stdout
+          }}
+
+    # S3バックエンドにログイン（必要な場合）
+    - name: Login to S3 backend
+      ansible.builtin.shell: |
+        cd {{ pulumi_project_path }}
+        {{ pulumi_env_prefix }} && {{ pulumi_sudo_cmd }} login {{ pulumi_s3_backend_url }}
+      register: s3_login_result
+      changed_when: s3_login_result.rc == 0
+      when: s3_login_needed
+
+    # ログイン結果を表示（verbosity > 1）
+    - name: Display S3 backend login status
+      ansible.builtin.debug:
+        msg: |
+          S3 backend: {{ pulumi_s3_backend_url }}
+          Login status: {{ 'Logged in' if not s3_login_needed else 'New login performed' }}
+      when: ansible_verbosity > 1

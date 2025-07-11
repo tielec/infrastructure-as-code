@@ -82,53 +82,9 @@
               export PULUMI_CONFIG_PASSPHRASE="your-secure-passphrase"
           when: not pulumi_passphrase_set
 
-        # プロジェクト名を取得（S3バックエンドURLに必要）
-        - name: Get project name from Pulumi.yaml
-          when: pulumi_project_name is not defined
-          block:
-            - name: Read Pulumi.yaml
-              ansible.builtin.slurp:
-                src: "{{ pulumi_project_path }}/Pulumi.yaml"
-              register: pulumi_yaml_raw
-
-            - name: Parse project name
-              ansible.builtin.set_fact:
-                pulumi_project_name: "{{ (pulumi_yaml_raw.content | b64decode | from_yaml).name }}"
-
-        # S3バックエンドURLを構築
-        - name: Set S3 backend URL
-          ansible.builtin.set_fact:
-            pulumi_s3_backend_url: "s3://{{ pulumi_s3_bucket }}/{{ pulumi_project_name }}"
-
-        # 現在のログイン状態を確認
-        - name: Check current backend
-          ansible.builtin.shell: |
-            cd {{ pulumi_project_path }}
-            export PULUMI_CONFIG_PASSPHRASE="{{ pulumi_config_passphrase }}"
-            export AWS_REGION="{{ pulumi_s3_region }}"
-            export AWS_DEFAULT_REGION="{{ pulumi_s3_region }}"
-            sudo -E {{ pulumi_bin_path }} whoami 2>&1 || echo "NOT_LOGGED_IN"
-          register: current_backend_check
-          changed_when: false
-          no_log: true
-
-        # S3バックエンドにログイン（必要な場合）
-        - name: Login to S3 backend
-          ansible.builtin.shell: |
-            cd {{ pulumi_project_path }}
-            export PULUMI_CONFIG_PASSPHRASE="{{ pulumi_config_passphrase }}"
-            export AWS_REGION="{{ pulumi_s3_region }}"
-            export AWS_DEFAULT_REGION="{{ pulumi_s3_region }}"
-            source {{ playbook_dir }}/../../scripts/aws-env.sh > /dev/null
-            eval $({{ playbook_dir }}/../../scripts/aws-env.sh) > /dev/null
-            sudo -E {{ pulumi_bin_path }} login {{ pulumi_s3_backend_url }}
-          when: 
-            - "'NOT_LOGGED_IN' in current_backend_check.stdout or pulumi_s3_backend_url not in current_backend_check.stdout"
-          register: s3_login_result
-          changed_when: s3_login_result.rc == 0
-          no_log: true
-
         # 環境変数をエクスポートする共通コマンドを定義（S3用）
+        # 注: S3バックエンドのURLはプロジェクトごとに異なるため、
+        # 実際のログインは各タスクで行う（init_stack.yml等で処理）
         - name: Set S3 backend environment prefix
           ansible.builtin.set_fact:
             pulumi_env_prefix: >-
@@ -146,11 +102,12 @@
           ansible.builtin.set_fact:
             pulumi_sudo_cmd: "sudo -E {{ pulumi_bin_path }}"
 
-        # ログイン検証
-        - name: Verify Pulumi login successful
+        # Pulumi Cloudの場合のみログイン検証
+        - name: Verify Pulumi Cloud login successful
+          when: pulumi_backend_type == 'cloud'
           ansible.builtin.shell: |
-            cd {{ pulumi_project_path }}
-            {{ pulumi_env_prefix }} && {{ pulumi_sudo_cmd }} whoami
+            export PULUMI_ACCESS_TOKEN="{{ pulumi_access_token }}"
+            {{ pulumi_sudo_cmd }} whoami
           register: pulumi_verify_login
           changed_when: false
           failed_when: pulumi_verify_login.rc != 0
@@ -160,9 +117,14 @@
         - name: Display Pulumi login status
           ansible.builtin.debug:
             msg: |
-              Pulumi authenticated to {{ pulumi_backend_type }} backend
-              {% if pulumi_backend_type == 's3' %}S3 URL: {{ pulumi_s3_backend_url }}{% endif %}
-              User/Backend: {{ pulumi_verify_login.stdout }}
+              Pulumi backend type: {{ pulumi_backend_type }}
+              {% if pulumi_backend_type == 'cloud' %}
+              Authenticated as: {{ pulumi_verify_login.stdout }}
+              {% else %}
+              S3 backend configured (login will be performed per project)
+              S3 bucket: {{ pulumi_s3_bucket }}
+              Region: {{ pulumi_s3_region }}
+              {% endif %}
           when: ansible_verbosity > 1
 
         # 認証完了フラグを設定（重複チェックを防ぐため）
@@ -210,7 +172,6 @@
         pulumi_sudo_cmd: "sudo -E /root/.pulumi/bin/pulumi"
         pulumi_bin_path: "/root/.pulumi/bin/pulumi"
         pulumi_authenticated: true
-        pulumi_s3_backend_url: "s3://{{ pulumi_s3_bucket }}/mock-project"
 
     - name: Display check mode notice
       ansible.builtin.debug:
