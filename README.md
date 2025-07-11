@@ -43,13 +43,12 @@
     - スタック名: bootstrap-environment
     - パラメータ
         - `KeyName`: 先ほど作成したEC2キーペア名（例：`bootstrap-environment-key`）
-        - `InstanceType`: インスタンスタイプ（デフォルト: t3.medium）
+        - `InstanceType`: インスタンスタイプ（デフォルト: t4g.small）
         - `AllowedIP`: SSHアクセスを許可するIPアドレス範囲（セキュリティのため自分のIPアドレスに制限することを推奨）
 
 3. スタックが作成完了したら、出力タブから以下の情報を確認：
     - `BootstrapPublicIP`: 踏み台サーバーのパブリックIPアドレス
-    - `VPCID`: 作成されたVPC ID
-    - `PublicSubnetID`: パブリックサブネットID
+    - `PulumiStateBucketName`: Pulumiのステート管理用S3バケット名
 
 ### 3. 踏み台サーバーへの接続とセットアップ
 
@@ -58,16 +57,11 @@
    ssh -i bootstrap-environment-key.pem ec2-user@<BootstrapPublicIP>
    ```
 
-2. 接続すると、簡易セットアップガイドが表示されます。以下の2ステップでセットアップが完了します：
+2. 接続すると、リポジトリは既にクローンされています。以下のコマンドでセットアップを完了します：
 
    ```bash
-   # 1. リポジトリをクローン
-   git clone <リポジトリURL>
-   cd infrastructure-as-code
-   
-   # 2. ブートストラップセットアップスクリプトを実行
-   chmod +x ./scripts/setup-bootstrap.sh
-   ./scripts/setup-bootstrap.sh
+   # ブートストラップセットアップスクリプトを実行
+   ./infrastructure-as-code/bootstrap/setup-bootstrap.sh
    ```
 
    このスクリプトは以下の処理を自動的に行います：
@@ -93,6 +87,9 @@ Jenkinsインフラのデプロイ前に、Pulumiのアクセストークンを�
 環境準備ができたら、以下のコマンドでインフラをデプロイします：
 
 ```bash
+# infrastructure-as-codeディレクトリに移動
+cd ~/infrastructure-as-code
+
 # 全体のデプロイパイプラインを実行（初期構築）
 cd ansible
 ansible-playbook playbooks/jenkins_setup_pipeline.yml -e "env=dev"
@@ -195,70 +192,47 @@ ansible-playbook playbooks/jenkins_teardown_pipeline.yml \
 
 ```
 infrastructure-as-code/
-├─ ansible/                    # Ansible設定ファイル
-│  ├─ ansible.cfg             # Ansible設定
-│  ├─ inventory/
-│  │  ├─ hosts               # インベントリファイル
-│  │  └─ group_vars/
-│  │      └─ all.yml         # 共通変数定義ファイル
-│  ├─ playbooks/              # 各種プレイブック
-│  │  ├─ bootstrap-setup.yml              # ブートストラップ環境セットアップ
-│  │  ├─ jenkins_setup_pipeline.yml       # メインパイプライン（構築）
-│  │  ├─ jenkins_teardown_pipeline.yml    # メインパイプライン（削除）
-│  │  ├─ deploy_jenkins_network.yml       # ネットワーク構築
-│  │  ├─ deploy_jenkins_security.yml      # セキュリティグループ構築
-│  │  ├─ deploy_jenkins_storage.yml       # ストレージ（EFS）構築
-│  │  ├─ deploy_jenkins_loadbalancer.yml  # ロードバランサー構築
-│  │  ├─ deploy_jenkins_controller.yml    # コントローラー構築
-│  │  ├─ deploy_jenkins_agent.yml         # エージェント構築
-│  │  ├─ deploy_jenkins_config.yml        # 初期設定
-│  │  └─ deploy_jenkins_application.yml   # アプリケーション設定
+├─ ansible/                    # Ansible設定とプレイブック
+│  ├─ inventory/              # インベントリと変数定義
+│  ├─ playbooks/              # 各種プレイブック（構築・削除・設定）
 │  └─ roles/                  # Ansibleロール
-│      ├─ aws_setup/         # AWS環境設定ロール
-│      ├─ pulumi_helper/     # Pulumiヘルパーロール
-│      └─ jenkins_*/         # Jenkins関連ロール
+│      ├─ aws_setup/          # AWS環境設定
+│      ├─ pulumi_helper/      # Pulumi操作ヘルパー
+│      ├─ jenkins_*/          # Jenkins関連（network, controller, agent等）
+│      └─ lambda_*/           # Lambda関連（IP管理、API Gateway等）
 │
-├─ bootstrap/                 # 初期セットアップ用
-│  └─ cfn-bootstrap-template.yaml  # CloudFormationテンプレート
+├─ bootstrap/                  # ブートストラップ環境構築
+│  ├─ cfn-bootstrap-template.yaml  # CloudFormationテンプレート
+│  └─ setup-bootstrap.sh           # セットアップスクリプト
 │
-├─ pulumi/                    # Pulumiプロジェクト
-│  ├─ jenkins-network/       # ネットワークスタック
-│  ├─ jenkins-security/      # セキュリティスタック
-│  ├─ jenkins-storage/       # ストレージスタック
-│  ├─ jenkins-loadbalancer/  # ロードバランサースタック
-│  ├─ jenkins-controller/    # コントローラースタック
-│  ├─ jenkins-agent/         # エージェントスタック
-│  ├─ jenkins-config/        # 設定管理スタック
-│  └─ jenkins-application/   # アプリケーション設定スタック
+├─ jenkins/                    # Jenkins設定とジョブ定義
+│  └─ jobs/                    # Jenkinsジョブ定義
+│      ├─ dsl/                 # Job DSL定義（フォルダ構造等）
+│      ├─ pipeline/            # パイプラインジョブ（Jenkinsfile）
+│      └─ shared/              # 共有ライブラリ
 │
-└─ scripts/                   # 各種スクリプト
-    ├─ aws-credentials.sh    # AWS認証情報設定
-    ├─ aws-env.sh           # AWS環境変数設定
-    ├─ check-aws-creds.sh   # AWS認証確認
-    ├─ setup-bootstrap.sh   # ブートストラップセットアップ
-    └─ jenkins/             # Jenkins関連スクリプト
-        ├─ groovy/          # Jenkins初期化用Groovyスクリプト
-        │  ├─ basic-settings.groovy
-        │  ├─ create-seed-job.groovy           # シードジョブ作成
-        │  ├─ install-plugins.groovy
-        │  ├─ recovery-mode.groovy
-        │  └─ setup-cli-user-and-credentials.groovy  # CLIユーザー作成
-        ├─ jobs/            # ジョブ定義
-        │  └─ seed-job.xml  # シードジョブXML定義
-        └─ shell/           # EC2設定用シェルスクリプト
-           ├─ agent-setup.sh
-           ├─ agent-template.sh
-           ├─ application-create-seed-job.sh    # シードジョブ作成
-           ├─ application-install-plugins.sh     # プラグインインストール
-           ├─ application-setup-cli-user-and-credentials.sh  # CLIユーザー設定
-           ├─ application-update-version.sh      # Jenkinsバージョン更新
-           ├─ controller-configure.sh
-           ├─ controller-install.sh
-           ├─ controller-mount-efs.sh
-           ├─ controller-startup.sh
-           ├─ controller-update.sh
-           └─ controller-user-data.sh
+├─ pulumi/                     # Pulumiインフラコード
+│  ├─ jenkins-*/               # Jenkinsインフラスタック
+│  └─ lambda-*/                # Lambdaインフラスタック
+│
+├─ scripts/                    # ユーティリティスクリプト
+│  ├─ aws/                     # AWS操作スクリプト
+│  └─ jenkins/                 # Jenkins設定スクリプト
+│      ├─ casc/                # Configuration as Code設定
+│      ├─ groovy/              # Groovy初期化スクリプト
+│      ├─ jobs/                # ジョブXML定義
+│      └─ shell/               # シェルスクリプト
+│
+└─ docs/                       # ドキュメント
 ```
+
+### 主要ディレクトリの説明
+
+- **ansible/**: Ansibleによる自動化設定。プレイブックでインフラの構築・削除・設定を管理
+- **bootstrap/**: EC2踏み台サーバーの初期構築用CloudFormationとセットアップスクリプト
+- **jenkins/**: Jenkinsジョブ定義とパイプライン。Job DSLとJenkinsfileによるジョブ管理
+- **pulumi/**: インフラストラクチャのコード。各コンポーネントを独立したスタックとして管理
+- **scripts/**: 各種ユーティリティスクリプト。AWS操作、Jenkins設定、初期化処理など
 
 ### 主な機能
 
