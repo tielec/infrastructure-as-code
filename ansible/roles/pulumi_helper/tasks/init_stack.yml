@@ -50,7 +50,11 @@
       ansible.builtin.shell: |
         cd {{ pulumi_project_path }}
         {{ pulumi_env_prefix }}
+        {% if pulumi_backend_type == 's3' %}
+        {{ pulumi_sudo_cmd }} stack init {{ resolved_stack_name }} --secrets-provider=passphrase
+        {% else %}
         {{ pulumi_sudo_cmd }} stack init {{ resolved_stack_name }}
+        {% endif %}
       register: stack_init_result
       changed_when: stack_init_result.rc == 0
       when: 
