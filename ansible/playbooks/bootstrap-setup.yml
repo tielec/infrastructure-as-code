@@ -1,7 +1,7 @@
----
 # bootstrap-setup.yml
 # Jenkinsインフラをデプロイするためのブートストラップ環境の設定
 # ARM64 (t4g) インスタンス対応版
+# amazon.aws コレクション対応版
 
 - name: Bootstrap Environment Setup
   hosts: localhost
@@ -170,7 +170,96 @@
             line: "export PATH=$PATH:/root/.pulumi/bin"
             create: yes
             mode: '0644'
-            
+    
+    # Python パッケージマネージャーの確認と更新
+    - name: Ensure Python package management is ready
+      block:
+        - name: Check if pip3 is installed
+          ansible.builtin.shell: pip3 --version
+          register: pip3_check
+          changed_when: false
+          failed_when: false
+        
+        - name: Install python3-pip if not present
+          ansible.builtin.yum:
+            name: python3-pip
+            state: present
+          when: pip3_check.rc != 0
+        
+        - name: Upgrade pip to latest version
+          ansible.builtin.pip:
+            name: pip
+            state: latest
+            executable: pip3
+    
+    # AWS Python SDKのインストール（amazon.aws コレクションの前提条件）
+    - name: Install Python packages for AWS integration
+      ansible.builtin.pip:
+        name:
+          - boto3>=1.26.0
+          - botocore>=1.29.0
+          - ansible>=5.0.0
+          - jmespath>=1.0.0  # AWS JSONクエリ用
+        state: present
+        executable: pip3
+    
+    # Ansible Collectionsのインストール
+    - name: Install Ansible Collections
+      block:
+        - name: Create Ansible directories
+          ansible.builtin.file:
+            path: "{{ item }}"
+            state: directory
+            mode: '0755'
+          loop:
+            - "/etc/ansible"
+            - "/etc/ansible/collections"
+            - "/usr/share/ansible/collections"
+        
+        - name: Create collections requirements file
+          ansible.builtin.copy:
+            dest: "/etc/ansible/collections/requirements.yml"
+            content: |
+              ---
+              collections:
+                - name: amazon.aws
+                  version: ">=5.0.0"
+                - name: community.aws
+                  version: ">=5.0.0"
+                - name: community.general
+                  version: ">=5.0.0"
+                - name: ansible.posix
+                  version: ">=1.4.0"
+            mode: '0644'
+        
+        - name: Install Ansible collections (system-wide)
+          ansible.builtin.shell: |
+            ansible-galaxy collection install -r /etc/ansible/collections/requirements.yml -p /usr/share/ansible/collections --force
+          environment:
+            ANSIBLE_COLLECTIONS_PATH: "/usr/share/ansible/collections"
+          register: collection_install
+          changed_when: "'Installing' in collection_install.stdout"
+        
+        - name: Set Ansible collections path in profile
+          ansible.builtin.lineinfile:
+            path: "/etc/profile.d/ansible.sh"
+            line: "export ANSIBLE_COLLECTIONS_PATH=/usr/share/ansible/collections:~/.ansible/collections"
+            create: yes
+            mode: '0644'
+        
+        - name: Verify collections installation
+          ansible.builtin.shell: |
+            export ANSIBLE_COLLECTIONS_PATH=/usr/share/ansible/collections
+            ansible-galaxy collection list
+          register: installed_collections
+          changed_when: false
+        
+        - name: Display installed collections summary
+          ansible.builtin.debug:
+            msg: |
+              Installed Ansible Collections:
+              {{ installed_collections.stdout | regex_findall('(amazon\.aws|community\.aws|community\.general|ansible\.posix).*') | join('\n') }}
+    
     # インストール検証スクリプトの作成
     - name: Create installation verification script
       ansible.builtin.copy:
@@ -180,6 +269,7 @@
           echo "=== System Information ==="
           echo "Architecture: $(uname -m)"
           echo "OS: $(cat /etc/os-release | grep PRETTY_NAME | cut -d= -f2 | tr -d '"')"
+          echo ""
           echo "=== Installed Tools ==="
           echo "Node.js: $(node --version 2>/dev/null || echo 'Not installed')"
           echo "npm: $(npm --version 2>/dev/null || echo 'Not installed')"
@@ -191,6 +281,15 @@
           echo "Git: $(git --version 2>/dev/null || echo 'Not installed')"
           echo "Java: $(java -version 2>&1 | head -n 1 || echo 'Not installed')"
           echo "JAVA_HOME: $JAVA_HOME"
+          echo ""
+          echo "=== Python AWS Libraries ==="
+          echo "boto3: $(pip3 show boto3 2>/dev/null | grep Version || echo 'Not installed')"
+          echo "botocore: $(pip3 show botocore 2>/dev/null | grep Version || echo 'Not installed')"
+          echo "jmespath: $(pip3 show jmespath 2>/dev/null | grep Version || echo 'Not installed')"
+          echo ""
+          echo "=== Ansible Collections ==="
+          export ANSIBLE_COLLECTIONS_PATH=/usr/share/ansible/collections:~/.ansible/collections
+          ansible-galaxy collection list 2>/dev/null | grep -E "(amazon\.aws|community\.aws|community\.general|ansible\.posix)" || echo "No collections found"
           echo "======================="
         owner: ec2-user
         group: ec2-user
@@ -237,9 +336,21 @@
           - Node.js {{ nodejs_version }}
           - Java {{ java_version }} (Amazon Corretto for ARM64)
           - Python 3 and pip3
-          - Ansible
+          - Ansible with AWS collections (amazon.aws, community.aws)
           - Pulumi
           - Git
+          
+          === AWS Integration ===
+          The following Python packages have been installed for AWS integration:
+          - boto3 (AWS SDK for Python)
+          - botocore (Core functionality of boto3)
+          - jmespath (JSON query language for boto3)
+          
+          The following Ansible collections have been installed:
+          - amazon.aws (Official AWS modules)
+          - community.aws (Community AWS modules)
+          - community.general (General community modules)
+          - ansible.posix (POSIX/Linux modules)
           
           === Jenkins Agent Setup ===
           This ARM64 instance is configured to work as a Jenkins Agent with:
@@ -250,7 +361,7 @@
           
           Next steps:
           1. Run "./verify-installation.sh" to check installed tools
-          2. Setup Pulumi: "sudo pulumi login"
+          2. Setup Pulumi: "export PULUMI_ACCESS_TOKEN='your-token'"
           3. Setup AWS credentials: "source ./setup-aws-credentials.sh"
           4. Setup Git SSH keys for repository access: 
              ssh-keygen -t ed25519 -C "your_email@example.com"
@@ -265,6 +376,10 @@
              - Use the EC2 instance's private IP or hostname
              - Set Remote root directory to: /home/ec2-user/jenkins-agent
           
+          7. For Pulumi S3 backend support:
+             export PULUMI_CONFIG_PASSPHRASE="your-secure-passphrase"
+             pulumi login s3://your-bucket-name/your-project
+          
           Note: This is an ARM64 (t4g) instance. Ensure your Jenkins controller
           and any Docker images you use are compatible with ARM64 architecture.
           
@@ -273,8 +388,35 @@
         group: ec2-user
         mode: '0644'
 
+    # 最終的な環境チェック
+    - name: Run final environment verification
+      block:
+        - name: Test boto3 import
+          ansible.builtin.shell: |
+            python3 -c "import boto3; print(f'boto3 version: {boto3.__version__}')"
+          register: boto3_test
+          changed_when: false
+        
+        - name: Test AWS collection availability
+          ansible.builtin.shell: |
+            export ANSIBLE_COLLECTIONS_PATH=/usr/share/ansible/collections
+            ansible-doc amazon.aws.s3_bucket_info --list | head -1
+          register: aws_collection_test
+          changed_when: false
+          failed_when: false
+        
+        - name: Display environment verification results
+          ansible.builtin.debug:
+            msg: |
+              Environment Verification Results:
+              - boto3: {{ 'OK' if boto3_test.rc == 0 else 'FAILED' }}
+              - amazon.aws collection: {{ 'OK' if aws_collection_test.rc == 0 else 'FAILED' }}
+
     - name: Display completion message
       ansible.builtin.debug:
         msg: |
           Bootstrap environment setup completed successfully on {{ arch }}!
           Java {{ java_version }} has been installed for Jenkins Agent compatibility.
+          AWS integration tools (boto3, amazon.aws collection) have been installed.
+          
+          You can now use both AWS CLI commands and Ansible AWS modules in your playbooks.
