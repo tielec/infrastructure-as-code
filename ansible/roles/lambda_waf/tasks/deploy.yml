@@ -31,6 +31,7 @@
         sudo -E /root/.pulumi/bin/pulumi config set aws:region {{ aws_region_name }}
         sudo -E /root/.pulumi/bin/pulumi config set {{ waf_project_name }}:projectName {{ project_name }}
         sudo -E /root/.pulumi/bin/pulumi config set {{ waf_project_name }}:apiGatewayStackName {{ api_gateway_project_name }}
+        sudo -E /root/.pulumi/bin/pulumi config set {{ waf_project_name }}:ipWhitelistStackName {{ ip_whitelist_project_name }}
         sudo -E /root/.pulumi/bin/pulumi config set {{ waf_project_name }}:ipWhitelistSource secretsManager
         sudo -E /root/.pulumi/bin/pulumi config set {{ waf_project_name }}:secretName {{ lambda_api.ip_whitelist.secret_name_pattern | replace('{environment}', env_name) }}
         sudo -E /root/.pulumi/bin/pulumi config set {{ waf_project_name }}:rateLimit {{ lambda_api.ip_whitelist.rate_limit_per_5min | string }}

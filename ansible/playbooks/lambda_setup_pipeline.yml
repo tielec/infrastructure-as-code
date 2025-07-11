@@ -32,6 +32,7 @@
         security_project_name: "{{ lambda_api_infra.pulumi.security_project }}"
         vpce_project_name: "{{ lambda_api_infra.pulumi.vpce_project }}"
         nat_project_name: "{{ lambda_api_infra.pulumi.nat_project }}"
+        ip_whitelist_project_name: "{{ lambda_api_infra.pulumi.ip_whitelist_project }}"
         functions_project_name: "{{ lambda_api_infra.pulumi.functions_project }}"
         api_gateway_project_name: "{{ lambda_api_infra.pulumi.api_gateway_project }}"
         waf_project_name: "{{ lambda_api_infra.pulumi.waf_project }}"
@@ -126,6 +127,7 @@
           - Security: {{ security_project_name }}
           - VPC Endpoints: {{ vpce_project_name }}
           - NAT: {{ nat_project_name }}
+          - IP Whitelist: {{ ip_whitelist_project_name }}
           - Functions: {{ functions_project_name }}
           - API Gateway: {{ api_gateway_project_name }}
           - WAF: {{ waf_project_name }}
@@ -185,6 +187,13 @@
         - security_deployed is defined and security_deployed
         - run_nat | default(true) | bool
     
+    # IP Whitelist設定のデプロイ（Pulumiスタックとして）
+    - name: Deploy IP Whitelist Configuration
+      ansible.builtin.include_role:
+        name: lambda_ip_whitelist
+      when: 
+        - run_ip_whitelist | default(true) | bool
+    
     # Lambda関数のデプロイ
     - name: Deploy Lambda Functions
       ansible.builtin.include_role:
@@ -204,12 +213,13 @@
         - functions_deployed is defined and functions_deployed
         - run_api_gateway | default(true) | bool
     
-    # WAFのデプロイ
+    # WAFのデプロイ（IP Whitelistスタックが必須）
     - name: Deploy WAF
       ansible.builtin.include_role:
         name: lambda_waf
       when: 
         - api_gateway_deployed is defined and api_gateway_deployed
+        - ip_whitelist_deployed is defined and ip_whitelist_deployed
         - run_waf | default(true) | bool
     
     # WebSocket APIのデプロイ（オプション）
@@ -231,17 +241,6 @@
         - enable_database | bool
         - run_database | default(true) | bool
 
-    # IP Whitelist初期化（WAFデプロイ前に実行）
-    - name: Initialize IP Whitelist
-      ansible.builtin.include_role:
-        name: lambda_ip_whitelist
-      vars:
-        operation: "init"
-      when: 
-        - api_gateway_deployed is defined and api_gateway_deployed
-        - init_ip_whitelist | default(true) | bool
-        - not waf_deployed | default(false)
-
     # デプロイメント結果サマリー
     - name: Deployment Summary
       ansible.builtin.debug:
@@ -252,6 +251,7 @@
           Security: {{ security_deployed | default(false) }}
           VPC Endpoints: {{ vpce_deployed | default(false) }}
           NAT: {{ nat_deployed | default(false) }} ({{ nat_type | default('N/A') }})
+          IP Whitelist: {{ ip_whitelist_deployed | default(false) }}
           Lambda Functions: {{ functions_deployed | default(false) }}
           API Gateway: {{ api_gateway_deployed | default(false) }}
           WAF: {{ waf_deployed | default(false) }}
@@ -261,4 +261,10 @@
           {% if api_gateway_deployed | default(false) %}
           API Endpoint: {{ api_endpoint | default('Not available') }}
           API Key: Use 'pulumi stack output apiKeyInfo -C {{ pulumi_path }}/{{ api_gateway_project_name }}'
+          {% endif %}
+          
+          {% if ip_whitelist_deployed | default(false) %}
+          IP Whitelist Management:
+          - Get current whitelist: cd {{ pulumi_path }}/{{ ip_whitelist_project_name }} && pulumi stack output managementCommands
+          - Secret name: Use 'pulumi stack output secretName -C {{ pulumi_path }}/{{ ip_whitelist_project_name }}'
           {% endif %}

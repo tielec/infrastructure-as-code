@@ -2,9 +2,9 @@
 scripts_dir: "{{ playbook_dir }}/../../scripts"
 pulumi_path: "{{ playbook_dir }}/../../pulumi"
 
-# アラートメール設定
-alert_email: "dev-team@example.com"
-critical_alert_email: "cto@example.com"
+# アラートメール設定（all.ymlから取得、デフォルト値を提供）
+alert_email: "{{ lambda_api_infra.alerts.email | default('dev-team@example.com') }}"
+critical_alert_email: "{{ lambda_api_infra.alerts.critical_email | default('cto@example.com') }}"
 
 # プレビューモード
 preview_only: false

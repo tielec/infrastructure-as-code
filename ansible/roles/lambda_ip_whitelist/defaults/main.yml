@@ -2,12 +2,10 @@
 
 # パスがプレイブックからの相対パスになるよう修正
 scripts_dir: "{{ playbook_dir }}/../../scripts"
+pulumi_path: "{{ playbook_dir }}/../../pulumi"
 
 # 環境名のデフォルト値
 env_name: "dev"
 
-# IP Whitelist管理のデフォルト値
-client_enabled: true
-client_type: "platform"
-client_priority: "normal"
-client_description: "Added via Ansible"
+# プレビューモード
+preview_only: false

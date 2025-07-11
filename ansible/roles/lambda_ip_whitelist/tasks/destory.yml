@@ -1,0 +1,72 @@
+---
+# IP Whitelist Pulumiスタックの削除タスク
+
+- name: Display IP Whitelist destruction information
+  ansible.builtin.debug:
+    msg: |
+      Destroying IP Whitelist Configuration:
+      - Project: {{ project_name }}
+      - Stack: {{ ip_whitelist_project_name }}
+      - Environment: {{ env_name }}
+      - Remove Stack: {{ remove_stacks | default(false) }}
+
+# ファイル権限設定
+- name: Ensure aws-env.sh has execute permissions
+  ansible.builtin.file:
+    path: "{{ scripts_dir }}/aws-env.sh"
+    mode: '0755'
+  register: aws_env_script_permission
+  no_log: true
+
+# Pulumiによる削除
+- name: Destroy IP Whitelist with Pulumi
+  block:
+    # Pulumiヘルパータスクを呼び出す
+    - name: Initialize IP whitelist stack
+      ansible.builtin.include_role:
+        name: pulumi_helper
+        tasks_from: init_stack
+      vars:
+        pulumi_project_path: "{{ pulumi_path }}/{{ ip_whitelist_project_name }}"
+        stack_name: "{{ env_name }}"
+    
+    # Pulumiリソースの削除
+    - name: Destroy IP whitelist resources with Pulumi
+      ansible.builtin.include_role:
+        name: pulumi_helper
+        tasks_from: destroy
+      vars:
+        pulumi_project_path: "{{ pulumi_path }}/{{ ip_whitelist_project_name }}"
+    
+    # スタック自体の削除（オプション）
+    - name: Remove IP whitelist stack (if requested)
+      ansible.builtin.include_role:
+        name: pulumi_helper
+        tasks_from: remove_stack
+      vars:
+        pulumi_project_path: "{{ pulumi_path }}/{{ ip_whitelist_project_name }}"
+        stack_name: "{{ env_name }}"
+      when: remove_stacks | default(false) | bool
+    
+    # 削除ステータスの設定
+    - name: Set IP whitelist destruction status on success
+      ansible.builtin.set_fact:
+        ip_whitelist_destroyed: true
+  
+  rescue:
+    # エラーハンドリング
+    - name: Set IP whitelist destruction status on failure
+      ansible.builtin.set_fact:
+        ip_whitelist_destroyed: false
+    
+    - name: Display error
+      ansible.builtin.debug:
+        msg: "Failed to destroy IP whitelist resources. See error details above."
+
+# 削除結果のサマリー表示
+- name: Display IP whitelist destruction summary
+  ansible.builtin.debug:
+    msg: |
+      IP Whitelist destruction summary:
+      - IP Whitelist Resources: {{ ip_whitelist_destroyed | ternary('Destroyed', 'Failed') }}
+      - Stack Removed: {{ (remove_stacks | default(false) | bool and ip_whitelist_destroyed) | ternary('Yes', 'No') }}
