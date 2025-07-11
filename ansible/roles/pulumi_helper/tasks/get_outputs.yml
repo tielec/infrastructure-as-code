@@ -7,11 +7,10 @@
 
 - name: Get stack outputs
   block:
-    # verbosity > 1 の場合のみ詳細を表示
-    - name: Display operation details
+    # 操作内容を表示
+    - name: Display operation info
       ansible.builtin.debug:
-        msg: "Getting output '{{ output_name | default('all') }}' from {{ pulumi_project_path | basename }}/{{ stack_name | default('current stack') }}"
-      when: ansible_verbosity > 1
+        msg: "Getting output '{{ output_name | default('all outputs') }}' from {{ pulumi_project_path | basename }}/{{ stack_name | default('current stack') }}"
     
     # スタックが選択されているか確認
     - name: Check current stack selection
@@ -99,27 +98,27 @@
         - not ansible_check_mode
         - stack_output_result.stdout.startswith('ERROR:')
     
-    # 成功時のみ、verbosityが高い場合に結果の概要を表示
-    - name: Display output summary
+    # 成功時、重要な出力値を見やすく表示
+    - name: Display output value
       ansible.builtin.debug:
         msg: >-
-          {{ output_name | default('Stack outputs') }}: 
-          {{ stack_output_result.stdout | truncate(100) if stack_output_result.stdout | length > 100 else stack_output_result.stdout }}
+          {{ output_name | default('Stack outputs') }}: {{ stack_output_result.stdout }}
       when: 
-        - ansible_verbosity > 1
         - not ansible_check_mode
         - not stack_output_result.stdout.startswith('ERROR:')
+        - output_name is defined
       
     - name: Set output success status
       ansible.builtin.set_fact:
         stack_output_succeeded: true
         
   rescue:
-    # エラー時は簡潔なメッセージのみ
+    # エラー時も詳細を表示
     - name: Handle output retrieval failure
       ansible.builtin.debug:
-        msg: "Failed to get output '{{ output_name | default('all outputs') }}' from {{ pulumi_project_path | basename }}"
-      when: ansible_verbosity > 0
+        msg: |
+          Failed to get output '{{ output_name | default('all outputs') }}' from {{ pulumi_project_path | basename }}
+          Error: {{ ansible_failed_result.msg | default('Unknown error') }}
     
     - name: Set fallback output
       ansible.builtin.set_fact:

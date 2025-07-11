@@ -31,21 +31,13 @@
       changed_when: "'No changes' not in pulumi_up_result.stdout"
       when: not ansible_check_mode
     
-    # 変更があった場合のみ結果サマリーを表示
-    - name: Display deployment summary
+    # デプロイ結果は重要なので常に表示
+    - name: Display deployment results
       ansible.builtin.debug:
-        msg: >-
-          Deployment {{ 'completed with changes' if pulumi_up_result.changed else 'completed (no changes)' }}
-      when: not ansible_check_mode
-    
-    # 詳細な結果はverbosity > 0の場合のみ
-    - name: Display deployment details
-      ansible.builtin.debug:
-        msg: "{{ pulumi_up_result.stdout_lines[-20:] }}"  # 最後の20行のみ表示
+        msg: "{{ pulumi_up_result.stdout_lines }}"
       when: 
-        - not ansible_check_mode 
-        - ansible_verbosity > 0
-        - pulumi_up_result.changed
+        - not ansible_check_mode
+        - pulumi_up_result is defined
     
     - name: Set success status
       ansible.builtin.set_fact:
@@ -55,25 +47,29 @@
     - name: Report deployment failure
       ansible.builtin.debug:
         msg: |
-          Deployment failed!
+          ========== Pulumi Deployment Failed ==========
           {% if 'TypeScript' in pulumi_up_result.stdout | default('') %}
-          Reason: TypeScript compilation errors
+          TypeScript compilation errors detected.
           {% elif 'unhandled exception' in pulumi_up_result.stdout | default('') %}
-          Reason: Unhandled exception during deployment
+          An unhandled exception occurred during deployment.
           {% else %}
-          Error code: {{ pulumi_up_result.rc | default('unknown') }}
+          Deployment failed with error code: {{ pulumi_up_result.rc | default('unknown') }}
           {% endif %}
     
-    # エラー詳細はverbosity > 0の場合のみ
-    - name: Display error details
+    # エラー詳細は重要なので表示
+    - name: Display error output
+      ansible.builtin.debug:
+        msg: |
+          Error details:
+          {{ pulumi_up_result.stdout | default('No output available') }}
+      when: pulumi_up_result is defined and pulumi_up_result.stdout is defined
+    
+    - name: Display error stderr
       ansible.builtin.debug:
         msg: |
           Error output:
-          {{ pulumi_up_result.stdout_lines[-50:] | join('\n') }}
-      when: 
-        - ansible_verbosity > 0
-        - pulumi_up_result is defined
-        - pulumi_up_result.stdout is defined
+          {{ pulumi_up_result.stderr }}
+      when: pulumi_up_result is defined and pulumi_up_result.stderr is defined and pulumi_up_result.stderr
     
     - name: Set failure status
       ansible.builtin.set_fact:
@@ -81,7 +77,7 @@
     
     - name: Fail the playbook
       ansible.builtin.fail:
-        msg: "Pulumi deployment failed. Run with -v for more details."
+        msg: "Pulumi deployment failed. See error details above."
 
 # チェックモード
 - name: Mock deploy (check mode)

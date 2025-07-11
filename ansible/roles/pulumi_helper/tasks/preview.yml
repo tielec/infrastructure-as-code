@@ -19,7 +19,7 @@
     
     - name: Start preview
       ansible.builtin.debug:
-        msg: "Previewing changes for stack '{{ current_stack.stdout }}'"
+        msg: "Previewing changes for stack '{{ current_stack.stdout }}' in {{ pulumi_project_path | basename }}"
       when: not ansible_check_mode
     
     # プレビューを実行
@@ -31,27 +31,25 @@
       changed_when: false
       when: not ansible_check_mode
     
-    # 結果の要約を表示（リソースの変更サマリー部分のみ）
-    - name: Display preview summary
-      ansible.builtin.debug:
-        msg: |
-          Preview summary:
-          {{ pulumi_preview_result.stdout_lines | select('match', '.*Resources:.*') | list | join('\n') }}
-          {{ pulumi_preview_result.stdout_lines | select('match', '.*[~+-].*to.*') | list | join('\n') }}
-      when: not ansible_check_mode
-    
-    # 詳細はverbosity > 0の場合のみ
-    - name: Display full preview
+    # プレビュー結果を常に表示（重要な情報）
+    - name: Display preview
       ansible.builtin.debug:
         msg: "{{ pulumi_preview_result.stdout_lines }}"
-      when: 
-        - not ansible_check_mode
-        - ansible_verbosity > 0
+      when: not ansible_check_mode
       
   rescue:
     - name: Display error message
       ansible.builtin.debug:
-        msg: "Failed to preview Pulumi deployment"
+        msg: |
+          Failed to preview Pulumi deployment
+          Error: {{ ansible_failed_result.msg | default('Unknown error') }}
+      
+    # エラー詳細も表示
+    - name: Display error details
+      ansible.builtin.debug:
+        msg: |
+          {{ pulumi_preview_result.stderr | default('No error output available') }}
+      when: pulumi_preview_result is defined and pulumi_preview_result.stderr is defined
 
 # チェックモード
 - name: Mock preview (check mode)
