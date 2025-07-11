@@ -171,37 +171,116 @@
             create: yes
             mode: '0644'
     
+    # Pythonバージョンの確認と対応
+    - name: Check Python version
+      ansible.builtin.shell: python3 --version
+      register: python_version_check
+      changed_when: false
+    
+    - name: Display Python version
+      ansible.builtin.debug:
+        msg: "Current Python version: {{ python_version_check.stdout }}"
+    
+    # Python 3.8以上の確認とインストール
+    - name: Ensure Python 3.8+ is available
+      block:
+        - name: Check if Python 3.8+ is already installed
+          ansible.builtin.shell: |
+            for py in python3.11 python3.10 python3.9 python3.8; do
+              if command -v $py &> /dev/null; then
+                echo $py
+                break
+              fi
+            done
+          register: python38_check
+          changed_when: false
+        
+        - name: Set Python executable
+          ansible.builtin.set_fact:
+            python3_executable: "{{ python38_check.stdout | default('python3') }}"
+        
+        - name: Install Python 3.9 if needed (Amazon Linux 2023)
+          ansible.builtin.yum:
+            name: python3.9
+            state: present
+          when: 
+            - python38_check.stdout == ""
+            - ansible_distribution == "Amazon"
+        
+        - name: Update Python executable after installation
+          ansible.builtin.set_fact:
+            python3_executable: "python3.9"
+          when: 
+            - python38_check.stdout == ""
+            - ansible_distribution == "Amazon"
+        
+        - name: Create Python environment configuration
+          ansible.builtin.copy:
+            dest: "/etc/profile.d/python3.sh"
+            content: |
+              # Set Python 3.8+ as default for pip operations
+              alias pip='{{ python3_executable }} -m pip'
+              alias pip3='{{ python3_executable }} -m pip'
+              export PYTHON3_EXECUTABLE='{{ python3_executable }}'
+            mode: '0644'
+          when: python3_executable != 'python3'
+    
     # Python パッケージマネージャーの確認と更新
     - name: Ensure Python package management is ready
       block:
-        - name: Check if pip3 is installed
-          ansible.builtin.shell: pip3 --version
-          register: pip3_check
+        - name: Check pip version
+          ansible.builtin.shell: "{{ python3_executable }} -m pip --version"
+          register: pip_check
           changed_when: false
           failed_when: false
         
-        - name: Install python3-pip if not present
-          ansible.builtin.yum:
-            name: python3-pip
-            state: present
-          when: pip3_check.rc != 0
+        - name: Ensure pip is installed for Python 3.8+
+          ansible.builtin.shell: |
+            {{ python3_executable }} -m ensurepip --upgrade
+          when: pip_check.rc != 0
+          failed_when: false
+        
+        - name: Install pip using get-pip.py if ensurepip failed
+          when: pip_check.rc != 0
+          block:
+            - name: Download get-pip.py
+              ansible.builtin.get_url:
+                url: https://bootstrap.pypa.io/get-pip.py
+                dest: /tmp/get-pip.py
+                mode: '0644'
+            
+            - name: Install pip
+              ansible.builtin.shell: |
+                {{ python3_executable }} /tmp/get-pip.py
+            
+            - name: Clean up get-pip.py
+              ansible.builtin.file:
+                path: /tmp/get-pip.py
+                state: absent
         
         - name: Upgrade pip to latest version
-          ansible.builtin.pip:
-            name: pip
-            state: latest
-            executable: pip3
+          ansible.builtin.shell: |
+            {{ python3_executable }} -m pip install --upgrade pip
+          register: pip_upgrade
+          changed_when: "'Successfully installed' in pip_upgrade.stdout"
     
     # AWS Python SDKのインストール（amazon.aws コレクションの前提条件）
     - name: Install Python packages for AWS integration
-      ansible.builtin.pip:
-        name:
-          - boto3>=1.26.0
-          - botocore>=1.29.0
-          - ansible>=5.0.0
-          - jmespath>=1.0.0  # AWS JSONクエリ用
-        state: present
-        executable: pip3
+      ansible.builtin.shell: |
+        {{ python3_executable }} -m pip install \
+          'boto3>=1.26.0,<1.34.0' \
+          'botocore>=1.29.0,<1.34.0' \
+          'ansible-core>=2.12.0,<2.15.0' \
+          'jmespath>=1.0.0'
+      register: aws_packages_install
+      changed_when: "'Successfully installed' in aws_packages_install.stdout"
+    
+    # ansibleパッケージのインストール（ansible-coreの上に構築）
+    - name: Install ansible package
+      ansible.builtin.shell: |
+        {{ python3_executable }} -m pip install 'ansible>=5.0.0,<8.0.0'
+      register: ansible_install
+      changed_when: "'Successfully installed' in ansible_install.stdout"
     
     # Ansible Collectionsのインストール
     - name: Install Ansible Collections
@@ -270,22 +349,36 @@
           echo "Architecture: $(uname -m)"
           echo "OS: $(cat /etc/os-release | grep PRETTY_NAME | cut -d= -f2 | tr -d '"')"
           echo ""
+          echo "=== Python Versions ==="
+          echo "Default Python3: $(python3 --version 2>&1 || echo 'Not installed')"
+          for py in python3.11 python3.10 python3.9 python3.8; do
+            if command -v $py &> /dev/null; then
+              echo "$py: $($py --version 2>&1)"
+            fi
+          done
+          # 実際に使用されているPythonを特定
+          PYTHON_EXEC=$(which python3.9 python3.10 python3.11 2>/dev/null | head -1)
+          if [ -z "$PYTHON_EXEC" ]; then
+            PYTHON_EXEC="python3"
+          fi
+          echo "Active Python: $PYTHON_EXEC ($($PYTHON_EXEC --version 2>&1))"
+          echo ""
           echo "=== Installed Tools ==="
           echo "Node.js: $(node --version 2>/dev/null || echo 'Not installed')"
           echo "npm: $(npm --version 2>/dev/null || echo 'Not installed')"
-          echo "Python: $(python3 --version 2>/dev/null || echo 'Not installed')"
-          echo "Pip: $(pip3 --version 2>/dev/null || echo 'Not installed')"
+          echo "Pip: $($PYTHON_EXEC -m pip --version 2>/dev/null || echo 'Not installed')"
           echo "AWS CLI: $(aws --version 2>/dev/null || echo 'Not installed')"
           echo "Ansible: $(ansible --version 2>/dev/null | head -n 1 || echo 'Not installed')"
+          echo "Ansible-core: $($PYTHON_EXEC -m pip show ansible-core 2>/dev/null | grep Version || echo 'Not installed')"
           echo "Pulumi: $(pulumi version 2>/dev/null || echo 'Not installed')"
           echo "Git: $(git --version 2>/dev/null || echo 'Not installed')"
           echo "Java: $(java -version 2>&1 | head -n 1 || echo 'Not installed')"
           echo "JAVA_HOME: $JAVA_HOME"
           echo ""
           echo "=== Python AWS Libraries ==="
-          echo "boto3: $(pip3 show boto3 2>/dev/null | grep Version || echo 'Not installed')"
-          echo "botocore: $(pip3 show botocore 2>/dev/null | grep Version || echo 'Not installed')"
-          echo "jmespath: $(pip3 show jmespath 2>/dev/null | grep Version || echo 'Not installed')"
+          echo "boto3: $($PYTHON_EXEC -m pip show boto3 2>/dev/null | grep Version || echo 'Not installed')"
+          echo "botocore: $($PYTHON_EXEC -m pip show botocore 2>/dev/null | grep Version || echo 'Not installed')"
+          echo "jmespath: $($PYTHON_EXEC -m pip show jmespath 2>/dev/null | grep Version || echo 'Not installed')"
           echo ""
           echo "=== Ansible Collections ==="
           export ANSIBLE_COLLECTIONS_PATH=/usr/share/ansible/collections:~/.ansible/collections
@@ -393,14 +486,14 @@
       block:
         - name: Test boto3 import
           ansible.builtin.shell: |
-            python3 -c "import boto3; print(f'boto3 version: {boto3.__version__}')"
+            {{ python3_executable }} -c "import boto3; print(f'boto3 version: {boto3.__version__}')"
           register: boto3_test
           changed_when: false
         
         - name: Test AWS collection availability
           ansible.builtin.shell: |
             export ANSIBLE_COLLECTIONS_PATH=/usr/share/ansible/collections
-            ansible-doc amazon.aws.s3_bucket_info --list | head -1
+            ansible-doc amazon.aws.s3_bucket --list | head -1
           register: aws_collection_test
           changed_when: false
           failed_when: false
@@ -409,6 +502,8 @@
           ansible.builtin.debug:
             msg: |
               Environment Verification Results:
+              - Python executable: {{ python3_executable }}
+              - Python version: {{ python_version_check.stdout }}
               - boto3: {{ 'OK' if boto3_test.rc == 0 else 'FAILED' }}
               - amazon.aws collection: {{ 'OK' if aws_collection_test.rc == 0 else 'FAILED' }}
 
@@ -416,6 +511,7 @@
       ansible.builtin.debug:
         msg: |
           Bootstrap environment setup completed successfully on {{ arch }}!
+          Python {{ python3_executable }} is being used for AWS integration.
           Java {{ java_version }} has been installed for Jenkins Agent compatibility.
           AWS integration tools (boto3, amazon.aws collection) have been installed.
           
