@@ -44,6 +44,35 @@
           - Resolved full name: {{ resolved_stack_name }}
           - Organization detected: {{ 'Yes' if resolved_stack_name != stack_name else 'No' }}
     
+    # 手動でスタックリストを確認（デバッグ用）
+    - name: Manual stack list check for debugging
+      ansible.builtin.shell: |
+        cd {{ pulumi_project_path }}
+        {{ pulumi_env_export }}
+        {{ pulumi_aws_auth }}
+        echo "=== Checking authentication ==="
+        sudo -E {{ pulumi_bin_path }} whoami || echo "AUTH FAILED"
+        echo "=== Listing stacks ==="
+        sudo -E {{ pulumi_bin_path }} stack ls || echo "LIST FAILED"
+        echo "=== Checking for specific stack ==="
+        sudo -E {{ pulumi_bin_path }} stack ls | grep -E "({{ stack_name }}|{{ resolved_stack_name }})" || echo "STACK NOT FOUND IN LIST"
+      register: manual_check
+      changed_when: false
+      failed_when: false
+      when: 
+        - ansible_verbosity > 1
+        - not ansible_check_mode
+    
+    - name: Display manual check results
+      ansible.builtin.debug:
+        msg: |
+          Manual stack check output:
+          {{ manual_check.stdout_lines | join('\n') }}
+      when: 
+        - ansible_verbosity > 1
+        - not ansible_check_mode
+        - manual_check is defined
+    
     # スタックの存在確認
     - name: Check if stack exists
       ansible.builtin.include_tasks: check_stack_exists.yml

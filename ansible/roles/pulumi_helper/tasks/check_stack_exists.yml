@@ -8,50 +8,177 @@
   ansible.builtin.include_tasks: common_vars.yml
   when: pulumi_env_export is not defined
 
+# デバッグ情報の表示
+- name: Display stack check parameters
+  ansible.builtin.debug:
+    msg: |
+      ========== Stack Existence Check ==========
+      Checking for stack: {{ resolved_stack_name | default(stack_name) }}
+      Project path: {{ pulumi_project_path }}
+      Backend type: {{ pulumi_backend_type }}
+      ==========================================
+  when: ansible_verbosity > 0
+
+# まず認証状態を確認
+- name: Verify authentication before listing stacks
+  ansible.builtin.shell: |
+    cd {{ pulumi_project_path }}
+    {{ pulumi_env_export }}
+    {{ pulumi_aws_auth }}
+    sudo -E {{ pulumi_bin_path }} whoami
+  register: auth_check
+  changed_when: false
+  failed_when: false
+  when: not ansible_check_mode
+
+- name: Display authentication status
+  ansible.builtin.debug:
+    msg: |
+      Authentication check: {{ 'SUCCESS' if auth_check.rc == 0 else 'FAILED' }}
+      {% if auth_check.rc != 0 %}
+      Error: {{ auth_check.stderr | default('Unknown error') }}
+      {% else %}
+      Logged in as: {{ auth_check.stdout }}
+      {% endif %}
+  when: 
+    - not ansible_check_mode
+    - ansible_verbosity > 0
+
+# 認証に失敗した場合は警告
+- name: Warn about authentication failure
+  ansible.builtin.debug:
+    msg: |
+      WARNING: Not authenticated to Pulumi. Stack listing may fail.
+      Please ensure PULUMI_ACCESS_TOKEN is set for Pulumi Cloud
+      or PULUMI_CONFIG_PASSPHRASE is set for S3 backend.
+  when:
+    - not ansible_check_mode
+    - auth_check.rc != 0
+
+# スタックリストを取得（エラーを隠蔽しない）
 - name: List all available stacks
   ansible.builtin.shell: |
     cd {{ pulumi_project_path }}
     {{ pulumi_env_export }}
     {{ pulumi_aws_auth }}
-    sudo -E {{ pulumi_bin_path }} stack ls --json 2>/dev/null || echo '[]'
-  register: stack_list
+    sudo -E {{ pulumi_bin_path }} stack ls --json
+  register: stack_list_raw
   changed_when: false
+  failed_when: false
   when: not ansible_check_mode
 
+# エラーチェック
+- name: Check if stack listing failed
+  ansible.builtin.set_fact:
+    stack_list_failed: "{{ stack_list_raw.rc != 0 }}"
+    stack_list_error: "{{ stack_list_raw.stderr | default('') }}"
+  when: not ansible_check_mode
+
+# デバッグ: 生のスタックリスト出力
+- name: Display raw stack list output
+  ansible.builtin.debug:
+    msg: |
+      Stack list command result:
+      - Return code: {{ stack_list_raw.rc }}
+      - Stdout length: {{ stack_list_raw.stdout | length }}
+      - Stderr: {{ stack_list_raw.stderr | default('None') }}
+      {% if stack_list_raw.rc == 0 and stack_list_raw.stdout | length > 0 %}
+      - First 500 chars of output: {{ stack_list_raw.stdout | truncate(500) }}
+      {% endif %}
+  when: 
+    - not ansible_check_mode
+    - ansible_verbosity > 1
+
+# スタックリストのパース
 - name: Parse stack list output
   ansible.builtin.set_fact:
     stack_list_parsed: >-
-      {%- if stack_list.stdout is defined and stack_list.stdout | length > 0 -%}
-        {%- set parsed = stack_list.stdout | from_json | default([]) -%}
+      {%- if not stack_list_failed and stack_list_raw.stdout is defined and stack_list_raw.stdout | length > 0 -%}
+        {%- set parsed = stack_list_raw.stdout | from_json | default([]) -%}
         {{ parsed }}
       {%- else -%}
         []
       {%- endif -%}
   when: not ansible_check_mode
 
+# パースされたスタックリストを表示
+- name: Display parsed stacks
+  ansible.builtin.debug:
+    msg: |
+      Found {{ stack_list_parsed | length }} stacks:
+      {% for stack in stack_list_parsed %}
+      - {{ stack.name }}
+      {% endfor %}
+  when: 
+    - not ansible_check_mode
+    - ansible_verbosity > 0
+
+# スタックの存在確認（シンプルなロジック）
 - name: Check if stack exists
   ansible.builtin.set_fact:
-    stack_exists: >-
-      {%- set search_name = resolved_stack_name | default(stack_name) -%}
-      {%- set found_stacks = [] -%}
-      {%- for stack in stack_list_parsed | default([]) -%}
-        {%- if stack.name is defined -%}
-          {%- if stack.name == search_name or stack.name == stack_name or stack.name.endswith('/' + stack_name) -%}
-            {%- set _ = found_stacks.append(stack) -%}
-          {%- endif -%}
-        {%- endif -%}
-      {%- endfor -%}
-      {{ found_stacks | length > 0 }}
+    stack_exists: false
   when: not ansible_check_mode
 
+- name: Search for matching stack
+  ansible.builtin.set_fact:
+    stack_exists: true
+  when:
+    - not ansible_check_mode
+    - item.name is defined
+    - item.name == resolved_stack_name or item.name == stack_name or item.name.endswith('/' + stack_name)
+  with_items: "{{ stack_list_parsed | default([]) }}"
+
+# エラーが発生した場合のフォールバック
+- name: Handle stack listing error
+  when:
+    - not ansible_check_mode
+    - stack_list_failed | default(false)
+  block:
+    - name: Try alternative stack check method
+      ansible.builtin.shell: |
+        cd {{ pulumi_project_path }}
+        {{ pulumi_env_export }}
+        {{ pulumi_aws_auth }}
+        # スタックを直接選択してみる
+        if sudo -E {{ pulumi_bin_path }} stack select {{ resolved_stack_name }} 2>/dev/null; then
+          echo "STACK_EXISTS"
+        elif sudo -E {{ pulumi_bin_path }} stack select {{ stack_name }} 2>/dev/null; then
+          echo "STACK_EXISTS"
+        else
+          echo "STACK_NOT_FOUND"
+        fi
+      register: direct_check
+      changed_when: false
+      failed_when: false
+    
+    - name: Set stack existence from direct check
+      ansible.builtin.set_fact:
+        stack_exists: "{{ 'STACK_EXISTS' in direct_check.stdout }}"
+    
+    - name: Display alternative check result
+      ansible.builtin.debug:
+        msg: |
+          Direct stack check result: {{ direct_check.stdout }}
+          Stack exists: {{ stack_exists }}
+
+# チェックモードの場合
 - name: Set mock stack existence (check mode)
   ansible.builtin.set_fact:
     stack_exists: false
+    stack_list_failed: false
   when: ansible_check_mode
 
+# 最終結果の表示
 - name: Display stack existence check result
   ansible.builtin.debug:
     msg: |
-      Stack '{{ resolved_stack_name | default(stack_name) }}' exists: {{ stack_exists }}
+      ========== Stack Check Result ==========
+      Stack name: {{ resolved_stack_name | default(stack_name) }}
+      Stack exists: {{ stack_exists }}
       Backend: {{ backend_display_name | default(pulumi_backend_type) }}
+      {% if stack_list_failed | default(false) %}
+      Note: Stack listing failed, used fallback method
+      Error: {{ stack_list_error }}
+      {% endif %}
+      ========================================
   when: ansible_verbosity > 0
