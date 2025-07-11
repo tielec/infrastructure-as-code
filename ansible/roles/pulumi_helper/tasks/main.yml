@@ -59,7 +59,7 @@
     msg: "Using Pulumi version: {{ pulumi_version.stdout }}"
   when: ansible_verbosity > 0
 
-# 共通変数の読み込み
+# 共通変数の読み込み（早期に実行）
 - name: Load common variables
   ansible.builtin.include_tasks: common_vars.yml
 
@@ -77,26 +77,8 @@
       ==================================================
   when: ansible_verbosity > 0
 
-# パスフレーズの確認（S3バックエンドの場合）- 環境変数を直接チェック
-- name: Check for PULUMI_CONFIG_PASSPHRASE in environment (S3 backend)
-  ansible.builtin.shell: |
-    if [ -n "${PULUMI_CONFIG_PASSPHRASE}" ]; then
-      echo "SET"
-    else
-      echo "NOT_SET"
-    fi
-  register: passphrase_check
-  changed_when: false
-  when: pulumi_backend_type == 's3'
-
-- name: Display passphrase check result
-  ansible.builtin.debug:
-    msg: "PULUMI_CONFIG_PASSPHRASE status: {{ passphrase_check.stdout | default('NOT_CHECKED') }}"
-  when: 
-    - pulumi_backend_type == 's3'
-    - ansible_verbosity > 0
-
-- name: Warn about missing passphrase (S3 backend)
+# パスフレーズの確認（S3バックエンドの場合）
+- name: Verify S3 backend passphrase is set
   ansible.builtin.fail:
     msg: |
       ERROR: S3 backend requires PULUMI_CONFIG_PASSPHRASE environment variable.
@@ -105,38 +87,16 @@
       
       If you have already set it, try one of these methods:
       1. Set it in the ansible command:
-         ansible-playbook -e "ansible_env.PULUMI_CONFIG_PASSPHRASE=$PULUMI_CONFIG_PASSPHRASE" playbook.yml
+         ansible-playbook -e "pulumi_config_passphrase=$PULUMI_CONFIG_PASSPHRASE" playbook.yml
       
-      2. Or use --extra-vars:
-         ansible-playbook --extra-vars "pulumi_config_passphrase=$PULUMI_CONFIG_PASSPHRASE" playbook.yml
-      
-      3. Or set it in your inventory/group_vars/all.yml:
-         ansible_env:
-           PULUMI_CONFIG_PASSPHRASE: "your-secure-passphrase"
+      2. Or set it in your inventory/group_vars/all.yml:
+         pulumi_config_passphrase: "your-secure-passphrase"
   when: 
     - pulumi_backend_type == 's3'
-    - passphrase_check.stdout == 'NOT_SET'
+    - _pulumi_passphrase | default('') | length == 0
 
-# S3バケット名の確認（S3バックエンドの場合）- 環境変数を直接チェック
-- name: Check for PULUMI_S3_BUCKET in environment (S3 backend)
-  ansible.builtin.shell: |
-    if [ -n "${PULUMI_S3_BUCKET}" ]; then
-      echo "SET"
-    else
-      echo "NOT_SET"
-    fi
-  register: s3_bucket_check
-  changed_when: false
-  when: pulumi_backend_type == 's3'
-
-- name: Display S3 bucket check result
-  ansible.builtin.debug:
-    msg: "PULUMI_S3_BUCKET status: {{ s3_bucket_check.stdout | default('NOT_CHECKED') }}"
-  when: 
-    - pulumi_backend_type == 's3'
-    - ansible_verbosity > 0
-
-- name: Warn about missing S3 bucket (S3 backend)
+# S3バケット名の確認（S3バックエンドの場合）
+- name: Verify S3 backend bucket is set
   ansible.builtin.fail:
     msg: |
       ERROR: S3 backend requires PULUMI_S3_BUCKET environment variable.
@@ -148,13 +108,13 @@
       
       If you have already set it, try one of these methods:
       1. Set it in the ansible command:
-         ansible-playbook -e "ansible_env.PULUMI_S3_BUCKET=$PULUMI_S3_BUCKET" playbook.yml
+         ansible-playbook -e "pulumi_s3_bucket=$PULUMI_S3_BUCKET" playbook.yml
       
-      2. Or use --extra-vars:
-         ansible-playbook --extra-vars "pulumi_s3_bucket=$PULUMI_S3_BUCKET" playbook.yml
+      2. Or set it in your inventory/group_vars/all.yml:
+         pulumi_s3_bucket: "your-pulumi-state-bucket-name"
   when: 
     - pulumi_backend_type == 's3'
-    - s3_bucket_check.stdout == 'NOT_SET'
+    - pulumi_s3_backend.bucket | default('') | length == 0
 
 # 結果変数の初期化
 - name: Initialize result variables

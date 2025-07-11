@@ -40,7 +40,7 @@
         msg: |
           Current stack secrets provider: {{ secrets_provider_check.stdout | default('unknown') }}
           Backend type: {{ pulumi_backend_type }}
-          Passphrase set: {{ 'Yes' if _pulumi_config_passphrase | default('') != '' else 'No' }}
+          Passphrase set: {{ 'Yes' if _pulumi_passphrase | default('') != '' else 'No' }}
       when: 
         - not ansible_check_mode
         - ansible_verbosity > 0

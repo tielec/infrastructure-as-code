@@ -1,0 +1,26 @@
+# 環境変数のデバッグ表示
+# 使用方法: ansible-playbook -vv で詳細表示
+
+- name: Display environment variables for debugging
+  ansible.builtin.debug:
+    msg: |
+      ========== Pulumi Environment Debug ==========
+      Backend Type: {{ pulumi_backend_type }}
+      
+      == Authentication ==
+      PULUMI_ACCESS_TOKEN (from env): {{ lookup('env', 'PULUMI_ACCESS_TOKEN') | length > 0 | ternary('SET', 'NOT SET') }}
+      _pulumi_access_token: {{ _pulumi_access_token | default('') | length > 0 | ternary('SET', 'NOT SET') }}
+      PULUMI_CONFIG_PASSPHRASE (from env): {{ lookup('env', 'PULUMI_CONFIG_PASSPHRASE') | length > 0 | ternary('SET', 'NOT SET') }}
+      _pulumi_passphrase: {{ _pulumi_passphrase | default('') | length > 0 | ternary('SET', 'NOT SET') }}
+      
+      == S3 Backend ==
+      S3 Bucket: {{ pulumi_s3_backend.bucket | default('NOT SET') }}
+      S3 Region: {{ pulumi_s3_backend.region | default('NOT SET') }}
+      
+      == Commands ==
+      pulumi_env_export (first 100 chars): {{ pulumi_env_export | truncate(100) }}
+      
+      == Test Command ==
+      Test command would be: cd {{ pulumi_project_path | default('/path/to/project') }} && {{ pulumi_env_export }} && sudo -E {{ pulumi_bin_path }} whoami
+      ==============================================
+  when: ansible_verbosity > 1
