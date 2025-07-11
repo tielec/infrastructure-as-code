@@ -1,9 +1,9 @@
 # Pulumiのプレビュー実行ヘルパータスク
 
-# 認証処理を実行
+# 認証処理を実行（既に認証済みの場合はスキップ）
 - name: Ensure Pulumi authentication
   ansible.builtin.include_tasks: login.yml
-  when: pulumi_access_token is not defined
+  when: pulumi_authenticated is not defined
 
 - name: Preview Pulumi deployment
   block:
@@ -17,6 +17,11 @@
       failed_when: current_stack.rc != 0
       when: not ansible_check_mode
     
+    - name: Start preview
+      ansible.builtin.debug:
+        msg: "Previewing changes for stack '{{ current_stack.stdout }}'"
+      when: not ansible_check_mode
+    
     # プレビューを実行
     - name: Run preview
       ansible.builtin.shell: |
@@ -26,11 +31,22 @@
       changed_when: false
       when: not ansible_check_mode
     
-    # プレビュー結果を表示
-    - name: Display preview
+    # 結果の要約を表示（リソースの変更サマリー部分のみ）
+    - name: Display preview summary
+      ansible.builtin.debug:
+        msg: |
+          Preview summary:
+          {{ pulumi_preview_result.stdout_lines | select('match', '.*Resources:.*') | list | join('\n') }}
+          {{ pulumi_preview_result.stdout_lines | select('match', '.*[~+-].*to.*') | list | join('\n') }}
+      when: not ansible_check_mode
+    
+    # 詳細はverbosity > 0の場合のみ
+    - name: Display full preview
       ansible.builtin.debug:
         msg: "{{ pulumi_preview_result.stdout_lines }}"
-      when: not ansible_check_mode
+      when: 
+        - not ansible_check_mode
+        - ansible_verbosity > 0
       
   rescue:
     - name: Display error message
@@ -40,5 +56,5 @@
 # チェックモード
 - name: Mock preview (check mode)
   ansible.builtin.debug:
-    msg: "Would preview Pulumi deployment (check mode active)"
+    msg: "Would preview Pulumi deployment (check mode)"
   when: ansible_check_mode

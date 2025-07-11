@@ -2,10 +2,10 @@
 # 入力: resolved_stack_name
 # 出力: stack_exists (true/false)
 
-# 認証処理を実行
+# 認証処理を実行（既に認証済みの場合はスキップ）
 - name: Ensure Pulumi authentication
   ansible.builtin.include_tasks: login.yml
-  when: pulumi_access_token is not defined
+  when: pulumi_authenticated is not defined
 
 - name: List all available stacks
   ansible.builtin.shell: |
@@ -30,7 +30,8 @@
     stack_exists: false
   when: ansible_check_mode
 
+# verbosity > 1 の場合のみ結果を表示
 - name: Display stack existence check result
   ansible.builtin.debug:
     msg: "Stack '{{ resolved_stack_name }}' exists: {{ stack_exists }}"
-  when: ansible_verbosity > 0
+  when: ansible_verbosity > 1

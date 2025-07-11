@@ -2,17 +2,16 @@
 # 入力: stack_name (例: dev)
 # 出力: resolved_stack_name (例: myorg/jenkins-agent/dev または dev)
 
-# 認証処理を実行
+# 認証処理を実行（既に認証済みの場合はスキップ）
 - name: Ensure Pulumi authentication
   ansible.builtin.include_tasks: login.yml
-  when: pulumi_access_token is not defined
+  when: pulumi_authenticated is not defined
 
+# verbosity > 2 の場合のみ詳細を表示
 - name: Display resolution start
   ansible.builtin.debug:
-    msg: |
-      Resolving stack name...
-      Input: {{ stack_name }}
-      Project: {{ pulumi_project_path }}
+    msg: "Resolving stack name: {{ stack_name }}"
+  when: ansible_verbosity > 2
 
 - name: Read Pulumi.yaml configuration
   ansible.builtin.slurp:
@@ -25,16 +24,16 @@
     pulumi_config: "{{ pulumi_yaml_content.content | b64decode | from_yaml }}"
   when: not ansible_check_mode
 
+# デバッグ情報はverbosity > 2の場合のみ
 - name: Display parsed configuration
   ansible.builtin.debug:
     msg: |
       Pulumi.yaml contents:
       - Name: {{ pulumi_config.name | default('not set') }}
       - Organization: {{ pulumi_config.organization | default('not set') }}
-      - Runtime: {{ pulumi_config.runtime | default('not set') }}
   when: 
     - not ansible_check_mode
-    - ansible_verbosity > 0
+    - ansible_verbosity > 2
 
 - name: Set resolved stack name
   ansible.builtin.set_fact:
@@ -51,10 +50,8 @@
     resolved_stack_name: "{{ stack_name }}"
   when: ansible_check_mode
 
+# 結果はverbosity > 1の場合のみ表示
 - name: Display resolution result
   ansible.builtin.debug:
-    msg: |
-      Stack name resolution complete:
-      - Input: {{ stack_name }}
-      - Resolved: {{ resolved_stack_name }}
-      - Organization used: {{ 'Yes' if resolved_stack_name != stack_name else 'No' }}
+    msg: "Resolved stack name: {{ resolved_stack_name }}"
+  when: ansible_verbosity > 1

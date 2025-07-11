@@ -24,7 +24,7 @@
         pulumi_bin_path: "/root/.pulumi/bin/pulumi"
       when: pulumi_bin_path is not defined
 
-    # ログイン状態の確認
+    # ログイン状態の確認（verbosityが高い場合のみ表示）
     - name: Check current Pulumi login status
       ansible.builtin.shell: |
         export PULUMI_ACCESS_TOKEN="{{ pulumi_access_token }}"
@@ -44,19 +44,21 @@
       changed_when: pulumi_login_result.rc == 0
       no_log: true
 
-    # ログイン検証
+    # ログイン検証（エラー時のみ）
     - name: Verify Pulumi login successful
       ansible.builtin.shell: |
         export PULUMI_ACCESS_TOKEN="{{ pulumi_access_token }}"
         sudo -E {{ pulumi_bin_path }} whoami
       register: pulumi_verify_login
       changed_when: false
+      failed_when: pulumi_verify_login.rc != 0
       no_log: true
 
+    # verbosity > 1 の場合のみログイン状態を表示
     - name: Display Pulumi login status
       ansible.builtin.debug:
-        msg: "Successfully authenticated to Pulumi as: {{ pulumi_verify_login.stdout }}"
-      when: ansible_verbosity > 0
+        msg: "Pulumi authenticated as: {{ pulumi_verify_login.stdout }}"
+      when: ansible_verbosity > 1
 
     # 環境変数をエクスポートする共通コマンドを定義
     - name: Set Pulumi environment prefix
@@ -70,6 +72,11 @@
     - name: Set Pulumi sudo command prefix
       ansible.builtin.set_fact:
         pulumi_sudo_cmd: "sudo -E {{ pulumi_bin_path }}"
+
+    # 認証完了フラグを設定（重複チェックを防ぐため）
+    - name: Mark authentication as complete
+      ansible.builtin.set_fact:
+        pulumi_authenticated: true
 
   rescue:
     - name: Handle authentication failure
@@ -94,7 +101,9 @@
         pulumi_env_prefix: "export PULUMI_ACCESS_TOKEN='mock-token-for-check-mode'"
         pulumi_sudo_cmd: "sudo -E /root/.pulumi/bin/pulumi"
         pulumi_bin_path: "/root/.pulumi/bin/pulumi"
+        pulumi_authenticated: true
 
     - name: Display check mode notice
       ansible.builtin.debug:
         msg: "Running in check mode - Pulumi authentication will be mocked"
+      when: ansible_verbosity > 1
