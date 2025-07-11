@@ -1,3 +1,4 @@
+# ansible/roles/pulumi_helper/tasks/check_stack_exists.yml
 # スタックの存在を確認する専用タスク
 # 入力: resolved_stack_name, stack_name
 # 出力: stack_exists (true/false)
@@ -31,10 +32,13 @@
 - name: Check if stack exists
   ansible.builtin.set_fact:
     stack_exists: >-
+      {%- set search_name = resolved_stack_name | default(stack_name) -%}
       {%- set found_stacks = [] -%}
       {%- for stack in stack_list_parsed | default([]) -%}
-        {%- if stack.name is defined and (stack.name == stack_name or stack.name.endswith('/' + stack_name)) -%}
-          {%- set _ = found_stacks.append(stack) -%}
+        {%- if stack.name is defined -%}
+          {%- if stack.name == search_name or stack.name == stack_name or stack.name.endswith('/' + stack_name) -%}
+            {%- set _ = found_stacks.append(stack) -%}
+          {%- endif -%}
         {%- endif -%}
       {%- endfor -%}
       {{ found_stacks | length > 0 }}
@@ -48,6 +52,6 @@
 - name: Display stack existence check result
   ansible.builtin.debug:
     msg: |
-      Stack '{{ stack_name }}' exists: {{ stack_exists }}
+      Stack '{{ resolved_stack_name | default(stack_name) }}' exists: {{ stack_exists }}
       Backend: {{ backend_display_name | default(pulumi_backend_type) }}
   when: ansible_verbosity > 0

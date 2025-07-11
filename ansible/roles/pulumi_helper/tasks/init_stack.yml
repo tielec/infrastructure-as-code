@@ -168,6 +168,18 @@
       ansible.builtin.set_fact:
         stack_init_succeeded: true
         current_stack_name: "{{ resolved_stack_name }}"
+    
+    # Jenkins agentロールなど外部で使用するための環境変数を設定
+    - name: Set Pulumi environment for external use
+      ansible.builtin.set_fact:
+        pulumi_env_for_external: >-
+          cd {{ pulumi_project_path }};
+          {{ pulumi_env_export }}
+          {{ pulumi_aws_auth }}
+        pulumi_selected_stack: "{{ resolved_stack_name }}"
+        pulumi_project_configured: true
+        cacheable: yes
+      when: not ansible_check_mode
         
   rescue:
     - name: Display error details
