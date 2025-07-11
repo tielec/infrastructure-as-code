@@ -2,6 +2,11 @@
 # 入力: stack_name (例: dev)
 # 出力: resolved_stack_name (例: myorg/jenkins-agent/dev または dev)
 
+# 認証処理を実行
+- name: Ensure Pulumi authentication
+  ansible.builtin.include_tasks: login.yml
+  when: pulumi_access_token is not defined
+
 - name: Display resolution start
   ansible.builtin.debug:
     msg: |

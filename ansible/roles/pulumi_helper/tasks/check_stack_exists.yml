@@ -2,11 +2,15 @@
 # 入力: resolved_stack_name
 # 出力: stack_exists (true/false)
 
+# 認証処理を実行
+- name: Ensure Pulumi authentication
+  ansible.builtin.include_tasks: login.yml
+  when: pulumi_access_token is not defined
+
 - name: List all available stacks
   ansible.builtin.shell: |
     cd {{ pulumi_project_path }}
-    export PULUMI_ACCESS_TOKEN="{{ lookup('env', 'PULUMI_ACCESS_TOKEN') }}"
-    sudo -E {{ pulumi_bin_path }} stack ls --json 2>/dev/null || echo '[]'
+    {{ pulumi_env_prefix }} && {{ pulumi_sudo_cmd }} stack ls --json 2>/dev/null || echo '[]'
   register: stack_list
   changed_when: false
   when: not ansible_check_mode

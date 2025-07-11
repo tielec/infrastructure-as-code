@@ -1,13 +1,17 @@
 # Pulumiスタックを削除するヘルパータスク
 
+# 認証処理を実行
+- name: Ensure Pulumi authentication
+  ansible.builtin.include_tasks: login.yml
+  when: pulumi_access_token is not defined
+
 - name: Destroy Pulumi stack
   block:
     # スタックが選択されているか確認
     - name: Ensure stack is selected
       ansible.builtin.shell: |
         cd {{ pulumi_project_path }}
-        export PULUMI_ACCESS_TOKEN="{{ lookup('env', 'PULUMI_ACCESS_TOKEN') }}"
-        sudo -E {{ pulumi_bin_path }} stack --show-name || exit 1
+        {{ pulumi_env_prefix }} && {{ pulumi_sudo_cmd }} stack --show-name || exit 1
       register: current_stack
       changed_when: false
       failed_when: current_stack.rc != 0
@@ -38,8 +42,7 @@
         - name: Cancel current operation
           ansible.builtin.shell: |
             cd {{ pulumi_project_path }}
-            export PULUMI_ACCESS_TOKEN="{{ lookup('env', 'PULUMI_ACCESS_TOKEN') }}"
-            sudo -E {{ pulumi_bin_path }} cancel
+            {{ pulumi_env_prefix }} && {{ pulumi_sudo_cmd }} cancel
           ignore_errors: true
         
         - name: Wait before retry

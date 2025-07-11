@@ -1,0 +1,100 @@
+# Pulumiの認証とトークン設定を一元管理するタスク
+# このファイルは各タスクの最初でincludeして使用します
+
+- name: Ensure Pulumi authentication
+  block:
+    # PULUMI_ACCESS_TOKENの確認
+    - name: Check for PULUMI_ACCESS_TOKEN in environment
+      ansible.builtin.set_fact:
+        pulumi_token_set: "{{ lookup('env', 'PULUMI_ACCESS_TOKEN') | length > 0 }}"
+        pulumi_access_token: "{{ lookup('env', 'PULUMI_ACCESS_TOKEN') }}"
+      no_log: true
+
+    - name: Fail if PULUMI_ACCESS_TOKEN is not set
+      ansible.builtin.fail:
+        msg: |
+          ERROR: PULUMI_ACCESS_TOKEN environment variable is not set.
+          Please set the PULUMI_ACCESS_TOKEN environment variable before running this playbook:
+          export PULUMI_ACCESS_TOKEN="pul-YOUR_ACCESS_TOKEN"
+      when: not pulumi_token_set
+
+    # Pulumiのパス設定
+    - name: Set Pulumi binary path if not already set
+      ansible.builtin.set_fact:
+        pulumi_bin_path: "/root/.pulumi/bin/pulumi"
+      when: pulumi_bin_path is not defined
+
+    # ログイン状態の確認
+    - name: Check current Pulumi login status
+      ansible.builtin.shell: |
+        export PULUMI_ACCESS_TOKEN="{{ pulumi_access_token }}"
+        sudo -E {{ pulumi_bin_path }} whoami
+      register: pulumi_login_check
+      changed_when: false
+      failed_when: false
+      no_log: true
+
+    # ログインが必要な場合のみログイン実行
+    - name: Login to Pulumi if not already logged in
+      ansible.builtin.shell: |
+        export PULUMI_ACCESS_TOKEN="{{ pulumi_access_token }}"
+        sudo -E {{ pulumi_bin_path }} login
+      when: pulumi_login_check.rc != 0
+      register: pulumi_login_result
+      changed_when: pulumi_login_result.rc == 0
+      no_log: true
+
+    # ログイン検証
+    - name: Verify Pulumi login successful
+      ansible.builtin.shell: |
+        export PULUMI_ACCESS_TOKEN="{{ pulumi_access_token }}"
+        sudo -E {{ pulumi_bin_path }} whoami
+      register: pulumi_verify_login
+      changed_when: false
+      no_log: true
+
+    - name: Display Pulumi login status
+      ansible.builtin.debug:
+        msg: "Successfully authenticated to Pulumi as: {{ pulumi_verify_login.stdout }}"
+      when: ansible_verbosity > 0
+
+    # 環境変数をエクスポートする共通コマンドを定義
+    - name: Set Pulumi environment prefix
+      ansible.builtin.set_fact:
+        pulumi_env_prefix: >-
+          export PULUMI_ACCESS_TOKEN="{{ pulumi_access_token }}";
+          source {{ playbook_dir }}/../../scripts/aws-env.sh > /dev/null &&
+          eval $({{ playbook_dir }}/../../scripts/aws-env.sh) > /dev/null
+
+    # sudoを使用したPulumiコマンドのプレフィックス
+    - name: Set Pulumi sudo command prefix
+      ansible.builtin.set_fact:
+        pulumi_sudo_cmd: "sudo -E {{ pulumi_bin_path }}"
+
+  rescue:
+    - name: Handle authentication failure
+      ansible.builtin.fail:
+        msg: |
+          Failed to authenticate to Pulumi.
+          Please ensure:
+          1. PULUMI_ACCESS_TOKEN is correctly set
+          2. The token is valid and not expired
+          3. You have internet connectivity to reach Pulumi service
+          
+          Error details: {{ ansible_failed_result.msg | default('Unknown error') }}
+
+# チェックモード用の処理
+- name: Set mock authentication for check mode
+  when: ansible_check_mode
+  block:
+    - name: Set mock values for check mode
+      ansible.builtin.set_fact:
+        pulumi_token_set: true
+        pulumi_access_token: "mock-token-for-check-mode"
+        pulumi_env_prefix: "export PULUMI_ACCESS_TOKEN='mock-token-for-check-mode'"
+        pulumi_sudo_cmd: "sudo -E /root/.pulumi/bin/pulumi"
+        pulumi_bin_path: "/root/.pulumi/bin/pulumi"
+
+    - name: Display check mode notice
+      ansible.builtin.debug:
+        msg: "Running in check mode - Pulumi authentication will be mocked"
