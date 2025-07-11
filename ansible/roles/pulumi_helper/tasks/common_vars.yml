@@ -71,6 +71,8 @@
           {%- else -%}
             {{ lookup('env', 'PULUMI_ACCESS_TOKEN') | default('', true) }}
           {%- endif -%}
+        # 直接環境変数から取得するバージョンも用意
+        _pulumi_access_token_direct: "{{ lookup('env', 'PULUMI_ACCESS_TOKEN') }}"
     
     # 環境変数エクスポートコマンド（バックエンドタイプに応じて適切な環境変数のみを設定）
     - name: Set environment export commands
@@ -84,11 +86,7 @@
           {%- else -%}
           unset PULUMI_CONFIG_PASSPHRASE;
           unset PULUMI_BACKEND_TYPE;
-          {%- if _pulumi_access_token == '' -%}
-          export PULUMI_ACCESS_TOKEN="{{ lookup('env', 'PULUMI_ACCESS_TOKEN') }}";
-          {%- else -%}
-          export PULUMI_ACCESS_TOKEN="{{ _pulumi_access_token }}";
-          {%- endif -%}
+          export PULUMI_ACCESS_TOKEN="{{ _pulumi_access_token_direct }}";
           {%- endif -%}
         pulumi_aws_auth: >-
           source {{ playbook_dir }}/../../scripts/aws-env.sh > /dev/null 2>&1 || true;
@@ -106,11 +104,7 @@
           {%- else -%}
           unset PULUMI_CONFIG_PASSPHRASE;
           unset PULUMI_BACKEND_TYPE;
-          {%- if _pulumi_access_token == '' -%}
-          export PULUMI_ACCESS_TOKEN="{{ lookup('env', 'PULUMI_ACCESS_TOKEN') }}";
-          {%- else -%}
-          export PULUMI_ACCESS_TOKEN="{{ _pulumi_access_token }}";
-          {%- endif -%}
+          export PULUMI_ACCESS_TOKEN="{{ _pulumi_access_token_direct }}";
           {%- endif -%}
           source {{ playbook_dir }}/../../scripts/aws-env.sh > /dev/null 2>&1 || true;
           eval $({{ playbook_dir }}/../../scripts/aws-env.sh) > /dev/null 2>&1 || true;
@@ -159,11 +153,7 @@
           {%- else -%}
           unset PULUMI_CONFIG_PASSPHRASE;
           unset PULUMI_BACKEND_TYPE;
-          {%- if _pulumi_access_token == '' -%}
-          export PULUMI_ACCESS_TOKEN="{{ lookup('env', 'PULUMI_ACCESS_TOKEN') }}";
-          {%- else -%}
-          export PULUMI_ACCESS_TOKEN="{{ _pulumi_access_token }}";
-          {%- endif -%}
+          export PULUMI_ACCESS_TOKEN="{{ _pulumi_access_token_direct }}";
           {%- endif -%}
           source {{ playbook_dir }}/../../scripts/aws-env.sh > /dev/null 2>&1 || true;
           eval $({{ playbook_dir }}/../../scripts/aws-env.sh) > /dev/null 2>&1 || true;
