@@ -285,9 +285,8 @@ Resources:
             yum update -y
             yum install -y git python3 python3-pip jq amazon-ssm-agent java-11-amazon-corretto-headless
             
-            # Ansible/Pulumi
+            # Ansible
             pip3 install ansible
-            curl -fsSL https://get.pulumi.com | sh
             
             # 環境設定
             systemctl enable amazon-ssm-agent
@@ -295,39 +294,27 @@ Resources:
             echo 'export PATH=$PATH:$HOME/.pulumi/bin' >> /home/ec2-user/.bashrc
             echo 'export AWS_DEFAULT_REGION=${AWS::Region}' >> /home/ec2-user/.bashrc
             
-            # ヘルパースクリプト
-            cat > /home/ec2-user/get-pulumi-bucket.sh << 'EOF'
-            #!/bin/bash
-            aws ssm get-parameter --name /bootstrap/pulumi/s3bucket-name --query 'Parameter.Value' --output text
-            EOF
-            chmod +x /home/ec2-user/get-pulumi-bucket.sh
-            
-            cat > /home/ec2-user/test-s3-access.sh << 'EOF'
-            #!/bin/bash
-            BUCKET=$(aws ssm get-parameter --name /bootstrap/pulumi/s3bucket-name --query 'Parameter.Value' --output text)
-            echo "Testing bucket: $BUCKET"
-            echo "test" > /tmp/test.txt
-            aws s3 cp /tmp/test.txt s3://$BUCKET/test.txt && aws s3 rm s3://$BUCKET/test.txt
-            echo "Test completed!"
-            EOF
-            chmod +x /home/ec2-user/test-s3-access.sh
+            # Git リポジトリのクローン
+            cd /home/ec2-user
+            sudo -u ec2-user git clone https://github.com/tielec/infrastructure-as-code
+            chmod +x /home/ec2-user/infrastructure-as-code/scripts/*.sh
+            chmod +x /home/ec2-user/infrastructure-as-code/bootstrap/*.sh
             
             # セットアップガイド
             cat > /home/ec2-user/SETUP_GUIDE.txt << 'EOF'
             === Bootstrap Environment Setup Guide ===
             Instance Version: ${InstanceVersion}
             
-            1. Clone your repository: git clone <REPO_URL>
-            2. Run: ./scripts/setup-bootstrap.sh
+            1. Repository already cloned: ~/infrastructure-as-code
+            2. Run: ./infrastructure-as-code/bootstrap/setup-bootstrap.sh
             
             Pulumi Backend: s3://${PulumiStateBucket}
-            Get bucket name: ./get-pulumi-bucket.sh
-            Test S3 access: ./test-s3-access.sh
             
             To recreate this instance, update CloudFormation with new InstanceVersion parameter.
             EOF
             
-            chown -R ec2-user:ec2-user /home/ec2-user/*.sh /home/ec2-user/*.txt
+            chown -R ec2-user:ec2-user /home/ec2-user/infrastructure-as-code
+            chown ec2-user:ec2-user /home/ec2-user/SETUP_GUIDE.txt
             echo "Bootstrap setup complete!"
 
   # EC2 Instance
