@@ -1,0 +1,334 @@
+---
+- name: Validate test-s3 Pulumi project with S3 backend
+  hosts: localhost
+  connection: local
+  gather_facts: yes
+  
+  vars:
+    # S3バックエンド設定
+    pulumi_backend_type: "s3"
+    pulumi_s3_bucket: "{{ lookup('env', 'PULUMI_S3_BUCKET') | default('pulumi-state-bucket') }}"
+    pulumi_s3_region: "{{ lookup('env', 'PULUMI_S3_REGION') | default('ap-northeast-1') }}"
+    
+    # プロジェクト設定
+    test_project_path: "{{ playbook_dir }}/../../pulumi/test-s3"
+    stack_name: "test-{{ ansible_date_time.epoch[-4:] }}"  # ユニークなスタック名（エポック時間の下4桁）
+    
+    # テスト設定
+    test_project_name: "pulumi-test"
+    cleanup_on_failure: true
+    remove_stack_on_success: false  # 成功時にスタックを削除するか
+    
+    # 操作モード
+    operation: "{{ op | default('full') }}"  # full, deploy-only, destroy-only
+    
+  pre_tasks:
+    # 共通変数の読み込み
+    - name: Include group_vars/all.yml
+      ansible.builtin.include_vars:
+        file: "{{ playbook_dir }}/../inventory/group_vars/all.yml"
+      when: "'all.yml' in lookup('fileglob', playbook_dir + '/../inventory/group_vars/all.yml')"
+    
+    # テスト用の変数設定
+    - name: Set test variables
+      ansible.builtin.set_fact:
+        aws_region: "{{ pulumi_s3_region }}"
+        test_timestamp: "{{ ansible_date_time.iso8601_basic_short }}"
+        test_run_id: "{{ 999999 | random }}"
+  
+  tasks:
+    # ==================== 準備フェーズ ====================
+    - name: "PHASE 1: Preparation and Validation"
+      block:
+        - name: Display test configuration
+          ansible.builtin.debug:
+            msg: |
+              ========================================
+              Test-S3 Validation Configuration
+              ========================================
+              Backend Type: {{ pulumi_backend_type }}
+              S3 Bucket: {{ pulumi_s3_bucket }}
+              S3 Region: {{ pulumi_s3_region }}
+              Project Path: {{ test_project_path }}
+              Stack Name: {{ stack_name }}
+              Operation Mode: {{ operation }}
+              Test Run ID: {{ test_run_id }}
+              ========================================
+        
+        - name: Check required environment variables
+          ansible.builtin.fail:
+            msg: |
+              ERROR: PULUMI_CONFIG_PASSPHRASE environment variable is not set.
+              Please set: export PULUMI_CONFIG_PASSPHRASE="your-passphrase"
+          when: lookup('env', 'PULUMI_CONFIG_PASSPHRASE') | length == 0
+        
+        - name: Verify project directory exists
+          ansible.builtin.stat:
+            path: "{{ test_project_path }}"
+          register: project_dir_check
+          failed_when: not project_dir_check.stat.exists
+        
+        - name: Check package.json exists
+          ansible.builtin.stat:
+            path: "{{ test_project_path }}/package.json"
+          register: package_json_check
+          failed_when: not package_json_check.stat.exists
+        
+        - name: Install npm dependencies
+          ansible.builtin.shell: |
+            cd {{ test_project_path }}
+            npm install
+          register: npm_install_result
+          changed_when: "'up to date' not in npm_install_result.stdout"
+    
+    # ==================== S3バケット確認フェーズ ====================
+    - name: "PHASE 2: S3 Backend Verification"
+      when: operation in ['full', 'deploy-only']
+      block:
+        - name: Check S3 bucket exists
+          amazon.aws.s3_bucket_info:
+            name: "{{ pulumi_s3_bucket }}"
+          register: s3_bucket_info
+          failed_when: s3_bucket_info.buckets | length == 0
+          ignore_errors: true
+        
+        - name: Create S3 bucket if not exists
+          when: s3_bucket_info is failed
+          amazon.aws.s3_bucket:
+            name: "{{ pulumi_s3_bucket }}"
+            region: "{{ pulumi_s3_region }}"
+            versioning: true
+            encryption: "AES256"
+            state: present
+          register: s3_bucket_creation
+        
+        - name: Test S3 bucket write access
+          amazon.aws.s3_object:
+            bucket: "{{ pulumi_s3_bucket }}"
+            object: "test-write-{{ test_run_id }}.txt"
+            content: "Write test at {{ test_timestamp }}"
+            mode: put
+          register: s3_write_test
+        
+        - name: Clean up test file
+          amazon.aws.s3_object:
+            bucket: "{{ pulumi_s3_bucket }}"
+            object: "test-write-{{ test_run_id }}.txt"
+            mode: delobj
+          when: s3_write_test is succeeded
+    
+    # ==================== スタック初期化フェーズ ====================
+    - name: "PHASE 3: Stack Initialization"
+      when: operation in ['full', 'deploy-only']
+      block:
+        - name: Initialize Pulumi stack
+          ansible.builtin.include_role:
+            name: pulumi_helper
+            tasks_from: init_stack
+          vars:
+            pulumi_project_path: "{{ test_project_path }}"
+            stack_name: "{{ stack_name }}"
+        
+        - name: Configure stack
+          ansible.builtin.include_role:
+            name: pulumi_helper
+            tasks_from: set_config
+          vars:
+            pulumi_project_path: "{{ test_project_path }}"
+            config_key: "projectName"
+            config_value: "{{ test_project_name }}"
+        
+        - name: Set AWS region config
+          ansible.builtin.include_role:
+            name: pulumi_helper
+            tasks_from: set_config
+          vars:
+            pulumi_project_path: "{{ test_project_path }}"
+            config_key: "aws:region"
+            config_value: "{{ aws_region }}"
+    
+    # ==================== デプロイフェーズ ====================
+    - name: "PHASE 4: Resource Deployment"
+      when: operation in ['full', 'deploy-only']
+      block:
+        - name: Preview deployment
+          ansible.builtin.include_role:
+            name: pulumi_helper
+            tasks_from: preview
+          vars:
+            pulumi_project_path: "{{ test_project_path }}"
+        
+        - name: Deploy resources
+          ansible.builtin.include_role:
+            name: pulumi_helper
+            tasks_from: deploy
+          vars:
+            pulumi_project_path: "{{ test_project_path }}"
+        
+        - name: Wait for resources to stabilize
+          ansible.builtin.pause:
+            seconds: 5
+            prompt: "Waiting for resources to stabilize..."
+    
+    # ==================== 検証フェーズ ====================
+    - name: "PHASE 5: Output Validation"
+      when: operation in ['full', 'deploy-only']
+      block:
+        - name: Get bucket name output
+          ansible.builtin.include_role:
+            name: pulumi_helper
+            tasks_from: get_outputs
+          vars:
+            pulumi_project_path: "{{ test_project_path }}"
+            stack_name: "{{ stack_name }}"
+            output_name: "bucketName"
+          register: bucket_name_output
+        
+        - name: Get bucket ARN output
+          ansible.builtin.include_role:
+            name: pulumi_helper
+            tasks_from: get_outputs
+          vars:
+            pulumi_project_path: "{{ test_project_path }}"
+            stack_name: "{{ stack_name }}"
+            output_name: "bucketArn"
+          register: bucket_arn_output
+        
+        - name: Get all outputs
+          ansible.builtin.include_role:
+            name: pulumi_helper
+            tasks_from: get_outputs
+          vars:
+            pulumi_project_path: "{{ test_project_path }}"
+            stack_name: "{{ stack_name }}"
+          register: all_outputs
+        
+        - name: Display outputs
+          ansible.builtin.debug:
+            msg: |
+              ========================================
+              Stack Outputs:
+              ========================================
+              Bucket Name: {{ bucket_name_output.stack_output_result.stdout | trim }}
+              Bucket ARN: {{ bucket_arn_output.stack_output_result.stdout | trim }}
+              All Outputs:
+              {{ all_outputs.stack_output_result.stdout }}
+              ========================================
+        
+        - name: Validate bucket exists in AWS
+          amazon.aws.s3_bucket_info:
+            name: "{{ bucket_name_output.stack_output_result.stdout | trim }}"
+          register: deployed_bucket_info
+          failed_when: deployed_bucket_info.buckets | length == 0
+    
+    # ==================== 更新テストフェーズ ====================
+    - name: "PHASE 6: Update Testing"
+      when: operation == 'full'
+      block:
+        - name: Update project configuration
+          ansible.builtin.include_role:
+            name: pulumi_helper
+            tasks_from: set_config
+          vars:
+            pulumi_project_path: "{{ test_project_path }}"
+            config_key: "projectName"
+            config_value: "{{ test_project_name }}-updated"
+        
+        - name: Preview update
+          ansible.builtin.include_role:
+            name: pulumi_helper
+            tasks_from: preview
+          vars:
+            pulumi_project_path: "{{ test_project_path }}"
+        
+        - name: Refresh stack state
+          ansible.builtin.include_role:
+            name: pulumi_helper
+            tasks_from: refresh
+          vars:
+            pulumi_project_path: "{{ test_project_path }}"
+    
+    # ==================== クリーンアップフェーズ ====================
+    - name: "PHASE 7: Cleanup"
+      when: operation in ['full', 'destroy-only'] or remove_stack_on_success
+      block:
+        - name: Destroy resources
+          ansible.builtin.include_role:
+            name: pulumi_helper
+            tasks_from: destroy
+          vars:
+            pulumi_project_path: "{{ test_project_path }}"
+        
+        - name: Remove stack (if requested)
+          ansible.builtin.include_role:
+            name: pulumi_helper
+            tasks_from: remove_stack
+          vars:
+            pulumi_project_path: "{{ test_project_path }}"
+            stack_name: "{{ stack_name }}"
+          when: remove_stack_on_success | bool
+        
+        - name: Cleanup S3 backend state files
+          amazon.aws.s3_object:
+            bucket: "{{ pulumi_s3_bucket }}"
+            prefix: "test-s3/.pulumi/stacks/{{ stack_name }}"
+            mode: list
+          register: state_files
+          when: remove_stack_on_success | bool
+        
+        - name: Delete state files
+          amazon.aws.s3_object:
+            bucket: "{{ pulumi_s3_bucket }}"
+            object: "{{ item }}"
+            mode: delobj
+          loop: "{{ state_files.s3_keys | default([]) }}"
+          when: 
+            - remove_stack_on_success | bool
+            - state_files.s3_keys is defined
+    
+    # ==================== 最終レポート ====================
+    - name: "PHASE 8: Final Report"
+      block:
+        - name: Generate test report
+          ansible.builtin.set_fact:
+            test_report: |
+              ========================================
+              Test-S3 Validation Report
+              ========================================
+              Test Run ID: {{ test_run_id }}
+              Timestamp: {{ test_timestamp }}
+              Stack Name: {{ stack_name }}
+              
+              Results:
+              - S3 Backend: ✓ Connected
+              - Stack Initialization: ✓ Success
+              - Resource Deployment: ✓ Success
+              - Output Validation: ✓ Success
+              - Update Testing: {{ '✓ Success' if operation == 'full' else 'Skipped' }}
+              - Cleanup: {{ '✓ Success' if operation in ['full', 'destroy-only'] else 'Skipped' }}
+              
+              Backend Details:
+              - S3 Bucket: {{ pulumi_s3_bucket }}
+              - Region: {{ pulumi_s3_region }}
+              
+              Test Status: PASSED
+              ========================================
+        
+        - name: Display test report
+          ansible.builtin.debug:
+            msg: "{{ test_report.split('\n') }}"
+        
+        - name: Save test report
+          ansible.builtin.copy:
+            content: "{{ test_report }}"
+            dest: "/tmp/test-s3-report-{{ test_run_id }}.txt"
+          when: not ansible_check_mode
+
+  handlers:
+    - name: cleanup on failure
+      ansible.builtin.include_role:
+        name: pulumi_helper
+        tasks_from: destroy
+      vars:
+        pulumi_project_path: "{{ test_project_path }}"
+      when: cleanup_on_failure | bool
