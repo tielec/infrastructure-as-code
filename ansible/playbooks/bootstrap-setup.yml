@@ -181,49 +181,41 @@
       ansible.builtin.debug:
         msg: "Current Python version: {{ python_version_check.stdout }}"
     
-    # Python 3.8以上の確認とインストール
-    - name: Ensure Python 3.8+ is available
+    # Amazon Linuxバージョンの確認
+    - name: Check Amazon Linux version
+      ansible.builtin.shell: |
+        if [ -f /etc/os-release ]; then
+          grep -E "^VERSION=" /etc/os-release | cut -d'"' -f2
+        else
+          echo "Unknown"
+        fi
+      register: amzn_version
+      changed_when: false
+    
+    - name: Display Amazon Linux version
+      ansible.builtin.debug:
+        msg: "Amazon Linux version: {{ amzn_version.stdout }}"
+    
+    # Python 3.7でも動作するようにパッケージ管理
+    - name: Handle Python packages for compatibility
       block:
-        - name: Check if Python 3.8+ is already installed
+        - name: Check available Python packages
           ansible.builtin.shell: |
-            for py in python3.11 python3.10 python3.9 python3.8; do
-              if command -v $py &> /dev/null; then
-                echo $py
-                break
-              fi
-            done
-          register: python38_check
+            yum list available | grep -E "^python3[0-9]*\." | awk '{print $1}' | sort -u
+          register: available_python_packages
           changed_when: false
+          failed_when: false
         
-        - name: Set Python executable
+        - name: Display available Python packages
+          ansible.builtin.debug:
+            msg: "Available Python packages: {{ available_python_packages.stdout_lines }}"
+          when: available_python_packages.stdout_lines is defined
+        
+        # Python 3.7を使用することを決定
+        - name: Set Python executable to current Python 3
           ansible.builtin.set_fact:
-            python3_executable: "{{ python38_check.stdout | default('python3') }}"
-        
-        - name: Install Python 3.9 if needed (Amazon Linux 2023)
-          ansible.builtin.yum:
-            name: python3.9
-            state: present
-          when: 
-            - python38_check.stdout == ""
-            - ansible_distribution == "Amazon"
-        
-        - name: Update Python executable after installation
-          ansible.builtin.set_fact:
-            python3_executable: "python3.9"
-          when: 
-            - python38_check.stdout == ""
-            - ansible_distribution == "Amazon"
-        
-        - name: Create Python environment configuration
-          ansible.builtin.copy:
-            dest: "/etc/profile.d/python3.sh"
-            content: |
-              # Set Python 3.8+ as default for pip operations
-              alias pip='{{ python3_executable }} -m pip'
-              alias pip3='{{ python3_executable }} -m pip'
-              export PYTHON3_EXECUTABLE='{{ python3_executable }}'
-            mode: '0644'
-          when: python3_executable != 'python3'
+            python3_executable: "python3"
+            use_python37: true
     
     # Python パッケージマネージャーの確認と更新
     - name: Ensure Python package management is ready
@@ -234,53 +226,59 @@
           changed_when: false
           failed_when: false
         
-        - name: Ensure pip is installed for Python 3.8+
-          ansible.builtin.shell: |
-            {{ python3_executable }} -m ensurepip --upgrade
+        - name: Ensure pip is installed
+          ansible.builtin.yum:
+            name: python3-pip
+            state: present
           when: pip_check.rc != 0
-          failed_when: false
         
-        - name: Install pip using get-pip.py if ensurepip failed
-          when: pip_check.rc != 0
-          block:
-            - name: Download get-pip.py
-              ansible.builtin.get_url:
-                url: https://bootstrap.pypa.io/get-pip.py
-                dest: /tmp/get-pip.py
-                mode: '0644'
-            
-            - name: Install pip
-              ansible.builtin.shell: |
-                {{ python3_executable }} /tmp/get-pip.py
-            
-            - name: Clean up get-pip.py
-              ansible.builtin.file:
-                path: /tmp/get-pip.py
-                state: absent
-        
-        - name: Upgrade pip to latest version
+        - name: Upgrade pip to compatible version
           ansible.builtin.shell: |
-            {{ python3_executable }} -m pip install --upgrade pip
+            {{ python3_executable }} -m pip install --upgrade 'pip<24.0'
           register: pip_upgrade
           changed_when: "'Successfully installed' in pip_upgrade.stdout"
     
-    # AWS Python SDKのインストール（amazon.aws コレクションの前提条件）
-    - name: Install Python packages for AWS integration
+    # Python 3.7互換のパッケージバージョンをインストール
+    - name: Install Python packages compatible with Python 3.7
       ansible.builtin.shell: |
         {{ python3_executable }} -m pip install \
-          'boto3>=1.26.0,<1.34.0' \
-          'botocore>=1.29.0,<1.34.0' \
-          'ansible-core>=2.12.0,<2.15.0' \
-          'jmespath>=1.0.0'
+          'boto3>=1.26.0,<1.29.0' \
+          'botocore>=1.29.0,<1.32.0' \
+          'ansible-core>=2.11.0,<2.14.0' \
+          'jmespath>=0.10.0,<2.0.0' \
+          'urllib3<2.0' \
+          'cryptography>=3.0,<39.0'
       register: aws_packages_install
       changed_when: "'Successfully installed' in aws_packages_install.stdout"
+      environment:
+        PYTHONWARNINGS: "ignore:Unverified HTTPS request"
     
-    # ansibleパッケージのインストール（ansible-coreの上に構築）
-    - name: Install ansible package
+    # ansibleパッケージのインストール（Python 3.7互換）
+    - name: Install ansible package compatible with Python 3.7
       ansible.builtin.shell: |
-        {{ python3_executable }} -m pip install 'ansible>=5.0.0,<8.0.0'
+        {{ python3_executable }} -m pip install 'ansible>=4.0.0,<6.0.0'
       register: ansible_install
       changed_when: "'Successfully installed' in ansible_install.stdout"
+      ignore_errors: true
+    
+    # ansible-baseまたはansible-coreが既にインストールされている場合の対処
+    - name: Check if ansible is already available
+      ansible.builtin.shell: |
+        ansible --version
+      register: ansible_check
+      changed_when: false
+      failed_when: false
+    
+    - name: Display ansible status
+      ansible.builtin.debug:
+        msg: |
+          Ansible installation status:
+          {% if ansible_check.rc == 0 %}
+          Ansible is already installed:
+          {{ ansible_check.stdout_lines[0] }}
+          {% else %}
+          Ansible installation may have issues, but continuing...
+          {% endif %}
     
     # Ansible Collectionsのインストール
     - name: Install Ansible Collections
