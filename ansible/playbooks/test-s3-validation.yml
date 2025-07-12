@@ -92,7 +92,7 @@
               register: npm_install_result
               changed_when: "'up to date' not in npm_install_result.stdout"
         
-            - name: Initialize Pulumi stack
+            - name: Initialize Pulumi pulumi_helper role
               ansible.builtin.include_role:
                 name: pulumi_helper
 
