@@ -86,36 +86,49 @@
       when: operation in ['full', 'deploy-only']
       block:
         - name: Check S3 bucket exists
-          amazon.aws.s3_bucket_info:
-            name: "{{ pulumi_s3_bucket }}"
-          register: s3_bucket_info
-          failed_when: s3_bucket_info.buckets | length == 0
-          ignore_errors: true
+          ansible.builtin.shell: |
+            aws s3api head-bucket --bucket {{ pulumi_s3_bucket }} --region {{ pulumi_s3_region }} 2>/dev/null
+          register: s3_bucket_check
+          failed_when: false
+          changed_when: false
         
         - name: Create S3 bucket if not exists
-          when: s3_bucket_info is failed
-          amazon.aws.s3_bucket:
-            name: "{{ pulumi_s3_bucket }}"
-            region: "{{ pulumi_s3_region }}"
-            versioning: true
-            encryption: "AES256"
-            state: present
+          when: s3_bucket_check.rc != 0
+          ansible.builtin.shell: |
+            aws s3api create-bucket \
+              --bucket {{ pulumi_s3_bucket }} \
+              --region {{ pulumi_s3_region }} \
+              {% if pulumi_s3_region != 'us-east-1' %}
+              --create-bucket-configuration LocationConstraint={{ pulumi_s3_region }} \
+              {% endif %}
+              2>&1
           register: s3_bucket_creation
+          failed_when: 
+            - s3_bucket_creation.rc != 0
+            - "'BucketAlreadyOwnedByYou' not in s3_bucket_creation.stderr"
+        
+        - name: Enable versioning on S3 bucket
+          ansible.builtin.shell: |
+            aws s3api put-bucket-versioning \
+              --bucket {{ pulumi_s3_bucket }} \
+              --versioning-configuration Status=Enabled \
+              --region {{ pulumi_s3_region }}
+          when: s3_bucket_check.rc != 0 or s3_bucket_creation is changed
         
         - name: Test S3 bucket write access
-          amazon.aws.s3_object:
-            bucket: "{{ pulumi_s3_bucket }}"
-            object: "test-write-{{ test_run_id }}.txt"
-            content: "Write test at {{ test_timestamp }}"
-            mode: put
+          ansible.builtin.shell: |
+            echo "Write test at {{ test_timestamp }}" | \
+            aws s3 cp - s3://{{ pulumi_s3_bucket }}/test-write-{{ test_run_id }}.txt \
+              --region {{ pulumi_s3_region }}
           register: s3_write_test
+          changed_when: false
         
         - name: Clean up test file
-          amazon.aws.s3_object:
-            bucket: "{{ pulumi_s3_bucket }}"
-            object: "test-write-{{ test_run_id }}.txt"
-            mode: delobj
+          ansible.builtin.shell: |
+            aws s3 rm s3://{{ pulumi_s3_bucket }}/test-write-{{ test_run_id }}.txt \
+              --region {{ pulumi_s3_region }}
           when: s3_write_test is succeeded
+          changed_when: false
     
     # ==================== スタック初期化フェーズ ====================
     - name: "PHASE 3: Stack Initialization"
@@ -216,10 +229,13 @@
               ========================================
         
         - name: Validate bucket exists in AWS
-          amazon.aws.s3_bucket_info:
-            name: "{{ bucket_name_output.stack_output_result.stdout | trim }}"
-          register: deployed_bucket_info
-          failed_when: deployed_bucket_info.buckets | length == 0
+          ansible.builtin.shell: |
+            aws s3api head-bucket \
+              --bucket {{ bucket_name_output.stack_output_result.stdout | trim }} \
+              --region {{ aws_region }} 2>&1
+          register: deployed_bucket_check
+          failed_when: deployed_bucket_check.rc != 0
+          changed_when: false
     
     # ==================== 更新テストフェーズ ====================
     - name: "PHASE 6: Update Testing"
