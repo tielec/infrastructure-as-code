@@ -1,11 +1,16 @@
 # スタックの存在を確認する専用タスク
-# 入力: resolved_stack_name
+# 入力: resolved_stack_name, stack_name
 # 出力: stack_exists (true/false)
 
 # 認証処理を実行（既に認証済みの場合はスキップ）
 - name: Ensure Pulumi authentication
   ansible.builtin.include_tasks: login.yml
   when: pulumi_authenticated is not defined
+
+# S3バックエンドの場合、プロジェクト別ログイン
+- name: Handle S3 backend project login
+  ansible.builtin.include_tasks: s3_backend_login.yml
+  when: pulumi_backend_type == 's3'
 
 - name: List all available stacks
   ansible.builtin.shell: |
@@ -15,15 +20,50 @@
   changed_when: false
   when: not ansible_check_mode
 
+# デバッグ情報の追加
+- name: Display stack list for debugging
+  ansible.builtin.debug:
+    msg: |
+      Available stacks: {{ stack_list.stdout }}
+      Looking for: {{ resolved_stack_name }}
+  when: 
+    - not ansible_check_mode
+    - ansible_verbosity > 0
+
 - name: Check if stack exists
   ansible.builtin.set_fact:
     stack_exists: >-
       {{
         stack_list.stdout | from_json | 
-        selectattr('name', 'search', stack_name + '$') | 
+        selectattr('name', 'equalto', resolved_stack_name) | 
         list | length > 0
       }}
   when: not ansible_check_mode
+
+# フォールバック: resolved_stack_name で見つからない場合、短い名前でも検索
+- name: Check with short name if not found
+  when:
+    - not ansible_check_mode
+    - not stack_exists
+  block:
+    - name: Try to find stack with short name
+      ansible.builtin.set_fact:
+        stack_exists: >-
+          {{
+            stack_list.stdout | from_json | 
+            selectattr('name', 'search', '/' + stack_name + '$') | 
+            list | length > 0
+          }}
+    
+    - name: Update resolved_stack_name if found with short name
+      when: stack_exists
+      ansible.builtin.set_fact:
+        resolved_stack_name: >-
+          {{
+            (stack_list.stdout | from_json | 
+            selectattr('name', 'search', '/' + stack_name + '$') | 
+            list | first).name
+          }}
 
 - name: Set mock stack existence (check mode)
   ansible.builtin.set_fact:
@@ -33,5 +73,7 @@
 # verbosity > 1 の場合のみ結果を表示
 - name: Display stack existence check result
   ansible.builtin.debug:
-    msg: "Stack '{{ resolved_stack_name }}' exists: {{ stack_exists }}"
+    msg: |
+      Stack '{{ resolved_stack_name }}' exists: {{ stack_exists }}
+      Short name '{{ stack_name }}' was used: {{ stack_name }}
   when: ansible_verbosity > 1
