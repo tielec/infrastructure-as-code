@@ -28,7 +28,7 @@
 # JenkinsインスタンスIDの取得（Parameter Storeから）
 - name: Get Jenkins instance ID from SSM Parameter Store
   ansible.builtin.shell: |
-    eval $({{ scripts_dir }}/aws-env.sh)
+    eval $({{ scripts_dir }}/aws/aws-env.sh)
     aws ssm get-parameter \
       --name "/{{ project_name }}/{{ env_name }}/jenkins/instanceId" \
       --region {{ aws_region_name }} \
@@ -73,7 +73,7 @@
 # ファイル権限設定
 - name: Ensure aws-env.sh has execute permissions
   ansible.builtin.file:
-    path: "{{ scripts_dir }}/aws-env.sh"
+    path: "{{ scripts_dir }}/aws/aws-env.sh"
     mode: '0755'
   register: aws_env_script_permission
   no_log: true
@@ -92,7 +92,7 @@
     
     - name: Configure config stack
       ansible.builtin.shell: |
-        {{ scripts_dir }}/aws-env.sh
+        {{ scripts_dir }}/aws/aws-env.sh
         cd {{ pulumi_path }}/jenkins-config
         sudo -E /root/.pulumi/bin/pulumi config set aws:region {{ aws_region_name }}
         sudo -E /root/.pulumi/bin/pulumi config set {{ config_project_name }}:projectName {{ project_name }}

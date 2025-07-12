@@ -59,8 +59,8 @@
           ansible.builtin.set_fact:
             pulumi_env_prefix: >-
               export PULUMI_ACCESS_TOKEN="{{ pulumi_access_token }}";
-              source {{ playbook_dir }}/../../scripts/aws-env.sh > /dev/null &&
-              eval $({{ playbook_dir }}/../../scripts/aws-env.sh) > /dev/null
+              source {{ playbook_dir }}/../../scripts/aws/aws-env.sh > /dev/null &&
+              eval $({{ playbook_dir }}/../../scripts/aws/aws-env.sh) > /dev/null
 
     # S3バックエンド認証の処理
     - name: Handle S3 backend authentication
@@ -91,8 +91,8 @@
               export PULUMI_CONFIG_PASSPHRASE="{{ pulumi_config_passphrase }}";
               export AWS_REGION="{{ pulumi_s3_region }}";
               export AWS_DEFAULT_REGION="{{ pulumi_s3_region }}";
-              source {{ playbook_dir }}/../../scripts/aws-env.sh > /dev/null &&
-              eval $({{ playbook_dir }}/../../scripts/aws-env.sh) > /dev/null
+              source {{ playbook_dir }}/../../scripts/aws/aws-env.sh > /dev/null &&
+              eval $({{ playbook_dir }}/../../scripts/aws/aws-env.sh) > /dev/null
 
     # 共通設定
     - name: Set common Pulumi settings

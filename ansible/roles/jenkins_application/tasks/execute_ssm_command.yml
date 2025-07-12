@@ -3,7 +3,7 @@
 
 - name: Execute SSM command - {{ ssm_comment }}
   ansible.builtin.shell: |
-    eval $({{ scripts_dir }}/aws-env.sh)
+    eval $({{ scripts_dir }}/aws/aws-env.sh)
     aws ssm send-command \
       --region {{ aws_region_name }} \
       --document-name "{{ ssm_document_name }}" \
@@ -23,7 +23,7 @@
 
 - name: Wait for command completion
   ansible.builtin.shell: |
-    eval $({{ scripts_dir }}/aws-env.sh)
+    eval $({{ scripts_dir }}/aws/aws-env.sh)
     aws ssm list-commands \
       --region {{ aws_region_name }} \
       --command-id "{{ command_data.Command.CommandId }}" \
@@ -37,7 +37,7 @@
 
 - name: Get command output
   ansible.builtin.shell: |
-    eval $({{ scripts_dir }}/aws-env.sh)
+    eval $({{ scripts_dir }}/aws/aws-env.sh)
     aws ssm get-command-invocation \
       --region {{ aws_region_name }} \
       --command-id "{{ command_data.Command.CommandId }}" \

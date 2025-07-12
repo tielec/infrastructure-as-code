@@ -24,7 +24,7 @@
     
     - name: Configure security stack
       ansible.builtin.shell: |
-        {{ scripts_dir }}/aws-env.sh
+        {{ scripts_dir }}/aws/aws-env.sh
         cd {{ pulumi_path }}/lambda-security
         sudo -E /root/.pulumi/bin/pulumi config set aws:region {{ aws_region_name }}
         sudo -E /root/.pulumi/bin/pulumi config set {{ security_project_name }}:projectName {{ project_name }}

@@ -26,7 +26,7 @@
     
     - name: Configure WAF stack
       ansible.builtin.shell: |
-        {{ scripts_dir }}/aws-env.sh
+        {{ scripts_dir }}/aws/aws-env.sh
         cd {{ pulumi_path }}/lambda-waf
         sudo -E /root/.pulumi/bin/pulumi config set aws:region {{ aws_region_name }}
         sudo -E /root/.pulumi/bin/pulumi config set {{ waf_project_name }}:projectName {{ project_name }}

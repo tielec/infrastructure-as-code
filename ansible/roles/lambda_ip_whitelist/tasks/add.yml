@@ -15,7 +15,7 @@
 
 - name: Get current IP whitelist
   ansible.builtin.shell: |
-    eval $({{ scripts_dir }}/aws-env.sh)
+    eval $({{ scripts_dir }}/aws/aws-env.sh)
     aws secretsmanager get-secret-value \
       --secret-id {{ secret_name }} \
       --region {{ aws_region_name }} \
@@ -55,7 +55,7 @@
 
 - name: Update secret
   ansible.builtin.shell: |
-    eval $({{ scripts_dir }}/aws-env.sh)
+    eval $({{ scripts_dir }}/aws/aws-env.sh)
     aws secretsmanager put-secret-value \
       --secret-id {{ secret_name }} \
       --secret-string '{{ updated_whitelist | to_json }}' \
