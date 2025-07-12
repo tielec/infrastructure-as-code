@@ -209,9 +209,13 @@
                 tasks_from: get_outputs
               vars:
                 pulumi_project_path: "{{ test_project_path }}"
-                stack_name: "{{ test_stack_name }}"  # 明示的に指定
+                stack_name: "{{ test_stack_name }}"
                 output_name: "bucketName"
-              register: bucket_name_output
+            
+            - name: Save bucket name
+              ansible.builtin.set_fact:
+                bucket_name_value: "{{ pulumi_output_value }}"
+              when: pulumi_output_value is defined
             
             - name: Get bucket ARN output
               ansible.builtin.include_role:
@@ -219,9 +223,13 @@
                 tasks_from: get_outputs
               vars:
                 pulumi_project_path: "{{ test_project_path }}"
-                stack_name: "{{ test_stack_name }}"  # 明示的に指定
+                stack_name: "{{ test_stack_name }}"
                 output_name: "bucketArn"
-              register: bucket_arn_output
+            
+            - name: Save bucket ARN
+              ansible.builtin.set_fact:
+                bucket_arn_value: "{{ pulumi_output_value }}"
+              when: pulumi_output_value is defined
             
             - name: Get all outputs
               ansible.builtin.include_role:
@@ -229,8 +237,13 @@
                 tasks_from: get_outputs
               vars:
                 pulumi_project_path: "{{ test_project_path }}"
-                stack_name: "{{ test_stack_name }}"  # 明示的に指定
-              register: all_outputs
+                stack_name: "{{ test_stack_name }}"
+                # output_name を指定しない = 全出力を取得
+            
+            - name: Save all outputs
+              ansible.builtin.set_fact:
+                all_outputs_value: "{{ pulumi_output_value }}"
+              when: pulumi_output_value is defined
             
             - name: Display outputs
               ansible.builtin.debug:
@@ -238,21 +251,24 @@
                   ========================================
                   Stack Outputs:
                   ========================================
-                  Bucket Name: {{ bucket_name_output.stack_output_result.stdout | default('N/A') | trim }}
-                  Bucket ARN: {{ bucket_arn_output.stack_output_result.stdout | default('N/A') | trim }}
+                  Bucket Name: {{ bucket_name_value | default('N/A') }}
+                  Bucket ARN: {{ bucket_arn_value | default('N/A') }}
                   All Outputs:
-                  {{ all_outputs.stack_output_result.stdout | default('No outputs available') }}
+                  {{ all_outputs_value | default('No outputs available') }}
                   ========================================
             
             - name: Validate bucket exists in AWS
               ansible.builtin.shell: |
                 aws s3api head-bucket \
-                  --bucket {{ bucket_name_output.stack_output_result.stdout | trim }} \
+                  --bucket {{ bucket_name_value }} \
                   --region {{ aws_region }} 2>&1
               register: deployed_bucket_check
               failed_when: deployed_bucket_check.rc != 0
               changed_when: false
-              when: bucket_name_output.stack_output_result is defined
+              when: 
+                - bucket_name_value is defined
+                - bucket_name_value != 'N/A'
+                - bucket_name_value | length > 0
         
         # ==================== 更新テストフェーズ ====================
         - name: "PHASE 6: Update Testing"
