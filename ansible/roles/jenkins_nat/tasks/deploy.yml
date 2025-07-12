@@ -14,16 +14,16 @@
       {% endif %}
 
 # ファイル権限設定
-- name: Ensure aws-env.sh has execute permissions
+- name: Ensure setup-aws-credentials.sh has execute permissions
   ansible.builtin.file:
-    path: "{{ scripts_dir }}/aws-env.sh"
+    path: "{{ scripts_dir }}/aws/setup-aws-credentials.sh"
     mode: '0755'
   register: aws_env_script_permission
   no_log: true  # 詳細なログを抑制
   
 - name: Report permission update
   ansible.builtin.debug:
-    msg: "aws-env.sh スクリプトに実行権限を付与しました"
+    msg: "setup-aws-credentials.sh スクリプトに実行権限を付与しました"
   when: aws_env_script_permission.changed
 
 # Pulumiデプロイ
@@ -40,7 +40,7 @@
     
     - name: Configure NAT stack
       ansible.builtin.shell: |
-        {{ scripts_dir }}/aws-env.sh
+        {{ scripts_dir }}/aws/setup-aws-credentials.sh
         cd {{ pulumi_path }}/jenkins-nat
         sudo -E /root/.pulumi/bin/pulumi config set aws:region {{ aws_region_name }}
         sudo -E /root/.pulumi/bin/pulumi config set {{ nat_project_name }}:projectName {{ project_name }}
@@ -80,8 +80,8 @@
     - name: Get NAT type from stack outputs
       ansible.builtin.shell: |
         cd {{ pulumi_path }}/jenkins-nat
-        # aws-env.shの出力を変数に格納し、標準出力には出さない
-        AWS_ENV=$({{ scripts_dir }}/aws-env.sh 2>/dev/null)
+        # setup-aws-credentials.shの出力を変数に格納し、標準出力には出さない
+        AWS_ENV=$({{ scripts_dir }}/aws/setup-aws-credentials.sh 2>/dev/null)
         eval "$AWS_ENV"
         
         sudo -E /root/.pulumi/bin/pulumi stack output natTypeExport 2>/dev/null || echo "unknown"
@@ -97,8 +97,8 @@
     - name: Get NAT resource IDs
       ansible.builtin.shell: |
         cd {{ pulumi_path }}/jenkins-nat
-        # aws-env.shの出力を変数に格納し、標準出力には出さない
-        AWS_ENV=$({{ scripts_dir }}/aws-env.sh 2>/dev/null)
+        # setup-aws-credentials.shの出力を変数に格納し、標準出力には出さない
+        AWS_ENV=$({{ scripts_dir }}/aws/setup-aws-credentials.sh 2>/dev/null)
         eval "$AWS_ENV"
         
         sudo -E /root/.pulumi/bin/pulumi stack output natResourceIdsExport 2>/dev/null || 
@@ -115,8 +115,8 @@
     - name: Get NAT instance public IP (if applicable)
       ansible.builtin.shell: |
         cd {{ pulumi_path }}/jenkins-nat
-        # aws-env.shの出力を変数に格納し、標準出力には出さない
-        AWS_ENV=$({{ scripts_dir }}/aws-env.sh 2>/dev/null)
+        # setup-aws-credentials.shの出力を変数に格納し、標準出力には出さない
+        AWS_ENV=$({{ scripts_dir }}/aws/setup-aws-credentials.sh 2>/dev/null)
         eval "$AWS_ENV"
         
         sudo -E /root/.pulumi/bin/pulumi stack output natInstancePublicIpExport 2>/dev/null || echo "N/A"
