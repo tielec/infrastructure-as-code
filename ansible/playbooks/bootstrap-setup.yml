@@ -12,7 +12,7 @@
   vars:
     nodejs_version: "16.x"
     user_home: "/home/ec2-user"
-    aws_credentials_script_path: "{{ playbook_dir }}/../scripts/aws-credentials.sh"
+    aws_credentials_script_path: "{{ playbook_dir }}/../scripts/aws/setup-aws-credentials.sh"
     java_version: "21"
     arch: "{{ ansible_architecture }}"
   
@@ -477,7 +477,7 @@
     - name: Create AWS credentials setup helper
       when: aws_cred_script.stat.exists
       ansible.builtin.copy:
-        dest: "{{ user_home }}/setup-aws-credentials.sh"
+        dest: "{{ user_home }}/setup-aws/setup-aws-credentials.sh"
         content: |
           #!/bin/bash
           echo "Setting up AWS credentials from IAM role..."
@@ -535,7 +535,7 @@
           Next steps:
           1. Run "./verify-installation.sh" to check installed tools
           2. Setup Pulumi: "export PULUMI_ACCESS_TOKEN='your-token'"
-          3. Setup AWS credentials: "source ./setup-aws-credentials.sh"
+          3. Setup AWS credentials: "source ./setup-aws/setup-aws-credentials.sh"
           4. Setup Git SSH keys for repository access: 
              ssh-keygen -t ed25519 -C "your_email@example.com"
              cat ~/.ssh/id_ed25519.pub
