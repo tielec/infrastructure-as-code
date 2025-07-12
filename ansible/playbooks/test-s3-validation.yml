@@ -92,6 +92,10 @@
               register: npm_install_result
               changed_when: "'up to date' not in npm_install_result.stdout"
         
+            - name: Initialize Pulumi stack
+              ansible.builtin.include_role:
+                name: pulumi_helper
+
         # ==================== S3バケット確認フェーズ ====================
         - name: "PHASE 2: S3 Backend Verification"
           when: operation in ['full', 'deploy-only']
