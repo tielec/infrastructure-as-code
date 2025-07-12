@@ -12,7 +12,8 @@
     
     # プロジェクト設定
     test_project_path: "{{ playbook_dir }}/../../pulumi/test-s3"
-    stack_name: "test-{{ ansible_date_time.epoch[-4:] }}"  # ユニークなスタック名（エポック時間の下4桁）
+    # 変数名を変更して衝突を回避
+    test_stack_name: "test-{{ ansible_date_time.epoch[-4:] }}"  # ユニークなスタック名（エポック時間の下4桁）
     
     # テスト設定
     test_project_name: "pulumi-test"
@@ -27,7 +28,7 @@
     - name: Include group_vars/all.yml
       ansible.builtin.include_vars:
         file: "{{ playbook_dir }}/../inventory/group_vars/all.yml"
-      when: "'all.yml' in lookup('fileglob', playbook_dir + '/../inventory/group_vars/all.yml')"
+      failed_when: false  # ファイルが存在しない場合も続行
     
     # テスト用の変数設定
     - name: Set test variables
@@ -53,7 +54,7 @@
                   S3 Bucket: {{ pulumi_s3_bucket }}
                   S3 Region: {{ pulumi_s3_region }}
                   Project Path: {{ test_project_path }}
-                  Stack Name: {{ stack_name }}
+                  Stack Name: {{ test_stack_name }}
                   Operation Mode: {{ operation }}
                   Test Run ID: {{ test_run_id }}
                   ========================================
@@ -143,9 +144,10 @@
                 tasks_from: init_stack
               vars:
                 pulumi_project_path: "{{ test_project_path }}"
-                stack_name: "{{ stack_name }}"
+                # 明示的に異なる変数名を使用
+                stack_name: "{{ test_stack_name }}"
             
-            - name: Configure stack
+            - name: Configure stack - projectName
               ansible.builtin.include_role:
                 name: pulumi_helper
                 tasks_from: set_config
@@ -154,7 +156,7 @@
                 config_key: "projectName"
                 config_value: "{{ test_project_name }}"
             
-            - name: Set AWS region config
+            - name: Configure stack - AWS region
               ansible.builtin.include_role:
                 name: pulumi_helper
                 tasks_from: set_config
@@ -196,7 +198,7 @@
                 tasks_from: get_outputs
               vars:
                 pulumi_project_path: "{{ test_project_path }}"
-                stack_name: "{{ stack_name }}"
+                stack_name: "{{ test_stack_name }}"  # 明示的に指定
                 output_name: "bucketName"
               register: bucket_name_output
             
@@ -206,7 +208,7 @@
                 tasks_from: get_outputs
               vars:
                 pulumi_project_path: "{{ test_project_path }}"
-                stack_name: "{{ stack_name }}"
+                stack_name: "{{ test_stack_name }}"  # 明示的に指定
                 output_name: "bucketArn"
               register: bucket_arn_output
             
@@ -216,7 +218,7 @@
                 tasks_from: get_outputs
               vars:
                 pulumi_project_path: "{{ test_project_path }}"
-                stack_name: "{{ stack_name }}"
+                stack_name: "{{ test_stack_name }}"  # 明示的に指定
               register: all_outputs
             
             - name: Display outputs
@@ -225,10 +227,10 @@
                   ========================================
                   Stack Outputs:
                   ========================================
-                  Bucket Name: {{ bucket_name_output.stack_output_result.stdout | trim }}
-                  Bucket ARN: {{ bucket_arn_output.stack_output_result.stdout | trim }}
+                  Bucket Name: {{ bucket_name_output.stack_output_result.stdout | default('N/A') | trim }}
+                  Bucket ARN: {{ bucket_arn_output.stack_output_result.stdout | default('N/A') | trim }}
                   All Outputs:
-                  {{ all_outputs.stack_output_result.stdout }}
+                  {{ all_outputs.stack_output_result.stdout | default('No outputs available') }}
                   ========================================
             
             - name: Validate bucket exists in AWS
@@ -239,6 +241,7 @@
               register: deployed_bucket_check
               failed_when: deployed_bucket_check.rc != 0
               changed_when: false
+              when: bucket_name_output.stack_output_result is defined
         
         # ==================== 更新テストフェーズ ====================
         - name: "PHASE 6: Update Testing"
@@ -284,12 +287,12 @@
                 tasks_from: remove_stack
               vars:
                 pulumi_project_path: "{{ test_project_path }}"
-                stack_name: "{{ stack_name }}"
+                stack_name: "{{ test_stack_name }}"  # 明示的に指定
               when: remove_stack_on_success | bool
             
             - name: Cleanup S3 backend state files
               ansible.builtin.shell: |
-                aws s3 ls s3://{{ pulumi_s3_bucket }}/test-s3/.pulumi/stacks/{{ stack_name }}/ \
+                aws s3 ls s3://{{ pulumi_s3_bucket }}/test-s3/.pulumi/stacks/{{ test_stack_name }}/ \
                   --region {{ pulumi_s3_region }} --recursive 2>/dev/null || echo "No files found"
               register: state_files_list
               when: remove_stack_on_success | bool
@@ -297,7 +300,7 @@
             
             - name: Delete state files
               ansible.builtin.shell: |
-                aws s3 rm s3://{{ pulumi_s3_bucket }}/test-s3/.pulumi/stacks/{{ stack_name }}/ \
+                aws s3 rm s3://{{ pulumi_s3_bucket }}/test-s3/.pulumi/stacks/{{ test_stack_name }}/ \
                   --region {{ pulumi_s3_region }} --recursive
               when: 
                 - remove_stack_on_success | bool
@@ -315,7 +318,7 @@
                   ========================================
                   Test Run ID: {{ test_run_id }}
                   Timestamp: {{ test_timestamp }}
-                  Stack Name: {{ stack_name }}
+                  Stack Name: {{ test_stack_name }}
                   
                   Results:
                   - S3 Backend: ✓ Connected
@@ -342,19 +345,55 @@
                 dest: "/tmp/test-s3-report-{{ test_run_id }}.txt"
               when: not ansible_check_mode
       
-      # rescueはblockの中で使用
       rescue:
         - name: Handle test failure
-          when: cleanup_on_failure | bool
           block:
             - name: Display failure message
               ansible.builtin.debug:
-                msg: "Test failed. Attempting cleanup..."
+                msg: |
+                  ========================================
+                  Test Failed!
+                  ========================================
+                  Error: {{ ansible_failed_result.msg | default('Unknown error') }}
+                  {% if cleanup_on_failure %}
+                  Attempting cleanup...
+                  {% endif %}
+                  ========================================
             
             - name: Cleanup on failure
+              when: cleanup_on_failure | bool
               ansible.builtin.include_role:
                 name: pulumi_helper
                 tasks_from: destroy
               vars:
                 pulumi_project_path: "{{ test_project_path }}"
               ignore_errors: true
+            
+            - name: Fail with error message
+              ansible.builtin.fail:
+                msg: "Test validation failed. See error above for details."
+
+# 実行例とトラブルシューティング用の情報をコメントとして追加
+# 
+# 使用方法:
+# 1. 環境変数の設定:
+#    export PULUMI_CONFIG_PASSPHRASE="your-passphrase"
+#    export AWS_PROFILE="your-profile"
+#    export PULUMI_S3_BUCKET="your-bucket"  # オプション
+#    export PULUMI_S3_REGION="ap-northeast-1"  # オプション
+#
+# 2. 実行:
+#    # フルテスト（デプロイ、検証、削除）
+#    ansible-playbook test-s3-validation.yml
+#    
+#    # デプロイのみ
+#    ansible-playbook test-s3-validation.yml -e op=deploy-only
+#    
+#    # 削除のみ
+#    ansible-playbook test-s3-validation.yml -e op=destroy-only
+#    
+#    # 成功時もスタックを削除
+#    ansible-playbook test-s3-validation.yml -e remove_stack_on_success=true
+#
+# 3. デバッグ:
+#    ansible-playbook test-s3-validation.yml -vvv
