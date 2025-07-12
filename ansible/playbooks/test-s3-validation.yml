@@ -36,7 +36,14 @@
         aws_region: "{{ pulumi_s3_region }}"
         test_timestamp: "{{ ansible_date_time.iso8601_basic_short }}"
         test_run_id: "{{ 999999 | random }}"
-  
+
+    # バックエンドタイプの確認
+    - name: Validate S3 backend configuration
+      ansible.builtin.assert:
+        that:
+          - pulumi_backend_type == 's3'
+        fail_msg: "This playbook is designed for S3 backend testing. Current backend: {{ pulumi_backend_type }}"
+
   tasks:
     # メインの処理をblockで囲み、エラーハンドリングを追加
     - name: Run test-s3 validation
