@@ -283,59 +283,91 @@
     # Ansible Collectionsのインストール
     - name: Install Ansible Collections
       block:
-        - name: Create Ansible directories
-          ansible.builtin.file:
-            path: "{{ item }}"
-            state: directory
-            mode: '0755'
-          loop:
-            - "/etc/ansible"
-            - "/etc/ansible/collections"
-            - "/usr/share/ansible/collections"
-        
-        - name: Create collections requirements file
-          ansible.builtin.copy:
-            dest: "/etc/ansible/collections/requirements.yml"
-            content: |
-              ---
-              collections:
-                - name: amazon.aws
-                  version: ">=5.0.0"
-                - name: community.aws
-                  version: ">=5.0.0"
-                - name: community.general
-                  version: ">=5.0.0"
-                - name: ansible.posix
-                  version: ">=1.4.0"
-            mode: '0644'
-        
-        - name: Install Ansible collections (system-wide)
+        - name: Check if ansible-galaxy is available
           ansible.builtin.shell: |
-            ansible-galaxy collection install -r /etc/ansible/collections/requirements.yml -p /usr/share/ansible/collections --force
-          environment:
-            ANSIBLE_COLLECTIONS_PATH: "/usr/share/ansible/collections"
-          register: collection_install
-          changed_when: "'Installing' in collection_install.stdout"
-        
-        - name: Set Ansible collections path in profile
-          ansible.builtin.lineinfile:
-            path: "/etc/profile.d/ansible.sh"
-            line: "export ANSIBLE_COLLECTIONS_PATH=/usr/share/ansible/collections:~/.ansible/collections"
-            create: yes
-            mode: '0644'
-        
-        - name: Verify collections installation
-          ansible.builtin.shell: |
-            export ANSIBLE_COLLECTIONS_PATH=/usr/share/ansible/collections
-            ansible-galaxy collection list
-          register: installed_collections
+            which ansible-galaxy || echo "NOT_FOUND"
+          register: galaxy_check
           changed_when: false
         
-        - name: Display installed collections summary
+        - name: Display ansible-galaxy location
+          ansible.builtin.debug:
+            msg: "ansible-galaxy location: {{ galaxy_check.stdout }}"
+        
+        # ansible-galaxyが利用可能な場合のみコレクションをインストール
+        - name: Install collections if ansible-galaxy is available
+          when: galaxy_check.stdout != "NOT_FOUND"
+          block:
+            - name: Create Ansible directories
+              ansible.builtin.file:
+                path: "{{ item }}"
+                state: directory
+                mode: '0755'
+              loop:
+                - "/etc/ansible"
+                - "/etc/ansible/collections"
+                - "/usr/share/ansible/collections"
+            
+            - name: Create collections requirements file
+              ansible.builtin.copy:
+                dest: "/etc/ansible/collections/requirements.yml"
+                content: |
+                  ---
+                  collections:
+                    - name: amazon.aws
+                      version: ">=5.0.0,<6.0.0"
+                    - name: community.aws
+                      version: ">=5.0.0,<6.0.0"
+                    - name: community.general
+                      version: ">=5.0.0,<6.0.0"
+                    - name: ansible.posix
+                      version: ">=1.4.0,<2.0.0"
+                mode: '0644'
+            
+            - name: Install Ansible collections (system-wide)
+              ansible.builtin.shell: |
+                {{ galaxy_check.stdout }} collection install -r /etc/ansible/collections/requirements.yml -p /usr/share/ansible/collections --force
+              environment:
+                ANSIBLE_COLLECTIONS_PATH: "/usr/share/ansible/collections"
+              register: collection_install
+              changed_when: "'Installing' in collection_install.stdout"
+            
+            - name: Set Ansible collections path in profile
+              ansible.builtin.lineinfile:
+                path: "/etc/profile.d/ansible.sh"
+                line: "export ANSIBLE_COLLECTIONS_PATH=/usr/share/ansible/collections:~/.ansible/collections"
+                create: yes
+                mode: '0644'
+            
+            - name: Verify collections installation
+              ansible.builtin.shell: |
+                export ANSIBLE_COLLECTIONS_PATH=/usr/share/ansible/collections
+                {{ galaxy_check.stdout }} collection list
+              register: installed_collections
+              changed_when: false
+            
+            - name: Display installed collections summary
+              ansible.builtin.debug:
+                msg: |
+                  Installed Ansible Collections:
+                  {{ installed_collections.stdout | regex_findall('(amazon\.aws|community\.aws|community\.general|ansible\.posix).*') | join('\n') }}
+        
+        # ansible-galaxyが利用できない場合の対処
+        - name: Handle missing ansible-galaxy
+          when: galaxy_check.stdout == "NOT_FOUND"
           ansible.builtin.debug:
             msg: |
-              Installed Ansible Collections:
-              {{ installed_collections.stdout | regex_findall('(amazon\.aws|community\.aws|community\.general|ansible\.posix).*') | join('\n') }}
+              WARNING: ansible-galaxy command not found.
+              This is expected if running this playbook with a minimal Ansible installation.
+              Collections will need to be installed manually after Ansible is fully set up.
+              
+              To install collections manually, run:
+              ansible-galaxy collection install amazon.aws community.aws community.general ansible.posix
+    
+    # galaxy_checkの結果を全体で利用可能にする
+    - name: Set galaxy availability fact
+      ansible.builtin.set_fact:
+        ansible_galaxy_available: "{{ galaxy_check is defined and galaxy_check.stdout != 'NOT_FOUND' }}"
+      when: galaxy_check is defined
     
     # インストール検証スクリプトの作成
     - name: Create installation verification script
@@ -386,7 +418,57 @@
         group: ec2-user
         mode: '0755'
         
-    # AWS認証情報スクリプトの周知
+    # Ansible Collections 手動インストール用スクリプトの作成
+    - name: Create post-bootstrap collection installer script
+      ansible.builtin.copy:
+        dest: "{{ user_home }}/install-ansible-collections.sh"
+        content: |
+          #!/bin/bash
+          # Ansible Collections 手動インストールスクリプト
+          
+          echo "=== Installing Ansible Collections ==="
+          
+          # ansible-galaxyの存在確認
+          if ! which ansible-galaxy >/dev/null 2>&1; then
+            echo "ERROR: ansible-galaxy command not found."
+            echo "Please ensure Ansible is properly installed first."
+            exit 1
+          fi
+          
+          # Collections のインストール
+          echo "Installing amazon.aws collection..."
+          ansible-galaxy collection install amazon.aws:5.5.0
+          
+          echo "Installing community.aws collection..."
+          ansible-galaxy collection install community.aws:5.5.0
+          
+          echo "Installing community.general collection..."
+          ansible-galaxy collection install community.general:5.8.3
+          
+          echo "Installing ansible.posix collection..."
+          ansible-galaxy collection install ansible.posix:1.5.4
+          
+          # インストール結果の確認
+          echo ""
+          echo "=== Installed Collections ==="
+          ansible-galaxy collection list | grep -E "(amazon\.aws|community\.aws|community\.general|ansible\.posix)"
+          
+          echo ""
+          echo "=== Testing amazon.aws collection ==="
+          if ansible-doc amazon.aws.s3_bucket >/dev/null 2>&1; then
+            echo "✓ amazon.aws collection is working"
+          else
+            echo "✗ amazon.aws collection test failed"
+          fi
+          
+          echo ""
+          echo "Collections installation completed!"
+          echo ""
+          echo "To use these collections, ensure this is set:"
+          echo "export ANSIBLE_COLLECTIONS_PATH=/usr/share/ansible/collections:~/.ansible/collections"
+        owner: ec2-user
+        group: ec2-user
+        mode: '0755'
     - name: Check AWS credentials script
       ansible.builtin.stat:
         path: "{{ aws_credentials_script_path }}"
@@ -471,6 +553,10 @@
              export PULUMI_CONFIG_PASSPHRASE="your-secure-passphrase"
              pulumi login s3://your-bucket-name/your-project
           
+          8. If Ansible collections were not installed automatically:
+             Run: ./install-ansible-collections.sh
+             This will install the required AWS collections for Ansible.
+          
           Note: This is an ARM64 (t4g) instance. Ensure your Jenkins controller
           and any Docker images you use are compatible with ARM64 architecture.
           
@@ -490,8 +576,12 @@
         
         - name: Test AWS collection availability
           ansible.builtin.shell: |
-            export ANSIBLE_COLLECTIONS_PATH=/usr/share/ansible/collections
-            ansible-doc amazon.aws.s3_bucket --list | head -1
+            if which ansible-doc >/dev/null 2>&1; then
+              export ANSIBLE_COLLECTIONS_PATH=/usr/share/ansible/collections
+              ansible-doc amazon.aws.s3_bucket --list | head -1
+            else
+              echo "ansible-doc not available yet"
+            fi
           register: aws_collection_test
           changed_when: false
           failed_when: false
@@ -503,7 +593,13 @@
               - Python executable: {{ python3_executable }}
               - Python version: {{ python_version_check.stdout }}
               - boto3: {{ 'OK' if boto3_test.rc == 0 else 'FAILED' }}
-              - amazon.aws collection: {{ 'OK' if aws_collection_test.rc == 0 else 'FAILED' }}
+              -               amazon.aws collection: {{ 'OK' if aws_collection_test.rc == 0 and 'not available' not in aws_collection_test.stdout else 'Not installed yet' }}
+              
+              {% if ansible_galaxy_available | default(false) %}
+              ansible-galaxy available: Yes
+              {% else %}
+              ansible-galaxy available: No (collections will need manual installation)
+              {% endif %}
 
     - name: Display completion message
       ansible.builtin.debug:
@@ -511,6 +607,18 @@
           Bootstrap environment setup completed successfully on {{ arch }}!
           Python {{ python3_executable }} is being used for AWS integration.
           Java {{ java_version }} has been installed for Jenkins Agent compatibility.
+          
+          {% if not (ansible_galaxy_available | default(false)) %}
+          NOTE: Ansible collections could not be installed automatically because 
+          ansible-galaxy command is not available. After this bootstrap completes,
+          you can install them manually with:
+          
+          ./install-ansible-collections.sh
+          
+          Or directly with:
+          ansible-galaxy collection install amazon.aws community.aws community.general ansible.posix
+          {% else %}
           AWS integration tools (boto3, amazon.aws collection) have been installed.
+          {% endif %}
           
           You can now use both AWS CLI commands and Ansible AWS modules in your playbooks.
