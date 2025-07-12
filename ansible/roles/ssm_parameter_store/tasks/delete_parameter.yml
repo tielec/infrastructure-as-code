@@ -1,0 +1,44 @@
+---
+# SSMパラメータを削除するタスク
+
+- name: Validate required variables
+  ansible.builtin.fail:
+    msg: "Required variable 'parameter_name' is not defined"
+  when: parameter_name is not defined or parameter_name | length == 0
+
+- name: Delete parameter
+  block:
+    - name: Remove parameter from SSM
+      amazon.aws.ssm_parameter:
+        name: "{{ parameter_name }}"
+        state: absent
+        region: "{{ ssm_parameter_store_region }}"
+      register: delete_result
+
+    - name: Set success status
+      ansible.builtin.set_fact:
+        ssm_operation_success: true
+
+    # キャッシュからも削除
+    - name: Remove from cache
+      when: 
+        - ssm_parameter_store_cache.enabled | bool
+        - parameter_name in ssm_parameter_cache
+      ansible.builtin.set_fact:
+        ssm_parameter_cache: "{{ ssm_parameter_cache | dict2items | rejectattr('key', 'equalto', parameter_name) | list | items2dict }}"
+        ssm_parameter_cache_timestamps: "{{ ssm_parameter_cache_timestamps | dict2items | rejectattr('key', 'equalto', parameter_name) | list | items2dict }}"
+
+  rescue:
+    - name: Handle deletion failure
+      ansible.builtin.set_fact:
+        ssm_operation_error: "{{ ansible_failed_result.msg | default('Failed to delete parameter') }}"
+        ssm_operation_success: false
+
+# デバッグ出力
+- name: Display operation result
+  ansible.builtin.debug:
+    msg: |
+      Parameter: {{ parameter_name }}
+      Deleted: {{ delete_result.changed | default(false) }}
+      Success: {{ ssm_operation_success }}
+  when: ssm_parameter_store_verbose

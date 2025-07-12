@@ -1,0 +1,80 @@
+---
+# SSMパラメータを設定/更新するタスク
+
+- name: Validate required variables
+  ansible.builtin.assert:
+    that:
+      - parameter_name is defined
+      - parameter_value is defined
+    fail_msg: "Required variables 'parameter_name' and 'parameter_value' must be defined"
+
+# パラメータタイプの決定
+- name: Determine parameter type
+  ansible.builtin.set_fact:
+    parameter_type: >-
+      {%- if parameter_type is defined -%}
+        {{ parameter_type }}
+      {%- elif is_secure | default(false) or (ssm_parameter_store_auto_secure and 
+              parameter_name | lower | regex_search('(' + ssm_parameter_store_all_secure_keywords | join('|') + ')') is not none) -%}
+        SecureString
+      {%- else -%}
+        String
+      {%- endif -%}
+
+- name: Set parameter
+  block:
+    - name: Create or update parameter
+      amazon.aws.ssm_parameter:
+        name: "{{ parameter_name }}"
+        value: "{{ parameter_value }}"
+        type: "{{ parameter_type }}"
+        region: "{{ ssm_parameter_store_region }}"
+        overwrite: "{{ overwrite | default(true) }}"
+        description: "{{ description | default('Managed by Ansible') }}"
+        key_id: "{{ kms_key_id | default(ssm_parameter_store_kms_key_id) }}"
+        tier: "{{ tier | default('Standard') }}"
+        tags: "{{ tags | default({}) }}"
+      register: set_result
+      no_log: "{{ parameter_type == 'SecureString' }}"
+
+    - name: Set success status
+      ansible.builtin.set_fact:
+        ssm_operation_success: true
+        ssm_parameter_version: "{{ set_result.parameter.version | default(1) }}"
+
+    # キャッシュの更新
+    - name: Update cache
+      when: ssm_parameter_store_cache.enabled | bool
+      ansible.builtin.set_fact:
+        ssm_parameter_cache: >-
+          {{
+            ssm_parameter_cache | combine({
+              parameter_name: parameter_value
+            })
+          }}
+        ssm_parameter_cache_timestamps: >-
+          {{
+            ssm_parameter_cache_timestamps | combine({
+              parameter_name: ansible_date_time.epoch | int
+            })
+          }}
+      no_log: "{{ parameter_type == 'SecureString' }}"
+
+  rescue:
+    - name: Handle set failure
+      ansible.builtin.set_fact:
+        ssm_operation_error: "{{ ansible_failed_result.msg | default('Failed to set parameter') }}"
+        ssm_operation_success: false
+
+# デバッグ出力
+- name: Display operation result
+  ansible.builtin.debug:
+    msg: |
+      Parameter: {{ parameter_name }}
+      Type: {{ parameter_type }}
+      Operation: {{ 'Created' if set_result.changed else 'Updated' }}
+      Version: {{ ssm_parameter_version | default('Unknown') }}
+      Success: {{ ssm_operation_success }}
+  when: 
+    - ssm_parameter_store_verbose
+    - ssm_operation_success

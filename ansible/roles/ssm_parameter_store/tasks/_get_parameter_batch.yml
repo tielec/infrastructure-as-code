@@ -1,0 +1,67 @@
+---
+# バッチ単位でパラメータを取得する内部タスク
+
+- name: Get batch of parameters
+  block:
+    - name: Retrieve parameters batch
+      amazon.aws.ssm_parameter:
+        names: "{{ parameter_batch }}"
+        region: "{{ ssm_parameter_store_region }}"
+        decrypt: "{{ decrypt | default(true) }}"
+      register: batch_result
+      no_log: true
+      retries: "{{ ssm_parameter_store_retry_count }}"
+      delay: "{{ ssm_parameter_store_retry_delay }}"
+
+    - name: Process batch results
+      ansible.builtin.set_fact:
+        ssm_parameters: >-
+          {{
+            ssm_parameters | combine(
+              batch_result.parameter_values | default({})
+            )
+          }}
+      no_log: true
+
+    - name: Process batch metadata
+      ansible.builtin.set_fact:
+        ssm_parameter_metadata: >-
+          {{
+            ssm_parameter_metadata | combine({
+              item.Name: {
+                'type': item.Type,
+                'version': item.Version,
+                'last_modified': item.LastModifiedDate | default('')
+              }
+            })
+          }}
+      loop: "{{ batch_result.parameters | default([]) }}"
+      no_log: true
+
+  rescue:
+    - name: Handle batch failure
+      ansible.builtin.debug:
+        msg: "Failed to retrieve batch {{ batch_index }}: {{ ansible_failed_result.msg | default('Unknown error') }}"
+      when: ssm_parameter_store_debug
+
+    # 個別にリトライ
+    - name: Try parameters individually
+      ansible.builtin.include_tasks: get_parameter.yml
+      vars:
+        parameter_name: "{{ param }}"
+        store_as: "_temp_param_{{ param | hash('md5') }}"
+      loop: "{{ parameter_batch }}"
+      loop_control:
+        loop_var: param
+      ignore_errors: true
+
+    - name: Track failed parameters
+      ansible.builtin.set_fact:
+        failed_parameters: >-
+          {{
+            failed_parameters + [param]
+          }}
+      when: not ssm_operation_success
+      loop: "{{ parameter_batch }}"
+      loop_control:
+        loop_var: param

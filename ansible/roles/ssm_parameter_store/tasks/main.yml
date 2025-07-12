@@ -1,0 +1,62 @@
+---
+# SSMパラメータストアヘルパーのメインタスク
+# 
+# このロールは以下の機能を提供します：
+# - パラメータの取得（単一/複数/パス指定）
+# - パラメータの設定/更新
+# - パラメータの削除
+# - パラメータの一覧取得
+# - 環境変数へのエクスポート
+# - パラメータのバリデーション
+
+# キャッシュの初期化
+- name: Initialize SSM parameter cache
+  ansible.builtin.set_fact:
+    ssm_parameter_cache: {}
+    ssm_parameter_cache_timestamps: {}
+  when: 
+    - ssm_parameter_cache is not defined
+    - ssm_parameter_store_cache.enabled | bool
+
+# セキュアキーワードリストの統合
+- name: Load secure keywords
+  ansible.builtin.include_vars:
+    file: secure_keywords.yml
+
+- name: Merge secure keywords lists
+  ansible.builtin.set_fact:
+    ssm_parameter_store_all_secure_keywords: >-
+      {{
+        ssm_parameter_store_secure_keywords +
+        ssm_parameter_store_additional_secure_keywords
+      }}
+
+# ヘルパー関数の定義
+- name: Define helper functions
+  ansible.builtin.set_fact:
+    # パラメータ名がセキュアかどうかを判定
+    ssm_is_secure_parameter: |
+      {%- set param_lower = parameter_name | lower -%}
+      {%- for keyword in ssm_parameter_store_all_secure_keywords -%}
+        {%- if keyword in param_lower -%}
+          true
+        {%- endif -%}
+      {%- endfor -%}
+      false
+    
+    # 値をマスクする関数
+    ssm_mask_value: |
+      {%- if ssm_parameter_store_mask_partial and value | length > 3 -%}
+        {{ value[:3] }}{{ ssm_parameter_store_mask_value[3:] }}
+      {%- else -%}
+        {{ ssm_parameter_store_mask_value }}
+      {%- endif -%}
+
+# 結果変数の初期化
+- name: Initialize result variables
+  ansible.builtin.set_fact:
+    ssm_parameter_value: null
+    ssm_parameters: {}
+    ssm_parameter_metadata: {}
+    ssm_operation_success: false
+    ssm_operation_error: null

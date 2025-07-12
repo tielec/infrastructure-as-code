@@ -1,0 +1,4 @@
+---
+# SSMパラメータストアヘルパーロールの依存関係定義
+dependencies:
+  - role: aws_setup

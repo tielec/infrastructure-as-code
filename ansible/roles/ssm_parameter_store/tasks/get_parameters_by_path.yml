@@ -1,0 +1,98 @@
+---
+# パス指定でSSMパラメータを一括取得するタスク
+
+- name: Validate required variables
+  ansible.builtin.fail:
+    msg: "Required variable 'parameter_path' is not defined"
+  when: parameter_path is not defined or parameter_path | length == 0
+
+# パスの正規化（末尾にスラッシュを確保）
+- name: Normalize parameter path
+  ansible.builtin.set_fact:
+    normalized_path: "{{ parameter_path if parameter_path.endswith('/') else parameter_path + '/' }}"
+
+- name: Get parameters by path
+  block:
+    - name: Retrieve parameters from SSM
+      amazon.aws.aws_ssm:
+        region: "{{ ssm_parameter_store_region }}"
+      register: ssm_connection
+
+    - name: Get parameters using AWS CLI (for path-based retrieval)
+      ansible.builtin.shell: |
+        aws ssm get-parameters-by-path \
+          --path "{{ normalized_path }}" \
+          {% if recursive | default(true) %}--recursive{% endif %} \
+          --with-decryption \
+          --region {{ ssm_parameter_store_region }} \
+          --output json
+      register: parameters_result
+      changed_when: false
+      no_log: "{{ not ssm_parameter_store_debug }}"
+
+    - name: Parse parameters
+      ansible.builtin.set_fact:
+        raw_parameters: "{{ parameters_result.stdout | from_json }}"
+      no_log: true
+
+    - name: Process parameters
+      ansible.builtin.set_fact:
+        ssm_parameters: >-
+          {{
+            ssm_parameters | combine({
+              item.Name: item.Value
+            })
+          }}
+      loop: "{{ raw_parameters.Parameters }}"
+      no_log: true
+
+    # メタデータの収集
+    - name: Collect parameter metadata
+      ansible.builtin.set_fact:
+        ssm_parameter_metadata: >-
+          {{
+            ssm_parameter_metadata | combine({
+              item.Name: {
+                'type': item.Type,
+                'version': item.Version,
+                'last_modified': item.LastModifiedDate | default(''),
+                'is_secure': item.Type == 'SecureString' or 
+                  (ssm_parameter_store_auto_secure and 
+                   item.Name | lower | regex_search('(' + ssm_parameter_store_all_secure_keywords | join('|') + ')') is not none)
+              }
+            })
+          }}
+      loop: "{{ raw_parameters.Parameters }}"
+      no_log: true
+
+    - name: Set success status
+      ansible.builtin.set_fact:
+        ssm_operation_success: true
+        ssm_parameter_count: "{{ raw_parameters.Parameters | length }}"
+
+  rescue:
+    - name: Handle errors
+      ansible.builtin.set_fact:
+        ssm_operation_error: "{{ ansible_failed_result.msg | default('Failed to retrieve parameters') }}"
+        ssm_operation_success: false
+
+# デバッグ出力
+- name: Display summary
+  ansible.builtin.debug:
+    msg: |
+      Parameter path: {{ normalized_path }}
+      Recursive: {{ recursive | default(true) }}
+      Parameters found: {{ ssm_parameter_count | default(0) }}
+      Success: {{ ssm_operation_success }}
+  when: ssm_parameter_store_verbose
+
+- name: Display parameter names (secure values masked)
+  ansible.builtin.debug:
+    msg: |
+      Retrieved parameters:
+      {% for name, metadata in ssm_parameter_metadata.items() %}
+      - {{ name }} ({{ metadata.type }}){% if metadata.is_secure %} [SECURE]{% endif %}
+      {% endfor %}
+  when: 
+    - ssm_parameter_store_verbose
+    - ssm_operation_success
