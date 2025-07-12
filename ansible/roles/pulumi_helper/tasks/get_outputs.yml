@@ -119,7 +119,14 @@
     - name: Set output success status
       ansible.builtin.set_fact:
         stack_output_succeeded: true
-        
+
+    # 結果をfactとして設定（呼び出し元からアクセス可能にする）
+    - name: Set output as fact for external access
+      ansible.builtin.set_fact:
+        pulumi_output_value: "{{ stack_output_result.stdout }}"
+        pulumi_output_success: "{{ stack_output_succeeded }}"
+      when: not ansible_check_mode
+
   rescue:
     # エラー時も詳細を表示（output_nameにデフォルト値を設定）
     - name: Handle output retrieval failure
