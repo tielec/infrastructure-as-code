@@ -339,11 +339,19 @@
             dest: "/tmp/test-s3-report-{{ test_run_id }}.txt"
           when: not ansible_check_mode
 
-  handlers:
-    - name: cleanup on failure
-      ansible.builtin.include_role:
-        name: pulumi_helper
-        tasks_from: destroy
-      vars:
-        pulumi_project_path: "{{ test_project_path }}"
+  # handlersセクションを削除し、rescue処理を追加
+  rescue:
+    - name: Handle test failure
       when: cleanup_on_failure | bool
+      block:
+        - name: Display failure message
+          ansible.builtin.debug:
+            msg: "Test failed. Attempting cleanup..."
+        
+        - name: Cleanup on failure
+          ansible.builtin.include_role:
+            name: pulumi_helper
+            tasks_from: destroy
+          vars:
+            pulumi_project_path: "{{ test_project_path }}"
+          ignore_errors: true
