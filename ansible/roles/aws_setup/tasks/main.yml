@@ -5,7 +5,7 @@
     path: "{{ item }}"
   register: script_stats
   loop:
-    - "{{ playbook_dir }}/../../scripts/aws-env.sh"
+    - "{{ playbook_dir }}/../../scripts/aws/aws-env.sh"
     - "{{ playbook_dir }}/../../scripts/aws/setup-aws-credentials.sh"
   no_log: true  # 詳細なステータス情報を抑制
 

@@ -13,7 +13,7 @@
 # ファイル権限設定
 - name: Ensure aws-env.sh has execute permissions
   ansible.builtin.file:
-    path: "{{ scripts_dir }}/aws-env.sh"
+    path: "{{ scripts_dir }}/aws/aws-env.sh"
     mode: '0755'
   register: aws_env_script_permission
   no_log: true  # 詳細なログを抑制
@@ -37,7 +37,7 @@
     
     - name: Configure network stack
       ansible.builtin.shell: |
-        {{ scripts_dir }}/aws-env.sh
+        {{ scripts_dir }}/aws/aws-env.sh
         cd {{ pulumi_path }}/jenkins-network
         sudo -E /root/.pulumi/bin/pulumi config set aws:region {{ aws_region_name }}
         sudo -E /root/.pulumi/bin/pulumi config set {{ network_project_name }}:projectName {{ project_name }}
@@ -70,7 +70,7 @@
     # スタック出力の取得
     - name: Get VPC ID from stack outputs
       ansible.builtin.shell: |
-        {{ scripts_dir }}/aws-env.sh
+        {{ scripts_dir }}/aws/aws-env.sh
         cd {{ pulumi_path }}/jenkins-network
         # スタック出力を確認
         sudo -E /root/.pulumi/bin/pulumi stack output || echo "No outputs available yet"
@@ -92,7 +92,7 @@
     # Public Subnet IDs取得
     - name: Get public subnet IDs
       ansible.builtin.shell: |
-        {{ scripts_dir }}/aws-env.sh
+        {{ scripts_dir }}/aws/aws-env.sh
         cd {{ pulumi_path }}/jenkins-network
         sudo -E /root/.pulumi/bin/pulumi stack output publicSubnetIds 2>/dev/null || 
           echo "['mock-public-subnet-1','mock-public-subnet-2']"
@@ -107,7 +107,7 @@
     # Private Subnet IDs取得
     - name: Get private subnet IDs
       ansible.builtin.shell: |
-        {{ scripts_dir }}/aws-env.sh
+        {{ scripts_dir }}/aws/aws-env.sh
         cd {{ pulumi_path }}/jenkins-network
         sudo -E /root/.pulumi/bin/pulumi stack output privateSubnetIds 2>/dev/null || 
           echo "['mock-private-subnet-1','mock-private-subnet-2']"

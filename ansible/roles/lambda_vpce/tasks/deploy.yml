@@ -24,7 +24,7 @@
     
     - name: Configure VPC endpoints stack
       ansible.builtin.shell: |
-        {{ scripts_dir }}/aws-env.sh
+        {{ scripts_dir }}/aws/aws-env.sh
         cd {{ pulumi_path }}/lambda-vpce
         sudo -E /root/.pulumi/bin/pulumi config set aws:region {{ aws_region_name }}
         sudo -E /root/.pulumi/bin/pulumi config set {{ vpce_project_name }}:projectName {{ project_name }}

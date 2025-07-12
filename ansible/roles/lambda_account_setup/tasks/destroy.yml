@@ -16,7 +16,7 @@
 # ファイル権限設定
 - name: Ensure aws-env.sh has execute permissions
   ansible.builtin.file:
-    path: "{{ scripts_dir }}/aws-env.sh"
+    path: "{{ scripts_dir }}/aws/aws-env.sh"
     mode: '0755'
   register: aws_env_script_permission
   no_log: true
