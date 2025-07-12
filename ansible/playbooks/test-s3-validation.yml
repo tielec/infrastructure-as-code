@@ -285,22 +285,21 @@
           when: remove_stack_on_success | bool
         
         - name: Cleanup S3 backend state files
-          amazon.aws.s3_object:
-            bucket: "{{ pulumi_s3_bucket }}"
-            prefix: "test-s3/.pulumi/stacks/{{ stack_name }}"
-            mode: list
-          register: state_files
+          ansible.builtin.shell: |
+            aws s3 ls s3://{{ pulumi_s3_bucket }}/test-s3/.pulumi/stacks/{{ stack_name }}/ \
+              --region {{ pulumi_s3_region }} --recursive 2>/dev/null || echo "No files found"
+          register: state_files_list
           when: remove_stack_on_success | bool
+          changed_when: false
         
         - name: Delete state files
-          amazon.aws.s3_object:
-            bucket: "{{ pulumi_s3_bucket }}"
-            object: "{{ item }}"
-            mode: delobj
-          loop: "{{ state_files.s3_keys | default([]) }}"
+          ansible.builtin.shell: |
+            aws s3 rm s3://{{ pulumi_s3_bucket }}/test-s3/.pulumi/stacks/{{ stack_name }}/ \
+              --region {{ pulumi_s3_region }} --recursive
           when: 
             - remove_stack_on_success | bool
-            - state_files.s3_keys is defined
+            - "'No files found' not in state_files_list.stdout"
+          changed_when: true
     
     # ==================== 最終レポート ====================
     - name: "PHASE 8: Final Report"
