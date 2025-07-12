@@ -131,13 +131,6 @@ lambda_api_infra:
           - percent: 100
             email: "cto@example.com"
 
-# Pulumi設定
-pulumi:
-  backend_type: "{{ lookup('env', 'PULUMI_BACKEND_TYPE') | default('cloud') }}"
-  s3:
-    bucket: "{{ lookup('env', 'PULUMI_S3_BUCKET') | default('pulumi-state-bucket') }}"
-    region: "{{ lookup('env', 'PULUMI_S3_REGION') | default('ap-northeast-1') }}"
-
 # Jenkins設定
 jenkins:
   version: "latest"
