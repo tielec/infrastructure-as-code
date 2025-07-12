@@ -12,7 +12,7 @@
 
 - name: Get stack outputs
   block:
-    # 操作内容を表示
+    # 操作内容を表示（output_nameにデフォルト値を設定）
     - name: Display operation info
       ansible.builtin.debug:
         msg: "Getting output '{{ output_name | default('all outputs') }}' from {{ pulumi_project_path | basename }}/{{ stack_name | default('current stack') }}"
@@ -74,23 +74,26 @@
           register: fallback_selection_result
           failed_when: fallback_selection_result.rc != 0
     
-    # スタック出力を取得
+    # スタック出力を取得（output_nameにデフォルト値を設定）
     - name: Get stack output
       ansible.builtin.shell: |
         cd {{ pulumi_project_path }}
         {{ pulumi_env_prefix }}
         
-        if [ -n "{{ output_name | default('') }}" ]; then
-          # 実際の値のみを取得（最後の行）
-          OUTPUT=$({{ pulumi_sudo_cmd }} stack output {{ output_name }} 2>&1)
-          if [ $? -eq 0 ]; then
-            echo "$OUTPUT" | tail -1
-          else
-            echo "ERROR: Output '{{ output_name }}' not found"
-          fi
+        # output_nameが空文字列の場合は全出力を取得
+        {% if output_name is defined and output_name | length > 0 %}
+        # 特定の出力を取得
+        OUTPUT=$({{ pulumi_sudo_cmd }} stack output {{ output_name }} 2>&1)
+        if [ $? -eq 0 ]; then
+          echo "$OUTPUT" | tail -1
         else
-          {{ pulumi_sudo_cmd }} stack output --json 2>/dev/null || echo "{}"
+          echo "ERROR: Output '{{ output_name }}' not found"
+          exit 1
         fi
+        {% else %}
+        # 全ての出力を取得（JSON形式）
+        {{ pulumi_sudo_cmd }} stack output --json 2>/dev/null || echo "{}"
+        {% endif %}
       register: stack_output_result
       changed_when: false
       when: not ansible_check_mode
@@ -98,7 +101,7 @@
     # エラーチェック
     - name: Check for output errors
       ansible.builtin.fail:
-        msg: "Failed to get output '{{ output_name }}' from stack"
+        msg: "Failed to get output '{{ output_name | default('all outputs') }}' from stack"
       when:
         - not ansible_check_mode
         - stack_output_result.stdout.startswith('ERROR:')
@@ -118,7 +121,7 @@
         stack_output_succeeded: true
         
   rescue:
-    # エラー時も詳細を表示
+    # エラー時も詳細を表示（output_nameにデフォルト値を設定）
     - name: Handle output retrieval failure
       ansible.builtin.debug:
         msg: |
