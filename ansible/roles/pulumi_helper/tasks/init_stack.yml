@@ -53,23 +53,32 @@
       ansible.builtin.debug:
         msg: "Stack {{ 'already exists - will select it' if stack_exists else 'does not exist - will create it' }}"
     
-    # スタックが存在しない場合は作成
+    # スタックが存在しない場合は作成（コメントをシェルの外に移動）
     - name: Initialize new stack if not exists
       ansible.builtin.shell: |
         cd {{ pulumi_project_path }}
         {{ pulumi_env_prefix }}
         {% if pulumi_backend_type == 's3' %}
-        # S3バックエンドではシンプルなスタック名を使用
         {{ pulumi_sudo_cmd }} stack init {{ stack_name }} --secrets-provider=passphrase
         {% else %}
-        # Pulumi Cloudでは解決済みの完全な名前を使用
         {{ pulumi_sudo_cmd }} stack init {{ resolved_stack_name }}
         {% endif %}
       register: stack_init_result
       changed_when: stack_init_result.rc == 0
+      failed_when: 
+        - stack_init_result.rc != 0
+        - "'already exists' not in stack_init_result.stderr"
       when: 
         - not ansible_check_mode
         - not stack_exists
+    
+    # 既存のスタックがある場合は選択のみ行う
+    - name: Handle existing stack
+      ansible.builtin.debug:
+        msg: "Stack already exists, proceeding with selection"
+      when:
+        - not ansible_check_mode
+        - stack_exists
     
     - name: Report stack creation
       ansible.builtin.debug:
@@ -77,6 +86,7 @@
       when:
         - not ansible_check_mode
         - not stack_exists
+        - stack_init_result is defined
         - stack_init_result.rc == 0
     
     # NPMの依存関係をインストール
@@ -107,14 +117,16 @@
       ansible.builtin.shell: |
         cd {{ pulumi_project_path }}
         {{ pulumi_env_prefix }}
-        
-        # まず単純な名前で試し、失敗したら解決済み名前を使用
+        {% if pulumi_backend_type == 's3' %}
+        {{ pulumi_sudo_cmd }} stack select {{ stack_name }}
+        {% else %}
         if {{ pulumi_sudo_cmd }} stack select {{ stack_name }} 2>/dev/null; then
           echo "{{ stack_name }}"
         else
           {{ pulumi_sudo_cmd }} stack select {{ resolved_stack_name }}
           echo "{{ resolved_stack_name }}"
         fi
+        {% endif %}
       register: stack_select_result
       changed_when: false
       when: not ansible_check_mode
@@ -181,7 +193,8 @@
         msg: |
           Stack initialization failed.
           {% if 'already exists' in stack_init_result.stderr | default('') %}
-          A stack with this name already exists. Use a different name or select existing stack.
+          A stack with this name already exists. This is expected if the stack was created previously.
+          Consider using 'stack select' instead of 'stack init'.
           {% elif 'npm ERR!' in npm_install_result.stderr | default('') %}
           npm dependency installation failed. Check package.json and network connectivity.
           {% elif 'no stack named' in stack_select_result.stderr | default('') %}
