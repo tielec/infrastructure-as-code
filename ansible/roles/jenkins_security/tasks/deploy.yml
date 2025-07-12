@@ -11,16 +11,16 @@
       - Environment: {{ env_name }}
 
 # ファイル権限設定
-- name: Ensure aws-env.sh has execute permissions
+- name: Ensure setup-aws-credentials.sh has execute permissions
   ansible.builtin.file:
-    path: "{{ scripts_dir }}/aws-env.sh"
+    path: "{{ scripts_dir }}/aws/setup-aws-credentials.sh"
     mode: '0755'
   register: aws_env_script_permission
   no_log: true  # 詳細なログを抑制
   
 - name: Report permission update
   ansible.builtin.debug:
-    msg: "aws-env.sh スクリプトに実行権限を付与しました"
+    msg: "setup-aws-credentials.sh スクリプトに実行権限を付与しました"
   when: aws_env_script_permission.changed
 
 # Pulumiデプロイ
@@ -37,7 +37,7 @@
     
     - name: Configure security stack
       ansible.builtin.shell: |
-        {{ scripts_dir }}/aws-env.sh
+        {{ scripts_dir }}/aws/setup-aws-credentials.sh
         cd {{ pulumi_path }}/jenkins-security
         sudo -E /root/.pulumi/bin/pulumi config set aws:region {{ aws_region_name }}
         sudo -E /root/.pulumi/bin/pulumi config set {{ security_project_name }}:projectName {{ project_name }}

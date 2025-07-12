@@ -11,9 +11,9 @@
       - Remove Stack: {{ remove_stacks | default(false) }}
 
 # ファイル権限設定
-- name: Ensure aws-env.sh has execute permissions
+- name: Ensure setup-aws-credentials.sh has execute permissions
   ansible.builtin.file:
-    path: "{{ scripts_dir }}/aws-env.sh"
+    path: "{{ scripts_dir }}/aws/setup-aws-credentials.sh"
     mode: '0755'
   register: aws_env_script_permission
   no_log: true
