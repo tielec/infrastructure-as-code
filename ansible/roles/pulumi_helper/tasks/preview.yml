@@ -1,9 +1,14 @@
 # Pulumiのプレビュー実行ヘルパータスク
 
-# 認証処理を実行
+# 認証処理を実行（既に認証済みの場合はスキップ）
 - name: Ensure Pulumi authentication
   ansible.builtin.include_tasks: login.yml
-  when: pulumi_access_token is not defined
+  when: pulumi_authenticated is not defined
+
+# S3バックエンドの場合、プロジェクト別ログイン
+- name: Handle S3 backend project login
+  ansible.builtin.include_tasks: s3_backend_login.yml
+  when: pulumi_backend_type == 's3'
 
 - name: Preview Pulumi deployment
   block:
@@ -17,6 +22,11 @@
       failed_when: current_stack.rc != 0
       when: not ansible_check_mode
     
+    - name: Start preview
+      ansible.builtin.debug:
+        msg: "Previewing changes for stack '{{ current_stack.stdout }}' in {{ pulumi_project_path | basename }}"
+      when: not ansible_check_mode
+    
     # プレビューを実行
     - name: Run preview
       ansible.builtin.shell: |
@@ -26,7 +36,7 @@
       changed_when: false
       when: not ansible_check_mode
     
-    # プレビュー結果を表示
+    # プレビュー結果を常に表示（重要な情報）
     - name: Display preview
       ansible.builtin.debug:
         msg: "{{ pulumi_preview_result.stdout_lines }}"
@@ -35,10 +45,19 @@
   rescue:
     - name: Display error message
       ansible.builtin.debug:
-        msg: "Failed to preview Pulumi deployment"
+        msg: |
+          Failed to preview Pulumi deployment
+          Error: {{ ansible_failed_result.msg | default('Unknown error') }}
+      
+    # エラー詳細も表示
+    - name: Display error details
+      ansible.builtin.debug:
+        msg: |
+          {{ pulumi_preview_result.stderr | default('No error output available') }}
+      when: pulumi_preview_result is defined and pulumi_preview_result.stderr is defined
 
 # チェックモード
 - name: Mock preview (check mode)
   ansible.builtin.debug:
-    msg: "Would preview Pulumi deployment (check mode active)"
+    msg: "Would preview Pulumi deployment (check mode)"
   when: ansible_check_mode

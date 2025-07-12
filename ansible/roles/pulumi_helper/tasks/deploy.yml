@@ -1,9 +1,14 @@
 # Pulumiのデプロイ実行ヘルパータスク
 
-# 認証処理を実行
+# 認証処理を実行（既に認証済みの場合はスキップ）
 - name: Ensure Pulumi authentication
   ansible.builtin.include_tasks: login.yml
-  when: pulumi_access_token is not defined
+  when: pulumi_authenticated is not defined
+
+# S3バックエンドの場合、プロジェクト別ログイン
+- name: Handle S3 backend project login
+  ansible.builtin.include_tasks: s3_backend_login.yml
+  when: pulumi_backend_type == 's3'
 
 - name: Deploy with Pulumi
   block:
@@ -17,6 +22,11 @@
       failed_when: current_stack.rc != 0
       when: not ansible_check_mode
     
+    - name: Start deployment
+      ansible.builtin.debug:
+        msg: "Deploying stack '{{ current_stack.stdout }}' in {{ pulumi_project_path | basename }}"
+      when: not ansible_check_mode
+    
     # デプロイを実行
     - name: Run deployment
       ansible.builtin.shell: |
@@ -26,52 +36,56 @@
       changed_when: "'No changes' not in pulumi_up_result.stdout"
       when: not ansible_check_mode
     
-    # デプロイ結果を表示
+    # デプロイ結果は重要なので常に表示
     - name: Display deployment results
       ansible.builtin.debug:
         msg: "{{ pulumi_up_result.stdout_lines }}"
-      when: not ansible_check_mode and ansible_verbosity > 0
+      when: 
+        - not ansible_check_mode
+        - pulumi_up_result is defined
     
     - name: Set success status
       ansible.builtin.set_fact:
         pulumi_deployment_succeeded: true
         
   rescue:
-    - name: Display error message
+    - name: Report deployment failure
       ansible.builtin.debug:
         msg: |
           ========== Pulumi Deployment Failed ==========
-          Failed to deploy Pulumi stack
-          Error code: {{ pulumi_up_result.rc | default('unknown') }}
-          {% if pulumi_up_result.stdout is defined %}
-          Output:
-          {{ pulumi_up_result.stdout }}
+          {% if 'TypeScript' in pulumi_up_result.stdout | default('') %}
+          TypeScript compilation errors detected.
+          {% elif 'unhandled exception' in pulumi_up_result.stdout | default('') %}
+          An unhandled exception occurred during deployment.
+          {% else %}
+          Deployment failed with error code: {{ pulumi_up_result.rc | default('unknown') }}
           {% endif %}
-          {% if pulumi_up_result.stderr is defined and pulumi_up_result.stderr %}
-          Error:
+    
+    # エラー詳細は重要なので表示
+    - name: Display error output
+      ansible.builtin.debug:
+        msg: |
+          Error details:
+          {{ pulumi_up_result.stdout | default('No output available') }}
+      when: pulumi_up_result is defined and pulumi_up_result.stdout is defined
+    
+    - name: Display error stderr
+      ansible.builtin.debug:
+        msg: |
+          Error output:
           {{ pulumi_up_result.stderr }}
-          {% endif %}
-          ==============================================
+      when: pulumi_up_result is defined and pulumi_up_result.stderr is defined and pulumi_up_result.stderr
     
     - name: Set failure status
       ansible.builtin.set_fact:
         pulumi_deployment_failed: true
     
-    # エラー時にAnsibleの実行を停止
     - name: Fail the playbook
       ansible.builtin.fail:
-        msg: |
-          Pulumi deployment failed. 
-          {% if 'TypeScript' in pulumi_up_result.stdout | default('') %}
-          TypeScript compilation errors detected. Please fix the code and try again.
-          {% elif 'unhandled exception' in pulumi_up_result.stdout | default('') %}
-          An unhandled exception occurred during deployment.
-          {% else %}
-          Check the output above for details.
-          {% endif %}
+        msg: "Pulumi deployment failed. See error details above."
 
 # チェックモード
 - name: Mock deploy (check mode)
   ansible.builtin.debug:
-    msg: "Would deploy with Pulumi (check mode active)"
+    msg: "Would deploy with Pulumi (check mode)"
   when: ansible_check_mode

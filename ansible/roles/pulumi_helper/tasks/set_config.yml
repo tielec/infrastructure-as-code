@@ -1,9 +1,14 @@
 # Pulumiスタックの設定値を管理するヘルパータスク
 
-# 認証処理を実行
+# 認証処理を実行（既に認証済みの場合はスキップ）
 - name: Ensure Pulumi authentication
   ansible.builtin.include_tasks: login.yml
-  when: pulumi_access_token is not defined
+  when: pulumi_authenticated is not defined
+
+# S3バックエンドの場合、プロジェクト別ログイン
+- name: Handle S3 backend project login
+  ansible.builtin.include_tasks: s3_backend_login.yml
+  when: pulumi_backend_type == 's3'
 
 - name: Configure Pulumi stack
   block:
@@ -13,7 +18,7 @@
         msg: "Required variables 'config_key' and 'config_value' are not defined"
       when: config_key is not defined or config_value is not defined
     
-    # スタックが選択されているか確認
+    # スタックが選択されているか確認（エラー出力を抑制）
     - name: Ensure stack is selected
       ansible.builtin.shell: |
         cd {{ pulumi_project_path }}
@@ -27,57 +32,50 @@
     - name: Set config value
       ansible.builtin.shell: |
         cd {{ pulumi_project_path }}
-        source {{ playbook_dir }}/../../scripts/aws-env.sh > /dev/null
-        eval $({{ playbook_dir }}/../../scripts/aws-env.sh) > /dev/null
         {{ pulumi_env_prefix }} && {{ pulumi_sudo_cmd }} config set {{ config_key }} "{{ config_value }}" {{ '--secret' if config_secret | default(false) else '' }}
       register: config_result
       changed_when: config_result.rc == 0
       when: not ansible_check_mode
   
-    - name: Display config result
+    # 結果を簡潔に表示
+    - name: Report config update
       ansible.builtin.debug:
-        msg: "Set config '{{ config_key }}' = {{ 'secret' if config_secret | default(false) else config_value }}"
-      when: not ansible_check_mode and ansible_verbosity > 0
+        msg: "Config set: {{ config_key }} = {{ '***' if config_secret | default(false) else config_value }}"
+      when: not ansible_check_mode
       
   rescue:
-    - name: Display error message
+    - name: Report config failure
       ansible.builtin.debug:
         msg: |
-          ========== Pulumi Config Failed ==========
-          Failed to set Pulumi config '{{ config_key }}'
-          {% if config_result is defined %}
+          Failed to set config '{{ config_key }}'
+          {% if 'no stack named' in config_result.stderr | default('') %}
+          Reason: No stack selected
+          {% elif 'invalid configuration key' in config_result.stderr | default('') %}
+          Reason: Invalid key format (use namespace:key)
+          {% else %}
           Error code: {{ config_result.rc | default('unknown') }}
-          {% if config_result.stdout is defined %}
-          Output:
-          {{ config_result.stdout }}
           {% endif %}
-          {% if config_result.stderr is defined and config_result.stderr %}
-          Error:
-          {{ config_result.stderr }}
-          {% endif %}
-          {% endif %}
-          =========================================
+    
+    # 詳細はverbosity > 0の場合のみ
+    - name: Display error details
+      ansible.builtin.debug:
+        msg: |
+          Error output:
+          {{ config_result.stderr | default('No error output') }}
+      when: 
+        - ansible_verbosity > 0
+        - config_result is defined
     
     - name: Set failure status
       ansible.builtin.set_fact:
         pulumi_config_failed: true
     
-    # エラー時にAnsibleの実行を停止
     - name: Fail the playbook
       ansible.builtin.fail:
-        msg: |
-          Failed to set Pulumi configuration.
-          Key: {{ config_key }}
-          {% if 'no stack named' in config_result.stderr | default('') %}
-          No stack is selected. Please select a stack first.
-          {% elif 'invalid configuration key' in config_result.stderr | default('') %}
-          Invalid configuration key format. Use namespace:key format (e.g., aws:region).
-          {% else %}
-          Check the output above for details.
-          {% endif %}
+        msg: "Failed to set Pulumi configuration. Run with -v for more details."
 
 # チェックモード
 - name: Mock config set (check mode)
   ansible.builtin.debug:
-    msg: "Would set config '{{ config_key | default('unknown') }}' = {{ 'secret' if config_secret | default(false) else config_value | default('unknown') }} (check mode active)"
+    msg: "Would set config '{{ config_key | default('unknown') }}' (check mode)"
   when: ansible_check_mode

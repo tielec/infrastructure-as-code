@@ -1,85 +1,154 @@
 # Pulumiの認証とトークン設定を一元管理するタスク
-# このファイルは各タスクの最初でincludeして使用します
+# Pulumi CloudとS3バックエンドの両方に対応
 
 - name: Ensure Pulumi authentication
   block:
-    # PULUMI_ACCESS_TOKENの確認
-    - name: Check for PULUMI_ACCESS_TOKEN in environment
-      ansible.builtin.set_fact:
-        pulumi_token_set: "{{ lookup('env', 'PULUMI_ACCESS_TOKEN') | length > 0 }}"
-        pulumi_access_token: "{{ lookup('env', 'PULUMI_ACCESS_TOKEN') }}"
-      no_log: true
-
-    - name: Fail if PULUMI_ACCESS_TOKEN is not set
-      ansible.builtin.fail:
-        msg: |
-          ERROR: PULUMI_ACCESS_TOKEN environment variable is not set.
-          Please set the PULUMI_ACCESS_TOKEN environment variable before running this playbook:
-          export PULUMI_ACCESS_TOKEN="pul-YOUR_ACCESS_TOKEN"
-      when: not pulumi_token_set
-
     # Pulumiのパス設定
     - name: Set Pulumi binary path if not already set
       ansible.builtin.set_fact:
         pulumi_bin_path: "/root/.pulumi/bin/pulumi"
       when: pulumi_bin_path is not defined
 
-    # ログイン状態の確認
-    - name: Check current Pulumi login status
-      ansible.builtin.shell: |
-        export PULUMI_ACCESS_TOKEN="{{ pulumi_access_token }}"
-        sudo -E {{ pulumi_bin_path }} whoami
-      register: pulumi_login_check
-      changed_when: false
-      failed_when: false
-      no_log: true
+    # バックエンドタイプの検証
+    - name: Validate backend type
+      ansible.builtin.fail:
+        msg: "Invalid pulumi_backend_type: {{ pulumi_backend_type }}. Must be 'cloud' or 's3'"
+      when: pulumi_backend_type not in ['cloud', 's3']
 
-    # ログインが必要な場合のみログイン実行
-    - name: Login to Pulumi if not already logged in
-      ansible.builtin.shell: |
-        export PULUMI_ACCESS_TOKEN="{{ pulumi_access_token }}"
-        sudo -E {{ pulumi_bin_path }} login
-      when: pulumi_login_check.rc != 0
-      register: pulumi_login_result
-      changed_when: pulumi_login_result.rc == 0
-      no_log: true
+    # Pulumi Cloud認証の処理
+    - name: Handle Pulumi Cloud authentication
+      when: pulumi_backend_type == 'cloud'
+      block:
+        # PULUMI_ACCESS_TOKENの確認
+        - name: Check for PULUMI_ACCESS_TOKEN in environment
+          ansible.builtin.set_fact:
+            pulumi_token_set: "{{ lookup('env', 'PULUMI_ACCESS_TOKEN') | length > 0 }}"
+            pulumi_access_token: "{{ lookup('env', 'PULUMI_ACCESS_TOKEN') }}"
+          no_log: true
 
-    # ログイン検証
-    - name: Verify Pulumi login successful
-      ansible.builtin.shell: |
-        export PULUMI_ACCESS_TOKEN="{{ pulumi_access_token }}"
-        sudo -E {{ pulumi_bin_path }} whoami
-      register: pulumi_verify_login
-      changed_when: false
-      no_log: true
+        - name: Fail if PULUMI_ACCESS_TOKEN is not set
+          ansible.builtin.fail:
+            msg: |
+              ERROR: PULUMI_ACCESS_TOKEN environment variable is not set.
+              Please set the PULUMI_ACCESS_TOKEN environment variable before running this playbook:
+              export PULUMI_ACCESS_TOKEN="pul-YOUR_ACCESS_TOKEN"
+          when: not pulumi_token_set
 
-    - name: Display Pulumi login status
-      ansible.builtin.debug:
-        msg: "Successfully authenticated to Pulumi as: {{ pulumi_verify_login.stdout }}"
-      when: ansible_verbosity > 0
+        # ログイン状態の確認
+        - name: Check current Pulumi Cloud login status
+          ansible.builtin.shell: |
+            export PULUMI_ACCESS_TOKEN="{{ pulumi_access_token }}"
+            sudo -E {{ pulumi_bin_path }} whoami
+          register: pulumi_login_check
+          changed_when: false
+          failed_when: false
+          no_log: true
 
-    # 環境変数をエクスポートする共通コマンドを定義
-    - name: Set Pulumi environment prefix
-      ansible.builtin.set_fact:
-        pulumi_env_prefix: >-
-          export PULUMI_ACCESS_TOKEN="{{ pulumi_access_token }}";
-          source {{ playbook_dir }}/../../scripts/aws-env.sh > /dev/null &&
-          eval $({{ playbook_dir }}/../../scripts/aws-env.sh) > /dev/null
+        # ログインが必要な場合のみログイン実行
+        - name: Login to Pulumi Cloud if not already logged in
+          ansible.builtin.shell: |
+            export PULUMI_ACCESS_TOKEN="{{ pulumi_access_token }}"
+            sudo -E {{ pulumi_bin_path }} login --cloud-url {{ pulumi_cloud_url }}
+          when: pulumi_login_check.rc != 0
+          register: pulumi_login_result
+          changed_when: pulumi_login_result.rc == 0
+          no_log: true
 
-    # sudoを使用したPulumiコマンドのプレフィックス
-    - name: Set Pulumi sudo command prefix
-      ansible.builtin.set_fact:
-        pulumi_sudo_cmd: "sudo -E {{ pulumi_bin_path }}"
+        # 環境変数をエクスポートする共通コマンドを定義
+        - name: Set Pulumi Cloud environment prefix
+          ansible.builtin.set_fact:
+            pulumi_env_prefix: >-
+              export PULUMI_ACCESS_TOKEN="{{ pulumi_access_token }}";
+              source {{ playbook_dir }}/../../scripts/aws-env.sh > /dev/null &&
+              eval $({{ playbook_dir }}/../../scripts/aws-env.sh) > /dev/null
+
+    # S3バックエンド認証の処理
+    - name: Handle S3 backend authentication
+      when: pulumi_backend_type == 's3'
+      block:
+        # PULUMI_CONFIG_PASSPHRASEの確認
+        - name: Check for PULUMI_CONFIG_PASSPHRASE in environment
+          ansible.builtin.set_fact:
+            pulumi_passphrase_set: "{{ lookup('env', 'PULUMI_CONFIG_PASSPHRASE') | length > 0 }}"
+            pulumi_config_passphrase: "{{ lookup('env', 'PULUMI_CONFIG_PASSPHRASE') }}"
+          no_log: true
+
+        - name: Fail if PULUMI_CONFIG_PASSPHRASE is not set
+          ansible.builtin.fail:
+            msg: |
+              ERROR: PULUMI_CONFIG_PASSPHRASE environment variable is not set.
+              S3 backend requires a passphrase for encryption.
+              Please set the PULUMI_CONFIG_PASSPHRASE environment variable:
+              export PULUMI_CONFIG_PASSPHRASE="your-secure-passphrase"
+          when: not pulumi_passphrase_set
+
+        # 環境変数をエクスポートする共通コマンドを定義（S3用）
+        # 注: S3バックエンドのURLはプロジェクトごとに異なるため、
+        # 実際のログインは各タスクで行う（init_stack.yml等で処理）
+        - name: Set S3 backend environment prefix
+          ansible.builtin.set_fact:
+            pulumi_env_prefix: >-
+              export PULUMI_CONFIG_PASSPHRASE="{{ pulumi_config_passphrase }}";
+              export AWS_REGION="{{ pulumi_s3_region }}";
+              export AWS_DEFAULT_REGION="{{ pulumi_s3_region }}";
+              source {{ playbook_dir }}/../../scripts/aws-env.sh > /dev/null &&
+              eval $({{ playbook_dir }}/../../scripts/aws-env.sh) > /dev/null
+
+    # 共通設定
+    - name: Set common Pulumi settings
+      block:
+        # sudoを使用したPulumiコマンドのプレフィックス
+        - name: Set Pulumi sudo command prefix
+          ansible.builtin.set_fact:
+            pulumi_sudo_cmd: "sudo -E {{ pulumi_bin_path }}"
+
+        # Pulumi Cloudの場合のみログイン検証
+        - name: Verify Pulumi Cloud login successful
+          when: pulumi_backend_type == 'cloud'
+          ansible.builtin.shell: |
+            export PULUMI_ACCESS_TOKEN="{{ pulumi_access_token }}"
+            {{ pulumi_sudo_cmd }} whoami
+          register: pulumi_verify_login
+          changed_when: false
+          failed_when: pulumi_verify_login.rc != 0
+          no_log: true
+
+        # verbosity > 1 の場合のみログイン状態を表示
+        - name: Display Pulumi login status
+          ansible.builtin.debug:
+            msg: |
+              Pulumi backend type: {{ pulumi_backend_type }}
+              {% if pulumi_backend_type == 'cloud' %}
+              Authenticated as: {{ pulumi_verify_login.stdout }}
+              {% else %}
+              S3 backend configured (login will be performed per project)
+              S3 bucket: {{ pulumi_s3_bucket }}
+              Region: {{ pulumi_s3_region }}
+              {% endif %}
+          when: ansible_verbosity > 1
+
+        # 認証完了フラグを設定（重複チェックを防ぐため）
+        - name: Mark authentication as complete
+          ansible.builtin.set_fact:
+            pulumi_authenticated: true
 
   rescue:
     - name: Handle authentication failure
       ansible.builtin.fail:
         msg: |
-          Failed to authenticate to Pulumi.
+          Failed to authenticate to Pulumi {{ pulumi_backend_type }} backend.
+          {% if pulumi_backend_type == 'cloud' %}
           Please ensure:
           1. PULUMI_ACCESS_TOKEN is correctly set
           2. The token is valid and not expired
           3. You have internet connectivity to reach Pulumi service
+          {% else %}
+          Please ensure:
+          1. PULUMI_CONFIG_PASSPHRASE is correctly set
+          2. AWS credentials are properly configured
+          3. S3 bucket '{{ pulumi_s3_bucket }}' exists and is accessible
+          4. AWS region is set to '{{ pulumi_s3_region }}'
+          {% endif %}
           
           Error details: {{ ansible_failed_result.msg | default('Unknown error') }}
 
@@ -91,10 +160,20 @@
       ansible.builtin.set_fact:
         pulumi_token_set: true
         pulumi_access_token: "mock-token-for-check-mode"
-        pulumi_env_prefix: "export PULUMI_ACCESS_TOKEN='mock-token-for-check-mode'"
+        pulumi_config_passphrase: "mock-passphrase-for-check-mode"
+        pulumi_env_prefix: >-
+          {% if pulumi_backend_type == 'cloud' %}
+          export PULUMI_ACCESS_TOKEN='mock-token-for-check-mode'
+          {% else %}
+          export PULUMI_CONFIG_PASSPHRASE='mock-passphrase-for-check-mode';
+          export AWS_REGION='{{ pulumi_s3_region }}';
+          export AWS_DEFAULT_REGION='{{ pulumi_s3_region }}'
+          {% endif %}
         pulumi_sudo_cmd: "sudo -E /root/.pulumi/bin/pulumi"
         pulumi_bin_path: "/root/.pulumi/bin/pulumi"
+        pulumi_authenticated: true
 
     - name: Display check mode notice
       ansible.builtin.debug:
-        msg: "Running in check mode - Pulumi authentication will be mocked"
+        msg: "Running in check mode - Pulumi {{ pulumi_backend_type }} authentication will be mocked"
+      when: ansible_verbosity > 1
