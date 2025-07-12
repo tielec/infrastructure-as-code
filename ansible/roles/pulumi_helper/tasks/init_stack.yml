@@ -59,8 +59,10 @@
         cd {{ pulumi_project_path }}
         {{ pulumi_env_prefix }}
         {% if pulumi_backend_type == 's3' %}
-        {{ pulumi_sudo_cmd }} stack init {{ resolved_stack_name }} --secrets-provider=passphrase
+        # S3バックエンドではシンプルなスタック名を使用
+        {{ pulumi_sudo_cmd }} stack init {{ stack_name }} --secrets-provider=passphrase
         {% else %}
+        # Pulumi Cloudでは解決済みの完全な名前を使用
         {{ pulumi_sudo_cmd }} stack init {{ resolved_stack_name }}
         {% endif %}
       register: stack_init_result

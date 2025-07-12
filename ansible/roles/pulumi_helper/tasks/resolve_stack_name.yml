@@ -18,38 +18,56 @@
     msg: "Resolving stack name: {{ stack_name }}"
   when: ansible_verbosity > 2
 
-- name: Read Pulumi.yaml configuration
-  ansible.builtin.slurp:
-    src: "{{ pulumi_project_path }}/Pulumi.yaml"
-  register: pulumi_yaml_content
-  when: not ansible_check_mode
+# S3バックエンドの場合はシンプルなスタック名を使用
+- name: Handle S3 backend stack name
+  when: pulumi_backend_type == 's3'
+  block:
+    - name: Set simple stack name for S3 backend
+      ansible.builtin.set_fact:
+        resolved_stack_name: "{{ stack_name }}"
+    
+    - name: Display S3 backend stack resolution
+      ansible.builtin.debug:
+        msg: "S3 backend uses simple stack names without organization"
+      when: ansible_verbosity > 1
 
-- name: Parse Pulumi configuration
-  ansible.builtin.set_fact:
-    pulumi_config: "{{ pulumi_yaml_content.content | b64decode | from_yaml }}"
-  when: not ansible_check_mode
+# Pulumi Cloudの場合は組織名を含む完全な名前を使用
+- name: Handle Pulumi Cloud stack name
+  when: pulumi_backend_type == 'cloud'
+  block:
+    - name: Read Pulumi.yaml configuration
+      ansible.builtin.slurp:
+        src: "{{ pulumi_project_path }}/Pulumi.yaml"
+      register: pulumi_yaml_content
+      when: not ansible_check_mode
 
-# デバッグ情報はverbosity > 2の場合のみ
-- name: Display parsed configuration
-  ansible.builtin.debug:
-    msg: |
-      Pulumi.yaml contents:
-      - Name: {{ pulumi_config.name | default('not set') }}
-      - Organization: {{ pulumi_config.organization | default('not set') }}
-  when: 
-    - not ansible_check_mode
-    - ansible_verbosity > 2
+    - name: Parse Pulumi configuration
+      ansible.builtin.set_fact:
+        pulumi_config: "{{ pulumi_yaml_content.content | b64decode | from_yaml }}"
+      when: not ansible_check_mode
 
-- name: Set resolved stack name
-  ansible.builtin.set_fact:
-    resolved_stack_name: >-
-      {%- if pulumi_config.organization is defined and pulumi_config.organization -%}
-        {{ pulumi_config.organization }}/{{ pulumi_config.name }}/{{ stack_name }}
-      {%- else -%}
-        {{ stack_name }}
-      {%- endif -%}
-  when: not ansible_check_mode
+    # デバッグ情報はverbosity > 2の場合のみ
+    - name: Display parsed configuration
+      ansible.builtin.debug:
+        msg: |
+          Pulumi.yaml contents:
+          - Name: {{ pulumi_config.name | default('not set') }}
+          - Organization: {{ pulumi_config.organization | default('not set') }}
+      when: 
+        - not ansible_check_mode
+        - ansible_verbosity > 2
 
+    - name: Set resolved stack name for Pulumi Cloud
+      ansible.builtin.set_fact:
+        resolved_stack_name: >-
+          {%- if pulumi_config.organization is defined and pulumi_config.organization -%}
+            {{ pulumi_config.organization }}/{{ pulumi_config.name }}/{{ stack_name }}
+          {%- else -%}
+            {{ stack_name }}
+          {%- endif -%}
+      when: not ansible_check_mode
+
+# チェックモード用
 - name: Set mock resolved stack name (check mode)
   ansible.builtin.set_fact:
     resolved_stack_name: "{{ stack_name }}"
@@ -58,5 +76,7 @@
 # 結果はverbosity > 1の場合のみ表示
 - name: Display resolution result
   ansible.builtin.debug:
-    msg: "Resolved stack name: {{ resolved_stack_name }}"
+    msg: |
+      Resolved stack name: {{ resolved_stack_name }}
+      Backend type: {{ pulumi_backend_type }}
   when: ansible_verbosity > 1
