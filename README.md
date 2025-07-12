@@ -294,7 +294,7 @@ infrastructure-as-code/
   - よくあるエラー：インターネット接続不可、IAMロール権限不足
 - **Pulumiデプロイエラー**: `pulumi logs`でエラー詳細を確認
 - **Ansibleエラー**: `-vvv`オプションを追加して詳細なログを確認（例: `ansible-playbook -vvv playbooks/jenkins_setup_pipeline.yml`）
-- **AWS認証エラー**: `source scripts/aws-credentials.sh`を実行して認証情報を更新
+- **AWS認証エラー**: `source scripts/aws/setup-aws-credentials.sh`を実行して認証情報を更新
 - **Pulumiログインエラー**: 環境変数`PULUMI_ACCESS_TOKEN`が正しく設定されているか確認
   ```bash
   # トークンが設定されているか確認
@@ -334,7 +334,7 @@ ansible-playbook playbooks/jenkins_setup_pipeline.yml -e "env=dev" --check
 - 本番環境では適切なセキュリティ設定を行ってください
 - AdministratorAccess権限は開発段階のみに使用し、本番環境では最小権限原則に従ってください
 - バックアップ戦略の実装を忘れずに行ってください
-- AWS認証情報は定期的に更新が必要です。セッションが切れた場合は`source scripts/aws-credentials.sh`を実行してください
+- AWS認証情報は定期的に更新が必要です。セッションが切れた場合は`source scripts/aws/setup-aws-credentials.sh`を実行してください
 - Pulumiアクセストークンは安全に管理してください。環境変数として設定する場合は、他のユーザーに見えないように注意してください
 - **削除操作は取り消せません**。本番環境での削除操作は特に注意して実行してください
 - Jenkinsバージョン更新前には必ずバックアップを取得してください

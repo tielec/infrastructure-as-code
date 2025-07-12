@@ -134,9 +134,9 @@ echo -e "${YELLOW}この環境変数が設定されていると、Ansible実行�
 
 # AWS認証情報の設定
 echo -e "\n${YELLOW}AWS認証情報を設定します...${NC}"
-if [ -f "$REPO_ROOT/scripts/aws-credentials.sh" ]; then
-  echo -e "${GREEN}scripts/aws-credentials.sh スクリプトが見つかりました。${NC}"
-  source "$REPO_ROOT/scripts/aws-credentials.sh"
+if [ -f "$REPO_ROOT/scripts/aws/setup-aws-credentials.sh" ]; then
+  echo -e "${GREEN}scripts/aws/setup-aws-credentials.sh スクリプトが見つかりました。${NC}"
+  source "$REPO_ROOT/scripts/aws/setup-aws-credentials.sh"
 else
   echo -e "${YELLOW}AWS認証情報スクリプトが見つかりません。${NC}"
   echo -e "EC2インスタンスのIAMロールを使用するため、設定は不要かもしれません。"
