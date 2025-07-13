@@ -14,6 +14,8 @@
     aws_credentials_script_path: "{{ playbook_dir }}/../scripts/aws/setup-aws-credentials.sh"
     java_version: "21"
     arch: "{{ ansible_architecture }}"
+    # ec2-userのローカルbinディレクトリを含むPATH
+    ansible_env_path: "/home/ec2-user/.local/bin:/usr/local/bin:/usr/bin:/bin"
   
   tasks:
     - name: Display start message
@@ -171,26 +173,31 @@
         msg: "Current Python version: {{ ansible_python_version }}"
     
     # Python パッケージの最新版インストール
-    - name: Upgrade pip
-      ansible.builtin.pip:
-        name: pip
+    - name: Install Python packages for AWS (system-wide)
+      ansible.builtin.dnf:
+        name:
+          - python3-boto3
+          - python3-botocore
+          - python3-jmespath
+          - python3-urllib3
+          - python3-cryptography
+          - python3-pyyaml
+          - python3-jsonschema
         state: latest
-        executable: pip3
       become: yes
-    
-    - name: Install latest Python packages for AWS
+      
+    # 追加のPythonパッケージ（pipで管理）
+    - name: Ensure pip packages are installed for ec2-user
       ansible.builtin.pip:
         name:
+          - ansible-core>=2.16.0
           - boto3
           - botocore
-          - jmespath
-          - urllib3
-          - cryptography
-          - PyYAML
-          - jsonschema
         state: latest
-        executable: pip3
-      become: yes
+        extra_args: --user
+      become: no
+      environment:
+        PATH: "/home/ec2-user/.local/bin:/usr/local/bin:/usr/bin:/bin"
     
     # Ansible Collectionsのインストール
     - name: Install Ansible Collections
@@ -284,19 +291,27 @@
         dest: "{{ user_home }}/verify-installation.sh"
         content: |
           #!/bin/bash
+          # Source the environment
+          source /etc/profile.d/bootstrap-env.sh
+          
           echo "=== System Information ==="
           echo "Architecture: $(uname -m)"
           echo "OS: $(cat /etc/os-release | grep PRETTY_NAME | cut -d= -f2 | tr -d '"')"
           echo ""
+          echo "=== PATH Environment ==="
+          echo "PATH: $PATH"
+          echo ""
           echo "=== Python Environment ==="
           echo "Python3: $(python3 --version 2>&1)"
           echo "Pip3: $(pip3 --version 2>&1)"
+          echo "User pip: $(python3 -m pip --version 2>&1)"
           echo ""
           echo "=== Installed Tools ==="
           echo "Node.js: $(node --version 2>/dev/null || echo 'Not installed')"
           echo "npm: $(npm --version 2>/dev/null || echo 'Not installed')"
           echo "AWS CLI: $(aws --version 2>/dev/null || echo 'Not installed')"
           echo "Ansible: $(ansible --version 2>/dev/null | head -n 1 || echo 'Not installed')"
+          echo "Ansible location: $(which ansible 2>/dev/null || echo 'Not in PATH')"
           echo "Ansible-core: $(python3 -m pip show ansible-core 2>/dev/null | grep Version || echo 'Not installed')"
           echo "Pulumi: $(pulumi version 2>/dev/null || echo 'Not installed')"
           echo "Git: $(git --version 2>/dev/null || echo 'Not installed')"
@@ -362,22 +377,26 @@
           
           === Quick Start ===
           
-          1. Verify installation:
+          1. Re-login or source the environment:
+             source ~/.bashrc
+             source /etc/profile.d/bootstrap-env.sh
+          
+          2. Verify installation:
              ./verify-installation.sh
           
-          2. Configure AWS credentials (if using IAM role, this is automatic):
+          3. Configure AWS credentials (if using IAM role, this is automatic):
              aws sts get-caller-identity
           
-          3. Configure Pulumi:
+          4. Configure Pulumi:
              export PULUMI_ACCESS_TOKEN='your-token'
              pulumi login
           
-          4. Set up Git SSH keys:
+          5. Set up Git SSH keys:
              ssh-keygen -t ed25519 -C "your_email@example.com"
              cat ~/.ssh/id_ed25519.pub
              # Add the public key to your GitHub account
           
-          5. Clone and deploy infrastructure:
+          6. Clone and deploy infrastructure:
              git clone git@github.com:your-org/your-repo.git
              cd your-repo/ansible
              ansible-playbook playbooks/jenkins_setup_pipeline.yml -e "env=dev"
@@ -395,6 +414,15 @@
           - All tools are installed with the latest stable versions
           - Docker is available for container-based builds
           - Python environment uses system Python 3.9+
+          - Ansible and some Python packages are installed in user space (~/.local/bin)
+          - Always source ~/.bashrc or re-login after initial setup for PATH updates
+          
+          === Amazon Linux 2023 Specific ===
+          
+          - System packages are managed by dnf
+          - Python packages from dnf are preferred over pip for system packages
+          - User-specific tools are installed with --user flag
+          - PATH includes ~/.local/bin for user-installed tools
           
           For issues or updates, check the project documentation.
         owner: ec2-user
@@ -402,14 +430,24 @@
         mode: '0644'
         
     # 環境変数の設定
-    - name: Create environment setup script
+    - name: Create environment setup script for all users
       ansible.builtin.copy:
         dest: "/etc/profile.d/bootstrap-env.sh"
         content: |
           # Bootstrap environment variables
           export ANSIBLE_COLLECTIONS_PATH=/usr/share/ansible/collections:~/.ansible/collections
           export JAVA_HOME=/usr/lib/jvm/java-{{ java_version }}-amazon-corretto
-          export PATH=$JAVA_HOME/bin:$PATH:/usr/local/bin
+          
+          # User-specific PATH additions
+          if [ -d "$HOME/.local/bin" ]; then
+            export PATH=$HOME/.local/bin:$PATH
+          fi
+          
+          if [ -d "$HOME/.pulumi/bin" ]; then
+            export PATH=$HOME/.pulumi/bin:$PATH
+          fi
+          
+          export PATH=$JAVA_HOME/bin:/usr/local/bin:$PATH
           
           # AWS region from instance metadata
           if [ -z "$AWS_DEFAULT_REGION" ]; then
