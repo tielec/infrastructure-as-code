@@ -23,6 +23,27 @@
 
 - name: Set parameter
   block:
+    # パラメータの存在確認
+    - name: Check if parameter exists
+      ansible.builtin.shell: |
+        aws ssm describe-parameters \
+          --parameter-filters "Key=Name,Values={{ parameter_name }}" \
+          --region {{ ssm_parameter_store_region }} \
+          --output json 2>&1
+      register: param_check
+      changed_when: false
+      failed_when: false
+
+    - name: Parse parameter check result
+      ansible.builtin.set_fact:
+        parameter_exists: "{{ (param_check.stdout | from_json).Parameters | default([]) | length > 0 }}"
+      when: param_check.rc == 0
+
+    - name: Set parameter not exists for failed check
+      ansible.builtin.set_fact:
+        parameter_exists: false
+      when: param_check.rc != 0
+
     # タグの準備
     - name: Prepare tags
       ansible.builtin.set_fact:
@@ -34,22 +55,99 @@
           {{ tag_items | join(' ') }}
       when: tags is defined
 
-    - name: Create or update parameter using AWS CLI
+    # パラメータ値を一時ファイルに保存（エスケープ問題を回避）
+    - name: Write parameter value to temp file
+      ansible.builtin.copy:
+        content: "{{ parameter_value }}"
+        dest: "/tmp/ssm_param_{{ parameter_name | hash('md5') }}.tmp"
+        mode: '0600'
+      no_log: "{{ parameter_type == 'SecureString' }}"
+
+    # 新規作成の場合（タグ付き）
+    - name: Create new parameter with tags
       ansible.builtin.shell: |
         aws ssm put-parameter \
           --name "{{ parameter_name }}" \
-          --value "{{ parameter_value }}" \
+          --value "file:///tmp/ssm_param_{{ parameter_name | hash('md5') }}.tmp" \
           --type "{{ parameter_type }}" \
           --region {{ ssm_parameter_store_region }} \
-          {% if overwrite | default(true) %}--overwrite{% endif %} \
           {% if description is defined %}--description "{{ description | default('Managed by Ansible') }}"{% endif %} \
           {% if parameter_type == 'SecureString' and kms_key_id is defined %}--key-id "{{ kms_key_id }}"{% endif %} \
           {% if tier is defined %}--tier "{{ tier }}"{% endif %} \
           {% if tags is defined and tag_list %}--tags {{ tag_list }}{% endif %} \
           --output json
-      register: set_result
+      register: create_result
       no_log: "{{ parameter_type == 'SecureString' }}"
       changed_when: true
+      when: 
+        - not parameter_exists | default(false)
+        - tags is defined
+
+    # 新規作成の場合（タグなし）
+    - name: Create new parameter without tags
+      ansible.builtin.shell: |
+        aws ssm put-parameter \
+          --name "{{ parameter_name }}" \
+          --value "file:///tmp/ssm_param_{{ parameter_name | hash('md5') }}.tmp" \
+          --type "{{ parameter_type }}" \
+          --region {{ ssm_parameter_store_region }} \
+          {% if description is defined %}--description "{{ description | default('Managed by Ansible') }}"{% endif %} \
+          {% if parameter_type == 'SecureString' and kms_key_id is defined %}--key-id "{{ kms_key_id }}"{% endif %} \
+          {% if tier is defined %}--tier "{{ tier }}"{% endif %} \
+          --output json
+      register: create_result
+      no_log: "{{ parameter_type == 'SecureString' }}"
+      changed_when: true
+      when: 
+        - not parameter_exists | default(false)
+        - tags is not defined
+
+    # 既存パラメータの更新（overwite使用、タグなし）
+    - name: Update existing parameter
+      ansible.builtin.shell: |
+        aws ssm put-parameter \
+          --name "{{ parameter_name }}" \
+          --value "file:///tmp/ssm_param_{{ parameter_name | hash('md5') }}.tmp" \
+          --type "{{ parameter_type }}" \
+          --region {{ ssm_parameter_store_region }} \
+          --overwrite \
+          {% if description is defined %}--description "{{ description | default('Managed by Ansible') }}"{% endif %} \
+          {% if parameter_type == 'SecureString' and kms_key_id is defined %}--key-id "{{ kms_key_id }}"{% endif %} \
+          {% if tier is defined %}--tier "{{ tier }}"{% endif %} \
+          --output json
+      register: update_result
+      no_log: "{{ parameter_type == 'SecureString' }}"
+      changed_when: true
+      when: 
+        - parameter_exists | default(false)
+        - overwrite | default(true)
+
+    # 一時ファイルのクリーンアップ
+    - name: Clean up temp file
+      ansible.builtin.file:
+        path: "/tmp/ssm_param_{{ parameter_name | hash('md5') }}.tmp"
+        state: absent
+      no_log: "{{ parameter_type == 'SecureString' }}"
+
+    # タグの個別更新（必要な場合）
+    - name: Update tags separately if needed
+      ansible.builtin.shell: |
+        aws ssm add-tags-to-resource \
+          --resource-type "Parameter" \
+          --resource-id "{{ parameter_name }}" \
+          --tags {{ tag_list }} \
+          --region {{ ssm_parameter_store_region }}
+      when:
+        - parameter_exists | default(false)
+        - tags is defined
+        - tag_list | length > 0
+      register: tag_update_result
+      changed_when: true
+
+    # 結果の統合
+    - name: Set operation result
+      ansible.builtin.set_fact:
+        set_result: "{{ create_result if not parameter_exists | default(false) else update_result }}"
 
     - name: Parse set result
       ansible.builtin.set_fact:
@@ -94,7 +192,8 @@
     msg: |
       Parameter: {{ parameter_name }}
       Type: {{ parameter_type }}
-      Operation: {{ 'Success' if ssm_operation_success else 'Failed' }}
+      Operation: {{ 'Created' if not parameter_exists | default(false) else 'Updated' }}
+      Success: {{ ssm_operation_success }}
       Version: {{ ssm_parameter_version | default('Unknown') }}
       {% if not ssm_operation_success %}
       Error: {{ ssm_operation_error }}
