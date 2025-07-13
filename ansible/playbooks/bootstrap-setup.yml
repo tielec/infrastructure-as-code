@@ -113,8 +113,6 @@
         - name: Add NodeSource repository
           ansible.builtin.shell: |
             curl -fsSL https://rpm.nodesource.com/setup_{{ nodejs_version }}.x | sudo bash -
-          args:
-            warn: false
             
         - name: Install Node.js
           ansible.builtin.dnf:
@@ -132,11 +130,10 @@
     - name: Install Java {{ java_version }} (Amazon Corretto)
       when: java_check.rc != 0
       block:
-        - name: Install Amazon Corretto repository
+        - name: Install Amazon Corretto {{ java_version }}
           ansible.builtin.dnf:
-            name: "https://corretto.aws/downloads/resources/{{ java_version }}.0.1.12.1/java-{{ java_version }}-amazon-corretto-devel-{{ java_version }}.0.1.12.1-1.{{ 'aarch64' if arch == 'aarch64' else 'x86_64' }}.rpm"
+            name: "java-{{ java_version }}-amazon-corretto-devel"
             state: present
-            disable_gpg_check: yes
           become: yes
             
         - name: Set JAVA_HOME environment variable
@@ -163,10 +160,14 @@
             curl -fsSL https://get.pulumi.com | sh -s -- --version latest
           environment:
             PULUMI_INSTALL_ARCH: "{{ 'arm64' if arch == 'aarch64' else 'amd64' }}"
+            HOME: "/home/ec2-user"
+          become: no
             
-        - name: Move Pulumi to system path
-          ansible.builtin.shell: |
-            sudo mv $HOME/.pulumi/bin/* /usr/local/bin/
+        - name: Create Pulumi symlink in system path
+          ansible.builtin.file:
+            src: "/home/ec2-user/.pulumi/bin/pulumi"
+            dest: "/usr/local/bin/pulumi"
+            state: link
           become: yes
           
         - name: Verify Pulumi installation
@@ -244,13 +245,14 @@
           become: yes
         
         - name: Install Ansible collections
-          ansible.builtin.command: |
+          ansible.builtin.shell: |
             ansible-galaxy collection install -r /etc/ansible/collections/requirements.yml -p /usr/share/ansible/collections --force
           environment:
             ANSIBLE_COLLECTIONS_PATH: "/usr/share/ansible/collections"
           become: yes
           register: collection_install
           changed_when: "'Installing' in collection_install.stdout"
+          ignore_errors: yes
         
         - name: Set Ansible collections path in profile
           ansible.builtin.lineinfile:
