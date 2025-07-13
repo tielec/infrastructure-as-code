@@ -23,29 +23,50 @@
 
 - name: Set parameter
   block:
-    - name: Create or update parameter
-      community.aws.ssm_parameter:
-        name: "{{ parameter_name }}"
-        value: "{{ parameter_value }}"
-        string_type: "{{ parameter_type }}"
-        region: "{{ ssm_parameter_store_region }}"
-        overwrite_value: "{{ 'always' if (overwrite | default(true)) else 'never' }}"
-        description: "{{ description | default('Managed by Ansible') }}"
-        key_id: "{{ kms_key_id | default(omit) if parameter_type != 'SecureString' else kms_key_id | default(ssm_parameter_store_kms_key_id) }}"
-        tier: "{{ tier | default('Standard') }}"
-        tags: "{{ tags | default({}) }}"
-        state: present
+    # タグの準備
+    - name: Prepare tags
+      ansible.builtin.set_fact:
+        tag_list: >-
+          {%- set tag_items = [] -%}
+          {%- for key, value in (tags | default({})).items() -%}
+            {%- set _ = tag_items.append('Key=' + key + ',Value=' + value) -%}
+          {%- endfor -%}
+          {{ tag_items | join(' ') }}
+      when: tags is defined
+
+    - name: Create or update parameter using AWS CLI
+      ansible.builtin.shell: |
+        aws ssm put-parameter \
+          --name "{{ parameter_name }}" \
+          --value "{{ parameter_value }}" \
+          --type "{{ parameter_type }}" \
+          --region {{ ssm_parameter_store_region }} \
+          {% if overwrite | default(true) %}--overwrite{% endif %} \
+          {% if description is defined %}--description "{{ description | default('Managed by Ansible') }}"{% endif %} \
+          {% if parameter_type == 'SecureString' and kms_key_id is defined %}--key-id "{{ kms_key_id }}"{% endif %} \
+          {% if tier is defined %}--tier "{{ tier }}"{% endif %} \
+          {% if tags is defined and tag_list %}--tags {{ tag_list }}{% endif %} \
+          --output json
       register: set_result
       no_log: "{{ parameter_type == 'SecureString' }}"
+      changed_when: true
+
+    - name: Parse set result
+      ansible.builtin.set_fact:
+        set_response: "{{ set_result.stdout | from_json if set_result.stdout else {} }}"
+      when: set_result.rc == 0
 
     - name: Set success status
       ansible.builtin.set_fact:
         ssm_operation_success: true
-        ssm_parameter_version: "{{ set_result.version | default(1) }}"
+        ssm_parameter_version: "{{ set_response.Version | default(1) }}"
+      when: set_result.rc == 0
 
     # キャッシュの更新
     - name: Update cache
-      when: ssm_parameter_store_cache.enabled | bool
+      when: 
+        - ssm_parameter_store_cache.enabled | bool
+        - set_result.rc == 0
       ansible.builtin.set_fact:
         ssm_parameter_cache: >-
           {{
@@ -64,7 +85,7 @@
   rescue:
     - name: Handle set failure
       ansible.builtin.set_fact:
-        ssm_operation_error: "{{ ansible_failed_result.msg | default('Failed to set parameter') }}"
+        ssm_operation_error: "{{ set_result.stderr | default(set_result.stdout | default('Failed to set parameter')) }}"
         ssm_operation_success: false
 
 # デバッグ出力
@@ -73,9 +94,9 @@
     msg: |
       Parameter: {{ parameter_name }}
       Type: {{ parameter_type }}
-      Operation: {{ 'Created' if set_result.changed else 'Updated' }}
+      Operation: {{ 'Success' if ssm_operation_success else 'Failed' }}
       Version: {{ ssm_parameter_version | default('Unknown') }}
-      Success: {{ ssm_operation_success }}
-  when: 
-    - ssm_parameter_store_verbose
-    - ssm_operation_success
+      {% if not ssm_operation_success %}
+      Error: {{ ssm_operation_error }}
+      {% endif %}
+  when: ssm_parameter_store_verbose

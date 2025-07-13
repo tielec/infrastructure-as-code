@@ -13,46 +13,35 @@
 
 - name: Get parameters by path
   block:
-    # パラメータ情報を取得
-    - name: Get parameter information by path
-      community.aws.ssm_parameter_info:
-        path: "{{ normalized_path }}"
-        recursive: "{{ recursive | default(true) }}"
-        region: "{{ ssm_parameter_store_region }}"
-      register: parameters_info
+    - name: Retrieve parameters using AWS CLI
+      ansible.builtin.shell: |
+        aws ssm get-parameters-by-path \
+          --path "{{ normalized_path }}" \
+          {% if recursive | default(true) %}--recursive{% endif %} \
+          {% if decrypt | default(true) %}--with-decryption{% endif %} \
+          --region {{ ssm_parameter_store_region }} \
+          --output json
+      register: parameters_result
+      changed_when: false
+      no_log: "{{ not ssm_parameter_store_debug }}"
+      retries: "{{ ssm_parameter_store_retry_count }}"
+      delay: "{{ ssm_parameter_store_retry_delay }}"
+      until: parameters_result.rc == 0
 
-    # 初期化
-    - name: Initialize results
+    - name: Parse parameters
       ansible.builtin.set_fact:
-        ssm_parameters: {}
-        ssm_parameter_metadata: {}
-
-    # 各パラメータの値を取得
-    - name: Get parameter values
-      community.aws.ssm_parameter_info:
-        name: "{{ item.name }}"
-        region: "{{ ssm_parameter_store_region }}"
-        with_decryption: "{{ decrypt | default(true) }}"
-      register: param_values
-      loop: "{{ parameters_info.parameters }}"
-      when: parameters_info.parameters | length > 0
+        raw_parameters: "{{ parameters_result.stdout | from_json }}"
       no_log: true
 
-    # 結果を処理
-    - name: Process parameter values
+    - name: Process parameters
       ansible.builtin.set_fact:
         ssm_parameters: >-
           {{
             ssm_parameters | combine({
-              item.item.name: item.parameters[0].value
+              item.Name: item.Value
             })
           }}
-      loop: "{{ param_values.results }}"
-      when: 
-        - param_values.results is defined
-        - item is not failed
-        - item.parameters is defined
-        - item.parameters | length > 0
+      loop: "{{ raw_parameters.Parameters | default([]) }}"
       no_log: true
 
     # メタデータの収集
@@ -61,29 +50,32 @@
         ssm_parameter_metadata: >-
           {{
             ssm_parameter_metadata | combine({
-              item.name: {
-                'type': item.type | default('String'),
-                'version': item.version | default(1),
-                'last_modified': item.last_modified_date | default(''),
-                'is_secure': item.type == 'SecureString' or 
+              item.Name: {
+                'type': item.Type,
+                'version': item.Version,
+                'last_modified': item.LastModifiedDate | default(''),
+                'arn': item.ARN | default(''),
+                'is_secure': item.Type == 'SecureString' or 
                   (ssm_parameter_store_auto_secure and 
-                   item.name | lower | regex_search('(' + ssm_parameter_store_all_secure_keywords | join('|') + ')') is not none)
+                   item.Name | lower | regex_search('(' + ssm_parameter_store_all_secure_keywords | join('|') + ')') is not none)
               }
             })
           }}
-      loop: "{{ parameters_info.parameters }}"
-      when: parameters_info.parameters | length > 0
+      loop: "{{ raw_parameters.Parameters | default([]) }}"
+      no_log: true
 
     - name: Set success status
       ansible.builtin.set_fact:
         ssm_operation_success: true
-        ssm_parameter_count: "{{ ssm_parameters | length }}"
+        ssm_parameter_count: "{{ raw_parameters.Parameters | length }}"
 
   rescue:
     - name: Handle errors
       ansible.builtin.set_fact:
-        ssm_operation_error: "{{ ansible_failed_result.msg | default('Failed to retrieve parameters') }}"
+        ssm_operation_error: "{{ parameters_result.stderr | default(parameters_result.stdout | default('Failed to retrieve parameters')) }}"
         ssm_operation_success: false
+        ssm_parameters: {}
+        ssm_parameter_count: 0
 
 # デバッグ出力
 - name: Display summary
@@ -105,4 +97,4 @@
   when: 
     - ssm_parameter_store_verbose
     - ssm_operation_success
-    - ssm_parameter_metadata | length > 0
+    - ssm_parameter_metadata is defined

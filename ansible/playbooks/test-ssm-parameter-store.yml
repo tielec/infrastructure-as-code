@@ -163,6 +163,7 @@
               ansible.builtin.assert:
                 that:
                   - ssm_operation_success
+                  - retrieved_password is defined
                   - retrieved_password == test_values.database_password
                 fail_msg: "Secure parameter retrieval failed"
             

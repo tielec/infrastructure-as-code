@@ -3,83 +3,90 @@
 
 - name: Get batch of parameters
   block:
-    # 個別にパラメータを取得（community.awsモジュールはバッチ取得をサポートしていないため）
-    - name: Initialize batch results
+    # パラメータ名のリストを文字列に変換
+    - name: Prepare parameter names for AWS CLI
       ansible.builtin.set_fact:
-        batch_parameters: {}
-        batch_metadata: {}
-        batch_failed: []
+        names_string: "{{ parameter_batch | join(' ') }}"
 
-    - name: Get each parameter in batch
-      community.aws.ssm_parameter_info:
-        name: "{{ param }}"
-        region: "{{ ssm_parameter_store_region }}"
-        with_decryption: "{{ decrypt | default(true) }}"
-      register: param_result
-      loop: "{{ parameter_batch }}"
-      loop_control:
-        loop_var: param
-      ignore_errors: true
+    - name: Retrieve parameters batch using AWS CLI
+      ansible.builtin.shell: |
+        aws ssm get-parameters \
+          --names {{ names_string }} \
+          --region {{ ssm_parameter_store_region }} \
+          {% if decrypt | default(true) %}--with-decryption{% endif %} \
+          --output json
+      register: batch_result
+      no_log: true
+      changed_when: false
+      retries: "{{ ssm_parameter_store_retry_count }}"
+      delay: "{{ ssm_parameter_store_retry_delay }}"
+      until: batch_result.rc == 0
+
+    - name: Parse batch results
+      ansible.builtin.set_fact:
+        batch_data: "{{ batch_result.stdout | from_json }}"
       no_log: true
 
     - name: Process successful parameters
       ansible.builtin.set_fact:
-        batch_parameters: >-
+        ssm_parameters: >-
           {{
-            batch_parameters | combine({
-              item.param: item.parameters[0].value
+            ssm_parameters | combine({
+              item.Name: item.Value
             })
           }}
-        batch_metadata: >-
+      loop: "{{ batch_data.Parameters | default([]) }}"
+      no_log: true
+
+    - name: Process batch metadata
+      ansible.builtin.set_fact:
+        ssm_parameter_metadata: >-
           {{
-            batch_metadata | combine({
-              item.param: {
-                'type': item.parameters[0].type | default('String'),
-                'version': item.parameters[0].version | default(1),
-                'last_modified': item.parameters[0].last_modified_date | default('')
+            ssm_parameter_metadata | combine({
+              item.Name: {
+                'type': item.Type,
+                'version': item.Version,
+                'last_modified': item.LastModifiedDate | default(''),
+                'arn': item.ARN | default('')
               }
             })
           }}
-      loop: "{{ param_result.results }}"
-      when: 
-        - item is not failed
-        - item.parameters is defined
-        - item.parameters | length > 0
+      loop: "{{ batch_data.Parameters | default([]) }}"
       no_log: true
 
-    - name: Track failed parameters
+    # 無効なパラメータの記録
+    - name: Track invalid parameters
       ansible.builtin.set_fact:
-        batch_failed: >-
-          {{
-            batch_failed + [item.param]
-          }}
-      loop: "{{ param_result.results }}"
-      when: item is failed
-
-    - name: Update main results
-      ansible.builtin.set_fact:
-        ssm_parameters: >-
-          {{
-            ssm_parameters | combine(batch_parameters)
-          }}
-        ssm_parameter_metadata: >-
-          {{
-            ssm_parameter_metadata | combine(batch_metadata)
-          }}
         failed_parameters: >-
           {{
-            failed_parameters + batch_failed
+            failed_parameters + batch_data.InvalidParameters | default([])
           }}
+      when: batch_data.InvalidParameters is defined and batch_data.InvalidParameters | length > 0
 
   rescue:
     - name: Handle batch failure
       ansible.builtin.debug:
-        msg: "Failed to retrieve batch {{ batch_index }}: {{ ansible_failed_result.msg | default('Unknown error') }}"
+        msg: "Failed to retrieve batch {{ batch_index }}: {{ batch_result.stderr | default(batch_result.stdout | default('Unknown error')) }}"
       when: ssm_parameter_store_debug
 
-    - name: Add all parameters to failed list
+    # 個別にリトライ
+    - name: Try parameters individually
+      ansible.builtin.include_tasks: get_parameter.yml
+      vars:
+        parameter_name: "{{ param }}"
+        store_as: "_temp_param_{{ param | hash('md5') }}"
+      loop: "{{ parameter_batch }}"
+      loop_control:
+        loop_var: param
+      ignore_errors: true
+
+    - name: Track failed parameters from individual attempts
       ansible.builtin.set_fact:
         failed_parameters: >-
           {{
-            failed_parameters + parameter_batch
+            failed_parameters + [param]
           }}
+      when: not ssm_operation_success
+      loop: "{{ parameter_batch }}"
+      loop_control:
+        loop_var: param

@@ -43,19 +43,18 @@
       when: item.pattern is defined
 
     - name: Validate JSON parameters
-      ansible.builtin.set_fact:
-        validation_result: >-
-          {%- try -%}
-            {{ ssm_parameters[item.name] | from_json }}
-            true
-          {%- except -%}
-            false
-          {%- endtry -%}
-      loop: "{{ parameter_schemas }}"
-      when: 
-        - item.type is defined
-        - item.type == 'json'
-      failed_when: not validation_result
+      block:
+        - name: Try to parse as JSON
+          ansible.builtin.set_fact:
+            _temp_json_value: "{{ ssm_parameters[item.name] | from_json }}"
+          failed_when: false
+          register: json_parse_result
+        
+        - name: Check JSON parse result
+          ansible.builtin.fail:
+            msg: "Parameter '{{ item.name }}' is not valid JSON"
+          when: json_parse_result is failed
+      loop: "{{ parameter_schemas | selectattr('type', 'defined') | selectattr('type', 'equalto', 'json') | list }}"
 
 # 値の範囲チェック
 - name: Validate parameter value ranges
