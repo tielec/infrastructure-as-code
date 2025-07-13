@@ -290,7 +290,7 @@ Resources:
             # Ansible と必要なPythonパッケージのインストール
             # Amazon Linux 2023では、システムのpipを直接アップグレードしない
             python3 -m pip install --user --upgrade pip
-            export PATH=$HOME/.local/bin:$PATH
+            export PATH="$HOME/.local/bin:$PATH"
             
             # Ansibleと必要なパッケージをユーザー環境にインストール
             python3 -m pip install --user ansible boto3 botocore
@@ -332,6 +332,7 @@ Resources:
             
             1. Repository already cloned: ~/infrastructure-as-code
             2. Run: ./infrastructure-as-code/bootstrap/setup-bootstrap.sh
+            3. Verify: ./infrastructure-as-code/bootstrap/verify-installation.sh
             
             Pulumi Backend: s3://${PulumiStateBucket}
             
