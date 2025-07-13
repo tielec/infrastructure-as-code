@@ -29,18 +29,19 @@
         value: "{{ parameter_value }}"
         string_type: "{{ parameter_type }}"
         region: "{{ ssm_parameter_store_region }}"
-        overwrite_value: "{{ overwrite | default(true) }}"
+        overwrite_value: "{{ 'always' if (overwrite | default(true)) else 'never' }}"
         description: "{{ description | default('Managed by Ansible') }}"
         key_id: "{{ kms_key_id | default(omit) if parameter_type != 'SecureString' else kms_key_id | default(ssm_parameter_store_kms_key_id) }}"
         tier: "{{ tier | default('Standard') }}"
         tags: "{{ tags | default({}) }}"
+        state: present
       register: set_result
       no_log: "{{ parameter_type == 'SecureString' }}"
 
     - name: Set success status
       ansible.builtin.set_fact:
         ssm_operation_success: true
-        ssm_parameter_version: "{{ set_result.parameter_metadata.version | default(1) }}"
+        ssm_parameter_version: "{{ set_result.version | default(1) }}"
 
     # キャッシュの更新
     - name: Update cache

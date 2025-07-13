@@ -29,10 +29,10 @@
 
     # 各パラメータの値を取得
     - name: Get parameter values
-      community.aws.ssm_parameter:
+      community.aws.ssm_parameter_info:
         name: "{{ item.name }}"
         region: "{{ ssm_parameter_store_region }}"
-        decryption: "{{ decrypt | default(true) }}"
+        with_decryption: "{{ decrypt | default(true) }}"
       register: param_values
       loop: "{{ parameters_info.parameters }}"
       when: parameters_info.parameters | length > 0
@@ -44,13 +44,15 @@
         ssm_parameters: >-
           {{
             ssm_parameters | combine({
-              item.item.name: item.parameter_value
+              item.item.name: item.parameters[0].value
             })
           }}
       loop: "{{ param_values.results }}"
       when: 
         - param_values.results is defined
         - item is not failed
+        - item.parameters is defined
+        - item.parameters | length > 0
       no_log: true
 
     # メタデータの収集

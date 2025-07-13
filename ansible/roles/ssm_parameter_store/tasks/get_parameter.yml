@@ -43,25 +43,30 @@
 - name: Get parameter from SSM
   when: not (cache_hit | default(false))
   block:
-    - name: Retrieve parameter
-      community.aws.ssm_parameter:
+    - name: Retrieve parameter info
+      community.aws.ssm_parameter_info:
         name: "{{ parameter_name }}"
         region: "{{ ssm_parameter_store_region }}"
-        decryption: "{{ decrypt | default(true) }}"
-      register: parameter_result
+        with_decryption: "{{ decrypt | default(true) }}"
+      register: parameter_info
       no_log: "{{ is_secure }}"
       retries: "{{ ssm_parameter_store_retry_count }}"
       delay: "{{ ssm_parameter_store_retry_delay }}"
-      until: parameter_result is succeeded
+      until: parameter_info is succeeded
+
+    - name: Check if parameter exists
+      ansible.builtin.fail:
+        msg: "Parameter not found"
+      when: parameter_info.parameters | length == 0
 
     - name: Extract parameter value
       ansible.builtin.set_fact:
-        ssm_parameter_value: "{{ parameter_result.parameter_value }}"
+        ssm_parameter_value: "{{ parameter_info.parameters[0].value }}"
         ssm_parameter_metadata:
           name: "{{ parameter_name }}"
-          type: "{{ parameter_result.parameter_metadata.type | default('String') }}"
-          version: "{{ parameter_result.parameter_metadata.version | default(1) }}"
-          last_modified: "{{ parameter_result.parameter_metadata.last_modified_date | default('') }}"
+          type: "{{ parameter_info.parameters[0].type | default('String') }}"
+          version: "{{ parameter_info.parameters[0].version | default(1) }}"
+          last_modified: "{{ parameter_info.parameters[0].last_modified_date | default('') }}"
       no_log: "{{ is_secure }}"
 
     # JSONパラメータの自動パース
@@ -94,7 +99,7 @@
       when: >-
         'ParameterNotFound' in (ansible_failed_result.msg | default('')) or 
         'does not exist' in (ansible_failed_result.msg | default('')) or
-        (parameter_result is defined and 'parameter_value' not in parameter_result)
+        'Parameter not found' in (ansible_failed_result.msg | default(''))
       block:
         - name: Use default value if provided
           ansible.builtin.set_fact:
