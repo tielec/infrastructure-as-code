@@ -258,13 +258,24 @@
         
         - name: Install Ansible collections
           ansible.builtin.shell: |
+            export PATH=/home/ec2-user/.local/bin:$PATH
             ansible-galaxy collection install -r /etc/ansible/collections/requirements.yml -p /usr/share/ansible/collections --force
           environment:
             ANSIBLE_COLLECTIONS_PATH: "/usr/share/ansible/collections"
+            PATH: "/home/ec2-user/.local/bin:/usr/local/bin:/usr/bin:/bin"
           become: yes
           register: collection_install
           changed_when: "'Installing' in collection_install.stdout"
           ignore_errors: yes
+          
+        - name: Alternative - Install collections as ec2-user
+          ansible.builtin.shell: |
+            ansible-galaxy collection install amazon.aws community.aws community.general ansible.posix community.docker --force
+          environment:
+            ANSIBLE_COLLECTIONS_PATH: "/home/ec2-user/.ansible/collections"
+          become: no
+          register: user_collection_install
+          when: collection_install.failed | default(false)
         
         - name: Set Ansible collections path in profile
           ansible.builtin.lineinfile:
@@ -497,3 +508,10 @@
           Run './verify-installation.sh' to check the installation.
           
           AWS integration is ready with the latest boto3 and Ansible AWS collections.
+          
+          {% if collection_install is defined and collection_install.failed %}
+          ⚠️  Note: Ansible collections installation failed during setup.
+          Please run the following command manually:
+          
+          ansible-galaxy collection install amazon.aws community.aws community.general ansible.posix community.docker
+          {% endif %}
