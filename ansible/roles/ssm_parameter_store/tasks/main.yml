@@ -28,29 +28,8 @@
     ssm_parameter_store_all_secure_keywords: >-
       {{
         ssm_parameter_store_secure_keywords +
-        ssm_parameter_store_additional_secure_keywords
+        ssm_parameter_store_additional_secure_keywords | default([])
       }}
-
-# ヘルパー関数の定義
-- name: Define helper functions
-  ansible.builtin.set_fact:
-    # パラメータ名がセキュアかどうかを判定
-    ssm_is_secure_parameter: |
-      {%- set param_lower = parameter_name | lower -%}
-      {%- for keyword in ssm_parameter_store_all_secure_keywords -%}
-        {%- if keyword in param_lower -%}
-          true
-        {%- endif -%}
-      {%- endfor -%}
-      false
-    
-    # 値をマスクする関数
-    ssm_mask_value: |
-      {%- if ssm_parameter_store_mask_partial and value | length > 3 -%}
-        {{ value[:3] }}{{ ssm_parameter_store_mask_value[3:] }}
-      {%- else -%}
-        {{ ssm_parameter_store_mask_value }}
-      {%- endif -%}
 
 # 結果変数の初期化
 - name: Initialize result variables
