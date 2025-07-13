@@ -44,10 +44,21 @@
           - tar
           - unzip
           - which
-          - curl
+          # curl-minimalがデフォルトでインストールされているため、curlは除外
           - wget
         state: present
       become: yes
+      
+    # curlがインストールされているか確認（curl-minimalでも可）
+    - name: Check curl availability
+      ansible.builtin.command: curl --version
+      register: curl_check
+      changed_when: false
+      failed_when: false
+      
+    - name: Display curl status
+      ansible.builtin.debug:
+        msg: "Curl status: {{ 'Available' if curl_check.rc == 0 else 'Not available' }}"
         
     # AWS CLI v2のインストール (ARM64対応)
     - name: Check if AWS CLI v2 is installed
@@ -284,6 +295,7 @@
             groups: docker
             append: yes
           become: yes
+      ignore_errors: yes  # Dockerのインストールが失敗してもセットアップを続行
     
     # インストール検証スクリプトの作成
     - name: Create installation verification script
