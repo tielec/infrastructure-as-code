@@ -142,16 +142,38 @@ echo
 # Ansible Collections
 echo -e "${YELLOW}=== Ansible Collections ===${NC}"
 if command -v ansible-galaxy &> /dev/null; then
-    collections=$(ansible-galaxy collection list 2>/dev/null | grep -E "(amazon\.aws|community\.aws|community\.general|ansible\.posix|community\.docker)" || true)
+    # 環境変数を設定
+    export ANSIBLE_COLLECTIONS_PATH="/usr/share/ansible/collections"
     
-    if [ -n "$collections" ]; then
-        echo "$collections" | while read line; do
-            echo -e "${GREEN}${CHECK_MARK}${NC} $line"
-        done
-    else
-        echo -e "${YELLOW}!${NC} No AWS/required collections found"
-        echo -e "${YELLOW}  Run: ansible-galaxy collection install amazon.aws community.aws community.general ansible.posix${NC}"
+    # 重複チェック
+    user_collections=false
+    if [ -d "$HOME/.local/lib/python3.9/site-packages/ansible_collections" ]; then
+        user_collections=true
+        echo -e "${YELLOW}⚠️  警告: ユーザー空間にもCollectionsが見つかりました${NC}"
+        echo -e "${YELLOW}   場所: ~/.local/lib/python3.9/site-packages/ansible_collections${NC}"
+        echo -e "${YELLOW}   推奨: cleanup-ansible-collections.shを実行してクリーンアップ${NC}"
+        echo
     fi
+    
+    # 必要なコレクションのリスト
+    required_collections=(
+        "amazon.aws"
+        "community.aws" 
+        "community.general"
+        "ansible.posix"
+        "community.docker"
+    )
+    
+    echo -e "${BLUE}Collections Path: $ANSIBLE_COLLECTIONS_PATH${NC}"
+    
+    for collection in "${required_collections[@]}"; do
+        if ansible-galaxy collection list 2>/dev/null | grep -q "^$collection"; then
+            version=$(ansible-galaxy collection list 2>/dev/null | grep "^$collection" | awk '{print $2}')
+            echo -e "${GREEN}${CHECK_MARK}${NC} $collection: $version"
+        else
+            echo -e "${RED}${CROSS_MARK}${NC} $collection: Not installed"
+        fi
+    done
 else
     echo -e "${RED}${CROSS_MARK}${NC} ansible-galaxy command not found"
 fi

@@ -259,7 +259,8 @@
         - name: Install Ansible collections
           ansible.builtin.shell: |
             export PATH=/home/ec2-user/.local/bin:$PATH
-            ansible-galaxy collection install -r /etc/ansible/collections/requirements.yml -p /usr/share/ansible/collections --force
+            # ユーザーがインストール済みのansible-galaxyを使用してシステム全体にインストール
+            sudo -E $(which ansible-galaxy) collection install -r /etc/ansible/collections/requirements.yml -p /usr/share/ansible/collections --force
           environment:
             ANSIBLE_COLLECTIONS_PATH: "/usr/share/ansible/collections"
             PATH: "/home/ec2-user/.local/bin:/usr/local/bin:/usr/bin:/bin"
@@ -268,19 +269,20 @@
           changed_when: "'Installing' in collection_install.stdout"
           ignore_errors: yes
           
-        - name: Alternative - Install collections as ec2-user
+        - name: Alternative - Install collections as ec2-user to system location
           ansible.builtin.shell: |
-            ansible-galaxy collection install amazon.aws community.aws community.general ansible.posix community.docker --force
-          environment:
-            ANSIBLE_COLLECTIONS_PATH: "/home/ec2-user/.ansible/collections"
-          become: no
-          register: user_collection_install
-          when: collection_install.failed | default(false)
+            export PATH=/home/ec2-user/.local/bin:$PATH
+            export ANSIBLE_COLLECTIONS_PATH=/usr/share/ansible/collections
+            # 個別にインストール（権限の問題を回避）
+            for collection in amazon.aws community.aws community.general ansible.posix community.docker; do
+              echo "Installing $collection..."
+              sudo -E $(which ansible-galaxy) collection install $collection --force -p /usr/share/ansible/collections
+            done
         
         - name: Set Ansible collections path in profile
           ansible.builtin.lineinfile:
             path: "/etc/profile.d/ansible.sh"
-            line: "export ANSIBLE_COLLECTIONS_PATH=/usr/share/ansible/collections:~/.ansible/collections"
+            line: "export ANSIBLE_COLLECTIONS_PATH=/usr/share/ansible/collections"
             create: yes
             mode: '0644'
           become: yes
@@ -377,11 +379,11 @@
           - urllib3, cryptography, PyYAML, jsonschema
           
           Ansible Collections (latest versions):
-          - amazon.aws (7.0+)
-          - community.aws (7.0+)
-          - community.general (8.0+)
-          - ansible.posix (1.5+)
-          - community.docker (3.4+)
+          - amazon.aws (10.0+)
+          - community.aws (10.0+)
+          - community.general (11.0+)
+          - ansible.posix (2.0+)
+          - community.docker (4.0+)
           
           === Quick Start ===
           
@@ -428,6 +430,7 @@
           - Docker is available for container-based builds
           - Python environment uses system Python 3.9+
           - Ansible and some Python packages are installed in user space (~/.local/bin)
+          - Ansible Collections are installed system-wide (/usr/share/ansible/collections)
           - Always source ~/.bashrc or re-login after initial setup for PATH updates
           
           === Amazon Linux 2023 Specific ===
@@ -436,6 +439,7 @@
           - Python packages from dnf are preferred over pip for system packages
           - User-specific tools are installed with --user flag
           - PATH includes ~/.local/bin for user-installed tools
+          - ANSIBLE_COLLECTIONS_PATH is set to /usr/share/ansible/collections
           
           For issues or updates, check the project documentation.
         owner: ec2-user
@@ -448,7 +452,7 @@
         dest: "/etc/profile.d/bootstrap-env.sh"
         content: |
           # Bootstrap environment variables
-          export ANSIBLE_COLLECTIONS_PATH=/usr/share/ansible/collections:~/.ansible/collections
+          export ANSIBLE_COLLECTIONS_PATH=/usr/share/ansible/collections
           export JAVA_HOME=/usr/lib/jvm/java-{{ java_version }}-amazon-corretto
           
           # User-specific PATH additions
