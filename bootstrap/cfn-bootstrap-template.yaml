@@ -1,5 +1,5 @@
 AWSTemplateFormatVersion: '2010-09-09'
-Description: 'Bootstrap EC2 Instance with minimal setup and force recreation'
+Description: 'Bootstrap EC2 Instance with Amazon Linux 2023 and latest tools'
 
 Parameters:
   KeyName:
@@ -24,9 +24,9 @@ Parameters:
     ConstraintDescription: Must be a valid IP CIDR range of the form x.x.x.x/x.
 
   LatestAmiId:
-    Description: Latest Amazon Linux 2 ARM64 AMI ID
+    Description: Latest Amazon Linux 2023 ARM64 AMI ID
     Type: AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>
-    Default: /aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-arm64-gp2
+    Default: /aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-arm64
   
   # インスタンス再作成用パラメータ（更新時にこの値を変更する）
   InstanceVersion:
@@ -282,15 +282,16 @@ Resources:
             echo "Stack update time: $(date)" >> /tmp/deployment-info.txt
             
             # システムの更新
-            yum update -y
-            yum install -y git python3 python3-pip jq amazon-ssm-agent java-11-amazon-corretto-headless
+            dnf update -y
+            dnf install -y git python3 python3-pip jq
             
-            # Ansible
-            pip3 install ansible
+            # Amazon SSM Agent は Amazon Linux 2023 にプリインストール済み
+            
+            # Ansible と必要なPythonパッケージのインストール
+            python3 -m pip install --upgrade pip
+            python3 -m pip install ansible boto3 botocore
             
             # 環境設定
-            systemctl enable amazon-ssm-agent
-            systemctl start amazon-ssm-agent
             echo 'export PATH=$PATH:$HOME/.pulumi/bin' >> /home/ec2-user/.bashrc
             echo 'export AWS_DEFAULT_REGION=${AWS::Region}' >> /home/ec2-user/.bashrc
             
@@ -304,6 +305,7 @@ Resources:
             cat > /home/ec2-user/SETUP_GUIDE.txt << 'EOF'
             === Bootstrap Environment Setup Guide ===
             Instance Version: ${InstanceVersion}
+            Amazon Linux 2023
             
             1. Repository already cloned: ~/infrastructure-as-code
             2. Run: ./infrastructure-as-code/bootstrap/setup-bootstrap.sh
@@ -337,6 +339,8 @@ Resources:
           Value: Jenkins-Agent
         - Key: InstanceVersion
           Value: !Ref InstanceVersion
+        - Key: OS
+          Value: AmazonLinux2023
 
 Outputs:
   BootstrapInstanceId:

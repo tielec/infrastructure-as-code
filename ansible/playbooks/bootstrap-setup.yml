@@ -1,16 +1,15 @@
 # bootstrap-setup.yml
 # Jenkinsインフラをデプロイするためのブートストラップ環境の設定
-# ARM64 (t4g) インスタンス対応版
-# amazon.aws コレクション対応版
+# ARM64 (t4g) インスタンス対応版 - Amazon Linux 2023
+# 最新のライブラリとコレクションを使用
 
-- name: Bootstrap Environment Setup
+- name: Bootstrap Environment Setup for Amazon Linux 2023
   hosts: localhost
   connection: local
   gather_facts: yes
-  # ansible.cfgでbecomeが設定されているため、ここでの指定は不要
   
   vars:
-    nodejs_version: "16.x"
+    nodejs_version: "20"  # LTS version
     user_home: "/home/ec2-user"
     aws_credentials_script_path: "{{ playbook_dir }}/../scripts/aws/setup-aws-credentials.sh"
     java_version: "21"
@@ -19,7 +18,34 @@
   tasks:
     - name: Display start message
       ansible.builtin.debug:
-        msg: "Starting Bootstrap Environment Setup for {{ arch }} architecture"
+        msg: |
+          Starting Bootstrap Environment Setup
+          - Architecture: {{ arch }}
+          - OS: Amazon Linux 2023
+          - Python: {{ ansible_python_version }}
+        
+    # システムアップデート
+    - name: Update system packages
+      ansible.builtin.dnf:
+        name: '*'
+        state: latest
+      become: yes
+      
+    # 必要な開発ツールのインストール
+    - name: Install development tools
+      ansible.builtin.dnf:
+        name:
+          - gcc
+          - gcc-c++
+          - make
+          - git
+          - tar
+          - unzip
+          - which
+          - curl
+          - wget
+        state: present
+      become: yes
         
     # AWS CLI v2のインストール (ARM64対応)
     - name: Check if AWS CLI v2 is installed
@@ -49,6 +75,7 @@
             
         - name: Install AWS CLI v2
           ansible.builtin.command: /tmp/aws/install
+          become: yes
           args:
             creates: /usr/local/bin/aws
             
@@ -60,7 +87,7 @@
             - "/tmp/awscliv2.zip"
             - "/tmp/aws"
             
-    # Node.jsのインストール (ARM64対応)
+    # Node.js 20 LTSのインストール (NodeSource経由)
     - name: Check if Node.js is installed
       ansible.builtin.shell: node --version
       register: node_check
@@ -68,25 +95,19 @@
       failed_when: false
       
     - name: Install Node.js {{ nodejs_version }}
-      when: node_check.rc != 0
+      when: node_check.rc != 0 or nodejs_version not in node_check.stdout
       block:
-        - name: Install development tools for Node.js
-          ansible.builtin.yum:
-            name:
-              - gcc-c++
-              - make
-            state: present
-            
-        - name: Configure Node.js repository
+        - name: Add NodeSource repository
           ansible.builtin.shell: |
-            curl -sL https://rpm.nodesource.com/setup_{{ nodejs_version }} | bash -
+            curl -fsSL https://rpm.nodesource.com/setup_{{ nodejs_version }}.x | sudo bash -
           args:
             warn: false
             
-        - name: Install Node.js packages
-          ansible.builtin.yum:
+        - name: Install Node.js
+          ansible.builtin.dnf:
             name: nodejs
             state: present
+          become: yes
             
     # Java 21のインストール (Amazon Corretto - ARM64対応)
     - name: Check if Java {{ java_version }} is installed
@@ -98,34 +119,12 @@
     - name: Install Java {{ java_version }} (Amazon Corretto)
       when: java_check.rc != 0
       block:
-        - name: Debug architecture info
-          ansible.builtin.debug:
-            msg: "Detected architecture: {{ arch }}"
-            
-        - name: Download Amazon Corretto {{ java_version }} RPM for ARM64
-          ansible.builtin.get_url:
-            url: "https://corretto.aws/downloads/latest/amazon-corretto-{{ java_version }}-aarch64-linux-jdk.rpm"
-            dest: "/tmp/amazon-corretto-{{ java_version }}-aarch64.rpm"
-            mode: '0644'
-          when: arch == 'aarch64'
-          
-        - name: Download Amazon Corretto {{ java_version }} RPM for x86_64
-          ansible.builtin.get_url:
-            url: "https://corretto.aws/downloads/latest/amazon-corretto-{{ java_version }}-x64-linux-jdk.rpm"
-            dest: "/tmp/amazon-corretto-{{ java_version }}-x64.rpm"
-            mode: '0644'
-          when: arch != 'aarch64'
-            
-        - name: Install Amazon Corretto {{ java_version }}
-          ansible.builtin.yum:
-            name: "/tmp/amazon-corretto-{{ java_version }}-{{ 'aarch64' if arch == 'aarch64' else 'x64' }}.rpm"
+        - name: Install Amazon Corretto repository
+          ansible.builtin.dnf:
+            name: "https://corretto.aws/downloads/resources/{{ java_version }}.0.1.12.1/java-{{ java_version }}-amazon-corretto-devel-{{ java_version }}.0.1.12.1-1.{{ 'aarch64' if arch == 'aarch64' else 'x86_64' }}.rpm"
             state: present
             disable_gpg_check: yes
-            
-        - name: Clean up Corretto RPM file
-          ansible.builtin.file:
-            path: "/tmp/amazon-corretto-{{ java_version }}-{{ 'aarch64' if arch == 'aarch64' else 'x64' }}.rpm"
-            state: absent
+          become: yes
             
         - name: Set JAVA_HOME environment variable
           ansible.builtin.lineinfile:
@@ -135,8 +134,9 @@
               export PATH=$JAVA_HOME/bin:$PATH
             create: yes
             mode: '0644'
+          become: yes
             
-    # Pulumiのインストール (rootとして使用)
+    # Pulumiのインストール
     - name: Check if Pulumi is installed
       ansible.builtin.stat:
         path: "/usr/local/bin/pulumi"
@@ -145,229 +145,138 @@
     - name: Install Pulumi
       when: not pulumi_check.stat.exists
       block:
-        - name: Download Pulumi
-          ansible.builtin.get_url:
-            url: https://get.pulumi.com
-            dest: /tmp/pulumi-installer.sh
-            mode: '0755'
-            
-        - name: Execute Pulumi installer
-          ansible.builtin.shell: /tmp/pulumi-installer.sh
-          args:
-            creates: "/root/.pulumi/bin/pulumi"
+        - name: Download and install Pulumi
+          ansible.builtin.shell: |
+            curl -fsSL https://get.pulumi.com | sh -s -- --version latest
           environment:
             PULUMI_INSTALL_ARCH: "{{ 'arm64' if arch == 'aarch64' else 'amd64' }}"
             
-        - name: Create Pulumi symbolic link
-          ansible.builtin.file:
-            src: "/root/.pulumi/bin/pulumi"
-            dest: "/usr/local/bin/pulumi"
-            state: link
-            
-        - name: Add Pulumi to PATH for all users
-          ansible.builtin.lineinfile:
-            path: "/etc/profile.d/pulumi.sh"
-            line: "export PATH=$PATH:/root/.pulumi/bin"
-            create: yes
-            mode: '0644'
+        - name: Move Pulumi to system path
+          ansible.builtin.shell: |
+            sudo mv $HOME/.pulumi/bin/* /usr/local/bin/
+          become: yes
+          
+        - name: Verify Pulumi installation
+          ansible.builtin.command: pulumi version
+          register: pulumi_version
+          changed_when: false
+          
+        - name: Display Pulumi version
+          ansible.builtin.debug:
+            msg: "Installed Pulumi version: {{ pulumi_version.stdout }}"
     
-    # Pythonバージョンの確認と対応
-    - name: Check Python version
-      ansible.builtin.shell: python3 --version
-      register: python_version_check
-      changed_when: false
-    
+    # Python環境の確認（Amazon Linux 2023はPython 3.9+を標準搭載）
     - name: Display Python version
       ansible.builtin.debug:
-        msg: "Current Python version: {{ python_version_check.stdout }}"
+        msg: "Current Python version: {{ ansible_python_version }}"
     
-    # Amazon Linuxバージョンの確認
-    - name: Check Amazon Linux version
-      ansible.builtin.shell: |
-        if [ -f /etc/os-release ]; then
-          grep -E "^VERSION=" /etc/os-release | cut -d'"' -f2
-        else
-          echo "Unknown"
-        fi
-      register: amzn_version
-      changed_when: false
+    # Python パッケージの最新版インストール
+    - name: Upgrade pip
+      ansible.builtin.pip:
+        name: pip
+        state: latest
+        executable: pip3
+      become: yes
     
-    - name: Display Amazon Linux version
-      ansible.builtin.debug:
-        msg: "Amazon Linux version: {{ amzn_version.stdout }}"
-    
-    # Python 3.7でも動作するようにパッケージ管理
-    - name: Handle Python packages for compatibility
-      block:
-        - name: Check available Python packages
-          ansible.builtin.shell: |
-            yum list available | grep -E "^python3[0-9]*\." | awk '{print $1}' | sort -u
-          register: available_python_packages
-          changed_when: false
-          failed_when: false
-        
-        - name: Display available Python packages
-          ansible.builtin.debug:
-            msg: "Available Python packages: {{ available_python_packages.stdout_lines }}"
-          when: available_python_packages.stdout_lines is defined
-        
-        # Python 3.7を使用することを決定
-        - name: Set Python executable to current Python 3
-          ansible.builtin.set_fact:
-            python3_executable: "python3"
-            use_python37: true
-    
-    # Python パッケージマネージャーの確認と更新
-    - name: Ensure Python package management is ready
-      block:
-        - name: Check pip version
-          ansible.builtin.shell: "{{ python3_executable }} -m pip --version"
-          register: pip_check
-          changed_when: false
-          failed_when: false
-        
-        - name: Ensure pip is installed
-          ansible.builtin.yum:
-            name: python3-pip
-            state: present
-          when: pip_check.rc != 0
-        
-        - name: Upgrade pip to compatible version
-          ansible.builtin.shell: |
-            {{ python3_executable }} -m pip install --upgrade 'pip<24.0'
-          register: pip_upgrade
-          changed_when: "'Successfully installed' in pip_upgrade.stdout"
-    
-    # Python 3.7互換のパッケージバージョンをインストール
-    - name: Install Python packages compatible with Python 3.7
-      ansible.builtin.shell: |
-        {{ python3_executable }} -m pip install \
-          'boto3>=1.26.0,<1.29.0' \
-          'botocore>=1.29.0,<1.32.0' \
-          'ansible-core>=2.11.0,<2.14.0' \
-          'jmespath>=0.10.0,<2.0.0' \
-          'urllib3<2.0' \
-          'cryptography>=3.0,<39.0'
-      register: aws_packages_install
-      changed_when: "'Successfully installed' in aws_packages_install.stdout"
-      environment:
-        PYTHONWARNINGS: "ignore:Unverified HTTPS request"
-    
-    # ansibleパッケージのインストール（Python 3.7互換）
-    - name: Install ansible package compatible with Python 3.7
-      ansible.builtin.shell: |
-        {{ python3_executable }} -m pip install 'ansible>=4.0.0,<6.0.0'
-      register: ansible_install
-      changed_when: "'Successfully installed' in ansible_install.stdout"
-      ignore_errors: true
-    
-    # ansible-baseまたはansible-coreが既にインストールされている場合の対処
-    - name: Check if ansible is already available
-      ansible.builtin.shell: |
-        ansible --version
-      register: ansible_check
-      changed_when: false
-      failed_when: false
-    
-    - name: Display ansible status
-      ansible.builtin.debug:
-        msg: |
-          Ansible installation status:
-          {% if ansible_check.rc == 0 %}
-          Ansible is already installed:
-          {{ ansible_check.stdout_lines[0] }}
-          {% else %}
-          Ansible installation may have issues, but continuing...
-          {% endif %}
+    - name: Install latest Python packages for AWS
+      ansible.builtin.pip:
+        name:
+          - boto3
+          - botocore
+          - jmespath
+          - urllib3
+          - cryptography
+          - PyYAML
+          - jsonschema
+        state: latest
+        executable: pip3
+      become: yes
     
     # Ansible Collectionsのインストール
     - name: Install Ansible Collections
       block:
-        - name: Check if ansible-galaxy is available
+        - name: Create Ansible directories
+          ansible.builtin.file:
+            path: "{{ item }}"
+            state: directory
+            mode: '0755'
+          become: yes
+          loop:
+            - "/etc/ansible"
+            - "/etc/ansible/collections"
+            - "/usr/share/ansible/collections"
+        
+        - name: Create collections requirements file
+          ansible.builtin.copy:
+            dest: "/etc/ansible/collections/requirements.yml"
+            content: |
+              ---
+              collections:
+                - name: amazon.aws
+                  version: ">=7.0.0"
+                - name: community.aws
+                  version: ">=7.0.0"
+                - name: community.general
+                  version: ">=8.0.0"
+                - name: ansible.posix
+                  version: ">=1.5.0"
+                - name: community.docker
+                  version: ">=3.4.0"
+            mode: '0644'
+          become: yes
+        
+        - name: Install Ansible collections
+          ansible.builtin.command: |
+            ansible-galaxy collection install -r /etc/ansible/collections/requirements.yml -p /usr/share/ansible/collections --force
+          environment:
+            ANSIBLE_COLLECTIONS_PATH: "/usr/share/ansible/collections"
+          become: yes
+          register: collection_install
+          changed_when: "'Installing' in collection_install.stdout"
+        
+        - name: Set Ansible collections path in profile
+          ansible.builtin.lineinfile:
+            path: "/etc/profile.d/ansible.sh"
+            line: "export ANSIBLE_COLLECTIONS_PATH=/usr/share/ansible/collections:~/.ansible/collections"
+            create: yes
+            mode: '0644'
+          become: yes
+        
+        - name: Verify collections installation
           ansible.builtin.shell: |
-            which ansible-galaxy || echo "NOT_FOUND"
-          register: galaxy_check
+            export ANSIBLE_COLLECTIONS_PATH=/usr/share/ansible/collections
+            ansible-galaxy collection list
+          register: installed_collections
           changed_when: false
         
-        - name: Display ansible-galaxy location
-          ansible.builtin.debug:
-            msg: "ansible-galaxy location: {{ galaxy_check.stdout }}"
-        
-        # ansible-galaxyが利用可能な場合のみコレクションをインストール
-        - name: Install collections if ansible-galaxy is available
-          when: galaxy_check.stdout != "NOT_FOUND"
-          block:
-            - name: Create Ansible directories
-              ansible.builtin.file:
-                path: "{{ item }}"
-                state: directory
-                mode: '0755'
-              loop:
-                - "/etc/ansible"
-                - "/etc/ansible/collections"
-                - "/usr/share/ansible/collections"
-            
-            - name: Create collections requirements file
-              ansible.builtin.copy:
-                dest: "/etc/ansible/collections/requirements.yml"
-                content: |
-                  ---
-                  collections:
-                    - name: amazon.aws
-                      version: ">=5.0.0,<6.0.0"
-                    - name: community.aws
-                      version: ">=5.0.0,<6.0.0"
-                    - name: community.general
-                      version: ">=5.0.0,<6.0.0"
-                    - name: ansible.posix
-                      version: ">=1.4.0,<2.0.0"
-                mode: '0644'
-            
-            - name: Install Ansible collections (system-wide)
-              ansible.builtin.shell: |
-                {{ galaxy_check.stdout }} collection install -r /etc/ansible/collections/requirements.yml -p /usr/share/ansible/collections --force
-              environment:
-                ANSIBLE_COLLECTIONS_PATH: "/usr/share/ansible/collections"
-              register: collection_install
-              changed_when: "'Installing' in collection_install.stdout"
-            
-            - name: Set Ansible collections path in profile
-              ansible.builtin.lineinfile:
-                path: "/etc/profile.d/ansible.sh"
-                line: "export ANSIBLE_COLLECTIONS_PATH=/usr/share/ansible/collections:~/.ansible/collections"
-                create: yes
-                mode: '0644'
-            
-            - name: Verify collections installation
-              ansible.builtin.shell: |
-                export ANSIBLE_COLLECTIONS_PATH=/usr/share/ansible/collections
-                {{ galaxy_check.stdout }} collection list
-              register: installed_collections
-              changed_when: false
-            
-            - name: Display installed collections summary
-              ansible.builtin.debug:
-                msg: |
-                  Installed Ansible Collections:
-                  {{ installed_collections.stdout | regex_findall('(amazon\.aws|community\.aws|community\.general|ansible\.posix).*') | join('\n') }}
-        
-        # ansible-galaxyが利用できない場合の対処
-        - name: Handle missing ansible-galaxy
-          when: galaxy_check.stdout == "NOT_FOUND"
+        - name: Display installed collections
           ansible.builtin.debug:
             msg: |
-              WARNING: ansible-galaxy command not found.
-              This is expected if running this playbook with a minimal Ansible installation.
-              Collections will need to be installed manually after Ansible is fully set up.
-              
-              To install collections manually, run:
-              ansible-galaxy collection install amazon.aws community.aws community.general ansible.posix
+              Installed Ansible Collections:
+              {{ installed_collections.stdout | regex_findall('(amazon\.aws|community\.aws|community\.general|ansible\.posix|community\.docker).*') | join('\n') }}
     
-    # galaxy_checkの結果を全体で利用可能にする
-    - name: Set galaxy availability fact
-      ansible.builtin.set_fact:
-        ansible_galaxy_available: "{{ galaxy_check is defined and galaxy_check.stdout != 'NOT_FOUND' }}"
-      when: galaxy_check is defined
+    # Dockerのインストール（オプション）
+    - name: Install Docker
+      block:
+        - name: Install Docker
+          ansible.builtin.dnf:
+            name: docker
+            state: present
+          become: yes
+          
+        - name: Start and enable Docker service
+          ansible.builtin.systemd:
+            name: docker
+            state: started
+            enabled: yes
+          become: yes
+          
+        - name: Add ec2-user to docker group
+          ansible.builtin.user:
+            name: ec2-user
+            groups: docker
+            append: yes
+          become: yes
     
     # インストール検証スクリプトの作成
     - name: Create installation verification script
@@ -379,111 +288,34 @@
           echo "Architecture: $(uname -m)"
           echo "OS: $(cat /etc/os-release | grep PRETTY_NAME | cut -d= -f2 | tr -d '"')"
           echo ""
-          echo "=== Python Versions ==="
-          echo "Default Python3: $(python3 --version 2>&1 || echo 'Not installed')"
-          for py in python3.11 python3.10 python3.9 python3.8; do
-            if command -v $py &> /dev/null; then
-              echo "$py: $($py --version 2>&1)"
-            fi
-          done
-          # 実際に使用されているPythonを特定
-          PYTHON_EXEC=$(which python3.9 python3.10 python3.11 2>/dev/null | head -1)
-          if [ -z "$PYTHON_EXEC" ]; then
-            PYTHON_EXEC="python3"
-          fi
-          echo "Active Python: $PYTHON_EXEC ($($PYTHON_EXEC --version 2>&1))"
+          echo "=== Python Environment ==="
+          echo "Python3: $(python3 --version 2>&1)"
+          echo "Pip3: $(pip3 --version 2>&1)"
           echo ""
           echo "=== Installed Tools ==="
           echo "Node.js: $(node --version 2>/dev/null || echo 'Not installed')"
           echo "npm: $(npm --version 2>/dev/null || echo 'Not installed')"
-          echo "Pip: $($PYTHON_EXEC -m pip --version 2>/dev/null || echo 'Not installed')"
           echo "AWS CLI: $(aws --version 2>/dev/null || echo 'Not installed')"
           echo "Ansible: $(ansible --version 2>/dev/null | head -n 1 || echo 'Not installed')"
-          echo "Ansible-core: $($PYTHON_EXEC -m pip show ansible-core 2>/dev/null | grep Version || echo 'Not installed')"
+          echo "Ansible-core: $(python3 -m pip show ansible-core 2>/dev/null | grep Version || echo 'Not installed')"
           echo "Pulumi: $(pulumi version 2>/dev/null || echo 'Not installed')"
           echo "Git: $(git --version 2>/dev/null || echo 'Not installed')"
           echo "Java: $(java -version 2>&1 | head -n 1 || echo 'Not installed')"
-          echo "JAVA_HOME: $JAVA_HOME"
+          echo "JAVA_HOME: ${JAVA_HOME:-Not set}"
+          echo "Docker: $(docker --version 2>/dev/null || echo 'Not installed')"
           echo ""
           echo "=== Python AWS Libraries ==="
-          echo "boto3: $($PYTHON_EXEC -m pip show boto3 2>/dev/null | grep Version || echo 'Not installed')"
-          echo "botocore: $($PYTHON_EXEC -m pip show botocore 2>/dev/null | grep Version || echo 'Not installed')"
-          echo "jmespath: $($PYTHON_EXEC -m pip show jmespath 2>/dev/null | grep Version || echo 'Not installed')"
+          echo "boto3: $(python3 -m pip show boto3 2>/dev/null | grep Version || echo 'Not installed')"
+          echo "botocore: $(python3 -m pip show botocore 2>/dev/null | grep Version || echo 'Not installed')"
+          echo "jmespath: $(python3 -m pip show jmespath 2>/dev/null | grep Version || echo 'Not installed')"
           echo ""
           echo "=== Ansible Collections ==="
           export ANSIBLE_COLLECTIONS_PATH=/usr/share/ansible/collections:~/.ansible/collections
-          ansible-galaxy collection list 2>/dev/null | grep -E "(amazon\.aws|community\.aws|community\.general|ansible\.posix)" || echo "No collections found"
+          ansible-galaxy collection list 2>/dev/null | grep -E "(amazon\.aws|community\.aws|community\.general|ansible\.posix|community\.docker)" || echo "No collections found"
+          echo ""
+          echo "=== AWS Credentials ==="
+          aws sts get-caller-identity 2>/dev/null || echo "AWS credentials not configured"
           echo "======================="
-        owner: ec2-user
-        group: ec2-user
-        mode: '0755'
-        
-    # Ansible Collections 手動インストール用スクリプトの作成
-    - name: Create post-bootstrap collection installer script
-      ansible.builtin.copy:
-        dest: "{{ user_home }}/install-ansible-collections.sh"
-        content: |
-          #!/bin/bash
-          # Ansible Collections 手動インストールスクリプト
-          
-          echo "=== Installing Ansible Collections ==="
-          
-          # ansible-galaxyの存在確認
-          if ! which ansible-galaxy >/dev/null 2>&1; then
-            echo "ERROR: ansible-galaxy command not found."
-            echo "Please ensure Ansible is properly installed first."
-            exit 1
-          fi
-          
-          # Collections のインストール
-          echo "Installing amazon.aws collection..."
-          ansible-galaxy collection install amazon.aws:5.5.0
-          
-          echo "Installing community.aws collection..."
-          ansible-galaxy collection install community.aws:5.5.0
-          
-          echo "Installing community.general collection..."
-          ansible-galaxy collection install community.general:5.8.3
-          
-          echo "Installing ansible.posix collection..."
-          ansible-galaxy collection install ansible.posix:1.5.4
-          
-          # インストール結果の確認
-          echo ""
-          echo "=== Installed Collections ==="
-          ansible-galaxy collection list | grep -E "(amazon\.aws|community\.aws|community\.general|ansible\.posix)"
-          
-          echo ""
-          echo "=== Testing amazon.aws collection ==="
-          if ansible-doc amazon.aws.s3_bucket >/dev/null 2>&1; then
-            echo "✓ amazon.aws collection is working"
-          else
-            echo "✗ amazon.aws collection test failed"
-          fi
-          
-          echo ""
-          echo "Collections installation completed!"
-          echo ""
-          echo "To use these collections, ensure this is set:"
-          echo "export ANSIBLE_COLLECTIONS_PATH=/usr/share/ansible/collections:~/.ansible/collections"
-        owner: ec2-user
-        group: ec2-user
-        mode: '0755'
-    - name: Check AWS credentials script
-      ansible.builtin.stat:
-        path: "{{ aws_credentials_script_path }}"
-      register: aws_cred_script
-      
-    - name: Create AWS credentials setup helper
-      when: aws_cred_script.stat.exists
-      ansible.builtin.copy:
-        dest: "{{ user_home }}/setup-aws/setup-aws-credentials.sh"
-        content: |
-          #!/bin/bash
-          echo "Setting up AWS credentials from IAM role..."
-          source {{ aws_credentials_script_path }}
-          echo "AWS credentials configured. Testing with 'aws sts get-caller-identity':"
-          aws sts get-caller-identity
         owner: ec2-user
         group: ec2-user
         mode: '0755'
@@ -497,128 +329,107 @@
         group: ec2-user
         mode: '0755'
         
-    # README.txtの作成（セットアップ手順）
+    # README.txtの作成
     - name: Create detailed README file
       ansible.builtin.copy:
         dest: "{{ user_home }}/README.txt"
         content: |
           === Bootstrap Environment Setup Complete ===
+          Amazon Linux 2023 - ARM64 ({{ arch }})
           
-          Your EC2 bootstrap instance ({{ arch }}) has been configured with the following tools:
-          - AWS CLI v2 (ARM64 optimized)
-          - Node.js {{ nodejs_version }}
-          - Java {{ java_version }} (Amazon Corretto for ARM64)
-          - Python 3 and pip3
-          - Ansible with AWS collections (amazon.aws, community.aws)
-          - Pulumi
+          Installed Tools and Versions:
+          - AWS CLI v2 (latest)
+          - Node.js {{ nodejs_version }} LTS
+          - Java {{ java_version }} (Amazon Corretto)
+          - Python 3.9+ (system default)
+          - Ansible with latest AWS collections
+          - Pulumi (latest)
+          - Docker
           - Git
           
-          === AWS Integration ===
-          The following Python packages have been installed for AWS integration:
+          Python Packages (latest versions):
           - boto3 (AWS SDK for Python)
           - botocore (Core functionality of boto3)
-          - jmespath (JSON query language for boto3)
+          - jmespath (JSON query language)
+          - urllib3, cryptography, PyYAML, jsonschema
           
-          The following Ansible collections have been installed:
-          - amazon.aws (Official AWS modules)
-          - community.aws (Community AWS modules)
-          - community.general (General community modules)
-          - ansible.posix (POSIX/Linux modules)
+          Ansible Collections (latest versions):
+          - amazon.aws (7.0+)
+          - community.aws (7.0+)
+          - community.general (8.0+)
+          - ansible.posix (1.5+)
+          - community.docker (3.4+)
           
-          === Jenkins Agent Setup ===
-          This ARM64 instance is configured to work as a Jenkins Agent with:
-          - Java {{ java_version }} for Jenkins agent execution
-          - Build tools (gcc, make, etc.)
+          === Quick Start ===
           
-          Jenkins agent work directory: ~/jenkins-agent
+          1. Verify installation:
+             ./verify-installation.sh
           
-          Next steps:
-          1. Run "./verify-installation.sh" to check installed tools
-          2. Setup Pulumi: "export PULUMI_ACCESS_TOKEN='your-token'"
-          3. Setup AWS credentials: "source ./setup-aws/setup-aws-credentials.sh"
-          4. Setup Git SSH keys for repository access: 
+          2. Configure AWS credentials (if using IAM role, this is automatic):
+             aws sts get-caller-identity
+          
+          3. Configure Pulumi:
+             export PULUMI_ACCESS_TOKEN='your-token'
+             pulumi login
+          
+          4. Set up Git SSH keys:
              ssh-keygen -t ed25519 -C "your_email@example.com"
              cat ~/.ssh/id_ed25519.pub
-             
-          5. After adding the SSH key to GitHub, you can clone your repository
-             and start working with the Jenkins Infrastructure as Code.
+             # Add the public key to your GitHub account
           
-          6. To connect this instance as a Jenkins Agent:
-             - In Jenkins, go to "Manage Jenkins" > "Manage Nodes and Clouds"
-             - Create a new node with SSH connection
-             - Use the EC2 instance's private IP or hostname
-             - Set Remote root directory to: /home/ec2-user/jenkins-agent
+          5. Clone and deploy infrastructure:
+             git clone git@github.com:your-org/your-repo.git
+             cd your-repo/ansible
+             ansible-playbook playbooks/jenkins_setup_pipeline.yml -e "env=dev"
           
-          7. For Pulumi S3 backend support:
-             export PULUMI_CONFIG_PASSPHRASE="your-secure-passphrase"
-             pulumi login s3://your-bucket-name/your-project
+          === Jenkins Agent Configuration ===
           
-          8. If Ansible collections were not installed automatically:
-             Run: ./install-ansible-collections.sh
-             This will install the required AWS collections for Ansible.
+          To connect as Jenkins Agent:
+          - Node type: SSH
+          - Remote directory: /home/ec2-user/jenkins-agent
+          - Java path: /usr/lib/jvm/java-{{ java_version }}-amazon-corretto
           
-          Note: This is an ARM64 (t4g) instance. Ensure your Jenkins controller
-          and any Docker images you use are compatible with ARM64 architecture.
+          === Notes ===
           
-          For more details, refer to the project documentation.
+          - This is an ARM64 instance optimized for t4g instance types
+          - All tools are installed with the latest stable versions
+          - Docker is available for container-based builds
+          - Python environment uses system Python 3.9+
+          
+          For issues or updates, check the project documentation.
         owner: ec2-user
         group: ec2-user
         mode: '0644'
-
-    # 最終的な環境チェック
-    - name: Run final environment verification
-      block:
-        - name: Test boto3 import
-          ansible.builtin.shell: |
-            {{ python3_executable }} -c "import boto3; print(f'boto3 version: {boto3.__version__}')"
-          register: boto3_test
-          changed_when: false
         
-        - name: Test AWS collection availability
-          ansible.builtin.shell: |
-            if which ansible-doc >/dev/null 2>&1; then
-              export ANSIBLE_COLLECTIONS_PATH=/usr/share/ansible/collections
-              ansible-doc amazon.aws.s3_bucket --list | head -1
-            else
-              echo "ansible-doc not available yet"
-            fi
-          register: aws_collection_test
-          changed_when: false
-          failed_when: false
-        
-        - name: Display environment verification results
-          ansible.builtin.debug:
-            msg: |
-              Environment Verification Results:
-              - Python executable: {{ python3_executable }}
-              - Python version: {{ python_version_check.stdout }}
-              - boto3: {{ 'OK' if boto3_test.rc == 0 else 'FAILED' }}
-              -               amazon.aws collection: {{ 'OK' if aws_collection_test.rc == 0 and 'not available' not in aws_collection_test.stdout else 'Not installed yet' }}
-              
-              {% if ansible_galaxy_available | default(false) %}
-              ansible-galaxy available: Yes
-              {% else %}
-              ansible-galaxy available: No (collections will need manual installation)
-              {% endif %}
+    # 環境変数の設定
+    - name: Create environment setup script
+      ansible.builtin.copy:
+        dest: "/etc/profile.d/bootstrap-env.sh"
+        content: |
+          # Bootstrap environment variables
+          export ANSIBLE_COLLECTIONS_PATH=/usr/share/ansible/collections:~/.ansible/collections
+          export JAVA_HOME=/usr/lib/jvm/java-{{ java_version }}-amazon-corretto
+          export PATH=$JAVA_HOME/bin:$PATH:/usr/local/bin
+          
+          # AWS region from instance metadata
+          if [ -z "$AWS_DEFAULT_REGION" ]; then
+            export AWS_DEFAULT_REGION=$(curl -s http://169.254.169.254/latest/meta-data/placement/region 2>/dev/null || echo "us-east-1")
+          fi
+        mode: '0644'
+      become: yes
 
     - name: Display completion message
       ansible.builtin.debug:
         msg: |
-          Bootstrap environment setup completed successfully on {{ arch }}!
-          Python {{ python3_executable }} is being used for AWS integration.
-          Java {{ java_version }} has been installed for Jenkins Agent compatibility.
+          ✅ Bootstrap environment setup completed successfully!
           
-          {% if not (ansible_galaxy_available | default(false)) %}
-          NOTE: Ansible collections could not be installed automatically because 
-          ansible-galaxy command is not available. After this bootstrap completes,
-          you can install them manually with:
+          Amazon Linux 2023 ({{ arch }}) with latest tools:
+          - Python {{ ansible_python_version }}
+          - Node.js {{ nodejs_version }} LTS
+          - Java {{ java_version }}
+          - Latest Ansible Collections (7.0+)
+          - Latest Python packages
           
-          ./install-ansible-collections.sh
+          Run './verify-installation.sh' to check the installation.
           
-          Or directly with:
-          ansible-galaxy collection install amazon.aws community.aws community.general ansible.posix
-          {% else %}
-          AWS integration tools (boto3, amazon.aws collection) have been installed.
-          {% endif %}
-          
-          You can now use both AWS CLI commands and Ansible AWS modules in your playbooks.
+          AWS integration is ready with the latest boto3 and Ansible AWS collections.
