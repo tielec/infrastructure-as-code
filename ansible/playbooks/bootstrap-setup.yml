@@ -322,55 +322,26 @@
           become: yes
       ignore_errors: yes  # Dockerのインストールが失敗してもセットアップを続行
     
-    # インストール検証スクリプトの作成
-    - name: Create installation verification script
-      ansible.builtin.copy:
-        dest: "{{ user_home }}/verify-installation.sh"
-        content: |
-          #!/bin/bash
-          # Source the environment
-          source /etc/profile.d/bootstrap-env.sh
-          
-          echo "=== System Information ==="
-          echo "Architecture: $(uname -m)"
-          echo "OS: $(cat /etc/os-release | grep PRETTY_NAME | cut -d= -f2 | tr -d '"')"
-          echo ""
-          echo "=== PATH Environment ==="
-          echo "PATH: $PATH"
-          echo ""
-          echo "=== Python Environment ==="
-          echo "Python3: $(python3 --version 2>&1)"
-          echo "Pip3: $(pip3 --version 2>&1)"
-          echo "User pip: $(python3 -m pip --version 2>&1)"
-          echo ""
-          echo "=== Installed Tools ==="
-          echo "Node.js: $(node --version 2>/dev/null || echo 'Not installed')"
-          echo "npm: $(npm --version 2>/dev/null || echo 'Not installed')"
-          echo "AWS CLI: $(aws --version 2>/dev/null || echo 'Not installed')"
-          echo "Ansible: $(ansible --version 2>/dev/null | head -n 1 || echo 'Not installed')"
-          echo "Ansible location: $(which ansible 2>/dev/null || echo 'Not in PATH')"
-          echo "Ansible-core: $(python3 -m pip show ansible-core 2>/dev/null | grep Version || echo 'Not installed')"
-          echo "Pulumi: $(pulumi version 2>/dev/null || echo 'Not installed')"
-          echo "Git: $(git --version 2>/dev/null || echo 'Not installed')"
-          echo "Java: $(java -version 2>&1 | head -n 1 || echo 'Not installed')"
-          echo "JAVA_HOME: ${JAVA_HOME:-Not set}"
-          echo "Docker: $(docker --version 2>/dev/null || echo 'Not installed')"
-          echo ""
-          echo "=== Python AWS Libraries ==="
-          echo "boto3: $(python3 -m pip show boto3 2>/dev/null | grep Version || echo 'Not installed')"
-          echo "botocore: $(python3 -m pip show botocore 2>/dev/null | grep Version || echo 'Not installed')"
-          echo "jmespath: $(python3 -m pip show jmespath 2>/dev/null | grep Version || echo 'Not installed')"
-          echo ""
-          echo "=== Ansible Collections ==="
-          export ANSIBLE_COLLECTIONS_PATH=/usr/share/ansible/collections:~/.ansible/collections
-          ansible-galaxy collection list 2>/dev/null | grep -E "(amazon\.aws|community\.aws|community\.general|ansible\.posix|community\.docker)" || echo "No collections found"
-          echo ""
-          echo "=== AWS Credentials ==="
-          aws sts get-caller-identity 2>/dev/null || echo "AWS credentials not configured"
-          echo "======================="
-        owner: ec2-user
-        group: ec2-user
+    # インストール検証スクリプトの確認
+    - name: Check if verify-installation.sh exists in repository
+      ansible.builtin.stat:
+        path: "{{ playbook_dir }}/../../bootstrap/verify-installation.sh"
+      register: verify_script
+      
+    - name: Make verify-installation.sh executable
+      ansible.builtin.file:
+        path: "{{ playbook_dir }}/../../bootstrap/verify-installation.sh"
         mode: '0755'
+      when: verify_script.stat.exists
+      
+    - name: Note about verification script
+      ansible.builtin.debug:
+        msg: |
+          Verification script is available at:
+          ~/infrastructure-as-code/bootstrap/verify-installation.sh
+          
+          You can also create a symlink for convenience:
+          ln -s ~/infrastructure-as-code/bootstrap/verify-installation.sh ~/verify-installation.sh
         
     # Jenkins Agent接続用のディレクトリ作成
     - name: Create Jenkins agent work directory
@@ -419,24 +390,29 @@
              source /etc/profile.d/bootstrap-env.sh
           
           2. Verify installation:
+             cd ~/infrastructure-as-code/bootstrap
              ./verify-installation.sh
           
-          3. Configure AWS credentials (if using IAM role, this is automatic):
+          3. Install Ansible collections:
+             ansible-galaxy collection install amazon.aws community.aws community.general ansible.posix
+          
+          4. Configure AWS credentials (if using IAM role, this is automatic):
              aws sts get-caller-identity
           
-          4. Configure Pulumi:
+          5. Configure Pulumi:
              export PULUMI_ACCESS_TOKEN='your-token'
              pulumi login
+             # Or use S3 backend:
+             pulumi login s3://$(aws ssm get-parameter --name /bootstrap/pulumi/s3bucket-name --query 'Parameter.Value' --output text)
           
-          5. Set up Git SSH keys:
+          6. Set up Git SSH keys:
              ssh-keygen -t ed25519 -C "your_email@example.com"
              cat ~/.ssh/id_ed25519.pub
              # Add the public key to your GitHub account
           
-          6. Clone and deploy infrastructure:
-             git clone git@github.com:your-org/your-repo.git
-             cd your-repo/ansible
-             ansible-playbook playbooks/jenkins_setup_pipeline.yml -e "env=dev"
+          7. Deploy infrastructure:
+             cd ~/infrastructure-as-code/ansible/playbooks
+             ansible-playbook jenkins_setup_pipeline.yml -e "env=dev"
           
           === Jenkins Agent Configuration ===
           
