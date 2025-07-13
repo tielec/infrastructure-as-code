@@ -44,7 +44,7 @@
   when: not (cache_hit | default(false))
   block:
     - name: Retrieve parameter
-      amazon.aws.ssm_parameter:
+      community.aws.ssm_parameter:
         name: "{{ parameter_name }}"
         region: "{{ ssm_parameter_store_region }}"
         decrypt: "{{ decrypt | default(true) }}"
@@ -56,12 +56,12 @@
 
     - name: Extract parameter value
       ansible.builtin.set_fact:
-        ssm_parameter_value: "{{ parameter_result.parameter_values[parameter_name] }}"
+        ssm_parameter_value: "{{ parameter_result.value }}"
         ssm_parameter_metadata:
           name: "{{ parameter_name }}"
-          type: "{{ parameter_result.parameters[0].Type | default('String') }}"
-          version: "{{ parameter_result.parameters[0].Version | default(1) }}"
-          last_modified: "{{ parameter_result.parameters[0].LastModifiedDate | default('') }}"
+          type: "{{ parameter_result.type | default('String') }}"
+          version: "{{ parameter_result.version | default(1) }}"
+          last_modified: "{{ parameter_result.last_modified_date | default('') }}"
       no_log: "{{ is_secure }}"
 
     # JSONパラメータの自動パース
@@ -91,7 +91,7 @@
 
   rescue:
     - name: Handle parameter not found
-      when: "'ParameterNotFound' in parameter_result.msg | default('')"
+      when: "'ParameterNotFound' in parameter_result.msg | default('') or 'does not exist' in parameter_result.msg | default('')"
       block:
         - name: Use default value if provided
           ansible.builtin.set_fact:
@@ -109,7 +109,7 @@
     - name: Handle other errors
       ansible.builtin.set_fact:
         ssm_operation_error: "{{ ansible_failed_result.msg | default('Unknown error') }}"
-      when: "'ParameterNotFound' not in parameter_result.msg | default('')"
+      when: "'ParameterNotFound' not in parameter_result.msg | default('') and 'does not exist' not in parameter_result.msg | default('')"
 
 # 変数として保存（オプション）
 - name: Store parameter as custom variable

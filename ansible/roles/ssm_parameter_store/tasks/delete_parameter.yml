@@ -9,7 +9,7 @@
 - name: Delete parameter
   block:
     - name: Remove parameter from SSM
-      amazon.aws.ssm_parameter:
+      community.aws.ssm_parameter:
         name: "{{ parameter_name }}"
         state: absent
         region: "{{ ssm_parameter_store_region }}"

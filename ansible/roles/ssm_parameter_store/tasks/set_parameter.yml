@@ -24,14 +24,14 @@
 - name: Set parameter
   block:
     - name: Create or update parameter
-      amazon.aws.ssm_parameter:
+      community.aws.ssm_parameter:
         name: "{{ parameter_name }}"
         value: "{{ parameter_value }}"
         type: "{{ parameter_type }}"
         region: "{{ ssm_parameter_store_region }}"
         overwrite: "{{ overwrite | default(true) }}"
         description: "{{ description | default('Managed by Ansible') }}"
-        key_id: "{{ kms_key_id | default(ssm_parameter_store_kms_key_id) }}"
+        key_id: "{{ kms_key_id | default(omit) if parameter_type != 'SecureString' else kms_key_id | default(ssm_parameter_store_kms_key_id) }}"
         tier: "{{ tier | default('Standard') }}"
         tags: "{{ tags | default({}) }}"
       register: set_result
@@ -40,7 +40,7 @@
     - name: Set success status
       ansible.builtin.set_fact:
         ssm_operation_success: true
-        ssm_parameter_version: "{{ set_result.parameter.version | default(1) }}"
+        ssm_parameter_version: "{{ set_result.version | default(1) }}"
 
     # キャッシュの更新
     - name: Update cache
