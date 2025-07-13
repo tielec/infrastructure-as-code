@@ -289,7 +289,7 @@ Resources:
             
             # Ansible と必要なPythonパッケージのインストール
             # Amazon Linux 2023では、システムのpipを直接アップグレードしない
-            python3 -m pip install --user --upgrade pip
+            python3 community.aws-m pip install --user --upgrade pip
             export PATH="$HOME/.local/bin:$PATH"
             
             # Ansibleと必要なパッケージをユーザー環境にインストール

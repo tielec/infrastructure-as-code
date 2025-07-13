@@ -67,6 +67,14 @@ fi
 echo -e "\n${YELLOW}=== システム全体のCollections更新 ===${NC}"
 echo "必要なCollectionsのみを最新版に更新します..."
 
+# ansible-galaxyのパスを確認
+ANSIBLE_GALAXY_PATH=$(which ansible-galaxy)
+if [ -z "$ANSIBLE_GALAXY_PATH" ]; then
+    echo -e "${RED}エラー: ansible-galaxyコマンドが見つかりません${NC}"
+    exit 1
+fi
+echo "ansible-galaxyの場所: $ANSIBLE_GALAXY_PATH"
+
 # 必要なコレクションのリスト
 collections=(
     "amazon.aws"
@@ -79,7 +87,8 @@ collections=(
 # 各コレクションを更新
 for collection in "${collections[@]}"; do
     echo -e "\n${BLUE}更新中: $collection${NC}"
-    sudo ansible-galaxy collection install $collection --force -p /usr/share/ansible/collections
+    # sudoでフルパスを使用し、環境変数を保持
+    sudo -E $ANSIBLE_GALAXY_PATH collection install $collection --force -p /usr/share/ansible/collections
 done
 
 # 7. 不要なコレクションの削除（オプション）
@@ -138,7 +147,8 @@ ansible-galaxy collection list | grep -E "(amazon\.aws|community\.aws|community\
 # 9. 動作確認
 echo -e "\n${YELLOW}=== 動作確認 ===${NC}"
 echo "amazon.awsコレクションのテスト..."
-if ansible-doc amazon.aws.ec2_instance >/dev/null 2>&1; then
+ANSIBLE_DOC_PATH=$(which ansible-doc)
+if [ -n "$ANSIBLE_DOC_PATH" ] && $ANSIBLE_DOC_PATH amazon.aws.ec2_instance >/dev/null 2>&1; then
     echo -e "${GREEN}✓ amazon.awsコレクションは正常に動作しています${NC}"
 else
     echo -e "${RED}✗ amazon.awsコレクションの動作確認に失敗${NC}"
