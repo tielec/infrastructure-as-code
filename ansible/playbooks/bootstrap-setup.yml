@@ -199,17 +199,29 @@
       become: yes
       
     # 追加のPythonパッケージ（pipで管理）
-    - name: Ensure pip packages are installed for ec2-user
+    - name: Check if ansible-core is already installed
+      ansible.builtin.command: python3 -m pip show ansible-core
+      register: ansible_core_check
+      changed_when: false
+      failed_when: false
+      become: no
+      
+    - name: Display current ansible-core version
+      ansible.builtin.debug:
+        msg: "Current ansible-core: {{ ansible_core_check.stdout | regex_search('Version: ([0-9.]+)', '\\1') | first if ansible_core_check.rc == 0 else 'Not installed' }}"
+      
+    - name: Ensure additional Python packages are installed for ec2-user
       ansible.builtin.pip:
         name:
-          - ansible-core>=2.16.0
           - boto3
           - botocore
+          - jmespath
         state: latest
         extra_args: --user
       become: no
       environment:
         PATH: "/home/ec2-user/.local/bin:/usr/local/bin:/usr/bin:/bin"
+      when: ansible_core_check.rc == 0  # ansible-coreが既にインストールされている場合のみ
     
     # Ansible Collectionsのインストール
     - name: Install Ansible Collections
