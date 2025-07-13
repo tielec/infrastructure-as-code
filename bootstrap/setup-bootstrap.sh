@@ -136,6 +136,10 @@ fi
 # Ansibleプレイブックを実行
 echo -e "\n${YELLOW}Ansibleプレイブックを実行して環境をセットアップします...${NC}"
 
+# 環境変数を設定
+export PATH="$HOME/.local/bin:$PATH"
+source ~/.bashrc
+
 # ansible-playbookのパスを取得
 ANSIBLE_PLAYBOOK_PATH=$(which ansible-playbook)
 if [ -z "$ANSIBLE_PLAYBOOK_PATH" ]; then
