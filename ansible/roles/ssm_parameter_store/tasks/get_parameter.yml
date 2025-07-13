@@ -47,7 +47,7 @@
       community.aws.ssm_parameter:
         name: "{{ parameter_name }}"
         region: "{{ ssm_parameter_store_region }}"
-        decrypt: "{{ decrypt | default(true) }}"
+        decryption: "{{ decrypt | default(true) }}"
       register: parameter_result
       no_log: "{{ is_secure }}"
       retries: "{{ ssm_parameter_store_retry_count }}"
@@ -56,12 +56,12 @@
 
     - name: Extract parameter value
       ansible.builtin.set_fact:
-        ssm_parameter_value: "{{ parameter_result.value }}"
+        ssm_parameter_value: "{{ parameter_result.parameter_value }}"
         ssm_parameter_metadata:
           name: "{{ parameter_name }}"
-          type: "{{ parameter_result.type | default('String') }}"
-          version: "{{ parameter_result.version | default(1) }}"
-          last_modified: "{{ parameter_result.last_modified_date | default('') }}"
+          type: "{{ parameter_result.parameter_metadata.type | default('String') }}"
+          version: "{{ parameter_result.parameter_metadata.version | default(1) }}"
+          last_modified: "{{ parameter_result.parameter_metadata.last_modified_date | default('') }}"
       no_log: "{{ is_secure }}"
 
     # JSONパラメータの自動パース
@@ -91,7 +91,10 @@
 
   rescue:
     - name: Handle parameter not found
-      when: "'ParameterNotFound' in parameter_result.msg | default('') or 'does not exist' in parameter_result.msg | default('')"
+      when: >-
+        'ParameterNotFound' in (ansible_failed_result.msg | default('')) or 
+        'does not exist' in (ansible_failed_result.msg | default('')) or
+        (parameter_result is defined and 'parameter_value' not in parameter_result)
       block:
         - name: Use default value if provided
           ansible.builtin.set_fact:
@@ -109,7 +112,7 @@
     - name: Handle other errors
       ansible.builtin.set_fact:
         ssm_operation_error: "{{ ansible_failed_result.msg | default('Unknown error') }}"
-      when: "'ParameterNotFound' not in parameter_result.msg | default('') and 'does not exist' not in parameter_result.msg | default('')"
+        ssm_operation_success: false
 
 # 変数として保存（オプション）
 - name: Store parameter as custom variable

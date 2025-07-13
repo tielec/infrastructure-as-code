@@ -13,37 +13,44 @@
 
 - name: Get parameters by path
   block:
-    - name: Retrieve parameters from SSM
-      amazon.aws.aws_ssm:
+    # パラメータ情報を取得
+    - name: Get parameter information by path
+      community.aws.ssm_parameter_info:
+        path: "{{ normalized_path }}"
+        recursive: "{{ recursive | default(true) }}"
         region: "{{ ssm_parameter_store_region }}"
-      register: ssm_connection
+      register: parameters_info
 
-    - name: Get parameters using AWS CLI (for path-based retrieval)
-      ansible.builtin.shell: |
-        aws ssm get-parameters-by-path \
-          --path "{{ normalized_path }}" \
-          {% if recursive | default(true) %}--recursive{% endif %} \
-          --with-decryption \
-          --region {{ ssm_parameter_store_region }} \
-          --output json
-      register: parameters_result
-      changed_when: false
-      no_log: "{{ not ssm_parameter_store_debug }}"
-
-    - name: Parse parameters
+    # 初期化
+    - name: Initialize results
       ansible.builtin.set_fact:
-        raw_parameters: "{{ parameters_result.stdout | from_json }}"
+        ssm_parameters: {}
+        ssm_parameter_metadata: {}
+
+    # 各パラメータの値を取得
+    - name: Get parameter values
+      community.aws.ssm_parameter:
+        name: "{{ item.name }}"
+        region: "{{ ssm_parameter_store_region }}"
+        decryption: "{{ decrypt | default(true) }}"
+      register: param_values
+      loop: "{{ parameters_info.parameters }}"
+      when: parameters_info.parameters | length > 0
       no_log: true
 
-    - name: Process parameters
+    # 結果を処理
+    - name: Process parameter values
       ansible.builtin.set_fact:
         ssm_parameters: >-
           {{
             ssm_parameters | combine({
-              item.Name: item.Value
+              item.item.name: item.parameter_value
             })
           }}
-      loop: "{{ raw_parameters.Parameters }}"
+      loop: "{{ param_values.results }}"
+      when: 
+        - param_values.results is defined
+        - item is not failed
       no_log: true
 
     # メタデータの収集
@@ -52,23 +59,23 @@
         ssm_parameter_metadata: >-
           {{
             ssm_parameter_metadata | combine({
-              item.Name: {
-                'type': item.Type,
-                'version': item.Version,
-                'last_modified': item.LastModifiedDate | default(''),
-                'is_secure': item.Type == 'SecureString' or 
+              item.name: {
+                'type': item.type | default('String'),
+                'version': item.version | default(1),
+                'last_modified': item.last_modified_date | default(''),
+                'is_secure': item.type == 'SecureString' or 
                   (ssm_parameter_store_auto_secure and 
-                   item.Name | lower | regex_search('(' + ssm_parameter_store_all_secure_keywords | join('|') + ')') is not none)
+                   item.name | lower | regex_search('(' + ssm_parameter_store_all_secure_keywords | join('|') + ')') is not none)
               }
             })
           }}
-      loop: "{{ raw_parameters.Parameters }}"
-      no_log: true
+      loop: "{{ parameters_info.parameters }}"
+      when: parameters_info.parameters | length > 0
 
     - name: Set success status
       ansible.builtin.set_fact:
         ssm_operation_success: true
-        ssm_parameter_count: "{{ raw_parameters.Parameters | length }}"
+        ssm_parameter_count: "{{ ssm_parameters | length }}"
 
   rescue:
     - name: Handle errors
@@ -96,3 +103,4 @@
   when: 
     - ssm_parameter_store_verbose
     - ssm_operation_success
+    - ssm_parameter_metadata | length > 0

@@ -1,38 +1,39 @@
 ---
 # SSMパラメータの一覧を取得するタスク
 
-# フィルター条件の設定
-- name: Build parameter filters
-  ansible.builtin.set_fact:
-    parameter_filters: >-
-      {%- set filters = [] -%}
-      {%- if name_prefix is defined -%}
-        {%- set _ = filters.append({'Key': 'Name', 'Values': [name_prefix]}) -%}
-      {%- endif -%}
-      {%- if parameter_type is defined -%}
-        {%- set _ = filters.append({'Key': 'Type', 'Values': [parameter_type]}) -%}
-      {%- endif -%}
-      {{ filters }}
-
 - name: List parameters
   block:
+    # パラメータ情報の取得
     - name: Get parameter list from SSM
-      ansible.builtin.shell: |
-        aws ssm describe-parameters \
-          {% if parameter_filters | length > 0 %}
-          --parameter-filters '{{ parameter_filters | to_json }}' \
-          {% endif %}
-          {% if max_results is defined %}
-          --max-items {{ max_results }} \
-          {% endif %}
-          --region {{ ssm_parameter_store_region }} \
-          --output json
+      community.aws.ssm_parameter_info:
+        region: "{{ ssm_parameter_store_region }}"
+        path_prefix: "{{ name_prefix | default(omit) }}"
       register: list_result
-      changed_when: false
 
-    - name: Parse parameter list
+    # 結果のフィルタリング（パラメータタイプ指定時）
+    - name: Filter by parameter type
       ansible.builtin.set_fact:
-        parameter_list: "{{ (list_result.stdout | from_json).Parameters }}"
+        parameter_list: >-
+          {{
+            list_result.parameters |
+            selectattr('type', 'equalto', parameter_type) |
+            list
+          }}
+      when: parameter_type is defined
+
+    - name: Use all parameters (no filter)
+      ansible.builtin.set_fact:
+        parameter_list: "{{ list_result.parameters }}"
+      when: parameter_type is not defined
+
+    # 最大結果数の適用
+    - name: Apply max results limit
+      ansible.builtin.set_fact:
+        parameter_list: "{{ parameter_list[:max_results|int] }}"
+      when: max_results is defined
+
+    - name: Set success status
+      ansible.builtin.set_fact:
         ssm_operation_success: true
 
     # 結果の整形
@@ -40,15 +41,15 @@
       ansible.builtin.set_fact:
         ssm_parameter_info: >-
           {{
-            parameter_list | map(attribute='Name') | list
+            parameter_list | map(attribute='name') | list
           }}
         ssm_parameter_details: >-
           {{
             parameter_list | map(lambda x: {
-              'name': x.Name,
-              'type': x.Type,
-              'last_modified': x.LastModifiedDate | default(''),
-              'version': x.Version | default(1)
+              'name': x.name,
+              'type': x.type | default('String'),
+              'last_modified': x.last_modified_date | default(''),
+              'version': x.version | default(1)
             }) | list
           }}
 
@@ -58,6 +59,8 @@
         ssm_operation_error: "{{ ansible_failed_result.msg | default('Failed to list parameters') }}"
         ssm_operation_success: false
         parameter_list: []
+        ssm_parameter_info: []
+        ssm_parameter_details: []
 
 # デバッグ出力
 - name: Display parameter list

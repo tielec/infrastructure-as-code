@@ -14,7 +14,7 @@
       community.aws.ssm_parameter:
         name: "{{ param }}"
         region: "{{ ssm_parameter_store_region }}"
-        decrypt: "{{ decrypt | default(true) }}"
+        decryption: "{{ decrypt | default(true) }}"
       register: param_result
       loop: "{{ parameter_batch }}"
       loop_control:
@@ -27,23 +27,23 @@
         batch_parameters: >-
           {{
             batch_parameters | combine({
-              item.param: item.value
+              item.param: item.parameter_value
             })
           }}
         batch_metadata: >-
           {{
             batch_metadata | combine({
               item.param: {
-                'type': item.type | default('String'),
-                'version': item.version | default(1),
-                'last_modified': item.last_modified_date | default('')
+                'type': item.parameter_metadata.type | default('String'),
+                'version': item.parameter_metadata.version | default(1),
+                'last_modified': item.parameter_metadata.last_modified_date | default('')
               }
             })
           }}
       loop: "{{ param_result.results }}"
       when: 
         - item is not failed
-        - item.value is defined
+        - item.parameter_value is defined
       no_log: true
 
     - name: Track failed parameters
