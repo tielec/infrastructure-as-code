@@ -6,7 +6,7 @@
     # Pulumiのパス設定
     - name: Set Pulumi binary path if not already set
       ansible.builtin.set_fact:
-        pulumi_bin_path: "/root/.pulumi/bin/pulumi"
+        pulumi_bin_path: "/usr/local/bin/pulumi"
       when: pulumi_bin_path is not defined
 
     # バックエンドタイプの検証
@@ -169,8 +169,8 @@
           export AWS_REGION='{{ pulumi_s3_region }}';
           export AWS_DEFAULT_REGION='{{ pulumi_s3_region }}'
           {% endif %}
-        pulumi_sudo_cmd: "sudo -E /root/.pulumi/bin/pulumi"
-        pulumi_bin_path: "/root/.pulumi/bin/pulumi"
+        pulumi_sudo_cmd: "pulumi"
+        pulumi_bin_path: "/usr/local/bin/pulumi"
         pulumi_authenticated: true
 
     - name: Display check mode notice

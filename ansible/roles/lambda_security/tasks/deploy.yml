@@ -26,10 +26,10 @@
       ansible.builtin.shell: |
         {{ scripts_dir }}/aws/aws-env.sh
         cd {{ pulumi_path }}/lambda-security
-        sudo -E /root/.pulumi/bin/pulumi config set aws:region {{ aws_region_name }}
-        sudo -E /root/.pulumi/bin/pulumi config set {{ security_project_name }}:projectName {{ project_name }}
-        sudo -E /root/.pulumi/bin/pulumi config set {{ security_project_name }}:networkStackName {{ network_project_name }}
-        sudo -E /root/.pulumi/bin/pulumi config set {{ security_project_name }}:enableDatabaseSecurityGroups {{ enable_database | string | lower }}
+        pulumi config set aws:region {{ aws_region_name }}
+        pulumi config set {{ security_project_name }}:projectName {{ project_name }}
+        pulumi config set {{ security_project_name }}:networkStackName {{ network_project_name }}
+        pulumi config set {{ security_project_name }}:enableDatabaseSecurityGroups {{ enable_database | string | lower }}
       register: pulumi_config_result
       changed_when: pulumi_config_result.rc == 0
     
@@ -56,7 +56,7 @@
       ansible.builtin.shell: |
         cd {{ pulumi_path }}/lambda-security
         export PULUMI_ACCESS_TOKEN="{{ lookup('env', 'PULUMI_ACCESS_TOKEN') }}"
-        sudo -E /root/.pulumi/bin/pulumi stack output --json
+        pulumi stack output --json
       register: security_outputs_raw
       changed_when: false
       when: not preview_only | default(false) | bool

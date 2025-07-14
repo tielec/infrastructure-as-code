@@ -40,10 +40,10 @@
       ansible.builtin.shell: |
         {{ scripts_dir }}/aws/aws-env.sh
         cd {{ pulumi_path }}/jenkins-loadbalancer
-        sudo -E /root/.pulumi/bin/pulumi config set aws:region {{ aws_region_name }}
-        sudo -E /root/.pulumi/bin/pulumi config set {{ loadbalancer_project_name }}:projectName {{ project_name }}
-        sudo -E /root/.pulumi/bin/pulumi config set {{ loadbalancer_project_name }}:networkStackName {{ network_project_name }}
-        sudo -E /root/.pulumi/bin/pulumi config set {{ loadbalancer_project_name }}:securityStackName {{ security_project_name }}
+        pulumi config set aws:region {{ aws_region_name }}
+        pulumi config set {{ loadbalancer_project_name }}:projectName {{ project_name }}
+        pulumi config set {{ loadbalancer_project_name }}:networkStackName {{ network_project_name }}
+        pulumi config set {{ loadbalancer_project_name }}:securityStackName {{ security_project_name }}
       register: pulumi_config_result
       changed_when: pulumi_config_result.rc == 0
     

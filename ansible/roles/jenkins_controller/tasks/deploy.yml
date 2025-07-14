@@ -45,24 +45,24 @@
       ansible.builtin.shell: |
         {{ scripts_dir }}/aws/aws-env.sh
         cd {{ pulumi_path }}/jenkins-controller
-        sudo -E /root/.pulumi/bin/pulumi config set aws:region {{ aws_region_name }}
-        sudo -E /root/.pulumi/bin/pulumi config set {{ controller_project_name }}:projectName {{ project_name }}
-        sudo -E /root/.pulumi/bin/pulumi config set {{ controller_project_name }}:networkStackName {{ network_project_name }}
-        sudo -E /root/.pulumi/bin/pulumi config set {{ controller_project_name }}:securityStackName {{ security_project_name }}
-        sudo -E /root/.pulumi/bin/pulumi config set {{ controller_project_name }}:storageStackName {{ storage_project_name }}
-        sudo -E /root/.pulumi/bin/pulumi config set {{ controller_project_name }}:loadbalancerStackName {{ loadbalancer_project_name }}
-        sudo -E /root/.pulumi/bin/pulumi config set {{ controller_project_name }}:jenkinsVersion {{ jenkins_version }}
-        sudo -E /root/.pulumi/bin/pulumi config set {{ controller_project_name }}:jenkinsColor {{ jenkins_color }}
-        sudo -E /root/.pulumi/bin/pulumi config set {{ controller_project_name }}:recoveryMode {{ recovery_mode | string | lower }}
-        sudo -E /root/.pulumi/bin/pulumi config set {{ controller_project_name }}:instanceType {{ instance_type }}
+        pulumi config set aws:region {{ aws_region_name }}
+        pulumi config set {{ controller_project_name }}:projectName {{ project_name }}
+        pulumi config set {{ controller_project_name }}:networkStackName {{ network_project_name }}
+        pulumi config set {{ controller_project_name }}:securityStackName {{ security_project_name }}
+        pulumi config set {{ controller_project_name }}:storageStackName {{ storage_project_name }}
+        pulumi config set {{ controller_project_name }}:loadbalancerStackName {{ loadbalancer_project_name }}
+        pulumi config set {{ controller_project_name }}:jenkinsVersion {{ jenkins_version }}
+        pulumi config set {{ controller_project_name }}:jenkinsColor {{ jenkins_color }}
+        pulumi config set {{ controller_project_name }}:recoveryMode {{ recovery_mode | string | lower }}
+        pulumi config set {{ controller_project_name }}:instanceType {{ instance_type }}
         {% if key_name is defined and key_name != "" %}
-        sudo -E /root/.pulumi/bin/pulumi config set {{ controller_project_name }}:keyName {{ key_name }}
+        pulumi config set {{ controller_project_name }}:keyName {{ key_name }}
         {% endif %}
         {% if git_repo is defined and git_repo != "" %}
-        sudo -E /root/.pulumi/bin/pulumi config set {{ controller_project_name }}:gitRepo {{ git_repo }}
+        pulumi config set {{ controller_project_name }}:gitRepo {{ git_repo }}
         {% endif %}
         {% if git_branch is defined and git_branch != "" %}
-        sudo -E /root/.pulumi/bin/pulumi config set {{ controller_project_name }}:gitBranch {{ git_branch }}
+        pulumi config set {{ controller_project_name }}:gitBranch {{ git_branch }}
         {% endif %}
       register: pulumi_config_result
       changed_when: pulumi_config_result.rc == 0

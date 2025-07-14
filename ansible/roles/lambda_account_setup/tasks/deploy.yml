@@ -26,10 +26,10 @@
       ansible.builtin.shell: |
         {{ scripts_dir }}/aws/aws-env.sh
         cd {{ pulumi_path }}/lambda-account-setup
-        sudo -E /root/.pulumi/bin/pulumi config set aws:region {{ aws_region_name }}
-        sudo -E /root/.pulumi/bin/pulumi config set lambda-account-setup:projectName {{ project_name }}
-        sudo -E /root/.pulumi/bin/pulumi config set lambda-account-setup:alertEmail {{ alert_email }}
-        sudo -E /root/.pulumi/bin/pulumi config set lambda-account-setup:criticalAlertEmail {{ critical_alert_email }}
+        pulumi config set aws:region {{ aws_region_name }}
+        pulumi config set lambda-account-setup:projectName {{ project_name }}
+        pulumi config set lambda-account-setup:alertEmail {{ alert_email }}
+        pulumi config set lambda-account-setup:criticalAlertEmail {{ critical_alert_email }}
       register: pulumi_config_result
       changed_when: pulumi_config_result.rc == 0
     

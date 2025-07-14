@@ -39,9 +39,9 @@
       ansible.builtin.shell: |
         {{ scripts_dir }}/aws/aws-env.sh
         cd {{ pulumi_path }}/jenkins-network
-        sudo -E /root/.pulumi/bin/pulumi config set aws:region {{ aws_region_name }}
-        sudo -E /root/.pulumi/bin/pulumi config set {{ network_project_name }}:projectName {{ project_name }}
-        sudo -E /root/.pulumi/bin/pulumi config set {{ network_project_name }}:vpcCidr {{ vpc_cidr | default('10.0.0.0/16') }}
+        pulumi config set aws:region {{ aws_region_name }}
+        pulumi config set {{ network_project_name }}:projectName {{ project_name }}
+        pulumi config set {{ network_project_name }}:vpcCidr {{ vpc_cidr | default('10.0.0.0/16') }}
       register: pulumi_config_result
       changed_when: pulumi_config_result.rc == 0
 
@@ -73,10 +73,10 @@
         {{ scripts_dir }}/aws/aws-env.sh
         cd {{ pulumi_path }}/jenkins-network
         # スタック出力を確認
-        sudo -E /root/.pulumi/bin/pulumi stack output || echo "No outputs available yet"
+        pulumi stack output || echo "No outputs available yet"
         
         # VPC IDの取得を試みる (存在しなければモック値を使用)
-        sudo -E /root/.pulumi/bin/pulumi stack output vpcId 2>/dev/null || echo "mock-vpc-id-for-empty-output"
+        pulumi stack output vpcId 2>/dev/null || echo "mock-vpc-id-for-empty-output"
       register: vpc_id_result
       changed_when: false
       ignore_errors: true
@@ -94,7 +94,7 @@
       ansible.builtin.shell: |
         {{ scripts_dir }}/aws/aws-env.sh
         cd {{ pulumi_path }}/jenkins-network
-        sudo -E /root/.pulumi/bin/pulumi stack output publicSubnetIds 2>/dev/null || 
+        pulumi stack output publicSubnetIds 2>/dev/null || 
           echo "['mock-public-subnet-1','mock-public-subnet-2']"
       register: public_subnets_result
       changed_when: false
@@ -109,7 +109,7 @@
       ansible.builtin.shell: |
         {{ scripts_dir }}/aws/aws-env.sh
         cd {{ pulumi_path }}/jenkins-network
-        sudo -E /root/.pulumi/bin/pulumi stack output privateSubnetIds 2>/dev/null || 
+        pulumi stack output privateSubnetIds 2>/dev/null || 
           echo "['mock-private-subnet-1','mock-private-subnet-2']"
       register: private_subnets_result
       changed_when: false
