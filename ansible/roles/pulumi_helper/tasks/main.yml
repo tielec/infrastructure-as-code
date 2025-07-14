@@ -32,13 +32,13 @@
 # Pulumiの確認と準備
 - name: Check if Pulumi is installed
   ansible.builtin.stat:
-    path: "/root/.pulumi/bin/pulumi"
+    path: "/usr/local/bin/pulumi"
   register: pulumi_check
   failed_when: false
 
 - name: Check root Pulumi installation
   ansible.builtin.stat:
-    path: "/root/.pulumi/bin/pulumi"
+    path: "/usr/local/bin/pulumi"
   register: pulumi_root_check
   failed_when: false
   when: not pulumi_check.stat.exists

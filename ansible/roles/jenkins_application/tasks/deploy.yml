@@ -36,9 +36,9 @@
       ansible.builtin.shell: |
         {{ scripts_dir }}/aws/aws-env.sh
         cd {{ pulumi_path }}/jenkins-application
-        sudo -E /root/.pulumi/bin/pulumi config set aws:region {{ aws_region_name }}
-        sudo -E /root/.pulumi/bin/pulumi config set {{ application_project_name }}:projectName {{ project_name }}
-        sudo -E /root/.pulumi/bin/pulumi config set {{ application_project_name }}:jenkinsVersion {{ jenkins_version }}
+        pulumi config set aws:region {{ aws_region_name }}
+        pulumi config set {{ application_project_name }}:projectName {{ project_name }}
+        pulumi config set {{ application_project_name }}:jenkinsVersion {{ jenkins_version }}
       register: pulumi_config_result
       changed_when: pulumi_config_result.rc == 0
     
@@ -63,7 +63,7 @@
       ansible.builtin.shell: |
         cd {{ pulumi_path }}/jenkins-application
         export PULUMI_ACCESS_TOKEN="{{ lookup('env', 'PULUMI_ACCESS_TOKEN') }}"
-        sudo -E /root/.pulumi/bin/pulumi stack output ssmDocuments --json 2>/dev/null || echo '{}'
+        pulumi stack output ssmDocuments --json 2>/dev/null || echo '{}'
       register: ssm_documents_output
       changed_when: false
 
@@ -87,7 +87,7 @@
       ansible.builtin.shell: |
         cd {{ pulumi_path }}/jenkins-config
         export PULUMI_ACCESS_TOKEN="{{ lookup('env', 'PULUMI_ACCESS_TOKEN') }}"
-        sudo -E /root/.pulumi/bin/pulumi stack output ssmDocuments --json 2>/dev/null || echo '{}'
+        pulumi stack output ssmDocuments --json 2>/dev/null || echo '{}'
       register: config_ssm_documents_output
       changed_when: false
 

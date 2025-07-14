@@ -55,7 +55,7 @@
   ansible.builtin.shell: |
     cd {{ pulumi_path }}/jenkins-storage
     export PULUMI_ACCESS_TOKEN="{{ lookup('env', 'PULUMI_ACCESS_TOKEN') }}"
-    sudo -E /root/.pulumi/bin/pulumi stack output efsFileSystemId 2>/dev/null
+    pulumi stack output efsFileSystemId 2>/dev/null
   register: efs_file_system_id_output
   changed_when: false
   failed_when: false
@@ -94,10 +94,10 @@
       ansible.builtin.shell: |
         {{ scripts_dir }}/aws/aws-env.sh
         cd {{ pulumi_path }}/jenkins-config
-        sudo -E /root/.pulumi/bin/pulumi config set aws:region {{ aws_region_name }}
-        sudo -E /root/.pulumi/bin/pulumi config set {{ config_project_name }}:projectName {{ project_name }}
-        sudo -E /root/.pulumi/bin/pulumi config set {{ config_project_name }}:jenkinsVersion {{ jenkins_version }}
-        sudo -E /root/.pulumi/bin/pulumi config set {{ config_project_name }}:recoveryMode {{ recovery_mode | string | lower }}
+        pulumi config set aws:region {{ aws_region_name }}
+        pulumi config set {{ config_project_name }}:projectName {{ project_name }}
+        pulumi config set {{ config_project_name }}:jenkinsVersion {{ jenkins_version }}
+        pulumi config set {{ config_project_name }}:recoveryMode {{ recovery_mode | string | lower }}
       register: pulumi_config_result
       changed_when: pulumi_config_result.rc == 0
     
@@ -122,7 +122,7 @@
       ansible.builtin.shell: |
         cd {{ pulumi_path }}/jenkins-config
         export PULUMI_ACCESS_TOKEN="{{ lookup('env', 'PULUMI_ACCESS_TOKEN') }}"
-        sudo -E /root/.pulumi/bin/pulumi stack output ssmDocuments --json 2>/dev/null || echo '{}'
+        pulumi stack output ssmDocuments --json 2>/dev/null || echo '{}'
       register: ssm_documents_output
       changed_when: false
 

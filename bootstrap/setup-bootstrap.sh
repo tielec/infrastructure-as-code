@@ -1,5 +1,6 @@
 #!/bin/bash
 # setup-bootstrap.sh - Jenkins CI/CD インフラストラクチャのブートストラップ環境セットアップスクリプト
+# Amazon Linux 2023対応版
 set -e
 
 GREEN='\033[0;32m'
@@ -10,14 +11,26 @@ NC='\033[0m' # No Color
 
 echo -e "${BLUE}=============================================${NC}"
 echo -e "${BLUE}   Jenkins インフラストラクチャ ブートストラップセットアップ   ${NC}"
+echo -e "${BLUE}   Amazon Linux 2023 Edition                 ${NC}"
 echo -e "${BLUE}=============================================${NC}"
 echo 
+
+# OSバージョンの確認
+echo -e "${GREEN}OS情報:${NC}"
+cat /etc/os-release | grep -E "^(NAME|VERSION)" | sed 's/^/  /'
+echo
 
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
 REPO_ROOT="$(dirname "$SCRIPT_DIR")"
 
 # リポジトリルートディレクトリに移動
 cd "$REPO_ROOT"
+
+# Python環境の確認
+echo -e "${GREEN}Python環境の確認:${NC}"
+python3 --version
+pip3 --version
+echo
 
 # スクリプトの実行権限確認と修正
 echo -e "${YELLOW}スクリプトファイルの実行権限を確認しています...${NC}"
@@ -90,7 +103,7 @@ generate_ssh_key() {
     echo -e "1. GitHubにログイン"
     echo -e "2. 右上のプロフィールアイコン → Settings"
     echo -e "3. 左側メニューの「SSH and GPG keys」→「New SSH key」"
-    echo -e "4. タイトルを入力（例: EC2 Bootstrap Instance）"
+    echo -e "4. タイトルを入力（例: EC2 Bootstrap Instance AL2023）"
     echo -e "5. 上記の公開キーを貼り付け"
     echo -e "6. 「Add SSH key」をクリック"
     
@@ -100,63 +113,105 @@ generate_ssh_key() {
   fi
 }
 
+# Ansibleの存在確認
+echo -e "${YELLOW}Ansibleのインストール状況を確認しています...${NC}"
+if ! command -v ansible-playbook &> /dev/null; then
+    echo -e "${YELLOW}Ansibleがインストールされていません。インストールします...${NC}"
+    sudo python3 -m pip install ansible
+fi
+
 # Ansibleプレイブックを実行
 echo -e "${YELLOW}ブートストラップ環境をセットアップします...${NC}"
 echo -e "${YELLOW}sudo権限が必要なため、パスワードの入力を求められる場合があります。${NC}"
 
 # GitHubリポジトリ用のSSHキーがあるか確認
-# これは必要に応じてコメントアウト可能
 if [ ! -f ~/.ssh/id_ed25519 ]; then
-  generate_ssh_key
+  echo -e "\n${YELLOW}GitHubアクセス用のSSHキーが必要ですか？${NC}"
+  read -p "SSHキーを生成しますか？ (y/N): " generate_key
+  if [[ $generate_key =~ ^[Yy]$ ]]; then
+    generate_ssh_key
+  fi
 fi
 
 # Ansibleプレイブックを実行
 echo -e "\n${YELLOW}Ansibleプレイブックを実行して環境をセットアップします...${NC}"
 
+# 環境変数を設定
+export PATH="$HOME/.local/bin:$PATH"
+source ~/.bashrc
+
 # ansible-playbookのパスを取得
 ANSIBLE_PLAYBOOK_PATH=$(which ansible-playbook)
 if [ -z "$ANSIBLE_PLAYBOOK_PATH" ]; then
-  echo -e "${YELLOW}ERROR: ansible-playbook コマンドが見つかりません。${NC}"
+  echo -e "${RED}ERROR: ansible-playbook コマンドが見つかりません。${NC}"
   exit 1
 fi
 
-echo -e "${YELLOW}ansible-playbook の場所: $ANSIBLE_PLAYBOOK_PATH${NC}"
+echo -e "${GREEN}ansible-playbook の場所: $ANSIBLE_PLAYBOOK_PATH${NC}"
 
-# 絶対パスで ansible-playbook を実行
-sudo $ANSIBLE_PLAYBOOK_PATH "$PLAYBOOK_PATH" -v
+# 絶対パスで ansible-playbook を実行（Amazon Linux 2023では通常sudoは不要）
+$ANSIBLE_PLAYBOOK_PATH "$PLAYBOOK_PATH" -v
 
 # Pulumi初期設定の案内
-echo -e "\n${YELLOW}Pulumiの設定について${NC}"
-echo -e "${YELLOW}Pulumi認証はAnsible実行時に必要です。${NC}"
-echo -e "${YELLOW}デプロイ前に以下の環境変数を設定してください：${NC}"
+echo -e "\n${BLUE}=== Pulumi設定 ===${NC}"
+echo -e "${YELLOW}Pulumiを使用するには、アクセストークンが必要です:${NC}"
 echo -e "${GREEN}export PULUMI_ACCESS_TOKEN=\"pul-YOUR_ACCESS_TOKEN\"${NC}"
-echo -e "${YELLOW}この環境変数が設定されていると、Ansible実行時に自動的にPulumiログインが行われます。${NC}"
+echo -e "${YELLOW}または、S3バックエンドを使用する場合:${NC}"
+echo -e "${GREEN}pulumi login s3://your-bucket-name${NC}"
 
-# AWS認証情報の設定
-echo -e "\n${YELLOW}AWS認証情報を設定します...${NC}"
-if [ -f "$REPO_ROOT/scripts/aws/setup-aws-credentials.sh" ]; then
-  echo -e "${GREEN}scripts/aws/setup-aws-credentials.sh スクリプトが見つかりました。${NC}"
-  source "$REPO_ROOT/scripts/aws/setup-aws-credentials.sh"
+# AWS認証情報の設定確認
+echo -e "\n${BLUE}=== AWS認証情報 ===${NC}"
+echo -e "${YELLOW}AWS認証情報を確認しています...${NC}"
+if aws sts get-caller-identity &> /dev/null; then
+    echo -e "${GREEN}✓ AWS認証情報は正しく設定されています${NC}"
+    aws sts get-caller-identity --output table
 else
-  echo -e "${YELLOW}AWS認証情報スクリプトが見つかりません。${NC}"
-  echo -e "EC2インスタンスのIAMロールを使用するため、設定は不要かもしれません。"
-  echo -e "必要に応じて、手動でAWS認証情報を設定してください。"
+    echo -e "${YELLOW}AWS認証情報が設定されていません。${NC}"
+    if [ -f "$REPO_ROOT/scripts/aws/setup-aws-credentials.sh" ]; then
+        echo -e "${GREEN}認証情報設定スクリプトを実行します...${NC}"
+        source "$REPO_ROOT/scripts/aws/setup-aws-credentials.sh"
+    else
+        echo -e "${YELLOW}EC2インスタンスのIAMロールを使用している場合は、追加設定は不要です。${NC}"
+    fi
+fi
+
+# Docker確認
+echo -e "\n${BLUE}=== Docker状態 ===${NC}"
+if command -v docker &> /dev/null; then
+    echo -e "${GREEN}✓ Dockerがインストールされています${NC}"
+    docker --version
+    if docker ps &> /dev/null; then
+        echo -e "${GREEN}✓ Dockerデーモンが実行中です${NC}"
+    else
+        echo -e "${YELLOW}Dockerデーモンが実行されていません。再ログインが必要かもしれません。${NC}"
+    fi
+else
+    echo -e "${YELLOW}Dockerはインストールされていません${NC}"
 fi
 
 # セットアップ完了メッセージ
-echo -e "\n${GREEN}ブートストラップ環境のセットアップが完了しました！${NC}"
-echo -e "\n${YELLOW}インストールされたツールを確認するには:${NC}"
-echo -e "  ./verify-installation.sh"
+echo -e "\n${GREEN}=============================================${NC}"
+echo -e "${GREEN}✅ ブートストラップ環境のセットアップが完了しました！${NC}"
+echo -e "${GREEN}=============================================${NC}"
+
+echo -e "\n${BLUE}インストールされたツール:${NC}"
+echo -e "  - AWS CLI v2 (最新版)"
+echo -e "  - Node.js 20 LTS"
+echo -e "  - Java 21 (Amazon Corretto)"
+echo -e "  - Python 3.9+"
+echo -e "  - Ansible with AWS collections (7.0+)"
+echo -e "  - Pulumi (最新版)"
+echo -e "  - Docker"
 
 echo -e "\n${YELLOW}次のステップ:${NC}"
-echo -e "1. AWS認証情報が正しく設定されていることを確認:"
-echo -e "   aws sts get-caller-identity"
-echo -e "2. JenkinsインフラストラクチャのAnsibleプレイブックを実行:"
-echo -e "   cd ansible/playbooks/"
-echo -e "   ansible-playbook jenkins_setup_pipeline.yml -e \"env=dev\" --check"
-echo -e "3. 問題がなければ、実際にデプロイを実行:"
-echo -e "   ansible-playbook jenkins_setup_pipeline.yml -e \"env=dev\""
+echo -e "1. インストール確認:"
+echo -e "   ${GREEN}./verify-installation.sh${NC}"
+echo -e ""
+echo -e "2. Jenkinsインフラのデプロイ:"
+echo -e "   ${GREEN}cd ansible/playbooks/${NC}"
+echo -e "   ${GREEN}ansible-playbook jenkins_setup_pipeline.yml -e \"env=dev\" --check${NC}"
+echo -e ""
+echo -e "3. 本番デプロイ:"
+echo -e "   ${GREEN}ansible-playbook jenkins_setup_pipeline.yml -e \"env=dev\"${NC}"
 
-echo -e "\n${BLUE}=============================================${NC}"
-echo -e "${BLUE}   セットアップ完了   ${NC}"
-echo -e "${BLUE}=============================================${NC}"
+echo -e "\n${BLUE}詳細な情報は ~/README.txt を参照してください。${NC}"

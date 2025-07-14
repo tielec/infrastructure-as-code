@@ -130,7 +130,7 @@
       ansible.builtin.shell: |
         cd {{ pulumi_path }}/lambda-database
         export PULUMI_ACCESS_TOKEN="{{ lookup('env', 'PULUMI_ACCESS_TOKEN') }}"
-        sudo -E /root/.pulumi/bin/pulumi stack ls --json | jq -r '.[].name' | grep -E "(^|/){{ env_name }}$" || echo ""
+        pulumi stack ls --json | jq -r '.[].name' | grep -E "(^|/){{ env_name }}$" || echo ""
       register: database_stack_check
       changed_when: false
       failed_when: false
@@ -149,7 +149,7 @@
       ansible.builtin.shell: |
         cd {{ pulumi_path }}/lambda-websocket
         export PULUMI_ACCESS_TOKEN="{{ lookup('env', 'PULUMI_ACCESS_TOKEN') }}"
-        sudo -E /root/.pulumi/bin/pulumi stack ls --json | jq -r '.[].name' | grep -E "(^|/){{ env_name }}$" || echo ""
+        pulumi stack ls --json | jq -r '.[].name' | grep -E "(^|/){{ env_name }}$" || echo ""
       register: websocket_stack_check
       changed_when: false
       failed_when: false
