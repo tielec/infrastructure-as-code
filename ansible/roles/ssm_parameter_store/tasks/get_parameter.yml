@@ -1,0 +1,154 @@
+---
+# 単一のSSMパラメータを取得するタスク
+
+- name: Validate required variables
+  ansible.builtin.fail:
+    msg: "Required variable 'parameter_name' is not defined"
+  when: parameter_name is not defined or parameter_name | length == 0
+
+# セキュアパラメータかどうかを判定
+- name: Determine if parameter is secure
+  ansible.builtin.set_fact:
+    is_secure: >-
+      {{
+        ssm_parameter_store_auto_secure and (
+          parameter_name | lower | regex_search('(' + ssm_parameter_store_all_secure_keywords | join('|') + ')')
+        ) is not none
+      }}
+
+# キャッシュの確認
+- name: Check cache for parameter
+  when: ssm_parameter_store_cache.enabled | bool
+  block:
+    - name: Get current timestamp
+      ansible.builtin.set_fact:
+        current_timestamp: "{{ ansible_date_time.epoch | int }}"
+    
+    - name: Check if parameter is in cache and not expired
+      ansible.builtin.set_fact:
+        cache_hit: >-
+          {{
+            parameter_name in ssm_parameter_cache and
+            parameter_name in ssm_parameter_cache_timestamps and
+            (current_timestamp | int - ssm_parameter_cache_timestamps[parameter_name] | int) < ssm_parameter_store_cache.ttl
+          }}
+    
+    - name: Use cached value
+      ansible.builtin.set_fact:
+        ssm_parameter_value: "{{ ssm_parameter_cache[parameter_name] }}"
+        ssm_operation_success: true
+      when: cache_hit | default(false)
+
+# SSMからパラメータを取得
+- name: Get parameter from SSM
+  when: not (cache_hit | default(false))
+  block:
+    - name: Retrieve parameter using AWS CLI
+      ansible.builtin.shell: |
+        aws ssm get-parameter \
+          --name "{{ parameter_name }}" \
+          --region {{ ssm_parameter_store_region }} \
+          {% if decrypt | default(true) %}--with-decryption{% endif %} \
+          --output json 2>&1
+      register: parameter_result
+      no_log: "{{ is_secure }}"
+      changed_when: false
+      retries: "{{ ssm_parameter_store_retry_count }}"
+      delay: "{{ ssm_parameter_store_retry_delay }}"
+      until: parameter_result.rc == 0 or 'ParameterNotFound' in parameter_result.stdout
+
+    - name: Parse parameter result
+      ansible.builtin.set_fact:
+        parameter_data: "{{ parameter_result.stdout | from_json }}"
+      when: parameter_result.rc == 0
+      no_log: "{{ is_secure }}"
+
+    - name: Extract parameter value and metadata
+      ansible.builtin.set_fact:
+        ssm_parameter_value: "{{ parameter_data.Parameter.Value }}"
+        ssm_parameter_metadata:
+          name: "{{ parameter_data.Parameter.Name }}"
+          type: "{{ parameter_data.Parameter.Type | default('String') }}"
+          version: "{{ parameter_data.Parameter.Version | default(1) }}"
+          last_modified: "{{ parameter_data.Parameter.LastModifiedDate | default('') }}"
+          arn: "{{ parameter_data.Parameter.ARN | default('') }}"
+      when: parameter_result.rc == 0
+      no_log: "{{ is_secure }}"
+
+    # JSONパラメータの自動パース
+    - name: Parse JSON parameter if requested
+      when: 
+        - parse_json | default(false)
+        - parameter_result.rc == 0
+      block:
+        - name: Parse JSON value
+          ansible.builtin.set_fact:
+            ssm_parameter_value: "{{ ssm_parameter_value | from_json }}"
+          no_log: "{{ is_secure }}"
+      rescue:
+        - name: Handle JSON parse error
+          ansible.builtin.fail:
+            msg: "Failed to parse parameter '{{ parameter_name }}' as JSON: {{ ssm_parameter_value }}"
+
+    # キャッシュに保存
+    - name: Cache parameter value
+      when: 
+        - ssm_parameter_store_cache.enabled | bool
+        - parameter_result.rc == 0
+      ansible.builtin.set_fact:
+        ssm_parameter_cache: "{{ ssm_parameter_cache | combine({parameter_name: ssm_parameter_value}) }}"
+        ssm_parameter_cache_timestamps: "{{ ssm_parameter_cache_timestamps | combine({parameter_name: current_timestamp}) }}"
+      no_log: "{{ is_secure }}"
+
+    - name: Set success status
+      ansible.builtin.set_fact:
+        ssm_operation_success: true
+      when: parameter_result.rc == 0
+
+  rescue:
+    - name: Handle parameter not found
+      when: "'ParameterNotFound' in parameter_result.stdout | default('')"
+      block:
+        - name: Use default value if provided
+          ansible.builtin.set_fact:
+            ssm_parameter_value: "{{ default_value }}"
+            ssm_operation_success: true
+          when: default_value is defined
+
+        - name: Fail if no default and fail_on_missing is true
+          ansible.builtin.fail:
+            msg: "Parameter '{{ parameter_name }}' not found in SSM Parameter Store"
+          when: 
+            - default_value is not defined
+            - ssm_parameter_store_fail_on_missing | bool
+
+    - name: Handle other errors
+      ansible.builtin.set_fact:
+        ssm_operation_error: "{{ parameter_result.stderr | default(parameter_result.stdout | default('Unknown error')) }}"
+        ssm_operation_success: false
+      when: "'ParameterNotFound' not in parameter_result.stdout | default('')"
+
+# 変数として保存（オプション）
+- name: Store parameter as custom variable
+  ansible.builtin.set_fact:
+    "{{ store_as }}": "{{ ssm_parameter_value }}"
+  when: 
+    - store_as is defined
+    - ssm_operation_success
+  no_log: "{{ is_secure }}"
+
+# デバッグ出力
+- name: Display parameter info (non-secure only)
+  ansible.builtin.debug:
+    msg: |
+      Parameter: {{ parameter_name }}
+      Type: {{ ssm_parameter_metadata.type | default('Unknown') }}
+      Success: {{ ssm_operation_success }}
+      {% if not is_secure %}
+      Value: {{ ssm_parameter_value }}
+      {% else %}
+      Value: {{ ssm_parameter_value | string | regex_replace('^(.{3}).*', '\\1***') if ssm_parameter_store_mask_partial else ssm_parameter_store_mask_value }}
+      {% endif %}
+  when: 
+    - ssm_parameter_store_verbose
+    - ssm_operation_success

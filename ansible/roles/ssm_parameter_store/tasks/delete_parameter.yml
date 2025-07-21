@@ -1,0 +1,61 @@
+---
+# SSMパラメータを削除するタスク
+
+- name: Validate required variables
+  ansible.builtin.fail:
+    msg: "Required variable 'parameter_name' is not defined"
+  when: parameter_name is not defined or parameter_name | length == 0
+
+- name: Delete parameter
+  block:
+    - name: Remove parameter from SSM using AWS CLI
+      ansible.builtin.shell: |
+        aws ssm delete-parameter \
+          --name "{{ parameter_name }}" \
+          --region {{ ssm_parameter_store_region }} \
+          --output json
+      register: delete_result
+      changed_when: delete_result.rc == 0
+
+    - name: Set success status
+      ansible.builtin.set_fact:
+        ssm_operation_success: true
+      when: delete_result.rc == 0
+
+    # キャッシュからも削除
+    - name: Remove from cache
+      when: 
+        - ssm_parameter_store_cache.enabled | bool
+        - parameter_name in ssm_parameter_cache
+      ansible.builtin.set_fact:
+        ssm_parameter_cache: "{{ ssm_parameter_cache | dict2items | rejectattr('key', 'equalto', parameter_name) | list | items2dict }}"
+        ssm_parameter_cache_timestamps: "{{ ssm_parameter_cache_timestamps | dict2items | rejectattr('key', 'equalto', parameter_name) | list | items2dict }}"
+
+  rescue:
+    - name: Check if parameter doesn't exist
+      ansible.builtin.set_fact:
+        parameter_not_found: "{{ 'ParameterNotFound' in delete_result.stderr | default('') }}"
+
+    - name: Handle parameter not found
+      ansible.builtin.set_fact:
+        ssm_operation_success: true
+        ssm_operation_error: "Parameter '{{ parameter_name }}' not found (already deleted)"
+      when: parameter_not_found
+
+    - name: Handle other deletion failures
+      ansible.builtin.set_fact:
+        ssm_operation_error: "{{ delete_result.stderr | default(delete_result.stdout | default('Failed to delete parameter')) }}"
+        ssm_operation_success: false
+      when: not parameter_not_found
+
+# デバッグ出力
+- name: Display operation result
+  ansible.builtin.debug:
+    msg: |
+      Parameter: {{ parameter_name }}
+      Deleted: {{ delete_result.changed | default(false) }}
+      Success: {{ ssm_operation_success }}
+      {% if ssm_operation_error is defined %}
+      Note: {{ ssm_operation_error }}
+      {% endif %}
+  when: ssm_parameter_store_verbose

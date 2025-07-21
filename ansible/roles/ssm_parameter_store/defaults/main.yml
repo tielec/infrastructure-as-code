@@ -1,0 +1,49 @@
+---
+# SSMパラメータストアヘルパーのデフォルト変数
+
+# AWS設定
+ssm_parameter_store_region: "{{ aws_region | default('ap-northeast-1') }}"
+
+# キャッシュ設定
+ssm_parameter_store_cache:
+  enabled: true
+  ttl: 300  # 5分間（秒）
+  scope: "playbook"  # playbook, task, none
+
+# セキュリティ設定
+ssm_parameter_store_auto_secure: true  # セキュアキーワードを自動検出
+ssm_parameter_store_mask_value: "***SECURE***"
+ssm_parameter_store_mask_partial: true  # true: 先頭3文字のみ表示 "abc***"
+ssm_parameter_store_secure_keywords:
+  - password
+  - secret
+  - key
+  - token
+  - credential
+  - private
+  - cert
+  - certificate
+  - auth
+
+# バッチ処理設定
+ssm_parameter_store_batch_size: 10  # AWS APIの制限に準拠
+
+# デフォルトの暗号化設定
+ssm_parameter_store_kms_key_id: "alias/aws/ssm"  # デフォルトKMSキー
+
+# エラーハンドリング
+ssm_parameter_store_fail_on_missing: true  # パラメータが見つからない場合に失敗
+ssm_parameter_store_retry_count: 3
+ssm_parameter_store_retry_delay: 5  # 秒
+
+# ログ設定
+ssm_parameter_store_verbose: "{{ ansible_verbosity > 0 }}"
+ssm_parameter_store_debug: "{{ ansible_verbosity > 1 }}"
+
+# 環境変数エクスポート設定
+ssm_parameter_store_env_prefix: ""
+ssm_parameter_store_env_uppercase: true
+ssm_parameter_store_env_separator: "_"
+
+# タイムアウト設定
+ssm_parameter_store_operation_timeout: 30  # 秒
