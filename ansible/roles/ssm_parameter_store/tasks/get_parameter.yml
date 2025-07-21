@@ -76,6 +76,15 @@
         ssm_operation_success: true
         ssm_operation_error: ""
 
+    - name: Set not found status when no default
+      when:
+        - _parameter_not_found
+        - default_value is not defined
+        - not ssm_parameter_store_fail_on_missing | default(true)
+      ansible.builtin.set_fact:
+        ssm_operation_success: false
+        ssm_operation_error: "Parameter not found"
+
     - name: Fail if no default value
       when:
         - _parameter_not_found
