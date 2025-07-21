@@ -1,17 +1,18 @@
 ---
-# SSMパラメータを設定/更新するタスク
+# SSMパラメータを設定/更新するタスク（aws_cli_helper版）
 
-- name: Validate required variables
+- name: Validate inputs
   ansible.builtin.assert:
     that:
       - parameter_name is defined
+      - parameter_name | length > 0
       - parameter_value is defined
     fail_msg: "Required variables 'parameter_name' and 'parameter_value' must be defined"
 
 # パラメータタイプの決定
 - name: Determine parameter type
   ansible.builtin.set_fact:
-    parameter_type: >-
+    _parameter_type: >-
       {%- if parameter_type is defined -%}
         {{ parameter_type }}
       {%- elif is_secure | default(false) or (ssm_parameter_store_auto_secure and 
@@ -21,66 +22,67 @@
         String
       {%- endif -%}
 
-# パラメータを設定（存在確認なしでoverwriteを使用）
-- name: Put parameter to SSM
-  ansible.builtin.shell: |
-    aws ssm put-parameter \
-      --name "{{ parameter_name }}" \
-      --value "{{ parameter_value }}" \
-      --type "{{ parameter_type }}" \
-      --overwrite \
-      --region {{ ssm_parameter_store_region }} \
-      {% if description is defined %}--description "{{ description }}"{% endif %} \
-      {% if parameter_type == 'SecureString' and kms_key_id is defined %}--key-id "{{ kms_key_id }}"{% endif %} \
+# パラメータを設定
+- name: Put parameter to SSM using AWS CLI helper
+  ansible.builtin.include_role:
+    name: aws_cli_helper
+    tasks_from: execute_with_retry
+  vars:
+    aws_command: >-
+      aws ssm put-parameter
+      --name "{{ parameter_name }}"
+      --value "{{ parameter_value }}"
+      --type "{{ _parameter_type }}"
+      --overwrite
+      {% if description is defined %}--description "{{ description }}"{% endif %}
+      {% if _parameter_type == 'SecureString' and kms_key_id is defined %}--key-id "{{ kms_key_id }}"{% endif %}
       --output json
-  register: put_result
-  no_log: "{{ parameter_type == 'SecureString' }}"
+    operation_name: "ssm_put_parameter"
+    no_log_output: "{{ _parameter_type == 'SecureString' }}"
 
 # 結果の処理
-- name: Set operation status
-  ansible.builtin.set_fact:
-    ssm_operation_success: "{{ put_result.rc == 0 }}"
-    ssm_operation_error: "{{ put_result.stderr | default('') if put_result.rc != 0 else '' }}"
+- name: Process put result
+  when: aws_cli_success
+  block:
+    - name: Extract version info
+      ansible.builtin.set_fact:
+        ssm_parameter_version: "{{ aws_cli_data.Version | default(1) }}"
+        ssm_operation_success: true
+        ssm_operation_error: ""
 
-# タグの設定（別途実行）
-- name: Add tags if specified
-  ansible.builtin.shell: |
-    aws ssm add-tags-to-resource \
-      --resource-type "Parameter" \
-      --resource-id "{{ parameter_name }}" \
-      --tags {% for k, v in tags.items() %}Key={{ k }},Value={{ v }}{% if not loop.last %} {% endif %}{% endfor %} \
-      --region {{ ssm_parameter_store_region }}
-  when:
-    - tags is defined
-    - tags | length > 0
-    - put_result.rc == 0
-  register: tag_result
+    # タグの設定
+    - name: Add tags if specified
+      when:
+        - tags is defined
+        - tags | length > 0
+      ansible.builtin.include_role:
+        name: aws_cli_helper
+        tasks_from: execute
+      vars:
+        aws_command: >-
+          aws ssm add-tags-to-resource
+          --resource-type "Parameter"
+          --resource-id "{{ parameter_name }}"
+          --tags {% for k, v in tags.items() %}Key={{ k }},Value={{ v }}{% if not loop.last %} {% endif %}{% endfor %}
+        operation_name: "ssm_add_tags"
 
-# バージョン情報の取得
-- name: Extract version info
+- name: Handle put failure
+  when: not aws_cli_success
   ansible.builtin.set_fact:
-    ssm_parameter_version: "{{ (put_result.stdout | from_json).Version | default(1) }}"
-  when: put_result.rc == 0
-
-# キャッシュの更新
-- name: Update cache
-  when: 
-    - ssm_parameter_store_cache.enabled | bool
-    - put_result.rc == 0
-  ansible.builtin.set_fact:
-    ssm_parameter_cache: "{{ ssm_parameter_cache | combine({parameter_name: parameter_value}) }}"
-    ssm_parameter_cache_timestamps: "{{ ssm_parameter_cache_timestamps | combine({parameter_name: ansible_date_time.epoch | int}) }}"
-  no_log: "{{ parameter_type == 'SecureString' }}"
+    ssm_operation_success: false
+    ssm_operation_error: "{{ aws_cli_error_message }}"
 
 # デバッグ出力
 - name: Display operation result
+  when: ssm_parameter_store_verbose
   ansible.builtin.debug:
     msg: |
       Parameter: {{ parameter_name }}
-      Type: {{ parameter_type }}
+      Type: {{ _parameter_type }}
       Success: {{ ssm_operation_success }}
-      Version: {{ ssm_parameter_version | default('Unknown') }}
-      {% if not ssm_operation_success %}
+      Retry Attempts: {{ aws_cli_retry_attempts | default(1) }}
+      {% if ssm_operation_success %}
+      Version: {{ ssm_parameter_version }}
+      {% else %}
       Error: {{ ssm_operation_error }}
       {% endif %}
-  when: ssm_parameter_store_verbose

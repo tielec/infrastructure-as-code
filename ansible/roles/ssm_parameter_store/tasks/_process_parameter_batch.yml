@@ -1,0 +1,58 @@
+---
+# 単一バッチのパラメータを処理する内部タスク
+
+# バッチで一括取得
+- name: Get parameters batch using AWS CLI helper
+  ansible.builtin.include_role:
+    name: aws_cli_helper
+    tasks_from: execute_with_retry
+  vars:
+    aws_command: >-
+      aws ssm get-parameters
+      --names {{ batch_names | join(' ') }}
+      {% if decrypt | default(true) %}--with-decryption{% endif %}
+      --output json
+    operation_name: "ssm_get_parameters_batch_{{ batch_index }}"
+    no_log_output: true
+
+# 成功時の処理
+- name: Process batch results
+  when: aws_cli_success
+  block:
+    - name: Extract parameters from batch
+      ansible.builtin.set_fact:
+        _batch_params: >-
+          {%- set params = {} -%}
+          {%- for param in aws_cli_data.Parameters | default([]) -%}
+            {%- set _ = params.update({param.Name: param.Value}) -%}
+          {%- endfor -%}
+          {{ params }}
+        _batch_metadata: >-
+          {%- set metadata = {} -%}
+          {%- for param in aws_cli_data.Parameters | default([]) -%}
+            {%- set _ = metadata.update({
+              param.Name: {
+                'type': param.Type,
+                'version': param.Version,
+                'last_modified': param.LastModifiedDate | default('')
+              }
+            }) -%}
+          {%- endfor -%}
+          {{ metadata }}
+
+    - name: Merge batch results
+      ansible.builtin.set_fact:
+        ssm_parameters: "{{ ssm_parameters | combine(_batch_params) }}"
+        ssm_parameter_metadata: "{{ ssm_parameter_metadata | combine(_batch_metadata) }}"
+
+# エラー処理
+- name: Log batch errors
+  when: 
+    - not aws_cli_success
+    - ssm_parameter_store_debug
+  ansible.builtin.debug:
+    msg: |
+      Batch {{ batch_index }} failed:
+      Error Type: {{ aws_cli_error_type }}
+      Error: {{ aws_cli_error_message }}
+      Retry Attempts: {{ aws_cli_retry_attempts }}
