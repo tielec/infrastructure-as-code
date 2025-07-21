@@ -218,7 +218,7 @@
               ansible.builtin.assert:
                 that:
                   - ssm_operation_success
-                  - ssm_parameter_count >= 3
+                  - ssm_parameter_count | int >= 3
                   - test_parameters.string_param in ssm_parameters
                   - ssm_parameters[test_parameters.string_param] == test_values.api_endpoint
                 fail_msg: "Multiple parameter retrieval failed"
@@ -239,7 +239,7 @@
               ansible.builtin.assert:
                 that:
                   - ssm_operation_success
-                  - ssm_parameter_count >= 4
+                  - ssm_parameter_count | int >= 4
                   - test_parameters.string_param in ssm_parameters
                   - test_parameters.secure_param in ssm_parameters
                 fail_msg: "Path-based parameter retrieval failed"
@@ -332,7 +332,7 @@
             - name: Assert cleanup successful
               ansible.builtin.assert:
                 that:
-                  - ssm_parameter_count == 0
+                  - ssm_parameter_count | int == 0
                 fail_msg: "Cleanup incomplete - parameters still exist"
         
         # ==================== 最終レポート ====================

@@ -77,7 +77,7 @@
 - name: Set operation summary
   ansible.builtin.set_fact:
     ssm_operation_success: true
-    ssm_parameter_count: "{{ ssm_parameters | length }}"
+    ssm_parameter_count: "{{ ssm_parameters | length | int }}"
 
 # デバッグ出力
 - name: Display results summary

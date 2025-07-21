@@ -59,7 +59,7 @@
     - name: Set success status
       ansible.builtin.set_fact:
         ssm_operation_success: true
-        ssm_parameter_count: "{{ ssm_parameters | length }}"
+        ssm_parameter_count: "{{ ssm_parameters | length | int }}"
 
 # エラー処理
 - name: Handle errors
