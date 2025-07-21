@@ -1,9 +1,12 @@
+---
+# 内部用: リトライループの実装
+
 - name: Increment retry counter
   ansible.builtin.set_fact:
-    _retry_attempt: "{{ _retry_attempt | int + 1 }}"
+    _retry_attempt: "{{ (_retry_attempt | int) + 1 }}"
 
 - name: "Attempt {{ _retry_attempt }}/{{ max_attempts }}"
-  when: not _retry_success and _retry_attempt | int <= max_attempts | int
+  when: not _retry_success and (_retry_attempt | int) <= (max_attempts | int)
   block:
     - name: Execute AWS command
       ansible.builtin.include_tasks: execute.yml
@@ -14,7 +17,7 @@
           {{
             not aws_cli_success and
             aws_cli_error_type | default('') in aws_cli_helper_retriable_errors and
-            _retry_attempt | int < max_attempts | int
+            (_retry_attempt | int) < (max_attempts | int)
           }}
 
     - name: Mark success if no retry needed
@@ -27,23 +30,24 @@
       ansible.builtin.set_fact:
         _retry_wait: >-
           {%- if use_backoff | default(aws_cli_helper_retry_backoff) -%}
-            {{ [retry_delay | default(aws_cli_helper_retry_delay) | int * (2 ** (_retry_attempt | int - 1)),
+            {{ [(retry_delay | default(aws_cli_helper_retry_delay) | int) * (2 ** ((_retry_attempt | int) - 1)),
                 aws_cli_helper_retry_max_delay | int] | min }}
           {%- else -%}
-            {{ retry_delay | default(aws_cli_helper_retry_delay) }}
+            {{ retry_delay | default(aws_cli_helper_retry_delay) | int }}
           {%- endif -%}
 
     - name: Wait before retry
       when: _should_retry
       ansible.builtin.pause:
-        seconds: "{{ _retry_wait }}"
+        seconds: "{{ _retry_wait | int }}"
         prompt: "Retrying after {{ _retry_wait }} seconds (attempt {{ _retry_attempt }}/{{ max_attempts }})"
 
     - name: Continue retry loop
       when: _should_retry
       ansible.builtin.include_tasks: _retry_loop.yml
 
+# 最終的なリトライ情報を整数として設定
 - name: Set final retry status
   ansible.builtin.set_fact:
-    aws_cli_retry_attempts: "{{ _retry_attempt }}"
-    aws_cli_retry_exhausted: "{{ not _retry_success and _retry_attempt | int >= max_attempts | int }}"
+    aws_cli_retry_attempts: "{{ _retry_attempt | int }}"
+    aws_cli_retry_exhausted: "{{ not _retry_success and (_retry_attempt | int) >= (max_attempts | int) }}"

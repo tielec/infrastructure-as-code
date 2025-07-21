@@ -71,6 +71,7 @@
     aws_cli_success: "{{ _aws_cli_raw_result.rc == 0 }}"
     aws_cli_stdout: "{{ _aws_cli_raw_result.stdout | default('') }}"
     aws_cli_stderr: "{{ _aws_cli_raw_result.stderr | default('') }}"
+    aws_cli_retry_attempts: 1  # execute.yml は常に1回の実行
   no_log: "{{ no_log_output | default(false) }}"
 
 # エラー解析

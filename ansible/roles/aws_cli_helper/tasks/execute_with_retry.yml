@@ -14,4 +14,4 @@
 - name: Execute with retry loop
   ansible.builtin.include_tasks: _retry_loop.yml
   vars:
-    max_attempts: "{{ (max_retries | default(aws_cli_helper_retry_count) | int) + 1 }}"
+    max_attempts: "{{ ((max_retries | default(aws_cli_helper_retry_count) | int) + 1) | int }}"
