@@ -10,22 +10,7 @@
       - Environment: {{ env_name }}
       - Jenkins Color: {{ jenkins_color | default('blue') }}
 
-# 既存のSSMドキュメントを削除（クリーンアップ）
-- name: Destroy existing SSM documents before update
-  ansible.builtin.include_role:
-    name: pulumi_helper
-    tasks_from: destroy
-  vars:
-    pulumi_project_path: "{{ pulumi_path }}/jenkins-config"
-    # 古いドキュメント名を指定して削除
-    target_resources:
-      - "aws:ssm/document:Document::jenkins-infra-jenkins-install-{{ env_name }}"
-      - "aws:ssm/document:Document::jenkins-infra-jenkins-mount-efs-{{ env_name }}"
-      - "aws:ssm/document:Document::jenkins-infra-jenkins-configure-{{ env_name }}"
-      - "aws:ssm/document:Document::jenkins-infra-jenkins-startup-{{ env_name }}"
-  ignore_errors: true
-
-# JenkinsインスタンスIDの取得（Parameter Storeから）- 修正版
+# JenkinsインスタンスIDの取得（Parameter Storeから）
 - name: Get Jenkins instance ID from SSM Parameter Store
   ansible.builtin.include_role:
     name: ssm_parameter_store
