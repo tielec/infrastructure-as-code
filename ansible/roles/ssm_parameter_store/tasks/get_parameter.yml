@@ -47,19 +47,12 @@
           last_modified: "{{ _param_data.Parameter.LastModifiedDate | default('') }}"
       no_log: "{{ is_secure }}"
 
-    # JSONパラメータの処理
-    - name: Check if value is string
+    # JSONパラメータの処理（一旦削除）
+    # TODO: JSONパース機能は後で実装
+    - name: Skip JSON parsing for now
       when: parse_json | default(false)
-      ansible.builtin.set_fact:
-        _is_string: "{{ ssm_parameter_value is string }}"
-
-    - name: Parse JSON string
-      when: 
-        - parse_json | default(false)
-        - _is_string | bool
-      ansible.builtin.set_fact:
-        ssm_parameter_value: "{{ ssm_parameter_value | from_json }}"
-      no_log: "{{ is_secure }}"
+      ansible.builtin.debug:
+        msg: "JSON parsing is not implemented in simple version"
 
     - name: Set success status
       ansible.builtin.set_fact:
