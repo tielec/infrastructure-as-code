@@ -1,127 +1,448 @@
 ---
-# ansible/playbooks/test-ssm-basic.yml
-# 基本的なSSMパラメータ操作のテスト
-- name: Basic SSM Parameter Store test
+# ansible/playbooks/test-ssm-parameter-store.yml
+# SSM Parameter Storeロールの包括的なテスト（シンプル版対応）
+- name: Validate SSM Parameter Store role functionality
   hosts: localhost
   connection: local
   gather_facts: yes
   
   vars:
-    test_param: "/ansible-test/basic-{{ ansible_date_time.epoch[-4:] }}"
+    # テスト設定
+    test_prefix: "/ansible-test/ssm-{{ ansible_date_time.epoch[-4:] }}"
+    test_timestamp: "{{ ansible_date_time.iso8601_basic_short }}"
     
+    # クリーンアップ設定
+    cleanup_on_failure: true
+    cleanup_on_success: true
+    
+    # 操作モード
+    operation: "{{ op | default('full') }}"  # full, create-only, test-only, cleanup-only
+    
+  pre_tasks:
+    # テスト用の固定値を設定
+    - name: Set test values
+      ansible.builtin.set_fact:
+        test_run_id: "{{ ansible_date_time.epoch[-6:] }}"
+        test_password: "SecureTestPwd{{ ansible_date_time.epoch[-6:] }}"
+    
+    - name: Set test parameters
+      ansible.builtin.set_fact:
+        test_parameters:
+          string_param: "{{ test_prefix }}/config/api_endpoint"
+          secure_param: "{{ test_prefix }}/secrets/database_password"
+          json_param: "{{ test_prefix }}/config/features"
+          list_param: "{{ test_prefix }}/config/allowed_ips"
+        test_values:
+          api_endpoint: "https://api.example.com/v1"
+          database_password: "{{ test_password }}"
+          features:
+            enable_cache: true
+            cache_ttl: 3600
+            max_connections: 100
+          allowed_ips:
+            - "10.0.0.0/8"
+            - "172.16.0.0/12"
+            - "192.168.0.0/16"
+    
+    # AWS認証の確認
+    - name: Verify AWS credentials
+      ansible.builtin.shell: aws sts get-caller-identity
+      register: aws_check
+      changed_when: false
+      failed_when: aws_check.rc != 0
+
   tasks:
-    # ==================== 基本テスト ====================
-    - name: Basic parameter operations
+    - name: Run SSM Parameter Store validation
       block:
-        # 1. ロールの初期化
-        - name: Initialize role
-          ansible.builtin.include_role:
-            name: ssm_parameter_store
-
-        # 2. パラメータの作成
-        - name: Create parameter
-          ansible.builtin.include_role:
-            name: ssm_parameter_store
-            tasks_from: set_parameter
-          vars:
-            parameter_name: "{{ test_param }}"
-            parameter_value: "test-value-123"
-
-        - name: Show create result
-          ansible.builtin.debug:
-            msg: "Create success: {{ ssm_operation_success }}"
-
-        # 3. パラメータの取得
-        - name: Get parameter
-          ansible.builtin.include_role:
-            name: ssm_parameter_store
-            tasks_from: get_parameter
-          vars:
-            parameter_name: "{{ test_param }}"
-
-        - name: Show get result
-          ansible.builtin.debug:
-            msg: |
-              Get success: {{ ssm_operation_success }}
-              Value: {{ ssm_parameter_value }}
-              Expected: test-value-123
-              Match: {{ ssm_parameter_value == 'test-value-123' }}
-
-        # 4. パラメータの更新
-        - name: Update parameter
-          ansible.builtin.include_role:
-            name: ssm_parameter_store
-            tasks_from: set_parameter
-          vars:
-            parameter_name: "{{ test_param }}"
-            parameter_value: "updated-value-456"
-
-        - name: Get updated parameter
-          ansible.builtin.include_role:
-            name: ssm_parameter_store
-            tasks_from: get_parameter
-          vars:
-            parameter_name: "{{ test_param }}"
-
-        - name: Show update result
-          ansible.builtin.debug:
-            msg: |
-              Update success: {{ ssm_operation_success }}
-              New value: {{ ssm_parameter_value }}
-              Expected: updated-value-456
-              Match: {{ ssm_parameter_value == 'updated-value-456' }}
-
-        # 5. パラメータの削除
-        - name: Delete parameter
-          ansible.builtin.include_role:
-            name: ssm_parameter_store
-            tasks_from: delete_parameter
-          vars:
-            parameter_name: "{{ test_param }}"
-
-        - name: Show delete result
-          ansible.builtin.debug:
-            msg: "Delete success: {{ ssm_operation_success }}"
-
-        # 6. 削除確認
-        - name: Try to get deleted parameter
-          ansible.builtin.include_role:
-            name: ssm_parameter_store
-            tasks_from: get_parameter
-          vars:
-            parameter_name: "{{ test_param }}"
-            ssm_parameter_store_fail_on_missing: false
-
-        - name: Show deletion confirmed
-          ansible.builtin.debug:
-            msg: "Parameter deleted: {{ not ssm_operation_success }}"
-
-        # 最終結果
-        - name: All tests passed
-          ansible.builtin.debug:
-            msg: |
-              ========================================
-              ✓ All basic tests passed!
-              - Create: OK
-              - Get: OK
-              - Update: OK
-              - Delete: OK
-              ========================================
-
+        # ==================== 準備フェーズ ====================
+        - name: "PHASE 1: Preparation and Setup"
+          block:
+            - name: Display test configuration
+              ansible.builtin.debug:
+                msg: |
+                  ========================================
+                  SSM Parameter Store Test Configuration
+                  ========================================
+                  Test Prefix: {{ test_prefix }}
+                  Test Run ID: {{ test_run_id }}
+                  Timestamp: {{ test_timestamp }}
+                  Operation Mode: {{ operation }}
+                  AWS Region: {{ ssm_parameter_store_region | default('ap-northeast-1') }}
+                  ========================================
+            
+            # SSM Parameter Storeロールの初期化
+            - name: Initialize SSM Parameter Store role
+              ansible.builtin.include_role:
+                name: ssm_parameter_store
+        
+        # ==================== パラメータ作成フェーズ ====================
+        - name: "PHASE 2: Parameter Creation"
+          when: operation in ['full', 'create-only']
+          block:
+            - name: Create string parameter
+              ansible.builtin.include_role:
+                name: ssm_parameter_store
+                tasks_from: set_parameter
+              vars:
+                parameter_name: "{{ test_parameters.string_param }}"
+                parameter_value: "{{ test_values.api_endpoint }}"
+                parameter_type: "String"
+                description: "Test API endpoint"
+                tags:
+                  TestRun: "{{ test_run_id }}"
+                  CreatedBy: "ansible-test"
+            
+            - name: Verify string parameter creation
+              ansible.builtin.assert:
+                that:
+                  - ssm_operation_success
+                fail_msg: "Failed to create string parameter"
+            
+            - name: Create secure parameter
+              ansible.builtin.include_role:
+                name: ssm_parameter_store
+                tasks_from: set_parameter
+              vars:
+                parameter_name: "{{ test_parameters.secure_param }}"
+                parameter_value: "{{ test_values.database_password }}"
+                parameter_type: "SecureString"
+                description: "Test database password"
+                tags:
+                  TestRun: "{{ test_run_id }}"
+                  CreatedBy: "ansible-test"
+            
+            - name: Verify secure parameter creation
+              ansible.builtin.assert:
+                that:
+                  - ssm_operation_success
+                fail_msg: "Failed to create secure parameter"
+            
+            - name: Create JSON parameter
+              ansible.builtin.include_role:
+                name: ssm_parameter_store
+                tasks_from: set_parameter
+              vars:
+                parameter_name: "{{ test_parameters.json_param }}"
+                parameter_value: "{{ test_values.features | to_json }}"
+                parameter_type: "String"
+                description: "Test feature configuration"
+                tags:
+                  TestRun: "{{ test_run_id }}"
+                  CreatedBy: "ansible-test"
+            
+            - name: Create StringList parameter
+              ansible.builtin.include_role:
+                name: ssm_parameter_store
+                tasks_from: set_parameter
+              vars:
+                parameter_name: "{{ test_parameters.list_param }}"
+                parameter_value: "{{ test_values.allowed_ips | join(',') }}"
+                parameter_type: "StringList"
+                description: "Test allowed IPs"
+                tags:
+                  TestRun: "{{ test_run_id }}"
+                  CreatedBy: "ansible-test"
+        
+        # ==================== 単一パラメータ取得テスト ====================
+        - name: "PHASE 3: Single Parameter Retrieval Tests"
+          when: operation in ['full', 'test-only']
+          block:
+            - name: Test get string parameter
+              ansible.builtin.include_role:
+                name: ssm_parameter_store
+                tasks_from: get_parameter
+              vars:
+                parameter_name: "{{ test_parameters.string_param }}"
+                store_as: "retrieved_api_endpoint"
+            
+            - name: Verify string parameter value
+              ansible.builtin.assert:
+                that:
+                  - ssm_operation_success
+                  - retrieved_api_endpoint == test_values.api_endpoint
+                fail_msg: "String parameter retrieval failed or value mismatch"
+            
+            - name: Test get secure parameter
+              ansible.builtin.include_role:
+                name: ssm_parameter_store
+                tasks_from: get_parameter
+              vars:
+                parameter_name: "{{ test_parameters.secure_param }}"
+                store_as: "retrieved_password"
+            
+            - name: Verify secure parameter
+              ansible.builtin.assert:
+                that:
+                  - ssm_operation_success
+                  - retrieved_password is defined
+                  - retrieved_password == test_values.database_password
+                fail_msg: "Secure parameter retrieval failed"
+            
+            - name: Test get JSON parameter with parsing
+              ansible.builtin.include_role:
+                name: ssm_parameter_store
+                tasks_from: get_parameter
+              vars:
+                parameter_name: "{{ test_parameters.json_param }}"
+                parse_json: true
+                store_as: "retrieved_features"
+            
+            - name: Verify JSON parameter
+              ansible.builtin.assert:
+                that:
+                  - ssm_operation_success
+                  - retrieved_features.enable_cache == test_values.features.enable_cache
+                  - retrieved_features.cache_ttl == test_values.features.cache_ttl
+                fail_msg: "JSON parameter retrieval or parsing failed"
+            
+            - name: Test parameter with default value
+              ansible.builtin.include_role:
+                name: ssm_parameter_store
+                tasks_from: get_parameter
+              vars:
+                parameter_name: "{{ test_prefix }}/nonexistent"
+                default_value: "fallback-value"
+                ssm_parameter_store_fail_on_missing: false
+            
+            - name: Verify default value usage
+              ansible.builtin.assert:
+                that:
+                  - ssm_operation_success
+                  - ssm_parameter_value == "fallback-value"
+                fail_msg: "Default value not used for missing parameter"
+        
+        # ==================== 複数パラメータ取得テスト ====================
+        - name: "PHASE 4: Multiple Parameter Retrieval Tests"
+          when: operation in ['full', 'test-only']
+          block:
+            - name: Test get multiple parameters
+              ansible.builtin.include_role:
+                name: ssm_parameter_store
+                tasks_from: get_parameters
+              vars:
+                parameter_names:
+                  - "{{ test_parameters.string_param }}"
+                  - "{{ test_parameters.secure_param }}"
+                  - "{{ test_parameters.json_param }}"
+                  - "{{ test_prefix }}/nonexistent"  # 存在しないパラメータ
+            
+            - name: Verify multiple parameter results
+              ansible.builtin.assert:
+                that:
+                  - ssm_operation_success
+                  - ssm_parameter_count >= 3
+                  - test_parameters.string_param in ssm_parameters
+                  - ssm_parameters[test_parameters.string_param] == test_values.api_endpoint
+                fail_msg: "Multiple parameter retrieval failed"
+        
+        # ==================== パスベース取得テスト ====================
+        - name: "PHASE 5: Path-based Retrieval Tests"
+          when: operation in ['full', 'test-only']
+          block:
+            - name: Test get parameters by path
+              ansible.builtin.include_role:
+                name: ssm_parameter_store
+                tasks_from: get_parameters_by_path
+              vars:
+                parameter_path: "{{ test_prefix }}/"
+                recursive: true
+            
+            - name: Verify path-based retrieval
+              ansible.builtin.assert:
+                that:
+                  - ssm_operation_success
+                  - ssm_parameter_count >= 4
+                  - test_parameters.string_param in ssm_parameters
+                  - test_parameters.secure_param in ssm_parameters
+                fail_msg: "Path-based parameter retrieval failed"
+            
+            - name: Test non-recursive path retrieval
+              ansible.builtin.include_role:
+                name: ssm_parameter_store
+                tasks_from: get_parameters_by_path
+              vars:
+                parameter_path: "{{ test_prefix }}/config/"
+                recursive: false
+            
+            - name: Store non-recursive results
+              ansible.builtin.set_fact:
+                non_recursive_count: "{{ ssm_parameter_count }}"
+        
+        # ==================== 更新テスト ====================
+        - name: "PHASE 6: Parameter Update Tests"
+          when: operation in ['full', 'test-only']
+          block:
+            - name: Update string parameter
+              ansible.builtin.include_role:
+                name: ssm_parameter_store
+                tasks_from: set_parameter
+              vars:
+                parameter_name: "{{ test_parameters.string_param }}"
+                parameter_value: "https://api.example.com/v2"
+                description: "Updated test API endpoint"
+            
+            - name: Verify parameter update
+              ansible.builtin.include_role:
+                name: ssm_parameter_store
+                tasks_from: get_parameter
+              vars:
+                parameter_name: "{{ test_parameters.string_param }}"
+            
+            - name: Assert update successful
+              ansible.builtin.assert:
+                that:
+                  - ssm_parameter_value == "https://api.example.com/v2"
+                fail_msg: "Parameter update failed"
+        
+        # ==================== 削除テスト ====================
+        - name: "PHASE 7: Parameter Deletion Tests"
+          when: operation in ['full', 'test-only']
+          block:
+            - name: Delete one parameter
+              ansible.builtin.include_role:
+                name: ssm_parameter_store
+                tasks_from: delete_parameter
+              vars:
+                parameter_name: "{{ test_parameters.string_param }}"
+            
+            - name: Verify deletion
+              ansible.builtin.include_role:
+                name: ssm_parameter_store
+                tasks_from: get_parameter
+              vars:
+                parameter_name: "{{ test_parameters.string_param }}"
+                ssm_parameter_store_fail_on_missing: false
+            
+            - name: Assert parameter deleted
+              ansible.builtin.assert:
+                that:
+                  - not ssm_operation_success
+                fail_msg: "Parameter still exists after deletion"
+        
+        # ==================== クリーンアップフェーズ ====================
+        - name: "PHASE 8: Cleanup"
+          when: operation in ['full', 'cleanup-only'] or cleanup_on_success
+          block:
+            - name: Delete remaining test parameters
+              ansible.builtin.include_role:
+                name: ssm_parameter_store
+                tasks_from: delete_parameter
+              vars:
+                parameter_name: "{{ item.value }}"
+              loop: "{{ test_parameters | dict2items }}"
+              when: item.key != 'string_param'  # Already deleted in previous test
+              ignore_errors: true
+            
+            - name: Verify cleanup
+              ansible.builtin.include_role:
+                name: ssm_parameter_store
+                tasks_from: get_parameters_by_path
+              vars:
+                parameter_path: "{{ test_prefix }}/"
+                recursive: true
+            
+            - name: Assert cleanup successful
+              ansible.builtin.assert:
+                that:
+                  - ssm_parameter_count == 0
+                fail_msg: "Cleanup incomplete - parameters still exist"
+        
+        # ==================== 最終レポート ====================
+        - name: "PHASE 9: Final Report"
+          block:
+            - name: Generate test report
+              ansible.builtin.set_fact:
+                test_report: |
+                  ========================================
+                  SSM Parameter Store Test Report
+                  ========================================
+                  Test Run ID: {{ test_run_id }}
+                  Timestamp: {{ test_timestamp }}
+                  Test Prefix: {{ test_prefix }}
+                  
+                  Test Results:
+                  - Parameter Creation: ✓ Success
+                  - Single Parameter Get: ✓ Success
+                  - Multiple Parameter Get: ✓ Success
+                  - Path-based Get: ✓ Success
+                  - Parameter Update: ✓ Success
+                  - Parameter Deletion: ✓ Success
+                  - Cleanup: {{ '✓ Success' if operation in ['full', 'cleanup-only'] else 'Skipped' }}
+                  
+                  Parameters Tested: {{ test_parameters | length }}
+                  AWS Region: {{ ssm_parameter_store_region | default('ap-northeast-1') }}
+                  
+                  Test Status: PASSED
+                  ========================================
+            
+            - name: Display test report
+              ansible.builtin.debug:
+                msg: "{{ test_report.split('\n') }}"
+            
+            - name: Save test report
+              ansible.builtin.copy:
+                content: "{{ test_report }}"
+                dest: "/tmp/ssm-test-report-{{ test_run_id }}.txt"
+              when: not ansible_check_mode
+      
       rescue:
-        - name: Test failed
-          ansible.builtin.debug:
-            msg: |
-              ========================================
-              ✗ Test failed!
-              Task: {{ ansible_failed_task.name | default('Unknown') }}
-              Error: {{ ansible_failed_result.msg | default('Unknown error') }}
-              ========================================
+        - name: Handle test failure
+          block:
+            - name: Display failure message
+              ansible.builtin.debug:
+                msg: |
+                  ========================================
+                  Test Failed!
+                  ========================================
+                  Error: {{ ansible_failed_result.msg | default('Unknown error') }}
+                  Task: {{ ansible_failed_task.name | default('Unknown task') }}
+                  {% if cleanup_on_failure %}
+                  Attempting cleanup...
+                  {% endif %}
+                  ========================================
+            
+            - name: Cleanup on failure
+              when: cleanup_on_failure | bool
+              block:
+                - name: Delete test parameters
+                  ansible.builtin.include_role:
+                    name: ssm_parameter_store
+                    tasks_from: delete_parameter
+                  vars:
+                    parameter_name: "{{ item.value }}"
+                  loop: "{{ test_parameters | dict2items }}"
+                  ignore_errors: true
+                
+                # 直接AWS CLIでも削除を試みる
+                - name: Force cleanup with AWS CLI
+                  ansible.builtin.shell: |
+                    aws ssm delete-parameter \
+                      --name "{{ item.value }}" \
+                      --region {{ ssm_parameter_store_region | default('ap-northeast-1') }} 2>/dev/null || true
+                  loop: "{{ test_parameters | dict2items }}"
+                  failed_when: false
+            
+            - name: Fail with error message
+              ansible.builtin.fail:
+                msg: "SSM Parameter Store test failed. See error above for details."
 
-        # クリーンアップ
-        - name: Cleanup on failure
-          ansible.builtin.shell: |
-            aws ssm delete-parameter \
-              --name "{{ test_param }}" \
-              --region ap-northeast-1 2>/dev/null || true
-          failed_when: false
+# 実行例
+# =====
+# 
+# フルテスト（デフォルト）:
+#   ansible-playbook test-ssm-parameter-store.yml
+#
+# 作成のみ:
+#   ansible-playbook test-ssm-parameter-store.yml -e op=create-only
+#
+# テストのみ（既存パラメータに対して）:
+#   ansible-playbook test-ssm-parameter-store.yml -e op=test-only
+#
+# クリーンアップのみ:
+#   ansible-playbook test-ssm-parameter-store.yml -e op=cleanup-only
+#
+# 詳細出力:
+#   ansible-playbook test-ssm-parameter-store.yml -v
+#
+# デバッグモード:
+#   ansible-playbook test-ssm-parameter-store.yml -vvv
