@@ -1,154 +1,259 @@
 ---
-# 単一のSSMパラメータを取得するタスク
+# SSMパラメータを設定/更新するタスク
 
 - name: Validate required variables
-  ansible.builtin.fail:
-    msg: "Required variable 'parameter_name' is not defined"
-  when: parameter_name is not defined or parameter_name | length == 0
+  ansible.builtin.assert:
+    that:
+      - parameter_name is defined
+      - parameter_value is defined
+    fail_msg: "Required variables 'parameter_name' and 'parameter_value' must be defined"
 
-# セキュアパラメータかどうかを判定
-- name: Determine if parameter is secure
+# パラメータタイプの決定
+- name: Determine parameter type
   ansible.builtin.set_fact:
-    is_secure: >-
-      {{
-        ssm_parameter_store_auto_secure and (
-          parameter_name | lower | regex_search('(' + ssm_parameter_store_all_secure_keywords | join('|') + ')')
-        ) is not none
-      }}
+    parameter_type: >-
+      {%- if parameter_type is defined -%}
+        {{ parameter_type }}
+      {%- elif is_secure | default(false) or (ssm_parameter_store_auto_secure and 
+              parameter_name | lower | regex_search('(' + ssm_parameter_store_all_secure_keywords | join('|') + ')') is not none) -%}
+        SecureString
+      {%- else -%}
+        String
+      {%- endif -%}
 
-# キャッシュの確認
-- name: Check cache for parameter
-  when: ssm_parameter_store_cache.enabled | bool
+- name: Set parameter
   block:
-    - name: Get current timestamp
-      ansible.builtin.set_fact:
-        current_timestamp: "{{ ansible_date_time.epoch | int }}"
-    
-    - name: Check if parameter is in cache and not expired
-      ansible.builtin.set_fact:
-        cache_hit: >-
-          {{
-            parameter_name in ssm_parameter_cache and
-            parameter_name in ssm_parameter_cache_timestamps and
-            (current_timestamp | int - ssm_parameter_cache_timestamps[parameter_name] | int) < ssm_parameter_store_cache.ttl
-          }}
-    
-    - name: Use cached value
-      ansible.builtin.set_fact:
-        ssm_parameter_value: "{{ ssm_parameter_cache[parameter_name] }}"
-        ssm_operation_success: true
-      when: cache_hit | default(false)
-
-# SSMからパラメータを取得
-- name: Get parameter from SSM
-  when: not (cache_hit | default(false))
-  block:
-    - name: Retrieve parameter using AWS CLI
+    # パラメータの存在確認
+    - name: Check if parameter exists
       ansible.builtin.shell: |
-        aws ssm get-parameter \
-          --name "{{ parameter_name }}" \
+        aws ssm describe-parameters \
+          --parameter-filters "Key=Name,Values={{ parameter_name }}" \
           --region {{ ssm_parameter_store_region }} \
-          {% if decrypt | default(true) %}--with-decryption{% endif %} \
           --output json 2>&1
-      register: parameter_result
-      no_log: "{{ is_secure }}"
+      register: param_check
       changed_when: false
-      retries: "{{ ssm_parameter_store_retry_count }}"
-      delay: "{{ ssm_parameter_store_retry_delay }}"
-      until: parameter_result.rc == 0 or 'ParameterNotFound' in parameter_result.stdout
+      failed_when: false
 
-    - name: Parse parameter result
+    - name: Parse parameter check result
       ansible.builtin.set_fact:
-        parameter_data: "{{ parameter_result.stdout | from_json }}"
-      when: parameter_result.rc == 0
-      no_log: "{{ is_secure }}"
+        parameter_exists: "{{ (param_check.stdout | from_json).Parameters | default([]) | length > 0 }}"
+      when: param_check.rc == 0
 
-    - name: Extract parameter value and metadata
+    - name: Set parameter not exists for failed check
       ansible.builtin.set_fact:
-        ssm_parameter_value: "{{ parameter_data.Parameter.Value }}"
-        ssm_parameter_metadata:
-          name: "{{ parameter_data.Parameter.Name }}"
-          type: "{{ parameter_data.Parameter.Type | default('String') }}"
-          version: "{{ parameter_data.Parameter.Version | default(1) }}"
-          last_modified: "{{ parameter_data.Parameter.LastModifiedDate | default('') }}"
-          arn: "{{ parameter_data.Parameter.ARN | default('') }}"
-      when: parameter_result.rc == 0
-      no_log: "{{ is_secure }}"
+        parameter_exists: false
+      when: param_check.rc != 0
 
-    # JSONパラメータの自動パース
-    - name: Parse JSON parameter if requested
+    # タグの準備
+    - name: Prepare tags
+      ansible.builtin.set_fact:
+        tag_list: >-
+          {%- set tag_items = [] -%}
+          {%- for key, value in (tags | default({})).items() -%}
+            {%- set _ = tag_items.append('Key=' + key + ',Value=' + value) -%}
+          {%- endfor -%}
+          {{ tag_items | join(' ') }}
+      when: tags is defined
+
+    # パラメータ値を一時ファイルに保存（エスケープ問題を回避）
+    - name: Write parameter value to temp file
+      ansible.builtin.copy:
+        content: "{{ parameter_value }}"
+        dest: "/tmp/ssm_param_{{ parameter_name | hash('md5') }}.tmp"
+        mode: '0600'
+      no_log: "{{ parameter_type == 'SecureString' }}"
+
+    # 操作結果の初期化
+    - name: Initialize operation results
+      ansible.builtin.set_fact:
+        create_result: null
+        update_result: null
+
+    # 新規作成の場合（タグ付き）
+    - name: Create new parameter with tags
+      ansible.builtin.shell: |
+        aws ssm put-parameter \
+          --name "{{ parameter_name }}" \
+          --value "file:///tmp/ssm_param_{{ parameter_name | hash('md5') }}.tmp" \
+          --type "{{ parameter_type }}" \
+          --region {{ ssm_parameter_store_region }} \
+          {% if description is defined %}--description "{{ description | default('Managed by Ansible') }}"{% endif %} \
+          {% if parameter_type == 'SecureString' and kms_key_id is defined %}--key-id "{{ kms_key_id }}"{% endif %} \
+          {% if tier is defined %}--tier "{{ tier }}"{% endif %} \
+          {% if tags is defined and tag_list %}--tags {{ tag_list }}{% endif %} \
+          --output json
+      register: _create_with_tags_result
+      no_log: "{{ parameter_type == 'SecureString' }}"
+      changed_when: true
       when: 
-        - parse_json | default(false)
-        - parameter_result.rc == 0
-      block:
-        - name: Parse JSON value
-          ansible.builtin.set_fact:
-            ssm_parameter_value: "{{ ssm_parameter_value | from_json }}"
-          no_log: "{{ is_secure }}"
-      rescue:
-        - name: Handle JSON parse error
-          ansible.builtin.fail:
-            msg: "Failed to parse parameter '{{ parameter_name }}' as JSON: {{ ssm_parameter_value }}"
+        - not parameter_exists | default(false)
+        - tags is defined
 
-    # キャッシュに保存
-    - name: Cache parameter value
+    # 新規作成の場合（タグなし）
+    - name: Create new parameter without tags
+      ansible.builtin.shell: |
+        aws ssm put-parameter \
+          --name "{{ parameter_name }}" \
+          --value "file:///tmp/ssm_param_{{ parameter_name | hash('md5') }}.tmp" \
+          --type "{{ parameter_type }}" \
+          --region {{ ssm_parameter_store_region }} \
+          {% if description is defined %}--description "{{ description | default('Managed by Ansible') }}"{% endif %} \
+          {% if parameter_type == 'SecureString' and kms_key_id is defined %}--key-id "{{ kms_key_id }}"{% endif %} \
+          {% if tier is defined %}--tier "{{ tier }}"{% endif %} \
+          --output json
+      register: _create_without_tags_result
+      no_log: "{{ parameter_type == 'SecureString' }}"
+      changed_when: true
       when: 
-        - ssm_parameter_store_cache.enabled | bool
-        - parameter_result.rc == 0
+        - not parameter_exists | default(false)
+        - tags is not defined
+
+    # 既存パラメータの更新（overwite使用、タグなし）
+    - name: Update existing parameter
+      ansible.builtin.shell: |
+        aws ssm put-parameter \
+          --name "{{ parameter_name }}" \
+          --value "file:///tmp/ssm_param_{{ parameter_name | hash('md5') }}.tmp" \
+          --type "{{ parameter_type }}" \
+          --region {{ ssm_parameter_store_region }} \
+          --overwrite \
+          {% if description is defined %}--description "{{ description | default('Managed by Ansible') }}"{% endif %} \
+          {% if parameter_type == 'SecureString' and kms_key_id is defined %}--key-id "{{ kms_key_id }}"{% endif %} \
+          {% if tier is defined %}--tier "{{ tier }}"{% endif %} \
+          --output json
+      register: _update_result
+      no_log: "{{ parameter_type == 'SecureString' }}"
+      changed_when: true
+      when: 
+        - parameter_exists | default(false)
+        - overwrite | default(true)
+
+    # 実行結果の統合
+    - name: Consolidate operation results
       ansible.builtin.set_fact:
-        ssm_parameter_cache: "{{ ssm_parameter_cache | combine({parameter_name: ssm_parameter_value}) }}"
-        ssm_parameter_cache_timestamps: "{{ ssm_parameter_cache_timestamps | combine({parameter_name: current_timestamp}) }}"
-      no_log: "{{ is_secure }}"
+        create_result: >-
+          {%- if _create_with_tags_result is defined and not _create_with_tags_result.skipped | default(false) -%}
+            {{ _create_with_tags_result }}
+          {%- elif _create_without_tags_result is defined and not _create_without_tags_result.skipped | default(false) -%}
+            {{ _create_without_tags_result }}
+          {%- else -%}
+            null
+          {%- endif -%}
+        update_result: >-
+          {%- if _update_result is defined and not _update_result.skipped | default(false) -%}
+            {{ _update_result }}
+          {%- else -%}
+            null
+          {%- endif -%}
+
+    # 実行された操作の判定
+    - name: Determine which operation was executed
+      ansible.builtin.set_fact:
+        _operation_executed: >-
+          {%- if create_result is not none and create_result is not null -%}
+            create
+          {%- elif update_result is not none and update_result is not null -%}
+            update
+          {%- else -%}
+            none
+          {%- endif -%}
+
+    # 一時ファイルのクリーンアップ
+    - name: Clean up temp file
+      ansible.builtin.file:
+        path: "/tmp/ssm_param_{{ parameter_name | hash('md5') }}.tmp"
+        state: absent
+      no_log: "{{ parameter_type == 'SecureString' }}"
+
+    # タグの個別更新（必要な場合）
+    - name: Update tags separately if needed
+      ansible.builtin.shell: |
+        aws ssm add-tags-to-resource \
+          --resource-type "Parameter" \
+          --resource-id "{{ parameter_name }}" \
+          --tags {{ tag_list }} \
+          --region {{ ssm_parameter_store_region }}
+      when:
+        - parameter_exists | default(false)
+        - tags is defined
+        - tag_list | length > 0
+      register: tag_update_result
+      changed_when: true
+
+    # 成功判定
+    - name: Check operation success
+      ansible.builtin.set_fact:
+        operation_success: >-
+          {%- if create_result is not none and create_result is not null and create_result.rc is defined -%}
+            {{ create_result.rc == 0 }}
+          {%- elif update_result is not none and update_result is not null and update_result.rc is defined -%}
+            {{ update_result.rc == 0 }}
+          {%- else -%}
+            false
+          {%- endif -%}
+
+    - name: Parse operation result
+      ansible.builtin.set_fact:
+        set_response: >-
+          {%- if create_result is not none and create_result is not null and create_result.stdout is defined -%}
+            {{ create_result.stdout | from_json }}
+          {%- elif update_result is not none and update_result is not null and update_result.stdout is defined -%}
+            {{ update_result.stdout | from_json }}
+          {%- else -%}
+            {}
+          {%- endif -%}
+      when: operation_success
 
     - name: Set success status
       ansible.builtin.set_fact:
         ssm_operation_success: true
-      when: parameter_result.rc == 0
+        ssm_parameter_version: "{{ set_response.Version | default(1) }}"
+      when: operation_success
+
+    # キャッシュの更新
+    - name: Update cache
+      when: 
+        - ssm_parameter_store_cache.enabled | bool
+        - operation_success
+      ansible.builtin.set_fact:
+        ssm_parameter_cache: >-
+          {{
+            ssm_parameter_cache | combine({
+              parameter_name: parameter_value
+            })
+          }}
+        ssm_parameter_cache_timestamps: >-
+          {{
+            ssm_parameter_cache_timestamps | combine({
+              parameter_name: ansible_date_time.epoch | int
+            })
+          }}
+      no_log: "{{ parameter_type == 'SecureString' }}"
 
   rescue:
-    - name: Handle parameter not found
-      when: "'ParameterNotFound' in parameter_result.stdout | default('')"
-      block:
-        - name: Use default value if provided
-          ansible.builtin.set_fact:
-            ssm_parameter_value: "{{ default_value }}"
-            ssm_operation_success: true
-          when: default_value is defined
-
-        - name: Fail if no default and fail_on_missing is true
-          ansible.builtin.fail:
-            msg: "Parameter '{{ parameter_name }}' not found in SSM Parameter Store"
-          when: 
-            - default_value is not defined
-            - ssm_parameter_store_fail_on_missing | bool
-
-    - name: Handle other errors
+    - name: Handle set failure
       ansible.builtin.set_fact:
-        ssm_operation_error: "{{ parameter_result.stderr | default(parameter_result.stdout | default('Unknown error')) }}"
+        ssm_operation_error: "{{ ansible_failed_result.msg | default('Failed to set parameter') }}"
         ssm_operation_success: false
-      when: "'ParameterNotFound' not in parameter_result.stdout | default('')"
 
-# 変数として保存（オプション）
-- name: Store parameter as custom variable
-  ansible.builtin.set_fact:
-    "{{ store_as }}": "{{ ssm_parameter_value }}"
-  when: 
-    - store_as is defined
-    - ssm_operation_success
-  no_log: "{{ is_secure }}"
+  always:
+    # 一時ファイルのクリーンアップ（エラー時も確実に実行）
+    - name: Ensure temp file cleanup
+      ansible.builtin.file:
+        path: "/tmp/ssm_param_{{ parameter_name | hash('md5') }}.tmp"
+        state: absent
+      failed_when: false
 
 # デバッグ出力
-- name: Display parameter info (non-secure only)
+- name: Display operation result
   ansible.builtin.debug:
     msg: |
       Parameter: {{ parameter_name }}
-      Type: {{ ssm_parameter_metadata.type | default('Unknown') }}
+      Type: {{ parameter_type }}
+      Operation: {{ _operation_executed | default('Unknown') | capitalize }}
       Success: {{ ssm_operation_success }}
-      {% if not is_secure %}
-      Value: {{ ssm_parameter_value }}
-      {% else %}
-      Value: {{ ssm_parameter_value[:3] + '***' if ssm_parameter_store_mask_partial else ssm_parameter_store_mask_value }}
+      Version: {{ ssm_parameter_version | default('Unknown') }}
+      {% if not ssm_operation_success and ssm_operation_error is defined %}
+      Error: {{ ssm_operation_error }}
       {% endif %}
-  when: 
-    - ssm_parameter_store_verbose
-    - ssm_operation_success
+  when: ssm_parameter_store_verbose

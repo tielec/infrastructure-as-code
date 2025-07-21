@@ -154,10 +154,12 @@
     - name: Set operation result
       ansible.builtin.set_fact:
         set_result: >-
-          {%- if not parameter_exists | default(false) -%}
-            {{ create_result | default({'rc': 1, 'stdout': '', 'stderr': 'Create operation was not executed'}) }}
+          {%- if not parameter_exists | default(false) and create_result is defined -%}
+            {{ create_result }}
+          {%- elif parameter_exists | default(false) and update_result is defined -%}
+            {{ update_result }}
           {%- else -%}
-            {{ update_result | default({'rc': 1, 'stdout': '', 'stderr': 'Update operation was not executed'}) }}
+            {{ {'rc': 1, 'stdout': '', 'stderr': 'Operation was not executed'} }}
           {%- endif -%}
 
     # 結果の確認
