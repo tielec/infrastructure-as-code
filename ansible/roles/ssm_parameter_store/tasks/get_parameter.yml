@@ -48,15 +48,17 @@
       no_log: "{{ is_secure }}"
 
     # JSONパラメータの処理
-    - name: Parse JSON if requested
+    - name: Check if value is string
       when: parse_json | default(false)
       ansible.builtin.set_fact:
-        ssm_parameter_value: >-
-          {%- if ssm_parameter_value is string -%}
-            {{ ssm_parameter_value | from_json }}
-          {%- else -%}
-            {{ ssm_parameter_value }}
-          {%- endif -%}
+        _is_string: "{{ ssm_parameter_value is string }}"
+
+    - name: Parse JSON string
+      when: 
+        - parse_json | default(false)
+        - _is_string | bool
+      ansible.builtin.set_fact:
+        ssm_parameter_value: "{{ ssm_parameter_value | from_json }}"
       no_log: "{{ is_secure }}"
 
     - name: Set success status
