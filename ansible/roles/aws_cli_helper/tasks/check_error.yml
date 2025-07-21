@@ -1,0 +1,52 @@
+---
+# AWS CLIエラーを解析する内部タスク
+#
+# 必須変数:
+#   - error_output: エラー出力文字列
+#
+# 戻り値:
+#   - aws_cli_error_type: エラータイプ
+#   - aws_cli_error_message: エラーメッセージ
+#   - aws_cli_is_retriable: リトライ可能かどうか
+
+- name: Extract error type from output
+  ansible.builtin.set_fact:
+    aws_cli_error_type: >-
+      {%- set patterns = {
+        'AccessDenied': 'AccessDenied|UnauthorizedOperation|Forbidden',
+        'InvalidParameter': 'InvalidParameter|ValidationException|MalformedInput',
+        'ResourceNotFound': 'NoSuch|NotFound|ResourceNotFoundException',
+        'ThrottlingException': 'Throttl|RequestLimitExceeded|TooManyRequests',
+        'ServiceUnavailable': 'ServiceUnavailable|InternalServerError|ServiceException',
+        'NetworkError': 'Could not connect|Connection reset|timeout',
+        'Timeout': 'failed to execute in the expected time frame|command timed out'
+      } -%}
+      {%- for error_type, pattern in patterns.items() -%}
+        {%- if error_output | regex_search(pattern, ignorecase=True) -%}
+          {{ error_type }}
+        {%- endif -%}
+      {%- else -%}
+        Unknown
+      {%- endfor -%}
+
+- name: Extract error message
+  ansible.builtin.set_fact:
+    aws_cli_error_message: >-
+      {%- set msg_match = error_output | regex_search('(?:message|Message|error|Error)[":\s]+([^"}\n]+)', '\\1') -%}
+      {%- if msg_match -%}
+        {{ msg_match[0] | trim }}
+      {%- else -%}
+        {{ error_output | trim | truncate(200) }}
+      {%- endif -%}
+
+- name: Determine if error is retriable
+  ansible.builtin.set_fact:
+    aws_cli_is_retriable: "{{ aws_cli_error_type in aws_cli_helper_retriable_errors }}"
+
+- name: Debug error analysis
+  when: aws_cli_helper_debug
+  ansible.builtin.debug:
+    msg: |
+      Error Type: {{ aws_cli_error_type }}
+      Retriable: {{ aws_cli_is_retriable }}
+      Message: {{ aws_cli_error_message }}

@@ -1,0 +1,17 @@
+---
+# リトライ機能付きでAWS CLIコマンドを実行
+#
+# execute.yml と同じ変数に加えて:
+#   - max_retries: 最大リトライ回数 (default: aws_cli_helper_retry_count)
+#   - retry_delay: リトライ間隔 (default: aws_cli_helper_retry_delay)
+#   - use_backoff: 指数バックオフを使用 (default: aws_cli_helper_retry_backoff)
+
+- name: Initialize retry counter
+  ansible.builtin.set_fact:
+    _retry_attempt: 0
+    _retry_success: false
+
+- name: Execute with retry loop
+  ansible.builtin.include_tasks: _retry_loop.yml
+  vars:
+    max_attempts: "{{ ((max_retries | default(aws_cli_helper_retry_count) | int) + 1) | int }}"
