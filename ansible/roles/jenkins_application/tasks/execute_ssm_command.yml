@@ -1,63 +1,97 @@
 ---
 # SSMコマンド実行用の共通タスク
 
+# aws-env.shの実行結果を取得
+- name: Get AWS environment variables
+  ansible.builtin.shell: |
+    {{ scripts_dir }}/aws/aws-env.sh
+  register: aws_env_output
+  changed_when: false
+
+# 環境変数をパース
+- name: Parse AWS environment variables
+  ansible.builtin.set_fact:
+    aws_env_vars: "{{ dict(aws_env_output.stdout_lines | map('regex_replace', '^export ', '') | map('split', '=', 1)) }}"
+
+# SSMコマンドを送信
 - name: Execute SSM command - {{ ssm_comment }}
-  ansible.builtin.shell: |
-    eval $({{ scripts_dir }}/aws/aws-env.sh)
-    aws ssm send-command \
-      --region {{ aws_region_name }} \
-      --document-name "{{ ssm_document_name }}" \
-      --targets "Key=instanceids,Values={{ instance_id }}" \
-      {% if ssm_parameters | default('') %}--parameters "{{ ssm_parameters }}" {% endif %}\
-      --comment "{{ ssm_comment }}" \
+  ansible.builtin.include_role:
+    name: aws_cli_helper
+    tasks_from: execute_with_retry
+  vars:
+    aws_command: >-
+      aws ssm send-command
+      --document-name "{{ ssm_document_name }}"
+      --targets "Key=instanceids,Values={{ instance_id }}"
+      {% if ssm_parameters | default('') %}--parameters "{{ ssm_parameters }}"{% endif %}
+      --comment "{{ ssm_comment }}"
       --output json
-  register: ssm_command
-  changed_when: true
+    operation_name: "send_ssm_command"
+    environment: "{{ aws_env_vars }}"
+    max_retries: 3
+    retry_delay: 5
 
-- name: Parse command response
+- name: Set command data
   ansible.builtin.set_fact:
-    command_data: "{{ ssm_command.stdout | from_json }}"
-  when: 
-    - ssm_command.rc == 0
-    - ssm_command.stdout | length > 0
+    command_data: "{{ aws_cli_data }}"
+  when: aws_cli_success
 
+# コマンドの完了を待機
 - name: Wait for command completion
-  ansible.builtin.shell: |
-    eval $({{ scripts_dir }}/aws/aws-env.sh)
-    aws ssm list-commands \
-      --region {{ aws_region_name }} \
-      --command-id "{{ command_data.Command.CommandId }}" \
-      --query "Commands[0].Status" \
-      --output text
-  register: command_status_result
-  until: command_status_result.stdout in ['Success', 'Failed', 'Cancelled', 'TimedOut']
-  retries: 60
-  delay: 10
   when: command_data is defined
+  block:
+    - name: Poll command status
+      ansible.builtin.include_role:
+        name: aws_cli_helper
+        tasks_from: execute
+      vars:
+        aws_command: >-
+          aws ssm list-commands
+          --command-id "{{ command_data.Command.CommandId }}"
+          --query "Commands[0].Status"
+          --output text
+        operation_name: "check_ssm_command_status"
+        environment: "{{ aws_env_vars }}"
+        parse_output: false  # テキスト出力なのでパース不要
+      register: status_check
+      until: aws_cli_stdout in ['Success', 'Failed', 'Cancelled', 'TimedOut']
+      retries: 60
+      delay: 10
 
+    - name: Store final command status
+      ansible.builtin.set_fact:
+        command_final_status: "{{ aws_cli_stdout }}"
+
+# コマンドの出力を取得
 - name: Get command output
-  ansible.builtin.shell: |
-    eval $({{ scripts_dir }}/aws/aws-env.sh)
-    aws ssm get-command-invocation \
-      --region {{ aws_region_name }} \
-      --command-id "{{ command_data.Command.CommandId }}" \
-      --instance-id "{{ instance_id }}" \
-      --output json
-  register: command_output_raw
   when: command_data is defined
+  ansible.builtin.include_role:
+    name: aws_cli_helper
+    tasks_from: execute_with_retry
+  vars:
+    aws_command: >-
+      aws ssm get-command-invocation
+      --command-id "{{ command_data.Command.CommandId }}"
+      --instance-id "{{ instance_id }}"
+      --output json
+    operation_name: "get_ssm_command_output"
+    environment: "{{ aws_env_vars }}"
+    max_retries: 3
+    retry_delay: 2
 
-- name: Parse command output
+- name: Set command output
   ansible.builtin.set_fact:
-    command_output: "{{ command_output_raw.stdout | from_json }}"
+    command_output: "{{ aws_cli_data }}"
   when: 
-    - command_output_raw is defined
-    - command_output_raw.stdout is defined
+    - command_data is defined
+    - aws_cli_success
 
+# 結果を表示
 - name: Display command output
   ansible.builtin.debug:
     msg: |
       === SSM Command Output for {{ ssm_comment }} ===
-      Status: {{ command_status_result.stdout }}
+      Status: {{ command_final_status }}
       
       Standard Output:
       {{ command_output.StandardOutputContent | default('No output') }}
@@ -68,11 +102,12 @@
       {% endif %}
   when: command_output is defined
 
+# エラーチェック
 - name: Check command result
   ansible.builtin.fail:
     msg: |
-      SSM command failed with status: {{ command_status_result.stdout }}
+      SSM command failed with status: {{ command_final_status }}
       Error output: {{ command_output.StandardErrorContent | default('No error output available') }}
   when: 
     - command_data is defined
-    - command_status_result.stdout != 'Success'
+    - command_final_status != 'Success'
