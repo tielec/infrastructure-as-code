@@ -1,0 +1,21 @@
+# AWS CLI Helper メインタスク
+# このロールは直接実行されることを想定していません
+# 各タスクファイルを include_tasks で呼び出してください
+
+- name: Verify AWS CLI is available
+  ansible.builtin.command: which aws
+  register: _aws_cli_check
+  changed_when: false
+  failed_when: false
+  run_once: true
+
+- name: Fail if AWS CLI not found
+  ansible.builtin.fail:
+    msg: "AWS CLI is not installed or not in PATH"
+  when: _aws_cli_check.rc != 0
+  run_once: true
+
+- name: Display AWS CLI Helper info
+  ansible.builtin.debug:
+    msg: "AWS CLI Helper role loaded. Use include_tasks to execute specific operations."
+  when: aws_cli_helper_debug

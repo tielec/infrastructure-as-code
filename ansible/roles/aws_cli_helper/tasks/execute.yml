@@ -1,0 +1,138 @@
+---
+# AWS CLIコマンドを実行する基本タスク
+#
+# 必須変数:
+#   - aws_command: 実行するAWS CLIコマンド（リージョンは自動追加）
+#   - operation_name: 操作名（ログ用）
+#
+# オプション変数:
+#   - no_log_output: 出力をマスクするか (default: false)
+#   - parse_output: JSONとしてパースするか (default: true)
+#   - timeout: タイムアウト秒数 (default: aws_cli_helper_timeout)
+#   - environment: 追加の環境変数
+#
+# 戻り値:
+#   - aws_cli_result: 生の実行結果
+#   - aws_cli_success: 成功/失敗フラグ
+#   - aws_cli_stdout: 標準出力
+#   - aws_cli_stderr: 標準エラー出力
+#   - aws_cli_data: パース済みJSONデータ（parse_output=true時）
+#   - aws_cli_error_type: エラータイプ（失敗時）
+
+- name: Validate required variables
+  ansible.builtin.assert:
+    that:
+      - aws_command is defined
+      - operation_name is defined
+    fail_msg: "Required variables 'aws_command' and 'operation_name' must be defined"
+
+# リージョンの設定を確認
+- name: Ensure region is defined
+  ansible.builtin.set_fact:
+    aws_cli_helper_region: "{{ aws_cli_helper_region | default('ap-northeast-1') }}"
+
+# リージョンが含まれていない場合は追加
+- name: Prepare AWS command with region
+  ansible.builtin.set_fact:
+    _aws_command_with_region: >-
+      {%- if '--region' not in aws_command -%}
+        {{ aws_command }} --region {{ aws_cli_helper_region }}
+      {%- else -%}
+        {{ aws_command }}
+      {%- endif -%}
+
+# 環境変数の準備
+- name: Prepare environment variables
+  ansible.builtin.set_fact:
+    _aws_environment: >-
+      {{
+        (environment | default({})) | combine({
+          'AWS_DEFAULT_REGION': aws_cli_helper_region | default('ap-northeast-1')
+        })
+      }}
+
+# AWS CLIコマンドを実行
+- name: "Execute AWS CLI: {{ operation_name }}"
+  ansible.builtin.shell: |
+    set -o pipefail
+    {{ _aws_command_with_region }}
+  args:
+    executable: /bin/bash
+  register: _aws_cli_raw_result
+  no_log: "{{ no_log_output | default(false) }}"
+  failed_when: false
+  timeout: "{{ timeout | default(aws_cli_helper_timeout) }}"
+  environment: "{{ _aws_environment }}"
+  ignore_errors: true  # タイムアウトエラーも含めてキャッチ
+
+# タイムアウトチェック
+- name: Check for timeout
+  ansible.builtin.set_fact:
+    _is_timeout: "{{ _aws_cli_raw_result.msg | default('') is search('failed to execute in the expected time frame') }}"
+  when: _aws_cli_raw_result is failed
+
+# 基本的な結果を設定
+- name: Set basic execution results
+  ansible.builtin.set_fact:
+    aws_cli_result: "{{ _aws_cli_raw_result }}"
+    aws_cli_success: "{{ _aws_cli_raw_result.rc | default(1) == 0 and not (_is_timeout | default(false)) }}"
+    aws_cli_stdout: "{{ _aws_cli_raw_result.stdout | default('') }}"
+    aws_cli_stderr: "{{ _aws_cli_raw_result.stderr | default('') }}"
+    aws_cli_retry_attempts: 1  # execute.yml は常に1回の実行
+  no_log: "{{ no_log_output | default(false) }}"
+
+# エラー解析
+- name: Analyze error if failed
+  when: not aws_cli_success
+  block:
+    - name: Set timeout error if detected
+      when: _is_timeout | default(false)
+      ansible.builtin.set_fact:
+        aws_cli_error_type: "Timeout"
+        aws_cli_error_message: "Command execution timed out after {{ timeout | default(aws_cli_helper_timeout) }} seconds"
+        aws_cli_is_retriable: false
+
+    - name: Analyze other errors
+      when: not (_is_timeout | default(false))
+      ansible.builtin.include_tasks: check_error.yml
+      vars:
+        error_output: "{{ aws_cli_stderr }}"
+
+# JSON出力のパース
+- name: Parse JSON output if requested
+  when:
+    - aws_cli_success
+    - parse_output | default(true)
+    - aws_cli_stdout | length > 0
+  ansible.builtin.include_tasks: parse_json.yml
+  vars:
+    json_string: "{{ aws_cli_stdout }}"  # 生の標準出力を渡す
+
+# パース無効時またはデフォルト値の設定
+- name: Set data for non-parsed output or default
+  ansible.builtin.set_fact:
+    aws_cli_data: {}
+    aws_cli_parse_error: ""
+  when: 
+    - aws_cli_data is not defined
+    - aws_cli_parse_error is not defined
+
+# デバッグ出力
+- name: Debug AWS CLI execution
+  when: aws_cli_helper_debug
+  ansible.builtin.debug:
+    msg: |
+      Operation: {{ operation_name }}
+      Command: {{ aws_command | regex_replace('--value\s+"[^"]*"', '--value "***"') }}
+      Success: {{ aws_cli_success }}
+      Timeout: {{ timeout | default(aws_cli_helper_timeout) }}s
+      {% if _is_timeout | default(false) %}
+      Result: Command timed out
+      {% endif %}
+      {% if not aws_cli_success %}
+      Error Type: {{ aws_cli_error_type | default('Unknown') }}
+      Error: {{ aws_cli_error_message | default(aws_cli_stderr | truncate(200)) }}
+      {% endif %}
+      {% if aws_cli_parse_error is defined and aws_cli_parse_error | length > 0 %}
+      Parse Error: {{ aws_cli_parse_error }}
+      {% endif %}

@@ -1,0 +1,28 @@
+---
+# AWS CLI Helper デフォルト変数
+
+# AWS設定
+aws_cli_helper_region: "{{ aws_region | default('ap-northeast-1') }}"
+
+# リトライ設定
+aws_cli_helper_retry_enabled: true
+aws_cli_helper_retry_count: 3
+aws_cli_helper_retry_delay: 5  # 秒
+aws_cli_helper_retry_backoff: true  # 指数バックオフを使用
+aws_cli_helper_retry_max_delay: 30  # 最大リトライ間隔（秒）
+
+# タイムアウト設定
+aws_cli_helper_timeout: 30  # 秒
+
+# ログ設定
+aws_cli_helper_verbose: "{{ ansible_verbosity > 0 }}"
+aws_cli_helper_debug: "{{ ansible_verbosity > 1 }}"
+
+# エラーパターン（リトライ可能なエラー）
+aws_cli_helper_retriable_errors:
+  - "ThrottlingException"
+  - "RequestLimitExceeded"
+  - "ServiceUnavailable"
+  - "RequestTimeout"
+  - "TooManyRequestsException"
+  - "ProvisionedThroughputExceededException"
