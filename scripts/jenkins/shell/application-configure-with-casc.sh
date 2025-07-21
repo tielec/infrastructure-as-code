@@ -63,20 +63,19 @@ else
     log "✓ Found Fleet ID: $EC2_FLEET_ID"
 fi
 
-# WorkterminalのホストIPを取得
-log "Retrieving Bootstrap-Instance Public IP..."
-WORKTERMINAL_HOST=$(aws ec2 describe-instances \
+# WorkterminalのホストIPをParameter Storeから取得
+log "Retrieving Workterminal Public IP from Parameter Store..."
+WORKTERMINAL_HOST=$(aws ssm get-parameter \
+    --name "/bootstrap/workterminal/public-ip" \
     --region "$AWS_REGION" \
-    --filters \
-    "Name=tag:Name,Values=Bootstrap-Instance" \
-    "Name=instance-state-name,Values=running" \
-    --query "Reservations[0].Instances[0].PublicIpAddress" \
-    --output text 2>/dev/null | grep -v "None" | grep -v "null" || echo "")
+    --query "Parameter.Value" \
+    --output text 2>/dev/null || echo "")
 
 if [ -z "$WORKTERMINAL_HOST" ] || [ "$WORKTERMINAL_HOST" = "None" ]; then
-    log "✗ WARNING: Bootstrap-Instance not found or has no public IP"
+    log "✗ WARNING: Workterminal IP not found in Parameter Store at /bootstrap/workterminal/public-ip"
+    log "  Please ensure the bootstrap instance is running and the parameter is set"
 else
-    log "✓ Found Bootstrap-Instance IP: $WORKTERMINAL_HOST"
+    log "✓ Found Workterminal IP from Parameter Store: $WORKTERMINAL_HOST"
 fi
 
 # 環境変数の設定

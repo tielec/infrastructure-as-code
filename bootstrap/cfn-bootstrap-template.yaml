@@ -74,6 +74,19 @@ Resources:
         Name: Pulumi-S3-Bucket-Name
         Purpose: Pulumi-Backend
 
+  # SSM Parameter Store に Public IP を保存
+  WorkTerminalPublicIPParameter:
+    Type: AWS::SSM::Parameter
+    DependsOn: BootstrapInstance
+    Properties:
+      Name: /bootstrap/workterminal/public-ip
+      Type: String
+      Value: !GetAtt BootstrapInstance.PublicIp
+      Description: Bootstrap instance public IP address
+      Tags:
+        Name: Bootstrap-Public-IP
+        Purpose: Work-Terminal
+
   # S3 Bucket Policy
   PulumiStateBucketPolicy:
     Type: AWS::S3::BucketPolicy
@@ -210,7 +223,7 @@ Resources:
       Roles:
         - !Ref BootstrapIAMRole
 
-  # SSM Parameter Store へのアクセス権限
+  # SSM Parameter Store へのアクセス権限（PutParameterを追加）
   SSMAccessPolicy:
     Type: AWS::IAM::Policy
     Properties:
@@ -223,6 +236,7 @@ Resources:
               - 'ssm:GetParameter'
               - 'ssm:GetParameters'
               - 'ssm:GetParametersByPath'
+              - 'ssm:PutParameter'
             Resource:
               - !Sub 'arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/bootstrap/*'
       Roles:
@@ -324,6 +338,13 @@ Resources:
               find /home/ec2-user/infrastructure-as-code/bootstrap -name "*.sh" -type f -exec chmod +x {} \;
             fi
             
+            # Public IPをSSM Parameter Storeに更新（バックアップとして）
+            # CloudFormationでも設定されますが、インスタンス内からも更新可能
+            PUBLIC_IP=$(curl -s http://169.254.169.254/latest/meta-data/public-ipv4)
+            if [ -n "$PUBLIC_IP" ]; then
+              aws ssm put-parameter --name /bootstrap/workterminal/public-ip --value "$PUBLIC_IP" --type String --overwrite --region ${AWS::Region} || true
+            fi
+            
             # セットアップガイド
             cat > /home/ec2-user/SETUP_GUIDE.txt << 'EOF'
             === Bootstrap Environment Setup Guide ===
@@ -335,6 +356,9 @@ Resources:
             3. Verify: ./infrastructure-as-code/bootstrap/verify-installation.sh
             
             Pulumi Backend: s3://${PulumiStateBucket}
+            
+            Public IP stored in SSM: /bootstrap/workterminal/public-ip
+            To retrieve: aws ssm get-parameter --name /bootstrap/workterminal/public-ip --query 'Parameter.Value' --output text
             
             Note: Python packages are installed in user space (~/.local/bin)
                   Make sure to source ~/.bashrc or re-login for PATH updates
@@ -395,6 +419,14 @@ Outputs:
   PulumiStateBucketName:
     Description: Name of the S3 bucket for Pulumi state storage
     Value: !Ref PulumiStateBucket
+
+  WorkTerminalPublicIPParameter:
+    Description: SSM Parameter path for public IP
+    Value: /bootstrap/workterminal/public-ip
+
+  GetPublicIPCommand:
+    Description: Command to retrieve public IP from SSM Parameter Store
+    Value: !Sub 'aws ssm get-parameter --name /bootstrap/workterminal/public-ip --query "Parameter.Value" --output text --region ${AWS::Region}'
 
   RecreateInstanceCommand:
     Description: Command to recreate the instance
