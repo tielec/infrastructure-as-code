@@ -1,0 +1,50 @@
+---
+# SSMパラメータを削除するタスク（シンプル版）
+
+- name: Validate required variables
+  ansible.builtin.assert:
+    that:
+      - parameter_name is defined
+      - parameter_name | length > 0
+    fail_msg: "Required variable 'parameter_name' is not defined or empty"
+
+# パラメータを削除
+- name: Delete parameter from SSM
+  ansible.builtin.shell: |
+    aws ssm delete-parameter \
+      --name "{{ parameter_name }}" \
+      --region {{ ssm_parameter_store_region }}
+  register: delete_result
+  failed_when: false
+
+# 結果の処理
+- name: Set operation status
+  ansible.builtin.set_fact:
+    ssm_operation_success: "{{ delete_result.rc == 0 or 'ParameterNotFound' in delete_result.stderr | default('') }}"
+    ssm_operation_error: >-
+      {%- if delete_result.rc == 0 -%}
+        ""
+      {%- elif 'ParameterNotFound' in delete_result.stderr | default('') -%}
+        "Parameter already deleted"
+      {%- else -%}
+        {{ delete_result.stderr | default('Unknown error') }}
+      {%- endif -%}
+
+# キャッシュからも削除
+- name: Remove from cache
+  when:
+    - ssm_parameter_store_cache.enabled | bool
+    - parameter_name in ssm_parameter_cache | default({})
+  ansible.builtin.set_fact:
+    ssm_parameter_cache: "{{ ssm_parameter_cache | dict2items | rejectattr('key', 'equalto', parameter_name) | list | items2dict }}"
+
+# デバッグ出力
+- name: Display operation result
+  ansible.builtin.debug:
+    msg: |
+      Parameter: {{ parameter_name }}
+      Deleted: {{ ssm_operation_success }}
+      {% if ssm_operation_error %}
+      Note: {{ ssm_operation_error }}
+      {% endif %}
+  when: ssm_parameter_store_verbose

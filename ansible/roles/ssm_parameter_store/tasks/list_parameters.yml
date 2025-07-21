@@ -1,0 +1,79 @@
+---
+# SSMパラメータの一覧を取得するタスク
+
+# フィルター条件の設定
+- name: Build parameter filters
+  ansible.builtin.set_fact:
+    parameter_filters: >-
+      {%- set filters = [] -%}
+      {%- if name_prefix is defined -%}
+        {%- set _ = filters.append({'Key': 'Name', 'Values': [name_prefix]}) -%}
+      {%- endif -%}
+      {%- if parameter_type is defined -%}
+        {%- set _ = filters.append({'Key': 'Type', 'Values': [parameter_type]}) -%}
+      {%- endif -%}
+      {{ filters }}
+
+- name: List parameters
+  block:
+    - name: Get parameter list from SSM using AWS CLI
+      ansible.builtin.shell: |
+        aws ssm describe-parameters \
+          {% if parameter_filters | length > 0 %}
+          --parameter-filters '{{ parameter_filters | to_json }}' \
+          {% endif %}
+          {% if max_results is defined %}
+          --max-items {{ max_results }} \
+          {% endif %}
+          --region {{ ssm_parameter_store_region }} \
+          --output json
+      register: list_result
+      changed_when: false
+
+    - name: Parse parameter list
+      ansible.builtin.set_fact:
+        parameter_list: "{{ (list_result.stdout | from_json).Parameters | default([]) }}"
+        ssm_operation_success: true
+
+    # 結果の整形
+    - name: Format parameter information
+      ansible.builtin.set_fact:
+        ssm_parameter_info: >-
+          {{
+            parameter_list | map(attribute='Name') | list
+          }}
+        ssm_parameter_details: >-
+          {%- set details = [] -%}
+          {%- for param in parameter_list -%}
+            {%- set _ = details.append({
+              'name': param.Name,
+              'type': param.Type,
+              'last_modified': param.LastModifiedDate | default(''),
+              'version': param.Version | default(1)
+            }) -%}
+          {%- endfor -%}
+          {{ details }}
+
+  rescue:
+    - name: Handle list failure
+      ansible.builtin.set_fact:
+        ssm_operation_error: "{{ list_result.stderr | default(list_result.stdout | default('Failed to list parameters')) }}"
+        ssm_operation_success: false
+        parameter_list: []
+        ssm_parameter_info: []
+        ssm_parameter_details: []
+
+# デバッグ出力
+- name: Display parameter list
+  ansible.builtin.debug:
+    msg: |
+      Total parameters found: {{ parameter_list | length }}
+      {% if ssm_parameter_store_debug and ssm_parameter_details | length > 0 %}
+      Parameters:
+      {% for param in ssm_parameter_details %}
+      - {{ param.Name }} ({{ param.Type }}, v{{ param.Version | default('1') }})
+      {% endfor %}
+      {% endif %}
+  when: 
+    - ssm_parameter_store_verbose
+    - ssm_operation_success

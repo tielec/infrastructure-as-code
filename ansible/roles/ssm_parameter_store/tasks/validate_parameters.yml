@@ -1,0 +1,131 @@
+---
+# SSMパラメータのバリデーションを行うタスク
+
+# 初期化
+- name: Initialize validation variables
+  ansible.builtin.set_fact:
+    missing_parameters: []
+    validation_errors: []
+
+# パラメータが取得されているか確認
+- name: Initialize parameters if not already done
+  ansible.builtin.set_fact:
+    ssm_parameters: "{{ ssm_parameters | default({}) }}"
+    ssm_parameter_metadata: "{{ ssm_parameter_metadata | default({}) }}"
+
+- name: Validate required parameters exist
+  when: required_parameters is defined
+  block:
+    - name: Check each required parameter
+      ansible.builtin.include_role:
+        name: ssm_parameter_store
+        tasks_from: get_parameter
+      vars:
+        parameter_name: "{{ item }}"
+        ssm_parameter_store_fail_on_missing: false
+        store_as: "_validate_param_{{ item | hash('md5') }}"
+      loop: "{{ required_parameters }}"
+
+    - name: Collect missing parameters
+      ansible.builtin.set_fact:
+        missing_parameters: >-
+          {{
+            required_parameters | 
+            difference(ssm_parameters.keys() | list)
+          }}
+
+    - name: Fail if required parameters are missing
+      ansible.builtin.fail:
+        msg: |
+          Required parameters are missing:
+          {% for param in missing_parameters %}
+          - {{ param }}
+          {% endfor %}
+      when: missing_parameters | length > 0
+
+# 型チェック
+- name: Validate parameter types
+  when: parameter_schemas is defined
+  block:
+    - name: Validate each parameter against schema
+      ansible.builtin.assert:
+        that:
+          - item.name in ssm_parameters
+          - ssm_parameters[item.name] is match(item.pattern | default('.*'))
+        fail_msg: "Parameter '{{ item.name }}' validation failed"
+      loop: "{{ parameter_schemas }}"
+      when: item.pattern is defined
+
+    - name: Validate JSON parameters
+      block:
+        - name: Try to parse as JSON
+          ansible.builtin.set_fact:
+            _temp_json_value: "{{ ssm_parameters[item.name] | from_json }}"
+          failed_when: false
+          register: json_parse_result
+        
+        - name: Check JSON parse result
+          ansible.builtin.fail:
+            msg: "Parameter '{{ item.name }}' is not valid JSON"
+          when: json_parse_result is failed
+      loop: "{{ parameter_schemas | selectattr('type', 'defined') | selectattr('type', 'equalto', 'json') | list }}"
+
+# 値の範囲チェック
+- name: Validate parameter value ranges
+  when: parameter_constraints is defined
+  block:
+    - name: Check numeric constraints
+      ansible.builtin.assert:
+        that:
+          - ssm_parameters[item.name] | int >= item.min | default(0)
+          - ssm_parameters[item.name] | int <= item.max | default(999999)
+        fail_msg: "Parameter '{{ item.name }}' value out of range"
+      loop: "{{ parameter_constraints }}"
+      when: 
+        - item.type | default('string') == 'number'
+        - item.name in ssm_parameters
+
+    - name: Check string length constraints
+      ansible.builtin.assert:
+        that:
+          - ssm_parameters[item.name] | length >= item.min_length | default(0)
+          - ssm_parameters[item.name] | length <= item.max_length | default(4096)
+        fail_msg: "Parameter '{{ item.name }}' length out of range"
+      loop: "{{ parameter_constraints }}"
+      when: 
+        - item.type | default('string') == 'string'
+        - item.name in ssm_parameters
+
+# 相互依存チェック
+- name: Validate parameter dependencies
+  when: parameter_dependencies is defined
+  block:
+    - name: Check dependencies
+      ansible.builtin.assert:
+        that:
+          - item.depends_on in ssm_parameters
+        fail_msg: "Parameter '{{ item.name }}' depends on missing parameter '{{ item.depends_on }}'"
+      loop: "{{ parameter_dependencies }}"
+      when: item.name in ssm_parameters
+
+# 結果のサマリー
+- name: Set validation summary
+  ansible.builtin.set_fact:
+    ssm_validation_passed: true
+    ssm_validation_summary:
+      total_validated: "{{ ssm_parameters | length }}"
+      required_found: "{{ required_parameters | default([]) | length - missing_parameters | default([]) | length }}"
+      schemas_validated: "{{ parameter_schemas | default([]) | length }}"
+      constraints_checked: "{{ parameter_constraints | default([]) | length }}"
+
+# デバッグ出力
+- name: Display validation summary
+  ansible.builtin.debug:
+    msg: |
+      Parameter validation completed:
+      - Total parameters: {{ ssm_validation_summary.total_validated }}
+      - Required parameters found: {{ ssm_validation_summary.required_found }}
+      - Schema validations: {{ ssm_validation_summary.schemas_validated }}
+      - Constraint checks: {{ ssm_validation_summary.constraints_checked }}
+      Result: PASSED
+  when: ssm_parameter_store_verbose

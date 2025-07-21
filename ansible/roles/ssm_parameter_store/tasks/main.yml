@@ -1,0 +1,41 @@
+---
+# SSMパラメータストアヘルパーのメインタスク
+# 
+# このロールは以下の機能を提供します：
+# - パラメータの取得（単一/複数/パス指定）
+# - パラメータの設定/更新
+# - パラメータの削除
+# - パラメータの一覧取得
+# - 環境変数へのエクスポート
+# - パラメータのバリデーション
+
+# キャッシュの初期化
+- name: Initialize SSM parameter cache
+  ansible.builtin.set_fact:
+    ssm_parameter_cache: {}
+    ssm_parameter_cache_timestamps: {}
+  when: 
+    - ssm_parameter_cache is not defined
+    - ssm_parameter_store_cache.enabled | bool
+
+# セキュアキーワードリストの統合
+- name: Load secure keywords
+  ansible.builtin.include_vars:
+    file: secure_keywords.yml
+
+- name: Merge secure keywords lists
+  ansible.builtin.set_fact:
+    ssm_parameter_store_all_secure_keywords: >-
+      {{
+        ssm_parameter_store_secure_keywords +
+        ssm_parameter_store_additional_secure_keywords | default([])
+      }}
+
+# 結果変数の初期化
+- name: Initialize result variables
+  ansible.builtin.set_fact:
+    ssm_parameter_value: null
+    ssm_parameters: {}
+    ssm_parameter_metadata: {}
+    ssm_operation_success: false
+    ssm_operation_error: null

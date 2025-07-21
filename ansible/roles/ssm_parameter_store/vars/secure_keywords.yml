@@ -1,0 +1,31 @@
+---
+# セキュアと判定するキーワードの拡張リスト
+# defaults/main.ymlの基本リストに追加される
+ssm_parameter_store_additional_secure_keywords:
+  - api_key
+  - api_secret
+  - access_key
+  - secret_key
+  - private_key
+  - public_key
+  - oauth
+  - jwt
+  - bearer
+  - session
+  - cookie
+  - csrf
+  - xsrf
+  - salt
+  - hash
+  - encrypt
+  - decrypt
+  - sign
+  - verify
+  - master
+  - root
+  - admin
+  - service_account
+  - client_secret
+  - client_id
+  - refresh_token
+  - id_token
