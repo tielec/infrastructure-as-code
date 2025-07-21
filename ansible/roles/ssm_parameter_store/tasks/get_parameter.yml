@@ -51,42 +51,17 @@
           {% if decrypt | default(true) %}--with-decryption{% endif %} \
           --output json 2>&1
       register: parameter_result
-      no_log: "{{ is_secure and not (ssm_parameter_store_debug | default(false)) }}"
+      no_log: "{{ is_secure }}"
       changed_when: false
       retries: "{{ ssm_parameter_store_retry_count }}"
       delay: "{{ ssm_parameter_store_retry_delay }}"
       until: parameter_result.rc == 0 or 'ParameterNotFound' in parameter_result.stdout
 
-    # デバッグ：AWS CLIの生の出力を確認
-    - name: Debug raw AWS CLI output
-      ansible.builtin.debug:
-        msg: |
-          AWS CLI raw output (first 500 chars): {{ parameter_result.stdout[:500] if parameter_result.stdout else 'No output' }}
-          Return code: {{ parameter_result.rc }}
-          stderr: {{ parameter_result.stderr | default('No stderr') }}
-      when: 
-        - ssm_parameter_store_debug | default(false)
-        - parameter_result.rc == 0
-
     - name: Parse parameter result
       ansible.builtin.set_fact:
         parameter_data: "{{ parameter_result.stdout | from_json }}"
       when: parameter_result.rc == 0
-      no_log: "{{ is_secure and not (ssm_parameter_store_debug | default(false)) }}"
-
-    # デバッグ：パース後のデータ構造を確認
-    - name: Debug parsed data structure
-      ansible.builtin.debug:
-        msg: |
-          Parsed parameter data:
-          Parameter Name: {{ parameter_data.Parameter.Name }}
-          Parameter Type: {{ parameter_data.Parameter.Type }}
-          Parameter Version: {{ parameter_data.Parameter.Version }}
-          Value type: {{ parameter_data.Parameter.Value | type_debug }}
-          Value length: {{ parameter_data.Parameter.Value | length }}
-      when: 
-        - ssm_parameter_store_debug | default(false)
-        - parameter_result.rc == 0
+      no_log: "{{ is_secure }}"
 
     - name: Extract parameter value and metadata
       ansible.builtin.set_fact:
@@ -98,24 +73,7 @@
           last_modified: "{{ parameter_data.Parameter.LastModifiedDate | default('') }}"
           arn: "{{ parameter_data.Parameter.ARN | default('') }}"
       when: parameter_result.rc == 0
-      no_log: "{{ is_secure and not (ssm_parameter_store_debug | default(false)) }}"
-
-    # デバッグ：値の詳細を確認
-    - name: Debug extracted value details
-      ansible.builtin.debug:
-        msg: |
-          Extracted value details:
-          Value: {{ ssm_parameter_value }}
-          Type: {{ ssm_parameter_value | type_debug }}
-          Length: {{ ssm_parameter_value | length }}
-          First 10 chars: {{ ssm_parameter_value[:10] if ssm_parameter_value else 'N/A' }}
-          Last 10 chars: {{ ssm_parameter_value[-10:] if ssm_parameter_value else 'N/A' }}
-          Contains newline: {{ '\n' in ssm_parameter_value }}
-          Contains carriage return: {{ '\r' in ssm_parameter_value }}
-          Trimmed length: {{ ssm_parameter_value | trim | length }}
-      when: 
-        - ssm_parameter_store_debug | default(false)
-        - parameter_result.rc == 0
+      no_log: "{{ is_secure }}"
 
     # JSONパラメータの自動パース
     - name: Parse JSON parameter if requested
@@ -126,7 +84,7 @@
         - name: Parse JSON value
           ansible.builtin.set_fact:
             ssm_parameter_value: "{{ ssm_parameter_value | from_json }}"
-          no_log: "{{ is_secure and not (ssm_parameter_store_debug | default(false)) }}"
+          no_log: "{{ is_secure }}"
       rescue:
         - name: Handle JSON parse error
           ansible.builtin.fail:
@@ -140,7 +98,7 @@
       ansible.builtin.set_fact:
         ssm_parameter_cache: "{{ ssm_parameter_cache | combine({parameter_name: ssm_parameter_value}) }}"
         ssm_parameter_cache_timestamps: "{{ ssm_parameter_cache_timestamps | combine({parameter_name: current_timestamp}) }}"
-      no_log: "{{ is_secure and not (ssm_parameter_store_debug | default(false)) }}"
+      no_log: "{{ is_secure }}"
 
     - name: Set success status
       ansible.builtin.set_fact:
@@ -177,22 +135,9 @@
   when: 
     - store_as is defined
     - ssm_operation_success
-  no_log: "{{ is_secure and not (ssm_parameter_store_debug | default(false)) }}"
+  no_log: "{{ is_secure }}"
 
-# デバッグ：store_as変数の確認
-- name: Debug stored variable
-  ansible.builtin.debug:
-    msg: |
-      Store_as variable '{{ store_as }}' details:
-      Value: {{ hostvars[inventory_hostname][store_as] }}
-      Type: {{ hostvars[inventory_hostname][store_as] | type_debug }}
-      Length: {{ hostvars[inventory_hostname][store_as] | length }}
-  when: 
-    - ssm_parameter_store_debug | default(false)
-    - store_as is defined
-    - ssm_operation_success
-
-# デバッグ出力（通常版）
+# デバッグ出力
 - name: Display parameter info (non-secure only)
   ansible.builtin.debug:
     msg: |
@@ -202,7 +147,7 @@
       {% if not is_secure %}
       Value: {{ ssm_parameter_value }}
       {% else %}
-      Value: {{ ssm_parameter_value | string | regex_replace('^(.{3}).*', '\\1***') if ssm_parameter_store_mask_partial else ssm_parameter_store_mask_value }}
+      Value: {{ ssm_parameter_value[:3] + '***' if ssm_parameter_store_mask_partial else ssm_parameter_store_mask_value }}
       {% endif %}
   when: 
     - ssm_parameter_store_verbose

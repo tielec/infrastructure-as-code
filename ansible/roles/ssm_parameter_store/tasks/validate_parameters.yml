@@ -1,6 +1,12 @@
 ---
 # SSMパラメータのバリデーションを行うタスク
 
+# 初期化
+- name: Initialize validation variables
+  ansible.builtin.set_fact:
+    missing_parameters: []
+    validation_errors: []
+
 - name: Validate required parameters exist
   when: required_parameters is defined
   block:
@@ -8,7 +14,7 @@
       ansible.builtin.include_tasks: get_parameter.yml
       vars:
         parameter_name: "{{ item }}"
-        fail_on_missing: false
+        ssm_parameter_store_fail_on_missing: false
       loop: "{{ required_parameters }}"
       register: validation_results
 

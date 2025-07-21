@@ -8,32 +8,7 @@
   vars:
     # テスト設定
     test_prefix: "/ansible-test/ssm-{{ ansible_date_time.epoch[-4:] }}"
-    test_run_id: "{{ 999999 | random }}"
     test_timestamp: "{{ ansible_date_time.iso8601_basic_short }}"
-    
-    # パスワードを固定値で設定（テスト用）
-    # lookup('password')は実行のたびに異なる値を返す可能性があるため
-    generated_password: "TestPassword{{ test_run_id }}Secure"
-    
-    # テストパラメータ定義
-    test_parameters:
-      string_param: "{{ test_prefix }}/config/api_endpoint"
-      secure_param: "{{ test_prefix }}/secrets/database_password"
-      json_param: "{{ test_prefix }}/config/features"
-      list_param: "{{ test_prefix }}/config/allowed_ips"
-    
-    # テストデータ（パスワードは生成済みのものを使用）
-    test_values:
-      api_endpoint: "https://api.example.com/v1"
-      database_password: "{{ generated_password }}"
-      features:
-        enable_cache: true
-        cache_ttl: 3600
-        max_connections: 100
-      allowed_ips:
-        - "10.0.0.0/8"
-        - "172.16.0.0/12"
-        - "192.168.0.0/16"
     
     # クリーンアップ設定
     cleanup_on_failure: true
@@ -43,6 +18,31 @@
     operation: "{{ op | default('full') }}"  # full, create-only, test-only, cleanup-only
     
   pre_tasks:
+    # テスト用の固定値を設定
+    - name: Set test run ID and password
+      ansible.builtin.set_fact:
+        test_run_id: "{{ ansible_date_time.epoch[-6:] }}"
+        generated_password: "SecureTestPwd{{ ansible_date_time.epoch[-6:] }}"
+    
+    - name: Set test parameters
+      ansible.builtin.set_fact:
+        test_parameters:
+          string_param: "{{ test_prefix }}/config/api_endpoint"
+          secure_param: "{{ test_prefix }}/secrets/database_password"
+          json_param: "{{ test_prefix }}/config/features"
+          list_param: "{{ test_prefix }}/config/allowed_ips"
+        test_values:
+          api_endpoint: "https://api.example.com/v1"
+          database_password: "{{ generated_password }}"
+          features:
+            enable_cache: true
+            cache_ttl: 3600
+            max_connections: 100
+          allowed_ips:
+            - "10.0.0.0/8"
+            - "172.16.0.0/12"
+            - "192.168.0.0/16"
+    
     # 共通変数の読み込み
     - name: Include group_vars/all.yml
       ansible.builtin.include_vars:
@@ -73,13 +73,14 @@
                   Timestamp: {{ test_timestamp }}
                   Operation Mode: {{ operation }}
                   AWS Region: {{ ssm_parameter_store_region | default('ap-northeast-1') }}
+                  Test Password: {{ generated_password }}
                   ========================================
             
             # SSM Parameter Storeロールの初期化
             - name: Initialize SSM Parameter Store role
               ansible.builtin.include_role:
                 name: ssm_parameter_store
-
+        
         # ==================== パラメータ作成フェーズ ====================
         - name: "PHASE 2: Parameter Creation"
           when: operation in ['full', 'create-only']
@@ -163,13 +164,25 @@
                 parameter_name: "{{ test_parameters.secure_param }}"
                 store_as: "retrieved_password"
             
+            # デバッグ情報の表示
+            - name: Debug secure parameter comparison
+              ansible.builtin.debug:
+                msg: |
+                  Expected password: {{ test_values.database_password }}
+                  Retrieved password: {{ retrieved_password }}
+                  Passwords match: {{ retrieved_password == test_values.database_password }}
+              when: ansible_verbosity > 0
+            
             - name: Verify secure parameter
               ansible.builtin.assert:
                 that:
                   - ssm_operation_success
                   - retrieved_password is defined
                   - retrieved_password == test_values.database_password
-                fail_msg: "Secure parameter retrieval failed"
+                fail_msg: |
+                  Secure parameter retrieval failed
+                  Expected: {{ test_values.database_password }}
+                  Retrieved: {{ retrieved_password | default('(undefined)') }}
             
             - name: Test get JSON parameter with parsing
               ansible.builtin.include_role:
@@ -494,35 +507,3 @@
             - name: Fail with error message
               ansible.builtin.fail:
                 msg: "SSM Parameter Store test failed. See error above for details."
-
-# 実行例とトラブルシューティング
-# 
-# 使用方法:
-# 1. 環境変数の設定:
-#    export AWS_PROFILE="your-profile"
-#    # または
-#    export AWS_ACCESS_KEY_ID="your-key"
-#    export AWS_SECRET_ACCESS_KEY="your-secret"
-#    export AWS_REGION="ap-northeast-1"
-#
-# 2. 実行:
-#    # フルテスト（作成、テスト、削除）
-#    ansible-playbook test-ssm-parameter-store.yml
-#    
-#    # 作成のみ
-#    ansible-playbook test-ssm-parameter-store.yml -e op=create-only
-#    
-#    # テストのみ（既存パラメータに対して）
-#    ansible-playbook test-ssm-parameter-store.yml -e op=test-only
-#    
-#    # クリーンアップのみ
-#    ansible-playbook test-ssm-parameter-store.yml -e op=cleanup-only
-#    
-#    # 成功時もパラメータを保持
-#    ansible-playbook test-ssm-parameter-store.yml -e cleanup_on_success=false
-#
-# 3. デバッグ:
-#    ansible-playbook test-ssm-parameter-store.yml -vvv
-#
-# 4. 特定のテストプレフィックスを使用:
-#    ansible-playbook test-ssm-parameter-store.yml -e test_prefix="/my-custom-test"
