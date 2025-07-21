@@ -28,25 +28,19 @@
   ansible.builtin.debug:
     msg: "Using Jenkins Instance ID: {{ jenkins_instance_id }}"
 
-# EFSファイルシステムIDの取得（未設定の場合）
-- name: Get EFS file system ID directly from Pulumi
-  ansible.builtin.shell: |
-    cd {{ pulumi_path }}/jenkins-storage
-    export PULUMI_ACCESS_TOKEN="{{ lookup('env', 'PULUMI_ACCESS_TOKEN') }}"
-    pulumi stack output efsFileSystemId 2>/dev/null
-  register: efs_file_system_id_output
-  changed_when: false
-  failed_when: false
+# EFSファイルシステムIDの取得 - SSM Parameter Storeから優先的に取得
+- name: Get EFS file system ID from Parameter Store
   when: efs_file_system_id is not defined or efs_file_system_id == ""
+  ansible.builtin.include_role:
+    name: ssm_parameter_store
+    tasks_from: get_parameter
+  vars:
+    parameter_name: "/{{ project_name }}/{{ env_name }}/storage/efsFileSystemId"
+    store_as: "efs_file_system_id"
 
-- name: Set EFS file system ID
-  ansible.builtin.set_fact:
-    efs_file_system_id: "{{ efs_file_system_id_output.stdout | trim }}"
-  when: 
-    - efs_file_system_id is not defined or efs_file_system_id == ""
-    - efs_file_system_id_output is defined
-    - efs_file_system_id_output.rc == 0
-    - efs_file_system_id_output.stdout | trim | regex_search('^fs-[a-f0-9]+$')
+- name: Display Jenkins EFS file system ID
+  ansible.builtin.debug:
+    msg: "Using EFS File System ID: {{ efs_file_system_id | default('Not defined') }}"
 
 # ファイル権限設定
 - name: Ensure aws-env.sh has execute permissions
