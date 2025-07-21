@@ -1,10 +1,12 @@
 ---
-# 複数のSSMパラメータを一括取得するタスク（シンプル版）
+# 複数のSSMパラメータを一括取得するタスク
 
-- name: Validate required variables
-  ansible.builtin.fail:
-    msg: "Required variable 'parameter_names' is not defined or empty"
-  when: parameter_names is not defined or parameter_names | length == 0
+- name: Validate inputs
+  ansible.builtin.assert:
+    that:
+      - parameter_names is defined
+      - parameter_names | length > 0
+    fail_msg: "Required variable 'parameter_names' must be defined and not empty"
 
 # 初期化
 - name: Initialize results
@@ -12,84 +14,41 @@
     ssm_parameters: {}
     ssm_parameter_metadata: {}
     ssm_failed_parameters: []
+    _batch_size: "{{ ssm_parameter_store_batch_size | default(10) | int }}"
 
-# パラメータを一括取得（AWS CLIは最大10個まで）
-- name: Get parameters in batches
-  ansible.builtin.shell: |
-    aws ssm get-parameters \
-      --names {{ item | join(' ') }} \
-      --region {{ ssm_parameter_store_region }} \
-      {% if decrypt | default(true) %}--with-decryption{% endif %} \
-      --output json
-  register: batch_results
-  loop: "{{ parameter_names | batch(10) | list }}"
-  no_log: true
+# バッチ処理でパラメータを取得
+- name: Process parameters in batches
+  ansible.builtin.include_tasks: _process_parameter_batch.yml
+  vars:
+    batch_names: "{{ item }}"
+    batch_index: "{{ ansible_loop.index }}"
+  loop: "{{ parameter_names | batch(_batch_size) | list }}"
+  loop_control:
+    loop_var: item
+    extended: true
 
-# 結果の処理
-- name: Process batch results
+# 結果の集計
+- name: Aggregate batch results
   ansible.builtin.set_fact:
-    ssm_parameters: >-
-      {%- set params = ssm_parameters -%}
-      {%- for batch in batch_results.results -%}
-        {%- if batch.rc == 0 -%}
-          {%- set data = batch.stdout | from_json -%}
-          {%- for param in data.Parameters | default([]) -%}
-            {%- set _ = params.update({param.Name: param.Value}) -%}
-          {%- endfor -%}
-        {%- endif -%}
-      {%- endfor -%}
-      {{ params }}
-
-# メタデータの収集
-- name: Collect metadata
-  ansible.builtin.set_fact:
-    ssm_parameter_metadata: >-
-      {%- set metadata = {} -%}
-      {%- for batch in batch_results.results -%}
-        {%- if batch.rc == 0 -%}
-          {%- set data = batch.stdout | from_json -%}
-          {%- for param in data.Parameters | default([]) -%}
-            {%- set _ = metadata.update({
-              param.Name: {
-                'type': param.Type,
-                'version': param.Version,
-                'last_modified': param.LastModifiedDate | default('')
-              }
-            }) -%}
-          {%- endfor -%}
-        {%- endif -%}
-      {%- endfor -%}
-      {{ metadata }}
+    ssm_operation_success: "{{ ssm_parameters | length > 0 }}"
+    ssm_parameter_count: "{{ ssm_parameters | length }}"
 
 # 失敗したパラメータの特定
 - name: Identify failed parameters
   ansible.builtin.set_fact:
-    ssm_failed_parameters: >-
-      {%- set failed = [] -%}
-      {%- for name in parameter_names -%}
-        {%- if name not in ssm_parameters -%}
-          {%- set _ = failed.append(name) -%}
-        {%- endif -%}
-      {%- endfor -%}
-      {{ failed }}
-
-# 結果のサマリー
-- name: Set operation summary
-  ansible.builtin.set_fact:
-    ssm_operation_success: true
-    ssm_parameter_count: "{{ ssm_parameters | length | int }}"
+    ssm_failed_parameters: "{{ parameter_names | difference(ssm_parameters.keys() | list) }}"
 
 # デバッグ出力
-- name: Display results summary
+- name: Display operation summary
+  when: ssm_parameter_store_verbose
   ansible.builtin.debug:
     msg: |
       Total requested: {{ parameter_names | length }}
       Successfully retrieved: {{ ssm_parameter_count }}
       Failed: {{ ssm_failed_parameters | length }}
-      {% if ssm_failed_parameters | length > 0 %}
+      {% if ssm_failed_parameters | length > 0 and ssm_parameter_store_debug %}
       Failed parameters:
       {% for param in ssm_failed_parameters %}
       - {{ param }}
       {% endfor %}
       {% endif %}
-  when: ssm_parameter_store_verbose

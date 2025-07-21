@@ -1,50 +1,45 @@
 ---
-# SSMパラメータを削除するタスク（シンプル版）
+# SSMパラメータを削除するタスク（aws_cli_helper版）
 
-- name: Validate required variables
+- name: Validate inputs
   ansible.builtin.assert:
     that:
       - parameter_name is defined
       - parameter_name | length > 0
-    fail_msg: "Required variable 'parameter_name' is not defined or empty"
+    fail_msg: "Required variable 'parameter_name' must be defined and not empty"
 
 # パラメータを削除
-- name: Delete parameter from SSM
-  ansible.builtin.shell: |
-    aws ssm delete-parameter \
-      --name "{{ parameter_name }}" \
-      --region {{ ssm_parameter_store_region }}
-  register: delete_result
-  failed_when: false
+- name: Delete parameter from SSM using AWS CLI helper
+  ansible.builtin.include_role:
+    name: aws_cli_helper
+    tasks_from: execute_with_retry
+  vars:
+    aws_command: >-
+      aws ssm delete-parameter
+      --name "{{ parameter_name }}"
+    operation_name: "ssm_delete_parameter"
 
 # 結果の処理
-- name: Set operation status
+- name: Process deletion result
   ansible.builtin.set_fact:
-    ssm_operation_success: "{{ delete_result.rc == 0 or 'ParameterNotFound' in delete_result.stderr | default('') }}"
+    ssm_operation_success: "{{ aws_cli_success or aws_cli_error_type == 'ResourceNotFound' }}"
     ssm_operation_error: >-
-      {%- if delete_result.rc == 0 -%}
+      {%- if aws_cli_success -%}
         ""
-      {%- elif 'ParameterNotFound' in delete_result.stderr | default('') -%}
+      {%- elif aws_cli_error_type == 'ResourceNotFound' -%}
         "Parameter already deleted"
       {%- else -%}
-        {{ delete_result.stderr | default('Unknown error') }}
+        {{ aws_cli_error_message }}
       {%- endif -%}
-
-# キャッシュからも削除
-- name: Remove from cache
-  when:
-    - ssm_parameter_store_cache.enabled | bool
-    - parameter_name in ssm_parameter_cache | default({})
-  ansible.builtin.set_fact:
-    ssm_parameter_cache: "{{ ssm_parameter_cache | dict2items | rejectattr('key', 'equalto', parameter_name) | list | items2dict }}"
 
 # デバッグ出力
 - name: Display operation result
+  when: ssm_parameter_store_verbose
   ansible.builtin.debug:
     msg: |
       Parameter: {{ parameter_name }}
       Deleted: {{ ssm_operation_success }}
+      Retry Attempts: {{ aws_cli_retry_attempts | default(1) }}
       {% if ssm_operation_error %}
       Note: {{ ssm_operation_error }}
       {% endif %}
-  when: ssm_parameter_store_verbose

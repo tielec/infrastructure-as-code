@@ -1,10 +1,12 @@
 ---
-# パス指定でSSMパラメータを一括取得するタスク（シンプル版）
+# パス指定でSSMパラメータを一括取得するタスク（aws_cli_helper版）
 
-- name: Validate required variables
-  ansible.builtin.fail:
-    msg: "Required variable 'parameter_path' is not defined"
-  when: parameter_path is not defined or parameter_path | length == 0
+- name: Validate inputs
+  ansible.builtin.assert:
+    that:
+      - parameter_path is defined
+      - parameter_path | length > 0
+    fail_msg: "Required variable 'parameter_path' must be defined"
 
 # パスの正規化
 - name: Normalize parameter path
@@ -12,31 +14,29 @@
     normalized_path: "{{ parameter_path if parameter_path.endswith('/') else parameter_path + '/' }}"
 
 # パラメータを取得
-- name: Get parameters by path
-  ansible.builtin.shell: |
-    aws ssm get-parameters-by-path \
-      --path "{{ normalized_path }}" \
-      {% if recursive | default(true) %}--recursive{% endif %} \
-      {% if decrypt | default(true) %}--with-decryption{% endif %} \
-      --region {{ ssm_parameter_store_region }} \
+- name: Get parameters by path using AWS CLI helper
+  ansible.builtin.include_role:
+    name: aws_cli_helper
+    tasks_from: execute_with_retry
+  vars:
+    aws_command: >-
+      aws ssm get-parameters-by-path
+      --path "{{ normalized_path }}"
+      {% if recursive | default(true) %}--recursive{% endif %}
+      {% if decrypt | default(true) %}--with-decryption{% endif %}
       --output json
-  register: path_result
-  no_log: true
+    operation_name: "ssm_get_parameters_by_path"
+    no_log_output: true
 
 # 結果の処理
 - name: Process results
-  when: path_result.rc == 0
+  when: aws_cli_success
   block:
-    - name: Parse parameters
-      ansible.builtin.set_fact:
-        _path_data: "{{ path_result.stdout | from_json }}"
-      no_log: true
-
     - name: Extract parameters
       ansible.builtin.set_fact:
         ssm_parameters: >-
           {%- set params = {} -%}
-          {%- for param in _path_data.Parameters | default([]) -%}
+          {%- for param in aws_cli_data.Parameters | default([]) -%}
             {%- set _ = params.update({param.Name: param.Value}) -%}
           {%- endfor -%}
           {{ params }}
@@ -45,7 +45,7 @@
       ansible.builtin.set_fact:
         ssm_parameter_metadata: >-
           {%- set metadata = {} -%}
-          {%- for param in _path_data.Parameters | default([]) -%}
+          {%- for param in aws_cli_data.Parameters | default([]) -%}
             {%- set _ = metadata.update({
               param.Name: {
                 'type': param.Type,
@@ -63,22 +63,23 @@
 
 # エラー処理
 - name: Handle errors
-  when: path_result.rc != 0
+  when: not aws_cli_success
   ansible.builtin.set_fact:
     ssm_operation_success: false
-    ssm_operation_error: "{{ path_result.stderr | default('Failed to retrieve parameters') }}"
+    ssm_operation_error: "{{ aws_cli_error_message }}"
     ssm_parameters: {}
     ssm_parameter_count: 0
 
 # デバッグ出力
 - name: Display summary
+  when: ssm_parameter_store_verbose
   ansible.builtin.debug:
     msg: |
       Path: {{ normalized_path }}
       Recursive: {{ recursive | default(true) }}
       Success: {{ ssm_operation_success }}
       Parameters found: {{ ssm_parameter_count | default(0) }}
+      Retry Attempts: {{ aws_cli_retry_attempts | default(1) }}
       {% if not ssm_operation_success %}
       Error: {{ ssm_operation_error }}
       {% endif %}
-  when: ssm_parameter_store_verbose
