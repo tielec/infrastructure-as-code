@@ -70,7 +70,7 @@
   block:
     - name: Check if parameter not found
       ansible.builtin.set_fact:
-        _parameter_not_found: "{{ 'ParameterNotFound' in get_result.stdout }}"
+        _parameter_not_found: "{{ 'ParameterNotFound' in get_result.stderr | default('') }}"
 
     - name: Use default value if specified
       when:
