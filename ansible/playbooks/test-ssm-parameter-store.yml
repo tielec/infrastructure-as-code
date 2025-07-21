@@ -11,8 +11,9 @@
     test_run_id: "{{ 999999 | random }}"
     test_timestamp: "{{ ansible_date_time.iso8601_basic_short }}"
     
-    # パスワードを一度だけ生成して保存
-    generated_password: "{{ lookup('password', '/dev/null length=32 chars=ascii_letters,digits') }}"
+    # パスワードを固定値で設定（テスト用）
+    # lookup('password')は実行のたびに異なる値を返す可能性があるため
+    generated_password: "TestPassword{{ test_run_id }}Secure"
     
     # テストパラメータ定義
     test_parameters:
