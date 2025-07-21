@@ -88,13 +88,16 @@
     - aws_cli_stdout | length > 0
   ansible.builtin.include_tasks: parse_json.yml
   vars:
-    json_string: "{{ aws_cli_stdout }}"
+    json_string: "{{ aws_cli_stdout }}"  # 生の標準出力を渡す
 
-# デフォルト値の設定
-- name: Set default values for unsuccessful parsing
+# パース無効時またはデフォルト値の設定
+- name: Set data for non-parsed output or default
   ansible.builtin.set_fact:
     aws_cli_data: {}
-  when: aws_cli_data is not defined
+    aws_cli_parse_error: ""
+  when: 
+    - aws_cli_data is not defined
+    - aws_cli_parse_error is not defined
 
 # デバッグ出力
 - name: Debug AWS CLI execution
@@ -107,4 +110,7 @@
       {% if not aws_cli_success %}
       Error Type: {{ aws_cli_error_type | default('Unknown') }}
       Error: {{ aws_cli_stderr | truncate(200) }}
+      {% endif %}
+      {% if aws_cli_parse_error is defined and aws_cli_parse_error | length > 0 %}
+      Parse Error: {{ aws_cli_parse_error }}
       {% endif %}

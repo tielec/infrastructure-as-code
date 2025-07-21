@@ -2,27 +2,62 @@
 # JSON出力をパースする内部タスク
 #
 # 必須変数:
-#   - json_string: パースするJSON文字列
+#   - json_string: パースするJSON文字列またはすでにパース済みのデータ
 #
 # 戻り値:
 #   - aws_cli_data: パース済みデータ（成功時）
 #   - aws_cli_parse_error: パースエラー（失敗時）
 
-- name: Attempt to parse JSON
+# データ型をチェック
+- name: Check data type
   ansible.builtin.set_fact:
-    aws_cli_data: "{{ json_string | from_json }}"
-  failed_when: false
-  register: _json_parse_result
+    _is_already_parsed: "{{ json_string is mapping or json_string is sequence }}"
+    _is_string: "{{ json_string is string }}"
 
-- name: Handle parse failure
-  when: _json_parse_result is failed
+# すでにパース済みの場合はそのまま使用
+- name: Use already parsed data
+  when: _is_already_parsed
+  ansible.builtin.set_fact:
+    aws_cli_data: "{{ json_string }}"
+    aws_cli_parse_error: ""
+
+# 文字列の場合はJSONパースを試行
+- name: Parse JSON string
+  when: _is_string
+  block:
+    - name: Attempt to parse JSON
+      ansible.builtin.set_fact:
+        aws_cli_data: "{{ json_string | from_json }}"
+      failed_when: false
+      register: _json_parse_result
+
+    - name: Handle parse failure
+      when: _json_parse_result is failed
+      ansible.builtin.set_fact:
+        aws_cli_data: {}
+        aws_cli_parse_error: "Failed to parse JSON output: {{ _json_parse_result.msg | default('Unknown error') }}"
+
+    - name: Handle successful parse
+      when: _json_parse_result is not failed
+      ansible.builtin.set_fact:
+        aws_cli_parse_error: ""
+
+# どちらでもない場合（数値など）
+- name: Handle other data types
+  when: not _is_already_parsed and not _is_string
   ansible.builtin.set_fact:
     aws_cli_data: {}
-    aws_cli_parse_error: "Failed to parse JSON output"
+    aws_cli_parse_error: "Unexpected data type: {{ json_string | type_debug }}"
 
+# デバッグ出力
 - name: Debug parsed data
-  when:
-    - aws_cli_helper_debug
-    - _json_parse_result is not failed
+  when: aws_cli_helper_debug
   ansible.builtin.debug:
-    msg: "Successfully parsed JSON with {{ aws_cli_data | type_debug }} containing {{ aws_cli_data | length }} items"
+    msg: |
+      Input type: {{ json_string | type_debug }}
+      Already parsed: {{ _is_already_parsed }}
+      Parse error: {{ aws_cli_parse_error | default('None') }}
+      {% if aws_cli_parse_error | length == 0 %}
+      Result type: {{ aws_cli_data | type_debug }}
+      Result size: {{ aws_cli_data | length }} items
+      {% endif %}
