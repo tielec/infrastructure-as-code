@@ -145,18 +145,26 @@
                 fail_msg: "Resource not found error detection failed"
             
             - name: Test 2.3 - Access denied simulation (if no S3 permissions)
-              ansible.builtin.include_role:
-                name: aws_cli_helper
-                tasks_from: execute
-              vars:
-                aws_command: "aws iam list-account-aliases"  # 通常は権限がないコマンド
-                operation_name: "access_denied_test"
-              ignore_errors: true
+              block:
+                - name: Try command that might be denied
+                  ansible.builtin.include_role:
+                    name: aws_cli_helper
+                    tasks_from: execute
+                  vars:
+                    aws_command: "aws iam list-account-aliases"  # 通常は権限がないコマンド
+                    operation_name: "access_denied_test"
+              rescue:
+                - name: Note access denied test handled
+                  ansible.builtin.set_fact:
+                    access_denied_handled: true
             
             - name: Display error type for access denied
               ansible.builtin.debug:
-                msg: "Error type detected: {{ aws_cli_error_type | default('No error or has permission') }}"
-              when: not (aws_cli_success | default(true))
+                msg: |
+                  Access denied test:
+                  - Success: {{ aws_cli_success | default(true) }}
+                  - Error type: {{ aws_cli_error_type | default('No error or has permission') }}
+                  - Test handled: {{ access_denied_handled | default(false) }}
         
         # ==================== リトライ機能テスト ====================
         - name: "PHASE 3: Retry Functionality Tests"
@@ -201,17 +209,22 @@
         - name: "PHASE 4: Secure Logging Tests"
           block:
             - name: Test 4.1 - Command with sensitive data (no_log enabled)
-              ansible.builtin.include_role:
-                name: aws_cli_helper
-                tasks_from: execute
-              vars:
-                aws_command: >-
-                  aws ssm get-parameter 
-                  --name "/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2"
-                  --query 'Parameter.Value'
-                operation_name: "secure_parameter_test"
-                no_log_output: true
-              ignore_errors: true
+              block:
+                - name: Execute secure command
+                  ansible.builtin.include_role:
+                    name: aws_cli_helper
+                    tasks_from: execute
+                  vars:
+                    aws_command: >-
+                      aws ssm get-parameter 
+                      --name "/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2"
+                      --query 'Parameter.Value'
+                    operation_name: "secure_parameter_test"
+                    no_log_output: true
+              rescue:
+                - name: Note secure logging test handled
+                  ansible.builtin.debug:
+                    msg: "Secure logging test completed (parameter might not exist)"
             
             - name: Verify secure logging worked
               ansible.builtin.debug:
@@ -313,22 +326,29 @@
             
             # このテストは意図的にタイムアウトを発生させる可能性があります
             - name: Test 7.2 - Command with very short timeout (might fail)
-              ansible.builtin.include_role:
-                name: aws_cli_helper
-                tasks_from: execute
-              vars:
-                aws_command: "aws ec2 describe-instances"
-                operation_name: "timeout_test_short"
-                timeout: 1
-              failed_when: false  # タイムアウトを許容
+              block:
+                - name: Execute command with short timeout
+                  ansible.builtin.include_role:
+                    name: aws_cli_helper
+                    tasks_from: execute
+                  vars:
+                    aws_command: "aws ec2 describe-instances"
+                    operation_name: "timeout_test_short"
+                    timeout: 1
+              rescue:
+                - name: Handle timeout error
+                  ansible.builtin.set_fact:
+                    timeout_test_handled: true
+                  when: "'time frame' in ansible_failed_result.msg | default('')"
             
             - name: Display timeout test result
               ansible.builtin.debug:
                 msg: |
                   Timeout test result:
-                  - Success: {{ aws_cli_success | default('undefined') }}
+                  - Success: {{ aws_cli_success | default(false) }}
                   - Error Type: {{ aws_cli_error_type | default('none') }}
-                  {% if aws_cli_error_type | default('') == 'Timeout' %}
+                  - Timeout handled: {{ timeout_test_handled | default(false) }}
+                  {% if aws_cli_error_type | default('') == 'Timeout' or timeout_test_handled | default(false) %}
                   - Timeout detected correctly!
                   {% endif %}
         
@@ -383,15 +403,20 @@
             - run_destructive_tests | bool
           block:
             - name: Clean up SSM parameters
-              ansible.builtin.include_role:
-                name: aws_cli_helper
-                tasks_from: execute
-              vars:
-                aws_command: >-
-                  aws ssm delete-parameter
-                  --name "{{ test_ssm_prefix }}/test-value"
-                operation_name: "cleanup_ssm"
-              ignore_errors: true
+              block:
+                - name: Delete test parameter
+                  ansible.builtin.include_role:
+                    name: aws_cli_helper
+                    tasks_from: execute
+                  vars:
+                    aws_command: >-
+                      aws ssm delete-parameter
+                      --name "{{ test_ssm_prefix }}/test-value"
+                    operation_name: "cleanup_ssm"
+              rescue:
+                - name: Note cleanup completed
+                  ansible.builtin.debug:
+                    msg: "Cleanup attempted (parameter may not exist)"
             
             - name: Display cleanup status
               ansible.builtin.debug:
