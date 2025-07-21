@@ -63,6 +63,12 @@
         mode: '0600'
       no_log: "{{ parameter_type == 'SecureString' }}"
 
+    # 操作結果の初期化
+    - name: Initialize operation results
+      ansible.builtin.set_fact:
+        create_result: null
+        update_result: null
+
     # 新規作成の場合（タグ付き）
     - name: Create new parameter with tags
       ansible.builtin.shell: |
@@ -144,27 +150,37 @@
       register: tag_update_result
       changed_when: true
 
-    # 結果の統合
+    # 結果の統合（修正版）
     - name: Set operation result
       ansible.builtin.set_fact:
-        set_result: "{{ create_result if not parameter_exists | default(false) else update_result }}"
+        set_result: >-
+          {%- if not parameter_exists | default(false) -%}
+            {{ create_result | default({'rc': 1, 'stdout': '', 'stderr': 'Create operation was not executed'}) }}
+          {%- else -%}
+            {{ update_result | default({'rc': 1, 'stdout': '', 'stderr': 'Update operation was not executed'}) }}
+          {%- endif -%}
+
+    # 結果の確認
+    - name: Check operation success
+      ansible.builtin.set_fact:
+        operation_success: "{{ set_result is defined and set_result.rc is defined and set_result.rc == 0 }}"
 
     - name: Parse set result
       ansible.builtin.set_fact:
         set_response: "{{ set_result.stdout | from_json if set_result.stdout else {} }}"
-      when: set_result.rc == 0
+      when: operation_success
 
     - name: Set success status
       ansible.builtin.set_fact:
         ssm_operation_success: true
         ssm_parameter_version: "{{ set_response.Version | default(1) }}"
-      when: set_result.rc == 0
+      when: operation_success
 
     # キャッシュの更新
     - name: Update cache
       when: 
         - ssm_parameter_store_cache.enabled | bool
-        - set_result.rc == 0
+        - operation_success
       ansible.builtin.set_fact:
         ssm_parameter_cache: >-
           {{
@@ -183,7 +199,7 @@
   rescue:
     - name: Handle set failure
       ansible.builtin.set_fact:
-        ssm_operation_error: "{{ set_result.stderr | default(set_result.stdout | default('Failed to set parameter')) }}"
+        ssm_operation_error: "{{ ansible_failed_result.msg | default('Failed to set parameter') }}"
         ssm_operation_success: false
 
 # デバッグ出力

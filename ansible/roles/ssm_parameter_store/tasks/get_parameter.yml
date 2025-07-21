@@ -57,6 +57,15 @@
       delay: "{{ ssm_parameter_store_retry_delay }}"
       until: parameter_result.rc == 0 or 'ParameterNotFound' in parameter_result.stdout
 
+    # デバッグ：AWS CLIの出力を確認（開発時のみ）
+    - name: Debug AWS CLI output (non-secure only)
+      ansible.builtin.debug:
+        msg: "AWS CLI response: {{ parameter_result.stdout }}"
+      when: 
+        - ssm_parameter_store_debug | default(false)
+        - not is_secure
+        - parameter_result.rc == 0
+
     - name: Parse parameter result
       ansible.builtin.set_fact:
         parameter_data: "{{ parameter_result.stdout | from_json }}"
@@ -137,7 +146,20 @@
     - ssm_operation_success
   no_log: "{{ is_secure }}"
 
-# デバッグ出力
+# デバッグ：実際の値を確認（開発時のみ、セキュアパラメータも表示）
+- name: Debug retrieved value (DEVELOPMENT ONLY - SHOWS SECURE VALUES)
+  ansible.builtin.debug:
+    msg: |
+      Parameter: {{ parameter_name }}
+      Success: {{ ssm_operation_success }}
+      Retrieved value length: {{ ssm_parameter_value | length if ssm_parameter_value is defined else 'N/A' }}
+      Stored as: {{ store_as | default('ssm_parameter_value') }}
+  when: 
+    - ssm_parameter_store_debug | default(false)
+    - ssm_operation_success
+    - ansible_verbosity > 2
+
+# デバッグ出力（通常版）
 - name: Display parameter info (non-secure only)
   ansible.builtin.debug:
     msg: |

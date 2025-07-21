@@ -2,9 +2,11 @@
 # SSMパラメータを削除するタスク
 
 - name: Validate required variables
-  ansible.builtin.fail:
-    msg: "Required variable 'parameter_name' is not defined"
-  when: parameter_name is not defined or parameter_name | length == 0
+  ansible.builtin.assert:
+    that:
+      - parameter_name is defined
+      - parameter_name | length > 0
+    fail_msg: "Required variable 'parameter_name' is not defined or empty"
 
 - name: Delete parameter
   block:

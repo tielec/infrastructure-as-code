@@ -11,6 +11,9 @@
     test_run_id: "{{ 999999 | random }}"
     test_timestamp: "{{ ansible_date_time.iso8601_basic_short }}"
     
+    # パスワードを一度だけ生成して保存
+    generated_password: "{{ lookup('password', '/dev/null length=32 chars=ascii_letters,digits') }}"
+    
     # テストパラメータ定義
     test_parameters:
       string_param: "{{ test_prefix }}/config/api_endpoint"
@@ -18,10 +21,10 @@
       json_param: "{{ test_prefix }}/config/features"
       list_param: "{{ test_prefix }}/config/allowed_ips"
     
-    # テストデータ
+    # テストデータ（パスワードは生成済みのものを使用）
     test_values:
       api_endpoint: "https://api.example.com/v1"
-      database_password: "{{ lookup('password', '/dev/null length=32 chars=ascii_letters,digits') }}"
+      database_password: "{{ generated_password }}"
       features:
         enable_cache: true
         cache_ttl: 3600
@@ -75,7 +78,7 @@
             - name: Initialize SSM Parameter Store role
               ansible.builtin.include_role:
                 name: ssm_parameter_store
-        
+
         # ==================== パラメータ作成フェーズ ====================
         - name: "PHASE 2: Parameter Creation"
           when: operation in ['full', 'create-only']
