@@ -1,29 +1,18 @@
 ---
-# SSMパラメータストアヘルパーのメインタスク
-# 
-# このロールは以下の機能を提供します：
-# - パラメータの取得（単一/複数/パス指定）
-# - パラメータの設定/更新
-# - パラメータの削除
-# - パラメータの一覧取得
-# - 環境変数へのエクスポート
-# - パラメータのバリデーション
+# SSMパラメータストアヘルパーのメインタスク（aws_cli_helper統合版）
 
-# キャッシュの初期化
-- name: Initialize SSM parameter cache
-  ansible.builtin.set_fact:
-    ssm_parameter_cache: {}
-    ssm_parameter_cache_timestamps: {}
-  when: 
-    - ssm_parameter_cache is not defined
-    - ssm_parameter_store_cache.enabled | bool
+# AWS CLI Helperが利用可能か確認
+- name: Verify AWS CLI Helper is available
+  ansible.builtin.include_role:
+    name: aws_cli_helper
+  run_once: true
 
-# セキュアキーワードリストの統合
+# セキュアキーワードの読み込み
 - name: Load secure keywords
   ansible.builtin.include_vars:
     file: secure_keywords.yml
 
-- name: Merge secure keywords lists
+- name: Compile secure keywords list
   ansible.builtin.set_fact:
     ssm_parameter_store_all_secure_keywords: >-
       {{
@@ -39,3 +28,14 @@
     ssm_parameter_metadata: {}
     ssm_operation_success: false
     ssm_operation_error: null
+    ssm_parameter_count: 0
+
+# AWS認証の確認（オプション）
+- name: Validate AWS configuration
+  when: ssm_parameter_store_validate_aws | default(true)
+  ansible.builtin.include_role:
+    name: aws_cli_helper
+    tasks_from: execute
+  vars:
+    aws_command: "aws sts get-caller-identity"
+    operation_name: "verify_aws_credentials"
