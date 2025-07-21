@@ -320,11 +320,17 @@
                 aws_command: "aws ec2 describe-instances"
                 operation_name: "timeout_test_short"
                 timeout: 1
-              ignore_errors: true
+              failed_when: false  # タイムアウトを許容
             
             - name: Display timeout test result
               ansible.builtin.debug:
-                msg: "Timeout test result - Success: {{ aws_cli_success | default('undefined') }}"
+                msg: |
+                  Timeout test result:
+                  - Success: {{ aws_cli_success | default('undefined') }}
+                  - Error Type: {{ aws_cli_error_type | default('none') }}
+                  {% if aws_cli_error_type | default('') == 'Timeout' %}
+                  - Timeout detected correctly!
+                  {% endif %}
         
         # ==================== 最終レポート ====================
         - name: "PHASE 8: Test Summary"

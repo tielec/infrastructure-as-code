@@ -1,3 +1,4 @@
+---
 # AWS CLIエラーを解析する内部タスク
 #
 # 必須変数:
@@ -17,7 +18,8 @@
         'ResourceNotFound': 'NoSuch|NotFound|ResourceNotFoundException',
         'ThrottlingException': 'Throttl|RequestLimitExceeded|TooManyRequests',
         'ServiceUnavailable': 'ServiceUnavailable|InternalServerError|ServiceException',
-        'NetworkError': 'Could not connect|Connection reset|timeout'
+        'NetworkError': 'Could not connect|Connection reset|timeout',
+        'Timeout': 'failed to execute in the expected time frame|command timed out'
       } -%}
       {%- for error_type, pattern in patterns.items() -%}
         {%- if error_output | regex_search(pattern, ignorecase=True) -%}

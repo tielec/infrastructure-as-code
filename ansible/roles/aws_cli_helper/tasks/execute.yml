@@ -63,12 +63,19 @@
   failed_when: false
   timeout: "{{ timeout | default(aws_cli_helper_timeout) }}"
   environment: "{{ _aws_environment }}"
+  ignore_errors: true  # タイムアウトエラーも含めてキャッチ
+
+# タイムアウトチェック
+- name: Check for timeout
+  ansible.builtin.set_fact:
+    _is_timeout: "{{ _aws_cli_raw_result.msg | default('') is search('failed to execute in the expected time frame') }}"
+  when: _aws_cli_raw_result is failed
 
 # 基本的な結果を設定
 - name: Set basic execution results
   ansible.builtin.set_fact:
     aws_cli_result: "{{ _aws_cli_raw_result }}"
-    aws_cli_success: "{{ _aws_cli_raw_result.rc == 0 }}"
+    aws_cli_success: "{{ _aws_cli_raw_result.rc | default(1) == 0 and not (_is_timeout | default(false)) }}"
     aws_cli_stdout: "{{ _aws_cli_raw_result.stdout | default('') }}"
     aws_cli_stderr: "{{ _aws_cli_raw_result.stderr | default('') }}"
     aws_cli_retry_attempts: 1  # execute.yml は常に1回の実行
@@ -77,9 +84,19 @@
 # エラー解析
 - name: Analyze error if failed
   when: not aws_cli_success
-  ansible.builtin.include_tasks: check_error.yml
-  vars:
-    error_output: "{{ aws_cli_stderr }}"
+  block:
+    - name: Set timeout error if detected
+      when: _is_timeout | default(false)
+      ansible.builtin.set_fact:
+        aws_cli_error_type: "Timeout"
+        aws_cli_error_message: "Command execution timed out after {{ timeout | default(aws_cli_helper_timeout) }} seconds"
+        aws_cli_is_retriable: false
+
+    - name: Analyze other errors
+      when: not (_is_timeout | default(false))
+      ansible.builtin.include_tasks: check_error.yml
+      vars:
+        error_output: "{{ aws_cli_stderr }}"
 
 # JSON出力のパース
 - name: Parse JSON output if requested
@@ -108,9 +125,13 @@
       Operation: {{ operation_name }}
       Command: {{ aws_command | regex_replace('--value\s+"[^"]*"', '--value "***"') }}
       Success: {{ aws_cli_success }}
+      Timeout: {{ timeout | default(aws_cli_helper_timeout) }}s
+      {% if _is_timeout | default(false) %}
+      Result: Command timed out
+      {% endif %}
       {% if not aws_cli_success %}
       Error Type: {{ aws_cli_error_type | default('Unknown') }}
-      Error: {{ aws_cli_stderr | truncate(200) }}
+      Error: {{ aws_cli_error_message | default(aws_cli_stderr | truncate(200)) }}
       {% endif %}
       {% if aws_cli_parse_error is defined and aws_cli_parse_error | length > 0 %}
       Parse Error: {{ aws_cli_parse_error }}
