@@ -176,7 +176,7 @@
                 that:
                   - aws_cli_success
                   - aws_cli_retry_attempts is defined
-                  - aws_cli_retry_attempts >= 1
+                  - aws_cli_retry_attempts | int >= 1
                 fail_msg: "Retry execution failed"
             
             - name: Test 3.2 - Command that might trigger throttling
@@ -194,7 +194,7 @@
               ansible.builtin.debug:
                 msg: |
                   Command success: {{ aws_cli_success }}
-                  Retry attempts: {{ aws_cli_retry_attempts }}
+                  Retry attempts: {{ aws_cli_retry_attempts | default(0) }}
                   Retry exhausted: {{ aws_cli_retry_exhausted | default(false) }}
         
         # ==================== セキュアログテスト ====================
