@@ -1,0 +1,28 @@
+---
+# JSON出力をパースする内部タスク
+#
+# 必須変数:
+#   - json_string: パースするJSON文字列
+#
+# 戻り値:
+#   - aws_cli_data: パース済みデータ（成功時）
+#   - aws_cli_parse_error: パースエラー（失敗時）
+
+- name: Attempt to parse JSON
+  ansible.builtin.set_fact:
+    aws_cli_data: "{{ json_string | from_json }}"
+  failed_when: false
+  register: _json_parse_result
+
+- name: Handle parse failure
+  when: _json_parse_result is failed
+  ansible.builtin.set_fact:
+    aws_cli_data: {}
+    aws_cli_parse_error: "Failed to parse JSON output"
+
+- name: Debug parsed data
+  when:
+    - aws_cli_helper_debug
+    - _json_parse_result is not failed
+  ansible.builtin.debug:
+    msg: "Successfully parsed JSON with {{ aws_cli_data | type_debug }} containing {{ aws_cli_data | length }} items"

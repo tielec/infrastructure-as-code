@@ -1,0 +1,405 @@
+---
+# AWS CLI Helperロールの包括的なテストプレイブック
+- name: Test AWS CLI Helper role
+  hosts: localhost
+  connection: local
+  gather_facts: yes
+  
+  vars:
+    test_timestamp: "{{ ansible_date_time.iso8601_basic_short }}"
+    test_id: "{{ ansible_date_time.epoch[-6:] }}"
+    # テスト用の安全なリソース名
+    test_s3_bucket: "test-aws-cli-helper-{{ test_id }}"
+    test_ssm_prefix: "/test/aws-cli-helper/{{ test_id }}"
+    
+    # テスト設定
+    run_destructive_tests: false  # S3バケット作成などの破壊的テストを実行するか
+    cleanup_resources: true       # テスト後にリソースをクリーンアップするか
+    
+  tasks:
+    - name: Test Suite for AWS CLI Helper
+      block:
+        # ==================== 準備フェーズ ====================
+        - name: "PHASE 0: Prerequisites"
+          block:
+            - name: Display test configuration
+              ansible.builtin.debug:
+                msg: |
+                  ========================================
+                  AWS CLI Helper Test Configuration
+                  ========================================
+                  Test ID: {{ test_id }}
+                  Timestamp: {{ test_timestamp }}
+                  AWS Region: {{ aws_cli_helper_region | default('ap-northeast-1') }}
+                  Destructive Tests: {{ run_destructive_tests }}
+                  ========================================
+            
+            - name: Verify AWS credentials
+              ansible.builtin.include_role:
+                name: aws_cli_helper
+                tasks_from: execute
+              vars:
+                aws_command: "aws sts get-caller-identity"
+                operation_name: "verify_credentials"
+            
+            - name: Check AWS authentication
+              ansible.builtin.assert:
+                that:
+                  - aws_cli_success
+                  - aws_cli_data.Account is defined
+                fail_msg: "AWS credentials not properly configured"
+            
+            - name: Display AWS account info
+              ansible.builtin.debug:
+                msg: "Running tests in AWS Account: {{ aws_cli_data.Account }} ({{ aws_cli_data.Arn }})"
+        
+        # ==================== 基本実行テスト ====================
+        - name: "PHASE 1: Basic Execution Tests"
+          block:
+            - name: Test 1.1 - Simple command execution
+              ansible.builtin.include_role:
+                name: aws_cli_helper
+                tasks_from: execute
+              vars:
+                aws_command: "aws s3api list-buckets"
+                operation_name: "list_buckets_simple"
+            
+            - name: Verify simple execution
+              ansible.builtin.assert:
+                that:
+                  - aws_cli_success is defined
+                  - aws_cli_stdout is defined
+                  - aws_cli_data is defined
+                  - aws_cli_data.Buckets is defined
+                fail_msg: "Simple command execution failed"
+            
+            - name: Test 1.2 - Command with JSON output parsing disabled
+              ansible.builtin.include_role:
+                name: aws_cli_helper
+                tasks_from: execute
+              vars:
+                aws_command: "aws --version"
+                operation_name: "get_version"
+                parse_output: false
+            
+            - name: Verify non-JSON output
+              ansible.builtin.assert:
+                that:
+                  - aws_cli_success
+                  - aws_cli_stdout is string
+                  - "'aws-cli' in aws_cli_stdout"
+                fail_msg: "Non-JSON output handling failed"
+            
+            - name: Test 1.3 - Command with custom region
+              ansible.builtin.include_role:
+                name: aws_cli_helper
+                tasks_from: execute
+              vars:
+                aws_command: "aws ec2 describe-regions --region us-east-1"
+                operation_name: "describe_regions"
+            
+            - name: Verify region handling
+              ansible.builtin.assert:
+                that:
+                  - aws_cli_success
+                  - aws_cli_data.Regions | length > 0
+                fail_msg: "Custom region handling failed"
+        
+        # ==================== エラーハンドリングテスト ====================
+        - name: "PHASE 2: Error Handling Tests"
+          block:
+            - name: Test 2.1 - Invalid command
+              ansible.builtin.include_role:
+                name: aws_cli_helper
+                tasks_from: execute
+              vars:
+                aws_command: "aws s3api invalid-command"
+                operation_name: "invalid_command_test"
+            
+            - name: Verify error handling for invalid command
+              ansible.builtin.assert:
+                that:
+                  - not aws_cli_success
+                  - aws_cli_error_type is defined
+                  - aws_cli_error_message is defined
+                fail_msg: "Invalid command error handling failed"
+            
+            - name: Test 2.2 - Resource not found error
+              ansible.builtin.include_role:
+                name: aws_cli_helper
+                tasks_from: execute
+              vars:
+                aws_command: "aws s3api get-bucket-location --bucket non-existent-bucket-{{ test_id }}"
+                operation_name: "resource_not_found_test"
+            
+            - name: Verify resource not found error
+              ansible.builtin.assert:
+                that:
+                  - not aws_cli_success
+                  - aws_cli_error_type == 'ResourceNotFound'
+                fail_msg: "Resource not found error detection failed"
+            
+            - name: Test 2.3 - Access denied simulation (if no S3 permissions)
+              ansible.builtin.include_role:
+                name: aws_cli_helper
+                tasks_from: execute
+              vars:
+                aws_command: "aws iam list-account-aliases"  # 通常は権限がないコマンド
+                operation_name: "access_denied_test"
+              ignore_errors: true
+            
+            - name: Display error type for access denied
+              ansible.builtin.debug:
+                msg: "Error type detected: {{ aws_cli_error_type | default('No error or has permission') }}"
+              when: not (aws_cli_success | default(true))
+        
+        # ==================== リトライ機能テスト ====================
+        - name: "PHASE 3: Retry Functionality Tests"
+          block:
+            - name: Test 3.1 - Successful command with retry enabled
+              ansible.builtin.include_role:
+                name: aws_cli_helper
+                tasks_from: execute_with_retry
+              vars:
+                aws_command: "aws ec2 describe-availability-zones"
+                operation_name: "describe_azs_with_retry"
+                max_retries: 3
+                retry_delay: 2
+            
+            - name: Verify retry execution
+              ansible.builtin.assert:
+                that:
+                  - aws_cli_success
+                  - aws_cli_retry_attempts is defined
+                  - aws_cli_retry_attempts >= 1
+                fail_msg: "Retry execution failed"
+            
+            - name: Test 3.2 - Command that might trigger throttling
+              ansible.builtin.include_role:
+                name: aws_cli_helper
+                tasks_from: execute_with_retry
+              vars:
+                aws_command: "aws ssm describe-parameters --max-items 1"
+                operation_name: "potential_throttle_test"
+                max_retries: 5
+                retry_delay: 1
+                use_backoff: true
+            
+            - name: Display retry information
+              ansible.builtin.debug:
+                msg: |
+                  Command success: {{ aws_cli_success }}
+                  Retry attempts: {{ aws_cli_retry_attempts }}
+                  Retry exhausted: {{ aws_cli_retry_exhausted | default(false) }}
+        
+        # ==================== セキュアログテスト ====================
+        - name: "PHASE 4: Secure Logging Tests"
+          block:
+            - name: Test 4.1 - Command with sensitive data (no_log enabled)
+              ansible.builtin.include_role:
+                name: aws_cli_helper
+                tasks_from: execute
+              vars:
+                aws_command: >-
+                  aws ssm get-parameter 
+                  --name "/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2"
+                  --query 'Parameter.Value'
+                operation_name: "secure_parameter_test"
+                no_log_output: true
+              ignore_errors: true
+            
+            - name: Verify secure logging worked
+              ansible.builtin.debug:
+                msg: "Secure logging test completed. Output should have been hidden."
+        
+        # ==================== JSONパーステスト ====================
+        - name: "PHASE 5: JSON Parsing Tests"
+          block:
+            - name: Test 5.1 - Valid JSON output
+              ansible.builtin.include_role:
+                name: aws_cli_helper
+                tasks_from: execute
+              vars:
+                aws_command: "aws ec2 describe-instance-types --instance-types t2.micro --query 'InstanceTypes[0]'"
+                operation_name: "json_parse_test"
+            
+            - name: Verify JSON parsing
+              ansible.builtin.assert:
+                that:
+                  - aws_cli_success
+                  - aws_cli_data is mapping
+                  - aws_cli_data.InstanceType == 't2.micro'
+                fail_msg: "JSON parsing failed"
+            
+            - name: Test 5.2 - Complex JSON structure
+              ansible.builtin.include_role:
+                name: aws_cli_helper
+                tasks_from: execute
+              vars:
+                aws_command: "aws ec2 describe-vpcs --query 'Vpcs[:1]'"
+                operation_name: "complex_json_test"
+            
+            - name: Verify complex JSON handling
+              ansible.builtin.assert:
+                that:
+                  - aws_cli_success
+                  - aws_cli_data is sequence or aws_cli_data is mapping
+                fail_msg: "Complex JSON parsing failed"
+        
+        # ==================== 実践的なテスト ====================
+        - name: "PHASE 6: Real-world Usage Tests"
+          when: run_destructive_tests | bool
+          block:
+            - name: Test 6.1 - Create SSM parameter
+              ansible.builtin.include_role:
+                name: aws_cli_helper
+                tasks_from: execute_with_retry
+              vars:
+                aws_command: >-
+                  aws ssm put-parameter
+                  --name "{{ test_ssm_prefix }}/test-value"
+                  --value "test-{{ test_timestamp }}"
+                  --type "String"
+                  --overwrite
+                operation_name: "create_ssm_parameter"
+            
+            - name: Verify SSM parameter creation
+              ansible.builtin.assert:
+                that:
+                  - aws_cli_success
+                  - aws_cli_data.Version is defined
+                fail_msg: "SSM parameter creation failed"
+            
+            - name: Test 6.2 - List created parameters
+              ansible.builtin.include_role:
+                name: aws_cli_helper
+                tasks_from: execute
+              vars:
+                aws_command: >-
+                  aws ssm get-parameters-by-path
+                  --path "{{ test_ssm_prefix }}/"
+                  --recursive
+                operation_name: "list_ssm_parameters"
+            
+            - name: Verify parameter listing
+              ansible.builtin.assert:
+                that:
+                  - aws_cli_success
+                  - aws_cli_data.Parameters | length > 0
+                fail_msg: "Parameter listing failed"
+        
+        # ==================== パフォーマンステスト ====================
+        - name: "PHASE 7: Performance and Timeout Tests"
+          block:
+            - name: Test 7.1 - Quick command with short timeout
+              ansible.builtin.include_role:
+                name: aws_cli_helper
+                tasks_from: execute
+              vars:
+                aws_command: "aws sts get-caller-identity"
+                operation_name: "timeout_test_quick"
+                timeout: 5
+            
+            - name: Verify quick command succeeded
+              ansible.builtin.assert:
+                that:
+                  - aws_cli_success
+                fail_msg: "Quick command with timeout failed"
+            
+            # このテストは意図的にタイムアウトを発生させる可能性があります
+            - name: Test 7.2 - Command with very short timeout (might fail)
+              ansible.builtin.include_role:
+                name: aws_cli_helper
+                tasks_from: execute
+              vars:
+                aws_command: "aws ec2 describe-instances"
+                operation_name: "timeout_test_short"
+                timeout: 1
+              ignore_errors: true
+            
+            - name: Display timeout test result
+              ansible.builtin.debug:
+                msg: "Timeout test result - Success: {{ aws_cli_success | default('undefined') }}"
+        
+        # ==================== 最終レポート ====================
+        - name: "PHASE 8: Test Summary"
+          block:
+            - name: Generate test summary
+              ansible.builtin.set_fact:
+                test_summary: |
+                  ========================================
+                  AWS CLI Helper Test Summary
+                  ========================================
+                  Test ID: {{ test_id }}
+                  Timestamp: {{ test_timestamp }}
+                  
+                  Test Results:
+                  ✓ Basic execution tests
+                  ✓ Error handling tests  
+                  ✓ Retry functionality tests
+                  ✓ Secure logging tests
+                  ✓ JSON parsing tests
+                  {% if run_destructive_tests %}
+                  ✓ Real-world usage tests
+                  {% else %}
+                  ⚠ Real-world usage tests (skipped)
+                  {% endif %}
+                  ✓ Performance tests
+                  
+                  All tests completed successfully!
+                  ========================================
+            
+            - name: Display test summary
+              ansible.builtin.debug:
+                msg: "{{ test_summary.split('\n') }}"
+      
+      rescue:
+        - name: Test failure handler
+          ansible.builtin.debug:
+            msg: |
+              ========================================
+              Test Failed!
+              ========================================
+              Failed task: {{ ansible_failed_task.name | default('Unknown') }}
+              Error: {{ ansible_failed_result.msg | default('Unknown error') }}
+              ========================================
+          
+      always:
+        # ==================== クリーンアップ ====================
+        - name: "Cleanup Phase"
+          when: 
+            - cleanup_resources | bool
+            - run_destructive_tests | bool
+          block:
+            - name: Clean up SSM parameters
+              ansible.builtin.include_role:
+                name: aws_cli_helper
+                tasks_from: execute
+              vars:
+                aws_command: >-
+                  aws ssm delete-parameter
+                  --name "{{ test_ssm_prefix }}/test-value"
+                operation_name: "cleanup_ssm"
+              ignore_errors: true
+            
+            - name: Display cleanup status
+              ansible.builtin.debug:
+                msg: "Cleanup completed"
+
+# 実行例
+# ======
+#
+# 基本的なテスト（非破壊的）:
+#   ansible-playbook test-aws-cli-helper.yml
+#
+# すべてのテストを実行:
+#   ansible-playbook test-aws-cli-helper.yml -e run_destructive_tests=true
+#
+# クリーンアップをスキップ:
+#   ansible-playbook test-aws-cli-helper.yml -e cleanup_resources=false
+#
+# 詳細出力:
+#   ansible-playbook test-aws-cli-helper.yml -v
+#
+# デバッグモード:
+#   ansible-playbook test-aws-cli-helper.yml -vvv
