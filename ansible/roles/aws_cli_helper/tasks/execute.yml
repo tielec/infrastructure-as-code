@@ -1,3 +1,4 @@
+---
 # AWS CLIコマンドを実行する基本タスク
 #
 # 必須変数:
@@ -25,6 +26,11 @@
       - operation_name is defined
     fail_msg: "Required variables 'aws_command' and 'operation_name' must be defined"
 
+# リージョンの設定を確認
+- name: Ensure region is defined
+  ansible.builtin.set_fact:
+    aws_cli_helper_region: "{{ aws_cli_helper_region | default('ap-northeast-1') }}"
+
 # リージョンが含まれていない場合は追加
 - name: Prepare AWS command with region
   ansible.builtin.set_fact:
@@ -34,6 +40,16 @@
       {%- else -%}
         {{ aws_command }}
       {%- endif -%}
+
+# 環境変数の準備
+- name: Prepare environment variables
+  ansible.builtin.set_fact:
+    _aws_environment: >-
+      {{
+        (environment | default({})) | combine({
+          'AWS_DEFAULT_REGION': aws_cli_helper_region | default('ap-northeast-1')
+        })
+      }}
 
 # AWS CLIコマンドを実行
 - name: "Execute AWS CLI: {{ operation_name }}"
@@ -46,7 +62,7 @@
   no_log: "{{ no_log_output | default(false) }}"
   failed_when: false
   timeout: "{{ timeout | default(aws_cli_helper_timeout) }}"
-  environment: "{{ environment | default({}) | combine({'AWS_DEFAULT_REGION': aws_cli_helper_region}) }}"
+  environment: "{{ _aws_environment }}"
 
 # 基本的な結果を設定
 - name: Set basic execution results

@@ -34,6 +34,11 @@
                   Destructive Tests: {{ run_destructive_tests }}
                   ========================================
             
+            # ロールの初期化（デフォルト変数の読み込み）
+            - name: Initialize AWS CLI Helper role
+              ansible.builtin.include_role:
+                name: aws_cli_helper
+            
             - name: Verify AWS credentials
               ansible.builtin.include_role:
                 name: aws_cli_helper
