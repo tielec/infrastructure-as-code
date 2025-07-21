@@ -126,19 +126,12 @@
 - name: Get active Jenkins instance
   block:
     - name: Get Jenkins instance ID from SSM Parameter Store
-      ansible.builtin.shell: |
-        eval $({{ scripts_dir }}/aws/aws-env.sh)
-        aws ssm get-parameter \
-          --name "/{{ project_name }}/{{ env_name }}/jenkins/instanceId" \
-          --region {{ aws_region_name }} \
-          --query "Parameter.Value" \
-          --output text
-      register: jenkins_instance_id_param
-      changed_when: false
-    
-    - name: Set Jenkins instance ID
-      ansible.builtin.set_fact:
-        jenkins_instance_id: "{{ jenkins_instance_id_param.stdout | trim }}"
+      ansible.builtin.include_role:
+        name: ssm_parameter_store
+        tasks_from: get_parameter
+      vars:
+        parameter_name: "/{{ project_name }}/{{ env_name }}/jenkins/instanceId"
+        store_as: "jenkins_instance_id"
     
     - name: Verify Jenkins instance ID
       ansible.builtin.fail:

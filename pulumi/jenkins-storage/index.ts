@@ -91,6 +91,45 @@ const jenkinsAccessPoint = new aws.efs.AccessPoint(`${projectName}-jenkins-ap`, 
     dependsOn: [efsFileSystem, mountTargetA, mountTargetB],
 });
 
+// EFSファイルシステムIDをSSM Parameter Storeに保存
+const efsFileSystemIdParameter = new aws.ssm.Parameter(`${projectName}-efs-id-param`, {
+    name: `/${projectName}/${environment}/storage/efsFileSystemId`,
+    type: "String",
+    value: efsFileSystem.id,
+    description: `EFS File System ID for Jenkins ${environment}`,
+    tags: {
+        Name: `${projectName}-efs-id-param-${environment}`,
+        Environment: environment,
+        ManagedBy: "pulumi",
+    },
+});
+
+// EFS DNS名をSSM Parameter Storeに保存
+const efsFileSystemDnsParameter = new aws.ssm.Parameter(`${projectName}-efs-dns-param`, {
+    name: `/${projectName}/${environment}/storage/efsFileSystemDns`,
+    type: "String",
+    value: pulumi.interpolate`${efsFileSystem.id}.efs.${aws.config.region}.amazonaws.com`,
+    description: `EFS DNS name for Jenkins ${environment}`,
+    tags: {
+        Name: `${projectName}-efs-dns-param-${environment}`,
+        Environment: environment,
+        ManagedBy: "pulumi",
+    },
+});
+
+// Jenkinsアクセスポイント情報もSSM Parameter Storeに保存
+const jenkinsAccessPointIdParameter = new aws.ssm.Parameter(`${projectName}-jenkins-ap-id-param`, {
+    name: `/${projectName}/${environment}/storage/jenkinsAccessPointId`,
+    type: "String",
+    value: jenkinsAccessPoint.id,
+    description: `Jenkins EFS Access Point ID for ${environment}`,
+    tags: {
+        Name: `${projectName}-jenkins-ap-id-param-${environment}`,
+        Environment: environment,
+        ManagedBy: "pulumi",
+    },
+});
+
 // エクスポート
 export const efsFileSystemId = efsFileSystem.id;
 export const efsFileSystemArn = efsFileSystem.arn;
@@ -99,3 +138,10 @@ export const jenkinsAccessPointId = jenkinsAccessPoint.id;
 export const jenkinsAccessPointArn = jenkinsAccessPoint.arn;
 export const mountTargetAId = mountTargetA.id;
 export const mountTargetBId = mountTargetB.id;
+
+// SSM Parameterのエクスポート（確認用）
+export const ssmParameters = {
+    efsFileSystemId: efsFileSystemIdParameter.name,
+    efsFileSystemDns: efsFileSystemDnsParameter.name,
+    jenkinsAccessPointId: jenkinsAccessPointIdParameter.name,
+};
