@@ -203,9 +203,106 @@ const natInstanceSecurityGroup = new aws.ec2.SecurityGroup(`${projectName}-nat-i
     },
 });
 
-// エクスポートに追加
+// ================ SSM Parameter Store への保存 ================
+
+// ALBセキュリティグループID
+const albSecurityGroupIdParameter = new aws.ssm.Parameter(`${projectName}-alb-sg-id-param`, {
+    name: `/${projectName}/${environment}/security/albSecurityGroupId`,
+    type: "String",
+    value: albSecurityGroup.id,
+    description: `ALB Security Group ID for ${projectName} ${environment}`,
+    tags: {
+        Environment: environment,
+        ManagedBy: "pulumi",
+    },
+});
+
+// Jenkinsマスターセキュリティグループ
+const jenkinsSecurityGroupIdParameter = new aws.ssm.Parameter(`${projectName}-jenkins-sg-id-param`, {
+    name: `/${projectName}/${environment}/security/jenkinsSecurityGroupId`,
+    type: "String",
+    value: jenkinsSecurityGroup.id,
+    description: `Jenkins Master Security Group ID for ${projectName} ${environment}`,
+    tags: {
+        Environment: environment,
+        ManagedBy: "pulumi",
+    },
+});
+
+// Jenkinsエージェントセキュリティグループ
+const jenkinsAgentSecurityGroupIdParameter = new aws.ssm.Parameter(`${projectName}-jenkins-agent-sg-id-param`, {
+    name: `/${projectName}/${environment}/security/jenkinsAgentSecurityGroupId`,
+    type: "String",
+    value: jenkinsAgentSecurityGroup.id,
+    description: `Jenkins Agent Security Group ID for ${projectName} ${environment}`,
+    tags: {
+        Environment: environment,
+        ManagedBy: "pulumi",
+    },
+});
+
+// EFSセキュリティグループ
+const efsSecurityGroupIdParameter = new aws.ssm.Parameter(`${projectName}-efs-sg-id-param`, {
+    name: `/${projectName}/${environment}/security/efsSecurityGroupId`,
+    type: "String",
+    value: efsSecurityGroup.id,
+    description: `EFS Security Group ID for ${projectName} ${environment}`,
+    tags: {
+        Environment: environment,
+        ManagedBy: "pulumi",
+    },
+});
+
+// NATインスタンスセキュリティグループ
+const natInstanceSecurityGroupIdParameter = new aws.ssm.Parameter(`${projectName}-nat-instance-sg-id-param`, {
+    name: `/${projectName}/${environment}/security/natInstanceSecurityGroupId`,
+    type: "String",
+    value: natInstanceSecurityGroup.id,
+    description: `NAT Instance Security Group ID for ${projectName} ${environment}`,
+    tags: {
+        Environment: environment,
+        ManagedBy: "pulumi",
+    },
+});
+
+// セキュリティグループ情報の統合パラメータ（JSON形式）
+const securityGroupsInfoParameter = new aws.ssm.Parameter(`${projectName}-security-groups-info-param`, {
+    name: `/${projectName}/${environment}/security/groupsInfo`,
+    type: "String",
+    value: pulumi.all([
+        albSecurityGroup.id,
+        jenkinsSecurityGroup.id,
+        jenkinsAgentSecurityGroup.id,
+        efsSecurityGroup.id,
+        natInstanceSecurityGroup.id
+    ]).apply(([albSg, jenkinsSg, agentSg, efsSg, natSg]) => JSON.stringify({
+        alb: albSg,
+        jenkinsMaster: jenkinsSg,
+        jenkinsAgent: agentSg,
+        efs: efsSg,
+        natInstance: natSg,
+        updatedAt: new Date().toISOString()
+    })),
+    description: `All Security Group IDs for ${projectName} ${environment}`,
+    tags: {
+        Environment: environment,
+        ManagedBy: "pulumi",
+    },
+});
+
+// エクスポート
 export const albSecurityGroupId = albSecurityGroup.id;
 export const jenkinsSecurityGroupId = jenkinsSecurityGroup.id;
 export const jenkinsAgentSecurityGroupId = jenkinsAgentSecurityGroup.id;
 export const efsSecurityGroupId = efsSecurityGroup.id;
 export const natInstanceSecurityGroupId = natInstanceSecurityGroup.id;
+
+// SSM Parameterのエクスポート（確認用）
+export const ssmParameters = {
+    albSecurityGroupId: albSecurityGroupIdParameter.name,
+    jenkinsSecurityGroupId: jenkinsSecurityGroupIdParameter.name,
+    jenkinsAgentSecurityGroupId: jenkinsAgentSecurityGroupIdParameter.name,
+    efsSecurityGroupId: efsSecurityGroupIdParameter.name,
+    natInstanceSecurityGroupId: natInstanceSecurityGroupIdParameter.name,
+    securityGroupsInfo: securityGroupsInfoParameter.name,
+};

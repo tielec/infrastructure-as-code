@@ -439,6 +439,8 @@ const spotFleetNotificationTopic = new aws.sns.Topic(`${projectName}-agent-fleet
     },
 });
 
+// ================ SSM Parameter Store への保存 ================
+
 // 基本的なSSMパラメータ（エージェント設定情報保存用）
 const agentInfoParameter = new aws.ssm.Parameter(`${projectName}-agent-fleet-info`, {
     name: `/${projectName}/${environment}/jenkins/agent/fleet-info`,
@@ -470,6 +472,131 @@ const spotFleetIdParameter = new aws.ssm.Parameter(`${projectName}-agent-spotfle
     },
 });
 
+// エージェントIAMロールARN
+const agentRoleArnParameter = new aws.ssm.Parameter(`${projectName}-agent-role-arn-param`, {
+    name: `/${projectName}/${environment}/jenkins/agent/roleArn`,
+    type: "String",
+    value: jenkinsAgentRole.arn,
+    description: `Jenkins Agent IAM Role ARN for ${environment} environment`,
+    tags: {
+        Environment: environment,
+        ManagedBy: "pulumi",
+    },
+});
+
+// エージェントインスタンスプロファイルARN
+const agentProfileArnParameter = new aws.ssm.Parameter(`${projectName}-agent-profile-arn-param`, {
+    name: `/${projectName}/${environment}/jenkins/agent/instanceProfileArn`,
+    type: "String",
+    value: jenkinsAgentProfile.arn,
+    description: `Jenkins Agent Instance Profile ARN for ${environment} environment`,
+    tags: {
+        Environment: environment,
+        ManagedBy: "pulumi",
+    },
+});
+
+// 起動テンプレートID（x86_64）
+const launchTemplateIdParameter = new aws.ssm.Parameter(`${projectName}-agent-lt-id-param`, {
+    name: `/${projectName}/${environment}/jenkins/agent/launchTemplateId`,
+    type: "String",
+    value: agentLaunchTemplate.id,
+    description: `Jenkins Agent Launch Template ID (x86_64) for ${environment} environment`,
+    tags: {
+        Environment: environment,
+        ManagedBy: "pulumi",
+    },
+});
+
+// 起動テンプレートID（ARM64）
+const launchTemplateArmIdParameter = new aws.ssm.Parameter(`${projectName}-agent-lt-arm-id-param`, {
+    name: `/${projectName}/${environment}/jenkins/agent/launchTemplateArmId`,
+    type: "String",
+    value: agentLaunchTemplateArm.id,
+    description: `Jenkins Agent Launch Template ID (ARM64) for ${environment} environment`,
+    tags: {
+        Environment: environment,
+        ManagedBy: "pulumi",
+    },
+});
+
+// SpotFleetロールARN
+const spotFleetRoleArnParameter = new aws.ssm.Parameter(`${projectName}-spotfleet-role-arn-param`, {
+    name: `/${projectName}/${environment}/jenkins/agent/spotFleetRoleArn`,
+    type: "String",
+    value: spotFleetRole.arn,
+    description: `Spot Fleet IAM Role ARN for ${environment} environment`,
+    tags: {
+        Environment: environment,
+        ManagedBy: "pulumi",
+    },
+});
+
+// 通知トピックARN
+const notificationTopicArnParameter = new aws.ssm.Parameter(`${projectName}-agent-notification-topic-param`, {
+    name: `/${projectName}/${environment}/jenkins/agent/notificationTopicArn`,
+    type: "String",
+    value: spotFleetNotificationTopic.arn,
+    description: `Agent Fleet Notification Topic ARN for ${environment} environment`,
+    tags: {
+        Environment: environment,
+        ManagedBy: "pulumi",
+    },
+});
+
+// エージェント設定の統合情報（JSON形式）
+const agentConfigInfoParameter = new aws.ssm.Parameter(`${projectName}-agent-config-info-param`, {
+    name: `/${projectName}/${environment}/jenkins/agent/configInfo`,
+    type: "String",
+    value: pulumi.all([
+        jenkinsAgentRole.arn,
+        jenkinsAgentProfile.arn,
+        agentLaunchTemplate.id,
+        agentLaunchTemplate.latestVersion,
+        agentLaunchTemplateArm.id,
+        agentLaunchTemplateArm.latestVersion,
+        spotFleetRole.arn,
+        spotFleetRequest.id,
+        spotFleetNotificationTopic.arn,
+        agentKeyPair.keyName,
+        agentPrivateKeyParameter.name
+    ]).apply(([
+        roleArn, profileArn, ltId, ltVersion, ltArmId, ltArmVersion,
+        fleetRoleArn, fleetId, topicArn, keyName, privateKeyParam
+    ]) => JSON.stringify({
+        iamRoleArn: roleArn,
+        instanceProfileArn: profileArn,
+        launchTemplates: {
+            x86_64: {
+                id: ltId,
+                latestVersion: ltVersion
+            },
+            arm64: {
+                id: ltArmId,
+                latestVersion: ltArmVersion
+            }
+        },
+        spotFleet: {
+            roleArn: fleetRoleArn,
+            requestId: fleetId,
+            minCapacity: minTargetCapacity,
+            maxCapacity: maxTargetCapacity,
+            spotPrice: spotPrice
+        },
+        snsTopicArn: topicArn,
+        sshKeyName: keyName,
+        privateKeyParameterName: privateKeyParam,
+        instanceType: instanceType,
+        createdAt: new Date().toISOString()
+    })),
+    description: `Jenkins Agent comprehensive configuration for ${environment} environment`,
+    tags: {
+        Environment: environment,
+        ManagedBy: "pulumi",
+    },
+});
+
+
 // エクスポート
 export const agentRoleArn = jenkinsAgentRole.arn;
 export const agentProfileArn = jenkinsAgentProfile.arn;
@@ -484,3 +611,16 @@ export const minCapacity = minTargetCapacity;
 export const maxCapacity = maxTargetCapacity;
 export const agentKeyPairName = agentKeyPair.keyName;
 export const privateKeyParameterName = agentPrivateKeyParameter.name;
+
+export const ssmParameters = {
+    privateKey: agentPrivateKeyParameter.name,
+    fleetInfo: agentInfoParameter.name,
+    spotFleetId: spotFleetIdParameter.name,
+    agentRoleArn: agentRoleArnParameter.name,
+    agentProfileArn: agentProfileArnParameter.name,
+    launchTemplateId: launchTemplateIdParameter.name,
+    launchTemplateArmId: launchTemplateArmIdParameter.name,
+    spotFleetRoleArn: spotFleetRoleArnParameter.name,
+    notificationTopicArn: notificationTopicArnParameter.name,
+    configInfo: agentConfigInfoParameter.name,
+};

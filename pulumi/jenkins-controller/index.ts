@@ -426,6 +426,8 @@ const targetGroupAttachment = new aws.lb.TargetGroupAttachment(
     }
 );
 
+// ================ SSM Parameter Store への保存 ================
+
 // インスタンスIDをSSM Parameter Storeに保存
 const instanceIdParameter = new aws.ssm.Parameter(`${projectName}-jenkins-instance-id`, {
     name: `/${projectName}/${environment}/jenkins/instanceId`,
@@ -440,6 +442,82 @@ const instanceIdParameter = new aws.ssm.Parameter(`${projectName}-jenkins-instan
     overwrite: true,  // 既存のパラメータを上書き可能にする
 });
 
+// JenkinsプライベートIPアドレス
+const jenkinsPrivateIpParameter = new aws.ssm.Parameter(`${projectName}-jenkins-private-ip-param`, {
+    name: `/${projectName}/${environment}/jenkins/privateIp`,
+    type: "String",
+    value: jenkinsInstance.privateIp,
+    description: `Jenkins Controller Private IP for ${environment} environment (${jenkinsColor})`,
+    tags: {
+        Environment: environment,
+        Color: jenkinsColor,
+        ManagedBy: "pulumi",
+    },
+    overwrite: true,
+});
+
+// Jenkins IAMロールARN
+const jenkinsRoleArnParameter = new aws.ssm.Parameter(`${projectName}-jenkins-role-arn-param`, {
+    name: `/${projectName}/${environment}/jenkins/roleArn`,
+    type: "String",
+    value: jenkinsRole.arn,
+    description: `Jenkins Controller IAM Role ARN for ${environment} environment`,
+    tags: {
+        Environment: environment,
+        Color: jenkinsColor,
+        ManagedBy: "pulumi",
+    },
+});
+
+// Jenkinsインスタンスプロファイル名
+const jenkinsProfileNameParameter = new aws.ssm.Parameter(`${projectName}-jenkins-profile-name-param`, {
+    name: `/${projectName}/${environment}/jenkins/instanceProfileName`,
+    type: "String",
+    value: jenkinsInstanceProfile.name,
+    description: `Jenkins Controller Instance Profile Name for ${environment} environment`,
+    tags: {
+        Environment: environment,
+        Color: jenkinsColor,
+        ManagedBy: "pulumi",
+    },
+});
+
+// Jenkinsコントローラー統合情報（JSON形式）
+const jenkinsControllerInfoParameter = new aws.ssm.Parameter(`${projectName}-jenkins-controller-info-param`, {
+    name: `/${projectName}/${environment}/jenkins/controllerInfo`,
+    type: "String",
+    value: pulumi.all([
+        jenkinsInstance.id,
+        jenkinsInstance.privateIp,
+        jenkinsInstance.publicIp,
+        jenkinsRole.arn,
+        jenkinsInstanceProfile.name,
+        jenkinsInstanceProfile.arn
+    ]).apply(([instanceId, privateIp, publicIp, roleArn, profileName, profileArn]) => JSON.stringify({
+        instanceId: instanceId,
+        privateIp: privateIp,
+        publicIp: publicIp || null,
+        iamRoleArn: roleArn,
+        instanceProfileName: profileName,
+        instanceProfileArn: profileArn,
+        color: jenkinsColor,
+        instanceType: instanceType,
+        architecture: "arm64",
+        gitRepo: gitRepo,
+        gitBranch: gitBranch,
+        recoveryMode: recoveryMode,
+        createdAt: new Date().toISOString()
+    })),
+    description: `Jenkins Controller comprehensive information for ${environment} environment`,
+    tags: {
+        Environment: environment,
+        Color: jenkinsColor,
+        ManagedBy: "pulumi",
+    },
+    overwrite: true,
+});
+
+
 // エクスポート
 export const jenkinsInstanceId = jenkinsInstance.id;
 export const jenkinsPrivateIp = jenkinsInstance.privateIp;
@@ -450,3 +528,11 @@ export const recoveryModeEnabled = recoveryMode;
 export const deployedGitRepo = gitRepo;
 export const deployedGitBranch = gitBranch;
 export const instanceArchitecture = "arm64";  // アーキテクチャ情報をエクスポート
+
+export const ssmParameters = {
+    instanceId: instanceIdParameter.name,
+    privateIp: jenkinsPrivateIpParameter.name,
+    roleArn: jenkinsRoleArnParameter.name,
+    instanceProfileName: jenkinsProfileNameParameter.name,
+    controllerInfo: jenkinsControllerInfoParameter.name,
+};

@@ -145,6 +145,158 @@ const privateRtAssociationB = new aws.ec2.RouteTableAssociation(`${projectName}-
     routeTableId: privateRouteTableB.id,
 });
 
+// ================ SSM Parameter Store への保存 ================
+
+// VPC情報の保存
+const vpcIdParameter = new aws.ssm.Parameter(`${projectName}-vpc-id-param`, {
+    name: `/${projectName}/${environment}/network/vpcId`,
+    type: "String",
+    value: vpc.id,
+    description: `VPC ID for ${projectName} ${environment}`,
+    tags: {
+        Environment: environment,
+        ManagedBy: "pulumi",
+    },
+});
+
+const vpcCidrParameter = new aws.ssm.Parameter(`${projectName}-vpc-cidr-param`, {
+    name: `/${projectName}/${environment}/network/vpcCidr`,
+    type: "String",
+    value: vpc.cidrBlock,
+    description: `VPC CIDR block for ${projectName} ${environment}`,
+    tags: {
+        Environment: environment,
+        ManagedBy: "pulumi",
+    },
+});
+
+// パブリックサブネット情報の保存
+const publicSubnetAIdParameter = new aws.ssm.Parameter(`${projectName}-public-subnet-a-id-param`, {
+    name: `/${projectName}/${environment}/network/publicSubnetAId`,
+    type: "String",
+    value: publicSubnetA.id,
+    description: `Public Subnet A ID for ${projectName} ${environment}`,
+    tags: {
+        Environment: environment,
+        ManagedBy: "pulumi",
+    },
+});
+
+const publicSubnetBIdParameter = new aws.ssm.Parameter(`${projectName}-public-subnet-b-id-param`, {
+    name: `/${projectName}/${environment}/network/publicSubnetBId`,
+    type: "String",
+    value: publicSubnetB.id,
+    description: `Public Subnet B ID for ${projectName} ${environment}`,
+    tags: {
+        Environment: environment,
+        ManagedBy: "pulumi",
+    },
+});
+
+// プライベートサブネット情報の保存
+const privateSubnetAIdParameter = new aws.ssm.Parameter(`${projectName}-private-subnet-a-id-param`, {
+    name: `/${projectName}/${environment}/network/privateSubnetAId`,
+    type: "String",
+    value: privateSubnetA.id,
+    description: `Private Subnet A ID for ${projectName} ${environment}`,
+    tags: {
+        Environment: environment,
+        ManagedBy: "pulumi",
+    },
+});
+
+const privateSubnetBIdParameter = new aws.ssm.Parameter(`${projectName}-private-subnet-b-id-param`, {
+    name: `/${projectName}/${environment}/network/privateSubnetBId`,
+    type: "String",
+    value: privateSubnetB.id,
+    description: `Private Subnet B ID for ${projectName} ${environment}`,
+    tags: {
+        Environment: environment,
+        ManagedBy: "pulumi",
+    },
+});
+
+// サブネットIDリストの保存（JSON形式）
+const publicSubnetIdsParameter = new aws.ssm.Parameter(`${projectName}-public-subnet-ids-param`, {
+    name: `/${projectName}/${environment}/network/publicSubnetIds`,
+    type: "StringList",
+    value: pulumi.interpolate`${publicSubnetA.id},${publicSubnetB.id}`,
+    description: `Public Subnet IDs for ${projectName} ${environment}`,
+    tags: {
+        Environment: environment,
+        ManagedBy: "pulumi",
+    },
+});
+
+const privateSubnetIdsParameter = new aws.ssm.Parameter(`${projectName}-private-subnet-ids-param`, {
+    name: `/${projectName}/${environment}/network/privateSubnetIds`,
+    type: "StringList",
+    value: pulumi.interpolate`${privateSubnetA.id},${privateSubnetB.id}`,
+    description: `Private Subnet IDs for ${projectName} ${environment}`,
+    tags: {
+        Environment: environment,
+        ManagedBy: "pulumi",
+    },
+});
+
+// ルートテーブル情報の保存
+const publicRouteTableIdParameter = new aws.ssm.Parameter(`${projectName}-public-rt-id-param`, {
+    name: `/${projectName}/${environment}/network/publicRouteTableId`,
+    type: "String",
+    value: publicRouteTable.id,
+    description: `Public Route Table ID for ${projectName} ${environment}`,
+    tags: {
+        Environment: environment,
+        ManagedBy: "pulumi",
+    },
+});
+
+const privateRouteTableAIdParameter = new aws.ssm.Parameter(`${projectName}-private-rt-a-id-param`, {
+    name: `/${projectName}/${environment}/network/privateRouteTableAId`,
+    type: "String",
+    value: privateRouteTableA.id,
+    description: `Private Route Table A ID for ${projectName} ${environment}`,
+    tags: {
+        Environment: environment,
+        ManagedBy: "pulumi",
+    },
+});
+
+const privateRouteTableBIdParameter = new aws.ssm.Parameter(`${projectName}-private-rt-b-id-param`, {
+    name: `/${projectName}/${environment}/network/privateRouteTableBId`,
+    type: "String",
+    value: privateRouteTableB.id,
+    description: `Private Route Table B ID for ${projectName} ${environment}`,
+    tags: {
+        Environment: environment,
+        ManagedBy: "pulumi",
+    },
+});
+
+// インターネットゲートウェイ情報の保存
+const igwIdParameter = new aws.ssm.Parameter(`${projectName}-igw-id-param`, {
+    name: `/${projectName}/${environment}/network/internetGatewayId`,
+    type: "String",
+    value: igw.id,
+    description: `Internet Gateway ID for ${projectName} ${environment}`,
+    tags: {
+        Environment: environment,
+        ManagedBy: "pulumi",
+    },
+});
+
+// アベイラビリティゾーン情報の保存
+const azNamesParameter = new aws.ssm.Parameter(`${projectName}-az-names-param`, {
+    name: `/${projectName}/${environment}/network/availabilityZones`,
+    type: "StringList",
+    value: azs.names.apply(names => names.slice(0, 2).join(",")),
+    description: `Availability Zones used for ${projectName} ${environment}`,
+    tags: {
+        Environment: environment,
+        ManagedBy: "pulumi",
+    },
+});
+
 // エクスポート
 export const vpcId = vpc.id;
 export const vpcCidr = vpc.cidrBlock;
@@ -159,3 +311,20 @@ export const publicRouteTableId = publicRouteTable.id;
 export const privateRouteTableAId = privateRouteTableA.id;
 export const privateRouteTableBId = privateRouteTableB.id;
 export const privateRouteTableIds = [privateRouteTableA.id, privateRouteTableB.id];
+
+// SSM Parameterのエクスポート（確認用）
+export const ssmParameters = {
+    vpcId: vpcIdParameter.name,
+    vpcCidr: vpcCidrParameter.name,
+    publicSubnetAId: publicSubnetAIdParameter.name,
+    publicSubnetBId: publicSubnetBIdParameter.name,
+    privateSubnetAId: privateSubnetAIdParameter.name,
+    privateSubnetBId: privateSubnetBIdParameter.name,
+    publicSubnetIds: publicSubnetIdsParameter.name,
+    privateSubnetIds: privateSubnetIdsParameter.name,
+    publicRouteTableId: publicRouteTableIdParameter.name,
+    privateRouteTableAId: privateRouteTableAIdParameter.name,
+    privateRouteTableBId: privateRouteTableBIdParameter.name,
+    internetGatewayId: igwIdParameter.name,
+    availabilityZones: azNamesParameter.name,
+};

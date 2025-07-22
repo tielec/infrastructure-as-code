@@ -496,22 +496,7 @@ echo "============================================"`;
     natInstancePrivateIp = natInstance.privateIp;
 }
 
-// 共通エクスポート
-export const natTypeExport = natType;
-export const natResourceIdsExport = natResourceIds;
-export const highAvailabilityEnabled = highAvailabilityMode;
-
-// 条件付きエクスポート（NAT Gateway用）
-export const natGatewayAIdExport = natGatewayAId;
-export const natGatewayBIdExport = natGatewayBId;
-export const natGatewayEipA = natGatewayEipAAddress;
-export const natGatewayEipB = natGatewayEipBAddress;
-
-// 条件付きエクスポート（NAT Instance用）
-export const natInstanceIdExport = natInstanceId;
-export const natInstancePublicIpExport = natInstancePublicIp;
-export const natInstancePrivateIpExport = natInstancePrivateIp;
-export const natInstanceTypeExport = natInstanceType;
+// ================ SSM Parameter Store への保存 ================
 
 // SSMパラメータにNAT設定を保存
 const natConfigParameter = new aws.ssm.Parameter(`${projectName}-nat-config`, {
@@ -528,3 +513,163 @@ const natConfigParameter = new aws.ssm.Parameter(`${projectName}-nat-config`, {
         Environment: environment,
     },
 });
+
+// NATゲートウェイモードの場合の追加パラメータ
+if (highAvailabilityMode && natGatewayAId && natGatewayBId) {
+    // NAT Gateway A ID
+    const natGatewayAIdParameter = new aws.ssm.Parameter(`${projectName}-nat-gateway-a-id-param`, {
+        name: `/${projectName}/${environment}/nat/gateway/a/id`,
+        type: "String",
+        value: natGatewayAId,
+        description: `NAT Gateway A ID for ${environment} environment`,
+        tags: {
+            Environment: environment,
+            ManagedBy: "pulumi",
+        },
+    });
+
+    // NAT Gateway B ID
+    const natGatewayBIdParameter = new aws.ssm.Parameter(`${projectName}-nat-gateway-b-id-param`, {
+        name: `/${projectName}/${environment}/nat/gateway/b/id`,
+        type: "String",
+        value: natGatewayBId,
+        description: `NAT Gateway B ID for ${environment} environment`,
+        tags: {
+            Environment: environment,
+            ManagedBy: "pulumi",
+        },
+    });
+
+    // NAT Gateway A EIP
+    const natGatewayAEipParameter = new aws.ssm.Parameter(`${projectName}-nat-gateway-a-eip-param`, {
+        name: `/${projectName}/${environment}/nat/gateway/a/eip`,
+        type: "String",
+        value: natGatewayEipAAddress!,
+        description: `NAT Gateway A Elastic IP for ${environment} environment`,
+        tags: {
+            Environment: environment,
+            ManagedBy: "pulumi",
+        },
+    });
+
+    // NAT Gateway B EIP
+    const natGatewayBEipParameter = new aws.ssm.Parameter(`${projectName}-nat-gateway-b-eip-param`, {
+        name: `/${projectName}/${environment}/nat/gateway/b/eip`,
+        type: "String",
+        value: natGatewayEipBAddress!,
+        description: `NAT Gateway B Elastic IP for ${environment} environment`,
+        tags: {
+            Environment: environment,
+            ManagedBy: "pulumi",
+        },
+    });
+}
+
+// NATインスタンスモードの場合の追加パラメータ
+if (!highAvailabilityMode && natInstanceId) {
+    // NAT Instance ID
+    const natInstanceIdParameter = new aws.ssm.Parameter(`${projectName}-nat-instance-id-param`, {
+        name: `/${projectName}/${environment}/nat/instance/id`,
+        type: "String",
+        value: natInstanceId,
+        description: `NAT Instance ID for ${environment} environment`,
+        tags: {
+            Environment: environment,
+            ManagedBy: "pulumi",
+        },
+    });
+
+    // NAT Instance Public IP
+    const natInstancePublicIpParameter = new aws.ssm.Parameter(`${projectName}-nat-instance-public-ip-param`, {
+        name: `/${projectName}/${environment}/nat/instance/publicIp`,
+        type: "String",
+        value: natInstancePublicIp!,
+        description: `NAT Instance Public IP for ${environment} environment`,
+        tags: {
+            Environment: environment,
+            ManagedBy: "pulumi",
+        },
+    });
+
+    // NAT Instance Private IP
+    const natInstancePrivateIpParameter = new aws.ssm.Parameter(`${projectName}-nat-instance-private-ip-param`, {
+        name: `/${projectName}/${environment}/nat/instance/privateIp`,
+        type: "String",
+        value: natInstancePrivateIp!,
+        description: `NAT Instance Private IP for ${environment} environment`,
+        tags: {
+            Environment: environment,
+            ManagedBy: "pulumi",
+        },
+    });
+}
+
+// NAT統合情報（JSON形式）
+const natDetailedInfoParameter = new aws.ssm.Parameter(`${projectName}-nat-detailed-info-param`, {
+    name: `/${projectName}/${environment}/nat/detailedInfo`,
+    type: "String",
+    value: pulumi.all([
+        natType,
+        highAvailabilityMode,
+        natInstanceType,
+        natGatewayAId,
+        natGatewayBId,
+        natGatewayEipAAddress,
+        natGatewayEipBAddress,
+        natInstanceId,
+        natInstancePublicIp,
+        natInstancePrivateIp
+    ]).apply(([
+        type, haMode, instanceType,
+        gwAId, gwBId, gwAEip, gwBEip,
+        instId, instPublicIp, instPrivateIp
+    ]) => JSON.stringify({
+        type: type,
+        highAvailability: haMode,
+        gateways: haMode ? {
+            a: {
+                id: gwAId,
+                elasticIp: gwAEip
+            },
+            b: {
+                id: gwBId,
+                elasticIp: gwBEip
+            }
+        } : null,
+        instance: !haMode ? {
+            id: instId,
+            type: instanceType,
+            publicIp: instPublicIp,
+            privateIp: instPrivateIp
+        } : null,
+        createdAt: new Date().toISOString()
+    })),
+    description: `NAT detailed configuration for ${environment} environment`,
+    tags: {
+        Environment: environment,
+        ManagedBy: "pulumi",
+    },
+});
+
+// 共通エクスポート
+export const natTypeExport = natType;
+export const natResourceIdsExport = natResourceIds;
+export const highAvailabilityEnabled = highAvailabilityMode;
+
+// 条件付きエクスポート（NAT Gateway用）
+export const natGatewayAIdExport = natGatewayAId;
+export const natGatewayBIdExport = natGatewayBId;
+export const natGatewayEipA = natGatewayEipAAddress;
+export const natGatewayEipB = natGatewayEipBAddress;
+
+// 条件付きエクスポート（NAT Instance用）
+export const natInstanceIdExport = natInstanceId;
+export const natInstancePublicIpExport = natInstancePublicIp;
+export const natInstancePrivateIpExport = natInstancePrivateIp;
+export const natInstanceTypeExport = natInstanceType;
+// エクスポートに追加:
+export const ssmParameters = {
+    config: natConfigParameter.name,
+    detailedInfo: natDetailedInfoParameter.name,
+};
+
