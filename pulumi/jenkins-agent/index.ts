@@ -91,16 +91,24 @@ const customAmiArmPromise = aws.ssm.getParameter({
 
 // 使用するAMI IDを決定（カスタムAMIがあればそれを使用、なければデフォルト）
 const amiX86Id = pulumi.output(Promise.all([customAmiX86Promise, defaultAmiX86])).apply(([customId, defaultAmi]) => {
+    console.log(`[DEBUG] x86 Custom AMI ID from SSM: ${customId}`);
+    console.log(`[DEBUG] x86 Default AMI ID: ${defaultAmi.id}`);
     if (customId && customId !== "ami-placeholder-x86" && customId !== "ami-placeholder") {
+        console.log(`[DEBUG] Using x86 custom AMI: ${customId}`);
         return customId;
     }
+    console.log(`[DEBUG] Using x86 default AMI: ${defaultAmi.id}`);
     return defaultAmi.id;
 });
 
 const amiArmId = pulumi.output(Promise.all([customAmiArmPromise, defaultAmiArm])).apply(([customId, defaultAmi]) => {
+    console.log(`[DEBUG] ARM Custom AMI ID from SSM: ${customId}`);
+    console.log(`[DEBUG] ARM Default AMI ID: ${defaultAmi.id}`);
     if (customId && customId !== "ami-placeholder-arm" && customId !== "ami-placeholder") {
+        console.log(`[DEBUG] Using ARM custom AMI: ${customId}`);
         return customId;
     }
+    console.log(`[DEBUG] Using ARM default AMI: ${defaultAmi.id}`);
     return defaultAmi.id;
 });
 
