@@ -62,16 +62,29 @@ const agentPrivateKeyParameter = new aws.ssm.Parameter(`${projectName}-agent-pri
 });
 
 // カスタムAMI IDをSSMパラメータから取得（存在しない場合はデフォルトAMIを使用）
-const customAmiX86Id = aws.ssm.getParameter({
-    name: `/${projectName}/${environment}/jenkins/agent/custom-ami-x86`,
-}).then(param => param.value).catch(() => null);
+let customAmiX86Id: string | null = null;
+let customAmiArmId: string | null = null;
 
-const customAmiArmId = aws.ssm.getParameter({
-    name: `/${projectName}/${environment}/jenkins/agent/custom-ami-arm`,
-}).then(param => param.value).catch(() => null);
+try {
+    const x86Param = await aws.ssm.getParameter({
+        name: `/${projectName}/${environment}/jenkins/agent/custom-ami-x86`,
+    });
+    customAmiX86Id = x86Param.value;
+} catch (e) {
+    // パラメータが存在しない場合はnull
+}
+
+try {
+    const armParam = await aws.ssm.getParameter({
+        name: `/${projectName}/${environment}/jenkins/agent/custom-ami-arm`,
+    });
+    customAmiArmId = armParam.value;
+} catch (e) {
+    // パラメータが存在しない場合はnull
+}
 
 // 最新のAmazon Linux 2023 AMIを取得（カスタムAMIが無い場合のフォールバック）
-const defaultAmiX86 = aws.ec2.getAmi({
+const defaultAmiX86 = await aws.ec2.getAmi({
     mostRecent: true,
     owners: ["amazon"],
     filters: [{
@@ -80,7 +93,7 @@ const defaultAmiX86 = aws.ec2.getAmi({
     }],
 });
 
-const defaultAmiArm = aws.ec2.getAmi({
+const defaultAmiArm = await aws.ec2.getAmi({
     mostRecent: true,
     owners: ["amazon"],
     filters: [{
@@ -90,13 +103,13 @@ const defaultAmiArm = aws.ec2.getAmi({
 });
 
 // 使用するAMI IDを決定（カスタムAMIがあればそれを使用、なければデフォルト）
-const amiX86Id = pulumi.output(customAmiX86Id).apply(customId => 
-    customId && customId !== "ami-placeholder-x86" ? customId : defaultAmiX86.then(ami => ami.id)
-);
+const amiX86Id = (customAmiX86Id && customAmiX86Id !== "ami-placeholder-x86") 
+    ? customAmiX86Id 
+    : defaultAmiX86.id;
 
-const amiArmId = pulumi.output(customAmiArmId).apply(customId => 
-    customId && customId !== "ami-placeholder-arm" ? customId : defaultAmiArm.then(ami => ami.id)
-);
+const amiArmId = (customAmiArmId && customAmiArmId !== "ami-placeholder-arm") 
+    ? customAmiArmId 
+    : defaultAmiArm.id;
 
 // IAMロール作成（Jenkinsエージェント用）
 const jenkinsAgentRole = new aws.iam.Role(`${projectName}-agent-role`, {
@@ -237,8 +250,8 @@ const agentLaunchTemplate = new aws.ec2.LaunchTemplate(`${projectName}-agent-lt`
         },
     }],
     // ユーザーデータをBase64エンコード（カスタムAMI使用時は最小限の設定）
-    userData: amiX86Id.apply(id => {
-        const isCustomAmi = !id.startsWith("ami-placeholder") && customAmiX86Id;
+    userData: pulumi.output(amiX86Id).apply(id => {
+        const isCustomAmi = customAmiX86Id && !customAmiX86Id.startsWith("ami-placeholder");
         const userData = isCustomAmi ? 
             // カスタムAMI用の最小限のユーザーデータ
             `#!/bin/bash
@@ -359,8 +372,8 @@ const agentLaunchTemplateArm = new aws.ec2.LaunchTemplate(`${projectName}-agent-
         },
     }],
     // ユーザーデータをBase64エンコード（カスタムAMI使用時は最小限の設定）
-    userData: amiArmId.apply(id => {
-        const isCustomAmi = !id.startsWith("ami-placeholder") && customAmiArmId;
+    userData: pulumi.output(amiArmId).apply(id => {
+        const isCustomAmi = customAmiArmId && !customAmiArmId.startsWith("ami-placeholder");
         const userData = isCustomAmi ? 
             // カスタムAMI用の最小限のユーザーデータ
             `#!/bin/bash
