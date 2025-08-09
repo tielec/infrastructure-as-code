@@ -13,8 +13,8 @@
   vars:
     # コマンドラインから環境名を受け取る
     env_name: "{{ env | default('dev') }}"
-    # AMI自動ビルドフラグ
-    trigger_build: "{{ trigger_build | default(false) }}"
+    # AMI自動ビルドフラグ（コマンドラインから直接参照）
+    should_trigger_build: false
   
   pre_tasks:
     # all.yml から変数を読み込む
@@ -38,7 +38,7 @@
           - "Environment: {{ env_name }}"
           - "Project: {{ project_name }}"
           - "Region: {{ aws_region_name }}"
-          - "Trigger Build: {{ trigger_build }}"
+          - "Trigger Build: {{ trigger_build | default(should_trigger_build) }}"
           - "=========================================="
   
   roles:
@@ -47,7 +47,7 @@
   
   post_tasks:
     - name: Trigger AMI builds if requested
-      when: trigger_build | bool
+      when: (trigger_build | default(should_trigger_build)) | bool
       block:
         - name: Get Image Pipeline ARNs
           ansible.builtin.shell: |
