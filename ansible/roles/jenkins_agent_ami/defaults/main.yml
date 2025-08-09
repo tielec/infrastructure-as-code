@@ -1,0 +1,21 @@
+---
+# Jenkins Agent AMI Builder defaults
+
+# Standard variables (same as other Jenkins roles)
+scripts_dir: "{{ playbook_dir }}/../../scripts"
+pulumi_path: "{{ playbook_dir }}/../../pulumi"
+env_name: "{{ env | default('dev') }}"
+
+# Pulumi settings (uses pulumi_helper defaults)
+# pulumi_backend_url is defined in pulumi_helper role
+
+# AMI Builder specific settings
+build_ami_on_deploy: false      # Deprecated - use trigger_ami_build instead
+trigger_ami_build: true         # Automatically trigger pipeline execution after deployment
+update_ssm_with_ami: true       # Automatically update SSM parameters with new AMI IDs
+wait_for_ami_build: true        # Wait for AMI build to complete before updating SSM (30-45 minutes)
+cleanup_old_amis: true          # Automatically delete old AMIs
+ami_retention_count: 2          # Number of AMIs to keep per architecture
+
+# Operation mode
+operation: deploy  # Options: deploy, destroy

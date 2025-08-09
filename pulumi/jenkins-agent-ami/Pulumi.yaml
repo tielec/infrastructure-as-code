@@ -1,0 +1,6 @@
+name: jenkins-agent-ami
+runtime:
+  name: nodejs
+  options:
+    typescript: true
+description: Jenkins Agent AMI builder using EC2 Image Builder

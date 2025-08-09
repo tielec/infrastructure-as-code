@@ -1,0 +1,215 @@
+---
+# Jenkins Agent AMI Builder deployment tasks
+
+- name: Deploy Agent AMI Builder Infrastructure with Pulumi
+  block:
+    - name: Set deployment variables
+      ansible.builtin.set_fact:
+        stack_name: "jenkins-agent-ami"
+        pulumi_dir: "{{ pulumi_path }}/jenkins-agent-ami"
+        env: "{{ env_name }}"
+        aws_region: "{{ aws_region_name }}"
+        network_project_name: "{{ infra.pulumi.network_project | default('jenkins-network') }}"
+        security_project_name: "{{ infra.pulumi.security_project | default('jenkins-security') }}"
+    
+    - name: Check if Pulumi directory exists
+      ansible.builtin.stat:
+        path: "{{ pulumi_dir }}"
+      register: pulumi_dir_stat
+    
+    - name: Fail if Pulumi directory doesn't exist
+      ansible.builtin.fail:
+        msg: "Pulumi directory doesn't exist: {{ pulumi_dir }}"
+      when: not pulumi_dir_stat.stat.exists
+    
+    # NPM dependencies
+    - name: Install npm dependencies for Jenkins Agent AMI
+      ansible.builtin.npm:
+        path: "{{ pulumi_dir }}"
+        state: present
+    
+    # TypeScript build
+    - name: Build TypeScript for Jenkins Agent AMI
+      ansible.builtin.shell: |
+        source {{ scripts_dir }}/aws/aws-env.sh
+        cd {{ pulumi_dir }}
+        npm run build
+      register: build_result
+      changed_when: "'Built' in build_result.stdout"
+    
+    # Pulumi stack init
+    - name: Initialize Pulumi stack for Jenkins Agent AMI
+      ansible.builtin.shell: |
+        source {{ scripts_dir }}/aws/aws-env.sh
+        cd {{ pulumi_dir }}
+        pulumi stack select {{ env }} --create
+      register: stack_init_result
+      failed_when: stack_init_result.rc != 0
+      changed_when: "'Created stack' in stack_init_result.stdout"
+    
+    # Pulumi configuration
+    - name: Set Pulumi configuration for Jenkins Agent AMI
+      ansible.builtin.shell: |
+        source {{ scripts_dir }}/aws/aws-env.sh
+        cd {{ pulumi_dir }}
+        pulumi config set aws:region {{ aws_region }}
+        pulumi config set {{ stack_name }}:projectName {{ project_name }}
+        pulumi config set {{ stack_name }}:networkStackName {{ network_project_name }}
+        pulumi config set {{ stack_name }}:securityStackName {{ security_project_name }}
+      register: pulumi_config_result
+      changed_when: pulumi_config_result.rc == 0
+    
+    # Pulumi preview
+    - name: Preview agent AMI deployment
+      ansible.builtin.shell: |
+        source {{ scripts_dir }}/aws/aws-env.sh
+        cd {{ pulumi_dir }}
+        pulumi preview
+      register: preview_result
+      changed_when: false
+    
+    # Pulumi deploy
+    - name: Deploy Jenkins Agent AMI Builder infrastructure
+      ansible.builtin.shell: |
+        source {{ scripts_dir }}/aws/aws-env.sh
+        cd {{ pulumi_dir }}
+        pulumi up -y
+      register: deploy_result
+      changed_when: deploy_result.rc == 0
+    
+    # Get outputs
+    - name: Get agent AMI stack outputs
+      ansible.builtin.shell: |
+        source {{ scripts_dir }}/aws/aws-env.sh
+        cd {{ pulumi_dir }}
+        pulumi stack output --json
+      register: stack_outputs
+      changed_when: false
+    
+    - name: Parse stack outputs
+      ansible.builtin.set_fact:
+        agent_ami_outputs: "{{ stack_outputs.stdout | from_json }}"
+      when: stack_outputs.stdout is defined
+    
+    - name: Display Jenkins Agent AMI Builder information
+      ansible.builtin.debug:
+        msg:
+          - "=========================================="
+          - "Jenkins Agent AMI Builder Deployment Complete"
+          - "=========================================="
+          - "Stack: {{ stack_name }}"
+          - "Environment: {{ env }}"
+          - "Project: {{ project_name }}"
+          - ""
+          - "Image Pipeline x86_64 ARN:"
+          - "  {{ agent_ami_outputs.imagePipelineX86Arn | default('N/A') }}"
+          - ""
+          - "Image Pipeline ARM64 ARN:"
+          - "  {{ agent_ami_outputs.imagePipelineArmArn | default('N/A') }}"
+          - ""
+          - "To build AMIs manually, run:"
+          - "  aws imagebuilder start-image-pipeline-execution \\"
+          - "    --image-pipeline-arn {{ agent_ami_outputs.imagePipelineX86Arn | default('N/A') }}"
+          - ""
+          - "  aws imagebuilder start-image-pipeline-execution \\"
+          - "    --image-pipeline-arn {{ agent_ami_outputs.imagePipelineArmArn | default('N/A') }}"
+          - ""
+          - "After AMIs are built, update SSM parameters:"
+          - "  aws ssm put-parameter \\"
+          - "    --name /{{ project_name }}/{{ env }}/jenkins/agent/custom-ami-x86 \\"
+          - "    --value ami-xxxxxxxxx --overwrite"
+          - ""
+          - "  aws ssm put-parameter \\"
+          - "    --name /{{ project_name }}/{{ env }}/jenkins/agent/custom-ami-arm \\"
+          - "    --value ami-xxxxxxxxx --overwrite"
+          - "=========================================="
+      when: agent_ami_outputs is defined
+    
+    # パイプラインを自動トリガー（デフォルトで有効）
+    - name: Trigger Image Builder pipelines
+      when: (trigger_ami_build | default(true)) | bool
+      block:
+        - name: Start x86_64 pipeline execution
+          when: agent_ami_outputs.imagePipelineX86Arn is defined
+          ansible.builtin.include_role:
+            name: aws_cli_helper
+            tasks_from: execute
+          vars:
+            aws_command: "aws imagebuilder start-image-pipeline-execution --image-pipeline-arn {{ agent_ami_outputs.imagePipelineX86Arn }}"
+            operation_name: "Start x86_64 Image Builder pipeline"
+            parse_output: true
+        
+        - name: Save x86 trigger result
+          ansible.builtin.set_fact:
+            x86_pipeline_trigger:
+              aws_cli_success: "{{ aws_cli_success }}"
+              aws_cli_data: "{{ aws_cli_data | default({}) }}"
+              aws_cli_stdout: "{{ aws_cli_stdout | default('') }}"
+          when: agent_ami_outputs.imagePipelineX86Arn is defined
+        
+        - name: Start ARM64 pipeline execution
+          when: agent_ami_outputs.imagePipelineArmArn is defined
+          ansible.builtin.include_role:
+            name: aws_cli_helper
+            tasks_from: execute
+          vars:
+            aws_command: "aws imagebuilder start-image-pipeline-execution --image-pipeline-arn {{ agent_ami_outputs.imagePipelineArmArn }}"
+            operation_name: "Start ARM64 Image Builder pipeline"
+            parse_output: true
+        
+        - name: Save ARM trigger result
+          ansible.builtin.set_fact:
+            arm_pipeline_trigger:
+              aws_cli_success: "{{ aws_cli_success }}"
+              aws_cli_data: "{{ aws_cli_data | default({}) }}"
+              aws_cli_stdout: "{{ aws_cli_stdout | default('') }}"
+          when: agent_ami_outputs.imagePipelineArmArn is defined
+        
+        - name: Display pipeline trigger results
+          ansible.builtin.debug:
+            msg:
+              - "=========================================="
+              - "Image Builder Pipelines Triggered"
+              - "=========================================="
+              - "x86_64: {{ 'Started' if x86_pipeline_trigger is defined and x86_pipeline_trigger.aws_cli_success else 'Failed or Skipped' }}"
+              - "ARM64: {{ 'Started' if arm_pipeline_trigger is defined and arm_pipeline_trigger.aws_cli_success else 'Failed or Skipped' }}"
+              - ""
+              - "AMI builds typically take 30-45 minutes to complete."
+              - "Monitor progress in AWS Console or with:"
+              - "  aws imagebuilder list-image-build-versions \\"
+              - "    --image-version-arn <pipeline-arn>"
+              - "=========================================="
+    
+    # SSMパラメータの更新（最新のAMI IDを登録）
+    - name: Update SSM parameters with built AMI IDs
+      when: (update_ssm_with_ami | default(true)) | bool
+      ansible.builtin.include_tasks: update_ssm_parameters.yml
+    
+    # 古いAMIのクリーンアップ
+    - name: Clean up old AMIs
+      when: (cleanup_old_amis | default(true)) | bool
+      block:
+        - name: Include AMI cleanup tasks
+          ansible.builtin.include_tasks: cleanup_amis.yml
+          vars:
+            retention_count: 2  # 保持するAMIの数（最新2つを保持）
+            ami_prefix: "{{ project_name }}-agent"
+    
+    - name: Set deployment success flag
+      ansible.builtin.set_fact:
+        agent_ami_deployed: true
+  
+  rescue:
+    - name: Display deployment failure message
+      ansible.builtin.debug:
+        msg:
+          - "ERROR: Agent AMI Builder deployment failed"
+          - "Please check the error messages above for details"
+    
+    - name: Set deployment failure flag
+      ansible.builtin.set_fact:
+        agent_ami_deployed: false
+    
+    - name: Fail the playbook
+      ansible.builtin.fail:
+        msg: "Agent AMI Builder deployment failed"

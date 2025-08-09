@@ -1,0 +1,8 @@
+---
+# Jenkins Agent AMI Builder role dependencies
+
+dependencies:
+  - role: aws_setup
+  - role: aws_cli_helper
+  - role: pulumi_helper
+  - role: ssm_parameter_store

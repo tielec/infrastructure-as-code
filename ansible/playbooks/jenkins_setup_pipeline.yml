@@ -32,6 +32,7 @@
         loadbalancer_project_name: "{{ infra.pulumi.loadbalancer_project }}"
         controller_project_name: "{{ infra.pulumi.controller_project }}"
         agent_project_name: "{{ infra.pulumi.agent_project }}"
+        agent_ami_project_name: "{{ infra.pulumi.agent_ami_project | default('jenkins-agent-ami') }}"
         config_project_name: "{{ infra.pulumi.config_project }}"
         application_project_name: "{{ infra.pulumi.application_project | default('jenkins-application') }}"
         jenkins_version: "{{ version | default(jenkins.version) }}"
@@ -101,6 +102,7 @@
           - LoadBalancer: {{ loadbalancer_project_name }}
           - Controller: {{ controller_project_name }}
           - Agent: {{ agent_project_name }}
+          - Agent AMI: {{ agent_ami_project_name }}
           - Config: {{ config_project_name }}
           - Application: {{ application_project_name }}
           
@@ -202,6 +204,22 @@
       ansible.builtin.debug:
         msg: "Config deployment status: {{ config_deployed | default(false) }}"
 
+    # Jenkins Agent AMI Builderをデプロイ（オプション）
+    - name: Deploy Jenkins Agent AMI Builder
+      ansible.builtin.include_role:
+        name: jenkins_agent_ami
+      when:
+        - network_deployed is defined and network_deployed
+        - security_deployed is defined and security_deployed
+        - run_agent_ami | default(false) | bool
+      register: agent_ami_deploy_result
+
+    # agent_ami_deployedを明示的に設定
+    - name: Set agent AMI deployment status
+      ansible.builtin.set_fact:
+        agent_ami_deployed: "{{ agent_ami_deploy_result is defined and agent_ami_deploy_result.rc is not defined }}"
+      when: agent_ami_deploy_result is defined
+
     # Jenkinsエージェントをデプロイ
     - name: Deploy Jenkins Agent
       ansible.builtin.include_role:
@@ -262,4 +280,5 @@
           Controller: {{ controller_deployed | default(false) }}
           Configuration: {{ config_deployed | default(false) }}
           Application: {{ application_deployed | default(false) }}
+          Agent AMI Builder: {{ agent_ami_deployed | default(false) }}
           Agent: {{ agent_deployed | default(false) }}

@@ -61,8 +61,8 @@ const agentPrivateKeyParameter = new aws.ssm.Parameter(`${projectName}-agent-pri
     },
 });
 
-// 最新のAmazon Linux 2023 AMIを取得（x86_64とARM64の両方）
-const amiX86 = aws.ec2.getAmi({
+// 最新のAmazon Linux 2023 AMIを取得
+const defaultAmiX86 = aws.ec2.getAmi({
     mostRecent: true,
     owners: ["amazon"],
     filters: [{
@@ -71,13 +71,45 @@ const amiX86 = aws.ec2.getAmi({
     }],
 });
 
-const amiArm = aws.ec2.getAmi({
+const defaultAmiArm = aws.ec2.getAmi({
     mostRecent: true,
     owners: ["amazon"],
     filters: [{
         name: "name",
         values: ["al2023-ami-*-kernel-*-arm64"],
     }],
+});
+
+// カスタムAMI IDをSSMパラメータから取得（存在しない場合はデフォルトAMIを使用）
+const customAmiX86Promise = aws.ssm.getParameter({
+    name: `/${projectName}/${environment}/jenkins/agent/custom-ami-x86`,
+}).then(param => param.value).catch(() => null);
+
+const customAmiArmPromise = aws.ssm.getParameter({
+    name: `/${projectName}/${environment}/jenkins/agent/custom-ami-arm`,
+}).then(param => param.value).catch(() => null);
+
+// 使用するAMI IDを決定（カスタムAMIがあればそれを使用、なければデフォルト）
+const amiX86Id = pulumi.output(Promise.all([customAmiX86Promise, defaultAmiX86])).apply(([customId, defaultAmi]) => {
+    console.log(`[DEBUG] x86 Custom AMI ID from SSM: ${customId}`);
+    console.log(`[DEBUG] x86 Default AMI ID: ${defaultAmi.id}`);
+    if (customId && customId !== "ami-placeholder-x86" && customId !== "ami-placeholder") {
+        console.log(`[DEBUG] Using x86 custom AMI: ${customId}`);
+        return customId;
+    }
+    console.log(`[DEBUG] Using x86 default AMI: ${defaultAmi.id}`);
+    return defaultAmi.id;
+});
+
+const amiArmId = pulumi.output(Promise.all([customAmiArmPromise, defaultAmiArm])).apply(([customId, defaultAmi]) => {
+    console.log(`[DEBUG] ARM Custom AMI ID from SSM: ${customId}`);
+    console.log(`[DEBUG] ARM Default AMI ID: ${defaultAmi.id}`);
+    if (customId && customId !== "ami-placeholder-arm" && customId !== "ami-placeholder") {
+        console.log(`[DEBUG] Using ARM custom AMI: ${customId}`);
+        return customId;
+    }
+    console.log(`[DEBUG] Using ARM default AMI: ${defaultAmi.id}`);
+    return defaultAmi.id;
 });
 
 // IAMロール作成（Jenkinsエージェント用）
@@ -189,7 +221,7 @@ const spotFleetRole = new aws.iam.Role(`${projectName}-spotfleet-role`, {
 // エージェント起動テンプレート（x86_64用）
 const agentLaunchTemplate = new aws.ec2.LaunchTemplate(`${projectName}-agent-lt`, {
     namePrefix: `${projectName}-agent-lt-`,
-    imageId: amiX86.then(ami => ami.id),
+    imageId: amiX86Id,
     instanceType: "t3.small", // デフォルトをt3.smallに変更
     keyName: agentKeyPair.keyName,  // 作成したキーペアを使用
     vpcSecurityGroupIds: [jenkinsAgentSecurityGroupId],
@@ -218,8 +250,38 @@ const agentLaunchTemplate = new aws.ec2.LaunchTemplate(`${projectName}-agent-lt`
             Role: "jenkins-agent",
         },
     }],
-    // ユーザーデータをBase64エンコード
-    userData: pulumi.output(`#!/bin/bash
+    // ユーザーデータをBase64エンコード（カスタムAMI使用時は最小限の設定）
+    userData: pulumi.all([amiX86Id, customAmiX86Promise]).apply(([id, customId]) => {
+        const isCustomAmi = customId && !customId.startsWith("ami-placeholder");
+        const userData = isCustomAmi ? 
+            // カスタムAMI用の最小限のユーザーデータ
+            `#!/bin/bash
+exec > >(tee /var/log/user-data.log|logger -t user-data -s 2>/dev/console) 2>&1
+set -x
+
+# スワップの有効化（既に作成済み）
+swapon /swapfile || true
+
+# Dockerの起動と権限設定
+systemctl start docker
+chmod 666 /var/run/docker.sock || true
+usermod -aG docker jenkins || true
+
+# 環境情報の保存
+echo "PROJECT_NAME=${projectName}" > /etc/jenkins-agent-env
+echo "ENVIRONMENT=${environment}" >> /etc/jenkins-agent-env
+echo "AGENT_ROOT=/home/jenkins/agent" >> /etc/jenkins-agent-env
+chmod 644 /etc/jenkins-agent-env
+
+# SSMエージェントの起動
+systemctl start amazon-ssm-agent
+
+# 起動完了のマーク
+echo "$(date) - Agent bootstrap completed (custom AMI)" > /home/jenkins/agent/bootstrap-complete
+chown jenkins:jenkins /home/jenkins/agent/bootstrap-complete
+` :
+            // デフォルトAMI用のフルユーザーデータ
+            `#!/bin/bash
 # Jenkins Agent Bootstrap Script
 exec > >(tee /var/log/user-data.log|logger -t user-data -s 2>/dev/console) 2>&1
 set -x
@@ -244,6 +306,9 @@ dnf clean all
 # Dockerの設定と起動
 systemctl enable docker
 systemctl start docker
+
+# Dockerソケットの権限設定
+chmod 666 /var/run/docker.sock || true
 
 # Jenkinsユーザーの作成
 useradd -m -d /home/jenkins -s /bin/bash jenkins
@@ -270,7 +335,9 @@ dnf install -y java-17-amazon-corretto
 # 起動完了のマーク
 echo "$(date) - Agent bootstrap completed" > /home/jenkins/agent/bootstrap-complete
 chown jenkins:jenkins /home/jenkins/agent/bootstrap-complete
-`).apply(userData => Buffer.from(userData).toString("base64")),
+`;
+        return Buffer.from(userData).toString("base64");
+    }),
     tags: {
         Name: `${projectName}-agent-lt-${environment}`,
         Environment: environment,
@@ -280,7 +347,7 @@ chown jenkins:jenkins /home/jenkins/agent/bootstrap-complete
 // ARM64用の起動テンプレート
 const agentLaunchTemplateArm = new aws.ec2.LaunchTemplate(`${projectName}-agent-lt-arm`, {
     namePrefix: `${projectName}-agent-lt-arm-`,
-    imageId: amiArm.then(ami => ami.id),
+    imageId: amiArmId,
     instanceType: "t4g.small",
     keyName: agentKeyPair.keyName,
     vpcSecurityGroupIds: [jenkinsAgentSecurityGroupId],
@@ -310,8 +377,39 @@ const agentLaunchTemplateArm = new aws.ec2.LaunchTemplate(`${projectName}-agent-
             Architecture: "arm64",
         },
     }],
-    // ユーザーデータをBase64エンコード
-    userData: pulumi.output(`#!/bin/bash
+    // ユーザーデータをBase64エンコード（カスタムAMI使用時は最小限の設定）
+    userData: pulumi.all([amiArmId, customAmiArmPromise]).apply(([id, customId]) => {
+        const isCustomAmi = customId && !customId.startsWith("ami-placeholder");
+        const userData = isCustomAmi ? 
+            // カスタムAMI用の最小限のユーザーデータ
+            `#!/bin/bash
+exec > >(tee /var/log/user-data.log|logger -t user-data -s 2>/dev/console) 2>&1
+set -x
+
+# スワップの有効化（既に作成済み）
+swapon /swapfile || true
+
+# Dockerの起動と権限設定
+systemctl start docker
+chmod 666 /var/run/docker.sock || true
+usermod -aG docker jenkins || true
+
+# 環境情報の保存
+echo "PROJECT_NAME=${projectName}" > /etc/jenkins-agent-env
+echo "ENVIRONMENT=${environment}" >> /etc/jenkins-agent-env
+echo "AGENT_ROOT=/home/jenkins/agent" >> /etc/jenkins-agent-env
+echo "ARCHITECTURE=arm64" >> /etc/jenkins-agent-env
+chmod 644 /etc/jenkins-agent-env
+
+# SSMエージェントの起動
+systemctl start amazon-ssm-agent
+
+# 起動完了のマーク
+echo "$(date) - Agent bootstrap completed (custom AMI)" > /home/jenkins/agent/bootstrap-complete
+chown jenkins:jenkins /home/jenkins/agent/bootstrap-complete
+` :
+            // デフォルトAMI用のフルユーザーデータ
+            `#!/bin/bash
 # Jenkins Agent Bootstrap Script
 exec > >(tee /var/log/user-data.log|logger -t user-data -s 2>/dev/console) 2>&1
 set -x
@@ -336,6 +434,9 @@ dnf clean all
 # Dockerの設定と起動
 systemctl enable docker
 systemctl start docker
+
+# Dockerソケットの権限設定
+chmod 666 /var/run/docker.sock || true
 
 # Jenkinsユーザーの作成
 useradd -m -d /home/jenkins -s /bin/bash jenkins
@@ -363,7 +464,9 @@ dnf install -y java-17-amazon-corretto
 # 起動完了のマーク
 echo "$(date) - Agent bootstrap completed" > /home/jenkins/agent/bootstrap-complete
 chown jenkins:jenkins /home/jenkins/agent/bootstrap-complete
-`).apply(userData => Buffer.from(userData).toString("base64")),
+`;
+        return Buffer.from(userData).toString("base64");
+    }),
     tags: {
         Name: `${projectName}-agent-lt-arm-${environment}`,
         Environment: environment,

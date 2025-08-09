@@ -1,0 +1,86 @@
+---
+# Jenkins Agent AMI Builder デプロイプレイブック
+# カスタムAMIを作成するEC2 Image Builderインフラをデプロイします
+#
+# 使用方法:
+#   ansible-playbook deploy_jenkins_agent_ami.yml -e "env=dev"
+#   ansible-playbook deploy_jenkins_agent_ami.yml -e "env=dev trigger_build=true"
+
+- name: Deploy Jenkins Agent AMI Builder
+  hosts: localhost
+  connection: local
+  gather_facts: yes
+  vars:
+    # コマンドラインから環境名を受け取る
+    env_name: "{{ env | default('dev') }}"
+    # AMI自動ビルドフラグ（コマンドラインから直接参照）
+    should_trigger_build: false
+  
+  pre_tasks:
+    # all.yml から変数を読み込む
+    - name: Include group_vars/all.yml
+      ansible.builtin.include_vars:
+        file: "{{ playbook_dir }}/../inventory/group_vars/all.yml"
+    
+    # 必要な変数を設定
+    - name: Set required variables from all.yml
+      ansible.builtin.set_fact:
+        project_name: "{{ infra.project_name }}"
+        aws_region_name: "{{ infra.aws.default_region }}"
+        agent_ami_project_name: "{{ infra.pulumi.agent_ami_project | default('jenkins-agent-ami') }}"
+    
+    - name: Display deployment information
+      ansible.builtin.debug:
+        msg:
+          - "=========================================="
+          - "Jenkins Agent AMI Builder Deployment"
+          - "=========================================="
+          - "Environment: {{ env_name }}"
+          - "Project: {{ project_name }}"
+          - "Region: {{ aws_region_name }}"
+          - "Trigger Build: {{ trigger_build | default(should_trigger_build) }}"
+          - "=========================================="
+  
+  roles:
+    - aws_setup
+    - jenkins_agent_ami
+  
+  post_tasks:
+    - name: Trigger AMI builds if requested
+      when: (trigger_build | default(should_trigger_build)) | bool
+      block:
+        - name: Get Image Pipeline ARNs
+          ansible.builtin.shell: |
+            cd {{ pulumi_path }}/jenkins-agent-ami
+            pulumi stack output --json
+          register: stack_outputs
+          changed_when: false
+        
+        - name: Parse outputs
+          ansible.builtin.set_fact:
+            pipelines: "{{ stack_outputs.stdout | from_json }}"
+        
+        - name: Start x86_64 AMI build
+          when: pipelines.imagePipelineX86Arn is defined
+          ansible.builtin.shell: |
+            aws imagebuilder start-image-pipeline-execution \
+              --image-pipeline-arn {{ pipelines.imagePipelineX86Arn }} \
+              --region {{ aws_region_name }}
+          register: x86_build
+          changed_when: x86_build.rc == 0
+        
+        - name: Start ARM64 AMI build  
+          when: pipelines.imagePipelineArmArn is defined
+          ansible.builtin.shell: |
+            aws imagebuilder start-image-pipeline-execution \
+              --image-pipeline-arn {{ pipelines.imagePipelineArmArn }} \
+              --region {{ aws_region_name }}
+          register: arm_build
+          changed_when: arm_build.rc == 0
+        
+        - name: Display build status
+          ansible.builtin.debug:
+            msg:
+              - "AMI builds have been triggered."
+              - "Monitor progress in AWS Console or with:"
+              - "  aws imagebuilder list-image-build-versions --image-version-arn <arn>"
