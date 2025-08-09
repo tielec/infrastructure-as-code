@@ -262,8 +262,10 @@ set -x
 # スワップの有効化（既に作成済み）
 swapon /swapfile || true
 
-# Dockerの起動
+# Dockerの起動と権限設定
 systemctl start docker
+chmod 666 /var/run/docker.sock || true
+usermod -aG docker jenkins || true
 
 # 環境情報の保存
 echo "PROJECT_NAME=${projectName}" > /etc/jenkins-agent-env
@@ -304,6 +306,9 @@ dnf clean all
 # Dockerの設定と起動
 systemctl enable docker
 systemctl start docker
+
+# Dockerソケットの権限設定
+chmod 666 /var/run/docker.sock || true
 
 # Jenkinsユーザーの作成
 useradd -m -d /home/jenkins -s /bin/bash jenkins
@@ -384,8 +389,10 @@ set -x
 # スワップの有効化（既に作成済み）
 swapon /swapfile || true
 
-# Dockerの起動
+# Dockerの起動と権限設定
 systemctl start docker
+chmod 666 /var/run/docker.sock || true
+usermod -aG docker jenkins || true
 
 # 環境情報の保存
 echo "PROJECT_NAME=${projectName}" > /etc/jenkins-agent-env
@@ -427,6 +434,9 @@ dnf clean all
 # Dockerの設定と起動
 systemctl enable docker
 systemctl start docker
+
+# Dockerソケットの権限設定
+chmod 666 /var/run/docker.sock || true
 
 # Jenkinsユーザーの作成
 useradd -m -d /home/jenkins -s /bin/bash jenkins
