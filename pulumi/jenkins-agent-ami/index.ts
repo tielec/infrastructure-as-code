@@ -15,15 +15,18 @@ const environment = pulumi.getStack();
 // バージョン管理（自動インクリメント）
 // Image Builderは X.Y.Z 形式のセマンティックバージョンのみ受け付ける
 const now = new Date();
-// 日付から一意のパッチバージョンを生成（1日の中での秒数を使用）
-const hours = now.getHours();
-const minutes = now.getMinutes();
-const seconds = now.getSeconds();
-const patchVersion = hours * 3600 + minutes * 60 + seconds; // 0-86399の範囲
+// yyyymmddhhmmss形式で日時文字列を生成
+const year = now.getFullYear();
+const month = String(now.getMonth() + 1).padStart(2, '0');
+const day = String(now.getDate()).padStart(2, '0');
+const hours = String(now.getHours()).padStart(2, '0');
+const minutes = String(now.getMinutes()).padStart(2, '0');
+const seconds = String(now.getSeconds()).padStart(2, '0');
+const dateTimeStr = `${year}${month}${day}${hours}${minutes}${seconds}`;
 
-// バージョンフォーマット: major.minor.patch (X.Y.Z形式)
-const componentVersion = config.get("componentVersion") || `1.0.${patchVersion}`;
-const recipeVersion = config.get("recipeVersion") || `1.0.${patchVersion}`;
+// バージョンフォーマット: 1.0.yyyymmddhhmmss (X.Y.Z形式)
+const componentVersion = config.get("componentVersion") || `1.0.${dateTimeStr}`;
+const recipeVersion = config.get("recipeVersion") || `1.0.${dateTimeStr}`;
 
 // バージョン情報をログ出力
 console.log(`[INFO] Component Version: ${componentVersion}`);
