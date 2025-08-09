@@ -1,0 +1,16 @@
+---
+# Jenkins Agent AMI Builder defaults
+
+# Standard variables (same as other Jenkins roles)
+scripts_dir: "{{ playbook_dir }}/../../scripts"
+pulumi_path: "{{ playbook_dir }}/../../pulumi"
+env_name: "{{ env | default('dev') }}"
+
+# Pulumi settings (uses pulumi_helper defaults)
+# pulumi_backend_url is defined in pulumi_helper role
+
+# AMI Builder specific settings
+build_ami_on_deploy: false  # Set to true to automatically trigger AMI build on deployment
+
+# Operation mode
+operation: deploy  # Options: deploy, destroy

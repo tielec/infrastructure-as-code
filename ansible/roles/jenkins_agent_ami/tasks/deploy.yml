@@ -1,0 +1,122 @@
+---
+# Jenkins Agent AMI Builder deployment tasks
+
+- name: Deploy Agent AMI Builder Infrastructure with Pulumi
+  block:
+    - name: Set deployment variables
+      ansible.builtin.set_fact:
+        stack_name: "jenkins-agent-ami"
+        pulumi_dir: "{{ pulumi_path }}/jenkins-agent-ami"
+        env: "{{ env_name }}"
+        aws_region: "{{ aws_region_name }}"
+    
+    - name: Check if Pulumi directory exists
+      ansible.builtin.stat:
+        path: "{{ pulumi_dir }}"
+      register: pulumi_dir_stat
+    
+    - name: Fail if Pulumi directory doesn't exist
+      ansible.builtin.fail:
+        msg: "Pulumi directory doesn't exist: {{ pulumi_dir }}"
+      when: not pulumi_dir_stat.stat.exists
+    
+    - name: Initialize agent AMI stack
+      ansible.builtin.include_role:
+        name: pulumi_helper
+        tasks_from: init_stack
+      vars:
+        pulumi_stack_name: "{{ stack_name }}"
+        pulumi_project_path: "{{ pulumi_dir }}"
+        pulumi_env: "{{ env }}"
+    
+    - name: Configure agent AMI stack
+      ansible.builtin.include_role:
+        name: pulumi_helper
+        tasks_from: config_stack
+      vars:
+        pulumi_stack_name: "{{ stack_name }}"
+        pulumi_project_path: "{{ pulumi_dir }}"
+        pulumi_config:
+          aws:region: "{{ aws_region }}"
+          projectName: "{{ project_name }}"
+          networkStackName: "jenkins-network"
+          securityStackName: "jenkins-security"
+    
+    - name: Deploy agent AMI stack
+      ansible.builtin.include_role:
+        name: pulumi_helper
+        tasks_from: deploy_stack
+      vars:
+        pulumi_stack_name: "{{ stack_name }}"
+        pulumi_project_path: "{{ pulumi_dir }}"
+    
+    - name: Get agent AMI stack outputs
+      ansible.builtin.include_role:
+        name: pulumi_helper
+        tasks_from: get_outputs
+      vars:
+        pulumi_stack_name: "{{ stack_name }}"
+        pulumi_project_path: "{{ pulumi_dir }}"
+      register: ami_stack_outputs
+    
+    - name: Save stack outputs to variable
+      ansible.builtin.set_fact:
+        agent_ami_outputs: "{{ pulumi_outputs }}"
+      when: pulumi_outputs is defined
+    
+    - name: Display Jenkins Agent AMI Builder information
+      ansible.builtin.debug:
+        msg:
+          - "=========================================="
+          - "Jenkins Agent AMI Builder Deployment Complete"
+          - "=========================================="
+          - "Stack: {{ stack_name }}"
+          - "Environment: {{ env }}"
+          - ""
+          - "Image Pipeline x86_64 ARN:"
+          - "  {{ agent_ami_outputs.imagePipelineX86Arn | default('N/A') }}"
+          - ""
+          - "Image Pipeline ARM64 ARN:"
+          - "  {{ agent_ami_outputs.imagePipelineArmArn | default('N/A') }}"
+          - ""
+          - "To build AMIs manually, run:"
+          - "  aws imagebuilder start-image-pipeline-execution \\"
+          - "    --image-pipeline-arn {{ agent_ami_outputs.imagePipelineX86Arn | default('N/A') }}"
+          - ""
+          - "  aws imagebuilder start-image-pipeline-execution \\"
+          - "    --image-pipeline-arn {{ agent_ami_outputs.imagePipelineArmArn | default('N/A') }}"
+          - ""
+          - "After AMIs are built, update SSM parameters:"
+          - "  aws ssm put-parameter \\"
+          - "    --name /{{ project_name }}/{{ env }}/jenkins/agent/custom-ami-x86 \\"
+          - "    --value ami-xxxxxxxxx --overwrite"
+          - ""
+          - "  aws ssm put-parameter \\"
+          - "    --name /{{ project_name }}/{{ env }}/jenkins/agent/custom-ami-arm \\"
+          - "    --value ami-xxxxxxxxx --overwrite"
+          - "=========================================="
+      when: agent_ami_outputs is defined
+    
+    - name: Optionally trigger AMI build
+      ansible.builtin.debug:
+        msg: "Auto-build is disabled. Run Image Builder pipelines manually when ready."
+      when: not (build_ami_on_deploy | default(false))
+    
+    - name: Set deployment success flag
+      ansible.builtin.set_fact:
+        agent_ami_deployed: true
+  
+  rescue:
+    - name: Display deployment failure message
+      ansible.builtin.debug:
+        msg:
+          - "ERROR: Agent AMI Builder deployment failed"
+          - "Please check the error messages above for details"
+    
+    - name: Set deployment failure flag
+      ansible.builtin.set_fact:
+        agent_ami_deployed: false
+    
+    - name: Fail the playbook
+      ansible.builtin.fail:
+        msg: "Agent AMI Builder deployment failed"
