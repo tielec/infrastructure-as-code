@@ -16,14 +16,14 @@ const environment = pulumi.getStack();
 const networkStackName = config.get("networkStackName") || "jenkins-network";
 const securityStackName = config.get("securityStackName") || "jenkins-security";
 
-// 既存のスタックから値を取得
+// 既存のスタックから値を取得（必須）
 const networkStack = new pulumi.StackReference(`${pulumi.getOrganization()}/${networkStackName}/${environment}`);
 const securityStack = new pulumi.StackReference(`${pulumi.getOrganization()}/${securityStackName}/${environment}`);
 
 // 必要なリソースIDを取得
-const vpcId = networkStack.getOutput("vpcId");
-const publicSubnetIds = networkStack.getOutput("publicSubnetIds");
-const jenkinsAgentSecurityGroupId = securityStack.getOutput("jenkinsAgentSecurityGroupId");
+const vpcId = networkStack.requireOutput("vpcId");
+const publicSubnetIds = networkStack.requireOutput("publicSubnetIds");
+const jenkinsAgentSecurityGroupId = securityStack.requireOutput("jenkinsAgentSecurityGroupId");
 
 // IAMロール（EC2 Image Builder用）
 const imageBuilderRole = new aws.iam.Role(`${projectName}-imagebuilder-role`, {
