@@ -9,6 +9,8 @@
         pulumi_dir: "{{ pulumi_path }}/jenkins-agent-ami"
         env: "{{ env_name }}"
         aws_region: "{{ aws_region_name }}"
+        network_project_name: "{{ infra.pulumi.network_project | default('jenkins-network') }}"
+        security_project_name: "{{ infra.pulumi.security_project | default('jenkins-security') }}"
     
     - name: Check if Pulumi directory exists
       ansible.builtin.stat:
@@ -97,6 +99,7 @@
           - "=========================================="
           - "Stack: {{ stack_name }}"
           - "Environment: {{ env }}"
+          - "Project: {{ project_name }}"
           - ""
           - "Image Pipeline x86_64 ARN:"
           - "  {{ agent_ami_outputs.imagePipelineX86Arn | default('N/A') }}"
