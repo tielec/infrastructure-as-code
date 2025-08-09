@@ -13,14 +13,17 @@ const projectName = config.get("projectName") || "jenkins-infra";
 const environment = pulumi.getStack();
 
 // バージョン管理（自動インクリメント）
-// 日付ベースのバージョンを生成（例： 1.0.20240809.1）
+// Image Builderは X.Y.Z 形式のセマンティックバージョンのみ受け付ける
 const now = new Date();
-const dateStr = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}`;
-const buildNumber = config.getNumber("buildNumber") || Math.floor(Math.random() * 1000);
+// 日付から一意のパッチバージョンを生成（1日の中での秒数を使用）
+const hours = now.getHours();
+const minutes = now.getMinutes();
+const seconds = now.getSeconds();
+const patchVersion = hours * 3600 + minutes * 60 + seconds; // 0-86399の範囲
 
-// バージョンフォーマット: major.minor.date.build
-const componentVersion = config.get("componentVersion") || `1.0.${dateStr}.${buildNumber}`;
-const recipeVersion = config.get("recipeVersion") || `1.0.${dateStr}.${buildNumber}`;
+// バージョンフォーマット: major.minor.patch (X.Y.Z形式)
+const componentVersion = config.get("componentVersion") || `1.0.${patchVersion}`;
+const recipeVersion = config.get("recipeVersion") || `1.0.${patchVersion}`;
 
 // バージョン情報をログ出力
 console.log(`[INFO] Component Version: ${componentVersion}`);
