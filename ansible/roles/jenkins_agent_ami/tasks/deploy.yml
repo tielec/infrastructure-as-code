@@ -12,6 +12,90 @@
         network_project_name: "{{ infra.pulumi.network_project | default('jenkins-network') }}"
         security_project_name: "{{ infra.pulumi.security_project | default('jenkins-security') }}"
     
+    # Check for existing Image Builder resources and handle dependencies
+    - name: Check for existing Image Builder pipelines
+      ansible.builtin.include_tasks: "{{ role_path }}/../aws_cli_helper/tasks/execute.yml"
+      vars:
+        aws_command: "aws imagebuilder list-image-pipelines"
+        operation_name: "List existing Image Builder pipelines"
+        parse_output: true
+      register: existing_pipelines
+    
+    - name: Check for existing Image Builder recipes with old versions
+      when: aws_cli_success
+      ansible.builtin.set_fact:
+        old_recipes: >-
+          {{
+            (aws_cli_data.imagePipelineList | default([]))
+            | selectattr('name', 'search', project_name + '-agent-.*-' + env)
+            | list
+          }}
+    
+    - name: Handle existing Image Builder resources
+      when: old_recipes | length > 0
+      block:
+        - name: Display found old resources
+          ansible.builtin.debug:
+            msg: "Found {{ old_recipes | length }} existing Image Builder resources that may need cleanup"
+        
+        # Check for running builds
+        - name: Check for running image builds
+          ansible.builtin.include_tasks: "{{ role_path }}/../aws_cli_helper/tasks/execute.yml"
+          loop: "{{ old_recipes }}"
+          vars:
+            aws_command: >-
+              aws imagebuilder list-image-build-versions 
+              --image-version-arn {{ item.arn | regex_replace('/image-pipeline/', '/image-recipe/') }}
+              --filters name=state,values=BUILDING,DISTRIBUTING,INTEGRATING,TESTING
+            operation_name: "Check for running builds for {{ item.name }}"
+            parse_output: true
+        
+        # Try to delete old images first (they depend on recipes)
+        - name: List old images for cleanup
+          ansible.builtin.include_tasks: "{{ role_path }}/../aws_cli_helper/tasks/execute.yml"
+          vars:
+            aws_command: >-
+              aws imagebuilder list-images 
+              --owner Self
+              --filters name=name,values={{ project_name }}-agent-*-{{ env }}*
+            operation_name: "List old images for cleanup"
+            parse_output: true
+        
+        - name: Delete old image versions
+          when: 
+            - aws_cli_success
+            - aws_cli_data.imageVersionList is defined
+            - aws_cli_data.imageVersionList | length > 0
+          ansible.builtin.include_tasks: "{{ role_path }}/../aws_cli_helper/tasks/execute_with_retry.yml"
+          loop: "{{ aws_cli_data.imageVersionList | default([]) }}"
+          vars:
+            aws_command: >-
+              aws imagebuilder delete-image 
+              --image-build-version-arn {{ item.arn }}
+            operation_name: "Delete old image {{ item.name | default('unknown') }}"
+            max_retries: 3
+            retry_delay: 10
+          ignore_errors: true
+        
+        # Update pipelines to remove recipe dependency
+        - name: Disable old pipelines
+          ansible.builtin.include_tasks: "{{ role_path }}/../aws_cli_helper/tasks/execute_with_retry.yml"
+          loop: "{{ old_recipes }}"
+          vars:
+            aws_command: >-
+              aws imagebuilder update-image-pipeline 
+              --image-pipeline-arn {{ item.arn }}
+              --status DISABLED
+            operation_name: "Disable pipeline {{ item.name }}"
+            max_retries: 3
+            retry_delay: 5
+          ignore_errors: true
+        
+        - name: Wait for resources to stabilize
+          ansible.builtin.pause:
+            seconds: 10
+            prompt: "Waiting for Image Builder resources to stabilize before proceeding..."
+    
     - name: Check if Pulumi directory exists
       ansible.builtin.stat:
         path: "{{ pulumi_dir }}"

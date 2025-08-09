@@ -10,6 +10,107 @@
         env: "{{ env_name }}"
         aws_region: "{{ aws_region_name }}"
     
+    # Clean up Image Builder resources first before Pulumi destroy
+    - name: Clean up Image Builder dependencies
+      block:
+        # List all Image Builder pipelines
+        - name: List Image Builder pipelines
+          ansible.builtin.include_tasks: "{{ role_path }}/../aws_cli_helper/tasks/execute.yml"
+          vars:
+            aws_command: "aws imagebuilder list-image-pipelines"
+            operation_name: "List Image Builder pipelines for cleanup"
+            parse_output: true
+        
+        - name: Filter our pipelines
+          when: aws_cli_success
+          ansible.builtin.set_fact:
+            our_pipelines: >-
+              {{
+                (aws_cli_data.imagePipelineList | default([]))
+                | selectattr('name', 'search', project_name + '-agent-.*-' + env)
+                | list
+              }}
+        
+        # Disable pipelines first
+        - name: Disable Image Builder pipelines
+          when: our_pipelines | default([]) | length > 0
+          ansible.builtin.include_tasks: "{{ role_path }}/../aws_cli_helper/tasks/execute_with_retry.yml"
+          loop: "{{ our_pipelines }}"
+          vars:
+            aws_command: >-
+              aws imagebuilder update-image-pipeline 
+              --image-pipeline-arn {{ item.arn }}
+              --status DISABLED
+            operation_name: "Disable pipeline {{ item.name }}"
+            max_retries: 3
+            retry_delay: 5
+          ignore_errors: true
+        
+        # List and delete images
+        - name: List Image Builder images
+          ansible.builtin.include_tasks: "{{ role_path }}/../aws_cli_helper/tasks/execute.yml"
+          vars:
+            aws_command: >-
+              aws imagebuilder list-images 
+              --owner Self
+              --filters name=name,values={{ project_name }}-agent-*-{{ env }}*
+            operation_name: "List images for cleanup"
+            parse_output: true
+        
+        - name: Delete Image Builder images
+          when: 
+            - aws_cli_success
+            - aws_cli_data.imageVersionList is defined
+            - aws_cli_data.imageVersionList | length > 0
+          ansible.builtin.include_tasks: "{{ role_path }}/../aws_cli_helper/tasks/execute_with_retry.yml"
+          loop: "{{ aws_cli_data.imageVersionList | default([]) }}"
+          vars:
+            aws_command: >-
+              aws imagebuilder delete-image 
+              --image-build-version-arn {{ item.arn }}
+            operation_name: "Delete image {{ item.name | default('unknown') }}"
+            max_retries: 5
+            retry_delay: 10
+          ignore_errors: true
+        
+        # List and delete distributions
+        - name: List Image Builder distribution configurations
+          ansible.builtin.include_tasks: "{{ role_path }}/../aws_cli_helper/tasks/execute.yml"
+          vars:
+            aws_command: "aws imagebuilder list-distribution-configurations"
+            operation_name: "List distribution configurations"
+            parse_output: true
+        
+        - name: Filter our distribution configurations
+          when: aws_cli_success
+          ansible.builtin.set_fact:
+            our_distributions: >-
+              {{
+                (aws_cli_data.distributionConfigurationSummaryList | default([]))
+                | selectattr('name', 'search', project_name + '-agent-.*-' + env)
+                | list
+              }}
+        
+        - name: Delete distribution configurations
+          when: our_distributions | default([]) | length > 0
+          ansible.builtin.include_tasks: "{{ role_path }}/../aws_cli_helper/tasks/execute_with_retry.yml"
+          loop: "{{ our_distributions }}"
+          vars:
+            aws_command: >-
+              aws imagebuilder delete-distribution-configuration 
+              --distribution-configuration-arn {{ item.arn }}
+            operation_name: "Delete distribution {{ item.name }}"
+            max_retries: 3
+            retry_delay: 5
+          ignore_errors: true
+        
+        - name: Wait for Image Builder cleanup to stabilize
+          ansible.builtin.pause:
+            seconds: 15
+            prompt: "Waiting for Image Builder resources to be cleaned up..."
+          when: (our_pipelines | default([]) | length > 0) or (our_distributions | default([]) | length > 0)
+      ignore_errors: true
+    
     - name: Check if Pulumi directory exists
       ansible.builtin.stat:
         path: "{{ pulumi_dir }}"
