@@ -356,6 +356,9 @@ const jenkinsAgentRecipeX86 = new aws.imagebuilder.ImageRecipe(`${projectName}-a
         Environment: environment,
         Architecture: "x86_64",
     },
+}, {
+    // バージョンやコンポーネントが変更される場合は、レシピを置き換える
+    replaceOnChanges: ["version", "components[0].componentArn"],
 });
 
 // Image Recipe（ARM64）
@@ -381,6 +384,9 @@ const jenkinsAgentRecipeArm = new aws.imagebuilder.ImageRecipe(`${projectName}-a
         Environment: environment,
         Architecture: "arm64",
     },
+}, {
+    // バージョンやコンポーネントが変更される場合は、レシピを置き換える
+    replaceOnChanges: ["version", "components[0].componentArn"],
 });
 
 // Infrastructure Configuration（x86_64）
@@ -480,6 +486,10 @@ const imagePipelineX86 = new aws.imagebuilder.ImagePipeline(`${projectName}-agen
         Environment: environment,
         Architecture: "x86_64",
     },
+}, {
+    // レシピが変更される場合は、パイプラインを置き換える
+    replaceOnChanges: ["imageRecipeArn"],
+    deleteBeforeReplace: true,
 });
 
 // Image Pipeline（ARM64）- スケジュール実行なし
@@ -499,6 +509,10 @@ const imagePipelineArm = new aws.imagebuilder.ImagePipeline(`${projectName}-agen
         Environment: environment,
         Architecture: "arm64",
     },
+}, {
+    // レシピが変更される場合は、パイプラインを置き換える
+    replaceOnChanges: ["imageRecipeArn"],
+    deleteBeforeReplace: true,
 });
 
 // カスタムAMI IDを格納するSSMパラメータ（仮の値）
