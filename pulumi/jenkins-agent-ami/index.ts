@@ -321,8 +321,8 @@ const jenkinsAgentRecipeX86 = new aws.imagebuilder.ImageRecipe(`${projectName}-a
         ebs: {
             volumeSize: 30,
             volumeType: "gp3",
-            deleteOnTermination: true,
-            encrypted: true,
+            deleteOnTermination: "true",
+            encrypted: "true",
         },
     }],
     tags: {
@@ -346,8 +346,8 @@ const jenkinsAgentRecipeArm = new aws.imagebuilder.ImageRecipe(`${projectName}-a
         ebs: {
             volumeSize: 30,
             volumeType: "gp3",
-            deleteOnTermination: true,
-            encrypted: true,
+            deleteOnTermination: "true",
+            encrypted: "true",
         },
     }],
     tags: {
