@@ -4,3 +4,4 @@
 dependencies:
   - role: aws_setup
   - role: pulumi_helper
+  - role: aws_cli_helper
