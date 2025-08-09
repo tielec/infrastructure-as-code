@@ -95,6 +95,8 @@ phases:
           commands:
             - dnf install -y docker
             - systemctl enable docker
+            - groupadd -f docker
+            - chmod 666 /var/run/docker.sock || true
 
       - name: InstallJava
         action: ExecuteBash
@@ -128,8 +130,12 @@ phases:
           commands:
             - useradd -m -d /home/jenkins -s /bin/bash jenkins || true
             - usermod -aG docker jenkins
+            - newgrp docker || true
             - mkdir -p /home/jenkins/agent
+            - mkdir -p /home/jenkins/.docker
             - chown -R jenkins:jenkins /home/jenkins
+            - echo '{"group":"docker"}' > /etc/docker/daemon.json || true
+            - chmod 666 /var/run/docker.sock || true
 
       - name: SetupSwap
         action: ExecuteBash
@@ -208,6 +214,8 @@ phases:
           commands:
             - dnf install -y docker
             - systemctl enable docker
+            - groupadd -f docker
+            - chmod 666 /var/run/docker.sock || true
 
       - name: InstallJava
         action: ExecuteBash
@@ -241,8 +249,12 @@ phases:
           commands:
             - useradd -m -d /home/jenkins -s /bin/bash jenkins || true
             - usermod -aG docker jenkins
+            - newgrp docker || true
             - mkdir -p /home/jenkins/agent
+            - mkdir -p /home/jenkins/.docker
             - chown -R jenkins:jenkins /home/jenkins
+            - echo '{"group":"docker"}' > /etc/docker/daemon.json || true
+            - chmod 666 /var/run/docker.sock || true
 
       - name: SetupSwap
         action: ExecuteBash
