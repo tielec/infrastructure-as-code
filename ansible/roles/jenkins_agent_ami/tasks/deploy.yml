@@ -130,22 +130,40 @@
       when: (trigger_ami_build | default(true)) | bool
       block:
         - name: Start x86_64 pipeline execution
-          ansible.builtin.shell: |
-            aws imagebuilder start-image-pipeline-execution \
-              --image-pipeline-arn {{ agent_ami_outputs.imagePipelineX86Arn }} \
-              --region {{ aws_region }}
-          register: x86_pipeline_trigger
           when: agent_ami_outputs.imagePipelineX86Arn is defined
-          ignore_errors: true
+          ansible.builtin.include_role:
+            name: aws_cli_helper
+            tasks_from: execute
+          vars:
+            aws_command: "aws imagebuilder start-image-pipeline-execution --image-pipeline-arn {{ agent_ami_outputs.imagePipelineX86Arn }}"
+            operation_name: "Start x86_64 Image Builder pipeline"
+            parse_output: true
+        
+        - name: Save x86 trigger result
+          ansible.builtin.set_fact:
+            x86_pipeline_trigger:
+              aws_cli_success: "{{ aws_cli_success }}"
+              aws_cli_data: "{{ aws_cli_data | default({}) }}"
+              aws_cli_stdout: "{{ aws_cli_stdout | default('') }}"
+          when: agent_ami_outputs.imagePipelineX86Arn is defined
         
         - name: Start ARM64 pipeline execution
-          ansible.builtin.shell: |
-            aws imagebuilder start-image-pipeline-execution \
-              --image-pipeline-arn {{ agent_ami_outputs.imagePipelineArmArn }} \
-              --region {{ aws_region }}
-          register: arm_pipeline_trigger
           when: agent_ami_outputs.imagePipelineArmArn is defined
-          ignore_errors: true
+          ansible.builtin.include_role:
+            name: aws_cli_helper
+            tasks_from: execute
+          vars:
+            aws_command: "aws imagebuilder start-image-pipeline-execution --image-pipeline-arn {{ agent_ami_outputs.imagePipelineArmArn }}"
+            operation_name: "Start ARM64 Image Builder pipeline"
+            parse_output: true
+        
+        - name: Save ARM trigger result
+          ansible.builtin.set_fact:
+            arm_pipeline_trigger:
+              aws_cli_success: "{{ aws_cli_success }}"
+              aws_cli_data: "{{ aws_cli_data | default({}) }}"
+              aws_cli_stdout: "{{ aws_cli_stdout | default('') }}"
+          when: agent_ami_outputs.imagePipelineArmArn is defined
         
         - name: Display pipeline trigger results
           ansible.builtin.debug:
@@ -153,8 +171,8 @@
               - "=========================================="
               - "Image Builder Pipelines Triggered"
               - "=========================================="
-              - "x86_64: {{ 'Started' if x86_pipeline_trigger is succeeded else 'Failed or Skipped' }}"
-              - "ARM64: {{ 'Started' if arm_pipeline_trigger is succeeded else 'Failed or Skipped' }}"
+              - "x86_64: {{ 'Started' if x86_pipeline_trigger is defined and x86_pipeline_trigger.aws_cli_success else 'Failed or Skipped' }}"
+              - "ARM64: {{ 'Started' if arm_pipeline_trigger is defined and arm_pipeline_trigger.aws_cli_success else 'Failed or Skipped' }}"
               - ""
               - "AMI builds typically take 30-45 minutes to complete."
               - "Monitor progress in AWS Console or with:"
@@ -174,7 +192,7 @@
         - name: Include AMI cleanup tasks
           ansible.builtin.include_tasks: cleanup_amis.yml
           vars:
-            retention_count: 3  # 保持するAMIの数を直接指定
+            retention_count: 2  # 保持するAMIの数（最新2つを保持）
             ami_prefix: "{{ project_name }}-agent"
     
     - name: Set deployment success flag

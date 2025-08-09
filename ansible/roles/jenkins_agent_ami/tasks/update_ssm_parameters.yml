@@ -5,107 +5,151 @@
 - name: Monitor Image Builder pipelines and update SSM parameters
   block:
     - name: Get x86_64 pipeline execution status
-      when: x86_pipeline_trigger is defined and x86_pipeline_trigger is succeeded
-      ansible.builtin.shell: |
-        # Get the latest build version ARN from the trigger response
-        echo '{{ x86_pipeline_trigger.stdout | default("{}") }}' | jq -r '.imageBuildVersionArn'
-      register: x86_build_version_arn
-      changed_when: false
+      when: x86_pipeline_trigger is defined and x86_pipeline_trigger.aws_cli_data is defined
+      ansible.builtin.set_fact:
+        x86_build_version_arn:
+          stdout: "{{ x86_pipeline_trigger.aws_cli_data.imageBuildVersionArn | default('null') }}"
     
     - name: Get ARM64 pipeline execution status
-      when: arm_pipeline_trigger is defined and arm_pipeline_trigger is succeeded
-      ansible.builtin.shell: |
-        # Get the latest build version ARN from the trigger response
-        echo '{{ arm_pipeline_trigger.stdout | default("{}") }}' | jq -r '.imageBuildVersionArn'
-      register: arm_build_version_arn
-      changed_when: false
+      when: arm_pipeline_trigger is defined and arm_pipeline_trigger.aws_cli_data is defined
+      ansible.builtin.set_fact:
+        arm_build_version_arn:
+          stdout: "{{ arm_pipeline_trigger.aws_cli_data.imageBuildVersionArn | default('null') }}"
     
     - name: Wait for Image Builder pipelines to complete
       when: wait_for_ami_build | default(false) | bool
       block:
         - name: Monitor x86_64 build status
           when: x86_build_version_arn is defined and x86_build_version_arn.stdout != 'null'
-          ansible.builtin.shell: |
-            aws imagebuilder get-image \
-              --image-build-version-arn {{ x86_build_version_arn.stdout }} \
-              --region {{ aws_region }} \
-              --query 'image.state.status' \
+          ansible.builtin.include_role:
+            name: aws_cli_helper
+            tasks_from: execute_with_retry
+          vars:
+            aws_command: |
+              aws imagebuilder get-image 
+              --image-build-version-arn {{ x86_build_version_arn.stdout }} 
+              --query 'image.state.status' 
               --output text
-          register: x86_build_status
-          until: x86_build_status.stdout in ['AVAILABLE', 'FAILED', 'CANCELLED']
+            operation_name: "Check x86_64 build status"
+            parse_output: false
+            max_retries: 60
+            retry_delay: 60
+          until: aws_cli_stdout in ['AVAILABLE', 'FAILED', 'CANCELLED']
           retries: 60  # 60 retries with 60 second delay = 1 hour max
           delay: 60
-          changed_when: false
         
         - name: Monitor ARM64 build status
           when: arm_build_version_arn is defined and arm_build_version_arn.stdout != 'null'
-          ansible.builtin.shell: |
-            aws imagebuilder get-image \
-              --image-build-version-arn {{ arm_build_version_arn.stdout }} \
-              --region {{ aws_region }} \
-              --query 'image.state.status' \
+          ansible.builtin.include_role:
+            name: aws_cli_helper
+            tasks_from: execute_with_retry
+          vars:
+            aws_command: |
+              aws imagebuilder get-image 
+              --image-build-version-arn {{ arm_build_version_arn.stdout }} 
+              --query 'image.state.status' 
               --output text
-          register: arm_build_status
-          until: arm_build_status.stdout in ['AVAILABLE', 'FAILED', 'CANCELLED']
+            operation_name: "Check ARM64 build status"
+            parse_output: false
+            max_retries: 60
+            retry_delay: 60
+          until: aws_cli_stdout in ['AVAILABLE', 'FAILED', 'CANCELLED']
           retries: 60
           delay: 60
-          changed_when: false
     
     # Get the latest available AMI IDs from Image Builder
     - name: Get latest x86_64 AMI from Image Builder
-      ansible.builtin.shell: |
-        aws imagebuilder list-image-pipeline-images \
-          --image-pipeline-arn {{ agent_ami_outputs.imagePipelineX86Arn }} \
-          --region {{ aws_region }} \
-          --query 'imageSummaryList[?state.status==`AVAILABLE`] | [0].outputResources.amis[0].image' \
-          --output text
-      register: latest_x86_ami
       when: agent_ami_outputs.imagePipelineX86Arn is defined
-      changed_when: false
-      ignore_errors: true
+      ansible.builtin.include_role:
+        name: aws_cli_helper
+        tasks_from: execute
+      vars:
+        aws_command: |
+          aws imagebuilder list-image-pipeline-images 
+          --image-pipeline-arn {{ agent_ami_outputs.imagePipelineX86Arn }} 
+          --query 'imageSummaryList[?state.status==`AVAILABLE`] | [0].outputResources.amis[0].image' 
+          --output text
+        operation_name: "Get latest x86_64 AMI"
+        parse_output: false
+    
+    - name: Save x86 AMI result
+      ansible.builtin.set_fact:
+        latest_x86_ami: "{{ aws_cli_result }}"
+      when: agent_ami_outputs.imagePipelineX86Arn is defined
     
     - name: Get latest ARM64 AMI from Image Builder
-      ansible.builtin.shell: |
-        aws imagebuilder list-image-pipeline-images \
-          --image-pipeline-arn {{ agent_ami_outputs.imagePipelineArmArn }} \
-          --region {{ aws_region }} \
-          --query 'imageSummaryList[?state.status==`AVAILABLE`] | [0].outputResources.amis[0].image' \
-          --output text
-      register: latest_arm_ami
       when: agent_ami_outputs.imagePipelineArmArn is defined
-      changed_when: false
-      ignore_errors: true
+      ansible.builtin.include_role:
+        name: aws_cli_helper
+        tasks_from: execute
+      vars:
+        aws_command: |
+          aws imagebuilder list-image-pipeline-images 
+          --image-pipeline-arn {{ agent_ami_outputs.imagePipelineArmArn }} 
+          --query 'imageSummaryList[?state.status==`AVAILABLE`] | [0].outputResources.amis[0].image' 
+          --output text
+        operation_name: "Get latest ARM64 AMI"
+        parse_output: false
+    
+    - name: Save ARM AMI result
+      ansible.builtin.set_fact:
+        latest_arm_ami: "{{ aws_cli_result }}"
+      when: agent_ami_outputs.imagePipelineArmArn is defined
     
     # Update SSM parameters with new AMI IDs
     - name: Update x86_64 AMI ID in SSM Parameter Store
       when: 
-        - latest_x86_ami is succeeded
+        - latest_x86_ami is defined
+        - latest_x86_ami.rc == 0
         - latest_x86_ami.stdout != ""
         - latest_x86_ami.stdout != "None"
         - latest_x86_ami.stdout != "null"
-      ansible.builtin.shell: |
-        aws ssm put-parameter \
-          --name "/{{ project_name }}/{{ env }}/jenkins/agent/custom-ami-x86" \
-          --value "{{ latest_x86_ami.stdout }}" \
-          --type "String" \
-          --overwrite \
-          --region {{ aws_region }}
-      register: x86_ssm_update
+      ansible.builtin.include_role:
+        name: ssm_parameter_store
+        tasks_from: set_parameter
+      vars:
+        parameter_name: "/{{ project_name }}/{{ env }}/jenkins/agent/custom-ami-x86"
+        parameter_value: "{{ latest_x86_ami.stdout }}"
+        parameter_type: "String"
+        description: "Jenkins Agent x86_64 AMI ID created by Image Builder"
+    
+    - name: Save x86 SSM update result
+      ansible.builtin.set_fact:
+        x86_ssm_update:
+          rc: "{{ 0 if ssm_operation_success | default(false) else 1 }}"
+      when: 
+        - latest_x86_ami is defined
+        - latest_x86_ami.rc == 0
+        - latest_x86_ami.stdout != ""
+        - latest_x86_ami.stdout != "None"
+        - latest_x86_ami.stdout != "null"
     
     - name: Update ARM64 AMI ID in SSM Parameter Store
       when:
-        - latest_arm_ami is succeeded
+        - latest_arm_ami is defined
+        - latest_arm_ami.rc == 0
         - latest_arm_ami.stdout != ""
         - latest_arm_ami.stdout != "None"
         - latest_arm_ami.stdout != "null"
-      ansible.builtin.shell: |
-        aws ssm put-parameter \
-          --name "/{{ project_name }}/{{ env }}/jenkins/agent/custom-ami-arm" \
-          --value "{{ latest_arm_ami.stdout }}" \
-          --type "String" \
-          --overwrite \
-          --region {{ aws_region }}
-      register: arm_ssm_update
+      ansible.builtin.include_role:
+        name: ssm_parameter_store
+        tasks_from: set_parameter
+      vars:
+        parameter_name: "/{{ project_name }}/{{ env }}/jenkins/agent/custom-ami-arm"
+        parameter_value: "{{ latest_arm_ami.stdout }}"
+        parameter_type: "String"
+        description: "Jenkins Agent ARM64 AMI ID created by Image Builder"
+    
+    - name: Save ARM SSM update result
+      ansible.builtin.set_fact:
+        arm_ssm_update:
+          rc: "{{ 0 if ssm_operation_success | default(false) else 1 }}"
+      when:
+        - latest_arm_ami is defined
+        - latest_arm_ami.rc == 0
+        - latest_arm_ami.stdout != ""
+        - latest_arm_ami.stdout != "None"
+        - latest_arm_ami.stdout != "null"
     
     # Display update results
     - name: Display SSM parameter update results
@@ -116,17 +160,17 @@
           - "=========================================="
           - "x86_64 AMI:"
           - "  AMI ID: {{ latest_x86_ami.stdout | default('Not available') }}"
-          - "  SSM Update: {{ 'Success' if x86_ssm_update is defined and x86_ssm_update is succeeded else 'Skipped or Failed' }}"
+          - "  SSM Update: {{ 'Success' if x86_ssm_update is defined and x86_ssm_update.rc == 0 else 'Skipped or Failed' }}"
           - ""
           - "ARM64 AMI:"
           - "  AMI ID: {{ latest_arm_ami.stdout | default('Not available') }}"
-          - "  SSM Update: {{ 'Success' if arm_ssm_update is defined and arm_ssm_update is succeeded else 'Skipped or Failed' }}"
+          - "  SSM Update: {{ 'Success' if arm_ssm_update is defined and arm_ssm_update.rc == 0 else 'Skipped or Failed' }}"
           - ""
           - "Note: Jenkins Agent stack needs to be redeployed to use new AMIs"
           - "  ansible-playbook deploy_jenkins_agent.yml -e env={{ env }}"
           - "=========================================="
-      when: (x86_ssm_update is defined and x86_ssm_update is succeeded) or
-            (arm_ssm_update is defined and arm_ssm_update is succeeded)
+      when: (x86_ssm_update is defined and x86_ssm_update.rc == 0) or
+            (arm_ssm_update is defined and arm_ssm_update.rc == 0)
 
   rescue:
     - name: Display SSM update error
