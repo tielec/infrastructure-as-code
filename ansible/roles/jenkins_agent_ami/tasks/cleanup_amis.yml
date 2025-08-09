@@ -1,0 +1,155 @@
+---
+# Clean up old Jenkins Agent AMIs
+# Variables:
+#   ami_retention_count: Number of AMIs to keep (default: 3)
+#   ami_prefix: AMI name prefix to filter (e.g., "jenkins-agent")
+#   env: Environment name
+
+- name: Clean up old Jenkins Agent AMIs
+  block:
+    - name: List all Jenkins Agent AMIs for x86_64
+      ansible.builtin.shell: |
+        aws ec2 describe-images \
+          --owners self \
+          --filters \
+            "Name=name,Values={{ ami_prefix }}-x86-{{ env }}-*" \
+            "Name=state,Values=available" \
+          --query 'Images | sort_by(@, &CreationDate) | reverse(@)' \
+          --region {{ aws_region }} \
+          --output json
+      register: x86_amis_result
+      changed_when: false
+    
+    - name: Parse x86_64 AMIs
+      ansible.builtin.set_fact:
+        x86_amis: "{{ x86_amis_result.stdout | from_json }}"
+      when: x86_amis_result.stdout | length > 0
+    
+    - name: List all Jenkins Agent AMIs for ARM64
+      ansible.builtin.shell: |
+        aws ec2 describe-images \
+          --owners self \
+          --filters \
+            "Name=name,Values={{ ami_prefix }}-arm-{{ env }}-*" \
+            "Name=state,Values=available" \
+          --query 'Images | sort_by(@, &CreationDate) | reverse(@)' \
+          --region {{ aws_region }} \
+          --output json
+      register: arm_amis_result
+      changed_when: false
+    
+    - name: Parse ARM64 AMIs
+      ansible.builtin.set_fact:
+        arm_amis: "{{ arm_amis_result.stdout | from_json }}"
+      when: arm_amis_result.stdout | length > 0
+    
+    - name: Identify x86_64 AMIs to delete
+      ansible.builtin.set_fact:
+        x86_amis_to_delete: "{{ x86_amis[ami_retention_count:] | default([]) }}"
+      when: 
+        - x86_amis is defined
+        - x86_amis | length > ami_retention_count | int
+    
+    - name: Identify ARM64 AMIs to delete
+      ansible.builtin.set_fact:
+        arm_amis_to_delete: "{{ arm_amis[ami_retention_count:] | default([]) }}"
+      when:
+        - arm_amis is defined
+        - arm_amis | length > ami_retention_count | int
+    
+    - name: Display AMI cleanup summary
+      ansible.builtin.debug:
+        msg:
+          - "=========================================="
+          - "AMI Cleanup Summary"
+          - "=========================================="
+          - "x86_64 AMIs:"
+          - "  Total: {{ x86_amis | default([]) | length }}"
+          - "  To Keep: {{ ami_retention_count }}"
+          - "  To Delete: {{ x86_amis_to_delete | default([]) | length }}"
+          - ""
+          - "ARM64 AMIs:"
+          - "  Total: {{ arm_amis | default([]) | length }}"
+          - "  To Keep: {{ ami_retention_count }}"
+          - "  To Delete: {{ arm_amis_to_delete | default([]) | length }}"
+          - "=========================================="
+    
+    # Delete old x86_64 AMIs
+    - name: Deregister old x86_64 AMIs
+      when: x86_amis_to_delete is defined and x86_amis_to_delete | length > 0
+      ansible.builtin.shell: |
+        aws ec2 deregister-image \
+          --image-id {{ item.ImageId }} \
+          --region {{ aws_region }}
+      loop: "{{ x86_amis_to_delete }}"
+      register: x86_deregister_result
+      ignore_errors: true
+      loop_control:
+        label: "{{ item.Name }} ({{ item.ImageId }})"
+    
+    # Delete associated snapshots for x86_64
+    - name: Delete snapshots for old x86_64 AMIs
+      when: x86_amis_to_delete is defined and x86_amis_to_delete | length > 0
+      ansible.builtin.shell: |
+        {% for device in item.BlockDeviceMappings %}
+        {% if device.Ebs is defined and device.Ebs.SnapshotId is defined %}
+        aws ec2 delete-snapshot \
+          --snapshot-id {{ device.Ebs.SnapshotId }} \
+          --region {{ aws_region }} || true
+        {% endif %}
+        {% endfor %}
+      loop: "{{ x86_amis_to_delete }}"
+      register: x86_snapshot_delete
+      ignore_errors: true
+      loop_control:
+        label: "{{ item.Name }} ({{ item.ImageId }})"
+    
+    # Delete old ARM64 AMIs
+    - name: Deregister old ARM64 AMIs
+      when: arm_amis_to_delete is defined and arm_amis_to_delete | length > 0
+      ansible.builtin.shell: |
+        aws ec2 deregister-image \
+          --image-id {{ item.ImageId }} \
+          --region {{ aws_region }}
+      loop: "{{ arm_amis_to_delete }}"
+      register: arm_deregister_result
+      ignore_errors: true
+      loop_control:
+        label: "{{ item.Name }} ({{ item.ImageId }})"
+    
+    # Delete associated snapshots for ARM64
+    - name: Delete snapshots for old ARM64 AMIs
+      when: arm_amis_to_delete is defined and arm_amis_to_delete | length > 0
+      ansible.builtin.shell: |
+        {% for device in item.BlockDeviceMappings %}
+        {% if device.Ebs is defined and device.Ebs.SnapshotId is defined %}
+        aws ec2 delete-snapshot \
+          --snapshot-id {{ device.Ebs.SnapshotId }} \
+          --region {{ aws_region }} || true
+        {% endif %}
+        {% endfor %}
+      loop: "{{ arm_amis_to_delete }}"
+      register: arm_snapshot_delete
+      ignore_errors: true
+      loop_control:
+        label: "{{ item.Name }} ({{ item.ImageId }})"
+    
+    - name: Display cleanup results
+      ansible.builtin.debug:
+        msg:
+          - "=========================================="
+          - "AMI Cleanup Complete"
+          - "=========================================="
+          - "x86_64 AMIs deleted: {{ x86_amis_to_delete | default([]) | length }}"
+          - "ARM64 AMIs deleted: {{ arm_amis_to_delete | default([]) | length }}"
+          - "=========================================="
+      when: (x86_amis_to_delete is defined and x86_amis_to_delete | length > 0) or
+            (arm_amis_to_delete is defined and arm_amis_to_delete | length > 0)
+
+  rescue:
+    - name: Display cleanup error
+      ansible.builtin.debug:
+        msg:
+          - "WARNING: AMI cleanup encountered errors"
+          - "Some old AMIs may not have been deleted"
+          - "Please check manually in AWS Console"

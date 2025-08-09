@@ -10,7 +10,12 @@ env_name: "{{ env | default('dev') }}"
 # pulumi_backend_url is defined in pulumi_helper role
 
 # AMI Builder specific settings
-build_ami_on_deploy: false  # Set to true to automatically trigger AMI build on deployment
+build_ami_on_deploy: false      # Deprecated - use trigger_ami_build instead
+trigger_ami_build: true         # Automatically trigger pipeline execution after deployment
+update_ssm_with_ami: true       # Automatically update SSM parameters with new AMI IDs
+wait_for_ami_build: false       # Wait for AMI build to complete (can take 30-45 minutes)
+cleanup_old_amis: true          # Automatically delete old AMIs
+ami_retention_count: 3          # Number of AMIs to keep per architecture
 
 # Operation mode
 operation: deploy  # Options: deploy, destroy

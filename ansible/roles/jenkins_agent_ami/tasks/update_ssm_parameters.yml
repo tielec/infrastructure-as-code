@@ -1,0 +1,137 @@
+---
+# Update SSM parameters with built AMI IDs
+# This task monitors Image Builder pipeline execution and updates SSM parameters when complete
+
+- name: Monitor Image Builder pipelines and update SSM parameters
+  block:
+    - name: Get x86_64 pipeline execution status
+      when: x86_pipeline_trigger is defined and x86_pipeline_trigger is succeeded
+      ansible.builtin.shell: |
+        # Get the latest build version ARN from the trigger response
+        echo '{{ x86_pipeline_trigger.stdout | default("{}") }}' | jq -r '.imageBuildVersionArn'
+      register: x86_build_version_arn
+      changed_when: false
+    
+    - name: Get ARM64 pipeline execution status
+      when: arm_pipeline_trigger is defined and arm_pipeline_trigger is succeeded
+      ansible.builtin.shell: |
+        # Get the latest build version ARN from the trigger response
+        echo '{{ arm_pipeline_trigger.stdout | default("{}") }}' | jq -r '.imageBuildVersionArn'
+      register: arm_build_version_arn
+      changed_when: false
+    
+    - name: Wait for Image Builder pipelines to complete
+      when: wait_for_ami_build | default(false) | bool
+      block:
+        - name: Monitor x86_64 build status
+          when: x86_build_version_arn is defined and x86_build_version_arn.stdout != 'null'
+          ansible.builtin.shell: |
+            aws imagebuilder get-image \
+              --image-build-version-arn {{ x86_build_version_arn.stdout }} \
+              --region {{ aws_region }} \
+              --query 'image.state.status' \
+              --output text
+          register: x86_build_status
+          until: x86_build_status.stdout in ['AVAILABLE', 'FAILED', 'CANCELLED']
+          retries: 60  # 60 retries with 60 second delay = 1 hour max
+          delay: 60
+          changed_when: false
+        
+        - name: Monitor ARM64 build status
+          when: arm_build_version_arn is defined and arm_build_version_arn.stdout != 'null'
+          ansible.builtin.shell: |
+            aws imagebuilder get-image \
+              --image-build-version-arn {{ arm_build_version_arn.stdout }} \
+              --region {{ aws_region }} \
+              --query 'image.state.status' \
+              --output text
+          register: arm_build_status
+          until: arm_build_status.stdout in ['AVAILABLE', 'FAILED', 'CANCELLED']
+          retries: 60
+          delay: 60
+          changed_when: false
+    
+    # Get the latest available AMI IDs from Image Builder
+    - name: Get latest x86_64 AMI from Image Builder
+      ansible.builtin.shell: |
+        aws imagebuilder list-image-pipeline-images \
+          --image-pipeline-arn {{ agent_ami_outputs.imagePipelineX86Arn }} \
+          --region {{ aws_region }} \
+          --query 'imageSummaryList[?state.status==`AVAILABLE`] | [0].outputResources.amis[0].image' \
+          --output text
+      register: latest_x86_ami
+      when: agent_ami_outputs.imagePipelineX86Arn is defined
+      changed_when: false
+      ignore_errors: true
+    
+    - name: Get latest ARM64 AMI from Image Builder
+      ansible.builtin.shell: |
+        aws imagebuilder list-image-pipeline-images \
+          --image-pipeline-arn {{ agent_ami_outputs.imagePipelineArmArn }} \
+          --region {{ aws_region }} \
+          --query 'imageSummaryList[?state.status==`AVAILABLE`] | [0].outputResources.amis[0].image' \
+          --output text
+      register: latest_arm_ami
+      when: agent_ami_outputs.imagePipelineArmArn is defined
+      changed_when: false
+      ignore_errors: true
+    
+    # Update SSM parameters with new AMI IDs
+    - name: Update x86_64 AMI ID in SSM Parameter Store
+      when: 
+        - latest_x86_ami is succeeded
+        - latest_x86_ami.stdout != ""
+        - latest_x86_ami.stdout != "None"
+        - latest_x86_ami.stdout != "null"
+      ansible.builtin.shell: |
+        aws ssm put-parameter \
+          --name "/{{ project_name }}/{{ env }}/jenkins/agent/custom-ami-x86" \
+          --value "{{ latest_x86_ami.stdout }}" \
+          --type "String" \
+          --overwrite \
+          --region {{ aws_region }}
+      register: x86_ssm_update
+    
+    - name: Update ARM64 AMI ID in SSM Parameter Store
+      when:
+        - latest_arm_ami is succeeded
+        - latest_arm_ami.stdout != ""
+        - latest_arm_ami.stdout != "None"
+        - latest_arm_ami.stdout != "null"
+      ansible.builtin.shell: |
+        aws ssm put-parameter \
+          --name "/{{ project_name }}/{{ env }}/jenkins/agent/custom-ami-arm" \
+          --value "{{ latest_arm_ami.stdout }}" \
+          --type "String" \
+          --overwrite \
+          --region {{ aws_region }}
+      register: arm_ssm_update
+    
+    # Display update results
+    - name: Display SSM parameter update results
+      ansible.builtin.debug:
+        msg:
+          - "=========================================="
+          - "SSM Parameter Update Results"
+          - "=========================================="
+          - "x86_64 AMI:"
+          - "  AMI ID: {{ latest_x86_ami.stdout | default('Not available') }}"
+          - "  SSM Update: {{ 'Success' if x86_ssm_update is defined and x86_ssm_update is succeeded else 'Skipped or Failed' }}"
+          - ""
+          - "ARM64 AMI:"
+          - "  AMI ID: {{ latest_arm_ami.stdout | default('Not available') }}"
+          - "  SSM Update: {{ 'Success' if arm_ssm_update is defined and arm_ssm_update is succeeded else 'Skipped or Failed' }}"
+          - ""
+          - "Note: Jenkins Agent stack needs to be redeployed to use new AMIs"
+          - "  ansible-playbook deploy_jenkins_agent.yml -e env={{ env }}"
+          - "=========================================="
+      when: (x86_ssm_update is defined and x86_ssm_update is succeeded) or
+            (arm_ssm_update is defined and arm_ssm_update is succeeded)
+
+  rescue:
+    - name: Display SSM update error
+      ansible.builtin.debug:
+        msg:
+          - "WARNING: Failed to update SSM parameters with new AMI IDs"
+          - "You may need to update them manually after builds complete"
+          - "Use: aws ssm put-parameter --name /{{ project_name }}/{{ env }}/jenkins/agent/custom-ami-[x86|arm] --value ami-xxxxx --overwrite"

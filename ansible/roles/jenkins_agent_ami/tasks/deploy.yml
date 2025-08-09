@@ -125,10 +125,57 @@
           - "=========================================="
       when: agent_ami_outputs is defined
     
-    - name: Optionally trigger AMI build
-      ansible.builtin.debug:
-        msg: "Auto-build is disabled. Run Image Builder pipelines manually when ready."
-      when: not (build_ami_on_deploy | default(false))
+    # パイプラインを自動トリガー（デフォルトで有効）
+    - name: Trigger Image Builder pipelines
+      when: (trigger_ami_build | default(true)) | bool
+      block:
+        - name: Start x86_64 pipeline execution
+          ansible.builtin.shell: |
+            aws imagebuilder start-image-pipeline-execution \
+              --image-pipeline-arn {{ agent_ami_outputs.imagePipelineX86Arn }} \
+              --region {{ aws_region }}
+          register: x86_pipeline_trigger
+          when: agent_ami_outputs.imagePipelineX86Arn is defined
+          ignore_errors: true
+        
+        - name: Start ARM64 pipeline execution
+          ansible.builtin.shell: |
+            aws imagebuilder start-image-pipeline-execution \
+              --image-pipeline-arn {{ agent_ami_outputs.imagePipelineArmArn }} \
+              --region {{ aws_region }}
+          register: arm_pipeline_trigger
+          when: agent_ami_outputs.imagePipelineArmArn is defined
+          ignore_errors: true
+        
+        - name: Display pipeline trigger results
+          ansible.builtin.debug:
+            msg:
+              - "=========================================="
+              - "Image Builder Pipelines Triggered"
+              - "=========================================="
+              - "x86_64: {{ 'Started' if x86_pipeline_trigger is succeeded else 'Failed or Skipped' }}"
+              - "ARM64: {{ 'Started' if arm_pipeline_trigger is succeeded else 'Failed or Skipped' }}"
+              - ""
+              - "AMI builds typically take 30-45 minutes to complete."
+              - "Monitor progress in AWS Console or with:"
+              - "  aws imagebuilder list-image-build-versions \\"
+              - "    --image-version-arn <pipeline-arn>"
+              - "=========================================="
+    
+    # SSMパラメータの更新（最新のAMI IDを登録）
+    - name: Update SSM parameters with built AMI IDs
+      when: (update_ssm_with_ami | default(true)) | bool
+      ansible.builtin.include_tasks: update_ssm_parameters.yml
+    
+    # 古いAMIのクリーンアップ
+    - name: Clean up old AMIs
+      when: (cleanup_old_amis | default(true)) | bool
+      block:
+        - name: Include AMI cleanup tasks
+          ansible.builtin.include_tasks: cleanup_amis.yml
+          vars:
+            ami_retention_count: "{{ ami_retention_count | default(3) }}"
+            ami_prefix: "{{ project_name }}-agent"
     
     - name: Set deployment success flag
       ansible.builtin.set_fact:
