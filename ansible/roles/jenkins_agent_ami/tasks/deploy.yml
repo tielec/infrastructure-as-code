@@ -174,7 +174,7 @@
         - name: Include AMI cleanup tasks
           ansible.builtin.include_tasks: cleanup_amis.yml
           vars:
-            ami_retention_count: "{{ ami_retention_count | default(3) }}"
+            retention_count: 3  # 保持するAMIの数を直接指定
             ami_prefix: "{{ project_name }}-agent"
     
     - name: Set deployment success flag

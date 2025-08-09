@@ -1,7 +1,7 @@
 ---
 # Clean up old Jenkins Agent AMIs
 # Variables:
-#   ami_retention_count: Number of AMIs to keep (default: 3)
+#   retention_count: Number of AMIs to keep (default: 3)
 #   ami_prefix: AMI name prefix to filter (e.g., "jenkins-agent")
 #   env: Environment name
 
@@ -45,17 +45,17 @@
     
     - name: Identify x86_64 AMIs to delete
       ansible.builtin.set_fact:
-        x86_amis_to_delete: "{{ x86_amis[ami_retention_count:] | default([]) }}"
+        x86_amis_to_delete: "{{ x86_amis[retention_count | int:] | default([]) }}"
       when: 
         - x86_amis is defined
-        - x86_amis | length > ami_retention_count | int
+        - x86_amis | length > retention_count | int
     
     - name: Identify ARM64 AMIs to delete
       ansible.builtin.set_fact:
-        arm_amis_to_delete: "{{ arm_amis[ami_retention_count:] | default([]) }}"
+        arm_amis_to_delete: "{{ arm_amis[retention_count | int:] | default([]) }}"
       when:
         - arm_amis is defined
-        - arm_amis | length > ami_retention_count | int
+        - arm_amis | length > retention_count | int
     
     - name: Display AMI cleanup summary
       ansible.builtin.debug:
@@ -65,12 +65,12 @@
           - "=========================================="
           - "x86_64 AMIs:"
           - "  Total: {{ x86_amis | default([]) | length }}"
-          - "  To Keep: {{ ami_retention_count }}"
+          - "  To Keep: {{ retention_count }}"
           - "  To Delete: {{ x86_amis_to_delete | default([]) | length }}"
           - ""
           - "ARM64 AMIs:"
           - "  Total: {{ arm_amis | default([]) | length }}"
-          - "  To Keep: {{ ami_retention_count }}"
+          - "  To Keep: {{ retention_count }}"
           - "  To Delete: {{ arm_amis_to_delete | default([]) | length }}"
           - "=========================================="
     
