@@ -14,7 +14,7 @@ const environment = pulumi.getStack();
 
 // バージョン管理（自動インクリメント）
 // Image Builderは X.Y.Z 形式のセマンティックバージョンのみ受け付ける
-// 各セグメントは2147483647以下である必要がある
+// 各セグメントは整数で、通常は 0-999999 の範囲を推奨
 const now = new Date();
 
 // 日付をマイナーバージョンに（YYMMDD形式）
@@ -23,15 +23,17 @@ const month = String(now.getMonth() + 1).padStart(2, '0');
 const day = String(now.getDate()).padStart(2, '0');
 const dateStr = `${year}${month}${day}`; // 例: 250809
 
-// 時刻をパッチバージョンに（HHMMSS形式）
-const hours = String(now.getHours()).padStart(2, '0');
-const minutes = String(now.getMinutes()).padStart(2, '0');
-const seconds = String(now.getSeconds()).padStart(2, '0');
-const timeStr = `${hours}${minutes}${seconds}`; // 例: 114649
+// 時刻を0-86399の範囲の数値に変換（1日の秒数）
+// これにより、パッチバージョンが有効な範囲内に収まる
+const hours = now.getHours();
+const minutes = now.getMinutes();
+const seconds = now.getSeconds();
+const secondsOfDay = hours * 3600 + minutes * 60 + seconds; // 0-86399
 
-// バージョンフォーマット: 1.YYMMDD.HHMMSS (X.Y.Z形式)
-const componentVersion = config.get("componentVersion") || `1.${dateStr}.${timeStr}`;
-const recipeVersion = config.get("recipeVersion") || `1.${dateStr}.${timeStr}`;
+// バージョンフォーマット: 1.YYMMDD.秒数 (X.Y.Z形式)
+// 例: 1.250809.41809 (11:30:09の場合)
+const componentVersion = config.get("componentVersion") || `1.${dateStr}.${secondsOfDay}`;
+const recipeVersion = config.get("recipeVersion") || `1.${dateStr}.${secondsOfDay}`;
 
 // バージョン情報をログ出力
 console.log(`[INFO] Component Version: ${componentVersion}`);
