@@ -21,41 +21,31 @@
       block:
         - name: Monitor x86_64 build status
           when: x86_build_version_arn is defined and x86_build_version_arn.stdout != 'null'
-          ansible.builtin.include_role:
-            name: aws_cli_helper
-            tasks_from: execute_with_retry
-          vars:
-            aws_command: |
-              aws imagebuilder get-image 
-              --image-build-version-arn {{ x86_build_version_arn.stdout }} 
-              --query 'image.state.status' 
+          ansible.builtin.shell: |
+            aws imagebuilder get-image \
+              --image-build-version-arn {{ x86_build_version_arn.stdout }} \
+              --region {{ aws_region }} \
+              --query 'image.state.status' \
               --output text
-            operation_name: "Check x86_64 build status"
-            parse_output: false
-            max_retries: 60
-            retry_delay: 60
-          until: aws_cli_stdout in ['AVAILABLE', 'FAILED', 'CANCELLED']
+          register: x86_build_status
+          until: x86_build_status.stdout in ['AVAILABLE', 'FAILED', 'CANCELLED']
           retries: 60  # 60 retries with 60 second delay = 1 hour max
           delay: 60
+          changed_when: false
         
         - name: Monitor ARM64 build status
           when: arm_build_version_arn is defined and arm_build_version_arn.stdout != 'null'
-          ansible.builtin.include_role:
-            name: aws_cli_helper
-            tasks_from: execute_with_retry
-          vars:
-            aws_command: |
-              aws imagebuilder get-image 
-              --image-build-version-arn {{ arm_build_version_arn.stdout }} 
-              --query 'image.state.status' 
+          ansible.builtin.shell: |
+            aws imagebuilder get-image \
+              --image-build-version-arn {{ arm_build_version_arn.stdout }} \
+              --region {{ aws_region }} \
+              --query 'image.state.status' \
               --output text
-            operation_name: "Check ARM64 build status"
-            parse_output: false
-            max_retries: 60
-            retry_delay: 60
-          until: aws_cli_stdout in ['AVAILABLE', 'FAILED', 'CANCELLED']
+          register: arm_build_status
+          until: arm_build_status.stdout in ['AVAILABLE', 'FAILED', 'CANCELLED']
           retries: 60
           delay: 60
+          changed_when: false
     
     # Get the latest available AMI IDs from Image Builder
     - name: Get latest x86_64 AMI from Image Builder
