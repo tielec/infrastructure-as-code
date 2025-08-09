@@ -20,49 +20,74 @@
         msg: "Pulumi directory doesn't exist: {{ pulumi_dir }}"
       when: not pulumi_dir_stat.stat.exists
     
-    - name: Initialize agent AMI stack
-      ansible.builtin.include_role:
-        name: pulumi_helper
-        tasks_from: init_stack
-      vars:
-        pulumi_stack_name: "{{ stack_name }}"
-        pulumi_project_path: "{{ pulumi_dir }}"
-        pulumi_env: "{{ env }}"
+    # NPM dependencies
+    - name: Install npm dependencies for Jenkins Agent AMI
+      ansible.builtin.npm:
+        path: "{{ pulumi_dir }}"
+        state: present
     
-    - name: Configure agent AMI stack
-      ansible.builtin.include_role:
-        name: pulumi_helper
-        tasks_from: config_stack
-      vars:
-        pulumi_stack_name: "{{ stack_name }}"
-        pulumi_project_path: "{{ pulumi_dir }}"
-        pulumi_config:
-          aws:region: "{{ aws_region }}"
-          projectName: "{{ project_name }}"
-          networkStackName: "jenkins-network"
-          securityStackName: "jenkins-security"
+    # TypeScript build
+    - name: Build TypeScript for Jenkins Agent AMI
+      ansible.builtin.shell: |
+        source {{ scripts_dir }}/aws/aws-env.sh
+        cd {{ pulumi_dir }}
+        npm run build
+      register: build_result
+      changed_when: "'Built' in build_result.stdout"
     
-    - name: Deploy agent AMI stack
-      ansible.builtin.include_role:
-        name: pulumi_helper
-        tasks_from: deploy_stack
-      vars:
-        pulumi_stack_name: "{{ stack_name }}"
-        pulumi_project_path: "{{ pulumi_dir }}"
+    # Pulumi stack init
+    - name: Initialize Pulumi stack for Jenkins Agent AMI
+      ansible.builtin.shell: |
+        source {{ scripts_dir }}/aws/aws-env.sh
+        cd {{ pulumi_dir }}
+        pulumi stack select {{ env }} --create
+      register: stack_init_result
+      failed_when: stack_init_result.rc != 0
+      changed_when: "'Created stack' in stack_init_result.stdout"
     
+    # Pulumi configuration
+    - name: Set Pulumi configuration for Jenkins Agent AMI
+      ansible.builtin.shell: |
+        source {{ scripts_dir }}/aws/aws-env.sh
+        cd {{ pulumi_dir }}
+        pulumi config set aws:region {{ aws_region }}
+        pulumi config set {{ stack_name }}:projectName {{ project_name }}
+        pulumi config set {{ stack_name }}:networkStackName {{ network_project_name }}
+        pulumi config set {{ stack_name }}:securityStackName {{ security_project_name }}
+      register: pulumi_config_result
+      changed_when: pulumi_config_result.rc == 0
+    
+    # Pulumi preview
+    - name: Preview agent AMI deployment
+      ansible.builtin.shell: |
+        source {{ scripts_dir }}/aws/aws-env.sh
+        cd {{ pulumi_dir }}
+        pulumi preview
+      register: preview_result
+      changed_when: false
+    
+    # Pulumi deploy
+    - name: Deploy Jenkins Agent AMI Builder infrastructure
+      ansible.builtin.shell: |
+        source {{ scripts_dir }}/aws/aws-env.sh
+        cd {{ pulumi_dir }}
+        pulumi up -y
+      register: deploy_result
+      changed_when: deploy_result.rc == 0
+    
+    # Get outputs
     - name: Get agent AMI stack outputs
-      ansible.builtin.include_role:
-        name: pulumi_helper
-        tasks_from: get_outputs
-      vars:
-        pulumi_stack_name: "{{ stack_name }}"
-        pulumi_project_path: "{{ pulumi_dir }}"
-      register: ami_stack_outputs
+      ansible.builtin.shell: |
+        source {{ scripts_dir }}/aws/aws-env.sh
+        cd {{ pulumi_dir }}
+        pulumi stack output --json
+      register: stack_outputs
+      changed_when: false
     
-    - name: Save stack outputs to variable
+    - name: Parse stack outputs
       ansible.builtin.set_fact:
-        agent_ami_outputs: "{{ pulumi_outputs }}"
-      when: pulumi_outputs is defined
+        agent_ami_outputs: "{{ stack_outputs.stdout | from_json }}"
+      when: stack_outputs.stdout is defined
     
     - name: Display Jenkins Agent AMI Builder information
       ansible.builtin.debug:
