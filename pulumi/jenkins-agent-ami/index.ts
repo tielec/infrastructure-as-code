@@ -12,6 +12,20 @@ const config = new pulumi.Config();
 const projectName = config.get("projectName") || "jenkins-infra";
 const environment = pulumi.getStack();
 
+// バージョン管理（自動インクリメント）
+// 日付ベースのバージョンを生成（例： 1.0.20240809.1）
+const now = new Date();
+const dateStr = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}`;
+const buildNumber = config.getNumber("buildNumber") || Math.floor(Math.random() * 1000);
+
+// バージョンフォーマット: major.minor.date.build
+const componentVersion = config.get("componentVersion") || `1.0.${dateStr}.${buildNumber}`;
+const recipeVersion = config.get("recipeVersion") || `1.0.${dateStr}.${buildNumber}`;
+
+// バージョン情報をログ出力
+console.log(`[INFO] Component Version: ${componentVersion}`);
+console.log(`[INFO] Recipe Version: ${recipeVersion}`);
+
 // スタック参照名を設定から取得
 const networkStackName = config.get("networkStackName") || "jenkins-network";
 const securityStackName = config.get("securityStackName") || "jenkins-security";
@@ -66,7 +80,7 @@ const imageBuilderInstanceProfile = new aws.iam.InstanceProfile(`${projectName}-
 const jenkinsAgentComponentX86 = new aws.imagebuilder.Component(`${projectName}-agent-component-x86`, {
     name: `${projectName}-agent-component-x86-${environment}`,
     platform: "Linux",
-    version: "1.0.0",
+    version: componentVersion,
     description: "Jenkins Agent setup component for x86_64",
     data: `name: JenkinsAgentSetup-x86
 description: Install and configure Jenkins Agent dependencies
@@ -185,7 +199,7 @@ phases:
 const jenkinsAgentComponentArm = new aws.imagebuilder.Component(`${projectName}-agent-component-arm`, {
     name: `${projectName}-agent-component-arm-${environment}`,
     platform: "Linux",
-    version: "1.0.0",
+    version: componentVersion,
     description: "Jenkins Agent setup component for ARM64",
     data: `name: JenkinsAgentSetup-arm64
 description: Install and configure Jenkins Agent dependencies for ARM64
@@ -322,7 +336,7 @@ const amiArm = aws.ec2.getAmi({
 // Image Recipe（x86_64）
 const jenkinsAgentRecipeX86 = new aws.imagebuilder.ImageRecipe(`${projectName}-agent-recipe-x86`, {
     name: `${projectName}-agent-recipe-x86-${environment}`,
-    version: "1.0.0",
+    version: recipeVersion,
     description: "Jenkins Agent AMI recipe for x86_64",
     parentImage: amiX86.then(ami => ami.id),
     components: [{
@@ -347,7 +361,7 @@ const jenkinsAgentRecipeX86 = new aws.imagebuilder.ImageRecipe(`${projectName}-a
 // Image Recipe（ARM64）
 const jenkinsAgentRecipeArm = new aws.imagebuilder.ImageRecipe(`${projectName}-agent-recipe-arm`, {
     name: `${projectName}-agent-recipe-arm-${environment}`,
-    version: "1.0.0",
+    version: recipeVersion,
     description: "Jenkins Agent AMI recipe for ARM64",
     parentImage: amiArm.then(ami => ami.id),
     components: [{
@@ -520,3 +534,5 @@ export const jenkinsAgentComponentX86Arn = jenkinsAgentComponentX86.arn;
 export const jenkinsAgentComponentArmArn = jenkinsAgentComponentArm.arn;
 export const customAmiX86ParameterName = customAmiX86Parameter.name;
 export const customAmiArmParameterName = customAmiArmParameter.name;
+export const currentComponentVersion = componentVersion;
+export const currentRecipeVersion = recipeVersion;
