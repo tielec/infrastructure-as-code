@@ -82,18 +82,78 @@
    - Node.js, AWS CLI, Pulumi, Dockerなどの必要なツールのインストール
    - AWS認証情報の設定
 
-### 4. Pulumiアクセストークンの設定
+### 4. Pulumiバックエンドの設定
 
-Jenkinsインフラのデプロイ前に、Pulumiのアクセストークンを設定する必要があります：
+本プロジェクトはデフォルトでS3バックエンドを使用してPulumiの状態を管理します。
+
+#### S3バックエンドの設定（推奨）
+
+S3バックエンドはCloudFormationブートストラップで作成されたS3バケットを使用します。パスフレーズは`setup-bootstrap.sh`実行時に対話形式で設定され、SSM Parameter Storeに安全に保存されます。
+
+##### 初回セットアップ
+
+`setup-bootstrap.sh`を実行すると、以下の処理が自動的に行われます：
+
+1. **S3バケットの確認**: CloudFormationで作成されたバケットを自動検出
+2. **パスフレーズの設定**: 対話形式で設定（自動生成または手動入力を選択可能）
+3. **SSM Parameter Storeへの保存**: SecureStringタイプで暗号化して保存
+
+##### Ansible実行時の自動設定
+
+**重要**: Ansibleは自動的にSSM Parameter Storeからパスフレーズを取得するため、通常は環境変数の設定は不要です。
+
+```bash
+# Ansibleを実行（パスフレーズは自動的にSSMから取得）
+cd ansible
+ansible-playbook playbooks/jenkins_setup_pipeline.yml -e "env=dev"
+```
+
+##### 手動での環境変数設定（オプション）
+
+環境変数を優先したい場合や、SSMへのアクセスを避けたい場合：
+
+```bash
+# SSMからパスフレーズを取得して環境変数に設定
+export PULUMI_CONFIG_PASSPHRASE=$(aws ssm get-parameter \
+  --name "/bootstrap/pulumi/config-passphrase" \
+  --with-decryption \
+  --query 'Parameter.Value' \
+  --output text)
+
+# S3バケット名を設定（オプション - 通常は自動検出）
+export PULUMI_STATE_BUCKET_NAME=$(aws cloudformation describe-stacks \
+  --stack-name bootstrap-environment \
+  --query "Stacks[0].Outputs[?OutputKey=='PulumiStateBucketName'].OutputValue" \
+  --output text)
+```
+
+**パスフレーズの優先順位**:
+1. 環境変数 `PULUMI_CONFIG_PASSPHRASE`（設定されている場合）
+2. SSM Parameter Store `/bootstrap/pulumi/config-passphrase`（自動取得）
+3. エラー（どちらも利用できない場合）
+
+##### パスフレーズの管理
+
+- **確認**: `aws ssm get-parameter --name "/bootstrap/pulumi/config-passphrase" --with-decryption --query 'Parameter.Value' --output text`
+- **変更**: SSMコンソールまたはCLIで直接更新（既存のPulumiスタックがある場合は注意）
+- **セキュリティ**: SSM Parameter StoreでKMS暗号化されているため安全
+
+**重要**: パスフレーズは一度設定したら変更しないでください。変更すると既存のPulumiスタックにアクセスできなくなります。
+
+#### Pulumi Cloudバックエンドの使用（代替）
+
+Pulumi Cloudを使用する場合：
 
 1. [Pulumi Console](https://app.pulumi.com/account/tokens)からアクセストークンを取得
-2. 以下のコマンドで環境変数を設定：
-
+2. 環境変数を設定：
    ```bash
    export PULUMI_ACCESS_TOKEN="pul-YOUR_ACCESS_TOKEN"
    ```
-
-   Ansible実行時にこの環境変数を使って自動的にPulumiログインが行われます。
+3. Ansible実行時にバックエンドタイプを指定：
+   ```bash
+   ansible-playbook playbooks/jenkins_setup_pipeline.yml \
+     -e "env=dev pulumi_backend_type=cloud"
+   ```
 
 ### 5. Jenkinsインフラの段階的デプロイ
 
@@ -295,14 +355,26 @@ infrastructure-as-code/
 - **Pulumiデプロイエラー**: `pulumi logs`でエラー詳細を確認
 - **Ansibleエラー**: `-vvv`オプションを追加して詳細なログを確認（例: `ansible-playbook -vvv playbooks/jenkins_setup_pipeline.yml`）
 - **AWS認証エラー**: `source scripts/aws/setup-aws-credentials.sh`を実行して認証情報を更新
-- **Pulumiログインエラー**: 環境変数`PULUMI_ACCESS_TOKEN`が正しく設定されているか確認
-  ```bash
-  # トークンが設定されているか確認
-  echo $PULUMI_ACCESS_TOKEN
-  
-  # 再設定が必要な場合
-  export PULUMI_ACCESS_TOKEN="pul-YOUR_ACCESS_TOKEN"
-  ```
+- **Pulumiバックエンドエラー**: 
+  - S3バックエンド使用時: 環境変数`PULUMI_CONFIG_PASSPHRASE`が設定されているか確認
+    ```bash
+    # パスフレーズが設定されているか確認
+    echo $PULUMI_CONFIG_PASSPHRASE
+    
+    # 再設定が必要な場合
+    export PULUMI_CONFIG_PASSPHRASE="your-secure-passphrase"
+    
+    # S3バケットの存在確認
+    aws s3 ls | grep pulumi-state
+    ```
+  - Pulumi Cloud使用時: 環境変数`PULUMI_ACCESS_TOKEN`が正しく設定されているか確認
+    ```bash
+    # トークンが設定されているか確認
+    echo $PULUMI_ACCESS_TOKEN
+    
+    # 再設定が必要な場合
+    export PULUMI_ACCESS_TOKEN="pul-YOUR_ACCESS_TOKEN"
+    ```
 - **Jenkinsへのアクセス問題**: セキュリティグループの設定を確認
 - **EFSマウント問題**: マウントターゲットの可用性を確認
 - **削除時のリソース依存関係エラー**: 削除順序が正しいか確認（ネットワークは最後に削除）
