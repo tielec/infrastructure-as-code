@@ -157,7 +157,7 @@ echo -e "\n${BLUE}=== Pulumi設定 ===${NC}"
 
 # CloudFormationスタックからPulumi S3バケット名を取得
 echo -e "${YELLOW}Pulumi用S3バケットを確認しています...${NC}"
-PULUMI_BUCKET=$(aws cloudformation describe-stacks --stack-name bootstrap-environment --query "Stacks[0].Outputs[?OutputKey=='PulumiStateBucketName'].OutputValue" --output text 2>/dev/null || echo "")
+PULUMI_BUCKET=$(aws cloudformation describe-stacks --stack-name bootstrap-iac-environment --query "Stacks[0].Outputs[?OutputKey=='PulumiStateBucketName'].OutputValue" --output text 2>/dev/null || echo "")
 
 if [ -n "$PULUMI_BUCKET" ]; then
     echo -e "${GREEN}✓ Pulumi S3バケットが見つかりました: ${PULUMI_BUCKET}${NC}"
