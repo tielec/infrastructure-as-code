@@ -21,10 +21,10 @@
           ansible.builtin.set_fact:
             pulumi_project_name: "{{ (pulumi_yaml_raw.content | b64decode | from_yaml).name }}"
 
-    # S3バックエンドURLを構築
+    # S3バックエンドURLを構築（プロジェクト名を含めない）
     - name: Set S3 backend URL
       ansible.builtin.set_fact:
-        pulumi_s3_backend_url: "s3://{{ pulumi_s3_bucket }}/{{ pulumi_project_name }}"
+        pulumi_s3_backend_url: "s3://{{ pulumi_s3_bucket }}"
 
     # 現在のバックエンドを確認
     - name: Check current backend
