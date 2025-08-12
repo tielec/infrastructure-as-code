@@ -171,9 +171,10 @@
     - name: Set common Pulumi settings
       block:
         # sudoを使用したPulumiコマンドのプレフィックス
+        # S3バックエンドの場合はsudoを使わない
         - name: Set Pulumi sudo command prefix
           ansible.builtin.set_fact:
-            pulumi_sudo_cmd: "sudo -E {{ pulumi_bin_path }}"
+            pulumi_sudo_cmd: "{{ pulumi_bin_path if pulumi_backend_type == 's3' else 'sudo -E ' + pulumi_bin_path }}"
 
         # Pulumi Cloudの場合のみログイン検証
         - name: Verify Pulumi Cloud login successful
