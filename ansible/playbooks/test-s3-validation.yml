@@ -319,16 +319,18 @@
             
             - name: Cleanup S3 backend state files
               ansible.builtin.shell: |
-                aws s3 ls s3://{{ pulumi_s3_bucket }}/test-s3/.pulumi/stacks/{{ test_stack_name }}/ \
-                  --region {{ pulumi_s3_region }} --recursive 2>/dev/null || echo "No files found"
+                aws s3 ls s3://{{ pulumi_s3_bucket }}/.pulumi/stacks/test-s3/{{ test_stack_name }}.json \
+                  --region {{ pulumi_s3_region }} 2>/dev/null || echo "No files found"
               register: state_files_list
               when: remove_stack_on_success | bool
               changed_when: false
             
             - name: Delete state files
               ansible.builtin.shell: |
-                aws s3 rm s3://{{ pulumi_s3_bucket }}/test-s3/.pulumi/stacks/{{ test_stack_name }}/ \
-                  --region {{ pulumi_s3_region }} --recursive
+                aws s3 rm s3://{{ pulumi_s3_bucket }}/.pulumi/stacks/test-s3/{{ test_stack_name }}.json \
+                  --region {{ pulumi_s3_region }}
+                aws s3 rm s3://{{ pulumi_s3_bucket }}/.pulumi/history/test-s3/{{ test_stack_name }}/ \
+                  --region {{ pulumi_s3_region }} --recursive 2>/dev/null || true
               when: 
                 - remove_stack_on_success | bool
                 - "'No files found' not in state_files_list.stdout"

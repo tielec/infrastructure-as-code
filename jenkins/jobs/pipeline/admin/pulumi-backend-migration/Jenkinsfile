@@ -1,0 +1,786 @@
+pipeline {
+    agent {
+        label 'bootstrap-workterminal'
+    }
+    
+    parameters {
+        choice(name: 'MIGRATION_DIRECTION', choices: ['CLOUD_TO_S3', 'S3_TO_CLOUD'], description: '移行方向を選択してください')
+        password(name: 'PULUMI_ACCESS_TOKEN_OVERRIDE', defaultValue: '', description: 'Pulumi Cloud Access Token (オプション - エージェントに設定されていない場合のみ使用)')
+        string(name: 'S3_BUCKET', defaultValue: 'pulumi-state-bucket', description: 'S3バケット名 (例: my-pulumi-state-bucket)')
+        string(name: 'S3_REGION', defaultValue: 'ap-northeast-1', description: 'S3バケットのリージョン')
+        password(name: 'PULUMI_CONFIG_PASSPHRASE', defaultValue: '', description: 'Pulumiスタックの暗号化パスフレーズ（S3バックエンドで必要）')
+        string(name: 'PULUMI_ORG', defaultValue: '', description: 'Pulumi Cloud組織名（S3→Cloud移行時に必要）')
+        choice(name: 'DRY_RUN', choices: ['true', 'false'], description: '実際の移行を行わずに確認のみ行う')
+        choice(name: 'FAIL_FAST', choices: ['true', 'false'], description: 'エラーが発生したらすぐに停止する')
+        choice(name: 'REMOVE_OLD_STACK', choices: ['false', 'true'], description: '移行成功後に古い環境のスタックを削除する（デフォルト: false）')
+    }
+    
+    environment {
+        // エージェントの環境変数を優先し、パラメータで上書き可能
+        PULUMI_ACCESS_TOKEN = "${params.PULUMI_ACCESS_TOKEN_OVERRIDE ?: env.PULUMI_ACCESS_TOKEN}"
+        BASE_PATH = '/home/ec2-user/infrastructure-as-code/pulumi'
+        // Pulumiのパスを追加
+        PATH = "/home/ec2-user/.pulumi/bin:/usr/local/bin:/usr/bin:/bin:${env.PATH}"
+        // Pulumiバイナリのフルパス（絶対パスを使用）
+        PULUMI_BIN = '/home/ec2-user/.pulumi/bin/pulumi'
+        // AWS設定
+        AWS_REGION = "${params.S3_REGION}"
+        AWS_DEFAULT_REGION = "${params.S3_REGION}"
+        // パスフレーズ設定
+        PULUMI_CONFIG_PASSPHRASE = "${params.PULUMI_CONFIG_PASSPHRASE}"
+    }
+    
+    stages {
+        stage('準備') {
+            steps {
+                script {
+                    // 移行方向の表示
+                    echo "========================================="
+                    echo "移行方向: ${params.MIGRATION_DIRECTION}"
+                    echo "========================================="
+                    
+                    // 必要な環境変数の確認
+                    if (params.MIGRATION_DIRECTION == 'CLOUD_TO_S3' || params.MIGRATION_DIRECTION == 'S3_TO_CLOUD') {
+                        if (!env.PULUMI_ACCESS_TOKEN) {
+                            error("PULUMI_ACCESS_TOKEN が設定されていません。エージェントの環境変数またはパラメータで設定してください。")
+                        }
+                    }
+                    
+                    if ((params.MIGRATION_DIRECTION == 'CLOUD_TO_S3' || params.MIGRATION_DIRECTION == 'S3_TO_CLOUD') && !params.PULUMI_CONFIG_PASSPHRASE) {
+                        error("PULUMI_CONFIG_PASSPHRASE が設定されていません。S3バックエンドではパスフレーズが必要です。")
+                    }
+                    
+                    if (params.MIGRATION_DIRECTION == 'S3_TO_CLOUD' && !params.PULUMI_ORG) {
+                        error("PULUMI_ORG が設定されていません。S3からPulumi Cloudへの移行では組織名が必要です。")
+                    }
+                    
+                    echo "S3バケット: ${params.S3_BUCKET}"
+                    echo "リージョン: ${params.S3_REGION}"
+                    echo "Dry Run: ${params.DRY_RUN}"
+                    echo "古いスタックを削除: ${params.REMOVE_OLD_STACK}"
+                    if (params.MIGRATION_DIRECTION == 'S3_TO_CLOUD') {
+                        echo "Pulumi組織: ${params.PULUMI_ORG}"
+                    }
+                    
+                    // Pulumiのバージョン確認
+                    sh '''
+                        # Pulumiの実行ファイルを探す
+                        PULUMI_BIN=""
+                        
+                        # ユーザーのホームディレクトリのPulumiを探す（絶対パスを使用）
+                        if test -f /home/ec2-user/.pulumi/bin/pulumi; then
+                            PULUMI_BIN="/home/ec2-user/.pulumi/bin/pulumi"
+                            echo "Pulumi found at: $PULUMI_BIN"
+                            /home/ec2-user/.pulumi/bin/pulumi version
+                        elif test -f "$HOME/.pulumi/bin/pulumi"; then
+                            PULUMI_BIN="$HOME/.pulumi/bin/pulumi"
+                            echo "Pulumi found at: $PULUMI_BIN"
+                            $HOME/.pulumi/bin/pulumi version
+                        else
+                            # 他の場所も確認
+                            for path in /usr/local/bin/pulumi /usr/bin/pulumi /opt/pulumi/bin/pulumi; do
+                                if test -f $path; then
+                                    PULUMI_BIN=$path
+                                    echo "Pulumi found at: $PULUMI_BIN"
+                                    $PULUMI_BIN version
+                                    break
+                                fi
+                            done
+                        fi
+                        
+                        if [ -z "$PULUMI_BIN" ]; then
+                            echo "ERROR: Pulumi実行ファイルが見つかりません"
+                            echo "現在のユーザーで確認:"
+                            which pulumi || echo 'not found'
+                            exit 1
+                        fi
+                    '''
+                }
+            }
+        }
+        
+        stage('S3バケット確認') {
+            steps {
+                script {
+                    // AWS設定の確認
+                    sh """
+                        echo "AWS設定確認:"
+                        echo "Region: ${params.S3_REGION}"
+                        aws configure list
+                        
+                        # AWS認証情報の確認
+                        aws sts get-caller-identity || echo "AWS認証情報の確認に失敗"
+                    """
+                    
+                    // S3バケットの存在確認
+                    def bucketExists = sh(
+                        script: "aws s3api head-bucket --bucket ${params.S3_BUCKET} --region ${params.S3_REGION} 2>/dev/null",
+                        returnStatus: true
+                    ) == 0
+                    
+                    if (!bucketExists) {
+                        error("S3バケット '${params.S3_BUCKET}' が存在しません。バケットを作成してから実行してください。")
+                    }
+                    
+                    echo "S3バケット '${params.S3_BUCKET}' の存在を確認しました。"
+                    
+                    // S3バケットへの書き込み権限確認
+                    echo "S3バケットへの書き込み権限を確認中..."
+                    def testFile = "test-write-permission-${System.currentTimeMillis()}.txt"
+                    def writeTest = sh(
+                        script: """
+                            echo "test" | aws s3 cp - s3://${params.S3_BUCKET}/${testFile} --region ${params.S3_REGION} 2>&1
+                            aws s3 rm s3://${params.S3_BUCKET}/${testFile} --region ${params.S3_REGION} 2>&1
+                        """,
+                        returnStatus: true
+                    )
+                    
+                    if (writeTest != 0) {
+                        error("""
+                            S3バケット '${params.S3_BUCKET}' への書き込み権限がありません。
+                            
+                            以下を確認してください：
+                            1. S3バケットポリシーでこのロールに対する書き込み権限があるか
+                            2. IAMロールに適切なS3権限があるか
+                            
+                            必要な権限:
+                            - s3:PutObject
+                            - s3:GetObject
+                            - s3:ListBucket
+                            - s3:DeleteObject (オプション)
+                        """)
+                    }
+                    
+                    echo "S3バケットへの書き込み権限を確認しました。"
+                }
+            }
+        }
+        
+        stage('Pulumiプロジェクト一覧取得') {
+            steps {
+                script {
+                    // 各プロジェクトのスタックを収集
+                    def projects = [
+                        'jenkins-agent',
+                        'jenkins-agent-ami',
+                        'jenkins-application',
+                        'jenkins-config',
+                        'jenkins-controller',
+                        'jenkins-loadbalancer',
+                        'jenkins-nat',
+                        'jenkins-network',
+                        'jenkins-security',
+                        'jenkins-storage',
+                        'lambda-account-setup',
+                        'lambda-api-gateway',
+                        'lambda-database',
+                        'lambda-functions',
+                        'lambda-nat',
+                        'lambda-network',
+                        'lambda-security',
+                        'lambda-vpce',
+                        'lambda-waf',
+                        'lambda-websocket'
+                    ]
+                    
+                    env.PULUMI_PROJECTS = projects.join(',')
+                    echo "移行対象プロジェクト: ${projects.size()}個"
+                }
+            }
+        }
+        
+        stage('ステート移行') {
+            steps {
+                script {
+                    def projects = env.PULUMI_PROJECTS.split(',')
+                    def failedProjects = []
+                    def successfulProjects = []
+                    
+                    projects.each { project ->
+                        def projectPath = "${env.BASE_PATH}/${project}"
+                        
+                        echo "========================================="
+                        echo "プロジェクト: ${project}"
+                        echo "パス: ${projectPath}"
+                        echo "移行方向: ${params.MIGRATION_DIRECTION}"
+                        echo "========================================="
+                        
+                        try {
+                            dir(projectPath) {
+                                // Pulumi.yamlの存在確認
+                                if (!fileExists('Pulumi.yaml')) {
+                                    echo "警告: Pulumi.yamlが見つかりません。スキップします。"
+                                    return
+                                }
+                                
+                                // Pulumi.yamlの内容を確認
+                                def yamlContent = sh(
+                                    script: "cat Pulumi.yaml | head -10",
+                                    returnStdout: true
+                                ).trim()
+                                
+                                echo "Pulumi.yaml内容（最初の10行）:\n${yamlContent}"
+                                
+                                // Pulumi.yamlが有効かチェック
+                                def yamlCheck = sh(
+                                    script: "grep -q '^name:' Pulumi.yaml && echo 'valid' || echo 'invalid'",
+                                    returnStdout: true
+                                ).trim()
+                                
+                                if (yamlCheck != 'valid') {
+                                    echo "警告: Pulumi.yamlが無効です。スキップします。"
+                                    return
+                                }
+                                
+                                if (params.DRY_RUN == 'true') {
+                                    echo "Dry Run モード - 実際の移行は行いません"
+                                    
+                                    // 現在のバックエンドを確認
+                                    def currentBackend = sh(
+                                        script: "${PULUMI_BIN} whoami 2>&1 || echo 'unknown'",
+                                        returnStdout: true
+                                    ).trim()
+                                    
+                                    echo "現在のバックエンド: ${currentBackend}"
+                                    
+                                    if (params.MIGRATION_DIRECTION == 'CLOUD_TO_S3') {
+                                        echo "移行元: Pulumi Cloud"
+                                        echo "移行先: s3://${params.S3_BUCKET}/${project}"
+                                        
+                                        // 現在すでにS3バックエンドの場合は警告
+                                        if (currentBackend.contains("s3://")) {
+                                            echo "警告: 現在すでにS3バックエンドを使用しています。S3_TO_CLOUDの移行が必要かもしれません。"
+                                        }
+                                        
+                                        if (params.REMOVE_OLD_STACK == 'true') {
+                                            echo "移行後: Pulumi Cloudのスタックを削除"
+                                        }
+                                    } else {
+                                        echo "移行元: s3://${params.S3_BUCKET}/${project}"
+                                        echo "移行先: Pulumi Cloud (${params.PULUMI_ORG})"
+                                        
+                                        // 現在Pulumi Cloudの場合は警告
+                                        if (!currentBackend.contains("s3://") && currentBackend != "unknown") {
+                                            echo "警告: 現在Pulumi Cloudを使用しています。CLOUD_TO_S3の移行が必要かもしれません。"
+                                        }
+                                        
+                                        if (params.REMOVE_OLD_STACK == 'true') {
+                                            echo "移行後: S3バックエンドのスタックを削除"
+                                        }
+                                    }
+                                    
+                                    successfulProjects.add(project)
+                                } else {
+                                    if (params.MIGRATION_DIRECTION == 'CLOUD_TO_S3') {
+                                        // Cloud → S3 移行
+                                        migrateCloudToS3(project)
+                                    } else {
+                                        // S3 → Cloud 移行
+                                        migrateS3ToCloud(project)
+                                    }
+                                    
+                                    successfulProjects.add(project)
+                                    echo "✓ ${project} の移行が完了しました"
+                                }
+                            }
+                        } catch (Exception e) {
+                            echo "✗ ${project} の移行に失敗しました: ${e.message}"
+                            failedProjects.add(project)
+                            
+                            // FAIL_FASTが有効な場合は即座に停止
+                            if (params.FAIL_FAST == 'true') {
+                                error("FAIL_FASTモード: ${project} の移行に失敗したため処理を停止します。\nエラー: ${e.message}")
+                            }
+                        }
+                    }
+                    
+                    // 結果サマリー
+                    echo "\n========================================="
+                    echo "移行結果サマリー"
+                    echo "========================================="
+                    echo "成功: ${successfulProjects.size()}個"
+                    echo "失敗: ${failedProjects.size()}個"
+                    if (params.REMOVE_OLD_STACK == 'true' && params.DRY_RUN == 'false') {
+                        echo "古いスタックの削除: 有効"
+                    }
+                    
+                    if (successfulProjects.size() > 0) {
+                        echo "\n成功したプロジェクト:"
+                        successfulProjects.each { echo "  - ${it}" }
+                    }
+                    
+                    if (failedProjects.size() > 0) {
+                        echo "\n失敗したプロジェクト:"
+                        failedProjects.each { echo "  - ${it}" }
+                        
+                        def errorMessage = """
+                        ${failedProjects.size()}個のプロジェクトの移行に失敗しました。
+                        詳細はログを確認してください。
+                        """
+                        error(errorMessage)
+                    }
+                }
+            }
+        }
+        
+        stage('移行結果確認') {
+            when {
+                expression { params.DRY_RUN == 'false' }
+            }
+            steps {
+                script {
+                    echo "========================================="
+                    echo "移行後の状態確認"
+                    echo "========================================="
+                    
+                    if (params.MIGRATION_DIRECTION == 'CLOUD_TO_S3') {
+                        // S3バケットの内容を確認（正しいパス構造で）
+                        sh """
+                            echo "S3バケットの内容:"
+                            echo "プロジェクトごとのステートファイル:"
+                            aws s3 ls s3://${params.S3_BUCKET}/.pulumi/stacks/ --recursive --region ${params.S3_REGION} | grep -E '\\.json\$' | head -20
+                            echo ""
+                            echo "プロジェクトごとのメタデータ:"
+                            aws s3 ls s3://${params.S3_BUCKET}/.pulumi/meta.yaml --region ${params.S3_REGION} 2>/dev/null || echo "メタデータファイルなし"
+                        """
+                    } else {
+                        // Pulumi Cloudのスタック状態を確認
+                        echo "Pulumi Cloudの移行されたスタックは各プロジェクトディレクトリで確認してください。"
+                    }
+                }
+            }
+        }
+    }
+    
+    post {
+        success {
+            script {
+                if (params.MIGRATION_DIRECTION == 'CLOUD_TO_S3') {
+                    echo """
+Pulumiステートの移行が正常に完了しました。
+今後は以下のコマンドでS3バックエンドを使用できます:
+export PULUMI_CONFIG_PASSPHRASE='your-passphrase'
+pulumi login s3://${params.S3_BUCKET}/<project-name>
+"""
+                    if (params.REMOVE_OLD_STACK == 'true' && params.DRY_RUN == 'false') {
+                        echo "\n古いPulumi Cloudのスタックは削除されました。"
+                    }
+                } else {
+                    echo """
+Pulumiステートの移行が正常に完了しました。
+今後は以下のコマンドでPulumi Cloudを使用できます:
+export PULUMI_ACCESS_TOKEN='your-token'
+pulumi login
+"""
+                    if (params.REMOVE_OLD_STACK == 'true' && params.DRY_RUN == 'false') {
+                        echo "\n古いS3バックエンドのスタックは削除されました。"
+                    }
+                }
+            }
+        }
+        failure {
+            echo "Pulumiステートの移行に失敗しました。ログを確認してください。"
+        }
+        always {
+            // バックアップファイルの保存場所を通知
+            sh '''
+                if ls */*-backup.json 1> /dev/null 2>&1; then
+                    echo "バックアップファイル:"
+                    find . -name "*-backup.json" -type f
+                fi
+            '''
+        }
+    }
+}
+
+// Cloud → S3 移行関数
+def migrateCloudToS3(String project) {
+    // プロジェクトディレクトリ内のワークスペース設定をクリア
+    sh '''
+        echo "既存のワークスペース設定をクリア中..."
+        rm -rf .pulumi/workspaces/ || true
+        rm -f .pulumi/credentials.json || true
+    '''
+    
+    // Pulumi Cloudにログイン（明示的にCloud URLを指定）
+    sh '''
+        echo "全てのバックエンドからログアウト中..."
+        ${PULUMI_BIN} logout || true
+        
+        echo "Pulumi Cloudにログイン中..."
+        export PULUMI_ACCESS_TOKEN="${PULUMI_ACCESS_TOKEN}"
+        ${PULUMI_BIN} login --cloud-url https://api.pulumi.com
+    '''
+    
+    // ログイン状態の確認
+    def whoami = sh(
+        script: "${PULUMI_BIN} whoami 2>&1",
+        returnStdout: true
+    ).trim()
+    echo "現在のログイン状態: ${whoami}"
+    
+    // ログインがS3のままの場合はエラー
+    if (whoami.contains("s3://")) {
+        error("Pulumi Cloudへのログインに失敗しました。現在もS3バックエンドにログインしています: ${whoami}")
+    }
+    
+    // 再度スタック一覧を取得（プロジェクトディレクトリ内で）
+    def stackList = sh(
+        script: """
+            export PULUMI_ACCESS_TOKEN="${PULUMI_ACCESS_TOKEN}"
+            ${PULUMI_BIN} stack ls --json 2>/dev/null || echo '[]'
+        """,
+        returnStdout: true
+    ).trim()
+    
+    echo "利用可能なスタック: ${stackList}"
+    
+    // スタックが空の場合、組織名を含めて検索
+    if (stackList == '[]' || stackList.isEmpty()) {
+        echo "プロジェクトディレクトリのスタックが見つかりません。組織名を含めて検索中..."
+        
+        // Pulumi.yamlから組織名を取得
+        def pulumiOrg = sh(
+            script: "grep '^organization:' Pulumi.yaml | awk '{print \$2}' | tr -d '\"' || echo ''",
+            returnStdout: true
+        ).trim()
+        
+        if (pulumiOrg) {
+            echo "組織名: ${pulumiOrg}"
+            // 組織名を含めてスタックを検索
+            stackList = sh(
+                script: """
+                    export PULUMI_ACCESS_TOKEN="${PULUMI_ACCESS_TOKEN}"
+                    ${PULUMI_BIN} stack ls --organization ${pulumiOrg} --json 2>/dev/null || echo '[]'
+                """,
+                returnStdout: true
+            ).trim()
+            echo "組織 ${pulumiOrg} のスタック: ${stackList}"
+        }
+    }
+    
+    // それでもスタックが空の場合はスキップ
+    if (stackList == '[]' || stackList.isEmpty()) {
+        // .pulumi/workspaces/ディレクトリを確認してバックエンドの状態を推測
+        def workspaceExists = sh(
+            script: "test -d .pulumi/workspaces && echo 'exists' || echo 'not exists'",
+            returnStdout: true
+        ).trim()
+        
+        def backendInfo = ""
+        if (workspaceExists == 'exists') {
+            backendInfo = sh(
+                script: "find .pulumi/workspaces -name '*.json' -exec grep -l 's3://' {} \\; | head -1 || echo ''",
+                returnStdout: true
+            ).trim()
+        }
+        
+        if (backendInfo) {
+            echo """
+警告: このプロジェクトはすでにS3バックエンドを使用している可能性があります。
+ワークスペース設定にS3バックエンドの情報が見つかりました。
+Pulumi Cloudにスタックが見つかりません。
+
+以下のいずれかの可能性があります：
+1. すでにS3バックエンドに移行済み
+2. Pulumi Cloudにスタックが存在しない
+3. 組織名やプロジェクト名が異なる
+
+S3からPulumi Cloudへの移行が必要な場合は、MIGRATION_DIRECTION を 'S3_TO_CLOUD' に設定してください。
+"""
+        } else {
+            echo "警告: Pulumi Cloudにスタックが見つかりません。スキップします。"
+        }
+        return
+    }
+    
+    // 現在のスタックを取得
+    def currentStack = sh(
+        script: "${PULUMI_BIN} stack --show-name 2>/dev/null || echo ''",
+        returnStdout: true
+    ).trim()
+    
+    // スタックが選択されていない場合は、最初のスタックを選択
+    if (currentStack.isEmpty() && stackList != '[]') {
+        def firstStack = sh(
+            script: "echo '${stackList}' | jq -r '.[0].name // empty' 2>/dev/null || echo ''",
+            returnStdout: true
+        ).trim()
+        
+        if (!firstStack.isEmpty()) {
+            echo "スタック '${firstStack}' を選択します"
+            sh "${PULUMI_BIN} stack select ${firstStack}"
+            currentStack = firstStack
+        }
+    }
+    
+    if (currentStack.isEmpty()) {
+        echo "警告: アクティブなスタックがありません。スキップします。"
+        return
+    }
+    
+    // 現在のスタック名を解析（組織名を除外）
+    def stackNameOnly = currentStack.contains('/') ? currentStack.split('/')[-1] : currentStack
+    echo "移行するスタック: ${currentStack} (スタック名: ${stackNameOnly})"
+    
+    // 現在のステートをエクスポート（バックアップ）
+    sh """
+        echo "現在のステートをエクスポート中..."
+        export PULUMI_ACCESS_TOKEN="${PULUMI_ACCESS_TOKEN}"
+        ${PULUMI_BIN} stack export --file ${project}-${stackNameOnly}-backup.json
+    """
+    
+    // S3バックエンドのURL（プロジェクトパスは含めない）
+    def s3BackendUrl = "s3://${params.S3_BUCKET}"
+    echo "移行先: ${s3BackendUrl} (プロジェクト: ${project})"
+    
+    // S3バックエンドにログイン
+    sh """
+        echo "S3バックエンドにログイン中..."
+        export AWS_REGION="${params.S3_REGION}"
+        export AWS_DEFAULT_REGION="${params.S3_REGION}"
+        export PULUMI_CONFIG_PASSPHRASE="${PULUMI_CONFIG_PASSPHRASE}"
+        ${PULUMI_BIN} login ${s3BackendUrl}
+    """
+    
+    // スタックを初期化（組織名なしで）
+    sh """
+        echo "スタックを初期化中..."
+        export AWS_REGION="${params.S3_REGION}"
+        export AWS_DEFAULT_REGION="${params.S3_REGION}"
+        export PULUMI_CONFIG_PASSPHRASE="${PULUMI_CONFIG_PASSPHRASE}"
+        ${PULUMI_BIN} stack init ${stackNameOnly} --secrets-provider=passphrase || echo "スタックは既に存在します"
+    """
+    
+    // スタックを選択
+    sh """
+        echo "スタックを選択中..."
+        export AWS_REGION="${params.S3_REGION}"
+        export AWS_DEFAULT_REGION="${params.S3_REGION}"
+        export PULUMI_CONFIG_PASSPHRASE="${PULUMI_CONFIG_PASSPHRASE}"
+        ${PULUMI_BIN} stack select ${stackNameOnly}
+    """
+    
+    // バックアップからステートをインポート
+    sh """
+        echo "ステートをインポート中..."
+        export AWS_REGION="${params.S3_REGION}"
+        export AWS_DEFAULT_REGION="${params.S3_REGION}"
+        export PULUMI_CONFIG_PASSPHRASE="${PULUMI_CONFIG_PASSPHRASE}"
+        ${PULUMI_BIN} stack import --file ${project}-${stackNameOnly}-backup.json --force
+    """
+    
+    // 移行の確認
+    sh """
+        echo "移行後の状態を確認中..."
+        export AWS_REGION="${params.S3_REGION}"
+        export AWS_DEFAULT_REGION="${params.S3_REGION}"
+        export PULUMI_CONFIG_PASSPHRASE="${PULUMI_CONFIG_PASSPHRASE}"
+        ${PULUMI_BIN} stack
+        ${PULUMI_BIN} stack export | jq '.version' || echo "ステートの確認に失敗"
+    """
+    
+    // 古いCloudスタックを削除（オプション）
+    if (params.REMOVE_OLD_STACK == 'true' && params.DRY_RUN == 'false') {
+        echo "\n古いPulumi Cloudスタックを削除中..."
+        
+        // バックアップファイルの存在確認
+        def backupExists = sh(
+            script: "test -f ${project}-${stackNameOnly}-backup.json && echo 'exists' || echo 'not exists'",
+            returnStdout: true
+        ).trim()
+        
+        if (backupExists != 'exists') {
+            error("バックアップファイルが見つかりません。安全のため削除を中止します。")
+        }
+        
+        // Pulumi Cloudに再度ログイン（明示的にCloud URLを指定）
+        sh """
+            echo "Pulumi Cloudに再ログイン中..."
+            export PULUMI_ACCESS_TOKEN="${PULUMI_ACCESS_TOKEN}"
+            ${PULUMI_BIN} login --cloud-url https://api.pulumi.com
+        """
+        
+        // スタックを選択
+        sh """
+            echo "削除するスタックを選択中: ${currentStack}"
+            export PULUMI_ACCESS_TOKEN="${PULUMI_ACCESS_TOKEN}"
+            ${PULUMI_BIN} stack select ${currentStack}
+        """
+        
+        // スタックを削除（--forceで確認をスキップ）
+        sh """
+            echo "Pulumi Cloudからスタックを削除中: ${currentStack}"
+            export PULUMI_ACCESS_TOKEN="${PULUMI_ACCESS_TOKEN}"
+            ${PULUMI_BIN} stack rm --yes --force || echo "スタックの削除に失敗しました"
+        """
+        
+        echo "✓ 古いPulumi Cloudスタックを削除しました: ${currentStack}"
+    }
+}
+
+// S3 → Cloud 移行関数
+def migrateS3ToCloud(String project) {
+    // S3バックエンドのURL（プロジェクトパスは含めない）
+    def s3BackendUrl = "s3://${params.S3_BUCKET}"
+    echo "移行元: ${s3BackendUrl} (プロジェクト: ${project})"
+    
+    // S3バックエンドにログイン
+    sh """
+        echo "S3バックエンドにログイン中..."
+        export AWS_REGION="${params.S3_REGION}"
+        export AWS_DEFAULT_REGION="${params.S3_REGION}"
+        export PULUMI_CONFIG_PASSPHRASE="${PULUMI_CONFIG_PASSPHRASE}"
+        ${PULUMI_BIN} login ${s3BackendUrl}
+    """
+    
+    // S3のスタック一覧を取得
+    def stackList = sh(
+        script: """
+            export AWS_REGION="${params.S3_REGION}"
+            export AWS_DEFAULT_REGION="${params.S3_REGION}"
+            export PULUMI_CONFIG_PASSPHRASE="${PULUMI_CONFIG_PASSPHRASE}"
+            ${PULUMI_BIN} stack ls --json 2>/dev/null || echo '[]'
+        """,
+        returnStdout: true
+    ).trim()
+    
+    echo "S3バックエンドの利用可能なスタック: ${stackList}"
+    
+    // 現在のスタックを取得
+    def currentStack = sh(
+        script: """
+            export PULUMI_CONFIG_PASSPHRASE="${PULUMI_CONFIG_PASSPHRASE}"
+            ${PULUMI_BIN} stack --show-name 2>/dev/null || echo ''
+        """,
+        returnStdout: true
+    ).trim()
+    
+    // スタックが選択されていない場合は、最初のスタックを選択
+    if (currentStack.isEmpty() && stackList != '[]') {
+        def firstStack = sh(
+            script: "echo '${stackList}' | jq -r '.[0].name // empty' 2>/dev/null || echo ''",
+            returnStdout: true
+        ).trim()
+        
+        if (!firstStack.isEmpty()) {
+            echo "スタック '${firstStack}' を選択します"
+            sh """
+                export PULUMI_CONFIG_PASSPHRASE="${PULUMI_CONFIG_PASSPHRASE}"
+                ${PULUMI_BIN} stack select ${firstStack}
+            """
+            currentStack = firstStack
+        }
+    }
+    
+    if (currentStack.isEmpty()) {
+        echo "警告: S3バックエンドにアクティブなスタックがありません。スキップします。"
+        return
+    }
+    
+    def stackNameOnly = currentStack
+    echo "移行するスタック: ${stackNameOnly}"
+    
+    // 現在のステートをエクスポート（バックアップ）
+    sh """
+        echo "S3バックエンドからステートをエクスポート中..."
+        export AWS_REGION="${params.S3_REGION}"
+        export AWS_DEFAULT_REGION="${params.S3_REGION}"
+        export PULUMI_CONFIG_PASSPHRASE="${PULUMI_CONFIG_PASSPHRASE}"
+        ${PULUMI_BIN} stack export --file ${project}-${stackNameOnly}-backup.json
+    """
+    
+    // Pulumi Cloudにログイン（明示的にCloud URLを指定）
+    sh """
+        echo "Pulumi Cloudにログイン中..."
+        export PULUMI_ACCESS_TOKEN="${PULUMI_ACCESS_TOKEN}"
+        ${PULUMI_BIN} login --cloud-url https://api.pulumi.com
+    """
+    
+    // ログイン状態の確認
+    def whoami = sh(
+        script: "${PULUMI_BIN} whoami 2>&1",
+        returnStdout: true
+    ).trim()
+    echo "現在のログイン状態: ${whoami}"
+    
+    // Cloudでスタックを初期化（組織名付きで）
+    def cloudStackName = "${params.PULUMI_ORG}/${project}/${stackNameOnly}"
+    sh """
+        echo "Pulumi Cloudでスタックを初期化中: ${cloudStackName}"
+        export PULUMI_ACCESS_TOKEN="${PULUMI_ACCESS_TOKEN}"
+        ${PULUMI_BIN} stack init ${cloudStackName} || echo "スタックは既に存在します"
+    """
+    
+    // スタックを選択
+    sh """
+        echo "Cloudのスタックを選択中..."
+        export PULUMI_ACCESS_TOKEN="${PULUMI_ACCESS_TOKEN}"
+        ${PULUMI_BIN} stack select ${cloudStackName}
+    """
+    
+    // バックアップからステートをインポート
+    sh """
+        echo "Pulumi Cloudにステートをインポート中..."
+        export PULUMI_ACCESS_TOKEN="${PULUMI_ACCESS_TOKEN}"
+        ${PULUMI_BIN} stack import --file ${project}-${stackNameOnly}-backup.json --force
+    """
+    
+    // 移行の確認
+    sh """
+        echo "移行後の状態を確認中..."
+        export PULUMI_ACCESS_TOKEN="${PULUMI_ACCESS_TOKEN}"
+        ${PULUMI_BIN} stack
+        ${PULUMI_BIN} stack export | jq '.version' || echo "ステートの確認に失敗"
+    """
+    
+    echo "✓ Pulumi Cloudへの移行が完了: ${cloudStackName}"
+    
+    // 古いS3スタックを削除（オプション）
+    if (params.REMOVE_OLD_STACK == 'true' && params.DRY_RUN == 'false') {
+        echo "\n古いS3バックエンドのスタックを削除中..."
+        
+        // バックアップファイルの存在確認
+        def backupExists = sh(
+            script: "test -f ${project}-${stackNameOnly}-backup.json && echo 'exists' || echo 'not exists'",
+            returnStdout: true
+        ).trim()
+        
+        if (backupExists != 'exists') {
+            error("バックアップファイルが見つかりません。安全のため削除を中止します。")
+        }
+        
+        // S3バックエンドに再度ログイン
+        sh """
+            echo "S3バックエンドに再ログイン中..."
+            export AWS_REGION="${params.S3_REGION}"
+            export AWS_DEFAULT_REGION="${params.S3_REGION}"
+            export PULUMI_CONFIG_PASSPHRASE="${PULUMI_CONFIG_PASSPHRASE}"
+            ${PULUMI_BIN} login ${s3BackendUrl}
+        """
+        
+        // スタックを選択
+        sh """
+            echo "削除するスタックを選択中: ${stackNameOnly}"
+            export PULUMI_CONFIG_PASSPHRASE="${PULUMI_CONFIG_PASSPHRASE}"
+            ${PULUMI_BIN} stack select ${stackNameOnly}
+        """
+        
+        // スタックを削除
+        sh """
+            echo "S3バックエンドからスタックを削除中: ${stackNameOnly}"
+            export PULUMI_CONFIG_PASSPHRASE="${PULUMI_CONFIG_PASSPHRASE}"
+            ${PULUMI_BIN} stack rm --yes --force || echo "スタックの削除に失敗しました"
+        """
+        
+        // S3からステートファイルも削除（正しいパス構造で）
+        sh """
+            echo "S3からステートファイルを削除中..."
+            aws s3 rm s3://${params.S3_BUCKET}/.pulumi/stacks/${project}/${stackNameOnly}.json --region ${params.S3_REGION} || true
+            aws s3 rm s3://${params.S3_BUCKET}/.pulumi/stacks/${project}/${stackNameOnly}.json.bak --region ${params.S3_REGION} || true
+            aws s3 rm s3://${params.S3_BUCKET}/.pulumi/history/${project}/${stackNameOnly}/ --recursive --region ${params.S3_REGION} || true
+        """
+        
+        echo "✓ 古いS3バックエンドのスタックを削除しました: ${stackNameOnly}"
+    }
+}

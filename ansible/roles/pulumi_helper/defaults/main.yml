@@ -2,14 +2,16 @@
 pulumi_base_path: "{{ playbook_dir }}/../../pulumi"
 
 # バックエンド設定
-pulumi_backend_type: "cloud"  # "cloud" または "s3"
+# all.ymlから読み込むか、デフォルト値を使用
+pulumi_backend_type: "{{ pulumi.backend_type | default('s3') }}"
 
-# Pulumi Cloud設定（デフォルト）
-pulumi_cloud_url: "https://api.pulumi.com"
+# Pulumi Cloud設定
+pulumi_cloud_url: "{{ pulumi.cloud.url | default('https://api.pulumi.com') }}"
 
 # S3バックエンド設定
-pulumi_s3_bucket: "pulumi-state-bucket"
-pulumi_s3_region: "ap-northeast-1"
+# all.ymlから読み込むか、CloudFormationで作成されたバケットを自動検出
+pulumi_s3_bucket: "{{ pulumi.s3.bucket | default(pulumi_state_bucket_name | default('')) }}"
+pulumi_s3_region: "{{ pulumi.s3.region | default('ap-northeast-1') }}"
 # S3バックエンドのパスフレーズは環境変数PULUMI_CONFIG_PASSPHRASEから取得
 
 # ログ出力の制御

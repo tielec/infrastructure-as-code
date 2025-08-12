@@ -1,6 +1,23 @@
 ---
 # インフラストラクチャ共通設定
 
+# Pulumi バックエンド設定
+pulumi:
+  # バックエンドタイプ（"cloud" または "s3"）
+  backend_type: "s3"
+  
+  # S3バックエンド設定
+  s3:
+    # S3バケット名（CloudFormationで作成されたバケット名を指定）
+    # デフォルトは "pulumi-state-{AWS_ACCOUNT_ID}" の形式
+    # 実行時に自動検出またはコマンドライン引数で指定可能
+    bucket: ""  # 空の場合は自動検出
+    region: "ap-northeast-1"
+  
+  # Pulumi Cloud設定（backend_type: "cloud" の場合に使用）
+  cloud:
+    url: "https://api.pulumi.com"
+
 # プロジェクト識別子
 infra:
   # メインのプロジェクト名（変数展開に使用）

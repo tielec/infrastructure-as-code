@@ -2,3 +2,7 @@
 # Pulumiヘルパーロールの依存関係定義
 dependencies:
   - role: aws_setup
+  - role: ssm_parameter_store
+    vars:
+      # S3バックエンド使用時にPULUMI_CONFIG_PASSPHRASEを自動取得
+      ssm_parameter_store_auto_fetch_passphrase: "{{ pulumi_backend_type | default('s3') == 's3' }}"

@@ -154,10 +154,98 @@ $ANSIBLE_PLAYBOOK_PATH "$PLAYBOOK_PATH" -v
 
 # Pulumi初期設定の案内
 echo -e "\n${BLUE}=== Pulumi設定 ===${NC}"
-echo -e "${YELLOW}Pulumiを使用するには、アクセストークンが必要です:${NC}"
+
+# CloudFormationスタックからPulumi S3バケット名を取得
+echo -e "${YELLOW}Pulumi用S3バケットを確認しています...${NC}"
+PULUMI_BUCKET=$(aws cloudformation describe-stacks --stack-name bootstrap-iac-environment --query "Stacks[0].Outputs[?OutputKey=='PulumiStateBucketName'].OutputValue" --output text 2>/dev/null || echo "")
+
+if [ -n "$PULUMI_BUCKET" ]; then
+    echo -e "${GREEN}✓ Pulumi S3バケットが見つかりました: ${PULUMI_BUCKET}${NC}"
+    
+    # SSMパラメータストアからPULUMI_CONFIG_PASSPHRASEを確認
+    PASSPHRASE_PARAM="/bootstrap/pulumi/config-passphrase"
+    echo -e "${YELLOW}Pulumi設定パスフレーズを確認しています...${NC}"
+    
+    EXISTING_PASSPHRASE=$(aws ssm get-parameter --name "$PASSPHRASE_PARAM" --with-decryption --query 'Parameter.Value' --output text 2>/dev/null || echo "")
+    
+    if [ -n "$EXISTING_PASSPHRASE" ]; then
+        echo -e "${GREEN}✓ Pulumi設定パスフレーズが既に設定されています${NC}"
+        echo -e "${YELLOW}既存のパスフレーズを使用します${NC}"
+    else
+        echo -e "${YELLOW}Pulumi設定パスフレーズがまだ設定されていません${NC}"
+        echo -e "${YELLOW}S3バックエンドのセキュリティのため、パスフレーズの設定が必要です${NC}"
+        echo -e ""
+        
+        # 対話形式でパスフレーズ設定を確認
+        read -p "Pulumi設定パスフレーズを設定しますか？ (Y/n): " setup_passphrase
+        if [[ ! $setup_passphrase =~ ^[Nn]$ ]]; then
+            echo -e "${YELLOW}パスフレーズの設定方法を選択してください:${NC}"
+            echo -e "1) 自動生成（推奨）"
+            echo -e "2) 手動入力"
+            read -p "選択 (1/2): " passphrase_choice
+            
+            if [ "$passphrase_choice" = "2" ]; then
+                # 手動入力
+                while true; do
+                    read -s -p "パスフレーズを入力してください（16文字以上推奨）: " passphrase1
+                    echo
+                    read -s -p "確認のためもう一度入力してください: " passphrase2
+                    echo
+                    
+                    if [ "$passphrase1" != "$passphrase2" ]; then
+                        echo -e "${RED}パスフレーズが一致しません。もう一度お試しください。${NC}"
+                    elif [ ${#passphrase1} -lt 16 ]; then
+                        echo -e "${RED}パスフレーズは16文字以上にしてください。${NC}"
+                    else
+                        PASSPHRASE="$passphrase1"
+                        break
+                    fi
+                done
+            else
+                # 自動生成
+                echo -e "${YELLOW}セキュアなパスフレーズを自動生成しています...${NC}"
+                PASSPHRASE=$(openssl rand -base64 32 | tr -d '\n')
+                echo -e "${GREEN}✓ パスフレーズが生成されました${NC}"
+            fi
+            
+            # SSMパラメータストアに保存
+            echo -e "${YELLOW}パスフレーズをSSMパラメータストアに保存しています...${NC}"
+            if aws ssm put-parameter \
+                --name "$PASSPHRASE_PARAM" \
+                --value "$PASSPHRASE" \
+                --type "SecureString" \
+                --description "Pulumi configuration passphrase for S3 backend encryption" \
+                --tags "Key=Name,Value=Pulumi-Config-Passphrase" "Key=Purpose,Value=Pulumi-Backend" \
+                --region ${AWS::Region:-ap-northeast-1} 2>/dev/null; then
+                echo -e "${GREEN}✓ パスフレーズがSSMパラメータストアに安全に保存されました${NC}"
+                echo -e "${GREEN}  パラメータ名: $PASSPHRASE_PARAM${NC}"
+            else
+                echo -e "${RED}パスフレーズの保存に失敗しました${NC}"
+                echo -e "${YELLOW}手動で以下のコマンドを実行してください:${NC}"
+                echo -e "${GREEN}aws ssm put-parameter --name \"$PASSPHRASE_PARAM\" --value \"YOUR_PASSPHRASE\" --type \"SecureString\"${NC}"
+            fi
+        fi
+    fi
+    
+    echo -e ""
+    echo -e "${BLUE}=== Pulumi使用方法 ===${NC}"
+    echo -e "${YELLOW}S3バックエンドを使用する場合（推奨）:${NC}"
+    echo -e "${GREEN}# SSMから自動的にパスフレーズを取得${NC}"
+    echo -e "${GREEN}export PULUMI_CONFIG_PASSPHRASE=\$(aws ssm get-parameter --name \"$PASSPHRASE_PARAM\" --with-decryption --query 'Parameter.Value' --output text)${NC}"
+    echo -e "${GREEN}export PULUMI_STATE_BUCKET_NAME=\"${PULUMI_BUCKET}\"${NC}"
+    echo -e ""
+    echo -e "${YELLOW}パスフレーズの確認:${NC}"
+    echo -e "${GREEN}aws ssm get-parameter --name \"$PASSPHRASE_PARAM\" --with-decryption --query 'Parameter.Value' --output text${NC}"
+else
+    echo -e "${YELLOW}Pulumi S3バケットが見つかりません。${NC}"
+    echo -e "${YELLOW}CloudFormationスタック 'bootstrap-environment' が存在することを確認してください。${NC}"
+fi
+
+echo -e ""
+echo -e "${YELLOW}代替オプション: Pulumi Cloudを使用する場合:${NC}"
 echo -e "${GREEN}export PULUMI_ACCESS_TOKEN=\"pul-YOUR_ACCESS_TOKEN\"${NC}"
-echo -e "${YELLOW}または、S3バックエンドを使用する場合:${NC}"
-echo -e "${GREEN}pulumi login s3://your-bucket-name${NC}"
+echo -e "${GREEN}# all.ymlでbackend_typeを'cloud'に変更するか、実行時に指定:${NC}"
+echo -e "${GREEN}ansible-playbook jenkins_setup_pipeline.yml -e \"env=dev pulumi_backend_type=cloud\"${NC}"
 
 # AWS認証情報の設定確認
 echo -e "\n${BLUE}=== AWS認証情報 ===${NC}"

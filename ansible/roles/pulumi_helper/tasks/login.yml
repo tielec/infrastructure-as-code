@@ -66,20 +66,62 @@
     - name: Handle S3 backend authentication
       when: pulumi_backend_type == 's3'
       block:
-        # PULUMI_CONFIG_PASSPHRASEの確認
+        # まず環境変数をチェック
         - name: Check for PULUMI_CONFIG_PASSPHRASE in environment
           ansible.builtin.set_fact:
-            pulumi_passphrase_set: "{{ lookup('env', 'PULUMI_CONFIG_PASSPHRASE') | length > 0 }}"
-            pulumi_config_passphrase: "{{ lookup('env', 'PULUMI_CONFIG_PASSPHRASE') }}"
+            pulumi_passphrase_from_env: "{{ lookup('env', 'PULUMI_CONFIG_PASSPHRASE') }}"
           no_log: true
 
-        - name: Fail if PULUMI_CONFIG_PASSPHRASE is not set
+        # 環境変数がない場合はSSMから取得を試みる
+        - name: Get passphrase from SSM if not in environment
+          when: pulumi_passphrase_from_env | length == 0
+          block:
+            - name: Retrieve PULUMI_CONFIG_PASSPHRASE from SSM Parameter Store
+              ansible.builtin.include_role:
+                name: ssm_parameter_store
+                tasks_from: get_parameter
+              vars:
+                parameter_name: "/bootstrap/pulumi/config-passphrase"
+                decrypt: true
+                store_as: "pulumi_config_passphrase_from_ssm"
+                ssm_parameter_store_fail_on_missing: false
+                default_value: ""
+
+            - name: Set passphrase from SSM
+              ansible.builtin.set_fact:
+                pulumi_config_passphrase: "{{ pulumi_config_passphrase_from_ssm }}"
+              when: pulumi_config_passphrase_from_ssm | length > 0
+              no_log: true
+
+        # 環境変数がある場合はそれを優先使用
+        - name: Use passphrase from environment variable
+          ansible.builtin.set_fact:
+            pulumi_config_passphrase: "{{ pulumi_passphrase_from_env }}"
+          when: pulumi_passphrase_from_env | length > 0
+          no_log: true
+
+        # パスフレーズが設定されているか最終確認
+        - name: Check if passphrase is set
+          ansible.builtin.set_fact:
+            pulumi_passphrase_set: "{{ pulumi_config_passphrase is defined and pulumi_config_passphrase | length > 0 }}"
+          no_log: true
+
+        - name: Display passphrase source (debug mode)
+          ansible.builtin.debug:
+            msg: "PULUMI_CONFIG_PASSPHRASE source: {{ 'environment variable' if pulumi_passphrase_from_env | length > 0 else 'SSM Parameter Store' if pulumi_config_passphrase | length > 0 else 'not found' }}"
+          when: ansible_verbosity > 1
+
+        - name: Fail if PULUMI_CONFIG_PASSPHRASE is not available
           ansible.builtin.fail:
             msg: |
-              ERROR: PULUMI_CONFIG_PASSPHRASE environment variable is not set.
+              ERROR: PULUMI_CONFIG_PASSPHRASE is not available.
               S3 backend requires a passphrase for encryption.
-              Please set the PULUMI_CONFIG_PASSPHRASE environment variable:
-              export PULUMI_CONFIG_PASSPHRASE="your-secure-passphrase"
+              
+              Option 1: Run setup-bootstrap.sh to configure passphrase in SSM
+              Option 2: Set environment variable manually:
+                export PULUMI_CONFIG_PASSPHRASE="your-secure-passphrase"
+              Option 3: Get from SSM and export if already configured:
+                export PULUMI_CONFIG_PASSPHRASE=$(aws ssm get-parameter --name "/bootstrap/pulumi/config-passphrase" --with-decryption --query 'Parameter.Value' --output text)
           when: not pulumi_passphrase_set
 
         # 環境変数をエクスポートする共通コマンドを定義（S3用）
