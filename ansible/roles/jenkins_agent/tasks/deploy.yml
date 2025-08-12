@@ -54,23 +54,87 @@
         pulumi_project_path: "{{ pulumi_path }}/jenkins-agent"
         stack_name: "{{ env_name }}"
     
-    - name: Configure agent stack
-      ansible.builtin.shell: |
-        {{ scripts_dir }}/aws/aws-env.sh
-        cd {{ pulumi_path }}/jenkins-agent        
-        pulumi config set aws:region {{ aws_region_name }}
-        pulumi config set {{ agent_project_name }}:projectName {{ project_name }}
-        pulumi config set {{ agent_project_name }}:networkStackName {{ network_project_name }}
-        pulumi config set {{ agent_project_name }}:securityStackName {{ security_project_name }}
-        pulumi config set {{ agent_project_name }}:instanceType {{ instance_type }}
-        pulumi config set {{ agent_project_name }}:minTargetCapacity {{ min_capacity }}
-        pulumi config set {{ agent_project_name }}:maxTargetCapacity {{ max_capacity }}
-        pulumi config set {{ agent_project_name }}:spotPrice {{ spot_price }}
-        {% if key_name is defined and key_name != "" %}
-        pulumi config set {{ agent_project_name }}:keyName {{ key_name }}
-        {% endif %}
-      register: pulumi_config_result
-      changed_when: pulumi_config_result.rc == 0
+    - name: Configure agent stack - AWS region
+      ansible.builtin.include_role:
+        name: pulumi_helper
+        tasks_from: set_config
+      vars:
+        pulumi_project_path: "{{ pulumi_path }}/jenkins-agent"
+        config_key: "aws:region"
+        config_value: "{{ aws_region_name }}"
+
+    - name: Configure agent stack - project name
+      ansible.builtin.include_role:
+        name: pulumi_helper
+        tasks_from: set_config
+      vars:
+        pulumi_project_path: "{{ pulumi_path }}/jenkins-agent"
+        config_key: "{{ agent_project_name }}:projectName"
+        config_value: "{{ project_name }}"
+
+    - name: Configure agent stack - network stack name
+      ansible.builtin.include_role:
+        name: pulumi_helper
+        tasks_from: set_config
+      vars:
+        pulumi_project_path: "{{ pulumi_path }}/jenkins-agent"
+        config_key: "{{ agent_project_name }}:networkStackName"
+        config_value: "{{ network_project_name }}"
+
+    - name: Configure agent stack - security stack name
+      ansible.builtin.include_role:
+        name: pulumi_helper
+        tasks_from: set_config
+      vars:
+        pulumi_project_path: "{{ pulumi_path }}/jenkins-agent"
+        config_key: "{{ agent_project_name }}:securityStackName"
+        config_value: "{{ security_project_name }}"
+
+    - name: Configure agent stack - instance type
+      ansible.builtin.include_role:
+        name: pulumi_helper
+        tasks_from: set_config
+      vars:
+        pulumi_project_path: "{{ pulumi_path }}/jenkins-agent"
+        config_key: "{{ agent_project_name }}:instanceType"
+        config_value: "{{ instance_type }}"
+
+    - name: Configure agent stack - min target capacity
+      ansible.builtin.include_role:
+        name: pulumi_helper
+        tasks_from: set_config
+      vars:
+        pulumi_project_path: "{{ pulumi_path }}/jenkins-agent"
+        config_key: "{{ agent_project_name }}:minTargetCapacity"
+        config_value: "{{ min_capacity }}"
+
+    - name: Configure agent stack - max target capacity
+      ansible.builtin.include_role:
+        name: pulumi_helper
+        tasks_from: set_config
+      vars:
+        pulumi_project_path: "{{ pulumi_path }}/jenkins-agent"
+        config_key: "{{ agent_project_name }}:maxTargetCapacity"
+        config_value: "{{ max_capacity }}"
+
+    - name: Configure agent stack - spot price
+      ansible.builtin.include_role:
+        name: pulumi_helper
+        tasks_from: set_config
+      vars:
+        pulumi_project_path: "{{ pulumi_path }}/jenkins-agent"
+        config_key: "{{ agent_project_name }}:spotPrice"
+        config_value: "{{ spot_price }}"
+
+    - name: Configure agent stack - key name (if defined)
+      ansible.builtin.include_role:
+        name: pulumi_helper
+        tasks_from: set_config
+      vars:
+        pulumi_project_path: "{{ pulumi_path }}/jenkins-agent"
+        config_key: "{{ agent_project_name }}:keyName"
+        config_value: "{{ key_name }}"
+      when: key_name is defined and key_name != ""
     
     # 依存関係の確認: 必要なスタックが全てデプロイ済みであることを確認
     - name: Check network stack outputs
