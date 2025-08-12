@@ -1,5 +1,4 @@
 # pulumi/test-s3/Pulumi.yaml
 name: test-s3
-organization: tielec
 runtime: nodejs
 description: Test S3 Bucket - Minimal Pulumi Project

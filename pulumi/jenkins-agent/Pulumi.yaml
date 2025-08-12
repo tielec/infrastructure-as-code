@@ -1,4 +1,3 @@
 name: jenkins-agent
-organization: tielec
 runtime: nodejs
 description: Jenkins Agent Infrastructure (Spot Fleet)
