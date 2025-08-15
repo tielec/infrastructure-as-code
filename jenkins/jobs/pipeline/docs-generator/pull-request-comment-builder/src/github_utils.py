@@ -284,12 +284,12 @@ class GitHubClient:
         """
         try:
             rate_limit = self.client.get_rate_limit()
-            remaining = rate_limit.core.remaining
+            remaining = rate_limit.resources.core.remaining
             
             if remaining < 100:
                 print(f"Warning: GitHub API rate limit is low. {remaining} requests remaining.")
             if remaining <= 0:
-                reset_time = rate_limit.core.reset.strftime('%Y-%m-%d %H:%M:%S')
+                reset_time = rate_limit.resources.core.reset.strftime('%Y-%m-%d %H:%M:%S')
                 raise GitHubClientError(
                     f"GitHub API rate limit exceeded. Resets at {reset_time}"
                 )
