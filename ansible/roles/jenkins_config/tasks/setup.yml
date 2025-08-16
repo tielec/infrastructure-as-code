@@ -16,7 +16,7 @@
     name: ssm_parameter_store
     tasks_from: get_parameter
   vars:
-    parameter_name: "/{{ project_name }}/{{ env_name }}/jenkins/instanceId"
+    parameter_name: "/jenkins-infra/{{ env_name }}/controller/instance-id"
     store_as: "jenkins_instance_id"
 
 - name: Verify Jenkins instance ID
@@ -35,7 +35,7 @@
     name: ssm_parameter_store
     tasks_from: get_parameter
   vars:
-    parameter_name: "/{{ project_name }}/{{ env_name }}/storage/efsFileSystemId"
+    parameter_name: "/jenkins-infra/{{ env_name }}/storage/efs-file-system-id"
     store_as: "efs_file_system_id"
 
 - name: Display Jenkins EFS file system ID
