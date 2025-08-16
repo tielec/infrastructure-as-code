@@ -45,68 +45,39 @@
         config_key: "aws:region"
         config_value: "{{ aws_region_name }}"
 
-    - name: Configure loadbalancer stack - project name
+    # SSMパラメータの確認
+    - name: Get project name from SSM Parameter Store
       ansible.builtin.include_role:
-        name: pulumi_helper
-        tasks_from: set_config
+        name: ssm_parameter_store
+        tasks_from: get_parameter
       vars:
-        pulumi_project_path: "{{ pulumi_path }}/jenkins-loadbalancer"
-        config_key: "{{ loadbalancer_project_name }}:projectName"
-        config_value: "{{ project_name }}"
-
-    - name: Configure loadbalancer stack - network stack name
+        parameter_name: "/jenkins-infra/{{ env_name }}/config/project-name"
+        store_as: "ssm_project_name"
+    
+    - name: Get VPC ID from SSM Parameter Store
       ansible.builtin.include_role:
-        name: pulumi_helper
-        tasks_from: set_config
+        name: ssm_parameter_store
+        tasks_from: get_parameter
       vars:
-        pulumi_project_path: "{{ pulumi_path }}/jenkins-loadbalancer"
-        config_key: "{{ loadbalancer_project_name }}:networkStackName"
-        config_value: "{{ network_project_name }}"
-
-    - name: Configure loadbalancer stack - security stack name
+        parameter_name: "/jenkins-infra/{{ env_name }}/network/vpc-id"
+        store_as: "ssm_vpc_id"
+    
+    - name: Get ALB security group ID from SSM Parameter Store
       ansible.builtin.include_role:
-        name: pulumi_helper
-        tasks_from: set_config
+        name: ssm_parameter_store
+        tasks_from: get_parameter
       vars:
-        pulumi_project_path: "{{ pulumi_path }}/jenkins-loadbalancer"
-        config_key: "{{ loadbalancer_project_name }}:securityStackName"
-        config_value: "{{ security_project_name }}"
+        parameter_name: "/jenkins-infra/{{ env_name }}/security/alb-sg-id"
+        store_as: "ssm_alb_sg_id"
     
-    # 依存関係の確認: NetworkとSecurityがデプロイ済みであることを確認
-    - name: Check network stack outputs
-      ansible.builtin.include_role:
-        name: pulumi_helper
-        tasks_from: get_outputs
-      vars:
-        pulumi_project_path: "{{ pulumi_path }}/jenkins-network"
-        stack_name: "{{ env_name }}"
-        output_name: "vpcId"
-        mock_output: "mock-vpc-id-for-check-mode"
-    
-    - name: Set network VPC ID
-      ansible.builtin.set_fact:
-        network_vpc_id: "{{ stack_output_result.stdout | trim }}"
-    
-    - name: Check security stack outputs
-      ansible.builtin.include_role:
-        name: pulumi_helper
-        tasks_from: get_outputs
-      vars:
-        pulumi_project_path: "{{ pulumi_path }}/jenkins-security"
-        stack_name: "{{ env_name }}"
-        output_name: "albSecurityGroupId"
-        mock_output: "mock-alb-sg-id"
-    
-    - name: Set ALB security group ID
-      ansible.builtin.set_fact:
-        alb_sg_id: "{{ stack_output_result.stdout | trim }}"
-    
-    - name: Display dependency validation
+    - name: Display configuration from SSM
       ansible.builtin.debug:
         msg: |
-          Dependency validation:
-          VPC ID from network stack: {{ network_vpc_id }}
-          ALB Security Group ID from security stack: {{ alb_sg_id }}
+          Using configuration from SSM:
+          - Project Name: {{ ssm_project_name }}
+          - VPC ID: {{ ssm_vpc_id }}
+          - ALB Security Group ID: {{ ssm_alb_sg_id }}
+    
     
     # Pulumiプレビュー
     - name: Preview loadbalancer deployment
@@ -131,49 +102,49 @@
       when: not ansible_check_mode
     
     # ALB DNSの取得
-    - name: Get ALB DNS name
+    - name: Get ALB DNS name from SSM Parameter Store
       ansible.builtin.include_role:
-        name: pulumi_helper
-        tasks_from: get_outputs
+        name: ssm_parameter_store
+        tasks_from: get_parameter
       vars:
-        pulumi_project_path: "{{ pulumi_path }}/jenkins-loadbalancer"
-        stack_name: "{{ env_name }}"
-        output_name: "albDnsName"
-        mock_output: "mock-alb-dns-name"
+        parameter_name: "/jenkins-infra/{{ env_name }}/loadbalancer/alb-dns-name"
+        store_as: "alb_dns_name"
     
-    - name: Set ALB DNS name
-      ansible.builtin.set_fact:
-        alb_dns_name: "{{ stack_output_result.stdout | trim }}"
-    
-    # Blue ターゲットグループARN
-    - name: Get Blue target group ARN
+    # ALB ARNの取得
+    - name: Get ALB ARN from SSM Parameter Store
       ansible.builtin.include_role:
-        name: pulumi_helper
-        tasks_from: get_outputs
+        name: ssm_parameter_store
+        tasks_from: get_parameter
       vars:
-        pulumi_project_path: "{{ pulumi_path }}/jenkins-loadbalancer"
-        stack_name: "{{ env_name }}"
-        output_name: "blueTargetGroupArn"
-        mock_output: "mock-blue-tg-arn"
+        parameter_name: "/jenkins-infra/{{ env_name }}/loadbalancer/alb-arn"
+        store_as: "alb_arn"
     
-    - name: Set Blue target group ARN
-      ansible.builtin.set_fact:
-        blue_target_group_arn: "{{ stack_output_result.stdout | trim }}"
-    
-    # Green ターゲットグループARN
-    - name: Get Green target group ARN
+    # Blue ターゲットグループARNの取得
+    - name: Get Blue target group ARN from SSM Parameter Store
       ansible.builtin.include_role:
-        name: pulumi_helper
-        tasks_from: get_outputs
+        name: ssm_parameter_store
+        tasks_from: get_parameter
       vars:
-        pulumi_project_path: "{{ pulumi_path }}/jenkins-loadbalancer"
-        stack_name: "{{ env_name }}"
-        output_name: "greenTargetGroupArn"
-        mock_output: "mock-green-tg-arn"
+        parameter_name: "/jenkins-infra/{{ env_name }}/loadbalancer/blue-target-group-arn"
+        store_as: "blue_target_group_arn"
     
-    - name: Set Green target group ARN
-      ansible.builtin.set_fact:
-        green_target_group_arn: "{{ stack_output_result.stdout | trim }}"
+    # Green ターゲットグループARNの取得
+    - name: Get Green target group ARN from SSM Parameter Store
+      ansible.builtin.include_role:
+        name: ssm_parameter_store
+        tasks_from: get_parameter
+      vars:
+        parameter_name: "/jenkins-infra/{{ env_name }}/loadbalancer/green-target-group-arn"
+        store_as: "green_target_group_arn"
+    
+    # Jenkins URLの取得
+    - name: Get Jenkins URL from SSM Parameter Store
+      ansible.builtin.include_role:
+        name: ssm_parameter_store
+        tasks_from: get_parameter
+      vars:
+        parameter_name: "/jenkins-infra/{{ env_name }}/loadbalancer/jenkins-url"
+        store_as: "jenkins_url"
     
     - name: Set loadbalancer facts for use in other playbooks
       ansible.builtin.set_fact:
@@ -186,8 +157,10 @@
         msg: |
           LoadBalancer Infrastructure Deployed Successfully:
           - ALB DNS Name: {{ alb_dns_name }}
+          - ALB ARN: {{ alb_arn }}
           - Blue Target Group ARN: {{ blue_target_group_arn }}
           - Green Target Group ARN: {{ green_target_group_arn }}
+          - Jenkins URL: {{ jenkins_url }}
   
   rescue:
     - name: Set loadbalancer deployment status on failure

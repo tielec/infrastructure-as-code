@@ -7,44 +7,64 @@
 import * as pulumi from "@pulumi/pulumi";
 import * as aws from "@pulumi/aws";
 
-// コンフィグから設定を取得
-const config = new pulumi.Config();
-const projectName = config.get("projectName") || "jenkins-infra";
+// 環境名をスタック名から取得
 const environment = pulumi.getStack();
+const ssmPrefix = `/jenkins-infra/${environment}`;
 
-// ネットワークスタック名とセキュリティスタック名を設定から取得
-const networkStackName = config.get("networkStackName") || "jenkins-network";
-const securityStackName = config.get("securityStackName") || "jenkins-security";
+// SSMパラメータから設定を取得
+const projectNameParam = aws.ssm.getParameter({
+    name: `${ssmPrefix}/config/project-name`,
+});
+const certificateArnParam = aws.ssm.getParameter({
+    name: `${ssmPrefix}/config/certificate-arn`,
+}, { async: true });
 
-// 既存のネットワークスタックとセキュリティスタックから値を取得
-const networkStack = new pulumi.StackReference(`${pulumi.getOrganization()}/${networkStackName}/${environment}`);
-const securityStack = new pulumi.StackReference(`${pulumi.getOrganization()}/${securityStackName}/${environment}`);
+// ネットワークリソースのSSMパラメータを取得
+const vpcIdParam = aws.ssm.getParameter({
+    name: `${ssmPrefix}/network/vpc-id`,
+});
+const publicSubnetAIdParam = aws.ssm.getParameter({
+    name: `${ssmPrefix}/network/public-subnet-a-id`,
+});
+const publicSubnetBIdParam = aws.ssm.getParameter({
+    name: `${ssmPrefix}/network/public-subnet-b-id`,
+});
 
-// VPC ID、パブリックサブネットID、ALB用セキュリティグループIDを取得
-const vpcId = networkStack.getOutput("vpcId");
-const publicSubnetIds = networkStack.getOutput("publicSubnetIds");
-const albSecurityGroupId = securityStack.getOutput("albSecurityGroupId");
+// セキュリティグループのSSMパラメータを取得
+const albSecurityGroupIdParam = aws.ssm.getParameter({
+    name: `${ssmPrefix}/security/alb-sg-id`,
+});
+
+// 設定値を変数に設定
+const projectName = pulumi.output(projectNameParam).apply(p => p.value);
+const certificateArn = certificateArnParam.then(p => p.value).catch(() => undefined);
+
+// ネットワークリソースIDを取得
+const vpcId = pulumi.output(vpcIdParam).apply(p => p.value);
+const publicSubnetAId = pulumi.output(publicSubnetAIdParam).apply(p => p.value);
+const publicSubnetBId = pulumi.output(publicSubnetBIdParam).apply(p => p.value);
+const publicSubnetIds = [publicSubnetAId, publicSubnetBId];
+const albSecurityGroupId = pulumi.output(albSecurityGroupIdParam).apply(p => p.value);
 
 // より短い名前の生成（ALBの名前制限に対応）
-const shortProjectName = projectName.length > 10 ? projectName.substring(0, 10) : projectName;
 const shortEnvName = environment.length > 3 ? environment.substring(0, 3) : environment;
 
 // Application Load Balancerの作成
-const alb = new aws.lb.LoadBalancer(`${shortProjectName}-alb`, {
+const alb = new aws.lb.LoadBalancer(`alb`, {
     internal: false,
     loadBalancerType: "application",
     securityGroups: [albSecurityGroupId],
     subnets: publicSubnetIds,
     enableDeletionProtection: environment === "prod",
     tags: {
-        Name: `${projectName}-jenkins-alb-${environment}`,
+        Name: pulumi.interpolate`${projectName}-jenkins-alb-${environment}`,
         Environment: environment,
         ManagedBy: "pulumi",
     },
 });
 
 // Blue環境のターゲットグループ
-const blueTargetGroup = new aws.lb.TargetGroup(`${shortProjectName}-blue-tg`, {
+const blueTargetGroup = new aws.lb.TargetGroup(`blue-tg`, {
     port: 8080,
     protocol: "HTTP",
     vpcId: vpcId,
@@ -61,14 +81,14 @@ const blueTargetGroup = new aws.lb.TargetGroup(`${shortProjectName}-blue-tg`, {
         matcher: "200-399",  // Jenkinsの場合、リダイレクトも正常と見なす
     },
     tags: {
-        Name: `${projectName}-jenkins-blue-tg-${environment}`,
+        Name: pulumi.interpolate`${projectName}-jenkins-blue-tg-${environment}`,
         Environment: environment,
         Color: "blue",
     },
 });
 
 // Green環境のターゲットグループ
-const greenTargetGroup = new aws.lb.TargetGroup(`${shortProjectName}-green-tg`, {
+const greenTargetGroup = new aws.lb.TargetGroup(`green-tg`, {
     port: 8080,
     protocol: "HTTP",
     vpcId: vpcId,
@@ -85,20 +105,19 @@ const greenTargetGroup = new aws.lb.TargetGroup(`${shortProjectName}-green-tg`, 
         matcher: "200-399",  // Jenkinsの場合、リダイレクトも正常と見なす
     },
     tags: {
-        Name: `${projectName}-jenkins-green-tg-${environment}`,
+        Name: pulumi.interpolate`${projectName}-jenkins-green-tg-${environment}`,
         Environment: environment,
         Color: "green",
     },
 });
 
-// SSL証明書の設定（オプション、証明書ARNが設定されている場合）
-const certificateArn = config.get("certificateArn");
+// SSL証明書の設定は上部で取得済み
 
 // HTTPリスナーの設定
 let httpListener;
 if (certificateArn) {
     // SSL証明書が設定されている場合はHTTPSにリダイレクト
-    httpListener = new aws.lb.Listener(`${shortProjectName}-http`, {
+    httpListener = new aws.lb.Listener(`http`, {
         loadBalancerArn: alb.arn,
         port: 80,
         protocol: "HTTP",
@@ -113,7 +132,7 @@ if (certificateArn) {
     });
 } else {
     // 証明書が設定されていない場合はBlue環境に直接転送
-    httpListener = new aws.lb.Listener(`${shortProjectName}-http`, {
+    httpListener = new aws.lb.Listener(`http`, {
         loadBalancerArn: alb.arn,
         port: 80,
         protocol: "HTTP",
@@ -127,7 +146,7 @@ if (certificateArn) {
 // HTTPSリスナーの設定（SSL証明書が設定されている場合のみ）
 let httpsListener;
 if (certificateArn) {
-    httpsListener = new aws.lb.Listener(`${shortProjectName}-https`, {
+    httpsListener = new aws.lb.Listener(`https`, {
         loadBalancerArn: alb.arn,
         port: 443,
         protocol: "HTTPS",
@@ -141,7 +160,7 @@ if (certificateArn) {
 }
 
 // Jenkins専用ポート（8080）のバックアップリスナー
-const httpDirectListener = new aws.lb.Listener(`${shortProjectName}-http-8080`, {
+const httpDirectListener = new aws.lb.Listener(`http-8080`, {
     loadBalancerArn: alb.arn,
     port: 8080,
     protocol: "HTTP",
@@ -152,26 +171,136 @@ const httpDirectListener = new aws.lb.Listener(`${shortProjectName}-http-8080`, 
 });
 
 // Blue/Green切り替え用のパラメータストア
-const activeEnvironmentParam = new aws.ssm.Parameter(`${shortProjectName}-active-env`, {
-    name: `/${projectName}/${environment}/jenkins/active-environment`,
+const activeEnvironmentParam = new aws.ssm.Parameter(`active-env`, {
+    name: `${ssmPrefix}/loadbalancer/active-environment`,
     type: "String",
     value: "blue", // 初期値はblue
+    overwrite: true,
     description: "Currently active Jenkins environment (blue/green)",
     tags: {
         Environment: environment,
         ManagedBy: "pulumi",
+        Component: "loadbalancer",
     },
 });
 
 // Jenkins URLをSSMパラメータストアに保存
-const jenkinsUrlParam = new aws.ssm.Parameter(`${shortProjectName}-jenkins-url`, {
-    name: `/${projectName}/${environment}/jenkins/url`,
+const jenkinsUrlParam = new aws.ssm.Parameter(`jenkins-url`, {
+    name: `${ssmPrefix}/loadbalancer/jenkins-url`,
     type: "String",
     value: pulumi.interpolate`http://${alb.dnsName}/`,
+    overwrite: true,
     description: "Jenkins URL for external access via ALB",
     tags: {
         Environment: environment,
         ManagedBy: "pulumi",
+        Component: "loadbalancer",
+    },
+});
+
+// ALBのARNをSSMパラメータに保存
+const albArnParam = new aws.ssm.Parameter(`alb-arn`, {
+    name: `${ssmPrefix}/loadbalancer/alb-arn`,
+    type: "String",
+    value: alb.arn,
+    overwrite: true,
+    tags: {
+        Environment: environment,
+        ManagedBy: "pulumi",
+        Component: "loadbalancer",
+    },
+});
+
+// ALBのDNS名をSSMパラメータに保存
+const albDnsNameParam = new aws.ssm.Parameter(`alb-dns-name`, {
+    name: `${ssmPrefix}/loadbalancer/alb-dns-name`,
+    type: "String",
+    value: alb.dnsName,
+    overwrite: true,
+    tags: {
+        Environment: environment,
+        ManagedBy: "pulumi",
+        Component: "loadbalancer",
+    },
+});
+
+// ALBのZone IDをSSMパラメータに保存
+const albZoneIdParam = new aws.ssm.Parameter(`alb-zone-id`, {
+    name: `${ssmPrefix}/loadbalancer/alb-zone-id`,
+    type: "String",
+    value: alb.zoneId,
+    overwrite: true,
+    tags: {
+        Environment: environment,
+        ManagedBy: "pulumi",
+        Component: "loadbalancer",
+    },
+});
+
+// Blue Target GroupのARNをSSMパラメータに保存
+const blueTargetGroupArnParam = new aws.ssm.Parameter(`blue-tg-arn`, {
+    name: `${ssmPrefix}/loadbalancer/blue-target-group-arn`,
+    type: "String",
+    value: blueTargetGroup.arn,
+    overwrite: true,
+    tags: {
+        Environment: environment,
+        ManagedBy: "pulumi",
+        Component: "loadbalancer",
+    },
+});
+
+// Green Target GroupのARNをSSMパラメータに保存
+const greenTargetGroupArnParam = new aws.ssm.Parameter(`green-tg-arn`, {
+    name: `${ssmPrefix}/loadbalancer/green-target-group-arn`,
+    type: "String",
+    value: greenTargetGroup.arn,
+    overwrite: true,
+    tags: {
+        Environment: environment,
+        ManagedBy: "pulumi",
+        Component: "loadbalancer",
+    },
+});
+
+// HTTPリスナーのARNをSSMパラメータに保存
+const httpListenerArnParam = new aws.ssm.Parameter(`http-listener-arn`, {
+    name: `${ssmPrefix}/loadbalancer/http-listener-arn`,
+    type: "String",
+    value: httpListener.arn,
+    overwrite: true,
+    tags: {
+        Environment: environment,
+        ManagedBy: "pulumi",
+        Component: "loadbalancer",
+    },
+});
+
+// HTTPSリスナーのARNをSSMパラメータに保存（存在する場合）
+if (httpsListener) {
+    const httpsListenerArnParam = new aws.ssm.Parameter(`https-listener-arn`, {
+        name: `${ssmPrefix}/loadbalancer/https-listener-arn`,
+        type: "String",
+        value: httpsListener.arn,
+        overwrite: true,
+        tags: {
+            Environment: environment,
+            ManagedBy: "pulumi",
+            Component: "loadbalancer",
+        },
+    });
+}
+
+// HTTP Direct ListenerのARNをSSMパラメータに保存
+const httpDirectListenerArnParam = new aws.ssm.Parameter(`http-direct-listener-arn`, {
+    name: `${ssmPrefix}/loadbalancer/http-direct-listener-arn`,
+    type: "String",
+    value: httpDirectListener.arn,
+    overwrite: true,
+    tags: {
+        Environment: environment,
+        ManagedBy: "pulumi",
+        Component: "loadbalancer",
     },
 });
 
