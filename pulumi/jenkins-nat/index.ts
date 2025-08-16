@@ -455,7 +455,7 @@ echo "============================================"`;
     const natInstance = new aws.ec2.Instance(`nat-instance`, {
         ami: pulumi.output(natAmi).apply(ami => ami.id),
         instanceType: natInstanceType,
-        keyName: keyName.apply(k => k === undefined ? undefined : k),
+        keyName: keyName as pulumi.Output<string | undefined>,
         subnetId: publicSubnetAId,
         vpcSecurityGroupIds: [natInstanceSecurityGroupId],
         iamInstanceProfile: natInstanceProfile.name,
