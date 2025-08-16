@@ -78,7 +78,7 @@ const jenkinsVersion = pulumi.output(jenkinsVersionParam).apply(p => p.value);
 const jenkinsColor = pulumi.output(jenkinsColorParam).apply(p => p.value);
 const recoveryMode = pulumi.output(recoveryModeParam).apply(p => p.value === "true");
 const instanceType = pulumi.output(instanceTypeParam).apply(p => p.value);
-const keyName = pulumi.output(keyNameParam).apply(p => p.value === "none" ? undefined : p.value);
+const keyName = pulumi.output(keyNameParam).apply(p => p.value);
 const gitRepo = pulumi.output(gitRepoParam).apply(p => p.value);
 const gitBranch = pulumi.output(gitBranchParam).apply(p => p.value);
 
@@ -455,7 +455,7 @@ const jenkinsInstance = new aws.ec2.Instance(`jenkins-controller`, {
     vpcSecurityGroupIds: pulumi.all([jenkinsSecurityGroupId, efsSecurityGroupId]).apply(
         ([jenkinsSgId, efsSgId]) => [jenkinsSgId, efsSgId]
     ),
-    keyName: keyName,
+    keyName: keyName.apply(k => k === "none" ? "" : k),
     iamInstanceProfile: jenkinsInstanceProfile.name,
     userData: userDataScript.apply(script => Buffer.from(script).toString("base64")),
     rootBlockDevice: {
