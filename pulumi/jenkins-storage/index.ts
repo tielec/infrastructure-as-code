@@ -7,27 +7,47 @@
 import * as pulumi from "@pulumi/pulumi";
 import * as aws from "@pulumi/aws";
 
-// コンフィグから設定を取得
-const config = new pulumi.Config();
-const projectName = config.get("projectName") || "jenkins-infra";
+// 環境名をスタック名から取得
 const environment = pulumi.getStack();
+const ssmPrefix = `/jenkins-infra/${environment}`;
 
-// ネットワークスタック名とセキュリティスタック名を設定から取得
-const networkStackName = config.get("networkStackName") || "jenkins-network";
-const securityStackName = config.get("securityStackName") || "jenkins-security";
+// SSMパラメータから設定を取得
+const projectNameParam = aws.ssm.getParameter({
+    name: `${ssmPrefix}/config/project-name`,
+});
+const efsPerformanceModeParam = aws.ssm.getParameter({
+    name: `${ssmPrefix}/config/efs-performance-mode`,
+});
+const efsThroughputModeParam = aws.ssm.getParameter({
+    name: `${ssmPrefix}/config/efs-throughput-mode`,
+});
 
-// 既存のネットワークスタックとセキュリティスタックから値を取得
-const networkStack = new pulumi.StackReference(`${pulumi.getOrganization()}/${networkStackName}/${environment}`);
-const securityStack = new pulumi.StackReference(`${pulumi.getOrganization()}/${securityStackName}/${environment}`);
+// ネットワークリソースのSSMパラメータを取得
+const vpcIdParam = aws.ssm.getParameter({
+    name: `${ssmPrefix}/network/vpc-id`,
+});
+const privateSubnetAIdParam = aws.ssm.getParameter({
+    name: `${ssmPrefix}/network/private-subnet-a-id`,
+});
+const privateSubnetBIdParam = aws.ssm.getParameter({
+    name: `${ssmPrefix}/network/private-subnet-b-id`,
+});
 
-// VPC IDとプライベートサブネットIDを取得
-const vpcId = networkStack.getOutput("vpcId");
-const privateSubnetIds = networkStack.getOutput("privateSubnetIds");
-const privateSubnetAId = networkStack.getOutput("privateSubnetAId");
-const privateSubnetBId = networkStack.getOutput("privateSubnetBId");
+// セキュリティグループのSSMパラメータを取得
+const efsSecurityGroupIdParam = aws.ssm.getParameter({
+    name: `${ssmPrefix}/security/efs-sg-id`,
+});
 
-// EFSセキュリティグループIDを取得
-const efsSecurityGroupId = securityStack.getOutput("efsSecurityGroupId");
+// 設定値を変数に設定
+const projectName = pulumi.output(projectNameParam).apply(p => p.value);
+const efsPerformanceMode = pulumi.output(efsPerformanceModeParam).apply(p => p.value as "generalPurpose" | "maxIO");
+const efsThroughputMode = pulumi.output(efsThroughputModeParam).apply(p => p.value as "bursting" | "provisioned");
+
+// ネットワークリソースIDを取得
+const vpcId = pulumi.output(vpcIdParam).apply(p => p.value);
+const privateSubnetAId = pulumi.output(privateSubnetAIdParam).apply(p => p.value);
+const privateSubnetBId = pulumi.output(privateSubnetBIdParam).apply(p => p.value);
+const efsSecurityGroupId = pulumi.output(efsSecurityGroupIdParam).apply(p => p.value);
 
 // EFSファイルシステムの作成
 const efsFileSystem = new aws.efs.FileSystem(`${projectName}-efs`, {
@@ -98,30 +118,32 @@ const efsFileSystemIdParameter = new aws.ssm.Parameter(`${projectName}-efs-id-pa
     value: efsFileSystem.id,
     description: `EFS File System ID for Jenkins ${environment}`,
     tags: {
-        Name: `${projectName}-efs-id-param-${environment}`,
         Environment: environment,
         ManagedBy: "pulumi",
+        Component: "storage",
     },
 });
 
 // EFS DNS名をSSM Parameter Storeに保存
-const efsFileSystemDnsParameter = new aws.ssm.Parameter(`${projectName}-efs-dns-param`, {
-    name: `/${projectName}/${environment}/storage/efsFileSystemDns`,
+const efsFileSystemDnsParameter = new aws.ssm.Parameter(`efs-dns-param`, {
+    name: `${ssmPrefix}/storage/efs-dns-name`,
     type: "String",
     value: pulumi.interpolate`${efsFileSystem.id}.efs.${aws.config.region}.amazonaws.com`,
+    overwrite: true,
     description: `EFS DNS name for Jenkins ${environment}`,
     tags: {
-        Name: `${projectName}-efs-dns-param-${environment}`,
         Environment: environment,
         ManagedBy: "pulumi",
+        Component: "storage",
     },
 });
 
 // Jenkinsアクセスポイント情報もSSM Parameter Storeに保存
-const jenkinsAccessPointIdParameter = new aws.ssm.Parameter(`${projectName}-jenkins-ap-id-param`, {
-    name: `/${projectName}/${environment}/storage/jenkinsAccessPointId`,
+const jenkinsAccessPointIdParameter = new aws.ssm.Parameter(`jenkins-ap-id-param`, {
+    name: `${ssmPrefix}/storage/jenkins-access-point-id`,
     type: "String",
     value: jenkinsAccessPoint.id,
+    overwrite: true,
     description: `Jenkins EFS Access Point ID for ${environment}`,
     tags: {
         Environment: environment,
