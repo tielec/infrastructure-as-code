@@ -45,7 +45,7 @@ log "  RESTART_JENKINS: $RESTART_JENKINS"
 log "Checking Parameter Store access..."
 
 # EC2 Agent用秘密鍵の存在確認
-AGENT_KEY_PATH="/${PROJECT_NAME}/${ENVIRONMENT}/jenkins/agent/private-key"
+AGENT_KEY_PATH="/jenkins-infra/${ENVIRONMENT}/agent/private-key"
 if aws ssm get-parameter --name "$AGENT_KEY_PATH" --region "$AWS_REGION" --query "Parameter.Name" --output text >/dev/null 2>&1; then
     log "✓ EC2 Agent private key found at: $AGENT_KEY_PATH"
 else
