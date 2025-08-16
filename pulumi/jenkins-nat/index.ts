@@ -55,7 +55,8 @@ const natInstanceSecurityGroupIdParam = aws.ssm.getParameter({
 const projectName = pulumi.output(projectNameParam).apply(p => p.value);
 const highAvailabilityMode = pulumi.output(highAvailabilityModeParam).apply(p => p.value === "true");
 const natInstanceType = pulumi.output(natInstanceTypeParam).apply(p => p.value);
-const keyName = pulumi.output(keyNameParam).apply(p => p.value === "none" ? undefined : p.value);
+// keyNameは"none"の場合は使用しない
+const keyNameValue = pulumi.output(keyNameParam).apply(p => p.value);
 
 // ネットワークリソースIDを取得
 const vpcId = pulumi.output(vpcIdParam).apply(p => p.value);
@@ -455,7 +456,8 @@ echo "============================================"`;
     const natInstance = new aws.ec2.Instance(`nat-instance`, {
         ami: pulumi.output(natAmi).apply(ami => ami.id),
         instanceType: natInstanceType,
-        keyName: keyName as pulumi.Output<string | undefined>,
+        // keyNameは"none"の場合は設定しない（空文字として扱う）
+        keyName: keyNameValue.apply(k => k === "none" ? "" : k),
         subnetId: publicSubnetAId,
         vpcSecurityGroupIds: [natInstanceSecurityGroupId],
         iamInstanceProfile: natInstanceProfile.name,
