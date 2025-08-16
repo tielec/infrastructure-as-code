@@ -123,12 +123,13 @@ const jenkinsRecoveryModeParam = new aws.ssm.Parameter("jenkins-recovery-mode", 
 });
 
 // EC2設定
+// 注: 実際のキーペア名を設定するか、SSHアクセスが不要な場合は"none"のままにしてください
 const keyNameParam = new aws.ssm.Parameter("key-name", {
     name: `${ssmPrefix}/config/key-name`,
     type: "String",
-    value: "",  // 必要に応じて設定
+    value: "none",  // EC2キーペア名（SSHアクセスが必要な場合は実際のキーペア名を設定）
     overwrite: true,
-    description: "EC2 key pair name for SSH access",
+    description: "EC2 key pair name for SSH access (set to 'none' if SSH access not needed)",
     tags: {
         Environment: environment,
         ManagedBy: "pulumi",
@@ -207,7 +208,7 @@ const agentSpotPriceParam = new aws.ssm.Parameter("agent-spot-price", {
 const gitRepoParam = new aws.ssm.Parameter("git-repo", {
     name: `${ssmPrefix}/config/git-repo`,
     type: "String",
-    value: "",  // 必要に応じて設定
+    value: "https://github.com/tielec/infrastructure-as-code",
     overwrite: true,
     description: "Git repository URL for Jenkins configuration",
     tags: {
