@@ -380,6 +380,84 @@ Resources:
             sudo -u ec2-user bash -c 'source ~/.bashrc && which python3 && python3 --version'
             sudo -u ec2-user bash -c 'source ~/.bashrc && which ansible && ansible --version || echo "Ansible not found"'
 
+  # SSM Maintenance Window用のIAMロール
+  MaintenanceWindowRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub '${AWS::StackName}-MaintenanceWindowRole'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ssm.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AmazonSSMMaintenanceWindowRole
+      Policies:
+        - PolicyName: EC2StopPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - ec2:StopInstances
+                  - ec2:DescribeInstances
+                Resource: '*'
+      Tags:
+        - Key: Name
+          Value: Maintenance-Window-Role
+
+  # SSM Maintenance Window (日本時間午前1時に停止)
+  StopInstanceMaintenanceWindow:
+    Type: AWS::SSM::MaintenanceWindow
+    Properties:
+      Name: !Sub '${AWS::StackName}-StopInstance'
+      Description: 'Stop Bootstrap instance daily at 1:00 AM JST'
+      Schedule: 'cron(0 16 ? * * *)'  # 毎日UTC 16:00（日本時間午前1時）
+      Duration: 1  # 1時間のウィンドウ
+      Cutoff: 0    # ウィンドウ終了前に新しいタスクを開始しない
+      AllowUnassociatedTargets: false
+      Tags:
+        - Key: Name
+          Value: Stop-Instance-Window
+
+  # Maintenance Windowのターゲット（停止対象のインスタンス）
+  StopInstanceTarget:
+    Type: AWS::SSM::MaintenanceWindowTarget
+    Properties:
+      Name: !Sub '${AWS::StackName}-StopTarget'
+      Description: 'Target for stopping bootstrap instance'
+      WindowId: !Ref StopInstanceMaintenanceWindow
+      ResourceType: INSTANCE
+      Targets:
+        - Key: InstanceIds
+          Values:
+            - !Ref BootstrapInstance
+
+  # Maintenance Windowのタスク（EC2停止コマンド）
+  StopInstanceTask:
+    Type: AWS::SSM::MaintenanceWindowTask
+    Properties:
+      Name: !Sub '${AWS::StackName}-StopTask'
+      Description: 'Stop bootstrap EC2 instance'
+      WindowId: !Ref StopInstanceMaintenanceWindow
+      ServiceRoleArn: !GetAtt MaintenanceWindowRole.Arn
+      Priority: 1
+      MaxConcurrency: '1'  # 同時実行数（1つのインスタンスのみ）
+      MaxErrors: '0'       # エラー許容数（0 = エラーを許容しない）
+      TaskType: AUTOMATION
+      TaskArn: AWS-StopEC2Instance  # AWS提供の自動化ドキュメント
+      Targets:
+        - Key: WindowTargetIds
+          Values:
+            - !Ref StopInstanceTarget
+      TaskInvocationParameters:
+        MaintenanceWindowAutomationParameters:
+          Parameters:
+            InstanceId:
+              - !Ref BootstrapInstance
+
   # EC2 Instance
   BootstrapInstance:
     Type: AWS::EC2::Instance
@@ -402,6 +480,8 @@ Resources:
           Value: !Ref InstanceVersion
         - Key: OS
           Value: AmazonLinux2023
+        - Key: AutoStop
+          Value: 'Enabled'
 
 Outputs:
   BootstrapInstanceId:
@@ -431,3 +511,11 @@ Outputs:
   RecreateInstanceCommand:
     Description: Command to recreate the instance
     Value: !Sub 'aws cloudformation update-stack --stack-name ${AWS::StackName} --use-previous-template --parameters ParameterKey=InstanceVersion,ParameterValue=$(date +%s) --capabilities CAPABILITY_NAMED_IAM'
+
+  StopScheduleStatus:
+    Description: Daily stop schedule status
+    Value: !Sub 'Instance will be stopped daily at 1:00 AM JST (16:00 UTC) via SSM Maintenance Window'
+
+  ManualStartCommand:
+    Description: Command to manually start the instance
+    Value: !Sub 'aws ec2 start-instances --instance-ids ${BootstrapInstance} --region ${AWS::Region}'
