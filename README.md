@@ -40,7 +40,7 @@
     - `bootstrap/cfn-bootstrap-template.yaml`
 
 2. スタック作成時に以下のスタック名とパラメータを指定：
-    - スタック名: bootstrap-environment
+    - スタック名: bootstrap-iac-environment
     - パラメータ
         - `KeyName`: 先ほど作成したEC2キーペア名（例：`bootstrap-environment-key`）
         - `InstanceType`: インスタンスタイプ（デフォルト: t4g.small）
@@ -49,6 +49,18 @@
 3. スタックが作成完了したら、出力タブから以下の情報を確認：
     - `BootstrapPublicIP`: 踏み台サーバーのパブリックIPアドレス
     - `PulumiStateBucketName`: Pulumiのステート管理用S3バケット名
+    - `ManualStartCommand`: インスタンス手動起動コマンド
+
+#### インスタンスの自動停止機能
+
+ブートストラップインスタンスは、コスト削減のため毎日日本時間午前1時（UTC 16:00）に自動停止されます。この機能はSSM Maintenance Windowを使用して実装されています。
+
+- **自動停止時刻**: 毎日 1:00 AM JST
+- **手動起動方法**: CloudFormation出力の`ManualStartCommand`に表示されるコマンドを使用
+  ```bash
+  aws ec2 start-instances --instance-ids <instance-id> --region ap-northeast-1
+  ```
+- **自動停止の無効化**: 必要に応じてCloudFormationスタックを更新して、Maintenance Windowを無効化できます
 
 ### 3. 踏み台サーバーへの接続とセットアップ
 
@@ -78,9 +90,29 @@
    ```
 
    このスクリプトは以下の処理を自動的に行います：
-   - GitHubアクセス用のSSHキー生成（必要な場合）
+   - GitHubアクセス用のSSHキー設定（SSMパラメータストアと連携）
    - Node.js, AWS CLI, Pulumi, Dockerなどの必要なツールのインストール
    - AWS認証情報の設定
+
+#### GitHub SSHキーの自動管理
+
+`setup-bootstrap.sh`は、GitHub SSHキーをSSMパラメータストアで管理します：
+
+- **初回実行時**: 
+  - SSHキーを自動生成
+  - メールアドレスの入力は初回のみ必要
+  - SSMパラメータストアに自動保存（秘密鍵は暗号化）
+  
+- **2回目以降（新しいインスタンス）**:
+  - SSMから自動的にキーを復元
+  - ユーザー入力不要で処理を継続
+  
+- **保存されるパラメータ**:
+  - `/bootstrap/github/email` - GitHubメールアドレス
+  - `/bootstrap/github/ssh-private-key` - 秘密鍵（SecureString）
+  - `/bootstrap/github/ssh-public-key` - 公開鍵
+
+これにより、インスタンスの再作成時でも同じSSHキーを使用でき、GitHubへの再登録が不要になります。
 
 ### 4. Pulumiバックエンドの設定
 
@@ -212,6 +244,41 @@ ansible-playbook playbooks/deploy_jenkins_application.yml \
   -e "jenkins_jobs_repo=https://github.com/myorg/jenkins-jobs.git" \
   -e "jenkins_jobs_branch=develop" \
   -e "jenkins_jobs_jenkinsfile=pipelines/seed-job/Jenkinsfile"
+```
+
+## ブートストラップ環境の管理
+
+### インスタンスの再作成
+
+ブートストラップインスタンスを再作成する場合、CloudFormationスタックの`InstanceVersion`パラメータを更新します：
+
+```bash
+# CloudFormation出力の RecreateInstanceCommand を使用
+aws cloudformation update-stack --stack-name bootstrap-iac-environment \
+  --use-previous-template \
+  --parameters ParameterKey=InstanceVersion,ParameterValue=$(date +%s) \
+  --capabilities CAPABILITY_NAMED_IAM
+```
+
+再作成後も以下の情報は保持されます：
+- Pulumi S3バケットとその内容
+- SSMパラメータストア内の設定（GitHub SSHキー、Pulumiパスフレーズなど）
+- VPCやセキュリティグループなどのネットワーク設定
+
+### ブートストラップ環境の完全削除
+
+ブートストラップ環境を完全に削除する場合：
+
+```bash
+# CloudFormationスタックの削除
+aws cloudformation delete-stack --stack-name bootstrap-iac-environment
+
+# 注意: これにより以下が削除されます：
+# - EC2インスタンス
+# - VPCとネットワーク関連リソース
+# - Pulumi S3バケット（データも含む）
+# - SSMパラメータ
+# - IAMロールとポリシー
 ```
 
 ## インフラストラクチャの削除
