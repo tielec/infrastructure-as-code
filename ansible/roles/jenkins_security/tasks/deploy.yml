@@ -43,39 +43,30 @@
         pulumi_project_path: "{{ pulumi_path }}/jenkins-security"
         config_key: "aws:region"
         config_value: "{{ aws_region_name }}"
-
-    - name: Configure security stack - project name
-      ansible.builtin.include_role:
-        name: pulumi_helper
-        tasks_from: set_config
-      vars:
-        pulumi_project_path: "{{ pulumi_path }}/jenkins-security"
-        config_key: "{{ security_project_name }}:projectName"
-        config_value: "{{ project_name }}"
-
-    - name: Configure security stack - network stack name
-      ansible.builtin.include_role:
-        name: pulumi_helper
-        tasks_from: set_config
-      vars:
-        pulumi_project_path: "{{ pulumi_path }}/jenkins-security"
-        config_key: "{{ security_project_name }}:networkStackName"
-        config_value: "{{ network_project_name }}"
     
-    # VPC IDの確認
-    - name: Get VPC ID from network stack
+    # SSMパラメータの確認
+    - name: Get project name from SSM Parameter Store
       ansible.builtin.include_role:
-        name: pulumi_helper
-        tasks_from: get_outputs
+        name: ssm_parameter_store
+        tasks_from: get_parameter
       vars:
-        pulumi_project_path: "{{ pulumi_path }}/jenkins-network"
-        stack_name: "{{ env_name }}"
-        output_name: "vpcId"
-        mock_output: "mock-vpc-id-for-check-mode"
+        parameter_name: "/jenkins-infra/{{ env_name }}/config/project-name"
+        store_as: "ssm_project_name"
     
-    - name: Display VPC ID
+    - name: Get VPC ID from SSM Parameter Store
+      ansible.builtin.include_role:
+        name: ssm_parameter_store
+        tasks_from: get_parameter
+      vars:
+        parameter_name: "/jenkins-infra/{{ env_name }}/network/vpc-id"
+        store_as: "ssm_vpc_id"
+    
+    - name: Display configuration from SSM
       ansible.builtin.debug:
-        msg: "Using VPC ID: {{ stack_output_result.stdout | trim }}"
+        msg: |
+          Using configuration from SSM:
+          - Project Name: {{ ssm_project_name }}
+          - VPC ID: {{ ssm_vpc_id }}
     
     # Pulumiプレビュー
     - name: Preview security deployment

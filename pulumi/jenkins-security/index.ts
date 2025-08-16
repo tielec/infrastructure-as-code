@@ -7,19 +7,24 @@
 import * as pulumi from "@pulumi/pulumi";
 import * as aws from "@pulumi/aws";
 
-// コンフィグから設定を取得
-const config = new pulumi.Config();
-const projectName = config.get("projectName") || "jenkins-infra";
+// 環境名をスタック名から取得
 const environment = pulumi.getStack();
-// ネットワークスタック名を設定から取得（デフォルト値も設定）
-const networkStackName = config.get("networkStackName") || "jenkins-network";
+const ssmPrefix = `/jenkins-infra/${environment}`;
 
-// 既存のネットワークスタックから値を取得
-const networkStack = new pulumi.StackReference(`${pulumi.getOrganization()}/${networkStackName}/${environment}`);
-const vpcId = networkStack.getOutput("vpcId");
+// SSMパラメータから設定を取得
+const projectNameParam = aws.ssm.getParameter({
+    name: `${ssmPrefix}/config/project-name`,
+});
+const vpcIdParam = aws.ssm.getParameter({
+    name: `${ssmPrefix}/network/vpc-id`,
+});
+
+// 設定値を変数に設定
+const projectName = pulumi.output(projectNameParam).apply(p => p.value);
+const vpcId = pulumi.output(vpcIdParam).apply(p => p.value);
 
 // ALB用セキュリティグループ
-const albSecurityGroup = new aws.ec2.SecurityGroup(`${projectName}-alb-sg`, {
+const albSecurityGroup = new aws.ec2.SecurityGroup(`alb-sg`, {
     vpcId: vpcId,
     description: "Security group for Jenkins ALB",
     ingress: [
@@ -56,13 +61,14 @@ const albSecurityGroup = new aws.ec2.SecurityGroup(`${projectName}-alb-sg`, {
         description: "Allow all outbound traffic",
     }],
     tags: {
-        Name: `${projectName}-alb-sg-${environment}`,
+        Name: pulumi.interpolate`${projectName}-alb-sg-${environment}`,
         Environment: environment,
+        ManagedBy: "pulumi",
     },
 });
 
 // Jenkins マスター用セキュリティグループ
-const jenkinsSecurityGroup = new aws.ec2.SecurityGroup(`${projectName}-jenkins-sg`, {
+const jenkinsSecurityGroup = new aws.ec2.SecurityGroup(`jenkins-sg`, {
     vpcId: vpcId,
     description: "Security group for Jenkins master instances",
     ingress: [
@@ -100,13 +106,14 @@ const jenkinsSecurityGroup = new aws.ec2.SecurityGroup(`${projectName}-jenkins-s
         description: "Allow all outbound traffic",
     }],
     tags: {
-        Name: `${projectName}-jenkins-master-sg-${environment}`,
+        Name: pulumi.interpolate`${projectName}-jenkins-master-sg-${environment}`,
         Environment: environment,
+        ManagedBy: "pulumi",
     },
 });
 
 // Jenkinsエージェント用セキュリティグループ
-const jenkinsAgentSecurityGroup = new aws.ec2.SecurityGroup(`${projectName}-jenkins-agent-sg`, {
+const jenkinsAgentSecurityGroup = new aws.ec2.SecurityGroup(`jenkins-agent-sg`, {
     vpcId: vpcId,
     description: "Security group for Jenkins agent instances",
     ingress: [
@@ -136,13 +143,14 @@ const jenkinsAgentSecurityGroup = new aws.ec2.SecurityGroup(`${projectName}-jenk
         description: "Allow all outbound traffic",
     }],
     tags: {
-        Name: `${projectName}-jenkins-agent-sg-${environment}`,
+        Name: pulumi.interpolate`${projectName}-jenkins-agent-sg-${environment}`,
         Environment: environment,
+        ManagedBy: "pulumi",
     },
 });
 
 // EFS用セキュリティグループ
-const efsSecurityGroup = new aws.ec2.SecurityGroup(`${projectName}-efs-sg`, {
+const efsSecurityGroup = new aws.ec2.SecurityGroup(`efs-sg`, {
     vpcId: vpcId,
     description: "Security group for Jenkins EFS",
     ingress: [
@@ -163,13 +171,14 @@ const efsSecurityGroup = new aws.ec2.SecurityGroup(`${projectName}-efs-sg`, {
         description: "Allow all outbound traffic",
     }],
     tags: {
-        Name: `${projectName}-efs-sg-${environment}`,
+        Name: pulumi.interpolate`${projectName}-efs-sg-${environment}`,
         Environment: environment,
+        ManagedBy: "pulumi",
     },
 });
 
 // NAT Instance用セキュリティグループ
-const natInstanceSecurityGroup = new aws.ec2.SecurityGroup(`${projectName}-nat-instance-sg`, {
+const natInstanceSecurityGroup = new aws.ec2.SecurityGroup(`nat-instance-sg`, {
     vpcId: vpcId,
     description: "Security group for NAT instance",
     ingress: [
@@ -198,12 +207,79 @@ const natInstanceSecurityGroup = new aws.ec2.SecurityGroup(`${projectName}-nat-i
         description: "Allow all outbound traffic",
     }],
     tags: {
-        Name: `${projectName}-nat-instance-sg-${environment}`,
+        Name: pulumi.interpolate`${projectName}-nat-instance-sg-${environment}`,
         Environment: environment,
+        ManagedBy: "pulumi",
     },
 });
 
-// エクスポートに追加
+// SSMパラメータストアへの保存
+// ALBセキュリティグループ
+const albSecurityGroupIdParam = new aws.ssm.Parameter(`alb-sg-id`, {
+    name: `${ssmPrefix}/security/alb-sg-id`,
+    type: "String",
+    value: albSecurityGroup.id,
+    overwrite: true,
+    tags: {
+        Environment: environment,
+        ManagedBy: "pulumi",
+        Component: "security",
+    },
+});
+
+// Jenkinsマスターセキュリティグループ
+const jenkinsSecurityGroupIdParam = new aws.ssm.Parameter(`jenkins-sg-id`, {
+    name: `${ssmPrefix}/security/jenkins-sg-id`,
+    type: "String",
+    value: jenkinsSecurityGroup.id,
+    overwrite: true,
+    tags: {
+        Environment: environment,
+        ManagedBy: "pulumi",
+        Component: "security",
+    },
+});
+
+// Jenkinsエージェントセキュリティグループ
+const jenkinsAgentSecurityGroupIdParam = new aws.ssm.Parameter(`jenkins-agent-sg-id`, {
+    name: `${ssmPrefix}/security/jenkins-agent-sg-id`,
+    type: "String",
+    value: jenkinsAgentSecurityGroup.id,
+    overwrite: true,
+    tags: {
+        Environment: environment,
+        ManagedBy: "pulumi",
+        Component: "security",
+    },
+});
+
+// EFSセキュリティグループ
+const efsSecurityGroupIdParam = new aws.ssm.Parameter(`efs-sg-id`, {
+    name: `${ssmPrefix}/security/efs-sg-id`,
+    type: "String",
+    value: efsSecurityGroup.id,
+    overwrite: true,
+    tags: {
+        Environment: environment,
+        ManagedBy: "pulumi",
+        Component: "security",
+    },
+});
+
+// NATインスタンスセキュリティグループ
+const natInstanceSecurityGroupIdParam = new aws.ssm.Parameter(`nat-instance-sg-id`, {
+    name: `${ssmPrefix}/security/nat-instance-sg-id`,
+    type: "String",
+    value: natInstanceSecurityGroup.id,
+    overwrite: true,
+    tags: {
+        Environment: environment,
+        ManagedBy: "pulumi",
+        Component: "security",
+    },
+});
+
+// エクスポート（既存のスタック参照用に残す）
 export const albSecurityGroupId = albSecurityGroup.id;
 export const jenkinsSecurityGroupId = jenkinsSecurityGroup.id;
 export const jenkinsAgentSecurityGroupId = jenkinsAgentSecurityGroup.id;
