@@ -48,16 +48,41 @@
       changed_when: "'Created stack' in stack_init_result.stdout"
     
     # Pulumi configuration
-    - name: Set Pulumi configuration for Jenkins Agent AMI
-      ansible.builtin.shell: |
-        source {{ scripts_dir }}/aws/aws-env.sh
-        cd {{ pulumi_dir }}
-        pulumi config set aws:region {{ aws_region }}
-        pulumi config set {{ stack_name }}:projectName {{ project_name }}
-        pulumi config set {{ stack_name }}:networkStackName {{ network_project_name }}
-        pulumi config set {{ stack_name }}:securityStackName {{ security_project_name }}
-      register: pulumi_config_result
-      changed_when: pulumi_config_result.rc == 0
+    - name: Configure agent AMI stack - AWS region
+      ansible.builtin.include_role:
+        name: pulumi_helper
+        tasks_from: set_config
+      vars:
+        pulumi_project_path: "{{ pulumi_dir }}"
+        config_key: "aws:region"
+        config_value: "{{ aws_region }}"
+
+    - name: Configure agent AMI stack - project name
+      ansible.builtin.include_role:
+        name: pulumi_helper
+        tasks_from: set_config
+      vars:
+        pulumi_project_path: "{{ pulumi_dir }}"
+        config_key: "{{ stack_name }}:projectName"
+        config_value: "{{ project_name }}"
+
+    - name: Configure agent AMI stack - network stack name
+      ansible.builtin.include_role:
+        name: pulumi_helper
+        tasks_from: set_config
+      vars:
+        pulumi_project_path: "{{ pulumi_dir }}"
+        config_key: "{{ stack_name }}:networkStackName"
+        config_value: "{{ network_project_name }}"
+
+    - name: Configure agent AMI stack - security stack name
+      ansible.builtin.include_role:
+        name: pulumi_helper
+        tasks_from: set_config
+      vars:
+        pulumi_project_path: "{{ pulumi_dir }}"
+        config_key: "{{ stack_name }}:securityStackName"
+        config_value: "{{ security_project_name }}"
     
     # Pulumi preview
     - name: Preview agent AMI deployment

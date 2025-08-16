@@ -1,4 +1,3 @@
 name: jenkins-storage
-organization: tielec
 runtime: nodejs
 description: Jenkins Storage Infrastructure (EFS)

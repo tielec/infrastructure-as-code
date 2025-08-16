@@ -41,17 +41,50 @@
         pulumi_project_path: "{{ pulumi_path }}/lambda-network"
         stack_name: "{{ env_name }}"
     
-    - name: Configure network stack
-      ansible.builtin.shell: |
-        {{ scripts_dir }}/aws/aws-env.sh
-        cd {{ pulumi_path }}/lambda-network
-        pulumi config set aws:region {{ aws_region_name }}
-        pulumi config set {{ network_project_name }}:projectName {{ project_name }}
-        pulumi config set {{ network_project_name }}:vpcCidr {{ lambda_api_infra.aws.vpc_cidr }}
-        pulumi config set {{ network_project_name }}:createIsolatedSubnets {{ enable_isolated_subnets | string | lower }}
-        pulumi config set {{ network_project_name }}:enableFlowLogs {{ (env_name == 'prod') | string | lower }}
-      register: pulumi_config_result
-      changed_when: pulumi_config_result.rc == 0
+    - name: Configure network stack - AWS region
+      ansible.builtin.include_role:
+        name: pulumi_helper
+        tasks_from: set_config
+      vars:
+        pulumi_project_path: "{{ pulumi_path }}/lambda-network"
+        config_key: "aws:region"
+        config_value: "{{ aws_region_name }}"
+
+    - name: Configure network stack - project name
+      ansible.builtin.include_role:
+        name: pulumi_helper
+        tasks_from: set_config
+      vars:
+        pulumi_project_path: "{{ pulumi_path }}/lambda-network"
+        config_key: "{{ network_project_name }}:projectName"
+        config_value: "{{ project_name }}"
+
+    - name: Configure network stack - VPC CIDR
+      ansible.builtin.include_role:
+        name: pulumi_helper
+        tasks_from: set_config
+      vars:
+        pulumi_project_path: "{{ pulumi_path }}/lambda-network"
+        config_key: "{{ network_project_name }}:vpcCidr"
+        config_value: "{{ lambda_api_infra.aws.vpc_cidr }}"
+
+    - name: Configure network stack - isolated subnets
+      ansible.builtin.include_role:
+        name: pulumi_helper
+        tasks_from: set_config
+      vars:
+        pulumi_project_path: "{{ pulumi_path }}/lambda-network"
+        config_key: "{{ network_project_name }}:createIsolatedSubnets"
+        config_value: "{{ enable_isolated_subnets | string | lower }}"
+
+    - name: Configure network stack - flow logs
+      ansible.builtin.include_role:
+        name: pulumi_helper
+        tasks_from: set_config
+      vars:
+        pulumi_project_path: "{{ pulumi_path }}/lambda-network"
+        config_key: "{{ network_project_name }}:enableFlowLogs"
+        config_value: "{{ (env_name == 'prod') | string | lower }}"
     
     # Pulumiプレビュー
     - name: Preview network deployment

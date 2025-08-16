@@ -1,4 +1,3 @@
 name: jenkins-loadbalancer
-organization: tielec
 runtime: nodejs
 description: Jenkins Load Balancer Infrastructure

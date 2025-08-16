@@ -35,15 +35,32 @@
         pulumi_project_path: "{{ pulumi_path }}/jenkins-network"
         stack_name: "{{ env_name }}"
     
-    - name: Configure network stack
-      ansible.builtin.shell: |
-        {{ scripts_dir }}/aws/aws-env.sh
-        cd {{ pulumi_path }}/jenkins-network
-        pulumi config set aws:region {{ aws_region_name }}
-        pulumi config set {{ network_project_name }}:projectName {{ project_name }}
-        pulumi config set {{ network_project_name }}:vpcCidr {{ vpc_cidr | default('10.0.0.0/16') }}
-      register: pulumi_config_result
-      changed_when: pulumi_config_result.rc == 0
+    - name: Configure network stack - AWS region
+      ansible.builtin.include_role:
+        name: pulumi_helper
+        tasks_from: set_config
+      vars:
+        pulumi_project_path: "{{ pulumi_path }}/jenkins-network"
+        config_key: "aws:region"
+        config_value: "{{ aws_region_name }}"
+
+    - name: Configure network stack - project name
+      ansible.builtin.include_role:
+        name: pulumi_helper
+        tasks_from: set_config
+      vars:
+        pulumi_project_path: "{{ pulumi_path }}/jenkins-network"
+        config_key: "{{ network_project_name }}:projectName"
+        config_value: "{{ project_name }}"
+
+    - name: Configure network stack - VPC CIDR
+      ansible.builtin.include_role:
+        name: pulumi_helper
+        tasks_from: set_config
+      vars:
+        pulumi_project_path: "{{ pulumi_path }}/jenkins-network"
+        config_key: "{{ network_project_name }}:vpcCidr"
+        config_value: "{{ vpc_cidr | default('10.0.0.0/16') }}"
 
     # Pulumiプレビュー
     - name: Preview network deployment

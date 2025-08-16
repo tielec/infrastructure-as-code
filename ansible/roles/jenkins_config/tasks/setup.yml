@@ -62,16 +62,41 @@
         pulumi_project_path: "{{ pulumi_path }}/jenkins-config"
         stack_name: "{{ env_name }}"
     
-    - name: Configure config stack
-      ansible.builtin.shell: |
-        {{ scripts_dir }}/aws/aws-env.sh
-        cd {{ pulumi_path }}/jenkins-config
-        pulumi config set aws:region {{ aws_region_name }}
-        pulumi config set {{ config_project_name }}:projectName {{ project_name }}
-        pulumi config set {{ config_project_name }}:jenkinsVersion {{ jenkins_version }}
-        pulumi config set {{ config_project_name }}:recoveryMode {{ recovery_mode | string | lower }}
-      register: pulumi_config_result
-      changed_when: pulumi_config_result.rc == 0
+    - name: Configure config stack - AWS region
+      ansible.builtin.include_role:
+        name: pulumi_helper
+        tasks_from: set_config
+      vars:
+        pulumi_project_path: "{{ pulumi_path }}/jenkins-config"
+        config_key: "aws:region"
+        config_value: "{{ aws_region_name }}"
+
+    - name: Configure config stack - project name
+      ansible.builtin.include_role:
+        name: pulumi_helper
+        tasks_from: set_config
+      vars:
+        pulumi_project_path: "{{ pulumi_path }}/jenkins-config"
+        config_key: "{{ config_project_name }}:projectName"
+        config_value: "{{ project_name }}"
+
+    - name: Configure config stack - Jenkins version
+      ansible.builtin.include_role:
+        name: pulumi_helper
+        tasks_from: set_config
+      vars:
+        pulumi_project_path: "{{ pulumi_path }}/jenkins-config"
+        config_key: "{{ config_project_name }}:jenkinsVersion"
+        config_value: "{{ jenkins_version }}"
+
+    - name: Configure config stack - recovery mode
+      ansible.builtin.include_role:
+        name: pulumi_helper
+        tasks_from: set_config
+      vars:
+        pulumi_project_path: "{{ pulumi_path }}/jenkins-config"
+        config_key: "{{ config_project_name }}:recoveryMode"
+        config_value: "{{ recovery_mode | string | lower }}"
     
     # Pulumiプレビュー
     - name: Preview config deployment

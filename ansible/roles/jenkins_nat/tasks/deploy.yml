@@ -38,21 +38,69 @@
         pulumi_project_path: "{{ pulumi_path }}/jenkins-nat"
         stack_name: "{{ env_name }}"
     
-    - name: Configure NAT stack
-      ansible.builtin.shell: |
-        {{ scripts_dir }}/aws/aws-env.sh
-        cd {{ pulumi_path }}/jenkins-nat
-        pulumi config set aws:region {{ aws_region_name }}
-        pulumi config set {{ nat_project_name }}:projectName {{ project_name }}
-        pulumi config set {{ nat_project_name }}:networkStackName {{ network_project_name }}
-        pulumi config set {{ nat_project_name }}:securityStackName {{ security_project_name }}
-        pulumi config set {{ nat_project_name }}:highAvailabilityMode {{ high_availability_mode | lower }}
-        pulumi config set {{ nat_project_name }}:natInstanceType {{ nat_instance_type }}
-        {% if key_name %}
-        pulumi config set {{ nat_project_name }}:keyName {{ key_name }}
-        {% endif %}
-      register: pulumi_config_result
-      changed_when: pulumi_config_result.rc == 0
+    - name: Configure NAT stack - AWS region
+      ansible.builtin.include_role:
+        name: pulumi_helper
+        tasks_from: set_config
+      vars:
+        pulumi_project_path: "{{ pulumi_path }}/jenkins-nat"
+        config_key: "aws:region"
+        config_value: "{{ aws_region_name }}"
+
+    - name: Configure NAT stack - project name
+      ansible.builtin.include_role:
+        name: pulumi_helper
+        tasks_from: set_config
+      vars:
+        pulumi_project_path: "{{ pulumi_path }}/jenkins-nat"
+        config_key: "{{ nat_project_name }}:projectName"
+        config_value: "{{ project_name }}"
+
+    - name: Configure NAT stack - network stack name
+      ansible.builtin.include_role:
+        name: pulumi_helper
+        tasks_from: set_config
+      vars:
+        pulumi_project_path: "{{ pulumi_path }}/jenkins-nat"
+        config_key: "{{ nat_project_name }}:networkStackName"
+        config_value: "{{ network_project_name }}"
+
+    - name: Configure NAT stack - security stack name
+      ansible.builtin.include_role:
+        name: pulumi_helper
+        tasks_from: set_config
+      vars:
+        pulumi_project_path: "{{ pulumi_path }}/jenkins-nat"
+        config_key: "{{ nat_project_name }}:securityStackName"
+        config_value: "{{ security_project_name }}"
+
+    - name: Configure NAT stack - high availability mode
+      ansible.builtin.include_role:
+        name: pulumi_helper
+        tasks_from: set_config
+      vars:
+        pulumi_project_path: "{{ pulumi_path }}/jenkins-nat"
+        config_key: "{{ nat_project_name }}:highAvailabilityMode"
+        config_value: "{{ high_availability_mode | lower }}"
+
+    - name: Configure NAT stack - NAT instance type
+      ansible.builtin.include_role:
+        name: pulumi_helper
+        tasks_from: set_config
+      vars:
+        pulumi_project_path: "{{ pulumi_path }}/jenkins-nat"
+        config_key: "{{ nat_project_name }}:natInstanceType"
+        config_value: "{{ nat_instance_type }}"
+
+    - name: Configure NAT stack - key name (if defined)
+      ansible.builtin.include_role:
+        name: pulumi_helper
+        tasks_from: set_config
+      vars:
+        pulumi_project_path: "{{ pulumi_path }}/jenkins-nat"
+        config_key: "{{ nat_project_name }}:keyName"
+        config_value: "{{ key_name }}"
+      when: key_name is defined and key_name != ""
 
     # Pulumiプレビュー
     - name: Preview NAT deployment

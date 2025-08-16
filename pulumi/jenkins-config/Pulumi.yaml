@@ -1,4 +1,3 @@
 name: jenkins-config
-organization: tielec
 runtime: nodejs
 description: Jenkins Configuration Resources (SSM Documents and Parameters)

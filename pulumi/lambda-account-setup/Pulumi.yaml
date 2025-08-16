@@ -1,4 +1,3 @@
 name: lambda-account-setup
-organization: tielec
 runtime: nodejs
 description: Lambda API Account-level setup - API Gateway CloudWatch Logs role
