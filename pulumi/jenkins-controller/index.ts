@@ -156,7 +156,7 @@ const efsPolicy = new aws.iam.RolePolicyAttachment(`jenkins-efs-policy`, {
 // SSM関連ポリシー（SSMコマンド実行のためのシンプルな権限）
 const ssmCustomPolicy = new aws.iam.Policy(`jenkins-ssm-custom-policy`, {
     description: "Custom policy for Jenkins instance to use SSM",
-    policy: JSON.stringify({
+    policy: pulumi.output(JSON.stringify({
         Version: "2012-10-17",
         Statement: [
             {
@@ -179,11 +179,11 @@ const ssmCustomPolicy = new aws.iam.Policy(`jenkins-ssm-custom-policy`, {
                     "ssm:PutParameter"
                 ],
                 Resource: [
-                    pulumi.interpolate`arn:aws:ssm:*:*:parameter/jenkins-infra/${environment}/jenkins/status/*`
+                    `arn:aws:ssm:*:*:parameter/jenkins-infra/${environment}/jenkins/status/*`
                 ]
             }
         ]
-    }),
+    })),
 });
 
 const ssmCustomPolicyAttachment = new aws.iam.RolePolicyAttachment(
@@ -197,7 +197,7 @@ const ssmCustomPolicyAttachment = new aws.iam.RolePolicyAttachment(
 // EC2およびSpot Fleet管理用の包括的なポリシー
 const ec2SpotFleetPolicy = new aws.iam.Policy(`jenkins-ec2-spotfleet-policy`, {
     description: "Comprehensive policy for Jenkins controller to manage EC2 instances and Spot Fleet",
-    policy: JSON.stringify({
+    policy: pulumi.output(JSON.stringify({
         Version: "2012-10-17",
         Statement: [
             {
@@ -280,9 +280,9 @@ const ec2SpotFleetPolicy = new aws.iam.Policy(`jenkins-ec2-spotfleet-policy`, {
                     "iam:PassRole"
                 ],
                 Resource: [
-                    pulumi.interpolate`arn:aws:iam::*:role/${projectName}-agent-role-${environment}`,
-                    pulumi.interpolate`arn:aws:iam::*:role/${projectName}-spotfleet-role-${environment}`,
-                    pulumi.interpolate`arn:aws:iam::*:instance-profile/${projectName}-agent-profile-${environment}`
+                    `arn:aws:iam::*:role/jenkins-infra-agent-role-${environment}`,
+                    `arn:aws:iam::*:role/jenkins-infra-spotfleet-role-${environment}`,
+                    `arn:aws:iam::*:instance-profile/jenkins-infra-agent-profile-${environment}`
                 ]
             },
             {
@@ -306,11 +306,11 @@ const ec2SpotFleetPolicy = new aws.iam.Policy(`jenkins-ec2-spotfleet-policy`, {
                     "ssm:DeleteParameter"
                 ],
                 Resource: [
-                    pulumi.interpolate`arn:aws:ssm:*:*:parameter/jenkins-infra/${environment}/jenkins/agent/*`
+                    `arn:aws:ssm:*:*:parameter/jenkins-infra/${environment}/jenkins/agent/*`
                 ]
             }
         ]
-    }),
+    })),
 });
 
 // EC2 Spot Fleet ポリシーのアタッチ
