@@ -39,7 +39,7 @@ const vpc = new aws.ec2.Vpc(`vpc`, {
 const igw = new aws.ec2.InternetGateway(`igw`, {
     vpcId: vpc.id,
     tags: {
-        Name: `${projectName}-igw-${environment}`,
+        Name: pulumi.interpolate`${projectName}-igw-${environment}`,
         Environment: environment,
     },
 });
@@ -54,7 +54,7 @@ const publicSubnetA = new aws.ec2.Subnet(`public-subnet-a`, {
     availabilityZone: azs.names[0],
     mapPublicIpOnLaunch: true,
     tags: {
-        Name: `${projectName}-public-subnet-a-${environment}`,
+        Name: pulumi.interpolate`${projectName}-public-subnet-a-${environment}`,
         Environment: environment,
         Type: "public",
     },
@@ -67,7 +67,7 @@ const publicSubnetB = new aws.ec2.Subnet(`public-subnet-b`, {
     availabilityZone: azs.names[1],
     mapPublicIpOnLaunch: true,
     tags: {
-        Name: `${projectName}-public-subnet-b-${environment}`,
+        Name: pulumi.interpolate`${projectName}-public-subnet-b-${environment}`,
         Environment: environment,
         Type: "public",
     },
@@ -79,7 +79,7 @@ const privateSubnetA = new aws.ec2.Subnet(`private-subnet-a`, {
     cidrBlock: "10.0.1.0/24",
     availabilityZone: azs.names[0],
     tags: {
-        Name: `${projectName}-private-subnet-a-${environment}`,
+        Name: pulumi.interpolate`${projectName}-private-subnet-a-${environment}`,
         Environment: environment,
         Type: "private",
     },
@@ -91,7 +91,7 @@ const privateSubnetB = new aws.ec2.Subnet(`private-subnet-b`, {
     cidrBlock: "10.0.3.0/24",
     availabilityZone: azs.names[1],
     tags: {
-        Name: `${projectName}-private-subnet-b-${environment}`,
+        Name: pulumi.interpolate`${projectName}-private-subnet-b-${environment}`,
         Environment: environment,
         Type: "private",
     },
@@ -101,7 +101,7 @@ const privateSubnetB = new aws.ec2.Subnet(`private-subnet-b`, {
 const publicRouteTable = new aws.ec2.RouteTable(`public-rt`, {
     vpcId: vpc.id,
     tags: {
-        Name: `${projectName}-public-rt-${environment}`,
+        Name: pulumi.interpolate`${projectName}-public-rt-${environment}`,
         Environment: environment,
     },
 });
@@ -129,7 +129,7 @@ const publicRtAssociationB = new aws.ec2.RouteTableAssociation(`public-rta-b`, {
 const privateRouteTableA = new aws.ec2.RouteTable(`private-rt-a`, {
     vpcId: vpc.id,
     tags: {
-        Name: `${projectName}-private-rt-a-${environment}`,
+        Name: pulumi.interpolate`${projectName}-private-rt-a-${environment}`,
         Environment: environment,
     },
 });
@@ -138,7 +138,7 @@ const privateRouteTableA = new aws.ec2.RouteTable(`private-rt-a`, {
 const privateRouteTableB = new aws.ec2.RouteTable(`private-rt-b`, {
     vpcId: vpc.id,
     tags: {
-        Name: `${projectName}-private-rt-b-${environment}`,
+        Name: pulumi.interpolate`${projectName}-private-rt-b-${environment}`,
         Environment: environment,
     },
 });
