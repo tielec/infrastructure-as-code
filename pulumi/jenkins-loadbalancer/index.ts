@@ -15,9 +15,6 @@ const ssmPrefix = `/jenkins-infra/${environment}`;
 const projectNameParam = aws.ssm.getParameter({
     name: `${ssmPrefix}/config/project-name`,
 });
-const certificateArnParam = aws.ssm.getParameter({
-    name: `${ssmPrefix}/config/certificate-arn`,
-}, { async: true });
 
 // ネットワークリソースのSSMパラメータを取得
 const vpcIdParam = aws.ssm.getParameter({
@@ -37,7 +34,11 @@ const albSecurityGroupIdParam = aws.ssm.getParameter({
 
 // 設定値を変数に設定
 const projectName = pulumi.output(projectNameParam).apply(p => p.value);
-const certificateArn = certificateArnParam.then(p => p.value).catch(() => undefined);
+
+// 証明書ARNは別途チェック（オプション）
+const certificateArnParam = aws.ssm.getParameter({
+    name: `${ssmPrefix}/config/certificate-arn`,
+}).then(p => p.value).catch(() => undefined);
 
 // ネットワークリソースIDを取得
 const vpcId = pulumi.output(vpcIdParam).apply(p => p.value);
@@ -114,50 +115,20 @@ const greenTargetGroup = new aws.lb.TargetGroup(`green-tg`, {
 // SSL証明書の設定は上部で取得済み
 
 // HTTPリスナーの設定
-let httpListener;
-if (certificateArn) {
-    // SSL証明書が設定されている場合はHTTPSにリダイレクト
-    httpListener = new aws.lb.Listener(`http`, {
-        loadBalancerArn: alb.arn,
-        port: 80,
-        protocol: "HTTP",
-        defaultActions: [{
-            type: "redirect",
-            redirect: {
-                port: "443",
-                protocol: "HTTPS",
-                statusCode: "HTTP_301",
-            },
-        }],
-    });
-} else {
-    // 証明書が設定されていない場合はBlue環境に直接転送
-    httpListener = new aws.lb.Listener(`http`, {
-        loadBalancerArn: alb.arn,
-        port: 80,
-        protocol: "HTTP",
-        defaultActions: [{
-            type: "forward",
-            targetGroupArn: blueTargetGroup.arn,
-        }],
-    });
-}
+// 証明書ARNは同期的に取得できないため、常にBlue環境に転送
+const httpListener = new aws.lb.Listener(`http`, {
+    loadBalancerArn: alb.arn,
+    port: 80,
+    protocol: "HTTP",
+    defaultActions: [{
+        type: "forward",
+        targetGroupArn: blueTargetGroup.arn,
+    }],
+});
 
-// HTTPSリスナーの設定（SSL証明書が設定されている場合のみ）
-let httpsListener;
-if (certificateArn) {
-    httpsListener = new aws.lb.Listener(`https`, {
-        loadBalancerArn: alb.arn,
-        port: 443,
-        protocol: "HTTPS",
-        sslPolicy: "ELBSecurityPolicy-2016-08",
-        certificateArn: certificateArn,
-        defaultActions: [{
-            type: "forward",
-            targetGroupArn: blueTargetGroup.arn,
-        }],
-    });
-}
+// HTTPSリスナーの設定（将来の実装用にコメントアウト）
+// 証明書ARNの取得はPromiseなので、条件付き作成が難しい
+// TODO: 証明書ARNが設定されている場合のHTTPS対応
 
 // Jenkins専用ポート（8080）のバックアップリスナー
 const httpDirectListener = new aws.lb.Listener(`http-8080`, {
@@ -276,20 +247,7 @@ const httpListenerArnParam = new aws.ssm.Parameter(`http-listener-arn`, {
     },
 });
 
-// HTTPSリスナーのARNをSSMパラメータに保存（存在する場合）
-if (httpsListener) {
-    const httpsListenerArnParam = new aws.ssm.Parameter(`https-listener-arn`, {
-        name: `${ssmPrefix}/loadbalancer/https-listener-arn`,
-        type: "String",
-        value: httpsListener.arn,
-        overwrite: true,
-        tags: {
-            Environment: environment,
-            ManagedBy: "pulumi",
-            Component: "loadbalancer",
-        },
-    });
-}
+// HTTPSリスナーのARNは現在未実装
 
 // HTTP Direct ListenerのARNをSSMパラメータに保存
 const httpDirectListenerArnParam = new aws.ssm.Parameter(`http-direct-listener-arn`, {
@@ -311,7 +269,7 @@ export const albZoneId = alb.zoneId;
 export const blueTargetGroupArn = blueTargetGroup.arn;
 export const greenTargetGroupArn = greenTargetGroup.arn;
 export const httpListenerArn = httpListener.arn;
-export const httpsListenerArn = httpsListener ? httpsListener.arn : undefined;
+export const httpsListenerArn = undefined; // 現在未実装
 export const httpDirectListenerArn = httpDirectListener.arn;
 export const activeEnvironment = activeEnvironmentParam.value;
 export const jenkinsUrl = jenkinsUrlParam.value;
