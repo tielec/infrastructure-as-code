@@ -85,8 +85,6 @@ security:
     sshHostKeyVerificationStrategy: "knownHostsFileVerificationStrategy"
   globalJobDslSecurityConfiguration:
     useScriptSecurity: false
-  sSHD:
-    port: -1
 
 unclassified:
   location:
