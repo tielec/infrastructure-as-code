@@ -124,9 +124,47 @@ const jenkinsAccessPointIdParameter = new aws.ssm.Parameter(`${projectName}-jenk
     value: jenkinsAccessPoint.id,
     description: `Jenkins EFS Access Point ID for ${environment}`,
     tags: {
-        Name: `${projectName}-jenkins-ap-id-param-${environment}`,
         Environment: environment,
         ManagedBy: "pulumi",
+        Component: "storage",
+    },
+});
+
+// マウントターゲットIDをSSMに保存
+const mountTargetAIdParam = new aws.ssm.Parameter(`mount-target-a-id`, {
+    name: `${ssmPrefix}/storage/mount-target-a-id`,
+    type: "String",
+    value: mountTargetA.id,
+    overwrite: true,
+    tags: {
+        Environment: environment,
+        ManagedBy: "pulumi",
+        Component: "storage",
+    },
+});
+
+const mountTargetBIdParam = new aws.ssm.Parameter(`mount-target-b-id`, {
+    name: `${ssmPrefix}/storage/mount-target-b-id`,
+    type: "String",
+    value: mountTargetB.id,
+    overwrite: true,
+    tags: {
+        Environment: environment,
+        ManagedBy: "pulumi",
+        Component: "storage",
+    },
+});
+
+// EFS ARNをSSMに保存
+const efsFileSystemArnParam = new aws.ssm.Parameter(`efs-arn-param`, {
+    name: `${ssmPrefix}/storage/efs-arn`,
+    type: "String",
+    value: efsFileSystem.arn,
+    overwrite: true,
+    tags: {
+        Environment: environment,
+        ManagedBy: "pulumi",
+        Component: "storage",
     },
 });
 
