@@ -7,44 +7,101 @@
 import * as pulumi from "@pulumi/pulumi";
 import * as aws from "@pulumi/aws";
 
-// コンフィグから設定を取得
-const config = new pulumi.Config();
-const projectName = config.get("projectName") || "jenkins-infra";
+// 環境名をスタック名から取得
 const environment = pulumi.getStack();
+const ssmPrefix = `/jenkins-infra/${environment}`;
 
-// スタック参照名を設定から取得
-const networkStackName = config.get("networkStackName") || "jenkins-network";
-const securityStackName = config.get("securityStackName") || "jenkins-security";
-const storageStackName = config.get("storageStackName") || "jenkins-storage";
-const loadbalancerStackName = config.get("loadbalancerStackName") || "jenkins-loadbalancer";
+// SSMパラメータから設定を取得
+const projectNameParam = aws.ssm.getParameter({
+    name: `${ssmPrefix}/config/project-name`,
+});
+const jenkinsVersionParam = aws.ssm.getParameter({
+    name: `${ssmPrefix}/config/jenkins-version`,
+});
+const jenkinsColorParam = aws.ssm.getParameter({
+    name: `${ssmPrefix}/config/jenkins-color`,
+});
+const recoveryModeParam = aws.ssm.getParameter({
+    name: `${ssmPrefix}/config/recovery-mode`,
+});
+const instanceTypeParam = aws.ssm.getParameter({
+    name: `${ssmPrefix}/config/instance-type`,
+});
+const keyNameParam = aws.ssm.getParameter({
+    name: `${ssmPrefix}/config/key-name`,
+});
+const gitRepoParam = aws.ssm.getParameter({
+    name: `${ssmPrefix}/config/git-repo`,
+});
+const gitBranchParam = aws.ssm.getParameter({
+    name: `${ssmPrefix}/config/git-branch`,
+});
 
-// Jenkins設定を取得
-const jenkinsVersion = config.get("jenkinsVersion") || "latest";
-const jenkinsColor = config.get("jenkinsColor") || "blue";
-const recoveryMode = config.getBoolean("recoveryMode") || false;
-const instanceType = config.get("instanceType") || "t4g.medium";  // t4g.mediumに変更
-const keyName = config.get("keyName");
-const gitRepo = config.get("gitRepo") || "https://github.com/tielec/infrastructure-as-code.git";
-const gitBranch = config.get("gitBranch") || "main";
+// ネットワークリソースのSSMパラメータを取得
+const vpcIdParam = aws.ssm.getParameter({
+    name: `${ssmPrefix}/network/vpc-id`,
+});
+const privateSubnetAIdParam = aws.ssm.getParameter({
+    name: `${ssmPrefix}/network/private-subnet-a-id`,
+});
+const privateSubnetBIdParam = aws.ssm.getParameter({
+    name: `${ssmPrefix}/network/private-subnet-b-id`,
+});
 
-// 既存のスタックから値を取得
-const networkStack = new pulumi.StackReference(`${pulumi.getOrganization()}/${networkStackName}/${environment}`);
-const securityStack = new pulumi.StackReference(`${pulumi.getOrganization()}/${securityStackName}/${environment}`);
-const storageStack = new pulumi.StackReference(`${pulumi.getOrganization()}/${storageStackName}/${environment}`);
-const loadbalancerStack = new pulumi.StackReference(`${pulumi.getOrganization()}/${loadbalancerStackName}/${environment}`);
+// セキュリティグループのSSMパラメータを取得
+const jenkinsSecurityGroupIdParam = aws.ssm.getParameter({
+    name: `${ssmPrefix}/security/jenkins-sg-id`,
+});
+const efsSecurityGroupIdParam = aws.ssm.getParameter({
+    name: `${ssmPrefix}/security/efs-sg-id`,
+});
 
-// 必要なリソースIDを取得
-const vpcId = networkStack.getOutput("vpcId");
-const privateSubnetIds = networkStack.getOutput("privateSubnetIds");
-const jenkinsSecurityGroupId = securityStack.getOutput("jenkinsSecurityGroupId");
-const efsSecurityGroupId = securityStack.getOutput("efsSecurityGroupId"); // EFSセキュリティグループも取得
-const efsFileSystemId = storageStack.getOutput("efsFileSystemId");
-const jenkinsAccessPointId = storageStack.getOutput("jenkinsAccessPointId");
-const blueTargetGroupArn = loadbalancerStack.getOutput("blueTargetGroupArn");
-const greenTargetGroupArn = loadbalancerStack.getOutput("greenTargetGroupArn");
+// ストレージリソースのSSMパラメータを取得
+const efsFileSystemIdParam = aws.ssm.getParameter({
+    name: `${ssmPrefix}/storage/efs-file-system-id`,
+});
+const jenkinsAccessPointIdParam = aws.ssm.getParameter({
+    name: `${ssmPrefix}/storage/jenkins-access-point-id`,
+});
+
+// ロードバランサーリソースのSSMパラメータを取得
+const blueTargetGroupArnParam = aws.ssm.getParameter({
+    name: `${ssmPrefix}/loadbalancer/blue-target-group-arn`,
+});
+const greenTargetGroupArnParam = aws.ssm.getParameter({
+    name: `${ssmPrefix}/loadbalancer/green-target-group-arn`,
+});
+
+// 設定値を変数に設定
+const projectName = pulumi.output(projectNameParam).apply(p => p.value);
+const jenkinsVersion = pulumi.output(jenkinsVersionParam).apply(p => p.value);
+const jenkinsColor = pulumi.output(jenkinsColorParam).apply(p => p.value);
+const recoveryMode = pulumi.output(recoveryModeParam).apply(p => p.value === "true");
+const instanceType = pulumi.output(instanceTypeParam).apply(p => p.value);
+const keyName = pulumi.output(keyNameParam).apply(p => p.value === "none" ? undefined : p.value);
+const gitRepo = pulumi.output(gitRepoParam).apply(p => p.value);
+const gitBranch = pulumi.output(gitBranchParam).apply(p => p.value);
+
+// ネットワークリソースIDを取得
+const vpcId = pulumi.output(vpcIdParam).apply(p => p.value);
+const privateSubnetAId = pulumi.output(privateSubnetAIdParam).apply(p => p.value);
+const privateSubnetBId = pulumi.output(privateSubnetBIdParam).apply(p => p.value);
+const privateSubnetIds = [privateSubnetAId, privateSubnetBId];
+
+// セキュリティグループIDを取得
+const jenkinsSecurityGroupId = pulumi.output(jenkinsSecurityGroupIdParam).apply(p => p.value);
+const efsSecurityGroupId = pulumi.output(efsSecurityGroupIdParam).apply(p => p.value);
+
+// ストレージリソースIDを取得
+const efsFileSystemId = pulumi.output(efsFileSystemIdParam).apply(p => p.value);
+const jenkinsAccessPointId = pulumi.output(jenkinsAccessPointIdParam).apply(p => p.value);
+
+// ロードバランサーリソースARNを取得
+const blueTargetGroupArn = pulumi.output(blueTargetGroupArnParam).apply(p => p.value);
+const greenTargetGroupArn = pulumi.output(greenTargetGroupArnParam).apply(p => p.value);
 
 // 環境に基づいてターゲットグループを選択
-const targetGroupArn = jenkinsColor === "blue" ? blueTargetGroupArn : greenTargetGroupArn;
+const targetGroupArn = jenkinsColor.apply(color => color === "blue" ? blueTargetGroupArn : greenTargetGroupArn);
 
 // 最新のAmazon Linux 2023 AMI (ARM64版)を取得
 const ami = aws.ec2.getAmi({
@@ -67,7 +124,7 @@ const ami = aws.ec2.getAmi({
 });
 
 // IAMロール作成（Jenkins用）
-const jenkinsRole = new aws.iam.Role(`${projectName}-jenkins-role-${jenkinsColor}`, {
+const jenkinsRole = new aws.iam.Role(`jenkins-role`, {
     assumeRolePolicy: JSON.stringify({
         Version: "2012-10-17",
         Statement: [{
@@ -79,25 +136,25 @@ const jenkinsRole = new aws.iam.Role(`${projectName}-jenkins-role-${jenkinsColor
         }],
     }),
     tags: {
-        Name: `${projectName}-jenkins-role-${jenkinsColor}-${environment}`,
+        Name: pulumi.interpolate`${projectName}-jenkins-role-${jenkinsColor}-${environment}`,
         Environment: environment,
-        Color: jenkinsColor,
+        Color: pulumi.interpolate`${jenkinsColor}`,
     },
 });
 
 // マネージドポリシーのアタッチ
-const ssmPolicy = new aws.iam.RolePolicyAttachment(`${projectName}-jenkins-ssm-policy-${jenkinsColor}`, {
+const ssmPolicy = new aws.iam.RolePolicyAttachment(`jenkins-ssm-policy`, {
     role: jenkinsRole.name,
     policyArn: "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore",
 });
 
-const efsPolicy = new aws.iam.RolePolicyAttachment(`${projectName}-jenkins-efs-policy-${jenkinsColor}`, {
+const efsPolicy = new aws.iam.RolePolicyAttachment(`jenkins-efs-policy`, {
     role: jenkinsRole.name,
     policyArn: "arn:aws:iam::aws:policy/AmazonElasticFileSystemClientReadWriteAccess",
 });
 
 // SSM関連ポリシー（SSMコマンド実行のためのシンプルな権限）
-const ssmCustomPolicy = new aws.iam.Policy(`${projectName}-jenkins-ssm-custom-policy-${jenkinsColor}`, {
+const ssmCustomPolicy = new aws.iam.Policy(`jenkins-ssm-custom-policy`, {
     description: "Custom policy for Jenkins instance to use SSM",
     policy: JSON.stringify({
         Version: "2012-10-17",
@@ -122,7 +179,7 @@ const ssmCustomPolicy = new aws.iam.Policy(`${projectName}-jenkins-ssm-custom-po
                     "ssm:PutParameter"
                 ],
                 Resource: [
-                    `arn:aws:ssm:*:*:parameter/${projectName}/${environment}/jenkins/status/*`
+                    pulumi.interpolate`arn:aws:ssm:*:*:parameter/jenkins-infra/${environment}/jenkins/status/*`
                 ]
             }
         ]
@@ -130,7 +187,7 @@ const ssmCustomPolicy = new aws.iam.Policy(`${projectName}-jenkins-ssm-custom-po
 });
 
 const ssmCustomPolicyAttachment = new aws.iam.RolePolicyAttachment(
-    `${projectName}-jenkins-ssm-custom-policy-attachment-${jenkinsColor}`, 
+    `jenkins-ssm-custom-policy-attachment`, 
     {
         role: jenkinsRole.name,
         policyArn: ssmCustomPolicy.arn,
@@ -138,7 +195,7 @@ const ssmCustomPolicyAttachment = new aws.iam.RolePolicyAttachment(
 );
 
 // EC2およびSpot Fleet管理用の包括的なポリシー
-const ec2SpotFleetPolicy = new aws.iam.Policy(`${projectName}-jenkins-ec2-spotfleet-policy-${jenkinsColor}`, {
+const ec2SpotFleetPolicy = new aws.iam.Policy(`jenkins-ec2-spotfleet-policy`, {
     description: "Comprehensive policy for Jenkins controller to manage EC2 instances and Spot Fleet",
     policy: JSON.stringify({
         Version: "2012-10-17",
@@ -223,9 +280,9 @@ const ec2SpotFleetPolicy = new aws.iam.Policy(`${projectName}-jenkins-ec2-spotfl
                     "iam:PassRole"
                 ],
                 Resource: [
-                    `arn:aws:iam::*:role/${projectName}-agent-role-${environment}`,
-                    `arn:aws:iam::*:role/${projectName}-spotfleet-role-${environment}`,
-                    `arn:aws:iam::*:instance-profile/${projectName}-agent-profile-${environment}`
+                    pulumi.interpolate`arn:aws:iam::*:role/${projectName}-agent-role-${environment}`,
+                    pulumi.interpolate`arn:aws:iam::*:role/${projectName}-spotfleet-role-${environment}`,
+                    pulumi.interpolate`arn:aws:iam::*:instance-profile/${projectName}-agent-profile-${environment}`
                 ]
             },
             {
@@ -249,7 +306,7 @@ const ec2SpotFleetPolicy = new aws.iam.Policy(`${projectName}-jenkins-ec2-spotfl
                     "ssm:DeleteParameter"
                 ],
                 Resource: [
-                    `arn:aws:ssm:*:*:parameter/${projectName}/${environment}/jenkins/agent/*`
+                    pulumi.interpolate`arn:aws:ssm:*:*:parameter/jenkins-infra/${environment}/jenkins/agent/*`
                 ]
             }
         ]
@@ -258,7 +315,7 @@ const ec2SpotFleetPolicy = new aws.iam.Policy(`${projectName}-jenkins-ec2-spotfl
 
 // EC2 Spot Fleet ポリシーのアタッチ
 const ec2SpotFleetPolicyAttachment = new aws.iam.RolePolicyAttachment(
-    `${projectName}-jenkins-ec2-spotfleet-policy-attachment-${jenkinsColor}`, 
+    `jenkins-ec2-spotfleet-policy-attachment`, 
     {
         role: jenkinsRole.name,
         policyArn: ec2SpotFleetPolicy.arn,
@@ -266,7 +323,7 @@ const ec2SpotFleetPolicyAttachment = new aws.iam.RolePolicyAttachment(
 );
 
 // Jenkins Plugins用の追加権限（EC2 Plugin, Fleet Plugin等）
-const jenkinsPluginPolicy = new aws.iam.Policy(`${projectName}-jenkins-plugin-policy-${jenkinsColor}`, {
+const jenkinsPluginPolicy = new aws.iam.Policy(`jenkins-plugin-policy`, {
     description: "Additional permissions for Jenkins EC2 and Fleet plugins",
     policy: JSON.stringify({
         Version: "2012-10-17",
@@ -321,7 +378,7 @@ const jenkinsPluginPolicy = new aws.iam.Policy(`${projectName}-jenkins-plugin-po
 });
 
 const jenkinsPluginPolicyAttachment = new aws.iam.RolePolicyAttachment(
-    `${projectName}-jenkins-plugin-policy-attachment-${jenkinsColor}`, 
+    `jenkins-plugin-policy-attachment`, 
     {
         role: jenkinsRole.name,
         policyArn: jenkinsPluginPolicy.arn,
@@ -330,12 +387,12 @@ const jenkinsPluginPolicyAttachment = new aws.iam.RolePolicyAttachment(
 
 // Jenkins用インスタンスプロファイル
 const jenkinsInstanceProfile = new aws.iam.InstanceProfile(
-    `${projectName}-jenkins-profile-${jenkinsColor}`, 
+    `jenkins-profile`, 
     {
         role: jenkinsRole.name,
         tags: {
             Environment: environment,
-            Color: jenkinsColor,
+            Color: pulumi.interpolate`${jenkinsColor}`,
         },
     }
 );
@@ -391,10 +448,10 @@ echo "Note: When installing Jenkins, ensure to use ARM64-compatible Java runtime
 `;
 
 // Jenkinsコントローラーインスタンス
-const jenkinsInstance = new aws.ec2.Instance(`${projectName}-jenkins-${jenkinsColor}`, {
+const jenkinsInstance = new aws.ec2.Instance(`jenkins-controller`, {
     ami: ami.then(ami => ami.id),
     instanceType: instanceType,
-    subnetId: privateSubnetIds.apply(subnets => subnets[0]),
+    subnetId: privateSubnetAId,
     vpcSecurityGroupIds: pulumi.all([jenkinsSecurityGroupId, efsSecurityGroupId]).apply(
         ([jenkinsSgId, efsSgId]) => [jenkinsSgId, efsSgId]
     ),
@@ -408,9 +465,9 @@ const jenkinsInstance = new aws.ec2.Instance(`${projectName}-jenkins-${jenkinsCo
         encrypted: true,
     },
     tags: {
-        Name: `${projectName}-jenkins-${jenkinsColor}-${environment}`,
+        Name: pulumi.interpolate`${projectName}-jenkins-${jenkinsColor}-${environment}`,
         Environment: environment,
-        Color: jenkinsColor,
+        Color: pulumi.interpolate`${jenkinsColor}`,
         Role: "jenkins-master",
         Architecture: "arm64",  // アーキテクチャタグを追加
     },
@@ -418,7 +475,7 @@ const jenkinsInstance = new aws.ec2.Instance(`${projectName}-jenkins-${jenkinsCo
 
 // ターゲットグループへの登録
 const targetGroupAttachment = new aws.lb.TargetGroupAttachment(
-    `${projectName}-jenkins-tg-attachment-${jenkinsColor}`, 
+    `jenkins-tg-attachment`, 
     {
         targetGroupArn: targetGroupArn,
         targetId: jenkinsInstance.id,
@@ -427,17 +484,70 @@ const targetGroupAttachment = new aws.lb.TargetGroupAttachment(
 );
 
 // インスタンスIDをSSM Parameter Storeに保存
-const instanceIdParameter = new aws.ssm.Parameter(`${projectName}-jenkins-instance-id`, {
-    name: `/${projectName}/${environment}/jenkins/instanceId`,
+const instanceIdParameter = new aws.ssm.Parameter(`jenkins-instance-id`, {
+    name: `${ssmPrefix}/controller/instance-id`,
     type: "String",
     value: jenkinsInstance.id,
-    description: `Jenkins Controller Instance ID for ${environment} environment (${jenkinsColor})`,
+    description: pulumi.interpolate`Jenkins Controller Instance ID for ${environment} environment (${jenkinsColor})`,
     tags: {
-        Name: `${projectName}-jenkins-instance-id-${environment}`,
+        Name: pulumi.interpolate`${projectName}-jenkins-instance-id-${environment}`,
         Environment: environment,
-        Color: jenkinsColor,
+        Color: pulumi.interpolate`${jenkinsColor}`,
+        Component: "controller",
     },
     overwrite: true,  // 既存のパラメータを上書き可能にする
+});
+
+// プライベートIPをSSMパラメータに保存
+const privateIpParameter = new aws.ssm.Parameter(`jenkins-private-ip`, {
+    name: `${ssmPrefix}/controller/private-ip`,
+    type: "String",
+    value: jenkinsInstance.privateIp,
+    overwrite: true,
+    tags: {
+        Environment: environment,
+        ManagedBy: "pulumi",
+        Component: "controller",
+    },
+});
+
+// インスタンスプロファイル名をSSMパラメータに保存
+const instanceProfileParameter = new aws.ssm.Parameter(`jenkins-instance-profile`, {
+    name: `${ssmPrefix}/controller/instance-profile-name`,
+    type: "String",
+    value: jenkinsInstanceProfile.name,
+    overwrite: true,
+    tags: {
+        Environment: environment,
+        ManagedBy: "pulumi",
+        Component: "controller",
+    },
+});
+
+// Jenkins RoleのARNをSSMパラメータに保存
+const roleArnParameter = new aws.ssm.Parameter(`jenkins-role-arn`, {
+    name: `${ssmPrefix}/controller/role-arn`,
+    type: "String",
+    value: jenkinsRole.arn,
+    overwrite: true,
+    tags: {
+        Environment: environment,
+        ManagedBy: "pulumi",
+        Component: "controller",
+    },
+});
+
+// デプロイされたJenkinsカラーをSSMパラメータに保存
+const deployedColorParameter = new aws.ssm.Parameter(`jenkins-deployed-color`, {
+    name: `${ssmPrefix}/controller/deployed-color`,
+    type: "String",
+    value: jenkinsColor,
+    overwrite: true,
+    tags: {
+        Environment: environment,
+        ManagedBy: "pulumi",
+        Component: "controller",
+    },
 });
 
 // エクスポート

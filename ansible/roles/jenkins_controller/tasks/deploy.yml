@@ -50,182 +50,66 @@
         config_key: "aws:region"
         config_value: "{{ aws_region_name }}"
 
-    - name: Configure controller stack - project name
+    # SSMパラメータの確認
+    - name: Get project name from SSM Parameter Store
       ansible.builtin.include_role:
-        name: pulumi_helper
-        tasks_from: set_config
+        name: ssm_parameter_store
+        tasks_from: get_parameter
       vars:
-        pulumi_project_path: "{{ pulumi_path }}/jenkins-controller"
-        config_key: "{{ controller_project_name }}:projectName"
-        config_value: "{{ project_name }}"
-
-    - name: Configure controller stack - network stack name
-      ansible.builtin.include_role:
-        name: pulumi_helper
-        tasks_from: set_config
-      vars:
-        pulumi_project_path: "{{ pulumi_path }}/jenkins-controller"
-        config_key: "{{ controller_project_name }}:networkStackName"
-        config_value: "{{ network_project_name }}"
-
-    - name: Configure controller stack - security stack name
-      ansible.builtin.include_role:
-        name: pulumi_helper
-        tasks_from: set_config
-      vars:
-        pulumi_project_path: "{{ pulumi_path }}/jenkins-controller"
-        config_key: "{{ controller_project_name }}:securityStackName"
-        config_value: "{{ security_project_name }}"
-
-    - name: Configure controller stack - storage stack name
-      ansible.builtin.include_role:
-        name: pulumi_helper
-        tasks_from: set_config
-      vars:
-        pulumi_project_path: "{{ pulumi_path }}/jenkins-controller"
-        config_key: "{{ controller_project_name }}:storageStackName"
-        config_value: "{{ storage_project_name }}"
-
-    - name: Configure controller stack - loadbalancer stack name
-      ansible.builtin.include_role:
-        name: pulumi_helper
-        tasks_from: set_config
-      vars:
-        pulumi_project_path: "{{ pulumi_path }}/jenkins-controller"
-        config_key: "{{ controller_project_name }}:loadbalancerStackName"
-        config_value: "{{ loadbalancer_project_name }}"
-
-    - name: Configure controller stack - Jenkins version
-      ansible.builtin.include_role:
-        name: pulumi_helper
-        tasks_from: set_config
-      vars:
-        pulumi_project_path: "{{ pulumi_path }}/jenkins-controller"
-        config_key: "{{ controller_project_name }}:jenkinsVersion"
-        config_value: "{{ jenkins_version }}"
-
-    - name: Configure controller stack - Jenkins color
-      ansible.builtin.include_role:
-        name: pulumi_helper
-        tasks_from: set_config
-      vars:
-        pulumi_project_path: "{{ pulumi_path }}/jenkins-controller"
-        config_key: "{{ controller_project_name }}:jenkinsColor"
-        config_value: "{{ jenkins_color }}"
-
-    - name: Configure controller stack - recovery mode
-      ansible.builtin.include_role:
-        name: pulumi_helper
-        tasks_from: set_config
-      vars:
-        pulumi_project_path: "{{ pulumi_path }}/jenkins-controller"
-        config_key: "{{ controller_project_name }}:recoveryMode"
-        config_value: "{{ recovery_mode | string | lower }}"
-
-    - name: Configure controller stack - instance type
-      ansible.builtin.include_role:
-        name: pulumi_helper
-        tasks_from: set_config
-      vars:
-        pulumi_project_path: "{{ pulumi_path }}/jenkins-controller"
-        config_key: "{{ controller_project_name }}:instanceType"
-        config_value: "{{ instance_type }}"
-
-    - name: Configure controller stack - key name (if defined)
-      ansible.builtin.include_role:
-        name: pulumi_helper
-        tasks_from: set_config
-      vars:
-        pulumi_project_path: "{{ pulumi_path }}/jenkins-controller"
-        config_key: "{{ controller_project_name }}:keyName"
-        config_value: "{{ key_name }}"
-      when: key_name is defined and key_name != ""
-
-    - name: Configure controller stack - git repo (if defined)
-      ansible.builtin.include_role:
-        name: pulumi_helper
-        tasks_from: set_config
-      vars:
-        pulumi_project_path: "{{ pulumi_path }}/jenkins-controller"
-        config_key: "{{ controller_project_name }}:gitRepo"
-        config_value: "{{ git_repo }}"
-      when: git_repo is defined and git_repo != ""
-
-    - name: Configure controller stack - git branch (if defined)
-      ansible.builtin.include_role:
-        name: pulumi_helper
-        tasks_from: set_config
-      vars:
-        pulumi_project_path: "{{ pulumi_path }}/jenkins-controller"
-        config_key: "{{ controller_project_name }}:gitBranch"
-        config_value: "{{ git_branch }}"
-      when: git_branch is defined and git_branch != ""
+        parameter_name: "/jenkins-infra/{{ env_name }}/config/project-name"
+        store_as: "ssm_project_name"
     
-    # 依存関係の確認: 必要なスタックが全てデプロイ済みであることを確認
-    - name: Check network stack outputs
+    - name: Get VPC ID from SSM Parameter Store
       ansible.builtin.include_role:
-        name: pulumi_helper
-        tasks_from: get_outputs
+        name: ssm_parameter_store
+        tasks_from: get_parameter
       vars:
-        pulumi_project_path: "{{ pulumi_path }}/jenkins-network"
-        stack_name: "{{ env_name }}"
-        output_name: "vpcId"
-        mock_output: "mock-vpc-id-for-check-mode"
+        parameter_name: "/jenkins-infra/{{ env_name }}/network/vpc-id"
+        store_as: "ssm_vpc_id"
     
-    - name: Set network VPC ID
-      ansible.builtin.set_fact:
-        network_vpc_id: "{{ stack_output_result.stdout | trim }}"
-    
-    - name: Check security stack outputs
+    - name: Get Jenkins security group ID from SSM Parameter Store
       ansible.builtin.include_role:
-        name: pulumi_helper
-        tasks_from: get_outputs
+        name: ssm_parameter_store
+        tasks_from: get_parameter
       vars:
-        pulumi_project_path: "{{ pulumi_path }}/jenkins-security"
-        stack_name: "{{ env_name }}"
-        output_name: "jenkinsSecurityGroupId"
-        mock_output: "mock-jenkins-sg-id"
+        parameter_name: "/jenkins-infra/{{ env_name }}/security/jenkins-sg-id"
+        store_as: "ssm_jenkins_sg_id"
     
-    - name: Set Jenkins security group ID
-      ansible.builtin.set_fact:
-        jenkins_sg_id: "{{ stack_output_result.stdout | trim }}"
-    
-    - name: Check storage stack outputs
+    - name: Get EFS file system ID from SSM Parameter Store
       ansible.builtin.include_role:
-        name: pulumi_helper
-        tasks_from: get_outputs
+        name: ssm_parameter_store
+        tasks_from: get_parameter
       vars:
-        pulumi_project_path: "{{ pulumi_path }}/jenkins-storage"
-        stack_name: "{{ env_name }}"
-        output_name: "efsFileSystemId"
-        mock_output: "mock-efs-id"
+        parameter_name: "/jenkins-infra/{{ env_name }}/storage/efs-file-system-id"
+        store_as: "ssm_efs_id"
     
-    - name: Set EFS file system ID
-      ansible.builtin.set_fact:
-        efs_file_system_id: "{{ stack_output_result.stdout | trim }}"
-    
-    - name: Check loadbalancer stack outputs
+    - name: Get Blue target group ARN from SSM Parameter Store
       ansible.builtin.include_role:
-        name: pulumi_helper
-        tasks_from: get_outputs
+        name: ssm_parameter_store
+        tasks_from: get_parameter
       vars:
-        pulumi_project_path: "{{ pulumi_path }}/jenkins-loadbalancer"
-        stack_name: "{{ env_name }}"
-        output_name: "blueTargetGroupArn"
-        mock_output: "mock-blue-tg-arn"
+        parameter_name: "/jenkins-infra/{{ env_name }}/loadbalancer/blue-target-group-arn"
+        store_as: "ssm_blue_tg_arn"
     
-    - name: Set Blue target group ARN
-      ansible.builtin.set_fact:
-        blue_target_group_arn: "{{ stack_output_result.stdout | trim }}"
+    - name: Get Green target group ARN from SSM Parameter Store
+      ansible.builtin.include_role:
+        name: ssm_parameter_store
+        tasks_from: get_parameter
+      vars:
+        parameter_name: "/jenkins-infra/{{ env_name }}/loadbalancer/green-target-group-arn"
+        store_as: "ssm_green_tg_arn"
     
-    - name: Display dependency validation
+    - name: Display configuration from SSM
       ansible.builtin.debug:
         msg: |
-          Dependency validation:
-          VPC ID from network stack: {{ network_vpc_id }}
-          Jenkins Security Group ID from security stack: {{ jenkins_sg_id }}
-          EFS File System ID from storage stack: {{ efs_file_system_id }}
-          Blue Target Group ARN from loadbalancer stack: {{ blue_target_group_arn }}
+          Using configuration from SSM:
+          - Project Name: {{ ssm_project_name }}
+          - VPC ID: {{ ssm_vpc_id }}
+          - Jenkins Security Group ID: {{ ssm_jenkins_sg_id }}
+          - EFS File System ID: {{ ssm_efs_id }}
+          - Blue Target Group ARN: {{ ssm_blue_tg_arn }}
+          - Green Target Group ARN: {{ ssm_green_tg_arn }}
+    
     
     # Pulumiプレビュー
     - name: Preview controller deployment
@@ -250,19 +134,29 @@
       when: not ansible_check_mode
     
     # Jenkinsインスタンス情報の取得
-    - name: Get Jenkins instance ID
+    - name: Get Jenkins instance ID from SSM Parameter Store
       ansible.builtin.include_role:
-        name: pulumi_helper
-        tasks_from: get_outputs
+        name: ssm_parameter_store
+        tasks_from: get_parameter
       vars:
-        pulumi_project_path: "{{ pulumi_path }}/jenkins-controller"
-        stack_name: "{{ env_name }}"
-        output_name: "jenkinsInstanceId"
-        mock_output: "mock-jenkins-instance-id"
+        parameter_name: "/jenkins-infra/{{ env_name }}/controller/instance-id"
+        store_as: "jenkins_instance_id"
     
-    - name: Set Jenkins instance ID
-      ansible.builtin.set_fact:
-        jenkins_instance_id: "{{ stack_output_result.stdout | trim }}"
+    - name: Get Jenkins private IP from SSM Parameter Store
+      ansible.builtin.include_role:
+        name: ssm_parameter_store
+        tasks_from: get_parameter
+      vars:
+        parameter_name: "/jenkins-infra/{{ env_name }}/controller/private-ip"
+        store_as: "jenkins_private_ip"
+    
+    - name: Get deployed Jenkins color from SSM Parameter Store
+      ansible.builtin.include_role:
+        name: ssm_parameter_store
+        tasks_from: get_parameter
+      vars:
+        parameter_name: "/jenkins-infra/{{ env_name }}/controller/deployed-color"
+        store_as: "deployed_jenkins_color"
     
     - name: Set controller facts for use in other playbooks
       ansible.builtin.set_fact:
@@ -275,7 +169,8 @@
         msg: |
           Jenkins Controller Infrastructure Deployed Successfully:
           - Instance ID: {{ jenkins_instance_id }}
-          - Jenkins Color: {{ jenkins_color }}
+          - Private IP: {{ jenkins_private_ip }}
+          - Deployed Jenkins Color: {{ deployed_jenkins_color }}
           - Recovery Mode: {{ recovery_mode }}
   
   rescue:
