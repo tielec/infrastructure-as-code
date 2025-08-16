@@ -52,7 +52,7 @@ fi
 # Fleet IDの取得
 log "Retrieving Fleet ID..."
 EC2_FLEET_ID=$(aws ssm get-parameter \
-    --name "/${PROJECT_NAME}/${ENVIRONMENT}/jenkins/agent/spotFleetRequestId" \
+    --name "/jenkins-infra/${ENVIRONMENT}/agent/spotFleetRequestId" \
     --region "$AWS_REGION" \
     --query "Parameter.Value" \
     --output text 2>/dev/null || echo "")
@@ -91,10 +91,15 @@ export EC2_NUM_EXECUTORS="${EC2_NUM_EXECUTORS:-3}"
 
 # Jenkins URLの設定（ALB経由の場合）
 JENKINS_URL=$(aws ssm get-parameter \
-    --name "/${PROJECT_NAME}/${ENVIRONMENT}/jenkins/url" \
+    --name "/jenkins-infra/${ENVIRONMENT}/loadbalancer/alb-dns" \
     --region "$AWS_REGION" \
     --query "Parameter.Value" \
     --output text 2>/dev/null || echo "http://localhost:8080/")
+
+# ALB DNSをJenkins URLに変換
+if [ "$JENKINS_URL" != "http://localhost:8080/" ]; then
+    JENKINS_URL="http://${JENKINS_URL}/"
+fi
 
 # URLが正しく取得できたかログ出力
 log "✓ Found Jenkins URL: $JENKINS_URL"

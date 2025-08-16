@@ -59,11 +59,11 @@ SEED_JOB_NAME="${SEED_JOB_NAME:-seed-job}"
 if command -v aws &> /dev/null; then
     # Gitリポジトリ設定
     if [ -z "$JENKINS_JOBS_REPO" ]; then
-        JENKINS_JOBS_REPO=$(aws ssm get-parameter --name "/${PROJECT_NAME}/${ENVIRONMENT}/jenkins/jobs-repo" --query "Parameter.Value" --output text 2>/dev/null || echo "https://github.com/tielec/infrastructure-as-code.git")
+        JENKINS_JOBS_REPO=$(aws ssm get-parameter --name "/jenkins-infra/${ENVIRONMENT}/config/git-repo" --query "Parameter.Value" --output text 2>/dev/null || echo "https://github.com/tielec/infrastructure-as-code.git")
     fi
     
     if [ -z "$JENKINS_JOBS_BRANCH" ]; then
-        JENKINS_JOBS_BRANCH=$(aws ssm get-parameter --name "/${PROJECT_NAME}/${ENVIRONMENT}/jenkins/jobs-branch" --query "Parameter.Value" --output text 2>/dev/null || echo "main")
+        JENKINS_JOBS_BRANCH=$(aws ssm get-parameter --name "/jenkins-infra/${ENVIRONMENT}/config/git-branch" --query "Parameter.Value" --output text 2>/dev/null || echo "main")
     fi
 else
     # SSMが使えない場合のデフォルト値
