@@ -6,9 +6,8 @@ import hudson.security.csrf.DefaultCrumbIssuer
 
 def instance = Jenkins.getInstance()
 
-// 古いエージェントプロトコルを無効化
-Set<String> agentProtocolsList = ['JNLP4-connect']
-instance.setAgentProtocols(agentProtocolsList)
+// エージェントプロトコルの設定は新しいJenkinsバージョンでは不要
+// Jenkins 2.516以降ではsetAgentProtocolsは使用できない
 
 // セットアップウィザードを完了としてマーク
 if(!instance.getInstallState().isSetupComplete()) {
