@@ -284,7 +284,16 @@ echo -e "\n${YELLOW}Ansibleプレイブックを実行して環境をセット�
 
 # 環境変数を設定
 export PATH="$HOME/.local/bin:$PATH"
+export ANSIBLE_COLLECTIONS_PATH="/usr/share/ansible/collections"
 source ~/.bashrc
+
+# 既存のcollectionsをクリーンアップ（ユーザー空間の重複を防ぐ）
+if [ -d "$HOME/.local/lib/python3.9/site-packages/ansible_collections" ]; then
+  echo -e "${YELLOW}ユーザー空間の既存のAnsible collectionsを検出しました。${NC}"
+  echo -e "${YELLOW}システム全体のcollectionsを使用するため、ユーザー空間のcollectionsを削除します。${NC}"
+  rm -rf "$HOME/.local/lib/python3.9/site-packages/ansible_collections"
+  echo -e "${GREEN}✓ ユーザー空間のcollectionsをクリーンアップしました${NC}"
+fi
 
 # ansible-playbookのパスを取得
 ANSIBLE_PLAYBOOK_PATH=$(which ansible-playbook)
@@ -294,6 +303,7 @@ if [ -z "$ANSIBLE_PLAYBOOK_PATH" ]; then
 fi
 
 echo -e "${GREEN}ansible-playbook の場所: $ANSIBLE_PLAYBOOK_PATH${NC}"
+echo -e "${GREEN}ANSIBLE_COLLECTIONS_PATH: $ANSIBLE_COLLECTIONS_PATH${NC}"
 
 # 絶対パスで ansible-playbook を実行（Amazon Linux 2023では通常sudoは不要）
 $ANSIBLE_PLAYBOOK_PATH "$PLAYBOOK_PATH" -v

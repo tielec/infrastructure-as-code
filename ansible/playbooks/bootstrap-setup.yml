@@ -244,40 +244,48 @@
               ---
               collections:
                 - name: amazon.aws
-                  version: ">=7.0.0"
+                  version: ">=10.0.0,<11.0.0"
                 - name: community.aws
-                  version: ">=7.0.0"
+                  version: ">=10.0.0,<11.0.0"
                 - name: community.general
-                  version: ">=8.0.0"
+                  version: ">=11.0.0,<12.0.0"
                 - name: ansible.posix
-                  version: ">=1.5.0"
+                  version: ">=2.0.0,<3.0.0"
                 - name: community.docker
-                  version: ">=3.4.0"
+                  version: ">=4.0.0,<5.0.0"
             mode: '0644'
           become: yes
         
-        - name: Install Ansible collections
+        - name: Check existing Ansible collections
           ansible.builtin.shell: |
-            export PATH=/home/ec2-user/.local/bin:$PATH
-            # ユーザーがインストール済みのansible-galaxyを使用してシステム全体にインストール
-            sudo -E $(which ansible-galaxy) collection install -r /etc/ansible/collections/requirements.yml -p /usr/share/ansible/collections --force
-          environment:
-            ANSIBLE_COLLECTIONS_PATH: "/usr/share/ansible/collections"
-            PATH: "/home/ec2-user/.local/bin:/usr/local/bin:/usr/bin:/bin"
-          become: yes
-          register: collection_install
-          changed_when: "'Installing' in collection_install.stdout"
-          ignore_errors: yes
-          
-        - name: Alternative - Install collections as ec2-user to system location
+            export ANSIBLE_COLLECTIONS_PATH=/usr/share/ansible/collections
+            ansible-galaxy collection list 2>/dev/null | grep -E "(amazon\.aws|community\.aws|community\.general|ansible\.posix|community\.docker)" || true
+          register: existing_collections
+          changed_when: false
+          failed_when: false
+        
+        - name: Install or update Ansible collections
           ansible.builtin.shell: |
             export PATH=/home/ec2-user/.local/bin:$PATH
             export ANSIBLE_COLLECTIONS_PATH=/usr/share/ansible/collections
-            # 個別にインストール（権限の問題を回避）
-            for collection in amazon.aws community.aws community.general ansible.posix community.docker; do
-              echo "Installing $collection..."
-              sudo -E $(which ansible-galaxy) collection install $collection --force -p /usr/share/ansible/collections
-            done
+            # ansible-galaxyコマンドのパスを取得
+            ANSIBLE_GALAXY=$(which ansible-galaxy 2>/dev/null || echo "/home/ec2-user/.local/bin/ansible-galaxy")
+            
+            if [ -x "$ANSIBLE_GALAXY" ]; then
+              echo "Using ansible-galaxy from: $ANSIBLE_GALAXY"
+              # システム全体にインストール（重複を避けるため --force は使わない）
+              sudo -E $ANSIBLE_GALAXY collection install -r /etc/ansible/collections/requirements.yml -p /usr/share/ansible/collections --upgrade
+            else
+              echo "ansible-galaxy not found, skipping collection installation"
+              exit 1
+            fi
+          environment:
+            ANSIBLE_COLLECTIONS_PATH: "/usr/share/ansible/collections"
+            PATH: "/home/ec2-user/.local/bin:/usr/local/bin:/usr/bin:/bin"
+          become: no
+          register: collection_install
+          changed_when: "'Installing' in collection_install.stdout or 'Upgrading' in collection_install.stdout"
+          failed_when: false
         
         - name: Set Ansible collections path in profile
           ansible.builtin.lineinfile:
@@ -290,7 +298,7 @@
         - name: Verify collections installation
           ansible.builtin.shell: |
             export ANSIBLE_COLLECTIONS_PATH=/usr/share/ansible/collections
-            ansible-galaxy collection list
+            ansible-galaxy collection list 2>/dev/null | grep -E "(amazon\.aws|community\.aws|community\.general|ansible\.posix|community\.docker)" || echo "No collections found"
           register: installed_collections
           changed_when: false
         
@@ -298,7 +306,7 @@
           ansible.builtin.debug:
             msg: |
               Installed Ansible Collections:
-              {{ installed_collections.stdout | regex_findall('(amazon\.aws|community\.aws|community\.general|ansible\.posix|community\.docker).*') | join('\n') }}
+              {{ installed_collections.stdout }}
     
     # Dockerのインストール（オプション）
     - name: Install Docker
@@ -378,12 +386,12 @@
           - jmespath (JSON query language)
           - urllib3, cryptography, PyYAML, jsonschema
           
-          Ansible Collections (latest versions):
-          - amazon.aws (10.0+)
-          - community.aws (10.0+)
-          - community.general (11.0+)
-          - ansible.posix (2.0+)
-          - community.docker (4.0+)
+          Ansible Collections (managed versions):
+          - amazon.aws (10.x)
+          - community.aws (10.x)
+          - community.general (11.x)
+          - ansible.posix (2.x)
+          - community.docker (4.x)
           
           === Quick Start ===
           
