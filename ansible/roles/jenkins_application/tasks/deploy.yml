@@ -40,24 +40,30 @@
         pulumi_project_path: "{{ pulumi_path }}/jenkins-application"
         config_key: "aws:region"
         config_value: "{{ aws_region_name }}"
-
-    - name: Configure application stack - project name
+    
+    # SSMパラメータの確認
+    - name: Get project name from SSM Parameter Store
       ansible.builtin.include_role:
-        name: pulumi_helper
-        tasks_from: set_config
+        name: ssm_parameter_store
+        tasks_from: get_parameter
       vars:
-        pulumi_project_path: "{{ pulumi_path }}/jenkins-application"
-        config_key: "{{ application_project_name }}:projectName"
-        config_value: "{{ project_name }}"
-
-    - name: Configure application stack - Jenkins version
+        parameter_name: "/jenkins-infra/{{ env_name }}/config/project-name"
+        store_as: "ssm_project_name"
+    
+    - name: Get Jenkins version from SSM Parameter Store
       ansible.builtin.include_role:
-        name: pulumi_helper
-        tasks_from: set_config
+        name: ssm_parameter_store
+        tasks_from: get_parameter
       vars:
-        pulumi_project_path: "{{ pulumi_path }}/jenkins-application"
-        config_key: "{{ application_project_name }}:jenkinsVersion"
-        config_value: "{{ jenkins_version }}"
+        parameter_name: "/jenkins-infra/{{ env_name }}/config/jenkins-version"
+        store_as: "ssm_jenkins_version"
+    
+    - name: Display configuration from SSM
+      ansible.builtin.debug:
+        msg: |
+          Using configuration from SSM:
+          - Project Name: {{ ssm_project_name }}
+          - Jenkins Version: {{ ssm_jenkins_version }}
     
     # Pulumiプレビュー
     - name: Preview application deployment
@@ -75,52 +81,42 @@
       vars:
         pulumi_project_path: "{{ pulumi_path }}/jenkins-application"
     
-    # SSMドキュメント名の取得（jenkins_configと同様の実装）
-    - name: Get SSM document names
-      ansible.builtin.shell: |
-        cd {{ pulumi_path }}/jenkins-application
-        export PULUMI_ACCESS_TOKEN="{{ lookup('env', 'PULUMI_ACCESS_TOKEN') }}"
-        pulumi stack output ssmDocuments --json 2>/dev/null || echo '{}'
-      register: ssm_documents_output
-      changed_when: false
-
+    # SSMドキュメント名の取得（SSMパラメータから）
+    - name: Get execute script document name from SSM Parameter Store
+      ansible.builtin.include_role:
+        name: ssm_parameter_store
+        tasks_from: get_parameter
+      vars:
+        parameter_name: "/jenkins-infra/{{ env_name }}/application/execute-script-document-name"
+        store_as: "execute_script_document_name"
+    
+    - name: Get restart document name from SSM Parameter Store
+      ansible.builtin.include_role:
+        name: ssm_parameter_store
+        tasks_from: get_parameter
+      vars:
+        parameter_name: "/jenkins-infra/{{ env_name }}/application/restart-document-name"
+        store_as: "restart_document_name"
+    
     - name: Set SSM document names
       ansible.builtin.set_fact:
-        ssm_documents: "{{ ssm_documents_output.stdout | from_json }}"
-      when: 
-        - ssm_documents_output.stdout | length > 0
-        - ssm_documents_output.stdout != '{}'
-
-    # フォールバック: デフォルト値を設定
-    - name: Set default SSM document names if not found
-      ansible.builtin.set_fact:
         ssm_documents:
-          executeScript: "jenkins-infra-jenkins-execute-script"
-          restart: "jenkins-infra-jenkins-restart"
-      when: ssm_documents is not defined or ssm_documents | length == 0
+          executeScript: "{{ execute_script_document_name }}"
+          restart: "{{ restart_document_name }}"
     
-    # jenkins_configのSSMドキュメントも取得（同様の実装）
-    - name: Get config SSM document names
-      ansible.builtin.shell: |
-        cd {{ pulumi_path }}/jenkins-config
-        export PULUMI_ACCESS_TOKEN="{{ lookup('env', 'PULUMI_ACCESS_TOKEN') }}"
-        pulumi stack output ssmDocuments --json 2>/dev/null || echo '{}'
-      register: config_ssm_documents_output
-      changed_when: false
-
+    # jenkins_configのSSMドキュメントも取得（SSMパラメータから）
+    - name: Get config update repo document name from SSM Parameter Store
+      ansible.builtin.include_role:
+        name: ssm_parameter_store
+        tasks_from: get_parameter
+      vars:
+        parameter_name: "/jenkins-infra/{{ env_name }}/config/update-repo-document-name"
+        store_as: "config_update_repo_document_name"
+    
     - name: Set config SSM document names
       ansible.builtin.set_fact:
-        config_ssm_documents: "{{ config_ssm_documents_output.stdout | from_json }}"
-      when: 
-        - config_ssm_documents_output.stdout | length > 0
-        - config_ssm_documents_output.stdout != '{}'
-
-    # フォールバック: デフォルト値を設定
-    - name: Set default config SSM document names if not found
-      ansible.builtin.set_fact:
         config_ssm_documents:
-          updateRepo: "jenkins-infra-jenkins-update-repo-{{ env_name }}"
-      when: config_ssm_documents is not defined or config_ssm_documents | length == 0
+          updateRepo: "{{ config_update_repo_document_name }}"
       
     - name: Display SSM document names
       ansible.builtin.debug:
@@ -147,7 +143,7 @@
         name: ssm_parameter_store
         tasks_from: get_parameter
       vars:
-        parameter_name: "/{{ project_name }}/{{ env_name }}/jenkins/instanceId"
+        parameter_name: "/jenkins-infra/{{ env_name }}/controller/instance-id"
         store_as: "jenkins_instance_id"
     
     - name: Verify Jenkins instance ID

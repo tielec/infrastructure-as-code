@@ -7,17 +7,24 @@
 import * as pulumi from "@pulumi/pulumi";
 import * as aws from "@pulumi/aws";
 
-// コンフィグから設定を取得
-const config = new pulumi.Config();
-const projectName = config.get("projectName") || "jenkins-infra";
+// 環境名をスタック名から取得
 const environment = pulumi.getStack();
+const ssmPrefix = `/jenkins-infra/${environment}`;
+
+// SSMパラメータから設定を取得
+const projectNameParam = aws.ssm.getParameter({
+    name: `${ssmPrefix}/config/project-name`,
+});
+
+// 設定値を変数に設定
+const projectName = pulumi.output(projectNameParam).apply(p => p.value);
 
 // タイムスタンプを生成（ドキュメント名の一意性を保証）
 const timestamp = new Date().toISOString().slice(0, 10).replace(/-/g, '');
 
 // 汎用的なスクリプト実行用SSMドキュメント
-const jenkinsExecuteScriptDocument = new aws.ssm.Document(`${projectName}-jenkins-execute-script`, {
-    name: `${projectName}-jenkins-execute-script-${environment}`,
+const jenkinsExecuteScriptDocument = new aws.ssm.Document(`jenkins-execute-script`, {
+    name: `jenkins-infra-jenkins-execute-script-${environment}`,
     documentType: "Command",
     documentFormat: "JSON",
     targetType: "/AWS::EC2::Instance",
@@ -51,7 +58,7 @@ const jenkinsExecuteScriptDocument = new aws.ssm.Document(`${projectName}-jenkin
                         "set -e",
                         "",
                         "# 環境変数の設定",
-                        "export PROJECT_NAME='" + projectName + "'",
+                        "export PROJECT_NAME='jenkins-infra'",
                         "export ENVIRONMENT='" + environment + "'",
                         "export JENKINS_HOME='/mnt/efs/jenkins'",
                         "export REPO_PATH='/root/infrastructure-as-code'",
@@ -89,8 +96,8 @@ const jenkinsExecuteScriptDocument = new aws.ssm.Document(`${projectName}-jenkin
 });
 
 // Jenkins再起動用SSMドキュメント（これは残す）
-const jenkinsRestartDocument = new aws.ssm.Document(`${projectName}-jenkins-restart`, {
-    name: `${projectName}-jenkins-restart-${environment}`,
+const jenkinsRestartDocument = new aws.ssm.Document(`jenkins-restart`, {
+    name: `jenkins-infra-jenkins-restart-${environment}`,
     documentType: "Command",
     documentFormat: "JSON",
     targetType: "/AWS::EC2::Instance",
@@ -141,8 +148,48 @@ const jenkinsRestartDocument = new aws.ssm.Document(`${projectName}-jenkins-rest
     replaceOnChanges: ["content", "targetType"]
 });
 
+// SSMドキュメント名をSSMパラメータに保存
+const executeScriptDocumentNameParam = new aws.ssm.Parameter(`execute-script-document-name`, {
+    name: `${ssmPrefix}/application/execute-script-document-name`,
+    type: "String",
+    value: jenkinsExecuteScriptDocument.name,
+    overwrite: true,
+    tags: {
+        Environment: environment,
+        ManagedBy: "pulumi",
+        Component: "application",
+    },
+});
+
+const restartDocumentNameParam = new aws.ssm.Parameter(`restart-document-name`, {
+    name: `${ssmPrefix}/application/restart-document-name`,
+    type: "String",
+    value: jenkinsRestartDocument.name,
+    overwrite: true,
+    tags: {
+        Environment: environment,
+        ManagedBy: "pulumi",
+        Component: "application",
+    },
+});
+
+// アプリケーションステータス用SSMパラメータ
+const applicationStatusParam = new aws.ssm.Parameter(`application-status`, {
+    name: `${ssmPrefix}/application/status`,
+    type: "String",
+    value: "initialized",
+    overwrite: true,
+    description: "Jenkins application deployment status",
+    tags: {
+        Environment: environment,
+        ManagedBy: "pulumi",
+        Component: "application",
+    },
+});
+
 // エクスポート
 export const ssmDocuments = {
     executeScript: jenkinsExecuteScriptDocument.name,
     restart: jenkinsRestartDocument.name,
 };
+export const applicationStatusParameterName = applicationStatusParam.name;
