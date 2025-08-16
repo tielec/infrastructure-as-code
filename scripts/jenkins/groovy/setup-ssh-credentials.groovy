@@ -28,7 +28,7 @@ println("Region: ${AWS_REGION}")
 // パラメータストアのパス -> クレデンシャル設定のマッピング
 def credentialMappings = [
     [
-        parameterPath: "/${PROJECT_NAME}/${ENVIRONMENT}/jenkins/agent/private-key",
+        parameterPath: "/jenkins-infra/${ENVIRONMENT}/agent/private-key",
         credentialId: "ec2-agent-keypair",
         description: "Spot Fleet で起動する EC2 Agent のSSH 秘密鍵",
         username: "ec2-user"
