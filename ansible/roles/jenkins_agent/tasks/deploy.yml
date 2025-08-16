@@ -62,79 +62,75 @@
         pulumi_project_path: "{{ pulumi_path }}/jenkins-agent"
         config_key: "aws:region"
         config_value: "{{ aws_region_name }}"
-
-    - name: Configure agent stack - project name
+    
+    # SSMパラメータの確認
+    - name: Get project name from SSM Parameter Store
       ansible.builtin.include_role:
-        name: pulumi_helper
-        tasks_from: set_config
+        name: ssm_parameter_store
+        tasks_from: get_parameter
       vars:
-        pulumi_project_path: "{{ pulumi_path }}/jenkins-agent"
-        config_key: "{{ agent_project_name }}:projectName"
-        config_value: "{{ project_name }}"
-
-    - name: Configure agent stack - network stack name
+        parameter_name: "/jenkins-infra/{{ env_name }}/config/project-name"
+        store_as: "ssm_project_name"
+    
+    - name: Get VPC ID from SSM Parameter Store
       ansible.builtin.include_role:
-        name: pulumi_helper
-        tasks_from: set_config
+        name: ssm_parameter_store
+        tasks_from: get_parameter
       vars:
-        pulumi_project_path: "{{ pulumi_path }}/jenkins-agent"
-        config_key: "{{ agent_project_name }}:networkStackName"
-        config_value: "{{ network_project_name }}"
-
-    - name: Configure agent stack - security stack name
+        parameter_name: "/jenkins-infra/{{ env_name }}/network/vpc-id"
+        store_as: "ssm_vpc_id"
+    
+    - name: Get Jenkins agent security group ID from SSM Parameter Store
       ansible.builtin.include_role:
-        name: pulumi_helper
-        tasks_from: set_config
+        name: ssm_parameter_store
+        tasks_from: get_parameter
       vars:
-        pulumi_project_path: "{{ pulumi_path }}/jenkins-agent"
-        config_key: "{{ agent_project_name }}:securityStackName"
-        config_value: "{{ security_project_name }}"
-
-    - name: Configure agent stack - instance type
+        parameter_name: "/jenkins-infra/{{ env_name }}/security/jenkins-agent-sg-id"
+        store_as: "ssm_agent_sg_id"
+    
+    - name: Get agent instance type from SSM Parameter Store
       ansible.builtin.include_role:
-        name: pulumi_helper
-        tasks_from: set_config
+        name: ssm_parameter_store
+        tasks_from: get_parameter
       vars:
-        pulumi_project_path: "{{ pulumi_path }}/jenkins-agent"
-        config_key: "{{ agent_project_name }}:instanceType"
-        config_value: "{{ instance_type }}"
-
-    - name: Configure agent stack - min target capacity
+        parameter_name: "/jenkins-infra/{{ env_name }}/config/agent-instance-type"
+        store_as: "ssm_instance_type"
+    
+    - name: Get agent max capacity from SSM Parameter Store
       ansible.builtin.include_role:
-        name: pulumi_helper
-        tasks_from: set_config
+        name: ssm_parameter_store
+        tasks_from: get_parameter
       vars:
-        pulumi_project_path: "{{ pulumi_path }}/jenkins-agent"
-        config_key: "{{ agent_project_name }}:minTargetCapacity"
-        config_value: "{{ min_capacity }}"
-
-    - name: Configure agent stack - max target capacity
+        parameter_name: "/jenkins-infra/{{ env_name }}/config/agent-max-capacity"
+        store_as: "ssm_max_capacity"
+    
+    - name: Get agent min capacity from SSM Parameter Store
       ansible.builtin.include_role:
-        name: pulumi_helper
-        tasks_from: set_config
+        name: ssm_parameter_store
+        tasks_from: get_parameter
       vars:
-        pulumi_project_path: "{{ pulumi_path }}/jenkins-agent"
-        config_key: "{{ agent_project_name }}:maxTargetCapacity"
-        config_value: "{{ max_capacity }}"
-
-    - name: Configure agent stack - spot price
+        parameter_name: "/jenkins-infra/{{ env_name }}/config/agent-min-capacity"
+        store_as: "ssm_min_capacity"
+    
+    - name: Get agent spot price from SSM Parameter Store
       ansible.builtin.include_role:
-        name: pulumi_helper
-        tasks_from: set_config
+        name: ssm_parameter_store
+        tasks_from: get_parameter
       vars:
-        pulumi_project_path: "{{ pulumi_path }}/jenkins-agent"
-        config_key: "{{ agent_project_name }}:spotPrice"
-        config_value: "{{ spot_price }}"
-
-    - name: Configure agent stack - key name (if defined)
-      ansible.builtin.include_role:
-        name: pulumi_helper
-        tasks_from: set_config
-      vars:
-        pulumi_project_path: "{{ pulumi_path }}/jenkins-agent"
-        config_key: "{{ agent_project_name }}:keyName"
-        config_value: "{{ key_name }}"
-      when: key_name is defined and key_name != ""
+        parameter_name: "/jenkins-infra/{{ env_name }}/config/agent-spot-price"
+        store_as: "ssm_spot_price"
+    
+    - name: Display configuration from SSM
+      ansible.builtin.debug:
+        msg: |
+          Using configuration from SSM:
+          - Project Name: {{ ssm_project_name }}
+          - VPC ID: {{ ssm_vpc_id }}
+          - Agent Security Group ID: {{ ssm_agent_sg_id }}
+          - Instance Type: {{ ssm_instance_type }}
+          - Max Capacity: {{ ssm_max_capacity }}
+          - Min Capacity: {{ ssm_min_capacity }}
+          - Spot Price: {{ ssm_spot_price }}
     
     # 依存関係の確認: 必要なスタックが全てデプロイ済みであることを確認
     - name: Check network stack outputs
@@ -194,48 +190,38 @@
         seconds: 10
       when: not ansible_check_mode
     
-    # Spot Fleetリクエスト情報の取得
-    - name: Get agent Spot Fleet request ID
-      ansible.builtin.include_role:
-        name: pulumi_helper
-        tasks_from: get_outputs
-      vars:
-        pulumi_project_path: "{{ pulumi_path }}/jenkins-agent"
-        stack_name: "{{ env_name }}"
-        output_name: "spotFleetRequestId"
-        mock_output: "mock-spot-fleet-request-id"
-    
-    - name: Set Spot Fleet request ID
-      ansible.builtin.set_fact:
-        spot_fleet_request_id: "{{ stack_output_result.stdout | trim }}"
-    
-    - name: Get agent launch template ID
-      ansible.builtin.include_role:
-        name: pulumi_helper
-        tasks_from: get_outputs
-      vars:
-        pulumi_project_path: "{{ pulumi_path }}/jenkins-agent"
-        stack_name: "{{ env_name }}"
-        output_name: "launchTemplateId"
-        mock_output: "mock-launch-template-id"
-    
-    - name: Set launch template ID
-      ansible.builtin.set_fact:
-        launch_template_id: "{{ stack_output_result.stdout | trim }}"
-    
-    # SSMパラメータに保存されたSpotFleet IDを取得する
-    - name: Verify SpotFleet ID was stored in SSM parameter
+    # Spot Fleetリクエスト情報の取得（SSMパラメータから）
+    - name: Get agent Spot Fleet request ID from SSM
       ansible.builtin.include_role:
         name: ssm_parameter_store
         tasks_from: get_parameter
       vars:
-        parameter_name: "/{{ project_name }}/{{ env_name }}/jenkins/agent/spotFleetRequestId"
-        ssm_parameter_store_fail_on_missing: false
-        store_as: "fleet_id_param_value"
-      
-    - name: Display SSM parameter value
-      ansible.builtin.debug:
-        msg: "SSMパラメータに保存されたSpotFleet ID: {{ fleet_id_param_value | default('取得失敗') }}"
+        parameter_name: "/jenkins-infra/{{ env_name }}/agent/spotFleetRequestId"
+        store_as: "spot_fleet_request_id"
+    
+    - name: Get agent launch template ID from SSM
+      ansible.builtin.include_role:
+        name: ssm_parameter_store
+        tasks_from: get_parameter
+      vars:
+        parameter_name: "/jenkins-infra/{{ env_name }}/agent/launch-template-id"
+        store_as: "launch_template_id"
+    
+    - name: Get agent role ARN from SSM
+      ansible.builtin.include_role:
+        name: ssm_parameter_store
+        tasks_from: get_parameter
+      vars:
+        parameter_name: "/jenkins-infra/{{ env_name }}/agent/role-arn"
+        store_as: "agent_role_arn"
+    
+    - name: Get agent keypair name from SSM
+      ansible.builtin.include_role:
+        name: ssm_parameter_store
+        tasks_from: get_parameter
+      vars:
+        parameter_name: "/jenkins-infra/{{ env_name }}/agent/keypair-name"
+        store_as: "agent_keypair_name"
     
     - name: Set agent facts for use in other playbooks
       ansible.builtin.set_fact:
@@ -249,9 +235,10 @@
           Jenkins Agent Infrastructure Deployed Successfully:
           - Spot Fleet Request ID: {{ spot_fleet_request_id }}
           - Launch Template ID: {{ launch_template_id }}
-          - Min Capacity: {{ min_capacity }}
-          - Max Capacity: {{ max_capacity }}
-          - SSM Parameter Status: {{ ssm_operation_success | ternary('Success', 'Failed') }}
+          - Agent Role ARN: {{ agent_role_arn }}
+          - Agent Keypair Name: {{ agent_keypair_name }}
+          - Min Capacity: {{ ssm_min_capacity }}
+          - Max Capacity: {{ ssm_max_capacity }}
   
   rescue:
     - name: Set agent deployment status on failure
