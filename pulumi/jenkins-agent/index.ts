@@ -72,7 +72,7 @@ const agentKeyPair = new aws.ec2.KeyPair(`agent-keypair`, {
     keyName: pulumi.interpolate`${projectName}-agent-${environment}`,
     publicKey: agentPrivateKey.publicKeyOpenssh,
     tags: {
-        Name: pulumi.interpolate`${projectName}-agent-keypair-${environment}`,
+        Name: `jenkins-infra-agent-keypair-${environment}`,
         Environment: environment,
         ManagedBy: "pulumi",
     },
@@ -154,7 +154,7 @@ const jenkinsAgentRole = new aws.iam.Role(`agent-role`, {
         }],
     }),
     tags: {
-        Name: pulumi.interpolate`${projectName}-agent-role-${environment}`,
+        Name: `jenkins-infra-agent-role-${environment}`,
         Environment: environment,
     },
 });
@@ -242,7 +242,7 @@ const spotFleetRole = new aws.iam.Role(`spotfleet-role`, {
         "arn:aws:iam::aws:policy/service-role/AmazonEC2SpotFleetTaggingRole",
     ],
     tags: {
-        Name: pulumi.interpolate`${projectName}-spotfleet-role-${environment}`,
+        Name: `jenkins-infra-spotfleet-role-${environment}`,
         Environment: environment,
     },
 });
@@ -368,7 +368,7 @@ chown jenkins:jenkins /home/jenkins/agent/bootstrap-complete
         return Buffer.from(userData).toString("base64");
     }),
     tags: {
-        Name: `${projectName}-agent-lt-${environment}`,
+        Name: `jenkins-infra-agent-lt-${environment}`,
         Environment: environment,
     },
 });
@@ -497,7 +497,7 @@ chown jenkins:jenkins /home/jenkins/agent/bootstrap-complete
         return Buffer.from(userData).toString("base64");
     }),
     tags: {
-        Name: pulumi.interpolate`${projectName}-agent-lt-arm-${environment}`,
+        Name: `jenkins-infra-agent-lt-arm-${environment}`,
         Environment: environment,
     },
 });
@@ -557,7 +557,7 @@ const spotFleetRequest = new aws.ec2.SpotFleetRequest(`agent-spot-fleet`, {
         return configs;
     }),
     tags: {
-        Name: pulumi.interpolate`${projectName}-agent-fleet-${environment}`,
+        Name: `jenkins-infra-agent-fleet-${environment}`,
         Environment: environment,
     },
 });
@@ -566,7 +566,7 @@ const spotFleetRequest = new aws.ec2.SpotFleetRequest(`agent-spot-fleet`, {
 const spotFleetNotificationTopic = new aws.sns.Topic(`agent-fleet-notifications`, {
     name: `jenkins-infra-agent-fleet-notifications-${environment}`,
     tags: {
-        Name: pulumi.interpolate`${projectName}-agent-fleet-notifications-${environment}`,
+        Name: `jenkins-infra-agent-fleet-notifications-${environment}`,
         Environment: environment,
     },
 });
