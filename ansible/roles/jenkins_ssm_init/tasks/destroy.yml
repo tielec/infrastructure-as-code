@@ -1,0 +1,65 @@
+---
+# SSMパラメータストア削除タスク
+
+- name: Display SSM parameter deletion information
+  ansible.builtin.debug:
+    msg: |
+      Destroying SSM Parameters:
+      - Project: {{ project_name }}
+      - Environment: {{ env_name }}
+      - AWS Region: {{ aws_region_name }}
+
+- name: Confirm SSM parameter deletion
+  ansible.builtin.pause:
+    prompt: "Are you sure you want to delete SSM parameters? Press Enter to continue or Ctrl+C to abort"
+  when: 
+    - confirm | default(false) | bool
+    - not force_destroy | default(false) | bool
+
+# Pulumiヘルパータスクを使用してSSMパラメータを削除
+- name: Destroy SSM parameters with Pulumi
+  block:
+    # Pulumiスタックの選択
+    - name: Select SSM init stack
+      ansible.builtin.include_role:
+        name: pulumi_helper
+        tasks_from: select_stack
+      vars:
+        pulumi_project_path: "{{ pulumi_path }}/jenkins-ssm-init"
+        stack_name: "{{ env_name }}"
+    
+    # Pulumiデストロイ
+    - name: Destroy SSM parameters
+      ansible.builtin.include_role:
+        name: pulumi_helper
+        tasks_from: destroy
+      vars:
+        pulumi_project_path: "{{ pulumi_path }}/jenkins-ssm-init"
+    
+    # 削除成功を記録
+    - name: Set SSM destruction success fact
+      ansible.builtin.set_fact:
+        ssm_destroyed: true
+    
+  rescue:
+    - name: SSM parameter deletion failed
+      ansible.builtin.debug:
+        msg: "SSM parameter deletion failed: {{ ansible_failed_result.msg | default('Unknown error') }}"
+      
+    - name: Set SSM destruction failure fact
+      ansible.builtin.set_fact:
+        ssm_destroyed: false
+    
+    - name: Fail the playbook if not forced
+      ansible.builtin.fail:
+        msg: "SSM parameter deletion failed"
+      when: not force_destroy | default(false) | bool
+
+- name: Display SSM destruction summary
+  ansible.builtin.debug:
+    msg: |
+      ========================================
+      SSM Parameter Store Deletion Complete
+      Status: {{ 'SUCCESS' if ssm_destroyed else 'FAILED' }}
+      ========================================
+  when: ssm_destroyed is defined

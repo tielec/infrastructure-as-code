@@ -44,23 +44,8 @@
         config_key: "aws:region"
         config_value: "{{ aws_region_name }}"
 
-    - name: Configure network stack - project name
-      ansible.builtin.include_role:
-        name: pulumi_helper
-        tasks_from: set_config
-      vars:
-        pulumi_project_path: "{{ pulumi_path }}/jenkins-network"
-        config_key: "{{ network_project_name }}:projectName"
-        config_value: "{{ project_name }}"
-
-    - name: Configure network stack - VPC CIDR
-      ansible.builtin.include_role:
-        name: pulumi_helper
-        tasks_from: set_config
-      vars:
-        pulumi_project_path: "{{ pulumi_path }}/jenkins-network"
-        config_key: "{{ network_project_name }}:vpcCidr"
-        config_value: "{{ vpc_cidr | default('10.0.0.0/16') }}"
+    # 注: プロジェクト名とVPC CIDRはSSMパラメータから取得するため、
+    # Pulumi設定は不要（Pulumiコード内でSSMから取得）
 
     # Pulumiプレビュー
     - name: Preview network deployment
