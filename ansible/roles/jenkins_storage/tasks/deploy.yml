@@ -78,17 +78,6 @@
           - VPC ID: {{ network_vpc_id }}
           - EFS Security Group ID: {{ efs_security_group_id }}
     
-    - name: Set EFS security group ID
-      ansible.builtin.set_fact:
-        efs_sg_id: "{{ stack_output_result.stdout | trim }}"
-    
-    - name: Display dependency validation
-      ansible.builtin.debug:
-        msg: |
-          Dependency validation:
-          VPC ID from network stack: {{ network_vpc_id }}
-          EFS Security Group ID from security stack: {{ efs_sg_id }}
-    
     # Pulumiプレビュー
     - name: Preview storage deployment
       ansible.builtin.include_role:
