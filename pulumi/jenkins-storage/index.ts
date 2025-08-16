@@ -50,12 +50,12 @@ const privateSubnetBId = pulumi.output(privateSubnetBIdParam).apply(p => p.value
 const efsSecurityGroupId = pulumi.output(efsSecurityGroupIdParam).apply(p => p.value);
 
 // EFSファイルシステムの作成
-const efsFileSystem = new aws.efs.FileSystem(`${projectName}-efs`, {
+const efsFileSystem = new aws.efs.FileSystem(`efs`, {
     encrypted: true,
-    performanceMode: "generalPurpose",
-    throughputMode: "bursting",
+    performanceMode: efsPerformanceMode,
+    throughputMode: efsThroughputMode,
     tags: {
-        Name: `${projectName}-jenkins-efs-${environment}`,
+        Name: pulumi.interpolate`${projectName}-jenkins-efs-${environment}`,
         Environment: environment,
         ManagedBy: "pulumi",
     },
@@ -65,7 +65,7 @@ const efsFileSystem = new aws.efs.FileSystem(`${projectName}-efs`, {
 });
 
 // マウントターゲットを個別に作成（削除順序を制御するため）
-const mountTargetA = new aws.efs.MountTarget(`${projectName}-efs-mt-a`, {
+const mountTargetA = new aws.efs.MountTarget(`efs-mt-a`, {
     fileSystemId: efsFileSystem.id,
     subnetId: privateSubnetAId,
     securityGroups: [efsSecurityGroupId],
@@ -76,7 +76,7 @@ const mountTargetA = new aws.efs.MountTarget(`${projectName}-efs-mt-a`, {
     deleteBeforeReplace: true,
 });
 
-const mountTargetB = new aws.efs.MountTarget(`${projectName}-efs-mt-b`, {
+const mountTargetB = new aws.efs.MountTarget(`efs-mt-b`, {
     fileSystemId: efsFileSystem.id,
     subnetId: privateSubnetBId,
     securityGroups: [efsSecurityGroupId],
@@ -88,7 +88,7 @@ const mountTargetB = new aws.efs.MountTarget(`${projectName}-efs-mt-b`, {
 });
 
 // EFSアクセスポイント (Jenkinsホームディレクトリ用)
-const jenkinsAccessPoint = new aws.efs.AccessPoint(`${projectName}-jenkins-ap`, {
+const jenkinsAccessPoint = new aws.efs.AccessPoint(`jenkins-ap`, {
     fileSystemId: efsFileSystem.id,
     posixUser: {
         gid: 994,  // Jenkinsのgid
@@ -103,7 +103,7 @@ const jenkinsAccessPoint = new aws.efs.AccessPoint(`${projectName}-jenkins-ap`, 
         },
     },
     tags: {
-        Name: `${projectName}-jenkins-ap-${environment}`,
+        Name: pulumi.interpolate`${projectName}-jenkins-ap-${environment}`,
         Environment: environment,
     },
 }, {
@@ -112,10 +112,11 @@ const jenkinsAccessPoint = new aws.efs.AccessPoint(`${projectName}-jenkins-ap`, 
 });
 
 // EFSファイルシステムIDをSSM Parameter Storeに保存
-const efsFileSystemIdParameter = new aws.ssm.Parameter(`${projectName}-efs-id-param`, {
-    name: `/${projectName}/${environment}/storage/efsFileSystemId`,
+const efsFileSystemIdParameter = new aws.ssm.Parameter(`efs-id-param`, {
+    name: `${ssmPrefix}/storage/efs-file-system-id`,
     type: "String",
     value: efsFileSystem.id,
+    overwrite: true,
     description: `EFS File System ID for Jenkins ${environment}`,
     tags: {
         Environment: environment,
