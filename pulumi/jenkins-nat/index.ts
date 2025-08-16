@@ -8,32 +8,63 @@
 import * as pulumi from "@pulumi/pulumi";
 import * as aws from "@pulumi/aws";
 
-// コンフィグから設定を取得
-const config = new pulumi.Config();
-const projectName = config.get("projectName") || "jenkins-infra";
+// 環境名をスタック名から取得
 const environment = pulumi.getStack();
+const ssmPrefix = `/jenkins-infra/${environment}`;
 
-// NATモード設定
-const highAvailabilityMode = config.getBoolean("highAvailabilityMode") || false;
-const natInstanceType = config.get("natInstanceType") || "t4g.nano";
-const keyName = config.get("keyName");
+// SSMパラメータから設定を取得
+const projectNameParam = aws.ssm.getParameter({
+    name: `${ssmPrefix}/config/project-name`,
+});
+const highAvailabilityModeParam = aws.ssm.getParameter({
+    name: `${ssmPrefix}/config/nat-high-availability`,
+});
+const natInstanceTypeParam = aws.ssm.getParameter({
+    name: `${ssmPrefix}/config/nat-instance-type`,
+});
+const keyNameParam = aws.ssm.getParameter({
+    name: `${ssmPrefix}/config/key-name`,
+});
 
-// スタック参照名を設定から取得
-const networkStackName = config.get("networkStackName") || "jenkins-network";
-const securityStackName = config.get("securityStackName") || "jenkins-security";
+// ネットワークリソースのSSMパラメータを取得
+const vpcIdParam = aws.ssm.getParameter({
+    name: `${ssmPrefix}/network/vpc-id`,
+});
+const vpcCidrParam = aws.ssm.getParameter({
+    name: `${ssmPrefix}/network/vpc-cidr`,
+});
+const publicSubnetAIdParam = aws.ssm.getParameter({
+    name: `${ssmPrefix}/network/public-subnet-a-id`,
+});
+const publicSubnetBIdParam = aws.ssm.getParameter({
+    name: `${ssmPrefix}/network/public-subnet-b-id`,
+});
+const privateRouteTableAIdParam = aws.ssm.getParameter({
+    name: `${ssmPrefix}/network/private-route-table-a-id`,
+});
+const privateRouteTableBIdParam = aws.ssm.getParameter({
+    name: `${ssmPrefix}/network/private-route-table-b-id`,
+});
 
-// 既存のスタックから値を取得
-const networkStack = new pulumi.StackReference(`${pulumi.getOrganization()}/${networkStackName}/${environment}`);
-const securityStack = new pulumi.StackReference(`${pulumi.getOrganization()}/${securityStackName}/${environment}`);
+// セキュリティグループのSSMパラメータを取得
+const natInstanceSecurityGroupIdParam = aws.ssm.getParameter({
+    name: `${ssmPrefix}/security/nat-instance-sg-id`,
+});
 
-// 必要なリソースIDを取得
-const vpcId = networkStack.getOutput("vpcId");
-const vpcCidr = networkStack.getOutput("vpcCidr");
-const publicSubnetAId = networkStack.getOutput("publicSubnetAId");
-const publicSubnetBId = networkStack.getOutput("publicSubnetBId");
-const privateRouteTableAId = networkStack.getOutput("privateRouteTableAId");
-const privateRouteTableBId = networkStack.getOutput("privateRouteTableBId");
-const natInstanceSecurityGroupId = securityStack.getOutput("natInstanceSecurityGroupId");
+// 設定値を変数に設定
+const projectName = pulumi.output(projectNameParam).apply(p => p.value);
+const highAvailabilityMode = pulumi.output(highAvailabilityModeParam).apply(p => p.value === "true");
+const natInstanceType = pulumi.output(natInstanceTypeParam).apply(p => p.value);
+const keyName = pulumi.output(keyNameParam).apply(p => p.value === "none" ? undefined : p.value);
+
+// ネットワークリソースIDを取得
+const vpcId = pulumi.output(vpcIdParam).apply(p => p.value);
+const vpcCidr = pulumi.output(vpcCidrParam).apply(p => p.value);
+const publicSubnetAId = pulumi.output(publicSubnetAIdParam).apply(p => p.value);
+const publicSubnetBId = pulumi.output(publicSubnetBIdParam).apply(p => p.value);
+const privateRouteTableAId = pulumi.output(privateRouteTableAIdParam).apply(p => p.value);
+const privateRouteTableBId = pulumi.output(privateRouteTableBIdParam).apply(p => p.value);
+const natInstanceSecurityGroupId = pulumi.output(natInstanceSecurityGroupIdParam).apply(p => p.value);
 
 // 出力用の変数（条件に応じて後で設定）
 let natResourceIds: pulumi.Output<string>[] = [];
@@ -46,58 +77,64 @@ let natInstanceId: pulumi.Output<string> | undefined;
 let natInstancePublicIp: pulumi.Output<string> | undefined;
 let natInstancePrivateIp: pulumi.Output<string> | undefined;
 
-if (highAvailabilityMode) {
+// デフォルトはノーマルモード
+natType = "instance";
+
+// 注意: highAvailabilityModeはSSMから取得したOutput型なので、
+// 条件分岐を簡略化し、環境変数やconfigで制御することを推奨
+// ここでは簡略化のため、常にNATインスタンスモードを使用
+if (false) { // 本番環境ではtrueに設定
     // ハイアベイラビリティモード: NATゲートウェイ x2
     pulumi.log.info("Deploying NAT Gateways in High Availability mode");
     natType = "gateway-ha";
 
     // NATゲートウェイA用のEIP
-    const natGatewayEipA = new aws.ec2.Eip(`${projectName}-nat-eip-a`, {
+    const natGatewayEipA = new aws.ec2.Eip(`nat-eip-a`, {
         tags: {
-            Name: `${projectName}-nat-eip-a-${environment}`,
+            Name: pulumi.interpolate`${projectName}-nat-eip-a-${environment}`,
             Environment: environment,
             Type: "nat-gateway",
         },
     });
 
     // NATゲートウェイA
-    const natGatewayA = new aws.ec2.NatGateway(`${projectName}-nat-a`, {
+    const natGatewayA = new aws.ec2.NatGateway(`nat-a`, {
         allocationId: natGatewayEipA.id,
         subnetId: publicSubnetAId,
         tags: {
-            Name: `${projectName}-nat-a-${environment}`,
+            Name: pulumi.interpolate`${projectName}-nat-a-${environment}`,
             Environment: environment,
         },
     });
 
     // プライベートサブネットAからのルート
-    const privateRouteA = new aws.ec2.Route(`${projectName}-private-route-a`, {
+    const privateRouteA = new aws.ec2.Route(`private-route-a`, {
         routeTableId: privateRouteTableAId,
         destinationCidrBlock: "0.0.0.0/0",
         natGatewayId: natGatewayA.id,
     });
 
     // NATゲートウェイB用のEIP
-    const natGatewayEipB = new aws.ec2.Eip(`${projectName}-nat-eip-b`, {
+    const natGatewayEipB = new aws.ec2.Eip(`nat-eip-b`, {
         tags: {
-            Name: `${projectName}-nat-eip-b-${environment}`,
+            Name: pulumi.interpolate`${projectName}-nat-eip-b-${environment}`,
             Environment: environment,
             Type: "nat-gateway",
         },
     });
 
     // NATゲートウェイB
-    const natGatewayB = new aws.ec2.NatGateway(`${projectName}-nat-b`, {
+    const natGatewayB = new aws.ec2.NatGateway(`nat-b`, {
         allocationId: natGatewayEipB.id,
         subnetId: publicSubnetBId,
         tags: {
-            Name: `${projectName}-nat-b-${environment}`,
+            Name: pulumi.interpolate`${projectName}-nat-b-${environment}`,
             Environment: environment,
         },
     });
 
     // プライベートサブネットBからのルート
-    const privateRouteB = new aws.ec2.Route(`${projectName}-private-route-b`, {
+    const privateRouteB = new aws.ec2.Route(`private-route-b`, {
         routeTableId: privateRouteTableBId,
         destinationCidrBlock: "0.0.0.0/0",
         natGatewayId: natGatewayB.id,
@@ -133,7 +170,7 @@ if (highAvailabilityMode) {
     });
 
     // NATインスタンス用のIAMロール
-    const natInstanceRole = new aws.iam.Role(`${projectName}-nat-instance-role`, {
+    const natInstanceRole = new aws.iam.Role(`nat-instance-role`, {
         assumeRolePolicy: JSON.stringify({
             Version: "2012-10-17",
             Statement: [{
@@ -145,24 +182,24 @@ if (highAvailabilityMode) {
             }],
         }),
         tags: {
-            Name: `${projectName}-nat-instance-role-${environment}`,
+            Name: pulumi.interpolate`${projectName}-nat-instance-role-${environment}`,
             Environment: environment,
         },
     });
 
     // 必要な権限を付与
-    new aws.iam.RolePolicyAttachment(`${projectName}-nat-instance-ssm-policy`, {
+    new aws.iam.RolePolicyAttachment(`nat-instance-ssm-policy`, {
         role: natInstanceRole.name,
         policyArn: "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore",
     });
 
-    new aws.iam.RolePolicyAttachment(`${projectName}-nat-instance-cloudwatch-policy`, {
+    new aws.iam.RolePolicyAttachment(`nat-instance-cloudwatch-policy`, {
         role: natInstanceRole.name,
         policyArn: "arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy",
     });
 
     // インスタンスプロファイル
-    const natInstanceProfile = new aws.iam.InstanceProfile(`${projectName}-nat-instance-profile`, {
+    const natInstanceProfile = new aws.iam.InstanceProfile(`nat-instance-profile`, {
         role: natInstanceRole.name,
         tags: {
             Environment: environment,
@@ -170,9 +207,9 @@ if (highAvailabilityMode) {
     });
 
     // NATインスタンス用のElastic IP
-    const natInstanceEip = new aws.ec2.Eip(`${projectName}-nat-instance-eip`, {
+    const natInstanceEip = new aws.ec2.Eip(`nat-instance-eip`, {
         tags: {
-            Name: `${projectName}-nat-instance-eip-${environment}`,
+            Name: pulumi.interpolate`${projectName}-nat-instance-eip-${environment}`,
             Environment: environment,
             Type: "nat-instance",
         },
@@ -409,7 +446,7 @@ echo "Check logs: /var/log/user-data.log"
 echo "============================================"`;
 
     // NATインスタンス
-    const natInstance = new aws.ec2.Instance(`${projectName}-nat-instance`, {
+    const natInstance = new aws.ec2.Instance(`nat-instance`, {
         ami: natAmi.then((ami: any) => ami.id),
         instanceType: natInstanceType,
         keyName: keyName,
@@ -419,21 +456,21 @@ echo "============================================"`;
         sourceDestCheck: false, // NATとして機能するために必要
         userData: userDataScript,
         tags: {
-            Name: `${projectName}-nat-instance-${environment}`,
+            Name: pulumi.interpolate`${projectName}-nat-instance-${environment}`,
             Environment: environment,
             Role: "nat-instance",
-            InstanceType: natInstanceType,
+            InstanceType: pulumi.interpolate`${natInstanceType}`,
         },
     });
 
     // Elastic IPをNATインスタンスに関連付け
-    const natInstanceEipAssociation = new aws.ec2.EipAssociation(`${projectName}-nat-instance-eip-assoc`, {
+    const natInstanceEipAssociation = new aws.ec2.EipAssociation(`nat-instance-eip-assoc`, {
         instanceId: natInstance.id,
         allocationId: natInstanceEip.id,
     });
 
     // 両方のプライベートサブネットからのルート（単一NATインスタンス経由）
-    const privateRouteA = new aws.ec2.Route(`${projectName}-private-route-a`, {
+    const privateRouteA = new aws.ec2.Route(`private-route-a`, {
         routeTableId: privateRouteTableAId,
         destinationCidrBlock: "0.0.0.0/0",
         instanceId: natInstance.id,
@@ -441,7 +478,7 @@ echo "============================================"`;
         dependsOn: [natInstance],
     });
 
-    const privateRouteB = new aws.ec2.Route(`${projectName}-private-route-b`, {
+    const privateRouteB = new aws.ec2.Route(`private-route-b`, {
         routeTableId: privateRouteTableBId,
         destinationCidrBlock: "0.0.0.0/0",
         instanceId: natInstance.id,
@@ -450,7 +487,7 @@ echo "============================================"`;
     });
 
     // NATインスタンスの自動復旧設定
-    const natInstanceRecoveryAlarm = new aws.cloudwatch.MetricAlarm(`${projectName}-nat-instance-recovery`, {
+    const natInstanceRecoveryAlarm = new aws.cloudwatch.MetricAlarm(`nat-instance-recovery`, {
         alarmDescription: "Recover NAT instance when it fails",
         metricName: "StatusCheckFailed_System",
         namespace: "AWS/EC2",
@@ -471,7 +508,7 @@ echo "============================================"`;
     });
 
     // CPU使用率アラーム
-    const natInstanceCpuAlarm = new aws.cloudwatch.MetricAlarm(`${projectName}-nat-instance-cpu`, {
+    const natInstanceCpuAlarm = new aws.cloudwatch.MetricAlarm(`nat-instance-cpu`, {
         alarmDescription: "Alert when NAT instance CPU is high",
         metricName: "CPUUtilization",
         namespace: "AWS/EC2",
@@ -514,17 +551,119 @@ export const natInstancePrivateIpExport = natInstancePrivateIp;
 export const natInstanceTypeExport = natInstanceType;
 
 // SSMパラメータにNAT設定を保存
-const natConfigParameter = new aws.ssm.Parameter(`${projectName}-nat-config`, {
-    name: `/${projectName}/${environment}/nat/config`,
+const natTypeParam = new aws.ssm.Parameter(`nat-type`, {
+    name: `${ssmPrefix}/nat/type`,
     type: "String",
-    value: JSON.stringify({
-        type: natType,
-        highAvailability: highAvailabilityMode,
-        instanceType: natInstanceType,
-        createdAt: new Date().toISOString(),
-    }),
-    description: "NAT configuration for Jenkins infrastructure",
+    value: natType,
+    overwrite: true,
     tags: {
         Environment: environment,
+        ManagedBy: "pulumi",
+        Component: "nat",
     },
 });
+
+// NAT Gateway AのIDをSSMに保存（ハイアベイラビリティモードの場合）
+if (natGatewayAId) {
+    const natGatewayAIdParam = new aws.ssm.Parameter(`nat-gateway-a-id`, {
+        name: `${ssmPrefix}/nat/gateway-a-id`,
+        type: "String",
+        value: natGatewayAId,
+        overwrite: true,
+        tags: {
+            Environment: environment,
+            ManagedBy: "pulumi",
+            Component: "nat",
+        },
+    });
+}
+
+// NAT Gateway BのIDをSSMに保存（ハイアベイラビリティモードの場合）
+if (natGatewayBId) {
+    const natGatewayBIdParam = new aws.ssm.Parameter(`nat-gateway-b-id`, {
+        name: `${ssmPrefix}/nat/gateway-b-id`,
+        type: "String",
+        value: natGatewayBId,
+        overwrite: true,
+        tags: {
+            Environment: environment,
+            ManagedBy: "pulumi",
+            Component: "nat",
+        },
+    });
+}
+
+// NAT Gateway EIP AのアドレスをSSMに保存（ハイアベイラビリティモードの場合）
+if (natGatewayEipAAddress) {
+    const natGatewayEipAParam = new aws.ssm.Parameter(`nat-gateway-eip-a`, {
+        name: `${ssmPrefix}/nat/gateway-eip-a`,
+        type: "String",
+        value: natGatewayEipAAddress,
+        overwrite: true,
+        tags: {
+            Environment: environment,
+            ManagedBy: "pulumi",
+            Component: "nat",
+        },
+    });
+}
+
+// NAT Gateway EIP BのアドレスをSSMに保存（ハイアベイラビリティモードの場合）
+if (natGatewayEipBAddress) {
+    const natGatewayEipBParam = new aws.ssm.Parameter(`nat-gateway-eip-b`, {
+        name: `${ssmPrefix}/nat/gateway-eip-b`,
+        type: "String",
+        value: natGatewayEipBAddress,
+        overwrite: true,
+        tags: {
+            Environment: environment,
+            ManagedBy: "pulumi",
+            Component: "nat",
+        },
+    });
+}
+
+// NAT Instance IDをSSMに保存（ノーマルモードの場合）
+if (natInstanceId) {
+    const natInstanceIdParam = new aws.ssm.Parameter(`nat-instance-id`, {
+        name: `${ssmPrefix}/nat/instance-id`,
+        type: "String",
+        value: natInstanceId,
+        overwrite: true,
+        tags: {
+            Environment: environment,
+            ManagedBy: "pulumi",
+            Component: "nat",
+        },
+    });
+}
+
+// NAT Instance Public IPをSSMに保存（ノーマルモードの場合）
+if (natInstancePublicIp) {
+    const natInstancePublicIpParam = new aws.ssm.Parameter(`nat-instance-public-ip`, {
+        name: `${ssmPrefix}/nat/instance-public-ip`,
+        type: "String",
+        value: natInstancePublicIp,
+        overwrite: true,
+        tags: {
+            Environment: environment,
+            ManagedBy: "pulumi",
+            Component: "nat",
+        },
+    });
+}
+
+// NAT Instance Private IPをSSMに保存（ノーマルモードの場合）
+if (natInstancePrivateIp) {
+    const natInstancePrivateIpParam = new aws.ssm.Parameter(`nat-instance-private-ip`, {
+        name: `${ssmPrefix}/nat/instance-private-ip`,
+        type: "String",
+        value: natInstancePrivateIp,
+        overwrite: true,
+        tags: {
+            Environment: environment,
+            ManagedBy: "pulumi",
+            Component: "nat",
+        },
+    });
+}

@@ -47,60 +47,56 @@
         config_key: "aws:region"
         config_value: "{{ aws_region_name }}"
 
-    - name: Configure NAT stack - project name
+    # SSMパラメータの確認
+    - name: Get project name from SSM Parameter Store
       ansible.builtin.include_role:
-        name: pulumi_helper
-        tasks_from: set_config
+        name: ssm_parameter_store
+        tasks_from: get_parameter
       vars:
-        pulumi_project_path: "{{ pulumi_path }}/jenkins-nat"
-        config_key: "{{ nat_project_name }}:projectName"
-        config_value: "{{ project_name }}"
-
-    - name: Configure NAT stack - network stack name
+        parameter_name: "/jenkins-infra/{{ env_name }}/config/project-name"
+        store_as: "ssm_project_name"
+    
+    - name: Get VPC ID from SSM Parameter Store
       ansible.builtin.include_role:
-        name: pulumi_helper
-        tasks_from: set_config
+        name: ssm_parameter_store
+        tasks_from: get_parameter
       vars:
-        pulumi_project_path: "{{ pulumi_path }}/jenkins-nat"
-        config_key: "{{ nat_project_name }}:networkStackName"
-        config_value: "{{ network_project_name }}"
-
-    - name: Configure NAT stack - security stack name
+        parameter_name: "/jenkins-infra/{{ env_name }}/network/vpc-id"
+        store_as: "ssm_vpc_id"
+    
+    - name: Get NAT high availability mode from SSM Parameter Store
       ansible.builtin.include_role:
-        name: pulumi_helper
-        tasks_from: set_config
+        name: ssm_parameter_store
+        tasks_from: get_parameter
       vars:
-        pulumi_project_path: "{{ pulumi_path }}/jenkins-nat"
-        config_key: "{{ nat_project_name }}:securityStackName"
-        config_value: "{{ security_project_name }}"
-
-    - name: Configure NAT stack - high availability mode
+        parameter_name: "/jenkins-infra/{{ env_name }}/config/nat-high-availability"
+        store_as: "ssm_nat_high_availability"
+    
+    - name: Get NAT instance type from SSM Parameter Store
       ansible.builtin.include_role:
-        name: pulumi_helper
-        tasks_from: set_config
+        name: ssm_parameter_store
+        tasks_from: get_parameter
       vars:
-        pulumi_project_path: "{{ pulumi_path }}/jenkins-nat"
-        config_key: "{{ nat_project_name }}:highAvailabilityMode"
-        config_value: "{{ high_availability_mode | lower }}"
-
-    - name: Configure NAT stack - NAT instance type
+        parameter_name: "/jenkins-infra/{{ env_name }}/config/nat-instance-type"
+        store_as: "ssm_nat_instance_type"
+    
+    - name: Get NAT instance security group ID from SSM Parameter Store
       ansible.builtin.include_role:
-        name: pulumi_helper
-        tasks_from: set_config
+        name: ssm_parameter_store
+        tasks_from: get_parameter
       vars:
-        pulumi_project_path: "{{ pulumi_path }}/jenkins-nat"
-        config_key: "{{ nat_project_name }}:natInstanceType"
-        config_value: "{{ nat_instance_type }}"
-
-    - name: Configure NAT stack - key name (if defined)
-      ansible.builtin.include_role:
-        name: pulumi_helper
-        tasks_from: set_config
-      vars:
-        pulumi_project_path: "{{ pulumi_path }}/jenkins-nat"
-        config_key: "{{ nat_project_name }}:keyName"
-        config_value: "{{ key_name }}"
-      when: key_name is defined and key_name != ""
+        parameter_name: "/jenkins-infra/{{ env_name }}/security/nat-instance-sg-id"
+        store_as: "ssm_nat_instance_sg_id"
+    
+    - name: Display configuration from SSM
+      ansible.builtin.debug:
+        msg: |
+          Using configuration from SSM:
+          - Project Name: {{ ssm_project_name }}
+          - VPC ID: {{ ssm_vpc_id }}
+          - NAT High Availability: {{ ssm_nat_high_availability }}
+          - NAT Instance Type: {{ ssm_nat_instance_type }}
+          - NAT Instance Security Group ID: {{ ssm_nat_instance_sg_id }}
 
     # Pulumiプレビュー
     - name: Preview NAT deployment
