@@ -154,20 +154,26 @@ if (false) { // 本番環境ではtrueに設定
     natType = "instance";
 
     // Amazon Linux 2023 AMI (ARM64版とx86_64版を自動選択)
-    const isArmInstance = natInstanceType.startsWith("t4g") || 
-                         natInstanceType.startsWith("m6g") || 
-                         natInstanceType.startsWith("m7g") ||
-                         natInstanceType.startsWith("c6g") ||
-                         natInstanceType.startsWith("c7g");
-    
-    const natAmi = aws.ec2.getAmi({
-        mostRecent: true,
-        owners: ["amazon"],
-        filters: [{
-            name: "name",
-            values: ["al2023-ami-*-kernel-*-" + (isArmInstance ? "arm64" : "x86_64")],
-        }],
+    // natInstanceTypeはOutput<string>なので、applyを使用して処理
+    const amiArch = natInstanceType.apply(instanceType => {
+        const isArm = instanceType.startsWith("t4g") || 
+                     instanceType.startsWith("m6g") || 
+                     instanceType.startsWith("m7g") ||
+                     instanceType.startsWith("c6g") ||
+                     instanceType.startsWith("c7g");
+        return isArm ? "arm64" : "x86_64";
     });
+    
+    const natAmi = amiArch.apply(arch => 
+        aws.ec2.getAmi({
+            mostRecent: true,
+            owners: ["amazon"],
+            filters: [{
+                name: "name",
+                values: [`al2023-ami-*-kernel-*-${arch}`],
+            }],
+        })
+    );
 
     // NATインスタンス用のIAMロール
     const natInstanceRole = new aws.iam.Role(`nat-instance-role`, {
@@ -447,9 +453,9 @@ echo "============================================"`;
 
     // NATインスタンス
     const natInstance = new aws.ec2.Instance(`nat-instance`, {
-        ami: natAmi.then((ami: any) => ami.id),
+        ami: pulumi.output(natAmi).apply(ami => ami.id),
         instanceType: natInstanceType,
-        keyName: keyName,
+        keyName: keyName.apply(k => k === undefined ? undefined : k),
         subnetId: publicSubnetAId,
         vpcSecurityGroupIds: [natInstanceSecurityGroupId],
         iamInstanceProfile: natInstanceProfile.name,
