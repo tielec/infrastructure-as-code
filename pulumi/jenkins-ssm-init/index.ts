@@ -141,7 +141,7 @@ const keyNameParam = new aws.ssm.Parameter("key-name", {
 const controllerInstanceTypeParam = new aws.ssm.Parameter("controller-instance-type", {
     name: `${ssmPrefix}/config/controller-instance-type`,
     type: "String",
-    value: "t3.medium",
+    value: "t4g.medium",  // ARM64 instance type
     overwrite: true,
     description: "Jenkins controller EC2 instance type",
     tags: {
@@ -155,7 +155,7 @@ const controllerInstanceTypeParam = new aws.ssm.Parameter("controller-instance-t
 const agentInstanceTypeParam = new aws.ssm.Parameter("agent-instance-type", {
     name: `${ssmPrefix}/config/agent-instance-type`,
     type: "String",
-    value: "t3.medium",
+    value: "t4g.medium",  // ARM64 instance type
     overwrite: true,
     description: "Jenkins agent EC2 instance type",
     tags: {
