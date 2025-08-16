@@ -91,21 +91,19 @@
     
     # Pulumi preview
     - name: Preview agent AMI deployment
-      ansible.builtin.shell: |
-        source {{ scripts_dir }}/aws/aws-env.sh
-        cd {{ pulumi_dir }}
-        pulumi preview
-      register: preview_result
-      changed_when: false
+      ansible.builtin.include_role:
+        name: pulumi_helper
+        tasks_from: preview
+      vars:
+        pulumi_project_path: "{{ pulumi_dir }}"
     
     # Pulumi deploy
     - name: Deploy Jenkins Agent AMI Builder infrastructure
-      ansible.builtin.shell: |
-        source {{ scripts_dir }}/aws/aws-env.sh
-        cd {{ pulumi_dir }}
-        pulumi up -y
-      register: deploy_result
-      changed_when: deploy_result.rc == 0
+      ansible.builtin.include_role:
+        name: pulumi_helper
+        tasks_from: deploy
+      vars:
+        pulumi_project_path: "{{ pulumi_dir }}"
     
     # Get outputs from SSM
     - name: Get pipeline x86 ARN from SSM Parameter Store
