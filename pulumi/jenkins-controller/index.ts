@@ -22,10 +22,10 @@ const jenkinsColorParam = aws.ssm.getParameter({
     name: `${ssmPrefix}/config/jenkins-color`,
 });
 const recoveryModeParam = aws.ssm.getParameter({
-    name: `${ssmPrefix}/config/recovery-mode`,
+    name: `${ssmPrefix}/config/jenkins-recovery-mode`,
 });
 const instanceTypeParam = aws.ssm.getParameter({
-    name: `${ssmPrefix}/config/instance-type`,
+    name: `${ssmPrefix}/config/controller-instance-type`,
 });
 const keyNameParam = aws.ssm.getParameter({
     name: `${ssmPrefix}/config/key-name`,
