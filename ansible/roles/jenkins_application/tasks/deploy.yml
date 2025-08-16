@@ -193,6 +193,15 @@
             ssm_parameters: "ScriptPath=scripts/jenkins/shell/application-install-plugins.sh"
             ssm_comment: "Installing Jenkins plugins"
             instance_id: "{{ jenkins_instance_id }}"
+        
+        # プラグインインストール後にJenkinsを再起動
+        - name: Restart Jenkins after plugin installation
+          ansible.builtin.include_tasks: tasks/execute_ssm_command.yml
+          vars:
+            ssm_document_name: "{{ ssm_documents.restart }}"
+            ssm_parameters: ""  # 空文字列に設定
+            ssm_comment: "Restarting Jenkins after plugin installation"
+            instance_id: "{{ jenkins_instance_id }}"
     
     # 3. CLIユーザーとクレデンシャル設定（統合版）
     - name: Setup CLI user and credentials
