@@ -171,24 +171,28 @@
     
     # Image Builderのイメージバージョンを削除
     - name: Delete Image Builder image versions
-      ansible.builtin.include_role:
-        name: aws_cli_helper
-        tasks_from: execute
-      vars:
-        aws_command: |
-          aws imagebuilder delete-image 
-          --image-build-version-arn "{{ item }}"
-        operation_name: "Delete image version {{ item.split('/')[-1] }}"
-        parse_output: false
-      loop: "{{ all_build_version_arns | default([]) }}"
-      loop_control:
-        label: "{{ item.split('/')[-1] if item is defined else 'unknown' }}"
+      block:
+        - name: Delete each image version
+          ansible.builtin.include_role:
+            name: aws_cli_helper
+            tasks_from: execute
+          vars:
+            aws_command: |
+              aws imagebuilder delete-image 
+              --image-build-version-arn "{{ item }}"
+            operation_name: "Delete image version {{ item.split('/')[-1] }}"
+            parse_output: false
+          loop: "{{ all_build_version_arns | default([]) }}"
+          loop_control:
+            label: "{{ item.split('/')[-1] if item is defined else 'unknown' }}"
+      rescue:
+        - name: Continue on deletion error
+          ansible.builtin.debug:
+            msg: "Some image versions may not have been deleted (possibly already deleted or in use)"
       when: 
         - not (dry_run | default(false) | bool)
         - all_build_version_arns is defined
         - all_build_version_arns | length > 0
-      register: delete_image_version_results
-      failed_when: false
     
     
     - name: Set success flag
