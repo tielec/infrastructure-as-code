@@ -90,15 +90,22 @@ export EC2_MAX_SIZE="${EC2_MAX_SIZE:-1}"
 export EC2_NUM_EXECUTORS="${EC2_NUM_EXECUTORS:-3}"
 
 # Jenkins URLの設定（ALB経由の場合）
-JENKINS_URL=$(aws ssm get-parameter \
+ALB_DNS=$(aws ssm get-parameter \
     --name "/jenkins-infra/${ENVIRONMENT}/loadbalancer/jenkins-url" \
     --region "$AWS_REGION" \
     --query "Parameter.Value" \
-    --output text 2>/dev/null || echo "http://localhost:8080/")
+    --output text 2>/dev/null || echo "")
 
 # ALB DNSをJenkins URLに変換
-if [ "$JENKINS_URL" != "http://localhost:8080/" ]; then
-    JENKINS_URL="http://${JENKINS_URL}/"
+if [ -n "$ALB_DNS" ] && [ "$ALB_DNS" != "None" ]; then
+    # ALB DNSにプロトコルが含まれていない場合はhttp://を追加
+    if [[ "$ALB_DNS" =~ ^https?:// ]]; then
+        JENKINS_URL="${ALB_DNS}"
+    else
+        JENKINS_URL="http://${ALB_DNS}/"
+    fi
+else
+    JENKINS_URL="http://localhost:8080/"
 fi
 
 # URLが正しく取得できたかログ出力
@@ -155,7 +162,6 @@ log "JCasC configuration file generated."
 log "Configuration will be applied on the next Jenkins restart."
 log "Note: The configuration can also be reloaded from Jenkins UI:"
 log "  Manage Jenkins > Configuration as Code > Reload existing configuration"
-fi
 
 log "JCasC configuration completed"
 log ""
