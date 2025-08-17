@@ -78,7 +78,7 @@
       ansible.builtin.include_role:
         name: jenkins_nat
       vars:
-        action: "destroy"
+        operation: "destroy"
   
   post_tasks:
     - name: Display completion message

@@ -77,7 +77,7 @@
       ansible.builtin.include_role:
         name: jenkins_controller
       vars:
-        action: "destroy"
+        operation: "destroy"
         destroy_target: "{{ target_color }}"
   
   post_tasks:

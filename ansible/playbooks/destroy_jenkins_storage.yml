@@ -101,14 +101,14 @@
       ansible.builtin.include_role:
         name: jenkins_storage
       vars:
-        action: "backup"
+        operation: "backup"
       when: create_backup | bool
     
     - name: Destroy Jenkins Storage
       ansible.builtin.include_role:
         name: jenkins_storage
       vars:
-        action: "destroy"
+        operation: "destroy"
         force_unmount: "{{ force_destroy }}"
   
   post_tasks:

@@ -93,14 +93,14 @@
       ansible.builtin.include_role:
         name: jenkins_network
       vars:
-        action: "check_vpc_resources"
+        operation: "check_vpc_resources"
       when: not force_destroy | bool
     
     - name: Destroy Jenkins Network Infrastructure
       ansible.builtin.include_role:
         name: jenkins_network
       vars:
-        action: "destroy"
+        operation: "destroy"
         force_delete: "{{ force_destroy }}"
   
   post_tasks:
