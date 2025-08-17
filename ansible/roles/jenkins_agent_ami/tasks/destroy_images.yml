@@ -139,15 +139,14 @@
       when: not (dry_run | default(false) | bool)
     
     - name: List all Image Builder images
-      ansible.builtin.command:
+      ansible.builtin.shell:
         cmd: |
           aws imagebuilder list-images \
             --owner Self \
             --region {{ aws_region_name }} \
-            --output json
+            --output json 2>&1 || echo '{"imageList":[]}'
       register: all_images_result
       changed_when: false
-      failed_when: false
       when: not (dry_run | default(false) | bool)
     
     - name: Debug - Image Builder list result
@@ -159,13 +158,10 @@
     
     - name: Parse and filter Image Builder images
       ansible.builtin.set_fact:
-        builder_images: "{{ all_images_result.stdout | default('{}') | from_json | json_query(query) | default([]) }}"
-      vars:
-        query: "imageList[?contains(name, '{{ project_name }}-agent')]"
+        builder_images: "{{ (all_images_result.stdout | default('{"imageList":[]}') | from_json).imageList | selectattr('name', 'search', project_name + '-agent') | list | default([]) }}"
       when: 
         - not (dry_run | default(false) | bool)
         - all_images_result is defined
-        - all_images_result.rc == 0
     
     - name: Debug - Found Image Builder images
       ansible.builtin.debug:
