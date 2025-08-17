@@ -87,11 +87,6 @@
       register: ami_deletion_results
     
     # Image Builderのイメージバージョンを削除（AMI削除後に実行）
-    - name: Debug - Starting Image Builder cleanup
-      ansible.builtin.debug:
-        msg: "Starting Image Builder image version cleanup for environment: {{ env_name }}"
-      when: not (dry_run | default(false) | bool)
-    
     # Image Builderのイメージ一覧を取得
     - name: List all Image Builder images
       ansible.builtin.include_role:
@@ -101,15 +96,6 @@
         aws_command: "aws imagebuilder list-images --owner Self --output json"
         operation_name: "List Image Builder images"
         parse_output: true
-      when: not (dry_run | default(false) | bool)
-    
-    - name: Debug - AWS CLI raw result
-      ansible.builtin.debug:
-        msg:
-          - "AWS CLI Success: {{ aws_cli_success | default('undefined') }}"
-          - "AWS CLI stdout: {{ aws_cli_stdout | default('no stdout') }}"
-          - "AWS CLI stderr: {{ aws_cli_stderr | default('no stderr') }}"
-          - "AWS CLI Data: {{ aws_cli_data | default('no data') }}"
       when: not (dry_run | default(false) | bool)
     
     - name: Save Image Builder list result
@@ -127,21 +113,6 @@
         - not (dry_run | default(false) | bool)
         - builder_images_raw is defined
     
-    - name: Debug - All Image Builder images before filtering
-      ansible.builtin.debug:
-        msg:
-          - "Total images found: {{ all_images | default([]) | length }}"
-          - "Images: {{ all_images | default([]) | map(attribute='name') | list }}"
-          - "Filtered images: {{ builder_images | default([]) | map(attribute='name') | list }}"
-      when: 
-        - not (dry_run | default(false) | bool)
-        - builder_images_raw is defined
-    
-    - name: Debug - Found Image Builder images
-      ansible.builtin.debug:
-        msg: "Found {{ builder_images | default([]) | length }} Image Builder images"
-      when: 
-        - not (dry_run | default(false) | bool)
     
     # 各イメージのビルドバージョンを取得
     - name: Get Image Builder image build versions
@@ -177,11 +148,6 @@
         - not (dry_run | default(false) | bool)
         - image_build_versions_results is defined
     
-    - name: Debug - Image build versions to delete
-      ansible.builtin.debug:
-        msg: "Found {{ all_build_version_arns | default([]) | length }} image build version(s) to delete"
-      when: 
-        - not (dry_run | default(false) | bool)
     
     # もしイメージが見つからない場合、パイプラインARNから直接イメージを探す
     - name: Alternative - Try to find images using pipeline names
