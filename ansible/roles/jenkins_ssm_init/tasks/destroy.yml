@@ -54,9 +54,16 @@
         name: aws_cli_helper
         tasks_from: execute
       vars:
-        aws_command: "aws ssm describe-parameters --parameter-filters Key=Name,Values=/{{ project_name }}/{{ env_name }}/ Option=BeginsWith --output json"
+        aws_command: "aws ssm describe-parameters --parameter-filters \"Key=Name,Option=BeginsWith,Values=/{{ project_name }}/{{ env_name }}/\" --max-results 50 --output json"
         operation_name: "List remaining SSM parameters"
         parse_output: true
+    
+    - name: Debug AWS CLI response
+      ansible.builtin.debug:
+        msg:
+          - "AWS CLI Success: {{ aws_cli_success | default('undefined') }}"
+          - "AWS CLI stdout: {{ aws_cli_stdout | default('no stdout') }}"
+          - "AWS CLI stderr: {{ aws_cli_stderr | default('no stderr') }}"
     
     - name: Save parameter list
       ansible.builtin.set_fact:
@@ -65,7 +72,9 @@
     
     - name: Display remaining parameters
       ansible.builtin.debug:
-        msg: "Found {{ remaining_params | length }} remaining SSM parameter(s) to delete"
+        msg: 
+          - "Found {{ remaining_params | default([]) | length }} remaining SSM parameter(s) to delete"
+          - "Parameters: {{ remaining_params | default([]) | map(attribute='Name') | list }}"
       when: remaining_params is defined
     
     - name: Delete each remaining parameter
