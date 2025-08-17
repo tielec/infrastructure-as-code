@@ -12,13 +12,26 @@
 
 # 現在のフェーズを取得
 - name: Get current phase from SSM
-  ansible.builtin.include_role:
-    name: ssm_parameter_store
-    tasks_from: get_parameter
-  vars:
-    parameter_name: "/jenkins-infra/{{ env_name }}/application/phase"
-    store_as: "current_phase"
-    default_value: "not_started"
+  block:
+    - name: Try to get phase parameter
+      ansible.builtin.include_role:
+        name: ssm_parameter_store
+        tasks_from: get_parameter
+      vars:
+        parameter_name: "/jenkins-infra/{{ env_name }}/application/phase"
+        store_as: "current_phase"
+      ignore_errors: true
+      register: phase_result
+    
+    - name: Set default phase if not found
+      when: phase_result is failed or ssm_parameter_value is not defined
+      ansible.builtin.set_fact:
+        current_phase: "not_started"
+    
+    - name: Set phase from SSM
+      when: phase_result is succeeded and ssm_parameter_value is defined
+      ansible.builtin.set_fact:
+        current_phase: "{{ ssm_parameter_value }}"
 
 - name: Display current phase
   ansible.builtin.debug:
