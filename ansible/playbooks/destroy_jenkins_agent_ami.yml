@@ -4,9 +4,11 @@
 #
 # 使用方法:
 #   ansible-playbook destroy_jenkins_agent_ami.yml -e "env=dev confirm=true"
+#   ansible-playbook destroy_jenkins_agent_ami.yml -e "env=dev confirm=true skip_ami_deletion=true"  # AMI削除をスキップ
 #
 # 注意: 
-#   - 作成済みのAMIは削除されません（手動で削除が必要）
+#   - 作成済みのAMIもデフォルトで削除されます
+#   - skip_ami_deletion=true を指定するとAMI削除をスキップできます
 #   - confirm=true を指定しないと削除は実行されません
 
 - name: Destroy Jenkins Agent AMI Builder
@@ -59,7 +61,7 @@
           - "  - Infrastructure configurations"
           - "  - IAM roles and policies"
           - ""
-          - "Note: Created AMIs will NOT be deleted"
+          - "Note: Created AMIs will also be deleted (use skip_ami_deletion=true to keep)"
           - "=========================================="
     
     - name: Countdown before destruction
@@ -77,6 +79,7 @@
         name: jenkins_agent_ami
       vars:
         operation: "destroy"
+        skip_ami_deletion: "{{ skip_ami_deletion | default(false) }}"
   
   post_tasks:
     - name: Display completion message
@@ -87,9 +90,10 @@
           - "=========================================="
           - "Jenkins Agent AMI Builder has been destroyed."
           - ""
-          - "Remaining resources:"
-          - "  - Created AMIs (if any) are still available"
-          - "  - SSM parameters with AMI IDs remain unchanged"
+          - "Removed resources:"
+          - "  - Image Builder infrastructure"
+          - "  - Created AMIs (unless skip_ami_deletion=true was used)"
+          - "  - Associated EBS snapshots"
           - ""
           - "To delete AMIs manually:"
           - "  1. List AMIs in AWS Console or CLI"

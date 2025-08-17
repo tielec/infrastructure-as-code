@@ -48,6 +48,15 @@
     - name: Set destroy success flag
       ansible.builtin.set_fact:
         agent_ami_destroyed: true
+    
+    # AMI削除（デフォルトで実行）
+    - name: Check if AMI deletion should be skipped
+      ansible.builtin.debug:
+        msg: "Skip AMI deletion: {{ skip_ami_deletion | default(false) }}"
+    
+    - name: Delete created AMIs
+      ansible.builtin.include_tasks: destroy_images.yml
+      when: not (skip_ami_deletion | default(false) | bool)
   
   rescue:
     - name: Display destroy failure message
