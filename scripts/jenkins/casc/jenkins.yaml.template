@@ -3,8 +3,11 @@ jenkins:
   numExecutors: 1
   mode: NORMAL
   authorizationStrategy:
-    loggedInUsersCanDoAnything:
-      allowAnonymousRead: false
+    unsecured: {}
+  securityRealm:
+    local:
+      allowsSignup: false
+      enableCaptcha: false
   crumbIssuer:
     standard:
       excludeClientIPFromCrumb: true
