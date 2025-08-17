@@ -1,15 +1,15 @@
 ---
-# destroy_jenkins_agent.yml
-# Jenkinsエージェント（Spot Fleet）を削除
+# remove_jenkins_nat.yml
+# Jenkins NAT Gateway/Instanceを削除
 #
 # 使用方法:
-#   ansible-playbook destroy_jenkins_agent.yml -e "env=dev confirm=true"
+#   ansible-playbook remove_jenkins_nat.yml -e "env=dev confirm=true"
 #
 # 注意:
 #   - confirm=true を指定しないと削除は実行されません
-#   - 実行中のジョブがある場合は完了を待つことを推奨
+#   - プライベートサブネットからのインターネットアクセスが不可能になります
 
-- name: Destroy Jenkins Agent Spot Fleet
+- name: Destroy Jenkins NAT Gateway/Instance
   hosts: localhost
   connection: local
   gather_facts: yes
@@ -18,8 +18,6 @@
     env_name: "{{ env | default('dev') }}"
     # 削除確認フラグ
     confirm_destroy: "{{ confirm | default(false) }}"
-    # 強制削除フラグ（実行中のジョブを無視）
-    force_destroy: "{{ force | default(false) }}"
   
   pre_tasks:
     # all.yml から変数を読み込む
@@ -32,7 +30,8 @@
       ansible.builtin.set_fact:
         project_name: "{{ infra.project_name }}"
         aws_region_name: "{{ infra.aws.default_region }}"
-        agent_project_name: "{{ infra.pulumi.agent_project }}"
+        nat_project_name: "{{ infra.pulumi.nat_project }}"
+        use_nat_instance: "{{ infra.aws.nat.use_instance | default(false) }}"
     
     - name: Check confirmation flag
       ansible.builtin.fail:
@@ -47,29 +46,23 @@
       ansible.builtin.debug:
         msg:
           - "=========================================="
-          - "WARNING: Jenkins Agent Destruction"
+          - "WARNING: Jenkins NAT Destruction"
           - "=========================================="
           - "Environment: {{ env_name }}"
           - "Project: {{ project_name }}"
           - "Region: {{ aws_region_name }}"
-          - "Force: {{ force_destroy }}"
+          - "Type: {{ 'NAT Instance' if use_nat_instance else 'NAT Gateway' }}"
           - ""
           - "This will destroy:"
-          - "  - Spot Fleet requests"
-          - "  - Running agent instances"
-          - "  - Launch Templates"
-          - "  - Auto Scaling configuration"
+          - "  - {{ 'NAT Instance (EC2)' if use_nat_instance else 'NAT Gateway' }}"
+          - "  - Elastic IP allocation"
+          - "  - Route table associations"
           - ""
-          - "Note: Running jobs will be terminated!"
+          - "Impact:"
+          - "  - Private subnet resources lose internet access"
+          - "  - Jenkins agents cannot download packages"
+          - "  - No outbound internet connectivity"
           - "=========================================="
-    
-    - name: Extra warning for running jobs
-      ansible.builtin.pause:
-        seconds: 15
-        prompt: |
-          CRITICAL: Any running Jenkins jobs will be terminated!
-          Press Ctrl+C now to cancel, or wait 15 seconds to continue...
-      when: not force_destroy | bool
     
     - name: Countdown before destruction
       ansible.builtin.pause:
@@ -81,12 +74,11 @@
       ansible.builtin.include_role:
         name: aws_setup
     
-    - name: Destroy Jenkins Agent Fleet
+    - name: Destroy Jenkins NAT
       ansible.builtin.include_role:
-        name: jenkins_agent
+        name: jenkins_nat
       vars:
         operation: "destroy"
-        force_terminate: "{{ force_destroy }}"
   
   post_tasks:
     - name: Display completion message
@@ -95,18 +87,21 @@
           - "=========================================="
           - "Destruction Complete"
           - "=========================================="
-          - "Jenkins Agent Fleet has been destroyed."
+          - "Jenkins NAT has been destroyed."
           - ""
           - "Removed resources:"
-          - "  - Spot Fleet requests"
-          - "  - Agent EC2 instances"
-          - "  - Launch Templates"
-          - "  - Auto Scaling configuration"
+          - "  - {{ 'NAT Instance' if use_nat_instance else 'NAT Gateway' }}"
+          - "  - Elastic IP"
+          - "  - Route configurations"
           - ""
-          - "Jenkins Controller remains operational."
-          - "Agents can be redeployed with deploy_jenkins_agent.yml"
+          - "Impact on environment:"
+          - "  - Private subnets have no internet access"
+          - "  - Jenkins agents cannot reach external repositories"
+          - ""
+          - "To restore connectivity:"
+          - "  ansible-playbook deploy_jenkins_nat.yml -e 'env={{ env_name }}'"
           - "=========================================="
-      when: agent_destroyed | default(false)
+      when: nat_destroyed | default(false)
     
     - name: Display failure message
       ansible.builtin.debug:
@@ -118,11 +113,10 @@
           - "Please check AWS Console for remaining resources."
           - ""
           - "Common cleanup targets:"
-          - "  - EC2 > Spot Requests"
-          - "  - EC2 > Instances (filter by tag: {{ project_name }})"
-          - "  - EC2 > Launch Templates"
+          - "  - VPC > NAT Gateways"
+          - "  - EC2 > Instances (if using NAT instance)"
+          - "  - VPC > Elastic IPs"
           - ""
-          - "To force termination of stuck resources:"
-          - "  ansible-playbook destroy_jenkins_agent.yml -e 'env={{ env_name }} confirm=true force=true'"
+          - "Note: NAT Gateway deletion may take several minutes"
           - "=========================================="
-      when: not (agent_destroyed | default(false))
+      when: not (nat_destroyed | default(false))

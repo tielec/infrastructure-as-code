@@ -1,15 +1,15 @@
 ---
-# destroy_jenkins_controller.yml
-# Jenkinsコントローラーインスタンスを削除
+# remove_jenkins_config.yml
+# Jenkinsコントローラーの設定リソースを削除
 #
 # 使用方法:
-#   ansible-playbook destroy_jenkins_controller.yml -e "env=dev confirm=true"
+#   ansible-playbook remove_jenkins_config.yml -e "env=dev confirm=true"
 #
 # 注意:
 #   - confirm=true を指定しないと削除は実行されません
-#   - EFSのJenkinsデータは保持されます（別途削除が必要）
+#   - 設定管理用のリソースのみ削除されます
 
-- name: Destroy Jenkins Controller
+- name: Destroy Jenkins Configuration Resources
   hosts: localhost
   connection: local
   gather_facts: yes
@@ -18,8 +18,6 @@
     env_name: "{{ env | default('dev') }}"
     # 削除確認フラグ
     confirm_destroy: "{{ confirm | default(false) }}"
-    # 特定のカラーのみ削除（blue/green）
-    target_color: "{{ color | default('both') }}"
   
   pre_tasks:
     # all.yml から変数を読み込む
@@ -32,7 +30,7 @@
       ansible.builtin.set_fact:
         project_name: "{{ infra.project_name }}"
         aws_region_name: "{{ infra.aws.default_region }}"
-        controller_project_name: "{{ infra.pulumi.controller_project }}"
+        config_project_name: "{{ infra.pulumi.config_project }}"
     
     - name: Check confirmation flag
       ansible.builtin.fail:
@@ -47,20 +45,18 @@
       ansible.builtin.debug:
         msg:
           - "=========================================="
-          - "WARNING: Jenkins Controller Destruction"
+          - "WARNING: Jenkins Configuration Resources Destruction"
           - "=========================================="
           - "Environment: {{ env_name }}"
           - "Project: {{ project_name }}"
           - "Region: {{ aws_region_name }}"
-          - "Target: {{ target_color }}"
           - ""
           - "This will destroy:"
-          - "  - Jenkins Controller EC2 instances"
-          - "  - Auto Scaling Groups"
-          - "  - Launch Templates"
-          - "  - Target Group attachments"
+          - "  - Configuration management resources"
+          - "  - SSM Parameters for Jenkins config"
+          - "  - Configuration backup resources"
           - ""
-          - "Note: EFS data and configurations are preserved"
+          - "Note: Jenkins instance will continue running"
           - "=========================================="
     
     - name: Countdown before destruction
@@ -73,12 +69,11 @@
       ansible.builtin.include_role:
         name: aws_setup
     
-    - name: Destroy Jenkins Controller
+    - name: Destroy Jenkins Configuration Resources
       ansible.builtin.include_role:
-        name: jenkins_controller
+        name: jenkins_config
       vars:
         operation: "destroy"
-        destroy_target: "{{ target_color }}"
   
   post_tasks:
     - name: Display completion message
@@ -87,23 +82,15 @@
           - "=========================================="
           - "Destruction Complete"
           - "=========================================="
-          - "Jenkins Controller has been destroyed."
+          - "Jenkins Configuration Resources have been destroyed."
           - ""
           - "Removed resources:"
-          - "  - EC2 instances"
-          - "  - Auto Scaling Groups"
-          - "  - Launch Templates"
+          - "  - Configuration SSM parameters"
+          - "  - Configuration management resources"
           - ""
-          - "Preserved resources:"
-          - "  - EFS filesystem with Jenkins data"
-          - "  - Load Balancer (still active)"
-          - "  - Security groups"
-          - ""
-          - "To fully remove Jenkins, also run:"
-          - "  - destroy_jenkins_storage.yml"
-          - "  - destroy_jenkins_loadbalancer.yml"
+          - "Jenkins instance remains operational."
           - "=========================================="
-      when: controller_destroyed | default(false)
+      when: config_destroyed | default(false)
     
     - name: Display failure message
       ansible.builtin.debug:
@@ -115,8 +102,7 @@
           - "Please check AWS Console for remaining resources."
           - ""
           - "Common cleanup targets:"
-          - "  - EC2 > Instances"
-          - "  - EC2 > Auto Scaling Groups"
-          - "  - EC2 > Launch Templates"
+          - "  - Systems Manager > Parameter Store"
+          - "  - S3 buckets (if used for config backup)"
           - "=========================================="
-      when: not (controller_destroyed | default(false))
+      when: not (config_destroyed | default(false))

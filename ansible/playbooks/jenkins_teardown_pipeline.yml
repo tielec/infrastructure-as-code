@@ -1,7 +1,7 @@
 ---
 # jenkins_teardown_pipeline.yml
 # Jenkins環境削除の全体フローを管理するプレイブック
-# 各destroy_jenkins_*.ymlプレイブックを逆順で実行
+# 各remove_jenkins_*.ymlプレイブックを逆順で実行
 
 - name: Jenkins Infrastructure Teardown Pipeline
   hosts: localhost
@@ -41,7 +41,7 @@
     
     # Jenkinsアプリケーション設定の削除
     - name: Destroy Jenkins Application Configuration
-      ansible.builtin.import_playbook: destroy_jenkins_application.yml
+      ansible.builtin.import_playbook: remove_jenkins_application.yml
       vars:
         env: "{{ env_name }}"
         confirm: true
@@ -51,7 +51,7 @@
     
     # Jenkinsエージェントの削除
     - name: Destroy Jenkins Agent
-      ansible.builtin.import_playbook: destroy_jenkins_agent.yml
+      ansible.builtin.import_playbook: remove_jenkins_agent.yml
       vars:
         env: "{{ env_name }}"
         confirm: true
@@ -61,7 +61,7 @@
     
     # Jenkins Agent AMIの削除
     - name: Destroy Jenkins Agent AMI Images
-      ansible.builtin.import_playbook: destroy_jenkins_agent_ami.yml
+      ansible.builtin.import_playbook: remove_jenkins_agent_ami.yml
       vars:
         env: "{{ env_name }}"
         confirm: true
@@ -71,7 +71,7 @@
     
     # Jenkins設定の削除
     - name: Destroy Jenkins Configuration
-      ansible.builtin.import_playbook: destroy_jenkins_config.yml
+      ansible.builtin.import_playbook: remove_jenkins_config.yml
       vars:
         env: "{{ env_name }}"
         confirm: true
@@ -81,7 +81,7 @@
     
     # Jenkinsコントローラーの削除
     - name: Destroy Jenkins Controller
-      ansible.builtin.import_playbook: destroy_jenkins_controller.yml
+      ansible.builtin.import_playbook: remove_jenkins_controller.yml
       vars:
         env: "{{ env_name }}"
         confirm: true
@@ -91,7 +91,7 @@
     
     # ロードバランサーの削除
     - name: Destroy LoadBalancer Infrastructure
-      ansible.builtin.import_playbook: destroy_jenkins_loadbalancer.yml
+      ansible.builtin.import_playbook: remove_jenkins_loadbalancer.yml
       vars:
         env: "{{ env_name }}"
         confirm: true
@@ -101,7 +101,7 @@
     
     # ストレージ（EFS）の削除
     - name: Destroy Storage Infrastructure (EFS)
-      ansible.builtin.import_playbook: destroy_jenkins_storage.yml
+      ansible.builtin.import_playbook: remove_jenkins_storage.yml
       vars:
         env: "{{ env_name }}"
         confirm: true
@@ -111,7 +111,7 @@
     
     # NATインフラの削除
     - name: Destroy NAT Infrastructure
-      ansible.builtin.import_playbook: destroy_jenkins_nat.yml
+      ansible.builtin.import_playbook: remove_jenkins_nat.yml
       vars:
         env: "{{ env_name }}"
         confirm: true
@@ -121,7 +121,7 @@
     
     # セキュリティグループの削除
     - name: Destroy Security Groups
-      ansible.builtin.import_playbook: destroy_jenkins_security.yml
+      ansible.builtin.import_playbook: remove_jenkins_security.yml
       vars:
         env: "{{ env_name }}"
         confirm: true
@@ -131,7 +131,7 @@
     
     # ネットワークインフラの削除
     - name: Destroy Network Infrastructure
-      ansible.builtin.import_playbook: destroy_jenkins_network.yml
+      ansible.builtin.import_playbook: remove_jenkins_network.yml
       vars:
         env: "{{ env_name }}"
         confirm: true
@@ -141,7 +141,7 @@
     
     # SSMパラメータストアの削除（最後に実行）
     - name: Destroy SSM Parameter Store
-      ansible.builtin.import_playbook: destroy_jenkins_ssm_init.yml
+      ansible.builtin.import_playbook: remove_jenkins_ssm_init.yml
       vars:
         env: "{{ env_name }}"
         confirm: true

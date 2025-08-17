@@ -3,8 +3,8 @@
 # EC2 Image Builderインフラを削除します
 #
 # 使用方法:
-#   ansible-playbook destroy_jenkins_agent_ami.yml -e "env=dev confirm=true"
-#   ansible-playbook destroy_jenkins_agent_ami.yml -e "env=dev confirm=true skip_ami_deletion=true"  # AMI削除をスキップ
+#   ansible-playbook remove_jenkins_agent_ami.yml -e "env=dev confirm=true"
+#   ansible-playbook remove_jenkins_agent_ami.yml -e "env=dev confirm=true skip_ami_deletion=true"  # AMI削除をスキップ
 #
 # 注意: 
 #   - 作成済みのAMIもデフォルトで削除されます

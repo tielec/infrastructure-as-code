@@ -1,15 +1,15 @@
 ---
-# destroy_jenkins_application.yml
-# Jenkinsアプリケーション設定を削除
+# remove_jenkins_agent.yml
+# Jenkinsエージェント（Spot Fleet）を削除
 #
 # 使用方法:
-#   ansible-playbook destroy_jenkins_application.yml -e "env=dev confirm=true"
+#   ansible-playbook remove_jenkins_agent.yml -e "env=dev confirm=true"
 #
 # 注意:
 #   - confirm=true を指定しないと削除は実行されません
-#   - SSMパラメータとアプリケーション設定のみ削除されます
+#   - 実行中のジョブがある場合は完了を待つことを推奨
 
-- name: Destroy Jenkins Application Configuration
+- name: Destroy Jenkins Agent Spot Fleet
   hosts: localhost
   connection: local
   gather_facts: yes
@@ -18,6 +18,8 @@
     env_name: "{{ env | default('dev') }}"
     # 削除確認フラグ
     confirm_destroy: "{{ confirm | default(false) }}"
+    # 強制削除フラグ（実行中のジョブを無視）
+    force_destroy: "{{ force | default(false) }}"
   
   pre_tasks:
     # all.yml から変数を読み込む
@@ -30,7 +32,7 @@
       ansible.builtin.set_fact:
         project_name: "{{ infra.project_name }}"
         aws_region_name: "{{ infra.aws.default_region }}"
-        application_project_name: "{{ infra.pulumi.application_project | default('jenkins-application') }}"
+        agent_project_name: "{{ infra.pulumi.agent_project }}"
     
     - name: Check confirmation flag
       ansible.builtin.fail:
@@ -45,19 +47,29 @@
       ansible.builtin.debug:
         msg:
           - "=========================================="
-          - "WARNING: Jenkins Application Configuration Destruction"
+          - "WARNING: Jenkins Agent Destruction"
           - "=========================================="
           - "Environment: {{ env_name }}"
           - "Project: {{ project_name }}"
           - "Region: {{ aws_region_name }}"
+          - "Force: {{ force_destroy }}"
           - ""
           - "This will destroy:"
-          - "  - SSM Parameters for application settings"
-          - "  - Jenkins configuration data"
-          - "  - Application-level secrets"
+          - "  - Spot Fleet requests"
+          - "  - Running agent instances"
+          - "  - Launch Templates"
+          - "  - Auto Scaling configuration"
           - ""
-          - "Note: Jenkins instance data will NOT be affected"
+          - "Note: Running jobs will be terminated!"
           - "=========================================="
+    
+    - name: Extra warning for running jobs
+      ansible.builtin.pause:
+        seconds: 15
+        prompt: |
+          CRITICAL: Any running Jenkins jobs will be terminated!
+          Press Ctrl+C now to cancel, or wait 15 seconds to continue...
+      when: not force_destroy | bool
     
     - name: Countdown before destruction
       ansible.builtin.pause:
@@ -69,11 +81,12 @@
       ansible.builtin.include_role:
         name: aws_setup
     
-    - name: Destroy Jenkins Application Configuration
+    - name: Destroy Jenkins Agent Fleet
       ansible.builtin.include_role:
-        name: jenkins_application
+        name: jenkins_agent
       vars:
         operation: "destroy"
+        force_terminate: "{{ force_destroy }}"
   
   post_tasks:
     - name: Display completion message
@@ -82,15 +95,18 @@
           - "=========================================="
           - "Destruction Complete"
           - "=========================================="
-          - "Jenkins Application Configuration has been destroyed."
+          - "Jenkins Agent Fleet has been destroyed."
           - ""
           - "Removed resources:"
-          - "  - Application SSM parameters"
-          - "  - Configuration secrets"
+          - "  - Spot Fleet requests"
+          - "  - Agent EC2 instances"
+          - "  - Launch Templates"
+          - "  - Auto Scaling configuration"
           - ""
-          - "Jenkins instance remains operational with default settings."
+          - "Jenkins Controller remains operational."
+          - "Agents can be redeployed with deploy_jenkins_agent.yml"
           - "=========================================="
-      when: application_destroyed | default(false)
+      when: agent_destroyed | default(false)
     
     - name: Display failure message
       ansible.builtin.debug:
@@ -102,7 +118,11 @@
           - "Please check AWS Console for remaining resources."
           - ""
           - "Common cleanup targets:"
-          - "  - Systems Manager > Parameter Store"
-          - "  - Secrets Manager (if used)"
+          - "  - EC2 > Spot Requests"
+          - "  - EC2 > Instances (filter by tag: {{ project_name }})"
+          - "  - EC2 > Launch Templates"
+          - ""
+          - "To force termination of stuck resources:"
+          - "  ansible-playbook remove_jenkins_agent.yml -e 'env={{ env_name }} confirm=true force=true'"
           - "=========================================="
-      when: not (application_destroyed | default(false))
+      when: not (agent_destroyed | default(false))

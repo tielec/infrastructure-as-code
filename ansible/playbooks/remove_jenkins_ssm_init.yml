@@ -1,5 +1,5 @@
 ---
-# destroy_jenkins_ssm_init.yml
+# remove_jenkins_ssm_init.yml
 # SSMパラメータストアの削除を実行
 
 - name: Destroy SSM Parameter Store for Jenkins Infrastructure

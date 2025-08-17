@@ -1,15 +1,15 @@
 ---
-# destroy_jenkins_nat.yml
-# Jenkins NAT Gateway/Instanceを削除
+# remove_jenkins_controller.yml
+# Jenkinsコントローラーインスタンスを削除
 #
 # 使用方法:
-#   ansible-playbook destroy_jenkins_nat.yml -e "env=dev confirm=true"
+#   ansible-playbook remove_jenkins_controller.yml -e "env=dev confirm=true"
 #
 # 注意:
 #   - confirm=true を指定しないと削除は実行されません
-#   - プライベートサブネットからのインターネットアクセスが不可能になります
+#   - EFSのJenkinsデータは保持されます（別途削除が必要）
 
-- name: Destroy Jenkins NAT Gateway/Instance
+- name: Destroy Jenkins Controller
   hosts: localhost
   connection: local
   gather_facts: yes
@@ -18,6 +18,8 @@
     env_name: "{{ env | default('dev') }}"
     # 削除確認フラグ
     confirm_destroy: "{{ confirm | default(false) }}"
+    # 特定のカラーのみ削除（blue/green）
+    target_color: "{{ color | default('both') }}"
   
   pre_tasks:
     # all.yml から変数を読み込む
@@ -30,8 +32,7 @@
       ansible.builtin.set_fact:
         project_name: "{{ infra.project_name }}"
         aws_region_name: "{{ infra.aws.default_region }}"
-        nat_project_name: "{{ infra.pulumi.nat_project }}"
-        use_nat_instance: "{{ infra.aws.nat.use_instance | default(false) }}"
+        controller_project_name: "{{ infra.pulumi.controller_project }}"
     
     - name: Check confirmation flag
       ansible.builtin.fail:
@@ -46,22 +47,20 @@
       ansible.builtin.debug:
         msg:
           - "=========================================="
-          - "WARNING: Jenkins NAT Destruction"
+          - "WARNING: Jenkins Controller Destruction"
           - "=========================================="
           - "Environment: {{ env_name }}"
           - "Project: {{ project_name }}"
           - "Region: {{ aws_region_name }}"
-          - "Type: {{ 'NAT Instance' if use_nat_instance else 'NAT Gateway' }}"
+          - "Target: {{ target_color }}"
           - ""
           - "This will destroy:"
-          - "  - {{ 'NAT Instance (EC2)' if use_nat_instance else 'NAT Gateway' }}"
-          - "  - Elastic IP allocation"
-          - "  - Route table associations"
+          - "  - Jenkins Controller EC2 instances"
+          - "  - Auto Scaling Groups"
+          - "  - Launch Templates"
+          - "  - Target Group attachments"
           - ""
-          - "Impact:"
-          - "  - Private subnet resources lose internet access"
-          - "  - Jenkins agents cannot download packages"
-          - "  - No outbound internet connectivity"
+          - "Note: EFS data and configurations are preserved"
           - "=========================================="
     
     - name: Countdown before destruction
@@ -74,11 +73,12 @@
       ansible.builtin.include_role:
         name: aws_setup
     
-    - name: Destroy Jenkins NAT
+    - name: Destroy Jenkins Controller
       ansible.builtin.include_role:
-        name: jenkins_nat
+        name: jenkins_controller
       vars:
         operation: "destroy"
+        destroy_target: "{{ target_color }}"
   
   post_tasks:
     - name: Display completion message
@@ -87,21 +87,23 @@
           - "=========================================="
           - "Destruction Complete"
           - "=========================================="
-          - "Jenkins NAT has been destroyed."
+          - "Jenkins Controller has been destroyed."
           - ""
           - "Removed resources:"
-          - "  - {{ 'NAT Instance' if use_nat_instance else 'NAT Gateway' }}"
-          - "  - Elastic IP"
-          - "  - Route configurations"
+          - "  - EC2 instances"
+          - "  - Auto Scaling Groups"
+          - "  - Launch Templates"
           - ""
-          - "Impact on environment:"
-          - "  - Private subnets have no internet access"
-          - "  - Jenkins agents cannot reach external repositories"
+          - "Preserved resources:"
+          - "  - EFS filesystem with Jenkins data"
+          - "  - Load Balancer (still active)"
+          - "  - Security groups"
           - ""
-          - "To restore connectivity:"
-          - "  ansible-playbook deploy_jenkins_nat.yml -e 'env={{ env_name }}'"
+          - "To fully remove Jenkins, also run:"
+          - "  - remove_jenkins_storage.yml"
+          - "  - remove_jenkins_loadbalancer.yml"
           - "=========================================="
-      when: nat_destroyed | default(false)
+      when: controller_destroyed | default(false)
     
     - name: Display failure message
       ansible.builtin.debug:
@@ -113,10 +115,8 @@
           - "Please check AWS Console for remaining resources."
           - ""
           - "Common cleanup targets:"
-          - "  - VPC > NAT Gateways"
-          - "  - EC2 > Instances (if using NAT instance)"
-          - "  - VPC > Elastic IPs"
-          - ""
-          - "Note: NAT Gateway deletion may take several minutes"
+          - "  - EC2 > Instances"
+          - "  - EC2 > Auto Scaling Groups"
+          - "  - EC2 > Launch Templates"
           - "=========================================="
-      when: not (nat_destroyed | default(false))
+      when: not (controller_destroyed | default(false))
