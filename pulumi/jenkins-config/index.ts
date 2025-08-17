@@ -35,8 +35,9 @@ const jenkinsRecoveryMode = pulumi.output(jenkinsRecoveryModeParam).apply(p => p
 const gitRepo = pulumi.output(gitRepoParam).apply(p => p.value);
 const gitBranch = pulumi.output(gitBranchParam).apply(p => p.value);
 
-// タイムスタンプを生成（ドキュメント名の一意性を保証）
-const timestamp = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+// バージョン名を動的に生成（タイムスタンプベース）
+const timestamp = new Date().toISOString().replace(/[:-]/g, '').replace(/\..+/, '');
+const versionName = `v${timestamp}`;
 
 // Jenkins設定用SSMパラメータ（ステータス情報を保存）
 const jenkinsStatusParam = new aws.ssm.Parameter(`jenkins-status`, {
@@ -71,7 +72,7 @@ const jenkinsConfigExecuteScriptDocument = new aws.ssm.Document(`jenkins-config-
     documentType: "Command",
     documentFormat: "JSON",
     targetType: "/AWS::EC2::Instance",
-    versionName: `v${timestamp}`,
+    versionName: versionName,
     content: JSON.stringify({
         schemaVersion: "2.2",
         description: "Execute script from Git repository on Jenkins instance",
@@ -135,7 +136,9 @@ const jenkinsConfigExecuteScriptDocument = new aws.ssm.Document(`jenkins-config-
         Environment: environment,
     },
 }, {
-    replaceOnChanges: ["content", "targetType"]
+    // ignoreChangesを使用して、既存のドキュメントを更新可能にする
+    // targetTypeとversionNameの変更は置換ではなく更新として扱う
+    ignoreChanges: ["targetType"],
 });
 
 // Gitリポジトリ更新用SSMドキュメント（これは残す）
