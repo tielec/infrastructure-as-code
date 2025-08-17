@@ -136,9 +136,10 @@ const jenkinsConfigExecuteScriptDocument = new aws.ssm.Document(`jenkins-config-
         Environment: environment,
     },
 }, {
-    // ignoreChangesを使用して、既存のドキュメントを更新可能にする
-    // targetTypeとversionNameの変更は置換ではなく更新として扱う
-    ignoreChanges: ["targetType"],
+    // replaceOnChangesを使用して、コンテンツ変更時に強制的に置換
+    // これによりバージョン更新エラーを回避
+    replaceOnChanges: ["content"],
+    deleteBeforeReplace: true,
 });
 
 // Gitリポジトリ更新用SSMドキュメント（これは残す）
