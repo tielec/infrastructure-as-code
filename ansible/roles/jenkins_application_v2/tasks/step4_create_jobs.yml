@@ -1,0 +1,75 @@
+---
+# Step 4: 初期ジョブ設定（冪等）
+
+# Seed Jobの存在確認
+- name: Check if seed job exists via SSM
+  ansible.builtin.include_tasks: ../jenkins_application/tasks/execute_ssm_command.yml
+  vars:
+    ssm_document_name: "{{ execute_script_document_name }}"
+    ssm_parameters: "ScriptPath=scripts/jenkins/v2/check-seed-job.sh"
+    ssm_comment: "Checking seed job existence"
+    instance_id: "{{ jenkins_instance_id }}"
+  register: seed_job_check
+
+- name: Parse seed job status
+  ansible.builtin.set_fact:
+    seed_job_exists: "{{ 'SEED_JOB_EXISTS' in seed_job_check.stdout }}"
+
+- name: Display seed job status
+  ansible.builtin.debug:
+    msg: "Seed job {{ 'already exists' if seed_job_exists else 'needs to be created' }}"
+
+# Seed Jobを作成
+- name: Create seed job if needed
+  when: not seed_job_exists
+  block:
+    - name: Create seed job via SSM
+      ansible.builtin.include_tasks: ../jenkins_application/tasks/execute_ssm_command.yml
+      vars:
+        ssm_document_name: "{{ execute_script_document_name }}"
+        ssm_parameters: "ScriptPath=scripts/jenkins/v2/create-seed-job.sh"
+        ssm_comment: "Creating seed job"
+        instance_id: "{{ jenkins_instance_id }}"
+      register: create_seed_result
+
+    - name: Verify seed job was created
+      ansible.builtin.assert:
+        that:
+          - "'SEED_JOB_CREATED' in create_seed_result.stdout"
+        fail_msg: "Failed to create seed job"
+
+    # 初回ビルドを実行（オプション）
+    - name: Run initial seed job build
+      when: jenkins_run_seed_job | default(false)
+      ansible.builtin.include_tasks: ../jenkins_application/tasks/execute_ssm_command.yml
+      vars:
+        ssm_document_name: "{{ execute_script_document_name }}"
+        ssm_parameters: "ScriptPath=scripts/jenkins/v2/run-seed-job.sh"
+        ssm_comment: "Running seed job"
+        instance_id: "{{ jenkins_instance_id }}"
+      register: run_seed_result
+
+    - name: Display seed job run result
+      when: jenkins_run_seed_job | default(false)
+      ansible.builtin.debug:
+        msg: "Seed job run: {{ 'SUCCESS' in run_seed_result.stdout | default('') }}"
+
+- name: Seed job already exists
+  when: seed_job_exists
+  ansible.builtin.debug:
+    msg: "Seed job already exists, skipping creation..."
+
+# フェーズを更新
+- name: Update phase to jobs_created
+  ansible.builtin.include_role:
+    name: ssm_parameter_store
+    tasks_from: put_parameter
+  vars:
+    parameter_name: "/jenkins-infra/{{ env_name }}/application/phase"
+    parameter_value: "jobs_created"
+    parameter_type: "String"
+    parameter_description: "Jenkins application configuration phase"
+
+- name: Step 4 completed
+  ansible.builtin.debug:
+    msg: "Step 4 - Initial jobs configured successfully"

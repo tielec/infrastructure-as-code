@@ -1,0 +1,67 @@
+---
+# jenkins_application_v2 メインタスク
+
+- name: Display Jenkins Application V2 information
+  ansible.builtin.debug:
+    msg: |
+      Starting Jenkins Application Configuration V2
+      Environment: {{ env_name }}
+      Project: {{ project_name }}
+      Jenkins Home: {{ jenkins_home }}
+      Recovery Mode: {{ jenkins_recovery_mode }}
+
+# 現在のフェーズを取得
+- name: Get current phase from SSM
+  ansible.builtin.include_role:
+    name: ssm_parameter_store
+    tasks_from: get_parameter
+  vars:
+    parameter_name: "/jenkins-infra/{{ env_name }}/application/phase"
+    store_as: "current_phase"
+    default_value: "not_started"
+
+- name: Display current phase
+  ansible.builtin.debug:
+    msg: "Current phase: {{ current_phase | default('not_started') }}"
+
+# Step 1: セキュリティ無効化
+- name: Step 1 - Disable Security
+  ansible.builtin.include_tasks: step1_disable_security.yml
+  when: current_phase | default('not_started') in ['not_started', 'security_disabled']
+
+# Step 2: プラグインインストール
+- name: Step 2 - Install Plugins
+  ansible.builtin.include_tasks: step2_install_plugins.yml
+  when: current_phase | default('not_started') in ['security_disabled', 'plugins_installed']
+
+# Step 3: システム設定とクレデンシャル
+- name: Step 3 - Configure System
+  ansible.builtin.include_tasks: step3_configure_system.yml
+  when: current_phase | default('not_started') in ['plugins_installed', 'system_configured']
+
+# Step 4: 初期ジョブ設定
+- name: Step 4 - Create Initial Jobs
+  ansible.builtin.include_tasks: step4_create_jobs.yml
+  when: 
+    - current_phase | default('not_started') in ['system_configured', 'jobs_created']
+    - jenkins_create_seed_job | bool
+
+# Step 5: セキュリティ有効化
+- name: Step 5 - Enable Security
+  ansible.builtin.include_tasks: step5_enable_security.yml
+  when: current_phase | default('not_started') in ['system_configured', 'jobs_created', 'security_enabled']
+
+# Step 6: 最終動作確認
+- name: Step 6 - Final Verification
+  ansible.builtin.include_tasks: step6_verify.yml
+  when: current_phase | default('not_started') in ['security_enabled', 'completed']
+
+# 完了メッセージ
+- name: Display completion status
+  ansible.builtin.debug:
+    msg: |
+      ===== Jenkins Application Configuration Complete =====
+      Phase: {{ current_phase | default('completed') }}
+      Jenkins URL: http://{{ alb_dns_name | default('localhost:8080') }}/
+      Admin User: {{ jenkins_admin_user }}
+      Status: Successfully configured

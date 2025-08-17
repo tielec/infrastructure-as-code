@@ -1,0 +1,92 @@
+---
+# Step 2: プラグインインストール（冪等）
+
+- name: Check installed plugins via SSM
+  ansible.builtin.include_tasks: ../jenkins_application/tasks/execute_ssm_command.yml
+  vars:
+    ssm_document_name: "{{ execute_script_document_name }}"
+    ssm_parameters: "ScriptPath=scripts/jenkins/v2/check-plugins.sh"
+    ssm_comment: "Checking installed plugins"
+    instance_id: "{{ jenkins_instance_id }}"
+  register: plugins_status_result
+
+- name: Parse installed plugins
+  ansible.builtin.set_fact:
+    installed_plugins: "{{ plugins_status_result.stdout | regex_findall('INSTALLED: (.+)') }}"
+
+- name: Display installed plugins
+  ansible.builtin.debug:
+    msg: "Currently installed plugins: {{ installed_plugins | length }} plugins"
+
+# 必要なプラグインのリストをSSMパラメータとして設定
+- name: Set required plugins list in SSM
+  ansible.builtin.include_role:
+    name: ssm_parameter_store
+    tasks_from: put_parameter
+  vars:
+    parameter_name: "/jenkins-infra/{{ env_name }}/application/required-plugins"
+    parameter_value: "{{ jenkins_required_plugins | join(',') }}"
+    parameter_type: "String"
+    parameter_description: "Required Jenkins plugins list"
+
+# プラグインをインストール
+- name: Install missing plugins via SSM
+  ansible.builtin.include_tasks: ../jenkins_application/tasks/execute_ssm_command.yml
+  vars:
+    ssm_document_name: "{{ execute_script_document_name }}"
+    ssm_parameters: "ScriptPath=scripts/jenkins/v2/install-plugins.sh"
+    ssm_comment: "Installing Jenkins plugins"
+    instance_id: "{{ jenkins_instance_id }}"
+  register: plugin_install_result
+
+- name: Check if plugins were installed
+  ansible.builtin.set_fact:
+    plugins_installed: "{{ 'PLUGINS_INSTALLED' in plugin_install_result.stdout }}"
+    restart_required: "{{ 'RESTART_REQUIRED' in plugin_install_result.stdout }}"
+
+# 再起動が必要な場合
+- name: Restart Jenkins if plugins were installed
+  when: restart_required | bool
+  block:
+    - name: Restart Jenkins for plugin activation
+      ansible.builtin.include_tasks: ../jenkins_application/tasks/execute_ssm_command.yml
+      vars:
+        ssm_document_name: "{{ execute_script_document_name }}"
+        ssm_parameters: "ScriptPath=scripts/jenkins/v2/restart-jenkins.sh"
+        ssm_comment: "Restarting Jenkins after plugin installation"
+        instance_id: "{{ jenkins_instance_id }}"
+
+    - name: Verify plugins are active
+      ansible.builtin.include_tasks: ../jenkins_application/tasks/execute_ssm_command.yml
+      vars:
+        ssm_document_name: "{{ execute_script_document_name }}"
+        ssm_parameters: "ScriptPath=scripts/jenkins/v2/verify-plugins.sh"
+        ssm_comment: "Verifying plugin activation"
+        instance_id: "{{ jenkins_instance_id }}"
+      register: verify_plugins_result
+
+    - name: Ensure all required plugins are active
+      ansible.builtin.assert:
+        that:
+          - "'ALL_PLUGINS_ACTIVE' in verify_plugins_result.stdout"
+        fail_msg: "Not all required plugins are active"
+
+- name: Plugins already installed
+  when: not restart_required | bool
+  ansible.builtin.debug:
+    msg: "All required plugins are already installed, skipping..."
+
+# フェーズを更新
+- name: Update phase to plugins_installed
+  ansible.builtin.include_role:
+    name: ssm_parameter_store
+    tasks_from: put_parameter
+  vars:
+    parameter_name: "/jenkins-infra/{{ env_name }}/application/phase"
+    parameter_value: "plugins_installed"
+    parameter_type: "String"
+    parameter_description: "Jenkins application configuration phase"
+
+- name: Step 2 completed
+  ansible.builtin.debug:
+    msg: "Step 2 - Plugins installed and activated successfully"

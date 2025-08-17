@@ -1,0 +1,89 @@
+---
+# Step 6: 最終動作確認
+
+- name: Final verification via SSM
+  ansible.builtin.include_tasks: ../jenkins_application/tasks/execute_ssm_command.yml
+  vars:
+    ssm_document_name: "{{ execute_script_document_name }}"
+    ssm_parameters: "ScriptPath=scripts/jenkins/v2/final-verification.sh"
+    ssm_comment: "Final verification of Jenkins setup"
+    instance_id: "{{ jenkins_instance_id }}"
+  register: final_verify_result
+
+# 検証結果をパース
+- name: Parse verification results
+  ansible.builtin.set_fact:
+    jenkins_running: "{{ 'JENKINS_RUNNING' in final_verify_result.stdout }}"
+    security_enabled: "{{ 'SECURITY_ENABLED' in final_verify_result.stdout }}"
+    plugins_active: "{{ 'PLUGINS_ACTIVE' in final_verify_result.stdout }}"
+    admin_exists: "{{ 'ADMIN_EXISTS' in final_verify_result.stdout }}"
+    casc_loaded: "{{ 'CASC_LOADED' in final_verify_result.stdout }}"
+
+# フェーズを完了に更新
+- name: Update phase to completed
+  when: jenkins_running and security_enabled and plugins_active and admin_exists
+  ansible.builtin.include_role:
+    name: ssm_parameter_store
+    tasks_from: put_parameter
+  vars:
+    parameter_name: "/jenkins-infra/{{ env_name }}/application/phase"
+    parameter_value: "completed"
+    parameter_type: "String"
+    parameter_description: "Jenkins application configuration phase"
+
+# 完了タイムスタンプを記録
+- name: Record completion timestamp
+  when: jenkins_running and security_enabled and plugins_active and admin_exists
+  ansible.builtin.include_role:
+    name: ssm_parameter_store
+    tasks_from: put_parameter
+  vars:
+    parameter_name: "/jenkins-infra/{{ env_name }}/application/completed-at"
+    parameter_value: "{{ ansible_date_time.iso8601 }}"
+    parameter_type: "String"
+    parameter_description: "Jenkins application configuration completion time"
+
+# ALB DNS名を取得（アクセス情報用）
+- name: Get ALB DNS for access info
+  ansible.builtin.include_role:
+    name: ssm_parameter_store
+    tasks_from: get_parameter
+  vars:
+    parameter_name: "/jenkins-infra/{{ env_name }}/loadbalancer/alb-dns"
+    store_as: "alb_dns_final"
+    default_value: "localhost:8080"
+
+# 最終サマリーを表示
+- name: Display final summary
+  ansible.builtin.debug:
+    msg: |
+      ===== Jenkins Application Configuration Complete =====
+      
+      Verification Results:
+      ✓ Jenkins Service: {{ 'Running' if jenkins_running else 'Not Running' }}
+      ✓ Security: {{ 'Enabled' if security_enabled else 'Disabled' }}
+      ✓ Plugins: {{ 'Active' if plugins_active else 'Not Active' }}
+      ✓ Admin User: {{ 'Exists' if admin_exists else 'Not Found' }}
+      ✓ Configuration: {{ 'Loaded' if casc_loaded else 'Not Loaded' }}
+      
+      Access Information:
+      - URL: http://{{ alb_dns_final }}/
+      - Username: admin
+      - Password: Stored in SSM Parameter /jenkins-infra/{{ env_name }}/credentials/admin-password
+      
+      Next Steps:
+      1. Access Jenkins using the URL above
+      2. Login with admin credentials
+      3. Verify all functionality is working
+      4. Run the seed job to create additional jobs
+      
+      Configuration Phase: {{ 'completed' if (jenkins_running and security_enabled and plugins_active and admin_exists) else 'incomplete' }}
+
+# エラーがある場合は警告
+- name: Warn if verification failed
+  when: not (jenkins_running and security_enabled and plugins_active and admin_exists)
+  ansible.builtin.debug:
+    msg: |
+      WARNING: Some verification checks failed
+      Please check the Jenkins logs and configuration
+      You may need to re-run specific steps to complete the setup

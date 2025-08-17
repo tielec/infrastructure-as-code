@@ -1,0 +1,48 @@
+---
+# jenkins_application_v2 デフォルト変数
+
+# 基本設定
+jenkins_home: "/mnt/efs/jenkins"
+jenkins_repo_path: "/root/infrastructure-as-code"
+jenkins_service_name: "jenkins"
+
+# タイムアウト設定
+jenkins_startup_timeout: 300
+jenkins_plugin_install_timeout: 600
+jenkins_api_check_interval: 10
+
+# プラグインリスト
+jenkins_required_plugins:
+  - configuration-as-code
+  - job-dsl
+  - workflow-aggregator
+  - git
+  - github
+  - credentials-binding
+  - ssh-credentials
+  - ec2-fleet
+  - timestamper
+  - ansicolor
+  - rebuild
+  - authorize-project
+  - matrix-auth
+  - role-strategy
+
+# セキュリティ設定
+jenkins_admin_user: "admin"
+jenkins_cli_user: "jenkins-cli"
+jenkins_api_user: "jenkins-api"
+
+# デフォルト値
+jenkins_recovery_mode: false
+jenkins_update_plugins: true
+jenkins_create_seed_job: true
+
+# フェーズ管理
+jenkins_phases:
+  - security_disabled
+  - plugins_installed
+  - system_configured
+  - jobs_created
+  - security_enabled
+  - completed

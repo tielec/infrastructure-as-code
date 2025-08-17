@@ -1,0 +1,95 @@
+---
+# Step 1: セキュリティ無効化（冪等）
+
+# Jenkinsインスタンス情報の取得
+- name: Get Jenkins instance ID from SSM
+  ansible.builtin.include_role:
+    name: ssm_parameter_store
+    tasks_from: get_parameter
+  vars:
+    parameter_name: "/jenkins-infra/{{ env_name }}/controller/instance-id"
+    store_as: "jenkins_instance_id"
+
+- name: Verify Jenkins instance ID
+  ansible.builtin.fail:
+    msg: "Invalid Jenkins instance ID format: {{ jenkins_instance_id }}"
+  when: not (jenkins_instance_id | regex_search('^i-[a-f0-9]+$'))
+
+# SSMドキュメント名の取得
+- name: Get execute script document name from SSM
+  ansible.builtin.include_role:
+    name: ssm_parameter_store
+    tasks_from: get_parameter
+  vars:
+    parameter_name: "/jenkins-infra/{{ env_name }}/application/execute-script-document-name"
+    store_as: "execute_script_document_name"
+
+# セキュリティ状態の確認
+- name: Check Jenkins security status via SSM
+  ansible.builtin.include_tasks: ../jenkins_application/tasks/execute_ssm_command.yml
+  vars:
+    ssm_document_name: "{{ execute_script_document_name }}"
+    ssm_parameters: "ScriptPath=scripts/jenkins/v2/check-security-status.sh"
+    ssm_comment: "Checking Jenkins security status"
+    instance_id: "{{ jenkins_instance_id }}"
+  register: security_status_result
+
+- name: Parse security status
+  ansible.builtin.set_fact:
+    jenkins_security_enabled: "{{ 'SECURED' in security_status_result.stdout | default('') }}"
+
+- name: Display current security status
+  ansible.builtin.debug:
+    msg: "Jenkins security is {{ 'enabled' if jenkins_security_enabled else 'disabled' }}"
+
+# セキュリティが有効な場合のみ無効化を実行
+- name: Disable security if enabled
+  when: jenkins_security_enabled
+  block:
+    - name: Apply unsecured configuration via SSM
+      ansible.builtin.include_tasks: ../jenkins_application/tasks/execute_ssm_command.yml
+      vars:
+        ssm_document_name: "{{ execute_script_document_name }}"
+        ssm_parameters: "ScriptPath=scripts/jenkins/v2/disable-security.sh"
+        ssm_comment: "Disabling Jenkins security"
+        instance_id: "{{ jenkins_instance_id }}"
+
+    - name: Wait for Jenkins to be accessible
+      ansible.builtin.pause:
+        seconds: 30
+        prompt: "Waiting for Jenkins to restart with security disabled..."
+
+    - name: Verify security is disabled
+      ansible.builtin.include_tasks: ../jenkins_application/tasks/execute_ssm_command.yml
+      vars:
+        ssm_document_name: "{{ execute_script_document_name }}"
+        ssm_parameters: "ScriptPath=scripts/jenkins/v2/check-security-status.sh"
+        ssm_comment: "Verifying security is disabled"
+        instance_id: "{{ jenkins_instance_id }}"
+      register: verify_result
+
+    - name: Ensure security is disabled
+      ansible.builtin.assert:
+        that:
+          - "'UNSECURED' in verify_result.stdout"
+        fail_msg: "Failed to disable Jenkins security"
+
+- name: Security already disabled
+  when: not jenkins_security_enabled
+  ansible.builtin.debug:
+    msg: "Jenkins security is already disabled, skipping..."
+
+# フェーズを更新
+- name: Update phase to security_disabled
+  ansible.builtin.include_role:
+    name: ssm_parameter_store
+    tasks_from: put_parameter
+  vars:
+    parameter_name: "/jenkins-infra/{{ env_name }}/application/phase"
+    parameter_value: "security_disabled"
+    parameter_type: "String"
+    parameter_description: "Jenkins application configuration phase"
+
+- name: Step 1 completed
+  ansible.builtin.debug:
+    msg: "Step 1 - Security disabled successfully"
