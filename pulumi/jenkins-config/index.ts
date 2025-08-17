@@ -68,7 +68,7 @@ const jenkinsConfiguredParam = new aws.ssm.Parameter(`jenkins-configured`, {
 
 // 汎用的なスクリプト実行用SSMドキュメント（jenkins-applicationと同じ構造）
 const jenkinsConfigExecuteScriptDocument = new aws.ssm.Document(`jenkins-config-execute-script`, {
-    name: `jenkins-infra-jenkins-config-execute-script-${environment}`,
+    name: `jenkins-execute-script-${environment}`,
     documentType: "Command",
     documentFormat: "JSON",
     targetType: "/AWS::EC2::Instance",
@@ -144,7 +144,7 @@ const jenkinsConfigExecuteScriptDocument = new aws.ssm.Document(`jenkins-config-
 
 // Gitリポジトリ更新用SSMドキュメント（これは残す）
 const jenkinsUpdateRepoDocument = new aws.ssm.Document(`jenkins-update-repo`, {
-    name: `jenkins-infra-jenkins-update-repo-${environment}`,
+    name: `jenkins-update-repo-${environment}`,
     documentType: "Command",
     documentFormat: "JSON",
     content: JSON.stringify({
