@@ -151,35 +151,10 @@ if [ "${DEBUG_CASC:-false}" = "true" ]; then
     done
 fi
 
-# JCasC設定を適用
-if [ "$RESTART_JENKINS" = "true" ]; then
-    log "Applying JCasC configuration by restarting Jenkins..."
-    systemctl restart jenkins
-    
-    # 起動を待機
-    log "Waiting for Jenkins to apply configuration..."
-    TIMEOUT=300
-    ELAPSED=0
-    while [ $ELAPSED -lt $TIMEOUT ]; do
-        if curl -sf http://localhost:8080/login > /dev/null 2>&1; then
-            log "Jenkins is running"
-            break
-        fi
-        sleep 5
-        ELAPSED=$((ELAPSED + 5))
-    done
-    
-    if [ $ELAPSED -ge $TIMEOUT ]; then
-        error_exit "Jenkins failed to start within timeout"
-    fi
-    
-    # 設定の適用を待機
-    sleep 30
-else
-    log "JCasC configuration file generated. Jenkins restart skipped."
-    log "To apply the configuration, either:"
-    log "  1. Restart Jenkins manually: systemctl restart jenkins"
-    log "  2. Reload configuration from Jenkins UI: Manage Jenkins > Configuration as Code > Reload existing configuration"
+log "JCasC configuration file generated."
+log "Configuration will be applied on the next Jenkins restart."
+log "Note: The configuration can also be reloaded from Jenkins UI:"
+log "  Manage Jenkins > Configuration as Code > Reload existing configuration"
 fi
 
 log "JCasC configuration completed"

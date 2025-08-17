@@ -95,80 +95,11 @@ const jenkinsExecuteScriptDocument = new aws.ssm.Document(`jenkins-execute-scrip
     replaceOnChanges: ["content", "targetType"]
 });
 
-// Jenkins再起動用SSMドキュメント（これは残す）
-const jenkinsRestartDocument = new aws.ssm.Document(`jenkins-restart`, {
-    name: `jenkins-infra-jenkins-restart-${environment}`,
-    documentType: "Command",
-    documentFormat: "JSON",
-    targetType: "/AWS::EC2::Instance",
-    versionName: `v${timestamp}`,
-    content: JSON.stringify({
-        schemaVersion: "2.2",
-        description: "Restart Jenkins service",
-        parameters: {},
-        mainSteps: [
-            {
-                action: "aws:runShellScript",
-                name: "restartJenkins",
-                inputs: {
-                    runCommand: [
-                        "#!/bin/bash",
-                        "set -e",
-                        "",
-                        "echo '===== Restarting Jenkins Service ====='",
-                        "systemctl restart jenkins",
-                        "",
-                        "# 起動を待機",
-                        "TIMEOUT=300",
-                        "ELAPSED=0",
-                        "while [ $ELAPSED -lt $TIMEOUT ]; do",
-                        "  if systemctl is-active jenkins > /dev/null && curl -s -f http://localhost:8080/login > /dev/null; then",
-                        "    echo 'Jenkins is running and responsive'",
-                        "    break",
-                        "  fi",
-                        "  sleep 10",
-                        "  ELAPSED=$((ELAPSED + 10))",
-                        "done",
-                        "",
-                        "if [ $ELAPSED -ge $TIMEOUT ]; then",
-                        "  echo 'ERROR: Jenkins failed to start within timeout'",
-                        "  exit 1",
-                        "fi",
-                        "",
-                        "# プラグインの読み込み完了を待つ",
-                        "echo 'Waiting for plugins to be fully loaded...'",
-                        "sleep 30",
-                        "",
-                        "echo 'Jenkins restart completed successfully'"
-                    ]
-                }
-            }
-        ]
-    }),
-    tags: {
-        Environment: environment,
-    },
-}, {
-    replaceOnChanges: ["content", "targetType"]
-});
-
 // SSMドキュメント名をSSMパラメータに保存
 const executeScriptDocumentNameParam = new aws.ssm.Parameter(`execute-script-document-name`, {
     name: `${ssmPrefix}/application/execute-script-document-name`,
     type: "String",
     value: jenkinsExecuteScriptDocument.name,
-    overwrite: true,
-    tags: {
-        Environment: environment,
-        ManagedBy: "pulumi",
-        Component: "application",
-    },
-});
-
-const restartDocumentNameParam = new aws.ssm.Parameter(`restart-document-name`, {
-    name: `${ssmPrefix}/application/restart-document-name`,
-    type: "String",
-    value: jenkinsRestartDocument.name,
     overwrite: true,
     tags: {
         Environment: environment,
@@ -194,6 +125,5 @@ const applicationStatusParam = new aws.ssm.Parameter(`application-status`, {
 // エクスポート
 export const ssmDocuments = {
     executeScript: jenkinsExecuteScriptDocument.name,
-    restart: jenkinsRestartDocument.name,
 };
 export const applicationStatusParameterName = applicationStatusParam.name;

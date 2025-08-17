@@ -175,105 +175,30 @@ cp "$GROOVY_SCRIPT" "$GROOVY_DIR/create-seed-job.groovy"
 chown jenkins:jenkins "$GROOVY_DIR/create-seed-job.groovy"
 chmod 644 "$GROOVY_DIR/create-seed-job.groovy"
 
-if [ "$RESTART_JENKINS" = "true" ]; then
-    # Jenkinsを再起動して実行
-    log "Restarting Jenkins to create seed job..."
-    systemctl restart jenkins
-    
-    # 起動を待機
-    log "Waiting for Jenkins to start..."
-    TIMEOUT=300
-    ELAPSED=0
-    while [ $ELAPSED -lt $TIMEOUT ]; do
-        if curl -sf http://localhost:8080/login > /dev/null 2>&1; then
-            log "Jenkins is running"
-            break
-        fi
-        sleep 5
-        ELAPSED=$((ELAPSED + 5))
-    done
-    
-    if [ $ELAPSED -ge $TIMEOUT ]; then
-        error_exit "Jenkins failed to start within timeout"
-    fi
-    
-    # セットアップの完了を待機
-    log "Waiting for seed job creation to complete..."
-    sleep 30
-    
-    # スクリプトを削除
-    rm -f "$GROOVY_DIR/create-seed-job.groovy"
-    rm -f /tmp/seed-job.xml
-else
-    log "Seed job creation script prepared. Jenkins restart skipped."
-    log "The seed job will be created on the next Jenkins restart."
-    log "Note: The Groovy script remains in place at: $GROOVY_DIR/create-seed-job.groovy"
-fi
+# Groovyスクリプトを配置済み - Jenkinsの再起動は外部から制御
+log "Seed job creation script prepared."
+log "The seed job will be created on the next Jenkins restart."
+log "Note: The Groovy script is placed at: $GROOVY_DIR/create-seed-job.groovy"
 
-# Groovyスクリプトの実行ログを確認
-if [ "$RESTART_JENKINS" = "true" ] && [ -f "/var/log/jenkins/jenkins.log" ]; then
-    log "Checking Groovy script execution logs..."
-    log "Recent Jenkins logs related to seed job:"
-    grep -i "seed" /var/log/jenkins/jenkins.log | tail -20 || true
-    grep -i "groovy" /var/log/jenkins/jenkins.log | tail -20 || true
-fi
-
-# 結果の確認
-log "Verifying seed job creation..."
-
-# ジョブの存在確認
-if [ -d "${JENKINS_HOME}/jobs/${SEED_JOB_NAME}" ]; then
-    log "✓ Seed job directory found: ${JENKINS_HOME}/jobs/${SEED_JOB_NAME}"
-    
-    # config.xmlの確認
-    if [ -f "${JENKINS_HOME}/jobs/${SEED_JOB_NAME}/config.xml" ]; then
-        log "✓ Seed job config.xml exists"
-        
-        # Git URLの確認
-        if grep -q "$JENKINS_JOBS_REPO" "${JENKINS_HOME}/jobs/${SEED_JOB_NAME}/config.xml"; then
-            log "✓ Git repository URL correctly configured: $JENKINS_JOBS_REPO"
-        else
-            log "✗ WARNING: Git repository URL not found in config.xml"
-        fi
-        
-        # ブランチの確認
-        if grep -q "$JENKINS_JOBS_BRANCH" "${JENKINS_HOME}/jobs/${SEED_JOB_NAME}/config.xml"; then
-            log "✓ Git branch correctly configured: $JENKINS_JOBS_BRANCH"
-        else
-            log "✗ WARNING: Git branch not found in config.xml"
-        fi
-        
-        # Jenkinsfileパスの確認
-        if grep -q "$JOB_DSL_SCRIPTS_PATH" "${JENKINS_HOME}/jobs/${SEED_JOB_NAME}/config.xml"; then
-            log "✓ Jenkinsfile path correctly configured: $JOB_DSL_SCRIPTS_PATH"
-        else
-            log "✗ WARNING: Jenkinsfile path not found in config.xml"
-        fi
-    else
-        log "✗ WARNING: Seed job config.xml not found"
-    fi
-else
-    if [ "$RESTART_JENKINS" = "true" ]; then
-        log "✗ WARNING: Seed job directory not found"
-    else
-        log "Seed job directory not found (expected - Jenkins not restarted)"
-    fi
-fi
-
-if [ "$RESTART_JENKINS" = "true" ]; then
-    log "===== Seed Job Setup Completed ====="
-else
-    log "===== Seed Job Setup Prepared ====="
-fi
+# ジョブの存在確認（再起動前のチェック）
 log ""
-if [ "$RESTART_JENKINS" = "true" ]; then
-    log "Next steps:"
-    log "1. Ensure your Git repository ($JENKINS_JOBS_REPO) contains:"
-    log "   - Jenkinsfile at: $JOB_DSL_SCRIPTS_PATH"
-    log "   - Job DSL scripts in the structure defined by your Jenkinsfile"
-    log "2. Run the '$SEED_JOB_NAME' job in Jenkins to create all other jobs"
-    log "3. The seed job will automatically manage job lifecycle (create/update/delete)"
+log "Checking if seed job already exists..."
+if [ -d "${JENKINS_HOME}/jobs/${SEED_JOB_NAME}" ]; then
+    log "✓ Seed job directory already exists: ${JENKINS_HOME}/jobs/${SEED_JOB_NAME}"
+    log "Note: The existing job will be updated on next restart"
 else
-    log "Seed job creation script is prepared and will execute on next Jenkins restart."
-    log "To apply now, restart Jenkins manually: systemctl restart jenkins"
+    log "Seed job will be created on next restart"
 fi
+
+log ""
+log "===== Seed Job Setup Prepared ====="
+log ""
+log "Seed job creation script is prepared and will execute on next Jenkins restart."
+log ""
+log "After restart, the following will happen:"
+log "1. Seed job '$SEED_JOB_NAME' will be created/updated"
+log "2. Job will be configured with:"
+log "   - Repository: $JENKINS_JOBS_REPO"
+log "   - Branch: $JENKINS_JOBS_BRANCH"
+log "   - Jenkinsfile path: $JOB_DSL_SCRIPTS_PATH"
+log "3. Run the seed job to create all other jobs"

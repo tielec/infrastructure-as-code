@@ -123,8 +123,8 @@ if [ "$RESTART_JENKINS" = "true" ]; then
             log "WARNING: Jenkins service is not active. Checking logs..."
             journalctl -u jenkins --no-pager -n 50
             
-            log "Attempting to restart Jenkins..."
-            systemctl restart jenkins
+            log "Jenkins service needs to be restarted externally"
+            # 再起動は外部から制御
         fi
         
         sleep 10
@@ -138,7 +138,7 @@ if [ "$RESTART_JENKINS" = "true" ]; then
 else
     log "Jenkins update completed. Service restart skipped."
     log "Jenkins is still running with the old version."
-    log "To apply the update, restart Jenkins manually: systemctl restart jenkins"
+    log "The update will be applied on the next Jenkins restart."
 fi
 
 # 更新完了情報を記録
@@ -166,9 +166,6 @@ log "Jenkins version update completed successfully"
 log "Previous version: $CURRENT_VERSION"
 log "New version: $NEW_VERSION"
 
-if [ "$RESTART_JENKINS" != "true" ]; then
-    log ""
-    log "IMPORTANT: Jenkins is still running with the old version."
-    log "The new version will be active after the next restart."
-    log "To restart now: systemctl restart jenkins"
-fi
+log ""
+log "IMPORTANT: Jenkins is still running with the old version."
+log "The new version will be active after the next restart."
