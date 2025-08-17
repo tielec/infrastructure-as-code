@@ -38,11 +38,13 @@
           - "Stack: {{ stack_name }}"
           - "Environment: {{ env }}"
           - ""
-          - "Note: Built AMIs are not automatically deleted."
-          - "To delete AMIs manually:"
-          - "  1. List AMIs with the appropriate tags"
-          - "  2. Deregister AMIs using AWS CLI or Console"
-          - "  3. Delete associated snapshots"
+          - "Pulumi has destroyed:"
+          - "  - Image Builder pipelines"
+          - "  - Image Builder recipes"
+          - "  - Image Builder components"
+          - "  - Distribution configurations"
+          - "  - Infrastructure configurations"
+          - "  - IAM roles and policies"
           - "=========================================="
     
     - name: Set destroy success flag
