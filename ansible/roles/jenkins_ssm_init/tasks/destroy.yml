@@ -47,11 +47,61 @@
         msg: "SSM parameter deletion failed"
       when: not force_destroy | default(false) | bool
 
+- name: Clean up remaining SSM parameters not managed by Pulumi
+  block:
+    - name: List all SSM parameters for the project
+      ansible.builtin.include_role:
+        name: aws_cli_helper
+        tasks_from: execute
+      vars:
+        aws_command: "aws ssm describe-parameters --parameter-filters Key=Name,Values=/{{ project_name }}/{{ env_name }}/ Option=BeginsWith --output json"
+        operation_name: "List remaining SSM parameters"
+        parse_output: true
+    
+    - name: Save parameter list
+      ansible.builtin.set_fact:
+        remaining_params: "{{ aws_cli_data.Parameters | default([]) }}"
+      when: aws_cli_success | default(false)
+    
+    - name: Display remaining parameters
+      ansible.builtin.debug:
+        msg: "Found {{ remaining_params | length }} remaining SSM parameter(s) to delete"
+      when: remaining_params is defined
+    
+    - name: Delete each remaining parameter
+      ansible.builtin.include_role:
+        name: aws_cli_helper
+        tasks_from: execute
+      vars:
+        aws_command: "aws ssm delete-parameter --name \"{{ item.Name }}\""
+        operation_name: "Delete parameter {{ item.Name }}"
+        parse_output: false
+      loop: "{{ remaining_params | default([]) }}"
+      loop_control:
+        label: "{{ item.Name }}"
+      when: 
+        - remaining_params is defined
+        - remaining_params | length > 0
+    
+    - name: Set complete cleanup flag
+      ansible.builtin.set_fact:
+        ssm_fully_cleaned: true
+  rescue:
+    - name: Cleanup failed
+      ansible.builtin.debug:
+        msg: "Some SSM parameters may not have been deleted"
+    
+    - name: Set cleanup failure flag
+      ansible.builtin.set_fact:
+        ssm_fully_cleaned: false
+  when: ssm_destroyed | default(false)
+
 - name: Display SSM destruction summary
   ansible.builtin.debug:
     msg: |
       ========================================
       SSM Parameter Store Deletion Complete
       Status: {{ 'SUCCESS' if ssm_destroyed else 'FAILED' }}
+      Full Cleanup: {{ 'SUCCESS' if ssm_fully_cleaned | default(false) else 'PARTIAL' }}
       ========================================
   when: ssm_destroyed is defined
