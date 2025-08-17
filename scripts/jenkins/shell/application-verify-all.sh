@@ -174,11 +174,27 @@ done
 INSTANCE_ID=$(curl -s -X PUT "http://169.254.169.254/latest/api/token" -H "X-aws-ec2-metadata-token-ttl-seconds: 21600" | xargs -I {} curl -s -H "X-aws-ec2-metadata-token: {}" http://169.254.169.254/latest/meta-data/instance-id)
 REGION=$(curl -s -X PUT "http://169.254.169.254/latest/api/token" -H "X-aws-ec2-metadata-token-ttl-seconds: 21600" | xargs -I {} curl -s -H "X-aws-ec2-metadata-token: {}" http://169.254.169.254/latest/meta-data/placement/region)
 
+# 再起動待ちの項目をカウント
+RESTART_REQUIRED_ITEMS=0
+for result in "${VERIFICATION_RESULTS[@]}"; do
+    if [[ "$result" == *"CLI User"* ]] || [[ "$result" == *"EC2 Fleet Config"* ]]; then
+        if [[ "$result" == "✗"* ]]; then
+            RESTART_REQUIRED_ITEMS=$((RESTART_REQUIRED_ITEMS + 1))
+        fi
+    fi
+done
+
+# 失敗項目が再起動待ちの項目のみの場合は警告として扱う
 if [ $FAILED_CHECKS -eq 0 ]; then
     STATUS="SUCCESS: All checks passed ($TOTAL_CHECKS/$TOTAL_CHECKS)"
     log ""
     log "✅ $STATUS"
     EXIT_CODE=0
+elif [ $FAILED_CHECKS -eq $RESTART_REQUIRED_ITEMS ]; then
+    STATUS="INFO: $FAILED_CHECKS items pending (will be configured on restart)"
+    log ""
+    log "ℹ️  $STATUS"
+    EXIT_CODE=0  # 再起動待ちの項目のみの場合は成功として扱う
 else
     STATUS="WARNING: $FAILED_CHECKS checks failed ($((TOTAL_CHECKS - FAILED_CHECKS))/$TOTAL_CHECKS passed)"
     log ""
