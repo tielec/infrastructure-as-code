@@ -23,7 +23,7 @@
     - name: Destroy agent AMI stack
       ansible.builtin.include_role:
         name: pulumi_helper
-        tasks_from: destroy_stack
+        tasks_from: destroy
       vars:
         pulumi_stack_name: "{{ stack_name }}"
         pulumi_project_path: "{{ pulumi_dir }}"
