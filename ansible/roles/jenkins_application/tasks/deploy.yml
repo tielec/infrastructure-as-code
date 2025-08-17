@@ -215,7 +215,7 @@
           ansible.builtin.include_tasks: execute_ssm_command.yml
           vars:
             ssm_document_name: "{{ ssm_documents.executeScript }}"
-            ssm_parameters: "ScriptPath=scripts/jenkins/shell/application-cleanup-groovy.sh,Parameters=plugins"
+            ssm_parameters: "ScriptPath=scripts/jenkins/shell/application-cleanup-groovy.sh,ScriptArgs=plugins"
             ssm_comment: "Cleaning up plugin installation scripts"
             instance_id: "{{ jenkins_instance_id }}"
     
@@ -276,7 +276,7 @@
           ansible.builtin.include_tasks: execute_ssm_command.yml
           vars:
             ssm_document_name: "{{ ssm_documents.executeScript }}"
-            ssm_parameters: "ScriptPath=scripts/jenkins/shell/application-cleanup-groovy.sh,Parameters=security"
+            ssm_parameters: "ScriptPath=scripts/jenkins/shell/application-cleanup-groovy.sh,ScriptArgs=security"
             ssm_comment: "Cleaning up security setup scripts"
             instance_id: "{{ jenkins_instance_id }}"
     
@@ -337,7 +337,7 @@
           ansible.builtin.include_tasks: execute_ssm_command.yml
           vars:
             ssm_document_name: "{{ ssm_documents.executeScript }}"
-            ssm_parameters: "ScriptPath=scripts/jenkins/shell/application-cleanup-groovy.sh,Parameters=seedjob"
+            ssm_parameters: "ScriptPath=scripts/jenkins/shell/application-cleanup-groovy.sh,ScriptArgs=seedjob"
             ssm_comment: "Cleaning up seed job scripts"
             instance_id: "{{ jenkins_instance_id }}"
 
@@ -348,7 +348,7 @@
       ansible.builtin.include_tasks: execute_ssm_command.yml
       vars:
         ssm_document_name: "{{ ssm_documents.executeScript }}"
-        ssm_parameters: "ScriptPath=scripts/jenkins/shell/application-cleanup-groovy.sh,Parameters=all"
+        ssm_parameters: "ScriptPath=scripts/jenkins/shell/application-cleanup-groovy.sh,ScriptArgs=all"
         ssm_comment: "Final cleanup of all temporary files"
         instance_id: "{{ jenkins_instance_id }}"
   when: final_cleanup | default(true) | bool
