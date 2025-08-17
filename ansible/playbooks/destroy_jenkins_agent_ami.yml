@@ -79,7 +79,6 @@
         name: jenkins_agent_ami
       vars:
         operation: "destroy"
-        skip_ami_deletion: "{{ skip_ami_deletion | default(false) }}"
   
   post_tasks:
     - name: Display completion message
