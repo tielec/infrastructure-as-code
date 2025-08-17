@@ -18,6 +18,10 @@ error_exit() {
 
 log "===== Jenkins Service Restart Script ====="
 
+# 現在のスクリプトのPIDを記録（誤ってkillしないように）
+SCRIPT_PID=$$
+log "Script PID: $SCRIPT_PID (will be protected from kill operations)"
+
 # Jenkinsを停止
 log "Stopping Jenkins service..."
 systemctl stop jenkins
@@ -26,9 +30,12 @@ systemctl stop jenkins
 log "Verifying Jenkins has stopped..."
 STOP_TIMEOUT=60
 STOP_ELAPSED=0
+SERVICE_STOPPED=false
+
 while [ $STOP_ELAPSED -lt $STOP_TIMEOUT ]; do
     if ! systemctl is-active jenkins > /dev/null 2>&1; then
         log "✓ Jenkins service stopped successfully"
+        SERVICE_STOPPED=true
         break
     fi
     sleep 5
@@ -36,27 +43,57 @@ while [ $STOP_ELAPSED -lt $STOP_TIMEOUT ]; do
     log "Waiting for Jenkins to stop... ($STOP_ELAPSED seconds)"
 done
 
-if [ $STOP_ELAPSED -ge $STOP_TIMEOUT ]; then
+# タイムアウトした場合のみ強制終了
+if [ "$SERVICE_STOPPED" = "false" ]; then
     log "WARNING: Jenkins did not stop cleanly within timeout"
     log "Force killing Jenkins processes..."
-    pkill -9 -f jenkins || true
+    
+    # systemdが管理しているJenkinsプロセスを特定して終了
+    JENKINS_PID=$(systemctl show -p MainPID jenkins 2>/dev/null | cut -d= -f2)
+    if [ -n "$JENKINS_PID" ] && [ "$JENKINS_PID" != "0" ]; then
+        log "  Killing main Jenkins process (PID: $JENKINS_PID)"
+        kill -9 "$JENKINS_PID" 2>/dev/null || true
+    fi
+    
+    # jenkins.warを実行しているその他のJavaプロセスを終了
+    JAVA_JENKINS_PIDS=$(pgrep -f "jenkins\.war" 2>/dev/null | grep -v "^$SCRIPT_PID$" || true)
+    if [ -n "$JAVA_JENKINS_PIDS" ]; then
+        log "  Killing Jenkins-related Java processes"
+        for pid in $JAVA_JENKINS_PIDS; do
+            if [ "$pid" != "$SCRIPT_PID" ]; then
+                log "    Killing PID: $pid"
+                kill -9 "$pid" 2>/dev/null || true
+            fi
+        done
+    fi
     sleep 5
-fi
-
-# プロセスが完全に終了したことを確認
-if pgrep -f jenkins > /dev/null; then
-    log "WARNING: Jenkins processes still running, force killing..."
-    pkill -9 -f jenkins || true
-    sleep 5
+    
+    # 強制終了後、再度プロセスが残っていないか確認
+    JENKINS_PID=$(systemctl show -p MainPID jenkins 2>/dev/null | cut -d= -f2)
+    if [ -n "$JENKINS_PID" ] && [ "$JENKINS_PID" != "0" ]; then
+        if kill -0 "$JENKINS_PID" 2>/dev/null; then
+            log "ERROR: Jenkins process still exists after force kill"
+            error_exit "Failed to stop Jenkins process"
+        fi
+    fi
 fi
 
 # ポートが解放されているか確認
 if netstat -tlpn 2>/dev/null | grep -q ':8080'; then
-    log "Waiting for port 8080 to be released..."
-    sleep 5
+    log "Port 8080 is still in use, waiting for release..."
+    PORT_WAIT=0
+    while [ $PORT_WAIT -lt 10 ] && netstat -tlpn 2>/dev/null | grep -q ':8080'; do
+        sleep 1
+        PORT_WAIT=$((PORT_WAIT + 1))
+    done
+    if netstat -tlpn 2>/dev/null | grep -q ':8080'; then
+        log "WARNING: Port 8080 still in use after waiting"
+    else
+        log "✓ Port 8080 released"
+    fi
 fi
 
-log "Jenkins stopped completely"
+log "✓ Jenkins stopped completely"
 
 # Jenkinsを起動
 log "Starting Jenkins service..."
