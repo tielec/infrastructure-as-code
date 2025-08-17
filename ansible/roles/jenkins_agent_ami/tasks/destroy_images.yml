@@ -120,7 +120,9 @@
     
     - name: Filter Image Builder images by name
       ansible.builtin.set_fact:
-        builder_images: "{{ builder_images_raw.imageList | default([]) | selectattr('name', 'search', project_name + '-agent') | list }}"
+        # imageVersionListとimageListの両方に対応
+        all_images: "{{ builder_images_raw.imageVersionList | default(builder_images_raw.imageList | default([])) }}"
+        builder_images: "{{ (builder_images_raw.imageVersionList | default(builder_images_raw.imageList | default([]))) | selectattr('name', 'search', project_name) | list }}"
       when: 
         - not (dry_run | default(false) | bool)
         - builder_images_raw is defined
@@ -128,8 +130,9 @@
     - name: Debug - All Image Builder images before filtering
       ansible.builtin.debug:
         msg:
-          - "Total images found: {{ builder_images_raw.imageList | default([]) | length }}"
-          - "Images: {{ builder_images_raw.imageList | default([]) | map(attribute='name') | list }}"
+          - "Total images found: {{ all_images | default([]) | length }}"
+          - "Images: {{ all_images | default([]) | map(attribute='name') | list }}"
+          - "Filtered images: {{ builder_images | default([]) | map(attribute='name') | list }}"
       when: 
         - not (dry_run | default(false) | bool)
         - builder_images_raw is defined
@@ -194,8 +197,9 @@
         
         - name: Filter for x86 and ARM images
           ansible.builtin.set_fact:
-            x86_image_arn: "{{ aws_cli_data.imageList | default([]) | selectattr('name', 'search', project_name + '-agent-x86') | map(attribute='arn') | first | default('') }}"
-            arm_image_arn: "{{ aws_cli_data.imageList | default([]) | selectattr('name', 'search', project_name + '-agent-arm') | map(attribute='arn') | first | default('') }}"
+            all_images_alt: "{{ aws_cli_data.imageVersionList | default(aws_cli_data.imageList | default([])) }}"
+            x86_image_arn: "{{ (aws_cli_data.imageVersionList | default(aws_cli_data.imageList | default([]))) | selectattr('name', 'search', 'x86') | map(attribute='arn') | first | default('') }}"
+            arm_image_arn: "{{ (aws_cli_data.imageVersionList | default(aws_cli_data.imageList | default([]))) | selectattr('name', 'search', 'arm') | map(attribute='arn') | first | default('') }}"
           when: aws_cli_success | default(false)
         
         - name: Debug - Found image ARNs
