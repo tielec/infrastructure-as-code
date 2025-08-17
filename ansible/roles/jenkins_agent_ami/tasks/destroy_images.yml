@@ -90,10 +90,10 @@
     - name: Find orphaned snapshots by CreatedBy tag
       amazon.aws.ec2_snapshot_info:
         region: "{{ aws_region_name }}"
-        owner_ids: self
         filters:
           "tag:CreatedBy": "EC2 Image Builder"
           "tag:Environment": "{{ env_name }}"
+          "owner-id": "{{ lookup('pipe', 'aws sts get-caller-identity --query Account --output text') }}"
       register: snapshot_list
       when: not (dry_run | default(false) | bool)
     
@@ -101,7 +101,8 @@
     - name: Find orphaned snapshots by description
       amazon.aws.ec2_snapshot_info:
         region: "{{ aws_region_name }}"
-        owner_ids: self
+        filters:
+          "owner-id": "{{ lookup('pipe', 'aws sts get-caller-identity --query Account --output text') }}"
       register: all_snapshots
       when: not (dry_run | default(false) | bool)
     
@@ -132,6 +133,11 @@
       ignore_errors: true  # スナップショットが使用中の場合はスキップ
     
     # Image Builderのイメージバージョンを削除（AMI削除後に実行）
+    - name: Debug - Starting Image Builder cleanup
+      ansible.builtin.debug:
+        msg: "Starting Image Builder image version cleanup for environment: {{ env_name }}"
+      when: not (dry_run | default(false) | bool)
+    
     - name: List all Image Builder images
       ansible.builtin.command:
         cmd: |
@@ -141,6 +147,7 @@
             --output json
       register: all_images_result
       changed_when: false
+      failed_when: false
       when: not (dry_run | default(false) | bool)
     
     - name: Parse and filter Image Builder images
