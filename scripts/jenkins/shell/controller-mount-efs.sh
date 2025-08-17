@@ -13,8 +13,10 @@ error_exit() {
     exit 1
 }
 
-# 環境変数はSSMドキュメントで既に設定されている
-# EFS_ID と AWS_REGION が渡される
+# 引数または環境変数から値を取得
+EFS_ID="${1:-$EFS_ID}"
+AWS_REGION="${2:-$AWS_REGION}"
+
 JENKINS_HOME_DIR="/mnt/efs/jenkins"
 MOUNT_POINT="/mnt/efs"
 

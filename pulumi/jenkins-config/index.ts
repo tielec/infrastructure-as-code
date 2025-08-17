@@ -35,6 +35,9 @@ const jenkinsRecoveryMode = pulumi.output(jenkinsRecoveryModeParam).apply(p => p
 const gitRepo = pulumi.output(gitRepoParam).apply(p => p.value);
 const gitBranch = pulumi.output(gitBranchParam).apply(p => p.value);
 
+// タイムスタンプを生成（ドキュメント名の一意性を保証）
+const timestamp = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+
 // Jenkins設定用SSMパラメータ（ステータス情報を保存）
 const jenkinsStatusParam = new aws.ssm.Parameter(`jenkins-status`, {
     name: `${ssmPrefix}/jenkins/status`,
@@ -62,11 +65,13 @@ const jenkinsConfiguredParam = new aws.ssm.Parameter(`jenkins-configured`, {
     },
 });
 
-// 汎用的なスクリプト実行用SSMドキュメント（jenkins-config専用）
+// 汎用的なスクリプト実行用SSMドキュメント（jenkins-applicationと同じ構造）
 const jenkinsConfigExecuteScriptDocument = new aws.ssm.Document(`jenkins-config-execute-script`, {
     name: `jenkins-infra-jenkins-config-execute-script-${environment}`,
     documentType: "Command",
     documentFormat: "JSON",
+    targetType: "/AWS::EC2::Instance",
+    versionName: `v${timestamp}`,
     content: JSON.stringify({
         schemaVersion: "2.2",
         description: "Execute script from Git repository on Jenkins instance",
@@ -75,31 +80,10 @@ const jenkinsConfigExecuteScriptDocument = new aws.ssm.Document(`jenkins-config-
                 type: "String",
                 description: "Path to script relative to repository root"
             },
-            // 個別の環境変数パラメータ
-            EfsId: {
+            ScriptArgs: {
                 type: "String",
                 default: "",
-                description: "EFS File System ID"
-            },
-            AwsRegion: {
-                type: "String",
-                default: "",
-                description: "AWS Region"
-            },
-            JenkinsVersion: {
-                type: "String",
-                default: "",
-                description: "Jenkins version"
-            },
-            JenkinsColor: {
-                type: "String",
-                default: "",
-                description: "Jenkins color (blue/green)"
-            },
-            JenkinsMode: {
-                type: "String",
-                default: "",
-                description: "Jenkins mode (normal/recovery)"
+                description: "Arguments to pass to the script"
             },
             WorkingDirectory: {
                 type: "String",
@@ -127,13 +111,6 @@ const jenkinsConfigExecuteScriptDocument = new aws.ssm.Document(`jenkins-config-
                         "export AWS_REGION=$(curl -s -H \"X-aws-ec2-metadata-token: $TOKEN\" http://169.254.169.254/latest/meta-data/placement/region)",
                         "export AWS_DEFAULT_REGION=$AWS_REGION",
                         "",
-                        "# 個別パラメータから環境変数を設定",
-                        "[ -n \"{{EfsId}}\" ] && export EFS_ID=\"{{EfsId}}\"",
-                        "[ -n \"{{AwsRegion}}\" ] && export AWS_REGION=\"{{AwsRegion}}\"",
-                        "[ -n \"{{JenkinsVersion}}\" ] && export JENKINS_VERSION=\"{{JenkinsVersion}}\"",
-                        "[ -n \"{{JenkinsColor}}\" ] && export JENKINS_COLOR=\"{{JenkinsColor}}\"",
-                        "[ -n \"{{JenkinsMode}}\" ] && export JENKINS_MODE=\"{{JenkinsMode}}\"",
-                        "",
                         "# 作業ディレクトリに移動",
                         "cd {{WorkingDirectory}}",
                         "",
@@ -144,15 +121,11 @@ const jenkinsConfigExecuteScriptDocument = new aws.ssm.Document(`jenkins-config-
                         "fi",
                         "",
                         "# スクリプトを実行",
-                        "echo \"Executing: {{ScriptPath}}\"",
-                        "echo \"Environment variables set:\"",
-                        "[ -n \"$EFS_ID\" ] && echo \"  EFS_ID=$EFS_ID\"",
-                        "[ -n \"$JENKINS_VERSION\" ] && echo \"  JENKINS_VERSION=$JENKINS_VERSION\"",
-                        "[ -n \"$JENKINS_COLOR\" ] && echo \"  JENKINS_COLOR=$JENKINS_COLOR\"",
-                        "[ -n \"$JENKINS_MODE\" ] && echo \"  JENKINS_MODE=$JENKINS_MODE\"",
+                        "echo \"Executing: {{ScriptPath}} {{ScriptArgs}}\"",
+                        "echo \"Environment: PROJECT_NAME=$PROJECT_NAME, ENVIRONMENT=$ENVIRONMENT, AWS_REGION=$AWS_REGION\"",
                         "",
                         "chmod +x \"{{ScriptPath}}\"",
-                        "bash \"{{ScriptPath}}\""
+                        "bash \"{{ScriptPath}}\" {{ScriptArgs}}"
                     ]
                 }
             }
@@ -161,6 +134,8 @@ const jenkinsConfigExecuteScriptDocument = new aws.ssm.Document(`jenkins-config-
     tags: {
         Environment: environment,
     },
+}, {
+    replaceOnChanges: ["content", "targetType"]
 });
 
 // Gitリポジトリ更新用SSMドキュメント（これは残す）

@@ -17,15 +17,8 @@ error_exit() {
 }
 
 # 引数または環境変数から設定を取得
-# ScriptArgsから渡される場合: JENKINS_COLOR=xxx
-for arg in "$@"; do
-    if [[ $arg == *"="* ]]; then
-        export "$arg"
-    fi
-done
-
-# 環境変数
-JENKINS_COLOR="${JENKINS_COLOR:-blue}"
+# 位置引数: $1=JENKINS_COLOR
+JENKINS_COLOR="${1:-${JENKINS_COLOR:-blue}}"
 JENKINS_HOME_DIR="/mnt/efs/jenkins"
 
 log "Starting Jenkins service"

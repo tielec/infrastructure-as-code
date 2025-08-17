@@ -17,16 +17,9 @@ error_exit() {
 }
 
 # 引数または環境変数から設定を取得
-# ScriptArgsから渡される場合: JENKINS_MODE=xxx JENKINS_COLOR=yyy
-for arg in "$@"; do
-    if [[ $arg == *"="* ]]; then
-        export "$arg"
-    fi
-done
-
-# 環境変数
-JENKINS_MODE="${JENKINS_MODE:-normal}"
-JENKINS_COLOR="${JENKINS_COLOR:-blue}"
+# 位置引数: $1=JENKINS_MODE, $2=JENKINS_COLOR
+JENKINS_MODE="${1:-${JENKINS_MODE:-normal}}"
+JENKINS_COLOR="${2:-${JENKINS_COLOR:-blue}}"
 JENKINS_HOME_DIR="/mnt/efs/jenkins"
 
 log "Jenkinsを設定: ${JENKINS_MODE}モード, ${JENKINS_COLOR}環境"

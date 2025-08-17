@@ -200,7 +200,7 @@
       ansible.builtin.include_tasks: execute_ssm_command.yml
       vars:
         ssm_document_name: "{{ ssm_documents.executeScript }}"
-        ssm_parameters: "ScriptPath=scripts/jenkins/shell/controller-mount-efs.sh,EfsId={{ efs_file_system_id }},AwsRegion={{ aws_region_name }}"
+        ssm_parameters: "ScriptPath=scripts/jenkins/shell/controller-mount-efs.sh,ScriptArgs={{ efs_file_system_id }} {{ aws_region_name }}"
         ssm_comment: "Mounting EFS"
         instance_id: "{{ jenkins_instance_id }}"
     
@@ -209,7 +209,7 @@
       ansible.builtin.include_tasks: execute_ssm_command.yml
       vars:
         ssm_document_name: "{{ ssm_documents.executeScript }}"
-        ssm_parameters: "ScriptPath=scripts/jenkins/shell/controller-install.sh,JenkinsVersion={{ jenkins_version }},JenkinsColor={{ jenkins_color }}"
+        ssm_parameters: "ScriptPath=scripts/jenkins/shell/controller-install.sh,ScriptArgs={{ jenkins_version }} {{ jenkins_color }}"
         ssm_comment: "Installing Jenkins"
         instance_id: "{{ jenkins_instance_id }}"
     
@@ -218,7 +218,7 @@
       ansible.builtin.include_tasks: execute_ssm_command.yml
       vars:
         ssm_document_name: "{{ ssm_documents.executeScript }}"
-        ssm_parameters: "ScriptPath=scripts/jenkins/shell/controller-configure.sh,JenkinsMode={{ recovery_mode | ternary('recovery', 'normal') }},JenkinsColor={{ jenkins_color }}"
+        ssm_parameters: "ScriptPath=scripts/jenkins/shell/controller-configure.sh,ScriptArgs={{ recovery_mode | ternary('recovery', 'normal') }} {{ jenkins_color }}"
         ssm_comment: "Configuring Jenkins"
         instance_id: "{{ jenkins_instance_id }}"
     
@@ -227,7 +227,7 @@
       ansible.builtin.include_tasks: execute_ssm_command.yml
       vars:
         ssm_document_name: "{{ ssm_documents.executeScript }}"
-        ssm_parameters: "ScriptPath=scripts/jenkins/shell/controller-startup.sh,JenkinsColor={{ jenkins_color }}"
+        ssm_parameters: "ScriptPath=scripts/jenkins/shell/controller-startup.sh,ScriptArgs={{ jenkins_color }}"
         ssm_comment: "Starting Jenkins"
         instance_id: "{{ jenkins_instance_id }}"
 
