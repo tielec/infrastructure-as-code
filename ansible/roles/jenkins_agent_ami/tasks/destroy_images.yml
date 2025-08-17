@@ -106,16 +106,31 @@
         parse_output: true
       when: not (dry_run | default(false) | bool)
     
-    - name: Parse Image Builder images
+    - name: Debug - AWS CLI raw result
+      ansible.builtin.debug:
+        msg:
+          - "AWS CLI Success: {{ aws_cli_success | default('undefined') }}"
+          - "AWS CLI Data: {{ aws_cli_data | default('no data') }}"
+      when: not (dry_run | default(false) | bool)
+    
+    - name: Save Image Builder list result
       ansible.builtin.set_fact:
         builder_images_raw: "{{ aws_cli_data | default({}) }}"
-      when: 
-        - not (dry_run | default(false) | bool)
-        - aws_cli_success | default(false)
+        builder_list_success: "{{ aws_cli_success | default(false) }}"
+      when: not (dry_run | default(false) | bool)
     
     - name: Filter Image Builder images by name
       ansible.builtin.set_fact:
         builder_images: "{{ builder_images_raw.imageList | default([]) | selectattr('name', 'search', project_name + '-agent') | list }}"
+      when: 
+        - not (dry_run | default(false) | bool)
+        - builder_images_raw is defined
+    
+    - name: Debug - All Image Builder images before filtering
+      ansible.builtin.debug:
+        msg:
+          - "Total images found: {{ builder_images_raw.imageList | default([]) | length }}"
+          - "Images: {{ builder_images_raw.imageList | default([]) | map(attribute='name') | list }}"
       when: 
         - not (dry_run | default(false) | bool)
         - builder_images_raw is defined
@@ -168,6 +183,102 @@
         msg: "Found {{ all_build_version_arns | default([]) | length }} image build version(s) to delete"
       when: 
         - not (dry_run | default(false) | bool)
+    
+    # もしイメージが見つからない場合、パイプラインARNから直接イメージを探す
+    - name: Alternative - Try to find images using pipeline names
+      block:
+        - name: List all images and filter for x86
+          ansible.builtin.include_role:
+            name: aws_cli_helper
+            tasks_from: execute
+          vars:
+            aws_command: |
+              aws imagebuilder list-images 
+              --owner Self 
+              --output json
+            operation_name: "List all images for filtering"
+            parse_output: true
+        
+        - name: Filter for x86 and ARM images
+          ansible.builtin.set_fact:
+            x86_image_arn: "{{ aws_cli_data.imageList | default([]) | selectattr('name', 'search', project_name + '-agent-x86') | map(attribute='arn') | first | default('') }}"
+            arm_image_arn: "{{ aws_cli_data.imageList | default([]) | selectattr('name', 'search', project_name + '-agent-arm') | map(attribute='arn') | first | default('') }}"
+          when: aws_cli_success | default(false)
+        
+        - name: Debug - Found image ARNs
+          ansible.builtin.debug:
+            msg:
+              - "x86 image ARN: {{ x86_image_arn | default('not found') }}"
+              - "ARM image ARN: {{ arm_image_arn | default('not found') }}"
+        
+        - name: Get x86 image build versions if found
+          ansible.builtin.include_role:
+            name: aws_cli_helper
+            tasks_from: execute
+          vars:
+            aws_command: |
+              aws imagebuilder list-image-build-versions 
+              --image-version-arn "{{ x86_image_arn }}" 
+              --output json
+            operation_name: "List x86 image build versions"
+            parse_output: true
+          when: 
+            - x86_image_arn is defined
+            - x86_image_arn | length > 0
+        
+        - name: Save x86 build versions
+          ansible.builtin.set_fact:
+            x86_build_versions: "{{ aws_cli_data.imageSummaryList | default([]) }}"
+          when: 
+            - aws_cli_success | default(false)
+            - x86_image_arn | length > 0
+        
+        - name: Get ARM image build versions if found
+          ansible.builtin.include_role:
+            name: aws_cli_helper
+            tasks_from: execute
+          vars:
+            aws_command: |
+              aws imagebuilder list-image-build-versions 
+              --image-version-arn "{{ arm_image_arn }}" 
+              --output json
+            operation_name: "List ARM image build versions"
+            parse_output: true
+          when: 
+            - arm_image_arn is defined
+            - arm_image_arn | length > 0
+        
+        - name: Save ARM build versions
+          ansible.builtin.set_fact:
+            arm_build_versions: "{{ aws_cli_data.imageSummaryList | default([]) }}"
+          when: 
+            - aws_cli_success | default(false)
+            - arm_image_arn | length > 0
+        
+        - name: Combine alternative build version ARNs
+          ansible.builtin.set_fact:
+            alternative_build_arns: >-
+              {%- set arns = [] -%}
+              {%- for version in (x86_build_versions | default([])) + (arm_build_versions | default([])) -%}
+                {%- set _ = arns.append(version.arn) -%}
+              {%- endfor -%}
+              {{ arns }}
+        
+        - name: Debug - Alternative method results
+          ansible.builtin.debug:
+            msg: "Found {{ alternative_build_arns | default([]) | length }} build version(s) via alternative method"
+        
+        - name: Use alternative ARNs if main method failed
+          ansible.builtin.set_fact:
+            all_build_version_arns: "{{ alternative_build_arns }}"
+          when: all_build_version_arns | default([]) | length == 0
+      rescue:
+        - name: Alternative method failed
+          ansible.builtin.debug:
+            msg: "Alternative image search method failed"
+      when: 
+        - not (dry_run | default(false) | bool)
+        - all_build_version_arns | default([]) | length == 0
     
     # Image Builderのイメージバージョンを削除
     - name: Delete Image Builder image versions
