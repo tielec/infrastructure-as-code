@@ -163,7 +163,7 @@
       when: update_repo | bool
       block:
         - name: Execute Git repository update
-          ansible.builtin.include_tasks: tasks/execute_ssm_command.yml
+          ansible.builtin.include_tasks: execute_ssm_command.yml
           vars:
             ssm_document_name: "{{ config_ssm_documents.updateRepo }}"
             ssm_parameters: "ProjectName={{ project_name }},Environment={{ env_name }},GitBranch={{ git_branch }},GitRepo={{ git_repo }}"
@@ -175,7 +175,7 @@
       when: jenkins_version != 'latest' or update_jenkins | default(false) | bool
       block:
         - name: Execute Jenkins version update
-          ansible.builtin.include_tasks: tasks/execute_ssm_command.yml
+          ansible.builtin.include_tasks: execute_ssm_command.yml
           vars:
             ssm_document_name: "{{ ssm_documents.executeScript }}"
             ssm_parameters: "ScriptPath=scripts/jenkins/shell/application-update-version.sh"
@@ -187,7 +187,7 @@
       when: install_plugins | bool
       block:
         - name: Execute plugin installation
-          ansible.builtin.include_tasks: tasks/execute_ssm_command.yml
+          ansible.builtin.include_tasks: execute_ssm_command.yml
           vars:
             ssm_document_name: "{{ ssm_documents.executeScript }}"
             ssm_parameters: "ScriptPath=scripts/jenkins/shell/application-install-plugins.sh"
@@ -196,7 +196,7 @@
         
         # プラグインインストール後にJenkinsを再起動
         - name: Restart Jenkins after plugin installation
-          ansible.builtin.include_tasks: tasks/execute_ssm_command.yml
+          ansible.builtin.include_tasks: execute_ssm_command.yml
           vars:
             ssm_document_name: "{{ ssm_documents.restart }}"
             ssm_parameters: ""  # 空文字列に設定
@@ -208,7 +208,7 @@
       when: setup_cli_user | default(true) | bool
       block:
         - name: Create CLI user and setup credentials
-          ansible.builtin.include_tasks: tasks/execute_ssm_command.yml
+          ansible.builtin.include_tasks: execute_ssm_command.yml
           vars:
             ssm_document_name: "{{ ssm_documents.executeScript }}"
             ssm_parameters: "ScriptPath=scripts/jenkins/shell/application-setup-cli-user-and-credentials.sh"
@@ -220,7 +220,7 @@
       when: setup_ssh_credentials | default(true) | bool
       block:
         - name: Execute SSH credentials setup
-          ansible.builtin.include_tasks: tasks/execute_ssm_command.yml
+          ansible.builtin.include_tasks: execute_ssm_command.yml
           vars:
             ssm_document_name: "{{ ssm_documents.executeScript }}"
             ssm_parameters: "ScriptPath=scripts/jenkins/shell/application-setup-ssh-credentials.sh"
@@ -232,7 +232,7 @@
       when: configure_with_casc | default(true) | bool
       block:
         - name: Execute JCasC configuration
-          ansible.builtin.include_tasks: tasks/execute_ssm_command.yml
+          ansible.builtin.include_tasks: execute_ssm_command.yml
           vars:
             ssm_document_name: "{{ ssm_documents.executeScript }}"
             ssm_parameters: "ScriptPath=scripts/jenkins/shell/application-configure-with-casc.sh"
@@ -244,7 +244,7 @@
       when: create_seed_job | default(true) | bool
       block:
         - name: Execute seed job creation
-          ansible.builtin.include_tasks: tasks/execute_ssm_command.yml
+          ansible.builtin.include_tasks: execute_ssm_command.yml
           vars:
             ssm_document_name: "{{ ssm_documents.executeScript }}"
             ssm_parameters: "ScriptPath=scripts/jenkins/shell/application-create-seed-job.sh"
@@ -256,7 +256,7 @@
       when: restart_jenkins | bool
       block:
         - name: Execute Jenkins restart
-          ansible.builtin.include_tasks: tasks/execute_ssm_command.yml
+          ansible.builtin.include_tasks: execute_ssm_command.yml
           vars:
             ssm_document_name: "{{ ssm_documents.restart }}"
             ssm_parameters: ""  # 空文字列に設定
