@@ -20,8 +20,8 @@
   register: aws_env_script_permission
   no_log: true
 
-# Pulumiデプロイ
-- name: Deploy Application Configuration with Pulumi
+# Pulumiデプロイ（アプリケーションステータスパラメータのみを作成）
+- name: Deploy Application Status Parameters with Pulumi
   block:
     # Pulumiヘルパータスクを呼び出す
     - name: Initialize application stack
@@ -65,29 +65,21 @@
           - Project Name: {{ ssm_project_name }}
           - Jenkins Version: {{ ssm_jenkins_version }}
     
-    # Pulumiプレビュー
-    - name: Preview application deployment
-      ansible.builtin.include_role:
-        name: pulumi_helper
-        tasks_from: preview
-      vars:
-        pulumi_project_path: "{{ pulumi_path }}/jenkins-application"
-    
-    # Pulumiデプロイ
-    - name: Deploy application stack
+    # Pulumiデプロイ（ステータスパラメータのみ）
+    - name: Deploy application status parameters
       ansible.builtin.include_role:
         name: pulumi_helper
         tasks_from: deploy
       vars:
         pulumi_project_path: "{{ pulumi_path }}/jenkins-application"
     
-    # SSMドキュメント名の取得（SSMパラメータから）
+    # SSMドキュメント名の取得（jenkins-configで作成されたものを使用）
     - name: Get execute script document name from SSM Parameter Store
       ansible.builtin.include_role:
         name: ssm_parameter_store
         tasks_from: get_parameter
       vars:
-        parameter_name: "/jenkins-infra/{{ env_name }}/application/execute-script-document-name"
+        parameter_name: "/jenkins-infra/{{ env_name }}/config/execute-script-document-name"
         store_as: "execute_script_document_name"
     
     - name: Set SSM document names
@@ -113,7 +105,7 @@
     - name: Display SSM document names
       ansible.builtin.debug:
         msg: |
-          SSM Documents available:
+          SSM Documents available (from jenkins-config):
           - Execute Script: {{ ssm_documents.executeScript }}
           - Update Repo: {{ config_ssm_documents.updateRepo }}
   

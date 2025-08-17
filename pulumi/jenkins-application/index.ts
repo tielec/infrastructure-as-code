@@ -1,8 +1,8 @@
 /**
  * pulumi/jenkins-application/index.ts
  * 
- * Jenkinsアプリケーション設定用の汎用的なSSMドキュメント
- * Gitリポジトリ内のスクリプトを実行するシンプルな基盤
+ * Jenkinsアプリケーション設定用のステータスパラメータを管理
+ * SSMドキュメントはjenkins-configで作成されたものを使用
  */
 import * as pulumi from "@pulumi/pulumi";
 import * as aws from "@pulumi/aws";
@@ -19,94 +19,8 @@ const projectNameParam = aws.ssm.getParameter({
 // 設定値を変数に設定
 const projectName = pulumi.output(projectNameParam).apply(p => p.value);
 
-// タイムスタンプを生成（ドキュメント名の一意性を保証）
-const timestamp = new Date().toISOString().slice(0, 10).replace(/-/g, '');
-
-// 汎用的なスクリプト実行用SSMドキュメント
-const jenkinsExecuteScriptDocument = new aws.ssm.Document(`jenkins-execute-script`, {
-    name: `jenkins-infra-jenkins-execute-script-${environment}`,
-    documentType: "Command",
-    documentFormat: "JSON",
-    targetType: "/AWS::EC2::Instance",
-    versionName: `v${timestamp}`,
-    content: JSON.stringify({
-        schemaVersion: "2.2",
-        description: "Execute script from Git repository on Jenkins instance",
-        parameters: {
-            ScriptPath: {
-                type: "String",
-                description: "Path to script relative to repository root"
-            },
-            ScriptArgs: {
-                type: "String",
-                default: "",
-                description: "Arguments to pass to the script"
-            },
-            WorkingDirectory: {
-                type: "String",
-                default: "/root/infrastructure-as-code",
-                description: "Working directory for script execution"
-            }
-        },
-        mainSteps: [
-            {
-                action: "aws:runShellScript",
-                name: "executeScript",
-                inputs: {
-                    runCommand: [
-                        "#!/bin/bash",
-                        "set -e",
-                        "",
-                        "# 環境変数の設定",
-                        "export PROJECT_NAME='jenkins-infra'",
-                        "export ENVIRONMENT='" + environment + "'",
-                        "export JENKINS_HOME='/mnt/efs/jenkins'",
-                        "export REPO_PATH='/root/infrastructure-as-code'",
-                        "",
-                        "# リージョンの取得",
-                        "TOKEN=$(curl -s -X PUT \"http://169.254.169.254/latest/api/token\" -H \"X-aws-ec2-metadata-token-ttl-seconds: 21600\")",
-                        "export AWS_REGION=$(curl -s -H \"X-aws-ec2-metadata-token: $TOKEN\" http://169.254.169.254/latest/meta-data/placement/region)",
-                        "export AWS_DEFAULT_REGION=$AWS_REGION",
-                        "",
-                        "# 作業ディレクトリに移動",
-                        "cd {{WorkingDirectory}}",
-                        "",
-                        "# スクリプトの存在確認",
-                        "if [ ! -f \"{{ScriptPath}}\" ]; then",
-                        "  echo \"ERROR: Script not found: {{ScriptPath}}\"",
-                        "  exit 1",
-                        "fi",
-                        "",
-                        "# スクリプトを実行",
-                        "echo \"Executing: {{ScriptPath}} {{ScriptArgs}}\"",
-                        "echo \"Environment: PROJECT_NAME=$PROJECT_NAME, ENVIRONMENT=$ENVIRONMENT, AWS_REGION=$AWS_REGION\"",
-                        "",
-                        "chmod +x \"{{ScriptPath}}\"",
-                        "bash \"{{ScriptPath}}\" {{ScriptArgs}}"
-                    ]
-                }
-            }
-        ]
-    }),
-    tags: {
-        Environment: environment,
-    },
-}, {
-    replaceOnChanges: ["content", "targetType"]
-});
-
-// SSMドキュメント名をSSMパラメータに保存
-const executeScriptDocumentNameParam = new aws.ssm.Parameter(`execute-script-document-name`, {
-    name: `${ssmPrefix}/application/execute-script-document-name`,
-    type: "String",
-    value: jenkinsExecuteScriptDocument.name,
-    overwrite: true,
-    tags: {
-        Environment: environment,
-        ManagedBy: "pulumi",
-        Component: "application",
-    },
-});
+// SSMドキュメントはjenkins-configで作成されたものを使用するため、
+// ここでは作成しない
 
 // アプリケーションステータス用SSMパラメータ
 const applicationStatusParam = new aws.ssm.Parameter(`application-status`, {
@@ -123,7 +37,4 @@ const applicationStatusParam = new aws.ssm.Parameter(`application-status`, {
 });
 
 // エクスポート
-export const ssmDocuments = {
-    executeScript: jenkinsExecuteScriptDocument.name,
-};
 export const applicationStatusParameterName = applicationStatusParam.name;
