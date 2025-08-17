@@ -1,5 +1,9 @@
-# deploy_jenkins_security.yml
+---
 # Jenkinsインフラのセキュリティグループをデプロイ
+
+#
+# 使用方法 (ansibleディレクトリから実行):
+#   ansible-playbook playbooks/jenkins/deploy/deploy_jenkins_security.yml -e "env=dev"
 
 - name: Deploy Jenkins Security Infrastructure
   hosts: localhost

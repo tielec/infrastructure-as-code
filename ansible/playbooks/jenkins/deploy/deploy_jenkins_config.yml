@@ -1,6 +1,10 @@
 ---
 # configure_jenkins_controller.yml
 # Jenkinsコントローラーの設定タスクを実行
+#
+# 使用方法 (ansibleディレクトリから実行):
+#   ansible-playbook playbooks/jenkins/deploy/deploy_jenkins_config.yml -e "env=dev"
+
 
 - name: Configure Jenkins Controller
   hosts: localhost

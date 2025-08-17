@@ -2,8 +2,8 @@
 # remove_jenkins_agent.yml
 # Jenkinsエージェント（Spot Fleet）を削除
 #
-# 使用方法:
-#   ansible-playbook remove_jenkins_agent.yml -e "env=dev confirm=true"
+# 使用方法 (ansibleディレクトリから実行):
+#   ansible-playbook playbooks/jenkins/remove/remove_jenkins_agent.yml -e "env=dev confirm=true"
 #
 # 注意:
 #   - confirm=true を指定しないと削除は実行されません
@@ -123,6 +123,6 @@
           - "  - EC2 > Launch Templates"
           - ""
           - "To force termination of stuck resources:"
-          - "  ansible-playbook remove_jenkins_agent.yml -e 'env={{ env_name }} confirm=true force=true'"
+          - "  ansible-playbook playbooks/jenkins/remove/remove_jenkins_agent.yml -e 'env={{ env_name }} confirm=true force=true'"
           - "=========================================="
       when: not (agent_destroyed | default(false))

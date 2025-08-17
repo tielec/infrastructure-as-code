@@ -1,6 +1,10 @@
 ---
 # deploy_jenkins_controller.yml
 # Jenkinsコントローラーインフラをデプロイ
+#
+# 使用方法 (ansibleディレクトリから実行):
+#   ansible-playbook playbooks/jenkins/deploy/deploy_jenkins_controller.yml -e "env=dev"
+
 
 - name: Deploy Jenkins Controller Infrastructure
   hosts: localhost

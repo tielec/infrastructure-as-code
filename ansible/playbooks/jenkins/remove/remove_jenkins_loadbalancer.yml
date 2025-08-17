@@ -2,8 +2,8 @@
 # remove_jenkins_loadbalancer.yml
 # Jenkins Application Load Balancerを削除
 #
-# 使用方法:
-#   ansible-playbook remove_jenkins_loadbalancer.yml -e "env=dev confirm=true"
+# 使用方法 (ansibleディレクトリから実行):
+#   ansible-playbook playbooks/jenkins/remove/remove_jenkins_loadbalancer.yml -e "env=dev confirm=true"
 #
 # 注意:
 #   - confirm=true を指定しないと削除は実行されません

@@ -3,8 +3,8 @@
 # このプレイブックは、Image Builderで作成された最新のAMI IDを
 # SSMパラメータストアに登録します
 #
-# 使用方法:
-#   ansible-playbook update_jenkins_ami_ssm.yml -e "env=dev"
+# 使用方法 (ansibleディレクトリから実行):
+#   ansible-playbook playbooks/jenkins/misc/update_jenkins_ami_ssm.yml -e "env=dev"
 #
 # このプレイブックは以下の場合に使用します：
 #   - Image Builderのビルドが完了した後

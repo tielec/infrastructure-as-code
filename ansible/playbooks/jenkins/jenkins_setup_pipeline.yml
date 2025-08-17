@@ -2,6 +2,10 @@
 # jenkins_setup_pipeline.yml
 # Jenkins環境構築の全体フローを管理するプレイブック
 # 各deploy_jenkins_*.ymlプレイブックを順番に実行
+#
+# 使用方法 (ansibleディレクトリから実行):
+#   ansible-playbook playbooks/jenkins/jenkins_setup_pipeline.yml -e "env=dev"
+#   ansible-playbook playbooks/jenkins/jenkins_setup_pipeline.yml -e "env=dev run_network=true run_security=false"
 
 - name: Jenkins Infrastructure Setup Pipeline
   hosts: localhost

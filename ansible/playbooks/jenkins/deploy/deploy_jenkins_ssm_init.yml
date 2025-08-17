@@ -1,6 +1,10 @@
 ---
 # deploy_jenkins_ssm_init.yml
 # SSMパラメータストアの初期化を実行
+#
+# 使用方法 (ansibleディレクトリから実行):
+#   ansible-playbook playbooks/jenkins/deploy/deploy_jenkins_ssm_init.yml -e "env=dev"
+
 
 - name: Initialize SSM Parameter Store for Jenkins Infrastructure
   hosts: localhost

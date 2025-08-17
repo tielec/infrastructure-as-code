@@ -2,9 +2,9 @@
 # Jenkins Agent AMI Builder デプロイプレイブック
 # カスタムAMIを作成するEC2 Image Builderインフラをデプロイします
 #
-# 使用方法:
-#   ansible-playbook deploy_jenkins_agent_ami.yml -e "env=dev"                    # デフォルト：パイプライン自動実行
-#   ansible-playbook deploy_jenkins_agent_ami.yml -e "env=dev trigger_ami_build=false"  # パイプライン実行を抑制
+# 使用方法 (ansibleディレクトリから実行):
+#   ansible-playbook playbooks/jenkins/deploy/deploy_jenkins_agent_ami.yml -e "env=dev"                    # デフォルト：パイプライン自動実行
+#   ansible-playbook playbooks/jenkins/deploy/deploy_jenkins_agent_ami.yml -e "env=dev trigger_ami_build=false"  # パイプライン実行を抑制
 
 - name: Deploy Jenkins Agent AMI Builder
   hosts: localhost

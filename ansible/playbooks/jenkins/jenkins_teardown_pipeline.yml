@@ -2,6 +2,10 @@
 # jenkins_teardown_pipeline.yml
 # Jenkins環境削除の全体フローを管理するプレイブック
 # 各remove_jenkins_*.ymlプレイブックを逆順で実行
+#
+# 使用方法 (ansibleディレクトリから実行):
+#   ansible-playbook playbooks/jenkins/jenkins_teardown_pipeline.yml -e "env=dev"                # 確認のみ
+#   ansible-playbook playbooks/jenkins/jenkins_teardown_pipeline.yml -e "env=dev confirm=true"   # 実際に削除
 
 - name: Jenkins Infrastructure Teardown Pipeline
   hosts: localhost

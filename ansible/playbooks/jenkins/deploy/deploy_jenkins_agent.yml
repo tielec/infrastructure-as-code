@@ -1,6 +1,9 @@
 ---
 # deploy_jenkins_agent.yml
 # Jenkinsインフラのエージェントリソース（SpotFleet、LaunchTemplate等）をデプロイ
+#
+# 使用方法 (ansibleディレクトリから実行):
+#   ansible-playbook playbooks/jenkins/deploy/deploy_jenkins_agent.yml -e "env=dev"
 
 - name: Deploy Jenkins Agent Infrastructure
   hosts: localhost
