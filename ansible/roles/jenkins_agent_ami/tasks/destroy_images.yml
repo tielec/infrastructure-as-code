@@ -98,10 +98,7 @@
         name: aws_cli_helper
         tasks_from: execute
       vars:
-        aws_command: |
-          aws imagebuilder list-images 
-          --owner Self 
-          --output json
+        aws_command: "aws imagebuilder list-images --owner Self --output json"
         operation_name: "List Image Builder images"
         parse_output: true
       when: not (dry_run | default(false) | bool)
@@ -110,6 +107,8 @@
       ansible.builtin.debug:
         msg:
           - "AWS CLI Success: {{ aws_cli_success | default('undefined') }}"
+          - "AWS CLI stdout: {{ aws_cli_stdout | default('no stdout') }}"
+          - "AWS CLI stderr: {{ aws_cli_stderr | default('no stderr') }}"
           - "AWS CLI Data: {{ aws_cli_data | default('no data') }}"
       when: not (dry_run | default(false) | bool)
     
@@ -147,10 +146,7 @@
         name: aws_cli_helper
         tasks_from: execute
       vars:
-        aws_command: |
-          aws imagebuilder list-image-build-versions 
-          --image-version-arn "{{ item.arn }}" 
-          --output json
+        aws_command: "aws imagebuilder list-image-build-versions --image-version-arn \"{{ item.arn }}\" --output json"
         operation_name: "List image build versions for {{ item.name }}"
         parse_output: true
       loop: "{{ builder_images | default([]) }}"
@@ -192,10 +188,7 @@
             name: aws_cli_helper
             tasks_from: execute
           vars:
-            aws_command: |
-              aws imagebuilder list-images 
-              --owner Self 
-              --output json
+            aws_command: "aws imagebuilder list-images --owner Self --output json"
             operation_name: "List all images for filtering"
             parse_output: true
         
@@ -216,10 +209,7 @@
             name: aws_cli_helper
             tasks_from: execute
           vars:
-            aws_command: |
-              aws imagebuilder list-image-build-versions 
-              --image-version-arn "{{ x86_image_arn }}" 
-              --output json
+            aws_command: "aws imagebuilder list-image-build-versions --image-version-arn \"{{ x86_image_arn }}\" --output json"
             operation_name: "List x86 image build versions"
             parse_output: true
           when: 
@@ -238,10 +228,7 @@
             name: aws_cli_helper
             tasks_from: execute
           vars:
-            aws_command: |
-              aws imagebuilder list-image-build-versions 
-              --image-version-arn "{{ arm_image_arn }}" 
-              --output json
+            aws_command: "aws imagebuilder list-image-build-versions --image-version-arn \"{{ arm_image_arn }}\" --output json"
             operation_name: "List ARM image build versions"
             parse_output: true
           when: 
@@ -288,9 +275,7 @@
             name: aws_cli_helper
             tasks_from: execute
           vars:
-            aws_command: |
-              aws imagebuilder delete-image 
-              --image-build-version-arn "{{ item }}"
+            aws_command: "aws imagebuilder delete-image --image-build-version-arn \"{{ item }}\""
             operation_name: "Delete image version {{ item.split('/')[-1] }}"
             parse_output: false
           loop: "{{ all_build_version_arns | default([]) }}"
