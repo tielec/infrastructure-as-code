@@ -35,9 +35,9 @@ const jenkinsRecoveryMode = pulumi.output(jenkinsRecoveryModeParam).apply(p => p
 const gitRepo = pulumi.output(gitRepoParam).apply(p => p.value);
 const gitBranch = pulumi.output(gitBranchParam).apply(p => p.value);
 
-// バージョン名を動的に生成（タイムスタンプベース）
-const timestamp = new Date().toISOString().replace(/[:-]/g, '').replace(/\..+/, '');
-const versionName = `v${timestamp}`;
+// バージョン名を動的に生成（数値インクリメント）
+// SSMドキュメントのバージョンは数値である必要がある（1, 2, 3...）
+// Pulumiは自動的にバージョンをインクリメントするので、versionNameを指定しない
 
 // Jenkins設定用SSMパラメータ（ステータス情報を保存）
 const jenkinsStatusParam = new aws.ssm.Parameter(`jenkins-status`, {
@@ -72,7 +72,7 @@ const jenkinsConfigExecuteScriptDocument = new aws.ssm.Document(`jenkins-config-
     documentType: "Command",
     documentFormat: "JSON",
     targetType: "/AWS::EC2::Instance",
-    versionName: versionName,
+    // versionNameを省略 - AWSが自動的にバージョン番号を管理
     content: JSON.stringify({
         schemaVersion: "2.2",
         description: "Execute script from Git repository on Jenkins instance",
