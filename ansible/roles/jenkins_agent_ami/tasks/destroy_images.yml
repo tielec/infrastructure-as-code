@@ -150,15 +150,29 @@
       failed_when: false
       when: not (dry_run | default(false) | bool)
     
+    - name: Debug - Image Builder list result
+      ansible.builtin.debug:
+        msg: "Image Builder list command result: {{ all_images_result.stdout | default('No output') }}"
+      when: 
+        - not (dry_run | default(false) | bool)
+        - all_images_result is defined
+    
     - name: Parse and filter Image Builder images
       ansible.builtin.set_fact:
-        builder_images: "{{ all_images_result.stdout | from_json | json_query(query) }}"
+        builder_images: "{{ all_images_result.stdout | default('{}') | from_json | json_query(query) | default([]) }}"
       vars:
         query: "imageList[?contains(name, '{{ project_name }}-agent')]"
       when: 
         - not (dry_run | default(false) | bool)
         - all_images_result is defined
         - all_images_result.rc == 0
+    
+    - name: Debug - Found Image Builder images
+      ansible.builtin.debug:
+        msg: "Found {{ builder_images | default([]) | length }} Image Builder images matching pattern '{{ project_name }}-agent'"
+      when: 
+        - not (dry_run | default(false) | bool)
+        - builder_images is defined
     
     - name: Get Image Builder image build versions for each image
       ansible.builtin.command:
