@@ -433,6 +433,50 @@ else
     echo -e "${YELLOW}Dockerはインストールされていません${NC}"
 fi
 
+# systemdサービスの設定（EC2起動時のPublic IP自動更新）
+echo -e "\n${BLUE}=== Public IP自動更新サービスの設定 ===${NC}"
+echo -e "${YELLOW}EC2起動時にPublic IPをSSMパラメータに自動更新するサービスを設定しています...${NC}"
+
+# スクリプトファイルの存在確認
+if [ -f "$REPO_ROOT/bootstrap/scripts/update-public-ip.sh" ]; then
+    # スクリプトを/opt/bootstrapディレクトリにコピー
+    sudo mkdir -p /opt/bootstrap
+    sudo cp "$REPO_ROOT/bootstrap/scripts/update-public-ip.sh" /opt/bootstrap/
+    sudo chmod +x /opt/bootstrap/update-public-ip.sh
+    echo -e "${GREEN}✓ update-public-ip.shをコピーしました${NC}"
+else
+    echo -e "${RED}エラー: update-public-ip.shが見つかりません${NC}"
+    echo -e "${YELLOW}  期待される場所: $REPO_ROOT/bootstrap/scripts/update-public-ip.sh${NC}"
+fi
+
+# systemdサービスファイルの存在確認とコピー
+if [ -f "$REPO_ROOT/bootstrap/scripts/update-public-ip.service" ]; then
+    sudo cp "$REPO_ROOT/bootstrap/scripts/update-public-ip.service" /etc/systemd/system/
+    echo -e "${GREEN}✓ update-public-ip.serviceをコピーしました${NC}"
+    
+    # サービスを有効化
+    sudo systemctl daemon-reload
+    sudo systemctl enable update-public-ip.service
+    
+    # 現在のPublic IPを即座に更新
+    if sudo systemctl start update-public-ip.service; then
+        echo -e "${GREEN}✓ Public IP自動更新サービスが正常に設定されました${NC}"
+        echo -e "${GREEN}  サービス名: update-public-ip.service${NC}"
+        echo -e "${GREEN}  スクリプト: /opt/bootstrap/update-public-ip.sh${NC}"
+        echo -e "${GREEN}  ログファイル: /var/log/update-public-ip.log${NC}"
+        
+        # 現在のPublic IPを表示
+        CURRENT_IP=$(aws ssm get-parameter --name /bootstrap/workterminal/public-ip --query 'Parameter.Value' --output text 2>/dev/null || echo "取得失敗")
+        echo -e "${GREEN}  現在のPublic IP: $CURRENT_IP${NC}"
+    else
+        echo -e "${YELLOW}⚠ Public IP更新サービスの初回実行に失敗しました${NC}"
+        echo -e "${YELLOW}  手動で確認してください: sudo systemctl status update-public-ip.service${NC}"
+    fi
+else
+    echo -e "${RED}エラー: update-public-ip.serviceが見つかりません${NC}"
+    echo -e "${YELLOW}  期待される場所: $REPO_ROOT/bootstrap/scripts/update-public-ip.service${NC}"
+fi
+
 # セットアップ完了メッセージ
 echo -e "\n${GREEN}=============================================${NC}"
 echo -e "${GREEN}✅ ブートストラップ環境のセットアップが完了しました！${NC}"
