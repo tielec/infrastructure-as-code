@@ -403,6 +403,7 @@ Resources:
                 Action:
                   - ec2:StopInstances
                   - ec2:DescribeInstances
+                  - ec2:DescribeInstanceStatus
                 Resource: '*'
       Tags:
         - Key: Name
