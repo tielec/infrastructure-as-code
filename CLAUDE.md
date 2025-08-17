@@ -11,27 +11,27 @@
 ### Jenkins完全デプロイメント
 ```bash
 cd ansible
-ansible-playbook playbooks/jenkins_setup_pipeline.yml -e "env=dev"
+ansible-playbook playbooks/jenkins/jenkins_setup_pipeline.yml -e "env=dev"
 ```
 
 ### 個別コンポーネントデプロイメント
 ```bash
 cd ansible
-ansible-playbook playbooks/deploy_jenkins_network.yml -e "env=dev"
-ansible-playbook playbooks/deploy_jenkins_security.yml -e "env=dev"
-ansible-playbook playbooks/deploy_jenkins_nat.yml -e "env=dev"
-ansible-playbook playbooks/deploy_jenkins_storage.yml -e "env=dev"
-ansible-playbook playbooks/deploy_jenkins_loadbalancer.yml -e "env=dev"
-ansible-playbook playbooks/deploy_jenkins_controller.yml -e "env=dev"
-ansible-playbook playbooks/deploy_jenkins_agent.yml -e "env=dev"
-ansible-playbook playbooks/deploy_jenkins_config.yml -e "env=dev"
-ansible-playbook playbooks/deploy_jenkins_application.yml -e "env=dev"
+ansible-playbook playbooks/jenkins/deploy/deploy_jenkins_network.yml -e "env=dev"
+ansible-playbook playbooks/jenkins/deploy/deploy_jenkins_security.yml -e "env=dev"
+ansible-playbook playbooks/jenkins/deploy/deploy_jenkins_nat.yml -e "env=dev"
+ansible-playbook playbooks/jenkins/deploy/deploy_jenkins_storage.yml -e "env=dev"
+ansible-playbook playbooks/jenkins/deploy/deploy_jenkins_loadbalancer.yml -e "env=dev"
+ansible-playbook playbooks/jenkins/deploy/deploy_jenkins_controller.yml -e "env=dev"
+ansible-playbook playbooks/jenkins/deploy/deploy_jenkins_agent.yml -e "env=dev"
+ansible-playbook playbooks/jenkins/deploy/deploy_jenkins_config.yml -e "env=dev"
+ansible-playbook playbooks/jenkins/deploy/deploy_jenkins_application.yml -e "env=dev"
 ```
 
 ### インフラストラクチャ削除
 ```bash
 cd ansible
-ansible-playbook playbooks/jenkins_teardown_pipeline.yml -e "env=dev confirm=true"
+ansible-playbook playbooks/jenkins/jenkins_teardown_pipeline.yml -e "env=dev confirm=true"
 ```
 
 ### Pulumiスタックコマンド (各pulumi/{component}ディレクトリから実行)

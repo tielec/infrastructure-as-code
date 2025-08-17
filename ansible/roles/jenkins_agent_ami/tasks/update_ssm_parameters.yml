@@ -17,7 +17,7 @@
           stdout: "{{ arm_pipeline_trigger.aws_cli_data.imageBuildVersionArn | default('null') }}"
     
     - name: Wait for Image Builder pipelines to complete
-      when: wait_for_ami_build | default(false) | bool
+      when: wait_for_ami_build | default(true) | bool
       block:
         - name: Monitor x86_64 build status
           when: x86_build_version_arn is defined and x86_build_version_arn.stdout != 'null'

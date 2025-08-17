@@ -23,7 +23,7 @@
 
     # SSMパラメータストアの初期化（最初に実行）
     - name: Deploy SSM Parameter Store
-      ansible.builtin.import_playbook: deploy_jenkins_ssm_init.yml
+      ansible.builtin.import_playbook: deploy/deploy_jenkins_ssm_init.yml
       vars:
         env: "{{ env_name }}"
       when: run_ssm_init | default(true) | bool
@@ -33,7 +33,7 @@
     
     # ネットワークインフラのデプロイ
     - name: Deploy Network Infrastructure
-      ansible.builtin.import_playbook: deploy_jenkins_network.yml
+      ansible.builtin.import_playbook: deploy/deploy_jenkins_network.yml
       vars:
         env: "{{ env_name }}"
       when: run_network | default(true) | bool
@@ -42,7 +42,7 @@
     
     # セキュリティグループのデプロイ
     - name: Deploy Security Groups
-      ansible.builtin.import_playbook: deploy_jenkins_security.yml
+      ansible.builtin.import_playbook: deploy/deploy_jenkins_security.yml
       vars:
         env: "{{ env_name }}"
       when: run_security | default(true) | bool
@@ -51,7 +51,7 @@
     
     # NATインフラのデプロイ
     - name: Deploy NAT Infrastructure
-      ansible.builtin.import_playbook: deploy_jenkins_nat.yml
+      ansible.builtin.import_playbook: deploy/deploy_jenkins_nat.yml
       vars:
         env: "{{ env_name }}"
       when: run_nat | default(true) | bool
@@ -60,7 +60,7 @@
     
     # ストレージ（EFS）のデプロイ
     - name: Deploy Storage Infrastructure (EFS)
-      ansible.builtin.import_playbook: deploy_jenkins_storage.yml
+      ansible.builtin.import_playbook: deploy/deploy_jenkins_storage.yml
       vars:
         env: "{{ env_name }}"
       when: run_storage | default(true) | bool
@@ -69,7 +69,7 @@
     
     # ロードバランサーのデプロイ
     - name: Deploy LoadBalancer Infrastructure
-      ansible.builtin.import_playbook: deploy_jenkins_loadbalancer.yml
+      ansible.builtin.import_playbook: deploy/deploy_jenkins_loadbalancer.yml
       vars:
         env: "{{ env_name }}"
       when: run_loadbalancer | default(true) | bool
@@ -78,7 +78,7 @@
     
     # Jenkinsコントローラーのデプロイ
     - name: Deploy Jenkins Controller
-      ansible.builtin.import_playbook: deploy_jenkins_controller.yml
+      ansible.builtin.import_playbook: deploy/deploy_jenkins_controller.yml
       vars:
         env: "{{ env_name }}"
       when: run_controller | default(true) | bool
@@ -87,7 +87,7 @@
     
     # Jenkinsコントローラーの設定
     - name: Configure Jenkins Controller
-      ansible.builtin.import_playbook: deploy_jenkins_config.yml
+      ansible.builtin.import_playbook: deploy/deploy_jenkins_config.yml
       vars:
         env: "{{ env_name }}"
       when: run_config | default(true) | bool
@@ -96,7 +96,7 @@
     
     # Jenkins Agent AMI Builderのデプロイ（オプション）
     - name: Deploy Jenkins Agent AMI Builder
-      ansible.builtin.import_playbook: deploy_jenkins_agent_ami.yml
+      ansible.builtin.import_playbook: deploy/deploy_jenkins_agent_ami.yml
       vars:
         env: "{{ env_name }}"
       when: run_agent_ami | default(false) | bool
@@ -105,7 +105,7 @@
     
     # Jenkinsエージェントのデプロイ
     - name: Deploy Jenkins Agent
-      ansible.builtin.import_playbook: deploy_jenkins_agent.yml
+      ansible.builtin.import_playbook: deploy/deploy_jenkins_agent.yml
       vars:
         env: "{{ env_name }}"
       when: run_agent | default(true) | bool
@@ -114,7 +114,7 @@
     
     # Jenkinsアプリケーション設定のデプロイ
     - name: Deploy Jenkins Application Configuration
-      ansible.builtin.import_playbook: deploy_jenkins_application.yml
+      ansible.builtin.import_playbook: deploy/deploy_jenkins_application.yml
       vars:
         env: "{{ env_name }}"
       when: run_application | default(true) | bool
