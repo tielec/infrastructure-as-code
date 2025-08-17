@@ -1,0 +1,108 @@
+---
+# destroy_jenkins_application.yml
+# Jenkinsアプリケーション設定を削除
+#
+# 使用方法:
+#   ansible-playbook destroy_jenkins_application.yml -e "env=dev confirm=true"
+#
+# 注意:
+#   - confirm=true を指定しないと削除は実行されません
+#   - SSMパラメータとアプリケーション設定のみ削除されます
+
+- name: Destroy Jenkins Application Configuration
+  hosts: localhost
+  connection: local
+  gather_facts: yes
+  vars:
+    # コマンドラインから環境名を受け取る
+    env_name: "{{ env | default('dev') }}"
+    # 削除確認フラグ
+    confirm_destroy: "{{ confirm | default(false) }}"
+  
+  pre_tasks:
+    # all.yml から変数を読み込む
+    - name: Include group_vars/all.yml
+      ansible.builtin.include_vars:
+        file: "{{ playbook_dir }}/../inventory/group_vars/all.yml"
+    
+    # 必要な変数を設定
+    - name: Set required variables from all.yml
+      ansible.builtin.set_fact:
+        project_name: "{{ infra.project_name }}"
+        aws_region_name: "{{ infra.aws.default_region }}"
+        application_project_name: "{{ infra.pulumi.application_project | default('jenkins-application') }}"
+    
+    - name: Check confirmation flag
+      ansible.builtin.fail:
+        msg: |
+          ========================================
+          Destruction requires confirmation.
+          Please run with: -e "confirm=true"
+          ========================================
+      when: not confirm_destroy | bool
+    
+    - name: Display destruction warning
+      ansible.builtin.debug:
+        msg:
+          - "=========================================="
+          - "WARNING: Jenkins Application Configuration Destruction"
+          - "=========================================="
+          - "Environment: {{ env_name }}"
+          - "Project: {{ project_name }}"
+          - "Region: {{ aws_region_name }}"
+          - ""
+          - "This will destroy:"
+          - "  - SSM Parameters for application settings"
+          - "  - Jenkins configuration data"
+          - "  - Application-level secrets"
+          - ""
+          - "Note: Jenkins instance data will NOT be affected"
+          - "=========================================="
+    
+    - name: Countdown before destruction
+      ansible.builtin.pause:
+        seconds: 10
+        prompt: "Starting destruction in 10 seconds... Press Ctrl+C to cancel"
+  
+  tasks:
+    - name: Setup AWS environment
+      ansible.builtin.include_role:
+        name: aws_setup
+    
+    - name: Destroy Jenkins Application Configuration
+      ansible.builtin.include_role:
+        name: jenkins_application
+      vars:
+        operation: "destroy"
+  
+  post_tasks:
+    - name: Display completion message
+      ansible.builtin.debug:
+        msg:
+          - "=========================================="
+          - "Destruction Complete"
+          - "=========================================="
+          - "Jenkins Application Configuration has been destroyed."
+          - ""
+          - "Removed resources:"
+          - "  - Application SSM parameters"
+          - "  - Configuration secrets"
+          - ""
+          - "Jenkins instance remains operational with default settings."
+          - "=========================================="
+      when: application_destroyed | default(false)
+    
+    - name: Display failure message
+      ansible.builtin.debug:
+        msg:
+          - "=========================================="
+          - "Destruction Failed or Incomplete"
+          - "=========================================="
+          - "Some resources may not have been deleted."
+          - "Please check AWS Console for remaining resources."
+          - ""
+          - "Common cleanup targets:"
+          - "  - Systems Manager > Parameter Store"
+          - "  - Secrets Manager (if used)"
+          - "=========================================="
+      when: not (application_destroyed | default(false))

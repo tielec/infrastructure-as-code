@@ -39,57 +39,112 @@
     
     # Pulumi stack init
     - name: Initialize Pulumi stack for Jenkins Agent AMI
-      ansible.builtin.shell: |
-        source {{ scripts_dir }}/aws/aws-env.sh
-        cd {{ pulumi_dir }}
-        pulumi stack select {{ env }} --create
-      register: stack_init_result
-      failed_when: stack_init_result.rc != 0
-      changed_when: "'Created stack' in stack_init_result.stdout"
+      ansible.builtin.include_role:
+        name: pulumi_helper
+        tasks_from: init_stack
+      vars:
+        pulumi_project_path: "{{ pulumi_dir }}"
+        stack_name: "{{ env }}"
     
     # Pulumi configuration
-    - name: Set Pulumi configuration for Jenkins Agent AMI
-      ansible.builtin.shell: |
-        source {{ scripts_dir }}/aws/aws-env.sh
-        cd {{ pulumi_dir }}
-        pulumi config set aws:region {{ aws_region }}
-        pulumi config set {{ stack_name }}:projectName {{ project_name }}
-        pulumi config set {{ stack_name }}:networkStackName {{ network_project_name }}
-        pulumi config set {{ stack_name }}:securityStackName {{ security_project_name }}
-      register: pulumi_config_result
-      changed_when: pulumi_config_result.rc == 0
+    - name: Configure agent AMI stack - AWS region
+      ansible.builtin.include_role:
+        name: pulumi_helper
+        tasks_from: set_config
+      vars:
+        pulumi_project_path: "{{ pulumi_dir }}"
+        config_key: "aws:region"
+        config_value: "{{ aws_region }}"
+    
+    # SSMパラメータの確認
+    - name: Get project name from SSM Parameter Store
+      ansible.builtin.include_role:
+        name: ssm_parameter_store
+        tasks_from: get_parameter
+      vars:
+        parameter_name: "/jenkins-infra/{{ env }}/config/project-name"
+        store_as: "ssm_project_name"
+    
+    - name: Get VPC ID from SSM Parameter Store
+      ansible.builtin.include_role:
+        name: ssm_parameter_store
+        tasks_from: get_parameter
+      vars:
+        parameter_name: "/jenkins-infra/{{ env }}/network/vpc-id"
+        store_as: "ssm_vpc_id"
+    
+    - name: Get Jenkins agent security group ID from SSM Parameter Store
+      ansible.builtin.include_role:
+        name: ssm_parameter_store
+        tasks_from: get_parameter
+      vars:
+        parameter_name: "/jenkins-infra/{{ env }}/security/jenkins-agent-sg-id"
+        store_as: "ssm_agent_sg_id"
+    
+    - name: Display configuration from SSM
+      ansible.builtin.debug:
+        msg: |
+          Using configuration from SSM:
+          - Project Name: {{ ssm_project_name }}
+          - VPC ID: {{ ssm_vpc_id }}
+          - Agent Security Group ID: {{ ssm_agent_sg_id }}
     
     # Pulumi preview
     - name: Preview agent AMI deployment
-      ansible.builtin.shell: |
-        source {{ scripts_dir }}/aws/aws-env.sh
-        cd {{ pulumi_dir }}
-        pulumi preview
-      register: preview_result
-      changed_when: false
+      ansible.builtin.include_role:
+        name: pulumi_helper
+        tasks_from: preview
+      vars:
+        pulumi_project_path: "{{ pulumi_dir }}"
     
     # Pulumi deploy
     - name: Deploy Jenkins Agent AMI Builder infrastructure
-      ansible.builtin.shell: |
-        source {{ scripts_dir }}/aws/aws-env.sh
-        cd {{ pulumi_dir }}
-        pulumi up -y
-      register: deploy_result
-      changed_when: deploy_result.rc == 0
+      ansible.builtin.include_role:
+        name: pulumi_helper
+        tasks_from: deploy
+      vars:
+        pulumi_project_path: "{{ pulumi_dir }}"
     
-    # Get outputs
-    - name: Get agent AMI stack outputs
-      ansible.builtin.shell: |
-        source {{ scripts_dir }}/aws/aws-env.sh
-        cd {{ pulumi_dir }}
-        pulumi stack output --json
-      register: stack_outputs
-      changed_when: false
+    # Get outputs from SSM
+    - name: Get pipeline x86 ARN from SSM Parameter Store
+      ansible.builtin.include_role:
+        name: ssm_parameter_store
+        tasks_from: get_parameter
+      vars:
+        parameter_name: "/jenkins-infra/{{ env }}/agent-ami/pipeline-x86-arn"
+        store_as: "pipeline_x86_arn"
     
-    - name: Parse stack outputs
+    - name: Get pipeline ARM ARN from SSM Parameter Store
+      ansible.builtin.include_role:
+        name: ssm_parameter_store
+        tasks_from: get_parameter
+      vars:
+        parameter_name: "/jenkins-infra/{{ env }}/agent-ami/pipeline-arm-arn"
+        store_as: "pipeline_arm_arn"
+    
+    - name: Get component version from SSM Parameter Store
+      ansible.builtin.include_role:
+        name: ssm_parameter_store
+        tasks_from: get_parameter
+      vars:
+        parameter_name: "/jenkins-infra/{{ env }}/agent-ami/component-version"
+        store_as: "component_version"
+    
+    - name: Get recipe version from SSM Parameter Store
+      ansible.builtin.include_role:
+        name: ssm_parameter_store
+        tasks_from: get_parameter
+      vars:
+        parameter_name: "/jenkins-infra/{{ env }}/agent-ami/recipe-version"
+        store_as: "recipe_version"
+    
+    - name: Set agent AMI outputs
       ansible.builtin.set_fact:
-        agent_ami_outputs: "{{ stack_outputs.stdout | from_json }}"
-      when: stack_outputs.stdout is defined
+        agent_ami_outputs:
+          imagePipelineX86Arn: "{{ pipeline_x86_arn }}"
+          imagePipelineArmArn: "{{ pipeline_arm_arn }}"
+          currentComponentVersion: "{{ component_version }}"
+          currentRecipeVersion: "{{ recipe_version }}"
     
     - name: Display Jenkins Agent AMI Builder information
       ansible.builtin.debug:
@@ -116,11 +171,11 @@
           - ""
           - "After AMIs are built, update SSM parameters:"
           - "  aws ssm put-parameter \\"
-          - "    --name /{{ project_name }}/{{ env }}/jenkins/agent/custom-ami-x86 \\"
+          - "    --name /jenkins-infra/{{ env }}/agent-ami/custom-ami-x86 \\"
           - "    --value ami-xxxxxxxxx --overwrite"
           - ""
           - "  aws ssm put-parameter \\"
-          - "    --name /{{ project_name }}/{{ env }}/jenkins/agent/custom-ami-arm \\"
+          - "    --name /jenkins-infra/{{ env }}/agent-ami/custom-ami-arm \\"
           - "    --value ami-xxxxxxxxx --overwrite"
           - "=========================================="
       when: agent_ami_outputs is defined

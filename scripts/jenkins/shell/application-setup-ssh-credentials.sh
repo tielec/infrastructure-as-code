@@ -45,7 +45,7 @@ log "  RESTART_JENKINS: $RESTART_JENKINS"
 log "Checking Parameter Store access..."
 
 # EC2 Agent用秘密鍵の存在確認
-AGENT_KEY_PATH="/${PROJECT_NAME}/${ENVIRONMENT}/jenkins/agent/private-key"
+AGENT_KEY_PATH="/jenkins-infra/${ENVIRONMENT}/agent/private-key"
 if aws ssm get-parameter --name "$AGENT_KEY_PATH" --region "$AWS_REGION" --query "Parameter.Name" --output text >/dev/null 2>&1; then
     log "✓ EC2 Agent private key found at: $AGENT_KEY_PATH"
 else
@@ -93,82 +93,18 @@ if [ -n "$ADDITIONAL_SSH_CREDENTIALS" ]; then
     log "Additional SSH credential mappings provided"
 fi
 
-if [ "$RESTART_JENKINS" = "true" ]; then
-    # Jenkinsを再起動して実行
-    log "Restarting Jenkins to setup SSH credentials..."
-    systemctl restart jenkins
-    
-    # 起動を待機
-    log "Waiting for Jenkins to start..."
-    TIMEOUT=300
-    ELAPSED=0
-    while [ $ELAPSED -lt $TIMEOUT ]; do
-        if curl -sf http://localhost:8080/login > /dev/null 2>&1; then
-            log "Jenkins is running"
-            break
-        fi
-        sleep 5
-        ELAPSED=$((ELAPSED + 5))
-    done
-    
-    if [ $ELAPSED -ge $TIMEOUT ]; then
-        error_exit "Jenkins failed to start within timeout"
-    fi
-    
-    # セットアップの完了を待機
-    log "Waiting for SSH credentials setup to complete..."
-    sleep 30
-    
-    # スクリプトを削除
-    rm -f "$GROOVY_DIR/setup-ssh-credentials.groovy"
-    
-    # 結果の確認
-    log "Verifying SSH credentials setup..."
-    
-    # クレデンシャルの存在を確認
-    if [ -f "${JENKINS_HOME}/credentials.xml" ]; then
-        if grep -q "ec2-agent-keypair" "${JENKINS_HOME}/credentials.xml"; then
-            log "✓ EC2 Agent SSH credential found"
-        else
-            log "✗ WARNING: EC2 Agent SSH credential not found in credentials.xml"
-        fi
-        
-        if grep -q "ec2-bootstrap-workterminal-keypair" "${JENKINS_HOME}/credentials.xml"; then
-            log "✓ Bootstrap Workterminal SSH credential found"
-        else
-            log "✗ WARNING: Bootstrap Workterminal SSH credential not found in credentials.xml"
-        fi
-    else
-        log "✗ WARNING: credentials.xml not found"
-    fi
-    
-    # セットアップログの最終行を確認
-    if [ -f "/var/log/jenkins/jenkins.log" ]; then
-        log "Recent Jenkins logs related to SSH credentials:"
-        grep -i "SSH Credentials Setup" /var/log/jenkins/jenkins.log | tail -20 || true
-    fi
-else
-    log "SSH credentials setup script prepared. Jenkins restart skipped."
-    log "The SSH credentials will be configured on the next Jenkins restart."
-    log "Note: The Groovy script remains in place at: $GROOVY_DIR/setup-ssh-credentials.groovy"
-    
-    log ""
-    log "Expected SSH credentials to be created on next restart:"
-    log "  - EC2 Agent keypair (ID: ec2-agent-keypair)"
-    log "  - Bootstrap Workterminal keypair (ID: ec2-bootstrap-workterminal-keypair)"
-    
-    if [ -n "$ADDITIONAL_SSH_CREDENTIALS" ]; then
-        log "  - Additional credentials as specified in ADDITIONAL_SSH_CREDENTIALS"
-    fi
+log "SSH credentials setup script prepared."
+log "The SSH credentials will be configured on the next Jenkins restart."
+log "Note: The Groovy script is placed at: $GROOVY_DIR/setup-ssh-credentials.groovy"
+
+log ""
+log "Expected SSH credentials to be created on next restart:"
+log "  - EC2 Agent keypair (ID: ec2-agent-keypair)"
+log "  - Bootstrap Workterminal keypair (ID: ec2-bootstrap-workterminal-keypair)"
+
+if [ -n "$ADDITIONAL_SSH_CREDENTIALS" ]; then
+    log "  - Additional credentials as specified in ADDITIONAL_SSH_CREDENTIALS"
 fi
 
-if [ "$RESTART_JENKINS" = "true" ]; then
-    log "SSH credentials setup completed"
-else
-    log "SSH credentials setup prepared"
-fi
-
-if [ "$RESTART_JENKINS" != "true" ]; then
-    log ""
-    log "To apply the configuration now, restart Jenkins manually: systemctl restart jenkins"
-fi
+log ""
+log "SSH credentials setup prepared successfully"

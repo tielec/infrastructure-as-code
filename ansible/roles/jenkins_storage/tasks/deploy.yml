@@ -36,52 +36,47 @@
         pulumi_project_path: "{{ pulumi_path }}/jenkins-storage"
         stack_name: "{{ env_name }}"
     
-    - name: Configure storage stack
-      ansible.builtin.shell: |
-        {{ scripts_dir }}/aws/aws-env.sh
-        cd {{ pulumi_path }}/jenkins-storage
-        pulumi config set aws:region {{ aws_region_name }}
-        pulumi config set {{ storage_project_name }}:projectName {{ project_name }}
-        pulumi config set {{ storage_project_name }}:networkStackName {{ network_project_name }}
-        pulumi config set {{ storage_project_name }}:securityStackName {{ security_project_name }}
-      register: pulumi_config_result
-      changed_when: pulumi_config_result.rc == 0
-    
-    # 依存関係の確認: NetworkとSecurityがデプロイ済みであることを確認
-    - name: Check network stack outputs
+    - name: Configure storage stack - AWS region
       ansible.builtin.include_role:
         name: pulumi_helper
-        tasks_from: get_outputs
+        tasks_from: set_config
       vars:
-        pulumi_project_path: "{{ pulumi_path }}/jenkins-network"
-        stack_name: "{{ env_name }}"
-        output_name: "vpcId"
-        mock_output: "mock-vpc-id-for-check-mode"
-    
-    - name: Set network VPC ID
-      ansible.builtin.set_fact:
-        network_vpc_id: "{{ stack_output_result.stdout | trim }}"
-    
-    - name: Check security stack outputs
+        pulumi_project_path: "{{ pulumi_path }}/jenkins-storage"
+        config_key: "aws:region"
+        config_value: "{{ aws_region_name }}"
+
+    # SSMパラメータの確認
+    - name: Get project name from SSM Parameter Store
       ansible.builtin.include_role:
-        name: pulumi_helper
-        tasks_from: get_outputs
+        name: ssm_parameter_store
+        tasks_from: get_parameter
       vars:
-        pulumi_project_path: "{{ pulumi_path }}/jenkins-security"
-        stack_name: "{{ env_name }}"
-        output_name: "efsSecurityGroupId"
-        mock_output: "mock-efs-sg-id"
+        parameter_name: "/jenkins-infra/{{ env_name }}/config/project-name"
+        store_as: "ssm_project_name"
     
-    - name: Set EFS security group ID
-      ansible.builtin.set_fact:
-        efs_sg_id: "{{ stack_output_result.stdout | trim }}"
+    - name: Get VPC ID from SSM Parameter Store
+      ansible.builtin.include_role:
+        name: ssm_parameter_store
+        tasks_from: get_parameter
+      vars:
+        parameter_name: "/jenkins-infra/{{ env_name }}/network/vpc-id"
+        store_as: "network_vpc_id"
     
-    - name: Display dependency validation
+    - name: Get EFS security group ID from SSM Parameter Store
+      ansible.builtin.include_role:
+        name: ssm_parameter_store
+        tasks_from: get_parameter
+      vars:
+        parameter_name: "/jenkins-infra/{{ env_name }}/security/efs-sg-id"
+        store_as: "efs_security_group_id"
+    
+    - name: Display configuration from SSM
       ansible.builtin.debug:
         msg: |
-          Dependency validation:
-          VPC ID from network stack: {{ network_vpc_id }}
-          EFS Security Group ID from security stack: {{ efs_sg_id }}
+          Using configuration from SSM:
+          - Project Name: {{ ssm_project_name }}
+          - VPC ID: {{ network_vpc_id }}
+          - EFS Security Group ID: {{ efs_security_group_id }}
     
     # Pulumiプレビュー
     - name: Preview storage deployment
@@ -106,34 +101,31 @@
       when: not ansible_check_mode
     
     # EFSファイルシステムIDの取得
-    - name: Get EFS file system ID
+    - name: Get EFS file system ID from SSM Parameter Store
       ansible.builtin.include_role:
-        name: pulumi_helper
-        tasks_from: get_outputs
+        name: ssm_parameter_store
+        tasks_from: get_parameter
       vars:
-        pulumi_project_path: "{{ pulumi_path }}/jenkins-storage"
-        stack_name: "{{ env_name }}"
-        output_name: "efsFileSystemId"
-        mock_output: "mock-efs-id"
-    
-    - name: Set EFS file system ID
-      ansible.builtin.set_fact:
-        efs_file_system_id: "{{ stack_output_result.stdout | trim }}"
+        parameter_name: "/jenkins-infra/{{ env_name }}/storage/efs-file-system-id"
+        store_as: "efs_file_system_id"
     
     # Jenkins Access Point IDの取得
-    - name: Get Jenkins access point ID
+    - name: Get Jenkins access point ID from SSM Parameter Store
       ansible.builtin.include_role:
-        name: pulumi_helper
-        tasks_from: get_outputs
+        name: ssm_parameter_store
+        tasks_from: get_parameter
       vars:
-        pulumi_project_path: "{{ pulumi_path }}/jenkins-storage"
-        stack_name: "{{ env_name }}"
-        output_name: "jenkinsAccessPointId"
-        mock_output: "mock-jenkins-ap-id"
+        parameter_name: "/jenkins-infra/{{ env_name }}/storage/jenkins-access-point-id"
+        store_as: "jenkins_access_point_id"
     
-    - name: Set Jenkins access point ID
-      ansible.builtin.set_fact:
-        jenkins_access_point_id: "{{ stack_output_result.stdout | trim }}"
+    # EFS DNS名の取得
+    - name: Get EFS DNS name from SSM Parameter Store
+      ansible.builtin.include_role:
+        name: ssm_parameter_store
+        tasks_from: get_parameter
+      vars:
+        parameter_name: "/jenkins-infra/{{ env_name }}/storage/efs-dns-name"
+        store_as: "efs_dns_name"
     
     - name: Set storage facts for use in other playbooks
       ansible.builtin.set_fact:
@@ -146,6 +138,7 @@
         msg: |
           Storage Infrastructure Deployed Successfully:
           - EFS File System ID: {{ efs_file_system_id }}
+          - EFS DNS Name: {{ efs_dns_name | default('N/A') }}
           - Jenkins Access Point ID: {{ jenkins_access_point_id }}
   
   rescue:

@@ -1,0 +1,74 @@
+---
+# destroy_jenkins_ssm_init.yml
+# SSMパラメータストアの削除を実行
+
+- name: Destroy SSM Parameter Store for Jenkins Infrastructure
+  hosts: localhost
+  connection: local
+  gather_facts: yes
+  
+  vars:
+    # コマンドラインから環境名を受け取る
+    env_name: "{{ env | default('dev') }}"
+    # 削除確認フラグ
+    confirm: "{{ confirm | default(false) }}"
+    # パスを明示的に定義
+    scripts_dir: "{{ playbook_dir }}/../../scripts"
+    pulumi_path: "{{ playbook_dir }}/../../pulumi"
+    # 削除操作を指定
+    operation: destroy
+  
+  pre_tasks:
+    # all.yml から変数を読み込む
+    - name: Include group_vars/all.yml
+      ansible.builtin.include_vars:
+        file: "{{ playbook_dir }}/../inventory/group_vars/all.yml"
+        
+    # 必要な変数を設定
+    - name: Set required variables from all.yml
+      ansible.builtin.set_fact:
+        project_name: "{{ infra.project_name }}"
+        aws_region_name: "{{ infra.aws.default_region }}"
+    
+    # 削除確認
+    - name: Confirm SSM parameter deletion
+      ansible.builtin.pause:
+        prompt: |
+          WARNING: This will delete all SSM parameters for environment '{{ env_name }}'
+          
+          This action will remove:
+          - All configuration parameters under /{{ project_name }}/{{ env_name }}/
+          
+          Are you sure you want to continue? (yes/no)
+      register: user_confirmation
+      when: not confirm | bool
+    
+    - name: Check user confirmation
+      ansible.builtin.fail:
+        msg: "SSM parameter deletion cancelled by user"
+      when: 
+        - not confirm | bool
+        - user_confirmation.user_input | lower != 'yes'
+  
+  roles:
+    - aws_setup
+    - pulumi_helper
+    - jenkins_ssm_init
+  
+  post_tasks:
+    - name: Display SSM deletion summary
+      ansible.builtin.debug:
+        msg: |
+          SSM Parameter Store Deletion Summary
+          =====================================
+          Environment: {{ env_name }}
+          AWS Region: {{ aws_region_name }}
+          Project: {{ project_name }}
+          Status: {{ 'SUCCESS' if ssm_destroyed | default(false) else 'FAILED' }}
+          
+          {% if ssm_destroyed | default(false) %}
+          SSM parameters have been successfully deleted.
+          {% else %}
+          SSM parameter deletion failed or was skipped.
+          Please check the error messages above.
+          {% endif %}

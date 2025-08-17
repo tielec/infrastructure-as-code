@@ -66,6 +66,37 @@
     - name: Handle S3 backend authentication
       when: pulumi_backend_type == 's3'
       block:
+        # S3バケット名が空の場合はSSMから取得
+        - name: Get S3 bucket name from SSM if not set
+          when: pulumi_s3_bucket is not defined or pulumi_s3_bucket | length == 0
+          block:
+            - name: Retrieve S3 bucket name from SSM Parameter Store
+              ansible.builtin.include_role:
+                name: ssm_parameter_store
+                tasks_from: get_parameter
+              vars:
+                parameter_name: "/bootstrap/pulumi/s3bucket-name"
+                decrypt: false
+                store_as: "pulumi_s3_bucket_from_ssm"
+                ssm_parameter_store_fail_on_missing: false
+                default_value: ""
+
+            - name: Set S3 bucket name from SSM
+              ansible.builtin.set_fact:
+                pulumi_s3_bucket: "{{ pulumi_s3_bucket_from_ssm }}"
+              when: pulumi_s3_bucket_from_ssm | length > 0
+
+            - name: Fail if S3 bucket name cannot be determined
+              ansible.builtin.fail:
+                msg: |
+                  ERROR: S3 bucket name is not configured.
+                  
+                  Please either:
+                  1. Set it in ansible/inventory/group_vars/all.yml under pulumi.s3.bucket
+                  2. Or ensure it exists in SSM parameter: /bootstrap/pulumi/s3bucket-name
+                  3. Or run the bootstrap setup to create the S3 bucket
+              when: pulumi_s3_bucket is not defined or pulumi_s3_bucket | length == 0
+
         # まず環境変数をチェック
         - name: Check for PULUMI_CONFIG_PASSPHRASE in environment
           ansible.builtin.set_fact:
@@ -140,9 +171,10 @@
     - name: Set common Pulumi settings
       block:
         # sudoを使用したPulumiコマンドのプレフィックス
+        # S3バックエンドの場合はsudoを使わない
         - name: Set Pulumi sudo command prefix
           ansible.builtin.set_fact:
-            pulumi_sudo_cmd: "sudo -E {{ pulumi_bin_path }}"
+            pulumi_sudo_cmd: "{{ pulumi_bin_path if pulumi_backend_type == 's3' else 'sudo -E ' + pulumi_bin_path }}"
 
         # Pulumi Cloudの場合のみログイン検証
         - name: Verify Pulumi Cloud login successful
@@ -168,6 +200,16 @@
               Region: {{ pulumi_s3_region }}
               {% endif %}
           when: ansible_verbosity > 1
+
+        # S3バケット名のソースを表示（S3バックエンドの場合）
+        - name: Display S3 bucket source (debug mode)
+          ansible.builtin.debug:
+            msg: |
+              S3 bucket name: {{ pulumi_s3_bucket }}
+              Source: {{ 'SSM Parameter Store' if pulumi_s3_bucket_from_ssm is defined else 'all.yml configuration' }}
+          when: 
+            - pulumi_backend_type == 's3'
+            - ansible_verbosity > 1
 
         # 認証完了フラグを設定（重複チェックを防ぐため）
         - name: Mark authentication as complete

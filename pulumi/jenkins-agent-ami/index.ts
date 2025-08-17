@@ -7,10 +7,17 @@
 import * as pulumi from "@pulumi/pulumi";
 import * as aws from "@pulumi/aws";
 
-// コンフィグから設定を取得
-const config = new pulumi.Config();
-const projectName = config.get("projectName") || "jenkins-infra";
+// 環境名をスタック名から取得
 const environment = pulumi.getStack();
+const ssmPrefix = `/jenkins-infra/${environment}`;
+
+// SSMパラメータから設定を取得
+const projectNameParam = aws.ssm.getParameter({
+    name: `${ssmPrefix}/config/project-name`,
+});
+
+// 設定値を変数に設定
+const projectName = pulumi.output(projectNameParam).apply(p => p.value);
 
 // バージョン管理（自動インクリメント）
 // Image Builderは X.Y.Z 形式のセマンティックバージョンのみ受け付ける
@@ -32,6 +39,7 @@ const secondsOfDay = hours * 3600 + minutes * 60 + seconds; // 0-86399
 
 // バージョンフォーマット: 1.YYMMDD.秒数 (X.Y.Z形式)
 // 例: 1.250809.41809 (11:30:09の場合)
+const config = new pulumi.Config();
 const componentVersion = config.get("componentVersion") || `1.${dateStr}.${secondsOfDay}`;
 const recipeVersion = config.get("recipeVersion") || `1.${dateStr}.${secondsOfDay}`;
 
@@ -39,21 +47,31 @@ const recipeVersion = config.get("recipeVersion") || `1.${dateStr}.${secondsOfDa
 console.log(`[INFO] Component Version: ${componentVersion}`);
 console.log(`[INFO] Recipe Version: ${recipeVersion}`);
 
-// スタック参照名を設定から取得
-const networkStackName = config.get("networkStackName") || "jenkins-network";
-const securityStackName = config.get("securityStackName") || "jenkins-security";
+// ネットワークリソースのSSMパラメータを取得
+const vpcIdParam = aws.ssm.getParameter({
+    name: `${ssmPrefix}/network/vpc-id`,
+});
+const publicSubnetAIdParam = aws.ssm.getParameter({
+    name: `${ssmPrefix}/network/public-subnet-a-id`,
+});
+const publicSubnetBIdParam = aws.ssm.getParameter({
+    name: `${ssmPrefix}/network/public-subnet-b-id`,
+});
 
-// 既存のスタックから値を取得（必須）
-const networkStack = new pulumi.StackReference(`${pulumi.getOrganization()}/${networkStackName}/${environment}`);
-const securityStack = new pulumi.StackReference(`${pulumi.getOrganization()}/${securityStackName}/${environment}`);
+// セキュリティグループのSSMパラメータを取得
+const jenkinsAgentSecurityGroupIdParam = aws.ssm.getParameter({
+    name: `${ssmPrefix}/security/jenkins-agent-sg-id`,
+});
 
-// 必要なリソースIDを取得
-const vpcId = networkStack.requireOutput("vpcId");
-const publicSubnetIds = networkStack.requireOutput("publicSubnetIds");
-const jenkinsAgentSecurityGroupId = securityStack.requireOutput("jenkinsAgentSecurityGroupId");
+// リソースIDを取得
+const vpcId = pulumi.output(vpcIdParam).apply(p => p.value);
+const publicSubnetAId = pulumi.output(publicSubnetAIdParam).apply(p => p.value);
+const publicSubnetBId = pulumi.output(publicSubnetBIdParam).apply(p => p.value);
+const publicSubnetIds = [publicSubnetAId, publicSubnetBId];
+const jenkinsAgentSecurityGroupId = pulumi.output(jenkinsAgentSecurityGroupIdParam).apply(p => p.value);
 
 // IAMロール（EC2 Image Builder用）
-const imageBuilderRole = new aws.iam.Role(`${projectName}-imagebuilder-role`, {
+const imageBuilderRole = new aws.iam.Role(`imagebuilder-role`, {
     assumeRolePolicy: JSON.stringify({
         Version: "2012-10-17",
         Statement: [{
@@ -65,24 +83,24 @@ const imageBuilderRole = new aws.iam.Role(`${projectName}-imagebuilder-role`, {
         }],
     }),
     tags: {
-        Name: `${projectName}-imagebuilder-role-${environment}`,
+        Name: pulumi.interpolate`${projectName}-imagebuilder-role-${environment}`,
         Environment: environment,
     },
 });
 
 // 必要なポリシーをアタッチ
-const ec2InstanceProfilePolicy = new aws.iam.RolePolicyAttachment(`${projectName}-imagebuilder-ec2-policy`, {
+const ec2InstanceProfilePolicy = new aws.iam.RolePolicyAttachment(`imagebuilder-ec2-policy`, {
     role: imageBuilderRole.name,
     policyArn: "arn:aws:iam::aws:policy/EC2InstanceProfileForImageBuilder",
 });
 
-const ssmManagedPolicy = new aws.iam.RolePolicyAttachment(`${projectName}-imagebuilder-ssm-policy`, {
+const ssmManagedPolicy = new aws.iam.RolePolicyAttachment(`imagebuilder-ssm-policy`, {
     role: imageBuilderRole.name,
     policyArn: "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore",
 });
 
 // インスタンスプロファイル
-const imageBuilderInstanceProfile = new aws.iam.InstanceProfile(`${projectName}-imagebuilder-profile`, {
+const imageBuilderInstanceProfile = new aws.iam.InstanceProfile(`imagebuilder-profile`, {
     role: imageBuilderRole.name,
     tags: {
         Environment: environment,
@@ -90,8 +108,8 @@ const imageBuilderInstanceProfile = new aws.iam.InstanceProfile(`${projectName}-
 });
 
 // Jenkins Agent用コンポーネント（x86_64）
-const jenkinsAgentComponentX86 = new aws.imagebuilder.Component(`${projectName}-agent-component-x86`, {
-    name: `${projectName}-agent-component-x86-${environment}`,
+const jenkinsAgentComponentX86 = new aws.imagebuilder.Component(`agent-component-x86`, {
+    name: pulumi.interpolate`${projectName}-agent-component-x86-${environment}`,
     platform: "Linux",
     version: componentVersion,
     description: "Jenkins Agent setup component for x86_64",
@@ -202,15 +220,15 @@ phases:
             - aws --version
 `,
     tags: {
-        Name: `${projectName}-agent-component-x86-${environment}`,
+        Name: pulumi.interpolate`${projectName}-agent-component-x86-${environment}`,
         Environment: environment,
         Architecture: "x86_64",
     },
 });
 
 // Jenkins Agent用コンポーネント（ARM64）
-const jenkinsAgentComponentArm = new aws.imagebuilder.Component(`${projectName}-agent-component-arm`, {
-    name: `${projectName}-agent-component-arm-${environment}`,
+const jenkinsAgentComponentArm = new aws.imagebuilder.Component(`agent-component-arm`, {
+    name: pulumi.interpolate`${projectName}-agent-component-arm-${environment}`,
     platform: "Linux",
     version: componentVersion,
     description: "Jenkins Agent setup component for ARM64",
@@ -321,7 +339,7 @@ phases:
             - aws --version
 `,
     tags: {
-        Name: `${projectName}-agent-component-arm-${environment}`,
+        Name: pulumi.interpolate`${projectName}-agent-component-arm-${environment}`,
         Environment: environment,
         Architecture: "arm64",
     },
@@ -347,8 +365,8 @@ const amiArm = aws.ec2.getAmi({
 });
 
 // Image Recipe（x86_64）
-const jenkinsAgentRecipeX86 = new aws.imagebuilder.ImageRecipe(`${projectName}-agent-recipe-x86`, {
-    name: `${projectName}-agent-recipe-x86-${environment}`,
+const jenkinsAgentRecipeX86 = new aws.imagebuilder.ImageRecipe(`agent-recipe-x86`, {
+    name: pulumi.interpolate`${projectName}-agent-recipe-x86-${environment}`,
     version: recipeVersion,
     description: "Jenkins Agent AMI recipe for x86_64",
     parentImage: amiX86.then(ami => ami.id),
@@ -365,7 +383,7 @@ const jenkinsAgentRecipeX86 = new aws.imagebuilder.ImageRecipe(`${projectName}-a
         },
     }],
     tags: {
-        Name: `${projectName}-agent-recipe-x86-${environment}`,
+        Name: pulumi.interpolate`${projectName}-agent-recipe-x86-${environment}`,
         Environment: environment,
         Architecture: "x86_64",
     },
@@ -375,8 +393,8 @@ const jenkinsAgentRecipeX86 = new aws.imagebuilder.ImageRecipe(`${projectName}-a
 });
 
 // Image Recipe（ARM64）
-const jenkinsAgentRecipeArm = new aws.imagebuilder.ImageRecipe(`${projectName}-agent-recipe-arm`, {
-    name: `${projectName}-agent-recipe-arm-${environment}`,
+const jenkinsAgentRecipeArm = new aws.imagebuilder.ImageRecipe(`agent-recipe-arm`, {
+    name: pulumi.interpolate`${projectName}-agent-recipe-arm-${environment}`,
     version: recipeVersion,
     description: "Jenkins Agent AMI recipe for ARM64",
     parentImage: amiArm.then(ami => ami.id),
@@ -393,7 +411,7 @@ const jenkinsAgentRecipeArm = new aws.imagebuilder.ImageRecipe(`${projectName}-a
         },
     }],
     tags: {
-        Name: `${projectName}-agent-recipe-arm-${environment}`,
+        Name: pulumi.interpolate`${projectName}-agent-recipe-arm-${environment}`,
         Environment: environment,
         Architecture: "arm64",
     },
@@ -403,48 +421,48 @@ const jenkinsAgentRecipeArm = new aws.imagebuilder.ImageRecipe(`${projectName}-a
 });
 
 // Infrastructure Configuration（x86_64）
-const infraConfigX86 = new aws.imagebuilder.InfrastructureConfiguration(`${projectName}-agent-infra-x86`, {
-    name: `${projectName}-agent-infra-x86-${environment}`,
+const infraConfigX86 = new aws.imagebuilder.InfrastructureConfiguration(`agent-infra-x86`, {
+    name: pulumi.interpolate`${projectName}-agent-infra-x86-${environment}`,
     description: "Infrastructure configuration for Jenkins Agent x86_64",
     instanceProfileName: imageBuilderInstanceProfile.name,
     instanceTypes: ["t3.medium"],
-    subnetId: publicSubnetIds.apply(ids => ids[0]),
+    subnetId: publicSubnetAId,
     securityGroupIds: [jenkinsAgentSecurityGroupId],
     terminateInstanceOnFailure: true,
     tags: {
-        Name: `${projectName}-agent-infra-x86-${environment}`,
+        Name: pulumi.interpolate`${projectName}-agent-infra-x86-${environment}`,
         Environment: environment,
         Architecture: "x86_64",
     },
 });
 
 // Infrastructure Configuration（ARM64）
-const infraConfigArm = new aws.imagebuilder.InfrastructureConfiguration(`${projectName}-agent-infra-arm`, {
-    name: `${projectName}-agent-infra-arm-${environment}`,
+const infraConfigArm = new aws.imagebuilder.InfrastructureConfiguration(`agent-infra-arm`, {
+    name: pulumi.interpolate`${projectName}-agent-infra-arm-${environment}`,
     description: "Infrastructure configuration for Jenkins Agent ARM64",
     instanceProfileName: imageBuilderInstanceProfile.name,
     instanceTypes: ["t4g.medium"],
-    subnetId: publicSubnetIds.apply(ids => ids[0]),
+    subnetId: publicSubnetAId,
     securityGroupIds: [jenkinsAgentSecurityGroupId],
     terminateInstanceOnFailure: true,
     tags: {
-        Name: `${projectName}-agent-infra-arm-${environment}`,
+        Name: pulumi.interpolate`${projectName}-agent-infra-arm-${environment}`,
         Environment: environment,
         Architecture: "arm64",
     },
 });
 
 // Distribution Configuration（x86_64）
-const distConfigX86 = new aws.imagebuilder.DistributionConfiguration(`${projectName}-agent-dist-x86`, {
-    name: `${projectName}-agent-dist-x86-${environment}`,
+const distConfigX86 = new aws.imagebuilder.DistributionConfiguration(`agent-dist-x86`, {
+    name: pulumi.interpolate`${projectName}-agent-dist-x86-${environment}`,
     description: "Distribution configuration for Jenkins Agent x86_64",
     distributions: [{
         region: aws.getRegion().then(r => r.name),
         amiDistributionConfiguration: {
-            name: `${projectName}-agent-x86-${environment}-{{imagebuilder:buildDate}}`,
+            name: pulumi.interpolate`${projectName}-agent-x86-${environment}-{{imagebuilder:buildDate}}`,
             description: "Jenkins Agent AMI for x86_64",
             amiTags: {
-                Name: `${projectName}-agent-x86-${environment}`,
+                Name: pulumi.interpolate`${projectName}-agent-x86-${environment}`,
                 Environment: environment,
                 Architecture: "x86_64",
                 BuildDate: "{{imagebuilder:buildDate}}",
@@ -453,22 +471,22 @@ const distConfigX86 = new aws.imagebuilder.DistributionConfiguration(`${projectN
         },
     }],
     tags: {
-        Name: `${projectName}-agent-dist-x86-${environment}`,
+        Name: pulumi.interpolate`${projectName}-agent-dist-x86-${environment}`,
         Environment: environment,
     },
 });
 
 // Distribution Configuration（ARM64）
-const distConfigArm = new aws.imagebuilder.DistributionConfiguration(`${projectName}-agent-dist-arm`, {
-    name: `${projectName}-agent-dist-arm-${environment}`,
+const distConfigArm = new aws.imagebuilder.DistributionConfiguration(`agent-dist-arm`, {
+    name: pulumi.interpolate`${projectName}-agent-dist-arm-${environment}`,
     description: "Distribution configuration for Jenkins Agent ARM64",
     distributions: [{
         region: aws.getRegion().then(r => r.name),
         amiDistributionConfiguration: {
-            name: `${projectName}-agent-arm-${environment}-{{imagebuilder:buildDate}}`,
+            name: pulumi.interpolate`${projectName}-agent-arm-${environment}-{{imagebuilder:buildDate}}`,
             description: "Jenkins Agent AMI for ARM64",
             amiTags: {
-                Name: `${projectName}-agent-arm-${environment}`,
+                Name: pulumi.interpolate`${projectName}-agent-arm-${environment}`,
                 Environment: environment,
                 Architecture: "arm64",
                 BuildDate: "{{imagebuilder:buildDate}}",
@@ -477,14 +495,14 @@ const distConfigArm = new aws.imagebuilder.DistributionConfiguration(`${projectN
         },
     }],
     tags: {
-        Name: `${projectName}-agent-dist-arm-${environment}`,
+        Name: pulumi.interpolate`${projectName}-agent-dist-arm-${environment}`,
         Environment: environment,
     },
 });
 
 // Image Pipeline（x86_64）- スケジュール実行なし
-const imagePipelineX86 = new aws.imagebuilder.ImagePipeline(`${projectName}-agent-pipeline-x86`, {
-    name: `${projectName}-agent-pipeline-x86-${environment}`,
+const imagePipelineX86 = new aws.imagebuilder.ImagePipeline(`agent-pipeline-x86`, {
+    name: pulumi.interpolate`${projectName}-agent-pipeline-x86-${environment}`,
     description: "Pipeline to build Jenkins Agent AMI for x86_64",
     imageRecipeArn: jenkinsAgentRecipeX86.arn,
     infrastructureConfigurationArn: infraConfigX86.arn,
@@ -495,7 +513,7 @@ const imagePipelineX86 = new aws.imagebuilder.ImagePipeline(`${projectName}-agen
         timeoutMinutes: 60,
     },
     tags: {
-        Name: `${projectName}-agent-pipeline-x86-${environment}`,
+        Name: pulumi.interpolate`${projectName}-agent-pipeline-x86-${environment}`,
         Environment: environment,
         Architecture: "x86_64",
     },
@@ -506,8 +524,8 @@ const imagePipelineX86 = new aws.imagebuilder.ImagePipeline(`${projectName}-agen
 });
 
 // Image Pipeline（ARM64）- スケジュール実行なし
-const imagePipelineArm = new aws.imagebuilder.ImagePipeline(`${projectName}-agent-pipeline-arm`, {
-    name: `${projectName}-agent-pipeline-arm-${environment}`,
+const imagePipelineArm = new aws.imagebuilder.ImagePipeline(`agent-pipeline-arm`, {
+    name: pulumi.interpolate`${projectName}-agent-pipeline-arm-${environment}`,
     description: "Pipeline to build Jenkins Agent AMI for ARM64",
     imageRecipeArn: jenkinsAgentRecipeArm.arn,
     infrastructureConfigurationArn: infraConfigArm.arn,
@@ -518,7 +536,7 @@ const imagePipelineArm = new aws.imagebuilder.ImagePipeline(`${projectName}-agen
         timeoutMinutes: 60,
     },
     tags: {
-        Name: `${projectName}-agent-pipeline-arm-${environment}`,
+        Name: pulumi.interpolate`${projectName}-agent-pipeline-arm-${environment}`,
         Environment: environment,
         Architecture: "arm64",
     },
@@ -529,27 +547,84 @@ const imagePipelineArm = new aws.imagebuilder.ImagePipeline(`${projectName}-agen
 });
 
 // カスタムAMI IDを格納するSSMパラメータ（仮の値）
-const customAmiX86Parameter = new aws.ssm.Parameter(`${projectName}-agent-custom-ami-x86`, {
-    name: `/${projectName}/${environment}/jenkins/agent/custom-ami-x86`,
+const customAmiX86Parameter = new aws.ssm.Parameter(`agent-custom-ami-x86`, {
+    name: `${ssmPrefix}/agent-ami/custom-ami-x86`,
     type: "String",
     value: "ami-placeholder-x86",  // 手動で更新する仮の値
+    overwrite: true,
     description: "Custom AMI ID for Jenkins Agent x86_64 (manually update after Image Builder execution)",
     tags: {
         Environment: environment,
+        ManagedBy: "pulumi",
+        Component: "agent-ami",
         Architecture: "x86_64",
         Note: "Update this value manually after running Image Builder pipeline",
     },
 });
 
-const customAmiArmParameter = new aws.ssm.Parameter(`${projectName}-agent-custom-ami-arm`, {
-    name: `/${projectName}/${environment}/jenkins/agent/custom-ami-arm`,
+const customAmiArmParameter = new aws.ssm.Parameter(`agent-custom-ami-arm`, {
+    name: `${ssmPrefix}/agent-ami/custom-ami-arm`,
     type: "String",
     value: "ami-placeholder-arm",  // 手動で更新する仮の値
+    overwrite: true,
     description: "Custom AMI ID for Jenkins Agent ARM64 (manually update after Image Builder execution)",
     tags: {
         Environment: environment,
+        ManagedBy: "pulumi",
+        Component: "agent-ami",
         Architecture: "arm64",
         Note: "Update this value manually after running Image Builder pipeline",
+    },
+});
+
+// パイプラインARNをSSMパラメータに保存
+const pipelineX86ArnParam = new aws.ssm.Parameter(`pipeline-x86-arn`, {
+    name: `${ssmPrefix}/agent-ami/pipeline-x86-arn`,
+    type: "String",
+    value: imagePipelineX86.arn,
+    overwrite: true,
+    tags: {
+        Environment: environment,
+        ManagedBy: "pulumi",
+        Component: "agent-ami",
+    },
+});
+
+const pipelineArmArnParam = new aws.ssm.Parameter(`pipeline-arm-arn`, {
+    name: `${ssmPrefix}/agent-ami/pipeline-arm-arn`,
+    type: "String",
+    value: imagePipelineArm.arn,
+    overwrite: true,
+    tags: {
+        Environment: environment,
+        ManagedBy: "pulumi",
+        Component: "agent-ami",
+    },
+});
+
+// コンポーネントバージョンをSSMパラメータに保存
+const componentVersionParam = new aws.ssm.Parameter(`component-version`, {
+    name: `${ssmPrefix}/agent-ami/component-version`,
+    type: "String",
+    value: componentVersion,
+    overwrite: true,
+    tags: {
+        Environment: environment,
+        ManagedBy: "pulumi",
+        Component: "agent-ami",
+    },
+});
+
+// レシピバージョンをSSMパラメータに保存
+const recipeVersionParam = new aws.ssm.Parameter(`recipe-version`, {
+    name: `${ssmPrefix}/agent-ami/recipe-version`,
+    type: "String",
+    value: recipeVersion,
+    overwrite: true,
+    tags: {
+        Environment: environment,
+        ManagedBy: "pulumi",
+        Component: "agent-ami",
     },
 });
 

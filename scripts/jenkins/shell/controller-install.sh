@@ -17,16 +17,9 @@ error_exit() {
 }
 
 # 引数または環境変数から設定を取得
-# ScriptArgsから渡される場合: JENKINS_VERSION=xxx JENKINS_COLOR=yyy
-for arg in "$@"; do
-    if [[ $arg == *"="* ]]; then
-        export "$arg"
-    fi
-done
-
-# 環境変数
-JENKINS_COLOR="${JENKINS_COLOR:-blue}"
-JENKINS_VERSION="${JENKINS_VERSION:-latest}"
+# 位置引数: $1=JENKINS_VERSION, $2=JENKINS_COLOR
+JENKINS_VERSION="${1:-${JENKINS_VERSION:-latest}}"
+JENKINS_COLOR="${2:-${JENKINS_COLOR:-blue}}"
 JENKINS_HOME_DIR="/mnt/efs/jenkins" # EFSマウント済みであることを前提
 
 log "Starting Jenkins installation script for ${JENKINS_COLOR} environment"

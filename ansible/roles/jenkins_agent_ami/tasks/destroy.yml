@@ -23,7 +23,7 @@
     - name: Destroy agent AMI stack
       ansible.builtin.include_role:
         name: pulumi_helper
-        tasks_from: destroy_stack
+        tasks_from: destroy
       vars:
         pulumi_stack_name: "{{ stack_name }}"
         pulumi_project_path: "{{ pulumi_dir }}"
@@ -38,16 +38,27 @@
           - "Stack: {{ stack_name }}"
           - "Environment: {{ env }}"
           - ""
-          - "Note: Built AMIs are not automatically deleted."
-          - "To delete AMIs manually:"
-          - "  1. List AMIs with the appropriate tags"
-          - "  2. Deregister AMIs using AWS CLI or Console"
-          - "  3. Delete associated snapshots"
+          - "Pulumi has destroyed:"
+          - "  - Image Builder pipelines"
+          - "  - Image Builder recipes"
+          - "  - Image Builder components"
+          - "  - Distribution configurations"
+          - "  - Infrastructure configurations"
+          - "  - IAM roles and policies"
           - "=========================================="
     
     - name: Set destroy success flag
       ansible.builtin.set_fact:
         agent_ami_destroyed: true
+    
+    # AMI削除（デフォルトで実行）
+    - name: Check if AMI deletion should be skipped
+      ansible.builtin.debug:
+        msg: "Skip AMI deletion: {{ skip_ami_deletion | default(false) }}"
+    
+    - name: Delete created AMIs
+      ansible.builtin.include_tasks: destroy_images.yml
+      when: not (skip_ami_deletion | default(false) | bool)
   
   rescue:
     - name: Display destroy failure message

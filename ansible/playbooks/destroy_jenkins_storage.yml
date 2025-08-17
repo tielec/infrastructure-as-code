@@ -1,0 +1,154 @@
+---
+# destroy_jenkins_storage.yml
+# Jenkins EFSストレージを削除
+#
+# 使用方法:
+#   ansible-playbook destroy_jenkins_storage.yml -e "env=dev confirm=true backup=true"
+#
+# 注意:
+#   - confirm=true を指定しないと削除は実行されません
+#   - backup=true でデータのバックアップを作成（推奨）
+#   - すべてのJenkinsデータが永久に失われます！
+
+- name: Destroy Jenkins Storage (EFS)
+  hosts: localhost
+  connection: local
+  gather_facts: yes
+  vars:
+    # コマンドラインから環境名を受け取る
+    env_name: "{{ env | default('dev') }}"
+    # 削除確認フラグ
+    confirm_destroy: "{{ confirm | default(false) }}"
+    # バックアップ作成フラグ
+    create_backup: "{{ backup | default(true) }}"
+    # 強制削除フラグ（マウント中でも削除）
+    force_destroy: "{{ force | default(false) }}"
+  
+  pre_tasks:
+    # all.yml から変数を読み込む
+    - name: Include group_vars/all.yml
+      ansible.builtin.include_vars:
+        file: "{{ playbook_dir }}/../inventory/group_vars/all.yml"
+    
+    # 必要な変数を設定
+    - name: Set required variables from all.yml
+      ansible.builtin.set_fact:
+        project_name: "{{ infra.project_name }}"
+        aws_region_name: "{{ infra.aws.default_region }}"
+        storage_project_name: "{{ infra.pulumi.storage_project }}"
+    
+    - name: Check confirmation flag
+      ansible.builtin.fail:
+        msg: |
+          ========================================
+          Destruction requires confirmation.
+          Please run with: -e "confirm=true"
+          ========================================
+      when: not confirm_destroy | bool
+    
+    - name: Display destruction warning
+      ansible.builtin.debug:
+        msg:
+          - "=========================================="
+          - "CRITICAL WARNING: Jenkins Storage Destruction"
+          - "=========================================="
+          - "Environment: {{ env_name }}"
+          - "Project: {{ project_name }}"
+          - "Region: {{ aws_region_name }}"
+          - "Backup: {{ create_backup }}"
+          - "Force: {{ force_destroy }}"
+          - ""
+          - "This will PERMANENTLY destroy:"
+          - "  - EFS File System"
+          - "  - ALL Jenkins data and configurations"
+          - "  - Job history and artifacts"
+          - "  - User data and credentials"
+          - "  - Mount targets"
+          - ""
+          - "THIS ACTION CANNOT BE UNDONE!"
+          - "=========================================="
+    
+    - name: Final confirmation
+      ansible.builtin.pause:
+        prompt: |
+          ============================================================
+          TYPE 'DELETE ALL JENKINS DATA' to confirm destruction
+          or press Ctrl+C to cancel
+          ============================================================
+      register: final_confirmation
+    
+    - name: Verify confirmation
+      ansible.builtin.fail:
+        msg: "Confirmation text did not match. Aborting destruction."
+      when: final_confirmation.user_input != 'DELETE ALL JENKINS DATA'
+    
+    - name: Create backup if requested
+      ansible.builtin.debug:
+        msg: "Creating EFS backup before deletion..."
+      when: create_backup | bool
+    
+    - name: Countdown before destruction
+      ansible.builtin.pause:
+        seconds: 15
+        prompt: "Starting destruction in 15 seconds... LAST CHANCE - Press Ctrl+C to cancel"
+  
+  tasks:
+    - name: Setup AWS environment
+      ansible.builtin.include_role:
+        name: aws_setup
+    
+    - name: Create EFS backup
+      ansible.builtin.include_role:
+        name: jenkins_storage
+      vars:
+        operation: "backup"
+      when: create_backup | bool
+    
+    - name: Destroy Jenkins Storage
+      ansible.builtin.include_role:
+        name: jenkins_storage
+      vars:
+        operation: "destroy"
+        force_unmount: "{{ force_destroy }}"
+  
+  post_tasks:
+    - name: Display completion message
+      ansible.builtin.debug:
+        msg:
+          - "=========================================="
+          - "Destruction Complete"
+          - "=========================================="
+          - "Jenkins Storage has been destroyed."
+          - ""
+          - "Removed resources:"
+          - "  - EFS File System"
+          - "  - Mount targets"
+          - "  - All Jenkins data"
+          - ""
+          - "Backup location (if created):"
+          - "  - S3: s3://{{ project_name }}-backup/efs/{{ ansible_date_time.epoch }}"
+          - ""
+          - "To rebuild Jenkins from scratch:"
+          - "  ansible-playbook jenkins_setup_pipeline.yml -e 'env={{ env_name }}'"
+          - "=========================================="
+      when: storage_destroyed | default(false)
+    
+    - name: Display failure message
+      ansible.builtin.debug:
+        msg:
+          - "=========================================="
+          - "Destruction Failed or Incomplete"
+          - "=========================================="
+          - "Some resources may not have been deleted."
+          - "Possible reasons:"
+          - "  - EFS is still mounted to instances"
+          - "  - Deletion protection is enabled"
+          - ""
+          - "To force deletion:"
+          - "  1. Unmount EFS from all instances"
+          - "  2. Run: ansible-playbook destroy_jenkins_storage.yml -e 'env={{ env_name }} confirm=true force=true'"
+          - ""
+          - "Manual cleanup:"
+          - "  - EFS Console > File Systems"
+          - "=========================================="
+      when: not (storage_destroyed | default(false))

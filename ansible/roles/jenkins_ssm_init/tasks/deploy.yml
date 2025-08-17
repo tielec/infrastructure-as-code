@@ -1,0 +1,105 @@
+---
+# SSMパラメータストア初期化デプロイタスク
+
+- name: Display SSM initialization information
+  ansible.builtin.debug:
+    msg: |
+      Initializing SSM Parameter Store:
+      - Project: {{ project_name }}
+      - Environment: {{ env_name }}
+      - AWS Region: {{ aws_region_name }}
+
+# Pulumiヘルパータスクを使用してSSMパラメータを初期化
+- name: Initialize SSM Parameter Store with Pulumi
+  block:
+    # Pulumiスタックの初期化
+    - name: Initialize SSM init stack
+      ansible.builtin.include_role:
+        name: pulumi_helper
+        tasks_from: init_stack
+      vars:
+        pulumi_project_path: "{{ pulumi_path }}/jenkins-ssm-init"
+        stack_name: "{{ env_name }}"
+    
+    # AWS設定
+    - name: Configure SSM init stack - AWS region
+      ansible.builtin.include_role:
+        name: pulumi_helper
+        tasks_from: set_config
+      vars:
+        pulumi_project_path: "{{ pulumi_path }}/jenkins-ssm-init"
+        config_key: "aws:region"
+        config_value: "{{ aws_region_name }}"
+
+    # Pulumiプレビュー
+    - name: Preview SSM parameter deployment
+      ansible.builtin.include_role:
+        name: pulumi_helper
+        tasks_from: preview
+      vars:
+        pulumi_project_path: "{{ pulumi_path }}/jenkins-ssm-init"
+      when: preview_mode | default(false) | bool
+    
+    # Pulumiデプロイ
+    - name: Deploy SSM parameters
+      ansible.builtin.include_role:
+        name: pulumi_helper
+        tasks_from: deploy
+      vars:
+        pulumi_project_path: "{{ pulumi_path }}/jenkins-ssm-init"
+    
+    # デプロイ成功を記録
+    - name: Set SSM initialization success fact
+      ansible.builtin.set_fact:
+        ssm_initialized: true
+    
+  rescue:
+    - name: SSM initialization failed
+      ansible.builtin.debug:
+        msg: "SSM parameter initialization failed: {{ ansible_failed_result.msg | default('Unknown error') }}"
+      
+    - name: Set SSM initialization failure fact
+      ansible.builtin.set_fact:
+        ssm_initialized: false
+    
+    - name: Fail the playbook
+      ansible.builtin.fail:
+        msg: "SSM parameter initialization failed"
+
+# SSMパラメータの検証
+- name: Verify SSM parameters
+  block:
+    - name: Wait for SSM parameters to propagate
+      ansible.builtin.pause:
+        seconds: 5
+      when: ssm_initialized | default(false) | bool
+    
+    - name: Verify critical SSM parameter exists
+      ansible.builtin.command:
+        cmd: "aws ssm get-parameter --name /jenkins-infra/{{ env_name }}/config/project-name --region {{ aws_region_name }}"
+      register: ssm_verify_result
+      changed_when: false
+      when: ssm_initialized | default(false) | bool
+    
+    - name: Display SSM parameter verification result
+      ansible.builtin.debug:
+        msg: |
+          SSM Parameters Status:
+          - Initialization: {{ 'SUCCESS' if ssm_initialized else 'FAILED' }}
+          - Verification: {{ 'SUCCESS' if ssm_verify_result.rc == 0 else 'FAILED' }}
+      when: ssm_initialized | default(false) | bool
+    
+  rescue:
+    - name: SSM parameter verification failed
+      ansible.builtin.debug:
+        msg: "Warning: SSM parameter verification failed but continuing"
+      when: ssm_initialized | default(false) | bool
+
+- name: Display SSM initialization summary
+  ansible.builtin.debug:
+    msg: |
+      ========================================
+      SSM Parameter Store Initialization Complete
+      Status: {{ 'SUCCESS' if ssm_initialized else 'FAILED' }}
+      ========================================
+  when: ssm_initialized is defined

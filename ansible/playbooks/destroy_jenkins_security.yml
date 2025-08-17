@@ -1,0 +1,147 @@
+---
+# destroy_jenkins_security.yml
+# Jenkinsセキュリティグループとロールを削除
+#
+# 使用方法:
+#   ansible-playbook destroy_jenkins_security.yml -e "env=dev confirm=true"
+#
+# 注意:
+#   - confirm=true を指定しないと削除は実行されません
+#   - 使用中のセキュリティグループは削除できません
+
+- name: Destroy Jenkins Security Resources
+  hosts: localhost
+  connection: local
+  gather_facts: yes
+  vars:
+    # コマンドラインから環境名を受け取る
+    env_name: "{{ env | default('dev') }}"
+    # 削除確認フラグ
+    confirm_destroy: "{{ confirm | default(false) }}"
+    # 強制削除フラグ
+    force_destroy: "{{ force | default(false) }}"
+  
+  pre_tasks:
+    # all.yml から変数を読み込む
+    - name: Include group_vars/all.yml
+      ansible.builtin.include_vars:
+        file: "{{ playbook_dir }}/../inventory/group_vars/all.yml"
+    
+    # 必要な変数を設定
+    - name: Set required variables from all.yml
+      ansible.builtin.set_fact:
+        project_name: "{{ infra.project_name }}"
+        aws_region_name: "{{ infra.aws.default_region }}"
+        security_project_name: "{{ infra.pulumi.security_project }}"
+    
+    - name: Check confirmation flag
+      ansible.builtin.fail:
+        msg: |
+          ========================================
+          Destruction requires confirmation.
+          Please run with: -e "confirm=true"
+          ========================================
+      when: not confirm_destroy | bool
+    
+    - name: Display destruction warning
+      ansible.builtin.debug:
+        msg:
+          - "=========================================="
+          - "WARNING: Jenkins Security Resources Destruction"
+          - "=========================================="
+          - "Environment: {{ env_name }}"
+          - "Project: {{ project_name }}"
+          - "Region: {{ aws_region_name }}"
+          - "Force: {{ force_destroy }}"
+          - ""
+          - "This will destroy:"
+          - "  - Security Groups"
+          - "  - IAM Roles and Policies"
+          - "  - Instance Profiles"
+          - "  - KMS Keys (if any)"
+          - ""
+          - "Note: Resources in use cannot be deleted"
+          - "=========================================="
+    
+    - name: Countdown before destruction
+      ansible.builtin.pause:
+        seconds: 10
+        prompt: "Starting destruction in 10 seconds... Press Ctrl+C to cancel"
+  
+  tasks:
+    - name: Setup AWS environment
+      ansible.builtin.include_role:
+        name: aws_setup
+    
+    - name: Check for dependent resources
+      ansible.builtin.include_role:
+        name: jenkins_security
+      vars:
+        operation: "check_dependencies"
+      when: not force_destroy | bool
+    
+    - name: Destroy Jenkins Security Resources
+      ansible.builtin.include_role:
+        name: jenkins_security
+      vars:
+        operation: "destroy"
+        force_delete: "{{ force_destroy }}"
+  
+  post_tasks:
+    - name: Display completion message
+      ansible.builtin.debug:
+        msg:
+          - "=========================================="
+          - "Destruction Complete"
+          - "=========================================="
+          - "Jenkins Security Resources have been destroyed."
+          - ""
+          - "Removed resources:"
+          - "  - Security Groups"
+          - "  - IAM Roles and Policies"
+          - "  - Instance Profiles"
+          - ""
+          - "Note: Some resources may be retained if still in use"
+          - "=========================================="
+      when: security_destroyed | default(false)
+    
+    - name: Display partial completion message
+      ansible.builtin.debug:
+        msg:
+          - "=========================================="
+          - "Partial Destruction"
+          - "=========================================="
+          - "Some security resources could not be deleted."
+          - ""
+          - "Common reasons:"
+          - "  - Security groups attached to running instances"
+          - "  - IAM roles in use by services"
+          - ""
+          - "Next steps:"
+          - "  1. Delete dependent resources first:"
+          - "     - destroy_jenkins_controller.yml"
+          - "     - destroy_jenkins_agent.yml"
+          - "     - destroy_jenkins_loadbalancer.yml"
+          - "  2. Re-run this playbook"
+          - ""
+          - "To force deletion (risky):"
+          - "  ansible-playbook destroy_jenkins_security.yml -e 'env={{ env_name }} confirm=true force=true'"
+          - "=========================================="
+      when: security_partially_destroyed | default(false)
+    
+    - name: Display failure message
+      ansible.builtin.debug:
+        msg:
+          - "=========================================="
+          - "Destruction Failed"
+          - "=========================================="
+          - "Security resources could not be deleted."
+          - ""
+          - "Please check:"
+          - "  - EC2 > Security Groups"
+          - "  - IAM > Roles"
+          - "  - IAM > Policies"
+          - ""
+          - "Manual cleanup may be required."
+          - "=========================================="
+      when: not (security_destroyed | default(false)) and not (security_partially_destroyed | default(false))

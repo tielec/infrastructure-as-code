@@ -22,16 +22,41 @@
         pulumi_project_path: "{{ pulumi_path }}/lambda-account-setup"
         stack_name: "account"  # アカウントレベルなので環境に依存しない
     
-    - name: Configure account setup stack
-      ansible.builtin.shell: |
-        {{ scripts_dir }}/aws/aws-env.sh
-        cd {{ pulumi_path }}/lambda-account-setup
-        pulumi config set aws:region {{ aws_region_name }}
-        pulumi config set lambda-account-setup:projectName {{ project_name }}
-        pulumi config set lambda-account-setup:alertEmail {{ alert_email }}
-        pulumi config set lambda-account-setup:criticalAlertEmail {{ critical_alert_email }}
-      register: pulumi_config_result
-      changed_when: pulumi_config_result.rc == 0
+    - name: Configure account setup stack - AWS region
+      ansible.builtin.include_role:
+        name: pulumi_helper
+        tasks_from: set_config
+      vars:
+        pulumi_project_path: "{{ pulumi_path }}/lambda-account-setup"
+        config_key: "aws:region"
+        config_value: "{{ aws_region_name }}"
+
+    - name: Configure account setup stack - project name
+      ansible.builtin.include_role:
+        name: pulumi_helper
+        tasks_from: set_config
+      vars:
+        pulumi_project_path: "{{ pulumi_path }}/lambda-account-setup"
+        config_key: "lambda-account-setup:projectName"
+        config_value: "{{ project_name }}"
+
+    - name: Configure account setup stack - alert email
+      ansible.builtin.include_role:
+        name: pulumi_helper
+        tasks_from: set_config
+      vars:
+        pulumi_project_path: "{{ pulumi_path }}/lambda-account-setup"
+        config_key: "lambda-account-setup:alertEmail"
+        config_value: "{{ alert_email }}"
+
+    - name: Configure account setup stack - critical alert email
+      ansible.builtin.include_role:
+        name: pulumi_helper
+        tasks_from: set_config
+      vars:
+        pulumi_project_path: "{{ pulumi_path }}/lambda-account-setup"
+        config_key: "lambda-account-setup:criticalAlertEmail"
+        config_value: "{{ critical_alert_email }}"
     
     # Pulumiプレビュー
     - name: Preview account setup deployment

@@ -1,0 +1,122 @@
+---
+# destroy_jenkins_controller.yml
+# Jenkinsコントローラーインスタンスを削除
+#
+# 使用方法:
+#   ansible-playbook destroy_jenkins_controller.yml -e "env=dev confirm=true"
+#
+# 注意:
+#   - confirm=true を指定しないと削除は実行されません
+#   - EFSのJenkinsデータは保持されます（別途削除が必要）
+
+- name: Destroy Jenkins Controller
+  hosts: localhost
+  connection: local
+  gather_facts: yes
+  vars:
+    # コマンドラインから環境名を受け取る
+    env_name: "{{ env | default('dev') }}"
+    # 削除確認フラグ
+    confirm_destroy: "{{ confirm | default(false) }}"
+    # 特定のカラーのみ削除（blue/green）
+    target_color: "{{ color | default('both') }}"
+  
+  pre_tasks:
+    # all.yml から変数を読み込む
+    - name: Include group_vars/all.yml
+      ansible.builtin.include_vars:
+        file: "{{ playbook_dir }}/../inventory/group_vars/all.yml"
+    
+    # 必要な変数を設定
+    - name: Set required variables from all.yml
+      ansible.builtin.set_fact:
+        project_name: "{{ infra.project_name }}"
+        aws_region_name: "{{ infra.aws.default_region }}"
+        controller_project_name: "{{ infra.pulumi.controller_project }}"
+    
+    - name: Check confirmation flag
+      ansible.builtin.fail:
+        msg: |
+          ========================================
+          Destruction requires confirmation.
+          Please run with: -e "confirm=true"
+          ========================================
+      when: not confirm_destroy | bool
+    
+    - name: Display destruction warning
+      ansible.builtin.debug:
+        msg:
+          - "=========================================="
+          - "WARNING: Jenkins Controller Destruction"
+          - "=========================================="
+          - "Environment: {{ env_name }}"
+          - "Project: {{ project_name }}"
+          - "Region: {{ aws_region_name }}"
+          - "Target: {{ target_color }}"
+          - ""
+          - "This will destroy:"
+          - "  - Jenkins Controller EC2 instances"
+          - "  - Auto Scaling Groups"
+          - "  - Launch Templates"
+          - "  - Target Group attachments"
+          - ""
+          - "Note: EFS data and configurations are preserved"
+          - "=========================================="
+    
+    - name: Countdown before destruction
+      ansible.builtin.pause:
+        seconds: 10
+        prompt: "Starting destruction in 10 seconds... Press Ctrl+C to cancel"
+  
+  tasks:
+    - name: Setup AWS environment
+      ansible.builtin.include_role:
+        name: aws_setup
+    
+    - name: Destroy Jenkins Controller
+      ansible.builtin.include_role:
+        name: jenkins_controller
+      vars:
+        operation: "destroy"
+        destroy_target: "{{ target_color }}"
+  
+  post_tasks:
+    - name: Display completion message
+      ansible.builtin.debug:
+        msg:
+          - "=========================================="
+          - "Destruction Complete"
+          - "=========================================="
+          - "Jenkins Controller has been destroyed."
+          - ""
+          - "Removed resources:"
+          - "  - EC2 instances"
+          - "  - Auto Scaling Groups"
+          - "  - Launch Templates"
+          - ""
+          - "Preserved resources:"
+          - "  - EFS filesystem with Jenkins data"
+          - "  - Load Balancer (still active)"
+          - "  - Security groups"
+          - ""
+          - "To fully remove Jenkins, also run:"
+          - "  - destroy_jenkins_storage.yml"
+          - "  - destroy_jenkins_loadbalancer.yml"
+          - "=========================================="
+      when: controller_destroyed | default(false)
+    
+    - name: Display failure message
+      ansible.builtin.debug:
+        msg:
+          - "=========================================="
+          - "Destruction Failed or Incomplete"
+          - "=========================================="
+          - "Some resources may not have been deleted."
+          - "Please check AWS Console for remaining resources."
+          - ""
+          - "Common cleanup targets:"
+          - "  - EC2 > Instances"
+          - "  - EC2 > Auto Scaling Groups"
+          - "  - EC2 > Launch Templates"
+          - "=========================================="
+      when: not (controller_destroyed | default(false))

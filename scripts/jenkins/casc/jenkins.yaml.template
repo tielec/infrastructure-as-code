@@ -3,8 +3,11 @@ jenkins:
   numExecutors: 1
   mode: NORMAL
   authorizationStrategy:
-    loggedInUsersCanDoAnything:
-      allowAnonymousRead: false
+    unsecured: {}
+  securityRealm:
+    local:
+      allowsSignup: false
+      enableCaptcha: false
   crumbIssuer:
     standard:
       excludeClientIPFromCrumb: true
@@ -85,8 +88,6 @@ security:
     sshHostKeyVerificationStrategy: "knownHostsFileVerificationStrategy"
   globalJobDslSecurityConfiguration:
     useScriptSecurity: false
-  sSHD:
-    port: -1
 
 unclassified:
   location:

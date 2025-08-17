@@ -85,32 +85,152 @@ if [ ! -f "$PLAYBOOK_PATH" ]; then
   exit 1
 fi
 
+# SSMパラメータストアからSSHキーを復元する関数
+restore_ssh_key_from_ssm() {
+  echo -e "${YELLOW}SSMパラメータストアからSSHキーを復元しています...${NC}"
+  
+  # SSMから秘密鍵を取得
+  PRIVATE_KEY=$(aws ssm get-parameter --name "/bootstrap/github/ssh-private-key" --with-decryption --query 'Parameter.Value' --output text 2>/dev/null || echo "")
+  PUBLIC_KEY=$(aws ssm get-parameter --name "/bootstrap/github/ssh-public-key" --query 'Parameter.Value' --output text 2>/dev/null || echo "")
+  
+  if [ -n "$PRIVATE_KEY" ] && [ -n "$PUBLIC_KEY" ]; then
+    # .sshディレクトリを作成
+    mkdir -p ~/.ssh
+    chmod 700 ~/.ssh
+    
+    # キーを復元
+    echo "$PRIVATE_KEY" > ~/.ssh/id_ed25519
+    echo "$PUBLIC_KEY" > ~/.ssh/id_ed25519.pub
+    chmod 600 ~/.ssh/id_ed25519
+    chmod 644 ~/.ssh/id_ed25519.pub
+    
+    echo -e "${GREEN}✓ SSHキーが正常に復元されました${NC}"
+    return 0
+  else
+    return 1
+  fi
+}
+
 # SSHキー生成用の関数
 generate_ssh_key() {
-  echo -e "${YELLOW}GitHubリポジトリアクセス用のSSHキーを生成します。${NC}"
-  echo -e "${YELLOW}すでにキーが存在する場合はスキップします。${NC}"
+  echo -e "${YELLOW}GitHubリポジトリアクセス用のSSHキーを設定します。${NC}"
   
-  if [ ! -f ~/.ssh/id_ed25519 ]; then
-    read -p "GitHub用のメールアドレスを入力してください: " git_email
-    ssh-keygen -t ed25519 -C "$git_email" -f ~/.ssh/id_ed25519 -N ""
+  # まずSSMパラメータストアを確認
+  echo -e "${YELLOW}SSMパラメータストアを確認しています...${NC}"
+  
+  # SSMから既存のキー情報を取得
+  GIT_EMAIL=$(aws ssm get-parameter --name "/bootstrap/github/email" --query 'Parameter.Value' --output text 2>/dev/null || echo "")
+  
+  if [ -n "$GIT_EMAIL" ]; then
+    echo -e "${GREEN}✓ 既存のGitHub設定が見つかりました (Email: $GIT_EMAIL)${NC}"
     
-    echo -e "\n${GREEN}SSHキーが生成されました。以下の公開キーをGitHubに登録してください:${NC}"
-    echo -e "${BLUE}----------------------------------------${NC}"
-    cat ~/.ssh/id_ed25519.pub
-    echo -e "${BLUE}----------------------------------------${NC}"
-    
-    echo -e "\n${YELLOW}SSHキーをGitHubアカウントに追加するには:${NC}"
-    echo -e "1. GitHubにログイン"
-    echo -e "2. 右上のプロフィールアイコン → Settings"
-    echo -e "3. 左側メニューの「SSH and GPG keys」→「New SSH key」"
-    echo -e "4. タイトルを入力（例: EC2 Bootstrap Instance AL2023）"
-    echo -e "5. 上記の公開キーを貼り付け"
-    echo -e "6. 「Add SSH key」をクリック"
-    
-    read -p "GitHubにキーを追加したら Enter キーを押してください..."
-  else
-    echo -e "${GREEN}既存のSSHキーが見つかりました。新規生成をスキップします。${NC}"
+    # SSMからキーを復元
+    if restore_ssh_key_from_ssm; then
+      echo -e "${GREEN}✓ SSHキーの復元が完了しました${NC}"
+      
+      # 公開鍵を表示
+      echo -e "\n${BLUE}=== GitHub公開鍵 ===${NC}"
+      echo -e "${YELLOW}以下の公開鍵がGitHubに登録されていることを確認してください:${NC}"
+      echo -e "${BLUE}----------------------------------------${NC}"
+      cat ~/.ssh/id_ed25519.pub
+      echo -e "${BLUE}----------------------------------------${NC}"
+      return 0
+    fi
   fi
+  
+  # 既存のローカルキーをチェック
+  if [ -f ~/.ssh/id_ed25519 ]; then
+    echo -e "${GREEN}ローカルに既存のSSHキーが見つかりました。${NC}"
+    
+    # SSMに保存されていない場合は保存するか確認
+    if [ -z "$GIT_EMAIL" ]; then
+      echo -e "${YELLOW}このキーをSSMパラメータストアに保存しますか？${NC}"
+      echo -e "${YELLOW}（今後、新しいインスタンスでも同じキーを使用できます）${NC}"
+      read -p "保存しますか？ (Y/n): " save_to_ssm
+      
+      if [[ ! $save_to_ssm =~ ^[Nn]$ ]]; then
+        # メールアドレスを取得
+        read -p "GitHub用のメールアドレスを入力してください: " git_email
+        
+        # SSMに保存
+        save_ssh_key_to_ssm "$git_email"
+      fi
+    fi
+    return 0
+  fi
+  
+  # 新規キー生成
+  echo -e "${YELLOW}新しいSSHキーを生成します。${NC}"
+  
+  # メールアドレスを取得（SSMから取得できなかった場合は入力を求める）
+  if [ -z "$GIT_EMAIL" ]; then
+    read -p "GitHub用のメールアドレスを入力してください: " git_email
+  else
+    git_email="$GIT_EMAIL"
+    echo -e "${GREEN}メールアドレス: $git_email${NC}"
+  fi
+  
+  # SSHキーを生成
+  ssh-keygen -t ed25519 -C "$git_email" -f ~/.ssh/id_ed25519 -N ""
+  
+  # SSMに保存
+  save_ssh_key_to_ssm "$git_email"
+  
+  # 公開鍵を表示
+  echo -e "\n${GREEN}SSHキーが生成されました。以下の公開キーをGitHubに登録してください:${NC}"
+  echo -e "${BLUE}----------------------------------------${NC}"
+  cat ~/.ssh/id_ed25519.pub
+  echo -e "${BLUE}----------------------------------------${NC}"
+  
+  echo -e "\n${YELLOW}SSHキーをGitHubアカウントに追加するには:${NC}"
+  echo -e "1. GitHubにログイン"
+  echo -e "2. 右上のプロフィールアイコン → Settings"
+  echo -e "3. 左側メニューの「SSH and GPG keys」→「New SSH key」"
+  echo -e "4. タイトルを入力（例: EC2 Bootstrap Instance AL2023）"
+  echo -e "5. 上記の公開キーを貼り付け"
+  echo -e "6. 「Add SSH key」をクリック"
+  
+  read -p "GitHubにキーを追加したら Enter キーを押してください..."
+}
+
+# SSHキーをSSMパラメータストアに保存する関数
+save_ssh_key_to_ssm() {
+  local git_email="$1"
+  
+  echo -e "${YELLOW}SSHキーをSSMパラメータストアに保存しています...${NC}"
+  
+  # メールアドレスを保存
+  aws ssm put-parameter \
+    --name "/bootstrap/github/email" \
+    --value "$git_email" \
+    --type "String" \
+    --description "GitHub email address for SSH key" \
+    --overwrite \
+    2>/dev/null || echo -e "${YELLOW}メールアドレスの保存をスキップ${NC}"
+  
+  # 秘密鍵を保存（SecureString）
+  aws ssm put-parameter \
+    --name "/bootstrap/github/ssh-private-key" \
+    --value "$(cat ~/.ssh/id_ed25519)" \
+    --type "SecureString" \
+    --description "GitHub SSH private key" \
+    --overwrite \
+    2>/dev/null || echo -e "${RED}秘密鍵の保存に失敗しました${NC}"
+  
+  # 公開鍵を保存
+  aws ssm put-parameter \
+    --name "/bootstrap/github/ssh-public-key" \
+    --value "$(cat ~/.ssh/id_ed25519.pub)" \
+    --type "String" \
+    --description "GitHub SSH public key" \
+    --overwrite \
+    2>/dev/null || echo -e "${RED}公開鍵の保存に失敗しました${NC}"
+  
+  echo -e "${GREEN}✓ SSHキーがSSMパラメータストアに安全に保存されました${NC}"
+  echo -e "${GREEN}  パラメータ:${NC}"
+  echo -e "${GREEN}    - /bootstrap/github/email${NC}"
+  echo -e "${GREEN}    - /bootstrap/github/ssh-private-key (暗号化)${NC}"
+  echo -e "${GREEN}    - /bootstrap/github/ssh-public-key${NC}"
 }
 
 # Ansibleの存在確認
@@ -124,12 +244,38 @@ fi
 echo -e "${YELLOW}ブートストラップ環境をセットアップします...${NC}"
 echo -e "${YELLOW}sudo権限が必要なため、パスワードの入力を求められる場合があります。${NC}"
 
-# GitHubリポジトリ用のSSHキーがあるか確認
-if [ ! -f ~/.ssh/id_ed25519 ]; then
-  echo -e "\n${YELLOW}GitHubアクセス用のSSHキーが必要ですか？${NC}"
-  read -p "SSHキーを生成しますか？ (y/N): " generate_key
-  if [[ $generate_key =~ ^[Yy]$ ]]; then
+# GitHubリポジトリ用のSSHキーを設定
+echo -e "\n${YELLOW}GitHub SSH キーの設定を確認しています...${NC}"
+
+# SSMパラメータストアから既存のキーを確認
+GIT_EMAIL_CHECK=$(aws ssm get-parameter --name "/bootstrap/github/email" --query 'Parameter.Value' --output text 2>/dev/null || echo "")
+
+if [ -n "$GIT_EMAIL_CHECK" ]; then
+  # SSMに設定が存在する場合は自動的に復元
+  echo -e "${GREEN}✓ SSMパラメータストアにGitHub設定が見つかりました${NC}"
+  
+  if [ ! -f ~/.ssh/id_ed25519 ]; then
+    # ローカルにキーがない場合は復元
+    restore_ssh_key_from_ssm
+  else
+    echo -e "${GREEN}✓ ローカルにSSHキーが既に存在します${NC}"
+  fi
+else
+  # SSMに設定がない場合
+  if [ ! -f ~/.ssh/id_ed25519 ]; then
+    echo -e "\n${YELLOW}GitHubアクセス用のSSHキーが設定されていません。${NC}"
+    echo -e "${YELLOW}SSHキーを生成して、SSMパラメータストアに保存します。${NC}"
     generate_ssh_key
+  else
+    # ローカルにキーはあるがSSMにない場合
+    echo -e "${GREEN}ローカルにSSHキーが見つかりました。${NC}"
+    echo -e "${YELLOW}このキーをSSMパラメータストアに保存しますか？${NC}"
+    read -p "保存しますか？ (Y/n): " save_existing
+    
+    if [[ ! $save_existing =~ ^[Nn]$ ]]; then
+      read -p "GitHub用のメールアドレスを入力してください: " git_email
+      save_ssh_key_to_ssm "$git_email"
+    fi
   fi
 fi
 
@@ -138,7 +284,16 @@ echo -e "\n${YELLOW}Ansibleプレイブックを実行して環境をセット�
 
 # 環境変数を設定
 export PATH="$HOME/.local/bin:$PATH"
+export ANSIBLE_COLLECTIONS_PATH="/usr/share/ansible/collections"
 source ~/.bashrc
+
+# 既存のcollectionsをクリーンアップ（ユーザー空間の重複を防ぐ）
+if [ -d "$HOME/.local/lib/python3.9/site-packages/ansible_collections" ]; then
+  echo -e "${YELLOW}ユーザー空間の既存のAnsible collectionsを検出しました。${NC}"
+  echo -e "${YELLOW}システム全体のcollectionsを使用するため、ユーザー空間のcollectionsを削除します。${NC}"
+  rm -rf "$HOME/.local/lib/python3.9/site-packages/ansible_collections"
+  echo -e "${GREEN}✓ ユーザー空間のcollectionsをクリーンアップしました${NC}"
+fi
 
 # ansible-playbookのパスを取得
 ANSIBLE_PLAYBOOK_PATH=$(which ansible-playbook)
@@ -148,6 +303,7 @@ if [ -z "$ANSIBLE_PLAYBOOK_PATH" ]; then
 fi
 
 echo -e "${GREEN}ansible-playbook の場所: $ANSIBLE_PLAYBOOK_PATH${NC}"
+echo -e "${GREEN}ANSIBLE_COLLECTIONS_PATH: $ANSIBLE_COLLECTIONS_PATH${NC}"
 
 # 絶対パスで ansible-playbook を実行（Amazon Linux 2023では通常sudoは不要）
 $ANSIBLE_PLAYBOOK_PATH "$PLAYBOOK_PATH" -v

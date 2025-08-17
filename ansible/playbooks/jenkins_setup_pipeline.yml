@@ -50,6 +50,27 @@
     - pulumi_helper
     
   tasks:
+    # SSMパラメータストアの初期化（最初に実行）
+    - name: Initialize SSM Parameter Store
+      ansible.builtin.include_role:
+        name: jenkins_ssm_init
+      when: run_ssm_init | default(true) | bool
+      tags:
+        - ssm-init
+        - always
+    
+    - name: Verify SSM initialization
+      ansible.builtin.fail:
+        msg: "SSM parameters must be initialized before proceeding. Run 'ansible-playbook deploy_jenkins_ssm_init.yml' first."
+      when: 
+        - run_ssm_init | default(true) | bool
+        - not (ssm_initialized | default(false) | bool)
+    
+    - name: Wait for SSM parameters to propagate
+      ansible.builtin.pause:
+        seconds: 5
+      when: ssm_initialized | default(false) | bool
+    
     - name: Check scripts directory exists
       ansible.builtin.stat:
         path: "{{ scripts_dir }}"

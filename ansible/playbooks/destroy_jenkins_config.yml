@@ -1,0 +1,108 @@
+---
+# destroy_jenkins_config.yml
+# Jenkinsコントローラーの設定リソースを削除
+#
+# 使用方法:
+#   ansible-playbook destroy_jenkins_config.yml -e "env=dev confirm=true"
+#
+# 注意:
+#   - confirm=true を指定しないと削除は実行されません
+#   - 設定管理用のリソースのみ削除されます
+
+- name: Destroy Jenkins Configuration Resources
+  hosts: localhost
+  connection: local
+  gather_facts: yes
+  vars:
+    # コマンドラインから環境名を受け取る
+    env_name: "{{ env | default('dev') }}"
+    # 削除確認フラグ
+    confirm_destroy: "{{ confirm | default(false) }}"
+  
+  pre_tasks:
+    # all.yml から変数を読み込む
+    - name: Include group_vars/all.yml
+      ansible.builtin.include_vars:
+        file: "{{ playbook_dir }}/../inventory/group_vars/all.yml"
+    
+    # 必要な変数を設定
+    - name: Set required variables from all.yml
+      ansible.builtin.set_fact:
+        project_name: "{{ infra.project_name }}"
+        aws_region_name: "{{ infra.aws.default_region }}"
+        config_project_name: "{{ infra.pulumi.config_project }}"
+    
+    - name: Check confirmation flag
+      ansible.builtin.fail:
+        msg: |
+          ========================================
+          Destruction requires confirmation.
+          Please run with: -e "confirm=true"
+          ========================================
+      when: not confirm_destroy | bool
+    
+    - name: Display destruction warning
+      ansible.builtin.debug:
+        msg:
+          - "=========================================="
+          - "WARNING: Jenkins Configuration Resources Destruction"
+          - "=========================================="
+          - "Environment: {{ env_name }}"
+          - "Project: {{ project_name }}"
+          - "Region: {{ aws_region_name }}"
+          - ""
+          - "This will destroy:"
+          - "  - Configuration management resources"
+          - "  - SSM Parameters for Jenkins config"
+          - "  - Configuration backup resources"
+          - ""
+          - "Note: Jenkins instance will continue running"
+          - "=========================================="
+    
+    - name: Countdown before destruction
+      ansible.builtin.pause:
+        seconds: 10
+        prompt: "Starting destruction in 10 seconds... Press Ctrl+C to cancel"
+  
+  tasks:
+    - name: Setup AWS environment
+      ansible.builtin.include_role:
+        name: aws_setup
+    
+    - name: Destroy Jenkins Configuration Resources
+      ansible.builtin.include_role:
+        name: jenkins_config
+      vars:
+        operation: "destroy"
+  
+  post_tasks:
+    - name: Display completion message
+      ansible.builtin.debug:
+        msg:
+          - "=========================================="
+          - "Destruction Complete"
+          - "=========================================="
+          - "Jenkins Configuration Resources have been destroyed."
+          - ""
+          - "Removed resources:"
+          - "  - Configuration SSM parameters"
+          - "  - Configuration management resources"
+          - ""
+          - "Jenkins instance remains operational."
+          - "=========================================="
+      when: config_destroyed | default(false)
+    
+    - name: Display failure message
+      ansible.builtin.debug:
+        msg:
+          - "=========================================="
+          - "Destruction Failed or Incomplete"
+          - "=========================================="
+          - "Some resources may not have been deleted."
+          - "Please check AWS Console for remaining resources."
+          - ""
+          - "Common cleanup targets:"
+          - "  - Systems Manager > Parameter Store"
+          - "  - S3 buckets (if used for config backup)"
+          - "=========================================="
+      when: not (config_destroyed | default(false))

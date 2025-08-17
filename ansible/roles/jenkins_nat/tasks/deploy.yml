@@ -38,21 +38,65 @@
         pulumi_project_path: "{{ pulumi_path }}/jenkins-nat"
         stack_name: "{{ env_name }}"
     
-    - name: Configure NAT stack
-      ansible.builtin.shell: |
-        {{ scripts_dir }}/aws/aws-env.sh
-        cd {{ pulumi_path }}/jenkins-nat
-        pulumi config set aws:region {{ aws_region_name }}
-        pulumi config set {{ nat_project_name }}:projectName {{ project_name }}
-        pulumi config set {{ nat_project_name }}:networkStackName {{ network_project_name }}
-        pulumi config set {{ nat_project_name }}:securityStackName {{ security_project_name }}
-        pulumi config set {{ nat_project_name }}:highAvailabilityMode {{ high_availability_mode | lower }}
-        pulumi config set {{ nat_project_name }}:natInstanceType {{ nat_instance_type }}
-        {% if key_name %}
-        pulumi config set {{ nat_project_name }}:keyName {{ key_name }}
-        {% endif %}
-      register: pulumi_config_result
-      changed_when: pulumi_config_result.rc == 0
+    - name: Configure NAT stack - AWS region
+      ansible.builtin.include_role:
+        name: pulumi_helper
+        tasks_from: set_config
+      vars:
+        pulumi_project_path: "{{ pulumi_path }}/jenkins-nat"
+        config_key: "aws:region"
+        config_value: "{{ aws_region_name }}"
+
+    # SSMパラメータの確認
+    - name: Get project name from SSM Parameter Store
+      ansible.builtin.include_role:
+        name: ssm_parameter_store
+        tasks_from: get_parameter
+      vars:
+        parameter_name: "/jenkins-infra/{{ env_name }}/config/project-name"
+        store_as: "ssm_project_name"
+    
+    - name: Get VPC ID from SSM Parameter Store
+      ansible.builtin.include_role:
+        name: ssm_parameter_store
+        tasks_from: get_parameter
+      vars:
+        parameter_name: "/jenkins-infra/{{ env_name }}/network/vpc-id"
+        store_as: "ssm_vpc_id"
+    
+    - name: Get NAT high availability mode from SSM Parameter Store
+      ansible.builtin.include_role:
+        name: ssm_parameter_store
+        tasks_from: get_parameter
+      vars:
+        parameter_name: "/jenkins-infra/{{ env_name }}/config/nat-high-availability"
+        store_as: "ssm_nat_high_availability"
+    
+    - name: Get NAT instance type from SSM Parameter Store
+      ansible.builtin.include_role:
+        name: ssm_parameter_store
+        tasks_from: get_parameter
+      vars:
+        parameter_name: "/jenkins-infra/{{ env_name }}/config/nat-instance-type"
+        store_as: "ssm_nat_instance_type"
+    
+    - name: Get NAT instance security group ID from SSM Parameter Store
+      ansible.builtin.include_role:
+        name: ssm_parameter_store
+        tasks_from: get_parameter
+      vars:
+        parameter_name: "/jenkins-infra/{{ env_name }}/security/nat-instance-sg-id"
+        store_as: "ssm_nat_instance_sg_id"
+    
+    - name: Display configuration from SSM
+      ansible.builtin.debug:
+        msg: |
+          Using configuration from SSM:
+          - Project Name: {{ ssm_project_name }}
+          - VPC ID: {{ ssm_vpc_id }}
+          - NAT High Availability: {{ ssm_nat_high_availability }}
+          - NAT Instance Type: {{ ssm_nat_instance_type }}
+          - NAT Instance Security Group ID: {{ ssm_nat_instance_sg_id }}
 
     # Pulumiプレビュー
     - name: Preview NAT deployment
@@ -76,59 +120,77 @@
         seconds: 10
       when: not ansible_check_mode
     
-    # スタック出力の取得
-    - name: Get NAT type from stack outputs
-      ansible.builtin.shell: |
-        cd {{ pulumi_path }}/jenkins-nat
-        # aws-env.shの出力を変数に格納し、標準出力には出さない
-        AWS_ENV=$({{ scripts_dir }}/aws/aws-env.sh 2>/dev/null)
-        eval "$AWS_ENV"
-        
-        pulumi stack output natTypeExport 2>/dev/null || echo "unknown"
-      register: nat_type_result
-      changed_when: false
+    # SSMパラメータからNATタイプを取得
+    - name: Get NAT type from SSM Parameter Store
+      ansible.builtin.include_role:
+        name: ssm_parameter_store
+        tasks_from: get_parameter
+      vars:
+        parameter_name: "/jenkins-infra/{{ env_name }}/nat/type"
+        store_as: "nat_type"
       ignore_errors: true
     
-    - name: Set NAT type
+    - name: Set default NAT type if not found
       ansible.builtin.set_fact:
-        nat_type: "{{ nat_type_result.stdout | trim }}"
+        nat_type: "instance"
+      when: nat_type is not defined or nat_type == ""
     
-    # NAT リソース ID の取得
-    - name: Get NAT resource IDs
-      ansible.builtin.shell: |
-        cd {{ pulumi_path }}/jenkins-nat
-        # aws-env.shの出力を変数に格納し、標準出力には出さない
-        AWS_ENV=$({{ scripts_dir }}/aws/aws-env.sh 2>/dev/null)
-        eval "$AWS_ENV"
-        
-        pulumi stack output natResourceIdsExport 2>/dev/null || 
-          echo "['mock-nat-resource-id']"
-      register: nat_resource_ids_result
-      changed_when: false
+    # NATインスタンスIDの取得
+    - name: Get NAT instance ID from SSM Parameter Store
+      ansible.builtin.include_role:
+        name: ssm_parameter_store
+        tasks_from: get_parameter
+      vars:
+        parameter_name: "/jenkins-infra/{{ env_name }}/nat/instance-id"
+        store_as: "nat_instance_id"
       ignore_errors: true
+      when: nat_type == "instance"
     
-    - name: Set NAT resource IDs
+    - name: Get NAT gateway A ID from SSM Parameter Store
+      ansible.builtin.include_role:
+        name: ssm_parameter_store
+        tasks_from: get_parameter
+      vars:
+        parameter_name: "/jenkins-infra/{{ env_name }}/nat/gateway-a-id"
+        store_as: "nat_gateway_a_id"
+      ignore_errors: true
+      when: nat_type == "gateway-ha"
+    
+    - name: Get NAT gateway B ID from SSM Parameter Store
+      ansible.builtin.include_role:
+        name: ssm_parameter_store
+        tasks_from: get_parameter
+      vars:
+        parameter_name: "/jenkins-infra/{{ env_name }}/nat/gateway-b-id"
+        store_as: "nat_gateway_b_id"
+      ignore_errors: true
+      when: nat_type == "gateway-ha"
+    
+    - name: Set NAT resource IDs for instance mode
       ansible.builtin.set_fact:
-        nat_resource_ids: "{{ nat_resource_ids_result.stdout | trim }}"
+        nat_resource_ids: "[{{ nat_instance_id | default('N/A') }}]"
+      when: nat_type == "instance"
+    
+    - name: Set NAT resource IDs for gateway mode
+      ansible.builtin.set_fact:
+        nat_resource_ids: "[{{ nat_gateway_a_id | default('N/A') }}, {{ nat_gateway_b_id | default('N/A') }}]"
+      when: nat_type == "gateway-ha"
     
     # NAT Instance の場合、追加情報を取得
-    - name: Get NAT instance public IP (if applicable)
-      ansible.builtin.shell: |
-        cd {{ pulumi_path }}/jenkins-nat
-        # aws-env.shの出力を変数に格納し、標準出力には出さない
-        AWS_ENV=$({{ scripts_dir }}/aws/aws-env.sh 2>/dev/null)
-        eval "$AWS_ENV"
-        
-        pulumi stack output natInstancePublicIpExport 2>/dev/null || echo "N/A"
-      register: nat_instance_ip_result
-      changed_when: false
+    - name: Get NAT instance public IP from SSM Parameter Store
+      ansible.builtin.include_role:
+        name: ssm_parameter_store
+        tasks_from: get_parameter
+      vars:
+        parameter_name: "/jenkins-infra/{{ env_name }}/nat/instance-public-ip"
+        store_as: "nat_instance_public_ip"
       ignore_errors: true
-      when: not high_availability_mode
+      when: nat_type == "instance"
     
-    - name: Set NAT instance IP
+    - name: Set default NAT instance IP if not found
       ansible.builtin.set_fact:
-        nat_instance_public_ip: "{{ nat_instance_ip_result.stdout | trim }}"
-      when: not high_availability_mode
+        nat_instance_public_ip: "N/A"
+      when: nat_instance_public_ip is not defined or nat_instance_public_ip == ""
     
     - name: Set NAT facts for use in other playbooks
       ansible.builtin.set_fact:
@@ -142,8 +204,12 @@
           Stack Name: {{ nat_project_name }}
           NAT Type: {{ nat_type }}
           NAT Resource IDs: {{ nat_resource_ids }}
-          {% if not high_availability_mode and nat_instance_public_ip is defined %}
+          {% if nat_type == "instance" and nat_instance_public_ip is defined %}
           NAT Instance Public IP: {{ nat_instance_public_ip }}
+          {% endif %}
+          {% if nat_type == "gateway-ha" %}
+          NAT Gateway A ID: {{ nat_gateway_a_id | default('N/A') }}
+          NAT Gateway B ID: {{ nat_gateway_b_id | default('N/A') }}
           {% endif %}
   
   rescue:

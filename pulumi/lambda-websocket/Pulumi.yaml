@@ -1,4 +1,3 @@
 name: lambda-websocket
-organization: tielec
 runtime: nodejs
 description: Lambda API WebSocket Infrastructure - WebSocket API for real-time communication

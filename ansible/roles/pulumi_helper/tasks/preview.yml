@@ -27,6 +27,21 @@
         msg: "Previewing changes for stack '{{ current_stack.stdout }}' in {{ pulumi_project_path | basename }}"
       when: not ansible_check_mode
     
+    # Pulumiスタックをリフレッシュ（AWS上のリソースの現在の状態を同期）
+    - name: Refresh Pulumi stack state
+      ansible.builtin.shell: |
+        cd {{ pulumi_project_path }}
+        {{ pulumi_commands.refresh }}
+      register: pulumi_refresh_result
+      changed_when: false
+      when: not ansible_check_mode
+      ignore_errors: true
+    
+    - name: Display refresh result
+      ansible.builtin.debug:
+        msg: "Stack state refreshed successfully"
+      when: not ansible_check_mode and pulumi_refresh_result.rc == 0
+    
     # プレビューを実行
     - name: Run preview
       ansible.builtin.shell: |
