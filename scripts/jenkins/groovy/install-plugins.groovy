@@ -91,30 +91,51 @@ def plugins = [
 
 // アップデートセンターの初期化を待機
 int attempts = 0
-int maxAttempts = 3
+int maxAttempts = 10  // 試行回数を増やす
 boolean updateCenterInitialized = false
+
+// 初回起動時の場合、Update Centerの初期化に時間がかかる
+println("Waiting for Update Center to initialize...")
+Thread.sleep(10000) // 初期待機時間を設ける
 
 while (!updateCenterInitialized && attempts < maxAttempts) {
     try {
         println("Checking update center... (attempt ${attempts + 1}/${maxAttempts})")
+        
+        // Update Centerを更新
+        uc.updateAllSites()
+        
+        // 少し待機してからチェック
+        Thread.sleep(5000)
+        
         def updateCenter = uc.getById("default")
         def available = updateCenter.getAvailables()
-        if (available && !available.isEmpty()) {
+        
+        // プラグインの利用可能リストを取得できるかチェック
+        if (updateCenter.getUpdates().size() > 0 || available.size() > 0) {
             updateCenterInitialized = true
-            println("Update center initialized successfully.")
+            println("Update center initialized successfully. Available plugins: ${available.size()}")
         } else {
-            println("Update center not initialized yet. Waiting...")
-            Thread.sleep(5000) // 5秒待機
-            uc.updateAllSites() // 更新を再試行
+            // まだ初期化されていない場合は、updateSiteのURLから直接チェック
+            def site = updateCenter.getSite()
+            if (site != null && site.getDataTimestamp() > 0) {
+                updateCenterInitialized = true
+                println("Update center initialized (data timestamp: ${new Date(site.getDataTimestamp())})")
+            } else {
+                println("Update center not initialized yet. Waiting...")
+                Thread.sleep(10000) // 10秒待機
+            }
         }
     } catch (Exception e) {
         println("Error checking update center: ${e.message}")
+        Thread.sleep(5000)
     }
     attempts++
 }
 
 if (!updateCenterInitialized) {
-    println("Warning: Update center could not be fully initialized. Some plugins might not install properly.")
+    println("Warning: Update center could not be fully initialized after ${maxAttempts} attempts.")
+    println("Attempting to proceed anyway...")
 }
 
 // プラグインをインストールまたは更新する関数
@@ -125,12 +146,29 @@ def installOrUpdatePlugin = { pluginId ->
         // プラグインがインストールされていない場合、新規インストール
         println("Installing plugin: ${pluginId}")
         try {
-            def installFuture = uc.getPlugin(pluginId).deploy()
-            while(!installFuture.isDone()) {
-                Thread.sleep(500)
+            def pluginToInstall = uc.getPlugin(pluginId)
+            if (pluginToInstall == null) {
+                println("Plugin ${pluginId} not found in update center. Skipping...")
+                return false
             }
-            println("Successfully installed plugin: ${pluginId}")
-            return true
+            
+            // 依存関係も含めてインストール
+            def installFuture = pluginToInstall.deploy(true)  // true = dynamicLoad
+            
+            // インストール完了を待つ
+            int waitCount = 0
+            while(!installFuture.isDone() && waitCount < 60) {  // 最大30秒待機
+                Thread.sleep(500)
+                waitCount++
+            }
+            
+            if (installFuture.isDone()) {
+                println("Successfully installed plugin: ${pluginId}")
+                return true
+            } else {
+                println("Plugin ${pluginId} installation timed out")
+                return false
+            }
         } catch (Exception e) {
             println("Failed to install plugin ${pluginId}: ${e.message}")
             return false
