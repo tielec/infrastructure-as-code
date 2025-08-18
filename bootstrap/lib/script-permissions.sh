@@ -11,21 +11,18 @@ check_script_permissions() {
     local fixed_count=0
     local script_count=0
     
-    if ! ensure_directory "$dir"; then
+    if [ ! -d "$dir" ]; then
+        echo "0:0"
         return 1
     fi
-    
-    log_info "ディレクトリをチェック: $dir"
     
     while IFS= read -r -d '' script; do
         script_count=$((script_count + 1))
         
         if [ ! -x "$script" ]; then
-            log_info "実行権限を付与: $script"
-            chmod +x "$script"
-            fixed_count=$((fixed_count + 1))
+            chmod +x "$script" 2>/dev/null && fixed_count=$((fixed_count + 1))
         fi
-    done < <(find "$dir" -type f -name "$pattern" -print0)
+    done < <(find "$dir" -type f -name "$pattern" -print0 2>/dev/null)
     
     echo "$script_count:$fixed_count"
 }
@@ -35,6 +32,7 @@ fix_all_script_permissions() {
     local repo_root="$1"
     local total_scripts=0
     local total_fixed=0
+    local fixed_files=()
     
     log_section "スクリプトファイルの実行権限確認"
     
@@ -48,12 +46,17 @@ fix_all_script_permissions() {
     
     for dir in "${directories[@]}"; do
         if [ -d "$dir" ]; then
-            local result=$(check_script_permissions "$dir" "*.sh")
-            local count=$(echo "$result" | cut -d: -f1)
-            local fixed=$(echo "$result" | cut -d: -f2)
-            
-            total_scripts=$((total_scripts + count))
-            total_fixed=$((total_fixed + fixed))
+            # ディレクトリ内のスクリプトを個別にチェック
+            while IFS= read -r -d '' script; do
+                total_scripts=$((total_scripts + 1))
+                
+                if [ ! -x "$script" ]; then
+                    if chmod +x "$script" 2>/dev/null; then
+                        total_fixed=$((total_fixed + 1))
+                        fixed_files+=("$script")
+                    fi
+                fi
+            done < <(find "$dir" -type f -name "*.sh" -print0 2>/dev/null)
         fi
     done
     
@@ -62,6 +65,9 @@ fix_all_script_permissions() {
     
     if [ $total_fixed -gt 0 ]; then
         log_warn "  実行権限を付与したファイル数: $total_fixed"
+        for file in "${fixed_files[@]}"; do
+            log_info "    - $(basename "$file")"
+        done
     else
         log_info "  すべてのスクリプトファイルに実行権限が付与されています"
     fi
