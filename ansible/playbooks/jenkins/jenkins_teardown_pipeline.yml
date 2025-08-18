@@ -7,7 +7,7 @@
 #   ansible-playbook playbooks/jenkins/jenkins_teardown_pipeline.yml -e "env=dev"                # 確認のみ
 #   ansible-playbook playbooks/jenkins/jenkins_teardown_pipeline.yml -e "env=dev confirm=true"   # 実際に削除
 
-- name: Jenkins Infrastructure Teardown Pipeline
+- name: Jenkins Infrastructure Teardown Pipeline - Confirmation
   hosts: localhost
   connection: local
   gather_facts: no
@@ -41,122 +41,116 @@
       ansible.builtin.debug:
         msg: "Deletion confirmed. Starting infrastructure teardown for environment '{{ env_name }}'..."
       when: confirm | bool
-    # 削除順序は作成順序の逆（依存関係を考慮）
-    
-    # Jenkinsアプリケーション設定の削除
-    - name: Destroy Jenkins Application Configuration
-      ansible.builtin.import_playbook: remove/remove_jenkins_application.yml
-      vars:
-        env: "{{ env_name }}"
-        confirm: true
-      when: destroy_application | default(true) | bool
-      tags:
-        - application
-    
-    # Jenkinsエージェントの削除
-    - name: Destroy Jenkins Agent
-      ansible.builtin.import_playbook: remove/remove_jenkins_agent.yml
-      vars:
-        env: "{{ env_name }}"
-        confirm: true
-      when: destroy_agent | default(true) | bool
-      tags:
-        - agent
-    
-    # Jenkins Agent AMIの削除
-    - name: Destroy Jenkins Agent AMI Images
-      ansible.builtin.import_playbook: remove/remove_jenkins_agent_ami.yml
-      vars:
-        env: "{{ env_name }}"
-        confirm: true
-      when: destroy_agent_ami | default(false) | bool
-      tags:
-        - agent-ami
-    
-    # Jenkins設定の削除
-    - name: Destroy Jenkins Configuration
-      ansible.builtin.import_playbook: remove/remove_jenkins_config.yml
-      vars:
-        env: "{{ env_name }}"
-        confirm: true
-      when: destroy_config | default(true) | bool
-      tags:
-        - config
-    
-    # Jenkinsコントローラーの削除
-    - name: Destroy Jenkins Controller
-      ansible.builtin.import_playbook: remove/remove_jenkins_controller.yml
-      vars:
-        env: "{{ env_name }}"
-        confirm: true
-      when: destroy_controller | default(true) | bool
-      tags:
-        - controller
-    
-    # ロードバランサーの削除
-    - name: Destroy LoadBalancer Infrastructure
-      ansible.builtin.import_playbook: remove/remove_jenkins_loadbalancer.yml
-      vars:
-        env: "{{ env_name }}"
-        confirm: true
-      when: destroy_loadbalancer | default(true) | bool
-      tags:
-        - loadbalancer
-    
-    # ストレージ（EFS）の削除
-    - name: Destroy Storage Infrastructure (EFS)
-      ansible.builtin.import_playbook: remove/remove_jenkins_storage.yml
-      vars:
-        env: "{{ env_name }}"
-        confirm: true
-      when: destroy_storage | default(true) | bool
-      tags:
-        - storage
-    
-    # NATインフラの削除
-    - name: Destroy NAT Infrastructure
-      ansible.builtin.import_playbook: remove/remove_jenkins_nat.yml
-      vars:
-        env: "{{ env_name }}"
-        confirm: true
-      when: destroy_nat | default(true) | bool
-      tags:
-        - nat
-    
-    # セキュリティグループの削除
-    - name: Destroy Security Groups
-      ansible.builtin.import_playbook: remove/remove_jenkins_security.yml
-      vars:
-        env: "{{ env_name }}"
-        confirm: true
-      when: destroy_security | default(true) | bool
-      tags:
-        - security
-    
-    # ネットワークインフラの削除
-    - name: Destroy Network Infrastructure
-      ansible.builtin.import_playbook: remove/remove_jenkins_network.yml
-      vars:
-        env: "{{ env_name }}"
-        confirm: true
-      when: destroy_network | default(true) | bool
-      tags:
-        - network
-    
-    # SSMパラメータストアの削除（最後に実行）
-    - name: Destroy SSM Parameter Store
-      ansible.builtin.import_playbook: remove/remove_jenkins_ssm_init.yml
-      vars:
-        env: "{{ env_name }}"
-        confirm: true
-      when: destroy_ssm_init | default(true) | bool
-      tags:
-        - ssm-init
+
+# 削除順序は作成順序の逆（依存関係を考慮）
+
+# Jenkinsアプリケーション設定の削除
+- import_playbook: remove/remove_jenkins_application.yml
+  vars:
+    env: "{{ env | default('dev') }}"
+    confirm: true
+  when: (confirm | default(false) | bool) and (destroy_application | default(true) | bool)
+  tags:
+    - application
+
+# Jenkinsエージェントの削除
+- import_playbook: remove/remove_jenkins_agent.yml
+  vars:
+    env: "{{ env | default('dev') }}"
+    confirm: true
+  when: (confirm | default(false) | bool) and (destroy_agent | default(true) | bool)
+  tags:
+    - agent
+
+# Jenkins Agent AMIの削除
+- import_playbook: remove/remove_jenkins_agent_ami.yml
+  vars:
+    env: "{{ env | default('dev') }}"
+    confirm: true
+  when: (confirm | default(false) | bool) and (destroy_agent_ami | default(false) | bool)
+  tags:
+    - agent-ami
+
+# Jenkins設定の削除
+- import_playbook: remove/remove_jenkins_config.yml
+  vars:
+    env: "{{ env | default('dev') }}"
+    confirm: true
+  when: (confirm | default(false) | bool) and (destroy_config | default(true) | bool)
+  tags:
+    - config
+
+# Jenkinsコントローラーの削除
+- import_playbook: remove/remove_jenkins_controller.yml
+  vars:
+    env: "{{ env | default('dev') }}"
+    confirm: true
+  when: (confirm | default(false) | bool) and (destroy_controller | default(true) | bool)
+  tags:
+    - controller
+
+# ロードバランサーの削除
+- import_playbook: remove/remove_jenkins_loadbalancer.yml
+  vars:
+    env: "{{ env | default('dev') }}"
+    confirm: true
+  when: (confirm | default(false) | bool) and (destroy_loadbalancer | default(true) | bool)
+  tags:
+    - loadbalancer
+
+# ストレージ（EFS）の削除
+- import_playbook: remove/remove_jenkins_storage.yml
+  vars:
+    env: "{{ env | default('dev') }}"
+    confirm: true
+  when: (confirm | default(false) | bool) and (destroy_storage | default(true) | bool)
+  tags:
+    - storage
+
+# NATインフラの削除
+- import_playbook: remove/remove_jenkins_nat.yml
+  vars:
+    env: "{{ env | default('dev') }}"
+    confirm: true
+  when: (confirm | default(false) | bool) and (destroy_nat | default(true) | bool)
+  tags:
+    - nat
+
+# セキュリティグループの削除
+- import_playbook: remove/remove_jenkins_security.yml
+  vars:
+    env: "{{ env | default('dev') }}"
+    confirm: true
+  when: (confirm | default(false) | bool) and (destroy_security | default(true) | bool)
+  tags:
+    - security
+
+# ネットワークインフラの削除
+- import_playbook: remove/remove_jenkins_network.yml
+  vars:
+    env: "{{ env | default('dev') }}"
+    confirm: true
+  when: (confirm | default(false) | bool) and (destroy_network | default(true) | bool)
+  tags:
+    - network
+
+# SSMパラメータストアの削除（最後に実行）
+- import_playbook: remove/remove_jenkins_ssm_init.yml
+  vars:
+    env: "{{ env | default('dev') }}"
+    confirm: true
+  when: (confirm | default(false) | bool) and (destroy_ssm_init | default(true) | bool)
+  tags:
+    - ssm-init
 
 - name: Teardown Complete
   hosts: localhost
   connection: local
   gather_facts: no
+  
+  vars:
+    env_name: "{{ env | default('dev') }}"
+    confirm: "{{ confirm | default(false) }}"
   
   tasks:
     - name: Display teardown summary
@@ -178,3 +172,4 @@
           3. Review AWS Cost Explorer for any lingering charges
           4. Remove any local Pulumi state backups if no longer needed
           5. Consider rotating any credentials that were used
+      when: confirm | bool

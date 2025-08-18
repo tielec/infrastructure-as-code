@@ -7,7 +7,7 @@
 #   ansible-playbook playbooks/jenkins/jenkins_setup_pipeline.yml -e "env=dev"
 #   ansible-playbook playbooks/jenkins/jenkins_setup_pipeline.yml -e "env=dev run_network=true run_security=false"
 
-- name: Jenkins Infrastructure Setup Pipeline
+- name: Jenkins Infrastructure Setup Pipeline - Start
   hosts: localhost
   connection: local
   gather_facts: no
@@ -25,110 +25,102 @@
           Environment: {{ env_name }}
           Starting infrastructure deployment...
 
-    # SSMパラメータストアの初期化（最初に実行）
-    - name: Deploy SSM Parameter Store
-      ansible.builtin.import_playbook: deploy/deploy_jenkins_ssm_init.yml
-      vars:
-        env: "{{ env_name }}"
-      when: run_ssm_init | default(true) | bool
-      tags:
-        - ssm-init
-        - always
-    
-    # ネットワークインフラのデプロイ
-    - name: Deploy Network Infrastructure
-      ansible.builtin.import_playbook: deploy/deploy_jenkins_network.yml
-      vars:
-        env: "{{ env_name }}"
-      when: run_network | default(true) | bool
-      tags:
-        - network
-    
-    # セキュリティグループのデプロイ
-    - name: Deploy Security Groups
-      ansible.builtin.import_playbook: deploy/deploy_jenkins_security.yml
-      vars:
-        env: "{{ env_name }}"
-      when: run_security | default(true) | bool
-      tags:
-        - security
-    
-    # NATインフラのデプロイ
-    - name: Deploy NAT Infrastructure
-      ansible.builtin.import_playbook: deploy/deploy_jenkins_nat.yml
-      vars:
-        env: "{{ env_name }}"
-      when: run_nat | default(true) | bool
-      tags:
-        - nat
-    
-    # ストレージ（EFS）のデプロイ
-    - name: Deploy Storage Infrastructure (EFS)
-      ansible.builtin.import_playbook: deploy/deploy_jenkins_storage.yml
-      vars:
-        env: "{{ env_name }}"
-      when: run_storage | default(true) | bool
-      tags:
-        - storage
-    
-    # ロードバランサーのデプロイ
-    - name: Deploy LoadBalancer Infrastructure
-      ansible.builtin.import_playbook: deploy/deploy_jenkins_loadbalancer.yml
-      vars:
-        env: "{{ env_name }}"
-      when: run_loadbalancer | default(true) | bool
-      tags:
-        - loadbalancer
-    
-    # Jenkinsコントローラーのデプロイ
-    - name: Deploy Jenkins Controller
-      ansible.builtin.import_playbook: deploy/deploy_jenkins_controller.yml
-      vars:
-        env: "{{ env_name }}"
-      when: run_controller | default(true) | bool
-      tags:
-        - controller
-    
-    # Jenkinsコントローラーの設定
-    - name: Configure Jenkins Controller
-      ansible.builtin.import_playbook: deploy/deploy_jenkins_config.yml
-      vars:
-        env: "{{ env_name }}"
-      when: run_config | default(true) | bool
-      tags:
-        - config
-    
-    # Jenkins Agent AMI Builderのデプロイ（オプション）
-    - name: Deploy Jenkins Agent AMI Builder
-      ansible.builtin.import_playbook: deploy/deploy_jenkins_agent_ami.yml
-      vars:
-        env: "{{ env_name }}"
-      when: run_agent_ami | default(false) | bool
-      tags:
-        - agent-ami
-    
-    # Jenkinsエージェントのデプロイ
-    - name: Deploy Jenkins Agent
-      ansible.builtin.import_playbook: deploy/deploy_jenkins_agent.yml
-      vars:
-        env: "{{ env_name }}"
-      when: run_agent | default(true) | bool
-      tags:
-        - agent
-    
-    # Jenkinsアプリケーション設定のデプロイ
-    - name: Deploy Jenkins Application Configuration
-      ansible.builtin.import_playbook: deploy/deploy_jenkins_application.yml
-      vars:
-        env: "{{ env_name }}"
-      when: run_application | default(true) | bool
-      tags:
-        - application
+# SSMパラメータストアの初期化（最初に実行）
+- import_playbook: deploy/deploy_jenkins_ssm_init.yml
+  vars:
+    env: "{{ env | default('dev') }}"
+  when: run_ssm_init | default(true) | bool
+  tags:
+    - ssm-init
+    - always
+
+# ネットワークインフラのデプロイ
+- import_playbook: deploy/deploy_jenkins_network.yml
+  vars:
+    env: "{{ env | default('dev') }}"
+  when: run_network | default(true) | bool
+  tags:
+    - network
+
+# セキュリティグループのデプロイ
+- import_playbook: deploy/deploy_jenkins_security.yml
+  vars:
+    env: "{{ env | default('dev') }}"
+  when: run_security | default(true) | bool
+  tags:
+    - security
+
+# NATインフラのデプロイ
+- import_playbook: deploy/deploy_jenkins_nat.yml
+  vars:
+    env: "{{ env | default('dev') }}"
+  when: run_nat | default(true) | bool
+  tags:
+    - nat
+
+# ストレージ（EFS）のデプロイ
+- import_playbook: deploy/deploy_jenkins_storage.yml
+  vars:
+    env: "{{ env | default('dev') }}"
+  when: run_storage | default(true) | bool
+  tags:
+    - storage
+
+# ロードバランサーのデプロイ
+- import_playbook: deploy/deploy_jenkins_loadbalancer.yml
+  vars:
+    env: "{{ env | default('dev') }}"
+  when: run_loadbalancer | default(true) | bool
+  tags:
+    - loadbalancer
+
+# Jenkinsコントローラーのデプロイ
+- import_playbook: deploy/deploy_jenkins_controller.yml
+  vars:
+    env: "{{ env | default('dev') }}"
+  when: run_controller | default(true) | bool
+  tags:
+    - controller
+
+# Jenkinsコントローラーの設定
+- import_playbook: deploy/deploy_jenkins_config.yml
+  vars:
+    env: "{{ env | default('dev') }}"
+  when: run_config | default(true) | bool
+  tags:
+    - config
+
+# Jenkins Agent AMI Builderのデプロイ（オプション）
+- import_playbook: deploy/deploy_jenkins_agent_ami.yml
+  vars:
+    env: "{{ env | default('dev') }}"
+  when: run_agent_ami | default(false) | bool
+  tags:
+    - agent-ami
+
+# Jenkinsエージェントのデプロイ
+- import_playbook: deploy/deploy_jenkins_agent.yml
+  vars:
+    env: "{{ env | default('dev') }}"
+  when: run_agent | default(true) | bool
+  tags:
+    - agent
+
+# Jenkinsアプリケーション設定のデプロイ
+- import_playbook: deploy/deploy_jenkins_application.yml
+  vars:
+    env: "{{ env | default('dev') }}"
+  when: run_application | default(true) | bool
+  tags:
+    - application
 
 - name: Setup Complete
   hosts: localhost
   connection: local
   gather_facts: no
+  
+  vars:
+    env_name: "{{ env | default('dev') }}"
   
   tasks:
     - name: Display deployment summary
