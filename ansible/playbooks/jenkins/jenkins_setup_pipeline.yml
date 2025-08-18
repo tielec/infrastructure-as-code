@@ -90,11 +90,11 @@
   tags:
     - config
 
-# Jenkins Agent AMI Builderのデプロイ（オプション）
+# Jenkins Agent AMI Builderのデプロイ
 - import_playbook: deploy/deploy_jenkins_agent_ami.yml
   vars:
     env: "{{ env | default('dev') }}"
-  when: run_agent_ami | default(false) | bool
+  when: run_agent_ami | default(true) | bool
   tags:
     - agent-ami
 
