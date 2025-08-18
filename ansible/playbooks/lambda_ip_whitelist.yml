@@ -12,14 +12,14 @@
     env_name: "{{ env | mandatory('Environment name is required. Use -e env=dev/staging/prod') }}"
     # 操作（必須）
     operation: "{{ op | mandatory('Operation is required. Use -e op=init/list/add/remove/update') }}"
-    # パスを明示的に定義
-    scripts_dir: "{{ playbook_dir }}/../../scripts"
+    # パスを明示的に定義（inventory_dirを基準にした相対パス）
+    scripts_dir: "{{ inventory_dir }}/../../scripts"
   
   pre_tasks:
     # all.yml から変数を読み込む
     - name: Include group_vars/all.yml
       ansible.builtin.include_vars:
-        file: "{{ playbook_dir }}/../inventory/group_vars/all.yml"
+        file: "{{ inventory_dir }}/group_vars/all.yml"
         
     # 必要な変数を設定
     - name: Set required variables from all.yml

@@ -11,9 +11,9 @@
   vars:
     # 環境名はコマンドラインから指定可能
     env_name: "{{ env | default('dev') }}"
-    # パスを明示的に定義
-    scripts_dir: "{{ playbook_dir }}/../../scripts"
-    pulumi_path: "{{ playbook_dir }}/../../pulumi"
+    # パスを明示的に定義（inventory_dirを基準にした相対パス）
+    scripts_dir: "{{ inventory_dir }}/../../scripts"
+    pulumi_path: "{{ inventory_dir }}/../../pulumi"
     # スタック自体も削除するかどうか
     remove_stacks: "{{ remove_stack | default(false) }}"
   
@@ -21,7 +21,7 @@
     # all.yml から変数を読み込む
     - name: Include group_vars/all.yml
       ansible.builtin.include_vars:
-        file: "{{ playbook_dir }}/../inventory/group_vars/all.yml"
+        file: "{{ inventory_dir }}/group_vars/all.yml"
         
     # 必要な変数を設定
     - name: Set required variables from all.yml

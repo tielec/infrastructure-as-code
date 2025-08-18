@@ -1,0 +1,21 @@
+[Unit]
+Description=Update Public IP in SSM Parameter Store
+After=network-online.target cloud-final.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/opt/bootstrap/update-public-ip.sh
+StandardOutput=journal
+StandardError=journal
+User=root
+RemainAfterExit=yes
+
+# Retry on failure
+Restart=on-failure
+RestartSec=30
+StartLimitInterval=200
+StartLimitBurst=3
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,170 @@
+---
+# remove_jenkins_network.yml
+# Jenkins VPCとネットワークリソースを削除
+#
+# 使用方法 (ansibleディレクトリから実行):
+#   ansible-playbook playbooks/jenkins/remove/remove_jenkins_network.yml -e "env=dev confirm=true"
+#
+# 注意:
+#   - confirm=true を指定しないと削除は実行されません
+#   - VPC内にリソースが存在する場合は削除できません
+#   - これは最後に実行すべきプレイブックです
+
+- name: Destroy Jenkins Network Infrastructure
+  hosts: localhost
+  connection: local
+  gather_facts: yes
+  vars:
+    # コマンドラインから環境名を受け取る
+    env_name: "{{ env | default('dev') }}"
+    # 削除確認フラグ
+    confirm_destroy: "{{ confirm | default(false) }}"
+    # 強制削除フラグ
+    force_destroy: "{{ force | default(false) }}"
+  
+  pre_tasks:
+    # all.yml から変数を読み込む
+    - name: Include group_vars/all.yml
+      ansible.builtin.include_vars:
+        file: "{{ inventory_dir }}/group_vars/all.yml"
+    
+    # 必要な変数を設定
+    - name: Set required variables from all.yml
+      ansible.builtin.set_fact:
+        project_name: "{{ infra.project_name }}"
+        aws_region_name: "{{ infra.aws.default_region }}"
+        network_project_name: "{{ infra.pulumi.network_project }}"
+    
+    - name: Check confirmation flag
+      ansible.builtin.fail:
+        msg: |
+          ========================================
+          Destruction requires confirmation.
+          Please run with: -e "confirm=true"
+          ========================================
+      when: not confirm_destroy | bool
+    
+    - name: Display destruction warning
+      ansible.builtin.debug:
+        msg:
+          - "=========================================="
+          - "CRITICAL WARNING: Jenkins Network Infrastructure Destruction"
+          - "=========================================="
+          - "Environment: {{ env_name }}"
+          - "Project: {{ project_name }}"
+          - "Region: {{ aws_region_name }}"
+          - "Force: {{ force_destroy }}"
+          - ""
+          - "This will destroy:"
+          - "  - VPC"
+          - "  - Subnets (Public and Private)"
+          - "  - Internet Gateway"
+          - "  - Route Tables"
+          - "  - Network ACLs"
+          - "  - VPC Endpoints (if any)"
+          - ""
+          - "IMPORTANT: This should be the LAST resource to delete!"
+          - "=========================================="
+    
+    - name: Pre-destruction checklist
+      ansible.builtin.pause:
+        prompt: |
+          Before proceeding, ensure you have deleted:
+          □ Jenkins Controllers (remove_jenkins_controller.yml)
+          □ Jenkins Agents (remove_jenkins_agent.yml)
+          □ Load Balancer (remove_jenkins_loadbalancer.yml)
+          □ NAT Gateway/Instance (remove_jenkins_nat.yml)
+          □ EFS Storage (remove_jenkins_storage.yml)
+          □ Security Groups (remove_jenkins_security.yml)
+          
+          Press Enter to continue or Ctrl+C to cancel
+    
+    - name: Countdown before destruction
+      ansible.builtin.pause:
+        seconds: 10
+        prompt: "Starting destruction in 10 seconds... Press Ctrl+C to cancel"
+  
+  tasks:
+    - name: Setup AWS environment
+      ansible.builtin.include_role:
+        name: aws_setup
+    
+    - name: Check for resources in VPC
+      ansible.builtin.include_role:
+        name: jenkins_network
+      vars:
+        operation: "check_vpc_resources"
+      when: not force_destroy | bool
+    
+    - name: Destroy Jenkins Network Infrastructure
+      ansible.builtin.include_role:
+        name: jenkins_network
+      vars:
+        operation: "destroy"
+        force_delete: "{{ force_destroy }}"
+  
+  post_tasks:
+    - name: Display completion message
+      ansible.builtin.debug:
+        msg:
+          - "=========================================="
+          - "Destruction Complete"
+          - "=========================================="
+          - "Jenkins Network Infrastructure has been destroyed."
+          - ""
+          - "Removed resources:"
+          - "  - VPC"
+          - "  - All Subnets"
+          - "  - Internet Gateway"
+          - "  - Route Tables"
+          - "  - Network ACLs"
+          - ""
+          - "The Jenkins environment has been completely removed."
+          - ""
+          - "To rebuild from scratch:"
+          - "  ansible-playbook jenkins_setup_pipeline.yml -e 'env={{ env_name }}'"
+          - "=========================================="
+      when: network_destroyed | default(false)
+    
+    - name: Display blocked message
+      ansible.builtin.debug:
+        msg:
+          - "=========================================="
+          - "Destruction Blocked"
+          - "=========================================="
+          - "VPC cannot be deleted - resources still exist!"
+          - ""
+          - "Found resources:"
+          - "{{ vpc_resources | default('Check AWS Console') }}"
+          - ""
+          - "Steps to resolve:"
+          - "  1. Delete all resources listed above"
+          - "  2. Re-run this playbook"
+          - ""
+          - "Common blocking resources:"
+          - "  - EC2 Instances"
+          - "  - NAT Gateways"
+          - "  - Load Balancers"
+          - "  - Network Interfaces"
+          - "  - VPC Endpoints"
+          - ""
+          - "To force deletion (DANGEROUS):"
+          - "  ansible-playbook playbooks/jenkins/remove/remove_jenkins_network.yml -e 'env={{ env_name }} confirm=true force=true'"
+          - "=========================================="
+      when: network_has_resources | default(false)
+    
+    - name: Display failure message
+      ansible.builtin.debug:
+        msg:
+          - "=========================================="
+          - "Destruction Failed"
+          - "=========================================="
+          - "Network resources could not be deleted."
+          - ""
+          - "Please check AWS Console:"
+          - "  - VPC Dashboard"
+          - "  - Check for dependencies"
+          - ""
+          - "Manual cleanup may be required."
+          - "=========================================="
+      when: not (network_destroyed | default(false)) and not (network_has_resources | default(false))

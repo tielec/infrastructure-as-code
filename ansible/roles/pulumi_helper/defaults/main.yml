@@ -1,5 +1,5 @@
 # Pulumiヘルパーのデフォルト変数
-pulumi_base_path: "{{ playbook_dir }}/../../pulumi"
+pulumi_base_path: "{{ inventory_dir }}/../../pulumi"
 
 # バックエンド設定
 # all.ymlから読み込むか、デフォルト値を使用

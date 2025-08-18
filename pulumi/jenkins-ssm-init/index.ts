@@ -6,6 +6,7 @@
  */
 import * as pulumi from "@pulumi/pulumi";
 import * as aws from "@pulumi/aws";
+import * as random from "@pulumi/random";
 
 // 環境名をスタック名から取得
 const environment = pulumi.getStack();
@@ -272,7 +273,53 @@ const efsThroughputModeParam = new aws.ssm.Parameter("efs-throughput-mode", {
     },
 });
 
+// Jenkins Adminユーザーのパスワード生成
+const adminPassword = new random.RandomPassword("jenkins-admin-password", {
+    length: 16,
+    special: true,
+    overrideSpecial: "_%@[]()<>?",
+});
+
+// 生成したパスワードをSSMに保存
+const adminPasswordParam = new aws.ssm.Parameter("jenkins-admin-password-param", {
+    name: `${ssmPrefix}/jenkins/admin-password`,
+    type: "SecureString",
+    value: adminPassword.result,
+    overwrite: true,
+    description: "Password for the Jenkins admin user",
+    tags: {
+        Environment: environment,
+        ManagedBy: "pulumi",
+        Component: "jenkins-auth",
+    },
+});
+
+// Jenkins CLIユーザーのパスワード生成
+const cliPassword = new random.RandomPassword("jenkins-cli-password", {
+    length: 20,
+    special: true,
+    overrideSpecial: "_%@[]()<>?",
+});
+
+// CLIユーザーのパスワードをSSMに保存
+const cliPasswordParam = new aws.ssm.Parameter("jenkins-cli-password-param", {
+    name: `${ssmPrefix}/jenkins/cli-password`,
+    type: "SecureString",
+    value: cliPassword.result,
+    overwrite: true,
+    description: "Password for the Jenkins CLI user",
+    tags: {
+        Environment: environment,
+        ManagedBy: "pulumi",
+        Component: "jenkins-auth",
+    },
+});
+
 // エクスポート
 export const ssmPrefixOutput = ssmPrefix;
 export const projectNameOutput = projectName;
 export const environmentOutput = environment;
+
+// セキュアな値のパス情報のみエクスポート（実際の値はエクスポートしない）
+export const adminPasswordPath = adminPasswordParam.name;
+export const cliPasswordPath = cliPasswordParam.name;

@@ -137,7 +137,7 @@ S3バックエンドはCloudFormationブートストラップで作成されたS
 ```bash
 # Ansibleを実行（パスフレーズは自動的にSSMから取得）
 cd ansible
-ansible-playbook playbooks/jenkins_setup_pipeline.yml -e "env=dev"
+ansible-playbook playbooks/jenkins/jenkins_setup_pipeline.yml -e "env=dev"
 ```
 
 ##### 手動での環境変数設定（オプション）
@@ -183,7 +183,7 @@ Pulumi Cloudを使用する場合：
    ```
 3. Ansible実行時にバックエンドタイプを指定：
    ```bash
-   ansible-playbook playbooks/jenkins_setup_pipeline.yml \
+   ansible-playbook playbooks/jenkins/jenkins_setup_pipeline.yml \
      -e "env=dev pulumi_backend_type=cloud"
    ```
 
@@ -197,20 +197,26 @@ cd ~/infrastructure-as-code
 
 # 全体のデプロイパイプラインを実行（初期構築）
 cd ansible
-ansible-playbook playbooks/jenkins_setup_pipeline.yml -e "env=dev"
+ansible-playbook playbooks/jenkins/jenkins_setup_pipeline.yml -e "env=dev"
 
 # 特定のコンポーネントだけをデプロイする場合
-ansible-playbook playbooks/jenkins_setup_pipeline.yml -e "env=dev run_network=true run_security=false run_storage=false"
+ansible-playbook playbooks/jenkins/jenkins_setup_pipeline.yml -e "env=dev run_network=true run_security=false run_storage=false"
 ```
 
 各コンポーネントを個別にデプロイすることも可能です：
 
 ```bash
 # ネットワークコンポーネントのみをデプロイ
-ansible-playbook playbooks/deploy_jenkins_network.yml -e "env=dev"
+ansible-playbook playbooks/jenkins/deploy/deploy_jenkins_network.yml -e "env=dev"
 
 # セキュリティグループのみをデプロイ
-ansible-playbook playbooks/deploy_jenkins_security.yml -e "env=dev"
+ansible-playbook playbooks/jenkins/deploy/deploy_jenkins_security.yml -e "env=dev"
+
+# Jenkins Agent AMIビルダーをデプロイ（デフォルトでImage Builderパイプライン自動実行）
+ansible-playbook playbooks/jenkins/deploy/deploy_jenkins_agent_ami.yml -e "env=dev"
+
+# Jenkins Agent AMIビルダーをデプロイ（パイプライン実行を抑制）
+ansible-playbook playbooks/jenkins/deploy/deploy_jenkins_agent_ami.yml -e "env=dev trigger_ami_build=false"
 
 # その他のコンポーネントも同様に個別デプロイ可能
 ```
@@ -221,16 +227,16 @@ Jenkins環境が構築された後、アプリケーションレベルの設定�
 
 ```bash
 # Jenkinsのバージョン更新、プラグインインストール、CLIユーザー作成、シードジョブ作成、再起動を実行
-ansible-playbook playbooks/deploy_jenkins_application.yml -e "env=dev"
+ansible-playbook playbooks/jenkins/deploy/deploy_jenkins_application.yml -e "env=dev"
 
 # Jenkinsバージョンのみ更新（プラグインインストールはスキップ）
-ansible-playbook playbooks/deploy_jenkins_application.yml -e "env=dev version=2.426.1 plugins=false"
+ansible-playbook playbooks/jenkins/deploy/deploy_jenkins_application.yml -e "env=dev version=2.426.1 plugins=false"
 
 # プラグインのみインストール（Gitリポジトリ更新はスキップ）
-ansible-playbook playbooks/deploy_jenkins_application.yml -e "env=dev update_git=false plugins=true restart=false"
+ansible-playbook playbooks/jenkins/deploy/deploy_jenkins_application.yml -e "env=dev update_git=false plugins=true restart=false"
 
 # シードジョブのみ作成（他の設定はスキップ）
-ansible-playbook playbooks/deploy_jenkins_application.yml -e "env=dev jenkins_version=latest install_plugins=false setup_cli_user=false restart_jenkins=false"
+ansible-playbook playbooks/jenkins/deploy/deploy_jenkins_application.yml -e "env=dev jenkins_version=latest install_plugins=false setup_cli_user=false restart_jenkins=false"
 ```
 
 #### シードジョブのカスタマイズ
@@ -239,7 +245,7 @@ ansible-playbook playbooks/deploy_jenkins_application.yml -e "env=dev jenkins_ve
 
 ```bash
 # カスタムGitリポジトリとブランチを指定してシードジョブを作成
-ansible-playbook playbooks/deploy_jenkins_application.yml \
+ansible-playbook playbooks/jenkins/deploy/deploy_jenkins_application.yml \
   -e "env=dev" \
   -e "jenkins_jobs_repo=https://github.com/myorg/jenkins-jobs.git" \
   -e "jenkins_jobs_branch=develop" \
@@ -289,25 +295,25 @@ aws cloudformation delete-stack --stack-name bootstrap-iac-environment
 
 ```bash
 # 削除の確認（ドライラン）
-ansible-playbook playbooks/jenkins_teardown_pipeline.yml -e "env=dev"
+ansible-playbook playbooks/jenkins/jenkins_teardown_pipeline.yml -e "env=dev"
 
 # 実際に削除を実行
-ansible-playbook playbooks/jenkins_teardown_pipeline.yml -e "env=dev confirm=true"
+ansible-playbook playbooks/jenkins/jenkins_teardown_pipeline.yml -e "env=dev confirm=true"
 
 # Pulumiスタックも含めて完全に削除
-ansible-playbook playbooks/jenkins_teardown_pipeline.yml -e "env=dev confirm=true remove_stacks=true"
+ansible-playbook playbooks/jenkins/jenkins_teardown_pipeline.yml -e "env=dev confirm=true remove_stacks=true"
 ```
 
 ### 特定コンポーネントの削除
 
 ```bash
 # ネットワークとセキュリティグループを残して他を削除
-ansible-playbook playbooks/jenkins_teardown_pipeline.yml \
-  -e "env=dev confirm=true tear_network=false tear_security=false"
+ansible-playbook playbooks/jenkins/jenkins_teardown_pipeline.yml \
+  -e "env=dev confirm=true destroy_network=false destroy_security=false"
 
 # エージェントとコントローラーのみ削除
-ansible-playbook playbooks/jenkins_teardown_pipeline.yml \
-  -e "env=dev confirm=true tear_config=false tear_loadbalancer=false tear_storage=false tear_security=false tear_network=false"
+ansible-playbook playbooks/jenkins/jenkins_teardown_pipeline.yml \
+  -e "env=dev confirm=true destroy_config=false destroy_loadbalancer=false destroy_storage=false destroy_security=false destroy_network=false"
 ```
 
 **注意**: 削除操作は破壊的な操作です。以下の点に注意してください：
@@ -334,7 +340,14 @@ ansible-playbook playbooks/jenkins_teardown_pipeline.yml \
 infrastructure-as-code/
 ├─ ansible/                    # Ansible設定とプレイブック
 │  ├─ inventory/              # インベントリと変数定義
-│  ├─ playbooks/              # 各種プレイブック（構築・削除・設定）
+│  ├─ playbooks/              # 各種プレイブック
+│  │  ├─ jenkins/             # Jenkins関連プレイブック
+│  │  │  ├─ deploy/          # デプロイ用
+│  │  │  ├─ remove/          # 削除用
+│  │  │  ├─ misc/            # その他（更新等）
+│  │  │  ├─ jenkins_setup_pipeline.yml    # セットアップパイプライン
+│  │  │  └─ jenkins_teardown_pipeline.yml # 削除パイプライン
+│  │  └─ lambda/              # Lambda関連プレイブック
 │  └─ roles/                  # Ansibleロール
 │      ├─ aws_setup/          # AWS環境設定
 │      ├─ pulumi_helper/      # Pulumi操作ヘルパー
@@ -462,10 +475,10 @@ infrastructure-as-code/
 vi ansible/inventory/group_vars/all.yml
 
 # エディタで必要な変更を行った後、構文をチェック
-ansible-playbook playbooks/jenkins_setup_pipeline.yml -e "env=dev" --syntax-check
+ansible-playbook playbooks/jenkins/jenkins_setup_pipeline.yml -e "env=dev" --syntax-check
 
 # 変更を適用（コミットする前にチェックモードで実行）
-ansible-playbook playbooks/jenkins_setup_pipeline.yml -e "env=dev" --check
+ansible-playbook playbooks/jenkins/jenkins_setup_pipeline.yml -e "env=dev" --check
 ```
 
 ## 注意事項
@@ -495,12 +508,16 @@ pulumi/
 
 2. 新しいAnsibleプレイブックの追加:
 ```
-ansible/playbooks/
+ansible/playbooks/jenkins/
   ├─jenkins_setup_pipeline.yml      # 既存のメインパイプライン
   ├─jenkins_teardown_pipeline.yml   # 既存の削除パイプライン
-  ├─deploy_jenkins_network.yml      # 既存のネットワークデプロイ
-  ├─deploy_jenkins_application.yml  # 既存のアプリケーション設定
-  └─deploy_monitoring.yml           # 新しいモニタリングデプロイ
+  ├─deploy/
+  │  ├─deploy_jenkins_network.yml      # 既存のネットワークデプロイ
+  │  ├─deploy_jenkins_application.yml  # 既存のアプリケーション設定
+  │  └─deploy_monitoring.yml           # 新しいモニタリングデプロイ
+  └─remove/
+     ├─remove_jenkins_network.yml      # ネットワーク削除
+     └─remove_monitoring.yml           # モニタリング削除
 ```
 
 3. 新しいロールの追加時は、必ず`deploy.yml`と`destroy.yml`の両方を実装してください

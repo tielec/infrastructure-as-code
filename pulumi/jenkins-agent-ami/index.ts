@@ -147,7 +147,7 @@ phases:
         action: ExecuteBash
         inputs:
           commands:
-            - dnf install -y java-17-amazon-corretto
+            - dnf install -y java-21-amazon-corretto
             - java -version
 
       - name: InstallBuildTools
@@ -266,7 +266,7 @@ phases:
         action: ExecuteBash
         inputs:
           commands:
-            - dnf install -y java-17-amazon-corretto
+            - dnf install -y java-21-amazon-corretto
             - java -version
 
       - name: InstallBuildTools

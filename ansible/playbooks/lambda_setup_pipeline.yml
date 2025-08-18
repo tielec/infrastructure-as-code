@@ -11,8 +11,8 @@
     # 環境名はコマンドラインから指定可能
     env_name: "{{ env | default('dev') }}"
     # パスを明示的に定義
-    scripts_dir: "{{ playbook_dir }}/../../scripts"
-    pulumi_path: "{{ playbook_dir }}/../../pulumi"
+    scripts_dir: "{{ inventory_dir }}/../../scripts"
+    pulumi_path: "{{ inventory_dir }}/../../pulumi"
     # Phase 1/2の切り替え
     enable_database: "{{ create_database | default(false) }}"
     enable_isolated_subnets: "{{ create_isolated_subnets | default(false) }}"
@@ -21,7 +21,7 @@
     # all.yml から変数を読み込む
     - name: Include group_vars/all.yml
       ansible.builtin.include_vars:
-        file: "{{ playbook_dir }}/../inventory/group_vars/all.yml"
+        file: "{{ inventory_dir }}/group_vars/all.yml"
         
     # 必要な変数を設定
     - name: Set required variables from all.yml

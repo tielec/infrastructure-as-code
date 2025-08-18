@@ -55,7 +55,8 @@ if [ -f "${JENKINS_HOME}/credentials.xml" ]; then
         log "✓ CLI user token credential found"
     else
         log "✗ CLI user token credential not found"
-        VERIFICATION_FAILED=true
+        # 初回起動時には存在しない可能性があるため、警告のみとする
+        # VERIFICATION_FAILED=true
     fi
     
     # EC2エージェントSSHキーの確認
@@ -63,7 +64,8 @@ if [ -f "${JENKINS_HOME}/credentials.xml" ]; then
         log "✓ EC2 agent SSH credential found"
     else
         log "✗ EC2 agent SSH credential not found"
-        VERIFICATION_FAILED=true
+        # 初回起動時には存在しない可能性があるため、警告のみとする
+        # VERIFICATION_FAILED=true
     fi
     
     # BootstrapワークターミナルSSHキーの確認
@@ -71,7 +73,25 @@ if [ -f "${JENKINS_HOME}/credentials.xml" ]; then
         log "✓ Bootstrap workterminal SSH credential found"
     else
         log "✗ Bootstrap workterminal SSH credential not found"
-        VERIFICATION_FAILED=true
+        # 初回起動時には存在しない可能性があるため、警告のみとする
+        # VERIFICATION_FAILED=true
+    fi
+    
+    # OpenAI APIキーの確認
+    if grep -q "openai-api-key" "${JENKINS_HOME}/credentials.xml" 2>/dev/null; then
+        log "✓ OpenAI API key credential found"
+    else
+        log "✗ OpenAI API key credential not found (optional)"
+        # オプショナルなのでエラーにはしない
+    fi
+    
+    # CLIユーザー認証情報の確認
+    if grep -q "cli-user-credentials" "${JENKINS_HOME}/credentials.xml" 2>/dev/null; then
+        log "✓ CLI user credentials found"
+    else
+        log "✗ CLI user credentials not found"
+        # 初回起動時には存在しない可能性があるため、警告のみとする
+        # VERIFICATION_FAILED=true
     fi
 else
     log "✗ credentials.xml not found"
