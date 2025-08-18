@@ -235,10 +235,22 @@
             ssm_parameters: "ScriptPath=scripts/jenkins/shell/application-setup-ssh-credentials.sh"
             ssm_comment: "Setting up SSH credentials from Parameter Store"
             instance_id: "{{ jenkins_instance_id }}"
+
+    # 5.5. Adminユーザーの設定
+    - name: Setup admin user
+      when: setup_admin_user | default(true) | bool
+      block:
+        - name: Create or update admin user
+          ansible.builtin.include_tasks: execute_ssm_command.yml
+          vars:
+            ssm_document_name: "{{ ssm_documents.executeScript }}"
+            ssm_parameters: "ScriptPath=scripts/jenkins/shell/setup-admin-user.sh"
+            ssm_comment: "Setting up admin user"
+            instance_id: "{{ jenkins_instance_id }}"
     
     # Phase 2.5: セキュリティ設定を適用するための再起動
     - name: Restart Jenkins to apply security settings
-      when: (setup_cli_user | default(true) | bool) or (setup_ssh_credentials | default(true) | bool)
+      when: (setup_cli_user | default(true) | bool) or (setup_ssh_credentials | default(true) | bool) or (setup_admin_user | default(true) | bool)
       block:
         - name: Execute Jenkins restart for security settings
           ansible.builtin.include_tasks: execute_ssm_command.yml

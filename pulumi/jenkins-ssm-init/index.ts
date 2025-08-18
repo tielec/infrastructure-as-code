@@ -6,6 +6,7 @@
  */
 import * as pulumi from "@pulumi/pulumi";
 import * as aws from "@pulumi/aws";
+import * as random from "@pulumi/random";
 
 // 環境名をスタック名から取得
 const environment = pulumi.getStack();
@@ -265,6 +266,27 @@ const efsThroughputModeParam = new aws.ssm.Parameter("efs-throughput-mode", {
     value: "bursting",
     overwrite: true,
     description: "EFS throughput mode (bursting or provisioned)",
+    tags: {
+        Environment: environment,
+        ManagedBy: "pulumi",
+        Component: "config",
+    },
+});
+
+// Jenkins Adminユーザーのパスワード生成
+const adminPassword = new random.RandomPassword("jenkins-admin-password", {
+    length: 16,
+    special: true,
+    overrideSpecial: "_%@[]()<>?",
+});
+
+// 生成したパスワードをSSMに保存
+const adminPasswordParam = new aws.ssm.Parameter("jenkins-admin-password-param", {
+    name: `${ssmPrefix}/config/admin-password`,
+    type: "SecureString",
+    value: adminPassword.result,
+    overwrite: true,
+    description: "Password for the Jenkins admin user",
     tags: {
         Environment: environment,
         ManagedBy: "pulumi",
