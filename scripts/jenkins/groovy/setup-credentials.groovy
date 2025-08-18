@@ -197,6 +197,56 @@ secretTextMappings.each { mapping ->
     }
 }
 
+println("\n--- GitHub App Credentials ---")
+
+// GitHub App クレデンシャルの設定
+// GitHub App プラグインがインストールされている場合のみ処理
+try {
+    // GitHub App クレデンシャルクラスの存在確認
+    def githubAppClass = Class.forName("org.jenkinsci.plugins.github_branch_source.GitHubAppCredentials")
+    
+    println("\nProcessing GitHub App credential: github-app-credentials")
+    println("  Description: GitHub App for repository access")
+    
+    // GitHub App情報をSSMから取得
+    def appId = getParameterFromSSM("/bootstrap/github/app-id")
+    def privateKey = getParameterFromSSM("/bootstrap/github/app-private-key")
+    def owner = getParameterFromSSM("/bootstrap/github/app-owner")
+    
+    if (!appId || !privateKey) {
+        println("  ✗ Skipping - GitHub App ID or private key not available")
+        skippedCount++
+    } else {
+        try {
+            // GitHub App クレデンシャルの作成
+            def credential = githubAppClass.newInstance(
+                CredentialsScope.GLOBAL,
+                "github-app-credentials",
+                "GitHub App for repository access",
+                appId,
+                Secret.fromString(privateKey)
+            )
+            
+            // ownerが指定されている場合は設定
+            if (owner && !owner.isEmpty()) {
+                credential.setOwner(owner)
+            }
+            
+            if (upsertCredential("github-app-credentials", credential)) {
+                successCount++
+            } else {
+                failureCount++
+            }
+        } catch (Exception e) {
+            println("  ✗ Failed to create GitHub App credential: ${e.message}")
+            failureCount++
+        }
+    }
+} catch (ClassNotFoundException e) {
+    println("\nGitHub App plugin not installed - skipping GitHub App credential")
+    println("  To enable GitHub App authentication, install the 'GitHub Branch Source' plugin")
+}
+
 println("\n--- Username/Password Credentials ---")
 
 // Username/Password クレデンシャルの設定
