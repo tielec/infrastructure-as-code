@@ -39,11 +39,6 @@ log "  PROJECT_NAME: $PROJECT_NAME"
 log "  ENVIRONMENT: $ENVIRONMENT"
 log "  AWS_REGION: $AWS_REGION"
 
-# Jenkins CLI設定
-JENKINS_CLI="java -jar $JENKINS_HOME/jenkins-cli.jar"
-JENKINS_URL="http://localhost:8080"
-JENKINS_INIT_GROOVY="$JENKINS_HOME/init.groovy.d"
-
 # Groovyスクリプトのソースパス
 GROOVY_SOURCE="$REPO_PATH/scripts/jenkins/groovy/setup-openai-credential.groovy"
 
@@ -53,19 +48,6 @@ if [ ! -f "$GROOVY_SOURCE" ]; then
 fi
 
 log "Groovy script found: $GROOVY_SOURCE"
-
-# Jenkins CLI用の認証情報を取得
-log "Retrieving Jenkins CLI credentials from SSM..."
-CLI_USERNAME=$(aws ssm get-parameter --name "/$PROJECT_NAME/$ENVIRONMENT/jenkins/cli-username" --region "$AWS_REGION" --query 'Parameter.Value' --output text 2>/dev/null || echo "")
-CLI_PASSWORD=$(aws ssm get-parameter --name "/$PROJECT_NAME/$ENVIRONMENT/jenkins/cli-password" --with-decryption --region "$AWS_REGION" --query 'Parameter.Value' --output text 2>/dev/null || echo "")
-
-if [ -z "$CLI_USERNAME" ] || [ -z "$CLI_PASSWORD" ]; then
-    log "CLI credentials not found in SSM. Using init.groovy.d method..."
-    AUTH_METHOD="init"
-else
-    log "CLI credentials found. Using Jenkins CLI method..."
-    AUTH_METHOD="cli"
-fi
 
 # OpenAI APIキーをSSMから取得
 log "Retrieving OpenAI API key from SSM Parameter Store..."
@@ -80,60 +62,27 @@ fi
 
 log "✓ OpenAI API key retrieved successfully"
 
-# 環境変数としてAPIキーを設定
-export OPENAI_API_KEY="$OPENAI_API_KEY"
+# Groovyスクリプトの配置先
+GROOVY_DIR="${JENKINS_HOME}/init.groovy.d"
+mkdir -p "$GROOVY_DIR"
 
-if [ "$AUTH_METHOD" = "cli" ]; then
-    # Jenkins CLIを使用してGroovyスクリプトを実行
-    log "Executing Groovy script via Jenkins CLI..."
-    
-    if $JENKINS_CLI -s "$JENKINS_URL" -auth "$CLI_USERNAME:$CLI_PASSWORD" groovy = < "$GROOVY_SOURCE"; then
-        log "✓ Groovy script executed successfully via CLI"
-    else
-        error_exit "Failed to execute Groovy script via CLI"
-    fi
-else
-    # init.groovy.dディレクトリにコピーして実行
-    log "Copying Groovy script to init.groovy.d..."
-    
-    # init.groovy.dディレクトリの作成
-    mkdir -p "$JENKINS_INIT_GROOVY"
-    
-    # スクリプトをコピー
-    cp "$GROOVY_SOURCE" "$JENKINS_INIT_GROOVY/setup-openai-credential.groovy"
-    
-    # 実行権限を設定
-    chmod 644 "$JENKINS_INIT_GROOVY/setup-openai-credential.groovy"
-    chown jenkins:jenkins "$JENKINS_INIT_GROOVY/setup-openai-credential.groovy"
-    
-    log "✓ Groovy script copied to: $JENKINS_INIT_GROOVY/setup-openai-credential.groovy"
-    log "The credential will be created on next Jenkins restart"
-fi
+GROOVY_SCRIPT_DST="${GROOVY_DIR}/03-setup-openai-credential.groovy"
 
-# 環境変数をクリア（セキュリティのため）
-unset OPENAI_API_KEY
+log "Replacing placeholder and copying OpenAI credential setup script to $GROOVY_SCRIPT_DST"
 
-# クレデンシャルの検証（CLIが使用可能な場合）
-if [ "$AUTH_METHOD" = "cli" ]; then
-    log "Verifying credential creation..."
-    
-    # 少し待機してからクレデンシャルを確認
-    sleep 2
-    
-    # クレデンシャルリストを確認
-    CREDENTIAL_CHECK=$($JENKINS_CLI -s "$JENKINS_URL" -auth "$CLI_USERNAME:$CLI_PASSWORD" list-credentials system::system::jenkins 2>/dev/null | grep "openai-api-key" || echo "")
-    
-    if [ -n "$CREDENTIAL_CHECK" ]; then
-        log "✓ Credential 'openai-api-key' verified in Jenkins"
-    else
-        log "Note: Credential verification pending. Will be available after Jenkins restart."
-    fi
-fi
+# APIキー内の特殊文字 `&`, `/`, `\` をsedのためにエスケープ
+ESCAPED_API_KEY=$(printf '%s\n' "$OPENAI_API_KEY" | sed -e 's/[&/\\]/\\&/g')
+
+# プレースホルダーを実際のAPIキーに置換して、新しいスクリプトファイルを作成
+sed "s/##OPENAI_API_KEY_PLACEHOLDER##/${ESCAPED_API_KEY}/g" "$GROOVY_SOURCE" > "$GROOVY_SCRIPT_DST"
+
+chown jenkins:jenkins "$GROOVY_SCRIPT_DST"
+chmod 644 "$GROOVY_SCRIPT_DST"
+
+log "OpenAI credential setup script prepared."
+log "The credential will be created or updated on the next Jenkins restart."
 
 log "===== OpenAI API Key Credential Setup Complete ====="
-log "Credential ID: openai-api-key"
-log "Scope: Global"
-log "Type: Secret Text"
 
 # 成功終了
 exit 0
