@@ -124,17 +124,17 @@ This is a placeholder. Please replace with your actual GitHub App private key.
     echo "   - .pemファイルがダウンロードされます"
     echo
     echo "2. PKCS#1からPKCS#8形式に変換（Jenkinsで必要）:"
-    echo "${GREEN}openssl pkcs8 -topk8 -inform PEM -outform PEM -nocrypt \\${NC}"
-    echo "${GREEN}  -in github-app-key.pem \\${NC}"
-    echo "${GREEN}  -out github-app-key-pkcs8.pem${NC}"
+    echo -e "${GREEN}openssl pkcs8 -topk8 -inform PEM -outform PEM -nocrypt \\\\${NC}"
+    echo -e "${GREEN}  -in github-app-key.pem \\\\${NC}"
+    echo -e "${GREEN}  -out github-app-key-pkcs8.pem${NC}"
     echo
     echo "3. 変換した秘密鍵をSSMに登録:"
-    echo "${GREEN}aws ssm put-parameter \\${NC}"
-    echo "${GREEN}  --name \"$APP_KEY_PARAM\" \\${NC}"
-    echo "${GREEN}  --value file://github-app-key-pkcs8.pem \\${NC}"
-    echo "${GREEN}  --type SecureString \\${NC}"
-    echo "${GREEN}  --overwrite \\${NC}"
-    echo "${GREEN}  --region $REGION${NC}"
+    echo -e "${GREEN}aws ssm put-parameter \\\\${NC}"
+    echo -e "${GREEN}  --name \"$APP_KEY_PARAM\" \\\\${NC}"
+    echo -e "${GREEN}  --value file://github-app-key-pkcs8.pem \\\\${NC}"
+    echo -e "${GREEN}  --type SecureString \\\\${NC}"
+    echo -e "${GREEN}  --overwrite \\\\${NC}"
+    echo -e "${GREEN}  --region $REGION${NC}"
     echo
     echo "または、AWS Management Consoleから直接設定:"
     echo "  1. Systems Manager → Parameter Store を開く"
@@ -173,7 +173,7 @@ This is a placeholder. Please replace with your actual GitHub App private key.
         log_warn "秘密鍵がPKCS#1形式です。PKCS#8形式への変換が必要です。"
         echo
         echo "変換コマンド:"
-        echo "${GREEN}openssl pkcs8 -topk8 -inform PEM -outform PEM -nocrypt -in key.pem -out key-pkcs8.pem${NC}"
+        echo -e "${GREEN}openssl pkcs8 -topk8 -inform PEM -outform PEM -nocrypt -in key.pem -out key-pkcs8.pem${NC}"
         echo
         if ! confirm_action "このまま続行しますか？"; then
             return 1
