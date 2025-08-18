@@ -32,7 +32,7 @@ fi
 # システムのアップデートと必要なパッケージのインストール
 log "システムの更新と必要なパッケージのインストール"
 dnf update -y
-dnf install -y java-17-amazon-corretto docker git jq wget amazon-ssm-agent aws-cfn-bootstrap
+dnf install -y java-21-amazon-corretto docker git jq wget amazon-ssm-agent aws-cfn-bootstrap
 
 # サービスの有効化
 log "システムサービスの有効化"

@@ -4,7 +4,7 @@
 
 echo "Starting Jenkins agent setup..."
 dnf update -y
-dnf install -y java-17-amazon-corretto docker git
+dnf install -y java-21-amazon-corretto docker git
 systemctl enable docker
 systemctl start docker
 

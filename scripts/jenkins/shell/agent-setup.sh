@@ -90,7 +90,7 @@ docker info >/dev/null 2>&1 && \
 # Install Java (必ず最後に実施)
 #---------------------------------------
 echo "Starting Java installation..."
-dnf install -y java-17-amazon-corretto
+dnf install -y java-21-amazon-corretto
 
 # Final verification
 echo "Setup complete. Verifying installations..."
