@@ -14,7 +14,7 @@
     confirm: "{{ confirm | default(false) }}"
     # パスを明示的に定義（inventory_dirを基準にした相対パス）
     scripts_dir: "{{ inventory_dir }}/../scripts"
-    pulumi_path: "{{ inventory_dir }}/../pulumi"
+    pulumi_path: "{{ inventory_dir }}/../../pulumi"
     # 削除操作を指定
     operation: destroy
   

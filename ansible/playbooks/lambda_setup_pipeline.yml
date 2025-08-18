@@ -12,7 +12,7 @@
     env_name: "{{ env | default('dev') }}"
     # パスを明示的に定義
     scripts_dir: "{{ inventory_dir }}/../scripts"
-    pulumi_path: "{{ inventory_dir }}/../pulumi"
+    pulumi_path: "{{ inventory_dir }}/../../pulumi"
     # Phase 1/2の切り替え
     enable_database: "{{ create_database | default(false) }}"
     enable_isolated_subnets: "{{ create_isolated_subnets | default(false) }}"

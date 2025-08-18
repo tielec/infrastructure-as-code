@@ -31,7 +31,7 @@
   tasks:
     - name: Get Pulumi stack outputs for pipeline ARNs
       ansible.builtin.shell: |
-        cd {{ inventory_dir }}/../pulumi/jenkins-agent-ami
+        cd {{ inventory_dir }}/../../pulumi/jenkins-agent-ami
         pulumi stack output --json
       register: stack_outputs
       changed_when: false
