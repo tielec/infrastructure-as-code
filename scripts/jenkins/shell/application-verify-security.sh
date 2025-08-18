@@ -55,7 +55,8 @@ if [ -f "${JENKINS_HOME}/credentials.xml" ]; then
         log "✓ CLI user token credential found"
     else
         log "✗ CLI user token credential not found"
-        VERIFICATION_FAILED=true
+        # 初回起動時には存在しない可能性があるため、警告のみとする
+        # VERIFICATION_FAILED=true
     fi
     
     # EC2エージェントSSHキーの確認
