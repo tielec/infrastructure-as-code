@@ -27,7 +27,7 @@
     # 共通変数の読み込み
     - name: Include group_vars/all.yml
       ansible.builtin.include_vars:
-        file: "{{ playbook_dir }}/../inventory/group_vars/all.yml"
+        file: "{{ inventory_dir }}/group_vars/all.yml"
       failed_when: false  # ファイルが存在しない場合も続行
     
     # テスト用の変数設定
