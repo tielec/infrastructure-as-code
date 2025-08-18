@@ -14,8 +14,8 @@ def ADMIN_USERNAME = "admin"
 def ADMIN_FULLNAME = "Jenkins Administrator"
 def ADMIN_EMAIL = "admin@jenkins.local"
 
-// 環境変数からパスワードを取得
-def adminPassword = System.getenv("JENKINS_ADMIN_PASSWORD")
+// パスワードはスクリプト実行時にプレースホルダーから置換される
+def adminPassword = "##JENKINS_ADMIN_PASSWORD_PLACEHOLDER##"
 
 println("=== Starting Admin User Setup ===")
 

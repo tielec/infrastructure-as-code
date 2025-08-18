@@ -36,25 +36,6 @@ fi
 
 log "Admin password retrieved successfully."
 
-# Jenkinsの起動スクリプトが読み込む環境変数ファイルにパスワードを追記
-# これにより、JenkinsのJVMが環境変数を認識できるようになる
-JENKINS_ENV_FILE="/etc/sysconfig/jenkins"
-if [ ! -f "$JENKINS_ENV_FILE" ]; then
-    # Debian/Ubuntu系の場合
-    JENKINS_ENV_FILE="/etc/default/jenkins"
-fi
-
-if [ -f "$JENKINS_ENV_FILE" ]; then
-    log "Updating Jenkins environment file: $JENKINS_ENV_FILE"
-    # 既存の設定を削除
-    sed -i '/^export JENKINS_ADMIN_PASSWORD=/d' "$JENKINS_ENV_FILE"
-    # 新しい設定を追記
-    echo "export JENKINS_ADMIN_PASSWORD='${ADMIN_PASSWORD}'" >> "$JENKINS_ENV_FILE"
-    log "JENKINS_ADMIN_PASSWORD set in environment file."
-else
-    log "WARNING: Jenkins environment file not found. Could not set JENKINS_ADMIN_PASSWORD."
-fi
-
 # Groovyスクリプトを配置
 GROOVY_DIR="${JENKINS_HOME}/init.groovy.d"
 mkdir -p "$GROOVY_DIR"
@@ -67,8 +48,15 @@ if [ ! -f "$GROOVY_SCRIPT_SRC" ]; then
     exit 1
 fi
 
-log "Copying admin user setup script to $GROOVY_SCRIPT_DST"
-cp "$GROOVY_SCRIPT_SRC" "$GROOVY_SCRIPT_DST"
+log "Replacing placeholder and copying admin user setup script to $GROOVY_SCRIPT_DST"
+
+# パスワード内の特殊文字 `&`, `/`, `` をsedのためにエスケープ
+ESCAPED_PASSWORD=$(printf '%s
+' "$ADMIN_PASSWORD" | sed -e 's/[&/\\]/\\&/g')
+
+# プレースホルダーを実際のパスワードに置換して、新しいスクリプトファイルを作成
+sed "s/##JENKINS_ADMIN_PASSWORD_PLACEHOLDER##/${ESCAPED_PASSWORD}/g" "$GROOVY_SCRIPT_SRC" > "$GROOVY_SCRIPT_DST"
+
 chown jenkins:jenkins "$GROOVY_SCRIPT_DST"
 chmod 644 "$GROOVY_SCRIPT_DST"
 
