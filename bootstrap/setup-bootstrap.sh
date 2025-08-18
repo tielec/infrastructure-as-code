@@ -53,9 +53,11 @@ prepare_ansible_environment() {
     export PATH="$HOME/.local/bin:$PATH"
     export ANSIBLE_COLLECTIONS_PATH="/usr/share/ansible/collections"
     
-    # bashrcから環境変数を読み込み
+    # bashrcから環境変数を読み込み（set -uを一時的に無効化）
     if [ -f ~/.bashrc ]; then
+        set +u
         source ~/.bashrc
+        set -u
     fi
     
     # 既存のcollectionsをクリーンアップ（ユーザー空間の重複を防ぐ）
