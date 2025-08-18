@@ -17,10 +17,15 @@ setup_github_app() {
     if aws ssm get-parameter --name "$APP_ID_PARAM" --region "$REGION" &>/dev/null; then
         log_info "✓ GitHub App IDは既に設定されています"
         
-        # 既存の設定を使用するか確認
-        if confirm_action "既存のGitHub App設定を使用しますか？"; then
-            log_info "既存の設定を使用します"
-            return 0
+        # 秘密鍵の確認
+        if aws ssm get-parameter --name "$APP_KEY_PARAM" --region "$REGION" &>/dev/null; then
+            log_info "✓ GitHub App秘密鍵も設定されています"
+            
+            # 既存の設定を使用するか確認
+            if confirm_action "既存のGitHub App設定を使用しますか？"; then
+                log_info "既存の設定を使用します"
+                return 0
+            fi
         fi
     fi
     
@@ -51,37 +56,6 @@ setup_github_app() {
         fi
     done
     
-    # 秘密鍵ファイルパスの入力
-    local key_path=""
-    local private_key=""
-    while [ -z "$private_key" ]; do
-        read -p "GitHub App秘密鍵ファイルのパス: " key_path
-        
-        if [ -z "$key_path" ]; then
-            log_warn "秘密鍵ファイルのパスを入力してください"
-            continue
-        fi
-        
-        # ~を展開
-        key_path="${key_path/#\~/$HOME}"
-        
-        if [ ! -f "$key_path" ]; then
-            log_warn "ファイルが見つかりません: $key_path"
-            continue
-        fi
-        
-        # PEM形式の確認
-        if ! grep -q "BEGIN RSA PRIVATE KEY" "$key_path" 2>/dev/null; then
-            log_warn "指定されたファイルはPEM形式の秘密鍵ではないようです"
-            if ! confirm_action "このファイルを使用しますか？"; then
-                continue
-            fi
-        fi
-        
-        private_key=$(cat "$key_path")
-        log_info "✓ 秘密鍵ファイルを読み込みました"
-    done
-    
     # 組織名/ユーザー名の入力（オプション）
     local owner=""
     read -p "組織名またはユーザー名（オプション、Enterでスキップ）: " owner
@@ -102,19 +76,6 @@ setup_github_app() {
         return 1
     fi
     
-    # 秘密鍵を保存（SecureString）
-    if aws ssm put-parameter \
-        --name "$APP_KEY_PARAM" \
-        --value "$private_key" \
-        --type "SecureString" \
-        --overwrite \
-        --region "$REGION" &>/dev/null; then
-        log_info "✓ 秘密鍵を保存しました"
-    else
-        log_error "秘密鍵の保存に失敗しました"
-        return 1
-    fi
-    
     # 組織名/ユーザー名を保存（指定された場合）
     if [ -n "$owner" ]; then
         if aws ssm put-parameter \
@@ -129,6 +90,101 @@ setup_github_app() {
         fi
     fi
     
+    # 秘密鍵用のプレースホルダーパラメータを作成
+    log_info "秘密鍵用のSSMパラメータを準備しています..."
+    
+    # プレースホルダーとして仮の秘密鍵形式の値でパラメータを作成（後で手動で更新）
+    local placeholder_key="-----BEGIN PRIVATE KEY-----
+PLACEHOLDER_PRIVATE_KEY
+This is a placeholder. Please replace with your actual GitHub App private key.
+-----END PRIVATE KEY-----"
+    
+    if aws ssm put-parameter \
+        --name "$APP_KEY_PARAM" \
+        --value "$placeholder_key" \
+        --type "SecureString" \
+        --description "GitHub App Private Key - Please update this manually" \
+        --overwrite \
+        --region "$REGION" &>/dev/null; then
+        log_info "✓ 秘密鍵用のパラメータを作成しました"
+    else
+        log_warn "秘密鍵パラメータの作成に失敗しました（既に存在する可能性があります）"
+    fi
+    
+    # 手動設定の指示を表示
+    echo
+    log_warn "================================================================"
+    log_warn "重要: GitHub App秘密鍵を手動で設定してください"
+    log_warn "================================================================"
+    echo
+    echo "GitHub Appの秘密鍵取得と変換手順："
+    echo
+    echo "1. GitHubでPrivate Keyをダウンロード:"
+    echo "   - GitHub App設定ページ → Private keys → Generate a private key"
+    echo "   - .pemファイルがダウンロードされます"
+    echo
+    echo "2. PKCS#1からPKCS#8形式に変換（Jenkinsで必要）:"
+    echo "${GREEN}openssl pkcs8 -topk8 -inform PEM -outform PEM -nocrypt \\${NC}"
+    echo "${GREEN}  -in github-app-key.pem \\${NC}"
+    echo "${GREEN}  -out github-app-key-pkcs8.pem${NC}"
+    echo
+    echo "3. 変換した秘密鍵をSSMに登録:"
+    echo "${GREEN}aws ssm put-parameter \\${NC}"
+    echo "${GREEN}  --name \"$APP_KEY_PARAM\" \\${NC}"
+    echo "${GREEN}  --value file://github-app-key-pkcs8.pem \\${NC}"
+    echo "${GREEN}  --type SecureString \\${NC}"
+    echo "${GREEN}  --overwrite \\${NC}"
+    echo "${GREEN}  --region $REGION${NC}"
+    echo
+    echo "または、AWS Management Consoleから直接設定:"
+    echo "  1. Systems Manager → Parameter Store を開く"
+    echo "  2. パラメータ名: $APP_KEY_PARAM"
+    echo "  3. 値: 変換後の秘密鍵の内容（PKCS#8形式）"
+    echo
+    echo "注意: GitHubからダウンロードした秘密鍵は通常PKCS#1形式（BEGIN RSA PRIVATE KEY）ですが、"
+    echo "      JenkinsではPKCS#8形式（BEGIN PRIVATE KEY）が必要です。"
+    echo
+    
+    # 秘密鍵が設定されるまで待機
+    log_info "秘密鍵を設定したら、Enterキーを押して続行してください..."
+    read -p ""
+    
+    # 秘密鍵が正しく設定されたか確認
+    log_info "秘密鍵の設定を確認しています..."
+    local stored_key=$(aws ssm get-parameter \
+        --name "$APP_KEY_PARAM" \
+        --with-decryption \
+        --region "$REGION" \
+        --query 'Parameter.Value' \
+        --output text 2>/dev/null)
+    
+    if echo "$stored_key" | grep -q "PLACEHOLDER_PRIVATE_KEY"; then
+        log_warn "秘密鍵がまだプレースホルダーのままです"
+        
+        if confirm_action "秘密鍵の設定をスキップして続行しますか？"; then
+            log_warn "秘密鍵の設定をスキップしました。後で手動で設定してください。"
+        else
+            log_info "秘密鍵を設定してから、このスクリプトを再実行してください。"
+            return 1
+        fi
+    elif echo "$stored_key" | grep -q "BEGIN PRIVATE KEY"; then
+        log_info "✓ 秘密鍵が正しく設定されました（PKCS#8形式）"
+    elif echo "$stored_key" | grep -q "BEGIN RSA PRIVATE KEY"; then
+        log_warn "秘密鍵がPKCS#1形式です。PKCS#8形式への変換が必要です。"
+        echo
+        echo "変換コマンド:"
+        echo "${GREEN}openssl pkcs8 -topk8 -inform PEM -outform PEM -nocrypt -in key.pem -out key-pkcs8.pem${NC}"
+        echo
+        if ! confirm_action "このまま続行しますか？"; then
+            return 1
+        fi
+    else
+        log_warn "秘密鍵の形式が認識できません"
+        if ! confirm_action "このまま続行しますか？"; then
+            return 1
+        fi
+    fi
+    
     log_info "✅ GitHub App設定が完了しました"
     echo
     echo "設定されたGitHub App情報："
@@ -136,7 +192,7 @@ setup_github_app() {
     if [ -n "$owner" ]; then
         echo "  - Owner: $owner"
     fi
-    echo "  - 秘密鍵: SSMに安全に保存されました"
+    echo "  - 秘密鍵パラメータ: $APP_KEY_PARAM"
     echo
     echo "この設定はJenkinsの起動時に自動的に読み込まれ、"
     echo "GitHub Appクレデンシャル（ID: github-app-credentials）として登録されます。"
