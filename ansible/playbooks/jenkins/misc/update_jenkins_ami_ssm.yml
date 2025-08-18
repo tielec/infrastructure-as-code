@@ -21,7 +21,7 @@
   pre_tasks:
     - name: Include group_vars/all.yml
       ansible.builtin.include_vars:
-        file: "{{ playbook_dir }}/../inventory/group_vars/all.yml"
+        file: "{{ inventory_dir }}/group_vars/all.yml"
     
     - name: Set required variables
       ansible.builtin.set_fact:
@@ -31,7 +31,7 @@
   tasks:
     - name: Get Pulumi stack outputs for pipeline ARNs
       ansible.builtin.shell: |
-        cd {{ playbook_dir }}/../../pulumi/jenkins-agent-ami
+        cd {{ inventory_dir }}/../pulumi/jenkins-agent-ami
         pulumi stack output --json
       register: stack_outputs
       changed_when: false

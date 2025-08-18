@@ -1,8 +1,8 @@
 # Jenkinsの設定ロールのデフォルト変数
 
 # パスがプレイブックからの相対パスになるよう修正
-scripts_dir: "{{ playbook_dir }}/../../scripts"
-pulumi_path: "{{ playbook_dir }}/../../pulumi"
+scripts_dir: "{{ inventory_dir }}/../scripts"
+pulumi_path: "{{ inventory_dir }}/../pulumi"
 
 # 環境名のデフォルト値
 env_name: "dev"

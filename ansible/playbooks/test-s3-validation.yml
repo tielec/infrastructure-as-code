@@ -11,7 +11,7 @@
     pulumi_s3_region: "{{ lookup('env', 'PULUMI_S3_REGION') | default('ap-northeast-1') }}"
     
     # プロジェクト設定
-    test_project_path: "{{ playbook_dir }}/../../pulumi/test-s3"
+    test_project_path: "{{ inventory_dir }}/../pulumi/test-s3"
     # 変数名を変更して衝突を回避
     test_stack_name: "test-{{ ansible_date_time.epoch[-4:] }}"  # ユニークなスタック名（エポック時間の下4桁）
     

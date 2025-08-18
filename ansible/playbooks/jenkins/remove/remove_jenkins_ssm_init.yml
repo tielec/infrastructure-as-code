@@ -12,9 +12,9 @@
     env_name: "{{ env | default('dev') }}"
     # 削除確認フラグ
     confirm: "{{ confirm | default(false) }}"
-    # パスを明示的に定義
-    scripts_dir: "{{ playbook_dir }}/../../scripts"
-    pulumi_path: "{{ playbook_dir }}/../../pulumi"
+    # パスを明示的に定義（inventory_dirを基準にした相対パス）
+    scripts_dir: "{{ inventory_dir }}/../scripts"
+    pulumi_path: "{{ inventory_dir }}/../pulumi"
     # 削除操作を指定
     operation: destroy
   
