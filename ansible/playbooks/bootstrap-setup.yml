@@ -335,12 +335,12 @@
     # インストール検証スクリプトの確認
     - name: Check if verify-installation.sh exists in repository
       ansible.builtin.stat:
-        path: "{{ inventory_dir }}/../bootstrap/verify-installation.sh"
+        path: "{{ inventory_dir }}/../../bootstrap/verify-installation.sh"
       register: verify_script
       
     - name: Make verify-installation.sh executable
       ansible.builtin.file:
-        path: "{{ inventory_dir }}/../bootstrap/verify-installation.sh"
+        path: "{{ inventory_dir }}/../../bootstrap/verify-installation.sh"
         mode: '0755'
       when: verify_script.stat.exists
       
