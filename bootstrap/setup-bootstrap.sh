@@ -306,7 +306,8 @@ echo -e "${GREEN}ansible-playbook の場所: $ANSIBLE_PLAYBOOK_PATH${NC}"
 echo -e "${GREEN}ANSIBLE_COLLECTIONS_PATH: $ANSIBLE_COLLECTIONS_PATH${NC}"
 
 # 絶対パスで ansible-playbook を実行（Amazon Linux 2023では通常sudoは不要）
-$ANSIBLE_PLAYBOOK_PATH "$PLAYBOOK_PATH" -v
+# インベントリファイルを明示的に指定
+$ANSIBLE_PLAYBOOK_PATH "$PLAYBOOK_PATH" -i "$ANSIBLE_DIR/inventory/hosts" -v
 
 # Pulumi初期設定の案内
 echo -e "\n${BLUE}=== Pulumi設定 ===${NC}"
