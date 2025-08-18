@@ -212,7 +212,19 @@
             instance_id: "{{ jenkins_instance_id }}"
     
     # Phase 2: セキュリティ設定（再起動後に実行）
-    # 4. CLIユーザーとクレデンシャル設定
+    # 4.1 Adminユーザーの設定
+    - name: Setup admin user
+      when: setup_admin_user | default(true) | bool
+      block:
+        - name: Create or update admin user
+          ansible.builtin.include_tasks: execute_ssm_command.yml
+          vars:
+            ssm_document_name: "{{ ssm_documents.executeScript }}"
+            ssm_parameters: "ScriptPath=scripts/jenkins/shell/setup-admin-user.sh"
+            ssm_comment: "Setting up admin user"
+            instance_id: "{{ jenkins_instance_id }}"
+
+    # 4.2 CLIユーザーとクレデンシャル設定
     - name: Setup CLI user and credentials
       when: setup_cli_user | default(true) | bool
       block:
@@ -223,8 +235,8 @@
             ssm_parameters: "ScriptPath=scripts/jenkins/shell/application-setup-cli-user-and-credentials.sh"
             ssm_comment: "Setting up CLI user and credentials"
             instance_id: "{{ jenkins_instance_id }}"
-    
-    # 5. SSHクレデンシャルの設定
+
+    # 5.1 SSHクレデンシャルの設定
     - name: Setup SSH credentials from Parameter Store
       when: setup_ssh_credentials | default(true) | bool
       block:
@@ -236,21 +248,21 @@
             ssm_comment: "Setting up SSH credentials from Parameter Store"
             instance_id: "{{ jenkins_instance_id }}"
 
-    # 5.5. Adminユーザーの設定
-    - name: Setup admin user
-      when: setup_admin_user | default(true) | bool
+    # 5.2 OpenAI APIキークレデンシャルの設定
+    - name: Setup OpenAI API key credential
+      when: setup_openai_credential | default(true) | bool
       block:
-        - name: Create or update admin user
+        - name: Execute OpenAI API key credential setup
           ansible.builtin.include_tasks: execute_ssm_command.yml
           vars:
             ssm_document_name: "{{ ssm_documents.executeScript }}"
-            ssm_parameters: "ScriptPath=scripts/jenkins/shell/setup-admin-user.sh"
-            ssm_comment: "Setting up admin user"
+            ssm_parameters: "ScriptPath=scripts/jenkins/shell/application-setup-openai-credential.sh"
+            ssm_comment: "Setting up OpenAI API key credential from Parameter Store"
             instance_id: "{{ jenkins_instance_id }}"
     
     # Phase 2.5: セキュリティ設定を適用するための再起動
     - name: Restart Jenkins to apply security settings
-      when: (setup_cli_user | default(true) | bool) or (setup_ssh_credentials | default(true) | bool) or (setup_admin_user | default(true) | bool)
+      when: (setup_cli_user | default(true) | bool) or (setup_ssh_credentials | default(true) | bool) or (setup_openai_credential | default(true) | bool) or (setup_admin_user | default(true) | bool)
       block:
         - name: Execute Jenkins restart for security settings
           ansible.builtin.include_tasks: execute_ssm_command.yml
@@ -372,6 +384,7 @@
       - Plugins Installed: {{ install_plugins }}
       - CLI User Setup: {{ setup_cli_user | default(true) }}
       - SSH Credentials Setup: {{ setup_ssh_credentials | default(true) }}
+      - OpenAI API Key Setup: {{ setup_openai_credential | default(true) }}
       - JCasC Configuration Applied: {{ configure_with_casc | default(true) }}
       - Seed Job Created: {{ create_seed_job | default(true) }}
       - Jenkins Restarted: {{ restart_jenkins }}
