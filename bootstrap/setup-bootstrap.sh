@@ -15,6 +15,7 @@ source "$LIB_DIR/script-permissions.sh"
 source "$LIB_DIR/ssh-manager.sh"
 source "$LIB_DIR/pulumi-config.sh"
 source "$LIB_DIR/systemd-service.sh"
+source "$LIB_DIR/openai-config.sh"
 
 # Ansibleプレイブックの格納場所
 readonly ANSIBLE_DIR="$REPO_ROOT/ansible"
@@ -190,6 +191,9 @@ main() {
     
     # SSH鍵の設定（SSMアクセスを含むが対話的処理が含まれる可能性）
     setup_ssh_keys
+    
+    # OpenAI APIキーの設定（SSMアクセスを含む）
+    setup_openai_api_key
     
     # Pulumi設定（AWS認証後に実行、SSMアクセスを含む）
     setup_pulumi_config
