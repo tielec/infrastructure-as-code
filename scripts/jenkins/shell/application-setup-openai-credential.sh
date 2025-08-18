@@ -61,6 +61,8 @@ if [ -z "$OPENAI_API_KEY" ]; then
 fi
 
 log "✓ OpenAI API key retrieved successfully"
+# APIキーの長さを確認（デバッグ用）
+log "API key length: ${#OPENAI_API_KEY} characters"
 
 # Groovyスクリプトの配置先
 GROOVY_DIR="${JENKINS_HOME}/init.groovy.d"
@@ -70,11 +72,11 @@ GROOVY_SCRIPT_DST="${GROOVY_DIR}/03-setup-openai-credential.groovy"
 
 log "Replacing placeholder and copying OpenAI credential setup script to $GROOVY_SCRIPT_DST"
 
-# APIキー内の特殊文字をエスケープ（sedの区切り文字として|を使用）
-ESCAPED_API_KEY=$(printf '%s' "$OPENAI_API_KEY" | sed 's/[[\.*^$()+?{|]/\\&/g')
+# APIキー内の特殊文字 `&`, `/`, `\` をsedのためにエスケープ
+ESCAPED_API_KEY=$(printf '%s\n' "$OPENAI_API_KEY" | sed -e 's/[&/\\]/\\&/g')
 
-# プレースホルダーを実際のAPIキーに置換（区切り文字として|を使用）
-sed "s|##OPENAI_API_KEY_PLACEHOLDER##|${ESCAPED_API_KEY}|g" "$GROOVY_SOURCE" > "$GROOVY_SCRIPT_DST"
+# プレースホルダーを実際のAPIキーに置換して、新しいスクリプトファイルを作成
+sed "s/##OPENAI_API_KEY_PLACEHOLDER##/${ESCAPED_API_KEY}/g" "$GROOVY_SOURCE" > "$GROOVY_SCRIPT_DST"
 
 chown jenkins:jenkins "$GROOVY_SCRIPT_DST"
 chmod 644 "$GROOVY_SCRIPT_DST"
