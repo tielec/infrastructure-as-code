@@ -21,13 +21,7 @@ log "===== Cleaning up Jenkins Groovy Scripts ====="
 # 環境変数の設定
 JENKINS_HOME="${JENKINS_HOME:-/mnt/efs/jenkins}"
 GROOVY_DIR="${JENKINS_HOME}/init.groovy.d"
-CLEANUP_PHASE="${1:-all}"  # パラメータで特定のフェーズのみクリーンアップ可能
-
-# クリーンアップ対象のGroovyスクリプト
-declare -A GROOVY_SCRIPTS
-GROOVY_SCRIPTS["plugins"]="install-plugins.groovy"
-GROOVY_SCRIPTS["security"]="setup-cli-user-and-credentials.groovy setup-ssh-credentials.groovy"
-GROOVY_SCRIPTS["seedjob"]="create-seed-job.groovy"
+CLEANUP_PHASE="${1:-all}"  # パラメータで後方互換性を維持
 
 # テンポラリファイル
 TEMP_FILES=(
@@ -36,53 +30,45 @@ TEMP_FILES=(
     "/tmp/jenkins-cli.jar"
 )
 
-# クリーンアップ関数
-cleanup_groovy_scripts() {
-    local phase="$1"
-    local scripts="$2"
+# init.groovy.dディレクトリのクリーンアップ
+log ""
+log "Cleaning up init.groovy.d directory..."
+if [ -d "$GROOVY_DIR" ]; then
+    # ディレクトリ内のファイル数を確認
+    FILE_COUNT=$(find "$GROOVY_DIR" -type f -name "*.groovy" 2>/dev/null | wc -l)
     
-    log "Cleaning up $phase scripts..."
-    for script in $scripts; do
-        local script_path="${GROOVY_DIR}/${script}"
-        if [ -f "$script_path" ]; then
-            log "  Removing: $script"
-            rm -f "$script_path"
+    if [ "$FILE_COUNT" -gt 0 ]; then
+        log "Found $FILE_COUNT Groovy script(s) in init.groovy.d"
+        
+        # すべての.groovyファイルを削除
+        find "$GROOVY_DIR" -type f -name "*.groovy" | while read -r script; do
+            script_name=$(basename "$script")
+            log "  Removing: $script_name"
+            rm -f "$script"
             
-            # バックアップがある場合は削除
-            if [ -f "${script_path}.bak" ]; then
-                rm -f "${script_path}.bak"
-                log "  Removed backup: ${script}.bak"
+            # バックアップファイルがある場合も削除
+            if [ -f "${script}.bak" ]; then
+                rm -f "${script}.bak"
+                log "  Removed backup: ${script_name}.bak"
             fi
-        else
-            log "  Already removed: $script"
-        fi
-    done
-}
-
-# フェーズごとのクリーンアップ実行
-case "$CLEANUP_PHASE" in
-    "plugins")
-        cleanup_groovy_scripts "plugins" "${GROOVY_SCRIPTS[plugins]}"
-        ;;
-    "security")
-        cleanup_groovy_scripts "security" "${GROOVY_SCRIPTS[security]}"
-        ;;
-    "seedjob")
-        cleanup_groovy_scripts "seedjob" "${GROOVY_SCRIPTS[seedjob]}"
-        ;;
-    "all")
-        # すべてのGroovyスクリプトをクリーンアップ
-        log "Performing complete cleanup..."
-        for phase in "${!GROOVY_SCRIPTS[@]}"; do
-            cleanup_groovy_scripts "$phase" "${GROOVY_SCRIPTS[$phase]}"
         done
-        ;;
-    *)
-        log "Unknown cleanup phase: $CLEANUP_PHASE"
-        log "Valid phases: plugins, security, seedjob, all"
-        exit 1
-        ;;
-esac
+        
+        log "✓ Removed all Groovy scripts from init.groovy.d"
+    else
+        log "✓ init.groovy.d is already clean (no Groovy scripts found)"
+    fi
+    
+    # その他の残存ファイルを確認
+    REMAINING_FILES=$(ls -1 "$GROOVY_DIR" 2>/dev/null | wc -l)
+    if [ "$REMAINING_FILES" -gt 0 ]; then
+        log "⚠ init.groovy.d still contains $REMAINING_FILES non-Groovy file(s):"
+        ls -la "$GROOVY_DIR" | grep -v "^total\|^d" | while read -r line; do
+            log "    $line"
+        done
+    fi
+else
+    log "✓ init.groovy.d directory does not exist"
+fi
 
 # テンポラリファイルのクリーンアップ
 log ""
@@ -95,23 +81,6 @@ for temp_file in "${TEMP_FILES[@]}"; do
         log "  Already removed: $temp_file"
     fi
 done
-
-# init.groovy.dディレクトリの確認
-log ""
-log "Checking init.groovy.d directory..."
-if [ -d "$GROOVY_DIR" ]; then
-    REMAINING_FILES=$(ls -1 "$GROOVY_DIR" 2>/dev/null | wc -l)
-    if [ "$REMAINING_FILES" -eq 0 ]; then
-        log "✓ init.groovy.d is clean (no remaining files)"
-    else
-        log "⚠ init.groovy.d contains $REMAINING_FILES file(s):"
-        ls -la "$GROOVY_DIR" | grep -v "^total\|^d" | while read -r line; do
-            log "    $line"
-        done
-    fi
-else
-    log "✓ init.groovy.d directory does not exist"
-fi
 
 # ログファイルのローテーション（サイズが大きい場合）
 LOG_FILE="/var/log/jenkins-application-cleanup.log"
