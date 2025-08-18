@@ -2,7 +2,7 @@
 # setup-bootstrap.sh - Jenkins CI/CD インフラストラクチャのブートストラップ環境セットアップスクリプト
 # Amazon Linux 2023対応版
 
-set -euo pipefail
+set -eo pipefail
 
 # スクリプトディレクトリとリポジトリルートの設定
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" &> /dev/null && pwd)"
@@ -53,11 +53,9 @@ prepare_ansible_environment() {
     export PATH="$HOME/.local/bin:$PATH"
     export ANSIBLE_COLLECTIONS_PATH="/usr/share/ansible/collections"
     
-    # bashrcから環境変数を読み込み（set -uを一時的に無効化）
+    # bashrcから環境変数を読み込み（エラーを無視）
     if [ -f ~/.bashrc ]; then
-        set +u
-        source ~/.bashrc
-        set -u
+        source ~/.bashrc 2>/dev/null || true
     fi
     
     # 既存のcollectionsをクリーンアップ（ユーザー空間の重複を防ぐ）
@@ -214,7 +212,10 @@ main() {
 }
 
 # エラーハンドリング
-trap 'log_error "エラーが発生しました (行: $LINENO)"' ERR
+trap 'log_error "エラーが発生しました (行: $LINENO, コマンド: $BASH_COMMAND)"' ERR
 
 # メイン処理を実行
 main "$@"
+
+# 正常終了
+exit 0

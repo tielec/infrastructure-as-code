@@ -1,6 +1,8 @@
 #!/bin/bash
 # common.sh - 共通関数とカラー定義
 
+# 厳密なエラーチェックは設定しない（呼び出し元で設定される）
+
 # カラー定義
 export GREEN='\033[0;32m'
 export YELLOW='\033[1;33m'
