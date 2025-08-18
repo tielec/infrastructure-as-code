@@ -11,7 +11,7 @@
   vars:
     nodejs_version: "20"  # LTS version
     user_home: "/home/ec2-user"
-    aws_credentials_script_path: "{{ inventory_dir }}/../scripts/aws/setup-aws-credentials.sh"
+    aws_credentials_script_path: "{{ inventory_dir }}/../../scripts/aws/setup-aws-credentials.sh"
     java_version: "21"
     arch: "{{ ansible_architecture }}"
     # ec2-userのローカルbinディレクトリを含むPATH

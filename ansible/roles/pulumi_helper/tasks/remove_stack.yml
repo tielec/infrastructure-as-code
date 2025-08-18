@@ -44,8 +44,8 @@
     - name: Remove stack
       ansible.builtin.shell: |
         cd {{ pulumi_project_path }}
-        source {{ inventory_dir }}/../scripts/aws/aws-env.sh > /dev/null
-        eval $({{ inventory_dir }}/../scripts/aws/aws-env.sh) > /dev/null
+        source {{ inventory_dir }}/../../scripts/aws/aws-env.sh > /dev/null
+        eval $({{ inventory_dir }}/../../scripts/aws/aws-env.sh) > /dev/null
         {{ pulumi_env_prefix }} && {{ pulumi_sudo_cmd }} stack rm --yes "{{ found_stack.stdout | trim }}"
       register: stack_rm_result
       changed_when: stack_rm_result.rc == 0

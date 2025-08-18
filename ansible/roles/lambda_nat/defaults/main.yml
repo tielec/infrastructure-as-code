@@ -1,7 +1,7 @@
 # lambda_nat ロールのデフォルト変数
 
 # パスがプレイブックからの相対パスになるよう修正
-scripts_dir: "{{ inventory_dir }}/../scripts"
+scripts_dir: "{{ inventory_dir }}/../../scripts"
 pulumi_path: "{{ inventory_dir }}/../../pulumi"
 
 # 環境名のデフォルト値

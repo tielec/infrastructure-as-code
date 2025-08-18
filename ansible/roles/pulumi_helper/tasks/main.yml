@@ -14,7 +14,7 @@
 # AWS環境の準備
 - name: Ensure AWS credential scripts are executable
   ansible.builtin.file:
-    path: "{{ inventory_dir }}/../scripts/aws/aws-env.sh"
+    path: "{{ inventory_dir }}/../../scripts/aws/aws-env.sh"
     mode: '0755'
   register: aws_env_script_perm
   failed_when: false

@@ -1,5 +1,5 @@
 # lambda_account_setup ロールのデフォルト変数
-scripts_dir: "{{ inventory_dir }}/../scripts"
+scripts_dir: "{{ inventory_dir }}/../../scripts"
 pulumi_path: "{{ inventory_dir }}/../../pulumi"
 
 # アラートメール設定

@@ -1,7 +1,7 @@
 # lambda_ip_whitelist ロールのデフォルト変数
 
 # パスがプレイブックからの相対パスになるよう修正
-scripts_dir: "{{ inventory_dir }}/../scripts"
+scripts_dir: "{{ inventory_dir }}/../../scripts"
 
 # 環境名のデフォルト値
 env_name: "dev"

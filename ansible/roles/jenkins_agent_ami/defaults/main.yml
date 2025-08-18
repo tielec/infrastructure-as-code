@@ -2,7 +2,7 @@
 # Jenkins Agent AMI Builder defaults
 
 # Standard variables (same as other Jenkins roles)
-scripts_dir: "{{ inventory_dir }}/../scripts"
+scripts_dir: "{{ inventory_dir }}/../../scripts"
 pulumi_path: "{{ inventory_dir }}/../../pulumi"
 env_name: "{{ env | default('dev') }}"
 
