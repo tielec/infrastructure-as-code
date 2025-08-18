@@ -20,7 +20,7 @@
     # all.yml から変数を読み込む
     - name: Include group_vars/all.yml
       ansible.builtin.include_vars:
-        file: "{{ playbook_dir }}/../inventory/group_vars/all.yml"
+        file: "{{ inventory_dir }}/group_vars/all.yml"
         
     # 必要な変数を設定
     - name: Set required variables from all.yml
