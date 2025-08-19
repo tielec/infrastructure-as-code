@@ -1,3 +1,279 @@
+// ========================
+// 関数定義
+// ========================
+
+/**
+ * パラメータの検証
+ */
+def validateParameters() {
+    if (!params.CONFIRM_SHUTDOWN && !params.DRY_RUN) {
+        error("環境停止の確認が必要です。CONFIRM_SHUTDOWNパラメータをチェックしてください。")
+    }
+    
+    echo "=== 環境停止ジョブ開始 ==="
+    echo "対象環境: ${params.ENVIRONMENT}"
+    echo "リージョン: ${params.AWS_REGION}"
+    echo "停止モード: ${params.SHUTDOWN_MODE}"
+    echo "待機タイムアウト: ${params.WAIT_TIMEOUT_MINUTES}分"
+    echo "ドライラン: ${params.DRY_RUN}"
+}
+
+/**
+ * SSMパラメータからリソースIDを取得
+ */
+def getResourceIdFromSSM(paramName, resourceType) {
+    try {
+        def resourceId = sh(
+            script: """
+                aws ssm get-parameter \
+                    --name "${paramName}" \
+                    --region ${AWS_REGION} \
+                    --query 'Parameter.Value' \
+                    --output text 2>/dev/null || echo ""
+            """,
+            returnStdout: true
+        ).trim()
+        
+        if (resourceId) {
+            echo "${resourceType} ID取得成功: ${resourceId}"
+        }
+        return resourceId
+    } catch (Exception e) {
+        echo "${resourceType} IDの取得をスキップ: ${e.message}"
+        return ""
+    }
+}
+
+/**
+ * 全リソースIDを取得
+ */
+def getAllResourceIds() {
+    env.CONTROLLER_INSTANCE_ID = getResourceIdFromSSM(CONTROLLER_INSTANCE_ID_PARAM, "Controller Instance")
+    env.NAT_INSTANCE_ID = getResourceIdFromSSM(NAT_INSTANCE_ID_PARAM, "NAT Instance")
+    env.SPOTFLEET_REQUEST_ID = getResourceIdFromSSM(SPOTFLEET_REQUEST_ID_PARAM, "SpotFleet Request")
+    
+    echo """
+停止対象リソース:
+- Controller Instance: ${env.CONTROLLER_INSTANCE_ID ?: 'Not found'}
+- NAT Instance: ${env.NAT_INSTANCE_ID ?: 'Not found'}
+- SpotFleet Request: ${env.SPOTFLEET_REQUEST_ID ?: 'Not found'}
+"""
+}
+
+/**
+ * SpotFleetの現在のキャパシティを取得
+ */
+def getSpotFleetCapacity(spotFleetRequestId) {
+    return sh(
+        script: """
+            aws ec2 describe-spot-fleet-requests \
+                --spot-fleet-request-ids ${spotFleetRequestId} \
+                --region ${AWS_REGION} \
+                --query 'SpotFleetRequestConfigs[0].SpotFleetRequestConfig.TargetCapacity' \
+                --output text 2>/dev/null || echo "0"
+        """,
+        returnStdout: true
+    ).trim()
+}
+
+/**
+ * SpotFleetのキャパシティを0に設定
+ */
+def scaleDownSpotFleet(spotFleetRequestId) {
+    sh """
+        aws ec2 modify-spot-fleet-request \
+            --spot-fleet-request-id ${spotFleetRequestId} \
+            --target-capacity 0 \
+            --region ${AWS_REGION}
+    """
+    echo "SpotFleetのキャパシティを0に設定しました"
+}
+
+/**
+ * SpotFleetのインスタンスが全て終了するまで待機
+ */
+def waitForSpotFleetTermination(spotFleetRequestId, timeoutMinutes) {
+    echo "エージェントジョブの完了を待機中..."
+    
+    timeout(time: timeoutMinutes, unit: 'MINUTES') {
+        waitUntil {
+            def runningInstances = sh(
+                script: """
+                    aws ec2 describe-spot-fleet-instances \
+                        --spot-fleet-request-id ${spotFleetRequestId} \
+                        --region ${AWS_REGION} \
+                        --query 'ActiveInstances[*].InstanceId' \
+                        --output json 2>/dev/null || echo "[]"
+                """,
+                returnStdout: true
+            ).trim()
+            
+            def instances = readJSON(text: runningInstances)
+            echo "残りのエージェントインスタンス数: ${instances.size()}"
+            return instances.size() == 0
+        }
+    }
+    echo "全エージェントが終了しました"
+}
+
+/**
+ * EC2 Fleetをスケールダウン
+ */
+def scaleDownEC2Fleet() {
+    if (!env.SPOTFLEET_REQUEST_ID || params.DRY_RUN) {
+        return
+    }
+    
+    echo "=== EC2 Fleet (SpotFleet) のスケールダウン ==="
+    
+    try {
+        def currentCapacity = getSpotFleetCapacity(env.SPOTFLEET_REQUEST_ID)
+        echo "現在のキャパシティ: ${currentCapacity}"
+        
+        if (currentCapacity != "0") {
+            scaleDownSpotFleet(env.SPOTFLEET_REQUEST_ID)
+            
+            if (params.SHUTDOWN_MODE == 'graceful') {
+                waitForSpotFleetTermination(env.SPOTFLEET_REQUEST_ID, params.WAIT_TIMEOUT_MINUTES.toInteger())
+            }
+        }
+    } catch (Exception e) {
+        echo "SpotFleetのスケールダウンでエラー: ${e.message}"
+        if (params.SHUTDOWN_MODE == 'graceful') {
+            error("SpotFleetのスケールダウンに失敗しました")
+        }
+    }
+}
+
+/**
+ * インスタンスの状態を取得
+ */
+def getInstanceState(instanceId) {
+    return sh(
+        script: """
+            aws ec2 describe-instances \
+                --instance-ids ${instanceId} \
+                --region ${AWS_REGION} \
+                --query 'Reservations[0].Instances[0].State.Name' \
+                --output text 2>/dev/null || echo "unknown"
+        """,
+        returnStdout: true
+    ).trim()
+}
+
+/**
+ * 実行中のインスタンスIDリストを作成
+ */
+def getRunningInstances() {
+    def instancesToStop = []
+    
+    if (env.NAT_INSTANCE_ID) {
+        def natState = getInstanceState(env.NAT_INSTANCE_ID)
+        echo "NAT インスタンスの現在の状態: ${natState}"
+        if (natState == 'running') {
+            instancesToStop.add(env.NAT_INSTANCE_ID)
+        }
+    }
+    
+    if (env.CONTROLLER_INSTANCE_ID) {
+        def controllerState = getInstanceState(env.CONTROLLER_INSTANCE_ID)
+        echo "Controller インスタンスの現在の状態: ${controllerState}"
+        if (controllerState == 'running') {
+            instancesToStop.add(env.CONTROLLER_INSTANCE_ID)
+        }
+    }
+    
+    return instancesToStop
+}
+
+/**
+ * NATとControllerインスタンスを停止
+ */
+def stopNATAndControllerInstances() {
+    if (!env.NAT_INSTANCE_ID && !env.CONTROLLER_INSTANCE_ID || params.DRY_RUN) {
+        return
+    }
+    
+    echo "=== NAT と Controller インスタンスの同時停止 ==="
+    
+    try {
+        def instancesToStop = getRunningInstances()
+        
+        if (instancesToStop.size() > 0) {
+            def instanceIds = instancesToStop.join(' ')
+            echo "停止対象インスタンス: ${instanceIds}"
+            
+            sh """
+                aws ec2 stop-instances \
+                    --instance-ids ${instanceIds} \
+                    --region ${AWS_REGION}
+            """
+            echo "インスタンス停止コマンドを送信しました"
+            
+            echo """
+===================================
+インスタンスの停止コマンドを送信しました：
+- NAT Instance: ${env.NAT_INSTANCE_ID ?: 'N/A'}
+- Controller Instance: ${env.CONTROLLER_INSTANCE_ID ?: 'N/A'}
+
+注意: まもなくJenkinsへのアクセスが失われます。
+===================================
+"""
+        } else {
+            echo "停止対象のインスタンスが見つかりません"
+        }
+    } catch (Exception e) {
+        echo "インスタンスの停止スケジュールでエラー: ${e.message}"
+        // 自身の停止なので、エラーでもジョブは成功とする
+    }
+}
+
+/**
+ * 実行サマリーを表示
+ */
+def showExecutionSummary() {
+    echo """
+===================================
+環境停止ジョブが完了しました
+===================================
+
+実行された操作:
+1. EC2 Fleet (SpotFleet): ${env.SPOTFLEET_REQUEST_ID ? 'キャパシティを0に設定' : 'スキップ（ID未検出）'}
+2. NAT & Controller インスタンス: ${(env.NAT_INSTANCE_ID || env.CONTROLLER_INSTANCE_ID) ? '停止コマンド送信' : 'スキップ（ID未検出）'}
+
+注意: Controllerの停止により、このJenkinsへのアクセスは間もなく失われます。
+環境を再開するには、AWSコンソールからインスタンスを起動してください。
+"""
+}
+
+/**
+ * ドライラン結果を表示
+ */
+def showDryRunSummary() {
+    echo """
+===================================
+ドライラン実行結果
+===================================
+
+以下のリソースが停止対象として検出されました:
+
+1. EC2 Fleet (SpotFleet)
+   - Request ID: ${env.SPOTFLEET_REQUEST_ID ?: 'Not found'}
+   
+2. NAT インスタンス
+   - Instance ID: ${env.NAT_INSTANCE_ID ?: 'Not found'}
+   
+3. Controller インスタンス
+   - Instance ID: ${env.CONTROLLER_INSTANCE_ID ?: 'Not found'}
+
+実際の停止を行うには、DRY_RUNをfalseに設定して再実行してください。
+"""
+}
+
+// ========================
+// パイプライン定義
+// ========================
+
 pipeline {
     agent {
         label 'built-in'
@@ -23,17 +299,7 @@ pipeline {
         stage('Validate Parameters') {
             steps {
                 script {
-                    // 停止確認のチェック
-                    if (!params.CONFIRM_SHUTDOWN && !params.DRY_RUN) {
-                        error("環境停止の確認が必要です。CONFIRM_SHUTDOWNパラメータをチェックしてください。")
-                    }
-                    
-                    echo "=== 環境停止ジョブ開始 ==="
-                    echo "対象環境: ${params.ENVIRONMENT}"
-                    echo "リージョン: ${params.AWS_REGION}"
-                    echo "停止モード: ${params.SHUTDOWN_MODE}"
-                    echo "待機タイムアウト: ${params.WAIT_TIMEOUT_MINUTES}分"
-                    echo "ドライラン: ${params.DRY_RUN}"
+                    validateParameters()
                 }
             }
         }
@@ -42,62 +308,7 @@ pipeline {
             steps {
                 script {
                     echo "=== リソースIDの取得 ==="
-                    
-                    // SSMパラメータストアからリソースIDを取得
-                    try {
-                        env.CONTROLLER_INSTANCE_ID = sh(
-                            script: """
-                                aws ssm get-parameter \
-                                    --name "${CONTROLLER_INSTANCE_ID_PARAM}" \
-                                    --region ${AWS_REGION} \
-                                    --query 'Parameter.Value' \
-                                    --output text 2>/dev/null || echo ""
-                            """,
-                            returnStdout: true
-                        ).trim()
-                    } catch (Exception e) {
-                        echo "Controller Instance IDの取得をスキップ: ${e.message}"
-                        env.CONTROLLER_INSTANCE_ID = ""
-                    }
-                    
-                    try {
-                        env.NAT_INSTANCE_ID = sh(
-                            script: """
-                                aws ssm get-parameter \
-                                    --name "${NAT_INSTANCE_ID_PARAM}" \
-                                    --region ${AWS_REGION} \
-                                    --query 'Parameter.Value' \
-                                    --output text 2>/dev/null || echo ""
-                            """,
-                            returnStdout: true
-                        ).trim()
-                    } catch (Exception e) {
-                        echo "NAT Instance IDの取得をスキップ: ${e.message}"
-                        env.NAT_INSTANCE_ID = ""
-                    }
-                    
-                    try {
-                        env.SPOTFLEET_REQUEST_ID = sh(
-                            script: """
-                                aws ssm get-parameter \
-                                    --name "${SPOTFLEET_REQUEST_ID_PARAM}" \
-                                    --region ${AWS_REGION} \
-                                    --query 'Parameter.Value' \
-                                    --output text 2>/dev/null || echo ""
-                            """,
-                            returnStdout: true
-                        ).trim()
-                    } catch (Exception e) {
-                        echo "SpotFleet Request IDの取得をスキップ: ${e.message}"
-                        env.SPOTFLEET_REQUEST_ID = ""
-                    }
-                    
-                    echo """
-停止対象リソース:
-- Controller Instance: ${env.CONTROLLER_INSTANCE_ID ?: 'Not found'}
-- NAT Instance: ${env.NAT_INSTANCE_ID ?: 'Not found'}
-- SpotFleet Request: ${env.SPOTFLEET_REQUEST_ID ?: 'Not found'}
-"""
+                    getAllResourceIds()
                 }
             }
         }
@@ -110,64 +321,7 @@ pipeline {
             }
             steps {
                 script {
-                    echo "=== EC2 Fleet (SpotFleet) のスケールダウン ==="
-                    
-                    try {
-                        // 現在のキャパシティを取得
-                        def currentCapacity = sh(
-                            script: """
-                                aws ec2 describe-spot-fleet-requests \
-                                    --spot-fleet-request-ids ${env.SPOTFLEET_REQUEST_ID} \
-                                    --region ${AWS_REGION} \
-                                    --query 'SpotFleetRequestConfigs[0].SpotFleetRequestConfig.TargetCapacity' \
-                                    --output text 2>/dev/null || echo "0"
-                            """,
-                            returnStdout: true
-                        ).trim()
-                        
-                        echo "現在のキャパシティ: ${currentCapacity}"
-                        
-                        if (currentCapacity != "0") {
-                            // キャパシティを0に設定
-                            sh """
-                                aws ec2 modify-spot-fleet-request \
-                                    --spot-fleet-request-id ${env.SPOTFLEET_REQUEST_ID} \
-                                    --target-capacity 0 \
-                                    --region ${AWS_REGION}
-                            """
-                            echo "SpotFleetのキャパシティを0に設定しました"
-                            
-                            // gracefulモードの場合、エージェントの終了を待つ
-                            if (params.SHUTDOWN_MODE == 'graceful') {
-                                echo "エージェントジョブの完了を待機中..."
-                                
-                                timeout(time: params.WAIT_TIMEOUT_MINUTES.toInteger(), unit: 'MINUTES') {
-                                    waitUntil {
-                                        def runningInstances = sh(
-                                            script: """
-                                                aws ec2 describe-spot-fleet-instances \
-                                                    --spot-fleet-request-id ${env.SPOTFLEET_REQUEST_ID} \
-                                                    --region ${AWS_REGION} \
-                                                    --query 'ActiveInstances[*].InstanceId' \
-                                                    --output json 2>/dev/null || echo "[]"
-                                            """,
-                                            returnStdout: true
-                                        ).trim()
-                                        
-                                        def instances = readJSON(text: runningInstances)
-                                        echo "残りのエージェントインスタンス数: ${instances.size()}"
-                                        return instances.size() == 0
-                                    }
-                                }
-                                echo "全エージェントが終了しました"
-                            }
-                        }
-                    } catch (Exception e) {
-                        echo "SpotFleetのスケールダウンでエラー: ${e.message}"
-                        if (params.SHUTDOWN_MODE == 'graceful') {
-                            error("SpotFleetのスケールダウンに失敗しました")
-                        }
-                    }
+                    scaleDownEC2Fleet()
                 }
             }
         }
@@ -180,49 +334,7 @@ pipeline {
             }
             steps {
                 script {
-                    echo "=== NAT と Controller インスタンスの同時停止 ==="
-                    
-                    try {
-                        // 停止するインスタンスIDのリストを作成
-                        def instancesToStop = []
-                        
-                        if (env.NAT_INSTANCE_ID) {
-                            instancesToStop.add(env.NAT_INSTANCE_ID)
-                        }
-                        
-                        if (env.CONTROLLER_INSTANCE_ID) {
-                            instancesToStop.add(env.CONTROLLER_INSTANCE_ID)
-                        }
-                        
-                        if (instancesToStop.size() > 0) {
-                            def instanceIds = instancesToStop.join(' ')
-                            
-                            echo "停止対象インスタンス: ${instanceIds}"
-                            
-                            // 両インスタンスを同時に停止
-                            sh """
-                                aws ec2 stop-instances \
-                                    --instance-ids ${instanceIds} \
-                                    --region ${AWS_REGION}
-                            """
-                            echo "インスタンス停止コマンドを送信しました"
-                            
-                            echo """
-===================================
-インスタンスの停止コマンドを送信しました：
-- NAT Instance: ${env.NAT_INSTANCE_ID ?: 'N/A'}
-- Controller Instance: ${env.CONTROLLER_INSTANCE_ID ?: 'N/A'}
-
-注意: まもなくJenkinsへのアクセスが失われます。
-===================================
-"""
-                        } else {
-                            echo "停止対象のインスタンスが見つかりません"
-                        }
-                    } catch (Exception e) {
-                        echo "インスタンスの停止スケジュールでエラー: ${e.message}"
-                        // 自身の停止なので、エラーでもジョブは成功とする
-                    }
+                    stopNATAndControllerInstances()
                 }
             }
         }
@@ -233,18 +345,7 @@ pipeline {
             }
             steps {
                 script {
-                    echo """
-===================================
-環境停止ジョブが完了しました
-===================================
-
-実行された操作:
-1. EC2 Fleet (SpotFleet): ${env.SPOTFLEET_REQUEST_ID ? 'キャパシティを0に設定' : 'スキップ（ID未検出）'}
-2. NAT & Controller インスタンス: ${(env.NAT_INSTANCE_ID || env.CONTROLLER_INSTANCE_ID) ? '停止コマンド送信' : 'スキップ（ID未検出）'}
-
-注意: Controllerの停止により、このJenkinsへのアクセスは間もなく失われます。
-環境を再開するには、AWSコンソールからインスタンスを起動してください。
-"""
+                    showExecutionSummary()
                 }
             }
         }
@@ -255,24 +356,7 @@ pipeline {
             }
             steps {
                 script {
-                    echo """
-===================================
-ドライラン実行結果
-===================================
-
-以下のリソースが停止対象として検出されました:
-
-1. EC2 Fleet (SpotFleet)
-   - Request ID: ${env.SPOTFLEET_REQUEST_ID ?: 'Not found'}
-   
-2. NAT インスタンス
-   - Instance ID: ${env.NAT_INSTANCE_ID ?: 'Not found'}
-   
-3. Controller インスタンス
-   - Instance ID: ${env.CONTROLLER_INSTANCE_ID ?: 'Not found'}
-
-実際の停止を行うには、DRY_RUNをfalseに設定して再実行してください。
-"""
+                    showDryRunSummary()
                 }
             }
         }
