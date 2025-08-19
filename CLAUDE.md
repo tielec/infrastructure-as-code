@@ -179,6 +179,23 @@ cd jenkins
 vi jenkins/README.md
 ```
 
+### 7. スクリプト開発時
+```bash
+# 1. スクリプトの開発
+cd scripts
+# 開発作業を実施
+
+# 2. scripts/README.md更新確認 ⚠️ 重要
+# 以下の項目で更新が必要か確認：
+# - スクリプト一覧（新規追加・変更）
+# - 使用方法（パラメータ・オプション変更）
+# - 環境変数（追加・変更）
+# - 依存関係（他スクリプトとの連携）
+# - セキュリティ設定（権限・認証）
+# - トラブルシューティング（新規問題）
+vi scripts/README.md
+```
+
 ## トラブルシューティングガイド
 
 ### Pulumi関連
@@ -193,12 +210,16 @@ vi jenkins/README.md
 
 **詳細なトラブルシューティング方法は [jenkins/README.md#トラブルシューティング](jenkins/README.md#トラブルシューティング) を参照してください。**
 
+### スクリプト関連
+
+**詳細なトラブルシューティング方法は [scripts/README.md#トラブルシューティング](scripts/README.md#トラブルシューティング) を参照してください。**
+
 ## コミットメッセージ規約
 
 ```
 [Component] Action: 詳細な説明
 
-Component: pulumi|ansible|jenkins|bootstrap|docs
+Component: pulumi|ansible|jenkins|bootstrap|scripts|docs
 Action: add|update|fix|remove|refactor
 
 例:
@@ -256,20 +277,40 @@ PULUMI_STATE_BUCKET_NAME  # S3バケット名（自動検出可能）
 DEPLOY_ENV               # デプロイ環境（dev/staging/prod）
 ```
 
+## スクリプトベストプラクティス
+
+**スクリプトの開発・使用方法については [scripts/README.md](scripts/README.md) を参照してください。**
+
+### 重要な注意事項
+
+- **スクリプト開発時**: スクリプトを修正・追加した場合、必ず `scripts/README.md` の更新が必要かチェックすること
+- **ドキュメント更新対象**:
+  - 新しいスクリプトの追加
+  - パラメータ・オプションの変更
+  - 環境変数の追加・変更
+  - 使用方法の変更
+  - セキュリティ設定の変更
+  - トラブルシューティング情報の追加
+
+### スクリプト作成規約
+
+1. **ヘッダーコメント必須**: 目的、使用方法、環境変数を明記
+2. **エラーハンドリング**: `set -euo pipefail` を使用
+3. **ログ出力**: 重要な処理はログ出力
+4. **冪等性**: 複数回実行しても安全に動作
+5. **セキュリティ**: 認証情報のハードコーディング禁止
+
 ## CI/CDパイプライン統合
 
-現在は手動デプロイメントですが、将来的なCI/CD統合のために以下を推奨：
+現在は手動デプロイメントを推奨。将来的なCI/CD統合のために以下を考慮：
 
-1. **GitHub Actions統合準備**
-   - ワークフローファイルのテンプレート準備
-   - シークレット管理の設計
-
-2. **自動テスト準備**
+1. **自動テスト準備**
    - Pulumiプレビューの自動実行
    - Ansibleシンタックスチェック
    - Jenkins設定の検証
+   - スクリプトのシンタックスチェック
 
-3. **モニタリング準備**
+2. **モニタリング準備**
    - CloudWatchダッシュボード設定
    - アラート設定の自動化
 
@@ -281,4 +322,5 @@ DEPLOY_ENV               # デプロイ環境（dev/staging/prod）
 3. **ansible/README.md**: Ansibleプレイブック・ロールの詳細
 4. **pulumi/README.md**: Pulumiスタックの詳細
 5. **jenkins/README.md**: Jenkins設定・ジョブの詳細
-6. **CONTRIBUTION.md**: コントリビューションガイド
+6. **scripts/README.md**: スクリプトの詳細
+7. **CONTRIBUTION.md**: コントリビューションガイド
