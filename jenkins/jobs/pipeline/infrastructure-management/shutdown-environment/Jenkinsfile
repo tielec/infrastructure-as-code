@@ -202,7 +202,7 @@ pipeline {
                             // 10秒後に両インスタンスを同時に停止するコマンドをバックグラウンドで実行
                             sh """
                                 # 10秒後にインスタンスを停止するコマンドをバックグラウンドで実行
-                                nohup sh -c 'sleep 10 && aws ec2 stop-instances --instance-ids ${instanceIds} --region ${AWS_REGION}' > /dev/null 2>&1 &
+                                (sleep 10 && aws ec2 stop-instances --instance-ids ${instanceIds} --region ${AWS_REGION}) &
                                 
                                 echo "インスタンス停止コマンドをスケジュールしました（10秒後に実行）"
                             """
