@@ -1,5 +1,24 @@
 ---
 # AWS CLI Helperロールの包括的なテストプレイブック
+#
+# 実行例
+# ======
+#
+# 基本的なテスト（非破壊的）:
+#   ansible-playbook playbooks/test/test-aws-cli-helper.yml
+#
+# すべてのテストを実行:
+#   ansible-playbook playbooks/test/test-aws-cli-helper.yml -e run_destructive_tests=true
+#
+# クリーンアップをスキップ:
+#   ansible-playbook playbooks/test/test-aws-cli-helper.yml -e cleanup_resources=false
+#
+# 詳細出力:
+#   ansible-playbook playbooks/test/test-aws-cli-helper.yml -v
+#
+# デバッグモード:
+#   ansible-playbook playbooks/test/test-aws-cli-helper.yml -vvv
+#
 - name: Test AWS CLI Helper role
   hosts: localhost
   connection: local
@@ -422,20 +441,3 @@
               ansible.builtin.debug:
                 msg: "Cleanup completed"
 
-# 実行例
-# ======
-#
-# 基本的なテスト（非破壊的）:
-#   ansible-playbook test-aws-cli-helper.yml
-#
-# すべてのテストを実行:
-#   ansible-playbook test-aws-cli-helper.yml -e run_destructive_tests=true
-#
-# クリーンアップをスキップ:
-#   ansible-playbook test-aws-cli-helper.yml -e cleanup_resources=false
-#
-# 詳細出力:
-#   ansible-playbook test-aws-cli-helper.yml -v
-#
-# デバッグモード:
-#   ansible-playbook test-aws-cli-helper.yml -vvv
