@@ -328,6 +328,33 @@ tmux attach -t jenkins-deploy
 - Agent AMI作成: 追加で最大1時間
 - 合計: 1.5〜2時間
 
+**トラブルシューティング**:
+全体デプロイメント中にエラーが発生した場合、タグを使用して特定のコンポーネントのみを再実行できます：
+
+```bash
+# jenkins-agentのみ再実行
+ansible-playbook playbooks/jenkins/jenkins_setup_pipeline.yml -e "env=dev" --tags agent
+
+# jenkins-applicationのみ再実行
+ansible-playbook playbooks/jenkins/jenkins_setup_pipeline.yml -e "env=dev" --tags application
+
+# jenkins-agentとjenkins-applicationの両方を再実行
+ansible-playbook playbooks/jenkins/jenkins_setup_pipeline.yml -e "env=dev" --tags agent,application
+```
+
+利用可能なタグ:
+- `ssm-init`: SSMパラメータ初期化
+- `network`: ネットワーク
+- `security`: セキュリティグループ
+- `nat`: NATゲートウェイ
+- `storage`: EFSストレージ
+- `loadbalancer`: ロードバランサー
+- `controller`: Jenkinsコントローラー
+- `config`: Jenkins設定
+- `agent-ami`: Agent AMIビルド
+- `agent`: Jenkinsエージェント
+- `application`: Jenkinsアプリケーション設定
+
 #### 個別コンポーネントのデプロイ
 
 特定のコンポーネントのみを更新する場合は個別デプロイが可能ですが、**依存関係に注意が必要です**。
