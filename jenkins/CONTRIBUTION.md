@@ -62,28 +62,52 @@ Jenkinsのジョブは**シードジョブパターン**で管理されていま
 
 ### アーキテクチャ
 
+```mermaid
+flowchart TB
+    subgraph config["設定ファイル"]
+        folder_config["folder-config.yaml<br/>フォルダ構造定義"]
+        job_config["job-config.yaml<br/>ジョブ定義"]
+    end
+    
+    subgraph seed["シードジョブ"]
+        job_creator["Admin_Jobs/job-creator<br/>ジョブ生成エンジン"]
+    end
+    
+    subgraph dsl["DSLスクリプト"]
+        folders_groovy["folders.groovy<br/>フォルダ生成"]
+        job_dsl["各種job DSL<br/>ジョブ生成"]
+    end
+    
+    subgraph generated["生成される構造"]
+        folder_structure["フォルダ構造<br/>Admin_Jobs/<br/>Account_Setup/<br/>Code_Quality_Checker/<br/>Document_Generator/<br/>Shared_Library/"]
+        
+        jobs["各ジョブ<br/>Admin_Jobs/xxx<br/>Account_Setup/xxx<br/>Code_Quality_Checker/xxx<br/>Document_Generator/xxx<br/>Shared_Library/xxx"]
+    end
+    
+    folder_config -->|"1 読み込み"| job_creator
+    job_config -->|"2 読み込み"| job_creator
+    job_creator -->|"3 実行"| folders_groovy
+    job_creator -->|"4 実行"| job_dsl
+    folders_groovy -->|"5 生成"| folder_structure
+    job_dsl -->|"6 生成"| jobs
+    folder_structure -->|依存| jobs
+    
+    style folder_config fill:#e1f5e1
+    style job_config fill:#e1f5e1
+    style job_creator fill:#ffe1e1
+    style folders_groovy fill:#e1e1ff
+    style job_dsl fill:#e1e1ff
+    style folder_structure fill:#fff5e1
+    style jobs fill:#fff5e1
 ```
-┌─────────────────────────────────────┐
-│        job-config.yaml              │  ← 1. ジョブ定義を追加
-│   (全ジョブの設定を集約管理)           │
-└────────────┬────────────────────────┘
-             │
-             ↓ 読み取り
-┌─────────────────────────────────────┐
-│    Admin_Jobs/job-creator           │  ← 4. シードジョブを実行
-│     (シードジョブ)                    │
-└────────────┬────────────────────────┘
-             │
-             ↓ 生成
-┌─────────────────────────────────────┐
-│        各カテゴリのジョブ              │
-│  - Admin_Jobs/xxx                   │
-│  - Account_Setup/xxx                │  ← 自動生成される
-│  - Code_Quality_Checker/xxx         │
-│  - Document_Generator/xxx           │
-│  - Shared_Library/xxx               │
-└─────────────────────────────────────┘
-```
+
+#### 処理フロー
+
+1. **フォルダ設定読み込み**: `folder-config.yaml`からフォルダ構造を読み込み
+2. **ジョブ設定読み込み**: `job-config.yaml`からジョブ定義を読み込み
+3. **フォルダ生成**: `folders.groovy`が最初に実行されフォルダ構造を作成
+4. **ジョブ生成**: 各DSLファイルが実行されジョブを生成
+5. **依存関係**: ジョブはフォルダ内に配置されるため、フォルダが先に必要
 
 ### 新規ジョブ作成手順
 
@@ -234,20 +258,60 @@ java -jar jenkins-cli.jar -s http://jenkins.example.com \
 
 ### フォルダ構造の管理
 
-新しいフォルダカテゴリが必要な場合は、`folders.groovy`を更新：
+フォルダ構造は設定ファイル駆動型で管理されています。新しいフォルダカテゴリが必要な場合は、`folder-config.yaml`を更新：
 
-```groovy
-// jenkins/jobs/dsl/folders.groovy
+#### folder-config.yamlの構造
 
-folder('New_Category') {
-    displayName('New Category Display Name')
-    description('''\
-        |フォルダの説明
-        |
-        |### 概要
-        |このフォルダーの目的
-        |'''.stripMargin())
-}
+```yaml
+# jenkins/jobs/pipeline/_seed/job-creator/folder-config.yaml
+
+# 静的フォルダ定義
+folders:
+  - path: "New_Category"
+    displayName: "New Category Display Name"
+    description: |
+      フォルダの説明
+      
+      ### 概要
+      このフォルダーの目的
+
+  - path: "Parent/Child"  # 階層構造も自動処理
+    displayName: "Child Folder"
+    description: "サブフォルダの説明"
+
+# 動的フォルダ生成ルール
+dynamic_folders:
+  - parent_path: "Code_Quality_Checker"
+    source: "jenkins-managed-repositories"  # job-config.yamlのリポジトリ定義から生成
+    template:
+      path_suffix: "{name}"  # {name}はリポジトリ名に置換
+      displayName: "Code Quality - {name}"
+      description: |
+        {name}リポジトリのコード品質チェックジョブ
+```
+
+#### フォルダ生成の仕組み
+
+1. **設定ファイル読み込み**: シードジョブが`folder-config.yaml`を読み込む
+2. **folders.groovy実行**: 設定をもとに`folders.groovy`がフォルダを生成
+3. **階層自動処理**: 親フォルダが存在しない場合は自動作成
+4. **動的生成**: `jenkins-managed-repositories`などから動的にフォルダを生成
+
+#### フォルダ追加手順
+
+```bash
+# 1. folder-config.yamlを編集
+vi jenkins/jobs/pipeline/_seed/job-creator/folder-config.yaml
+
+# 2. 静的フォルダを追加（例）
+folders:
+  - path: "Infrastructure"
+    displayName: "Infrastructure Jobs"
+    description: |
+      インフラストラクチャ関連のジョブ
+
+# 3. シードジョブを実行してフォルダ生成
+# Jenkins UI: Admin_Jobs/job-creator を実行
 ```
 
 ### ⚠️ 重要: パラメータ定義のルール
@@ -315,9 +379,44 @@ pipeline {
 
 1. **DSLファイルの存在確認**: 指定されたパスにDSLファイルが存在するか
 2. **Jenkinsfileの存在確認**: 指定されたパスにJenkinsfileが存在するか
-3. **構文チェック**: Groovy構文の妥当性
-4. **依存関係チェック**: 必要なライブラリやクレデンシャルの存在
-5. **パラメータ定義の確認**: DSLでパラメータが適切に定義されているか
+3. **folder-config.yamlの存在確認**: フォルダ設定ファイルが存在するか
+4. **構文チェック**: Groovy構文の妥当性
+5. **依存関係チェック**: 必要なライブラリやクレデンシャルの存在
+6. **パラメータ定義の確認**: DSLでパラメータが適切に定義されているか
+
+#### folders.groovyの実装詳細
+
+```groovy
+// jenkins/jobs/dsl/folders.groovy
+// このファイルは設定ファイルから自動的にフォルダを生成
+
+// Jenkinsfileから設定を受け取る
+def folderConfig = binding.hasVariable('jenkinsFoldersConfig') ? 
+    binding.getVariable('jenkinsFoldersConfig') : 
+    [:]
+
+// 1. 静的フォルダの作成
+if (folderConfig.folders) {
+    // 階層順にソート（親→子）
+    def sortedFolders = folderConfig.folders.sort { a, b -> 
+        a.path.count('/') - b.path.count('/')
+    }
+    
+    sortedFolders.each { folderDef ->
+        folder(folderDef.path) {
+            displayName(folderDef.displayName)
+            description(folderDef.description)
+        }
+    }
+}
+
+// 2. 動的フォルダの作成
+if (folderConfig.dynamic_folders) {
+    folderConfig.dynamic_folders.each { rule ->
+        // リポジトリベースの動的生成など
+    }
+}
+```
 
 ### よくあるパターン
 
@@ -517,37 +616,34 @@ pipelineJob('Category/job-name') {
 }
 ```
 
-### フォルダー構造定義
+### フォルダー構造定義（設定ファイル駆動型）
 
-```groovy
-// jobs/dsl/folders.groovy
+```yaml
+# folder-config.yamlで定義（設定ファイル駆動型）
+folders:
+  - path: "Admin_Jobs"
+    displayName: "管理ジョブ"
+    description: "システム管理用のジョブ群"
+    
+  - path: "CI_CD"
+    displayName: "CI/CDパイプライン"
+    description: "継続的インテグレーション/デプロイメント"
+    
+  - path: "Testing"
+    displayName: "テストジョブ"
+    description: "各種テスト実行用"
 
-// フォルダー作成関数
-def createFolder(String name, String displayName, String description) {
-    folder(name) {
-        displayName(displayName)
-        description(description)
-        
-        properties {
-            folderCredentialsProperty {
-                domainCredentials {
-                    domainCredentials {
-                        domain {
-                            name(name)
-                            description("${displayName}用のクレデンシャル")
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
-
-// フォルダー定義
-createFolder('Admin_Jobs', '管理ジョブ', 'システム管理用のジョブ群')
-createFolder('CI_CD', 'CI/CDパイプライン', '継続的インテグレーション/デプロイメント')
-createFolder('Testing', 'テストジョブ', '各種テスト実行用')
+# 動的フォルダ生成
+dynamic_folders:
+  - parent_path: "Testing"
+    source: "jenkins-managed-repositories"
+    template:
+      path_suffix: "{name}"
+      displayName: "Test - {name}"
+      description: "{name}リポジトリのテスト"
 ```
+
+folders.groovyは設定を読み込んで自動的にフォルダを生成します。
 
 ### 動的ジョブ生成
 
