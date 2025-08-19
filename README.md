@@ -101,6 +101,8 @@
    ```
 
    このスクリプトは以下の順序で処理を実行します：
+   
+   ※ `setup-bootstrap.sh`はモジュラー設計により、`bootstrap/lib/`ディレクトリ内のライブラリ関数を使用します
 
    **前提条件チェック（軽量処理）**
    1. OS情報の表示（Amazon Linux 2023の確認）
@@ -174,7 +176,9 @@ cat ~/.ssh/id_rsa.pub
 4. 秘密鍵をPKCS#8形式に変換してSSMに手動登録:
 
 ```bash
-# PKCS#8形式に変換
+# PKCS#8形式に変換（Jenkinsで必要）
+# GitHubからダウンロードした鍵はPKCS#1形式（BEGIN RSA PRIVATE KEY）
+# JenkinsにはPKCS#8形式（BEGIN PRIVATE KEY）が必要
 openssl pkcs8 -topk8 -inform PEM -outform PEM -nocrypt \
   -in github-app-key.pem \
   -out github-app-key-pkcs8.pem
