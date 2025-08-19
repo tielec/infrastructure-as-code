@@ -199,22 +199,21 @@ pipeline {
                             
                             echo "停止対象インスタンス: ${instanceIds}"
                             
-                            // 10秒後に両インスタンスを同時に停止するコマンドをバックグラウンドで実行
+                            // 両インスタンスを同時に停止
                             sh """
-                                # 10秒後にインスタンスを停止するコマンドをバックグラウンドで実行
-                                (sleep 10 && aws ec2 stop-instances --instance-ids ${instanceIds} --region ${AWS_REGION}) &
-                                
-                                echo "インスタンス停止コマンドをスケジュールしました（10秒後に実行）"
+                                aws ec2 stop-instances \
+                                    --instance-ids ${instanceIds} \
+                                    --region ${AWS_REGION}
                             """
+                            echo "インスタンス停止コマンドを送信しました"
                             
                             echo """
 ===================================
-インスタンスの停止をスケジュールしました。
-10秒後に以下のインスタンスが停止されます：
+インスタンスの停止コマンドを送信しました：
 - NAT Instance: ${env.NAT_INSTANCE_ID ?: 'N/A'}
 - Controller Instance: ${env.CONTROLLER_INSTANCE_ID ?: 'N/A'}
 
-このジョブは正常に完了としてマークされます。
+注意: まもなくJenkinsへのアクセスが失われます。
 ===================================
 """
                         } else {
@@ -241,7 +240,7 @@ pipeline {
 
 実行された操作:
 1. EC2 Fleet (SpotFleet): ${env.SPOTFLEET_REQUEST_ID ? 'キャパシティを0に設定' : 'スキップ（ID未検出）'}
-2. NAT & Controller インスタンス: ${(env.NAT_INSTANCE_ID || env.CONTROLLER_INSTANCE_ID) ? '停止スケジュール済み（10秒後）' : 'スキップ（ID未検出）'}
+2. NAT & Controller インスタンス: ${(env.NAT_INSTANCE_ID || env.CONTROLLER_INSTANCE_ID) ? '停止コマンド送信' : 'スキップ（ID未検出）'}
 
 注意: Controllerの停止により、このJenkinsへのアクセスは間もなく失われます。
 環境を再開するには、AWSコンソールからインスタンスを起動してください。
