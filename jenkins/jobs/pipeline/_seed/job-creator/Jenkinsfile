@@ -5,6 +5,7 @@ pipeline {
 
     environment {
         CONFIG_YAML_PATH = 'jenkins/jobs/pipeline/_seed/job-creator/job-config.yaml'
+        FOLDER_CONFIG_PATH = 'jenkins/jobs/pipeline/_seed/job-creator/folder-config.yaml'
         FODLER_DSL_PATH = 'jenkins/jobs/dsl/folders.groovy'
     }
     
@@ -67,6 +68,12 @@ pipeline {
                         validationSummary.add("Warning: folders.groovy not found at ${foldersFile}")
                     }
                     
+                    // folder-config.yamlの存在チェック
+                    def folderConfigFile = env.FOLDER_CONFIG_PATH
+                    if (!fileExists(folderConfigFile)) {
+                        validationSummary.add("Warning: folder-config.yaml not found at ${folderConfigFile}")
+                    }
+                    
                     // 検証結果のサマリー表示
                     echo "\n=== Validation Summary ==="
                     echo "Total jobs validated: ${totalJobs}"
@@ -92,7 +99,14 @@ pipeline {
                 script {
                     // YAMLファイルを読み込む
                     def config = readYaml file: env.CONFIG_YAML_PATH
+                    def folderConfig = [:]
                     def dslFiles = []
+                    
+                    // folder-config.yamlを読み込む（存在する場合）
+                    if (fileExists(env.FOLDER_CONFIG_PATH)) {
+                        folderConfig = readYaml file: env.FOLDER_CONFIG_PATH
+                        echo "Folder configuration loaded: ${folderConfig.folders ? folderConfig.folders.size() : 0} static folders, ${folderConfig.dynamic_folders ? folderConfig.dynamic_folders.size() : 0} dynamic rules"
+                    }
                     
                     // folders.groovyを追加（存在する場合）
                     def foldersFile = env.FODLER_DSL_PATH
@@ -114,6 +128,11 @@ pipeline {
                     def additionalParams = [
                         jenkinsJobsConfig: config['jenkins-jobs']
                     ]
+                    
+                    // フォルダ設定を追加
+                    if (folderConfig) {
+                        additionalParams['jenkinsFoldersConfig'] = folderConfig
+                    }
                     
                     // 他の設定が存在する場合は追加
                     if (config['jenkins-managed-repositories']) {
