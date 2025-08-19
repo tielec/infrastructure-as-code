@@ -1,4 +1,29 @@
 ---
+# test-s3 Pulumiプロジェクトの検証（S3バックエンド）
+#
+# 使用方法:
+# 1. 環境変数の設定:
+#    export PULUMI_CONFIG_PASSPHRASE="your-passphrase"
+#    export AWS_PROFILE="your-profile"
+#    export PULUMI_S3_BUCKET="your-bucket"  # オプション
+#    export PULUMI_S3_REGION="ap-northeast-1"  # オプション
+#
+# 2. 実行:
+#    # フルテスト（デプロイ、検証、削除）
+#    ansible-playbook playbooks/test/test-s3-validation.yml
+#    
+#    # デプロイのみ
+#    ansible-playbook playbooks/test/test-s3-validation.yml -e op=deploy-only
+#    
+#    # 削除のみ
+#    ansible-playbook playbooks/test/test-s3-validation.yml -e op=destroy-only
+#    
+#    # 成功時もスタックを削除
+#    ansible-playbook playbooks/test/test-s3-validation.yml -e remove_stack_on_success=true
+#
+# 3. デバッグ:
+#    ansible-playbook playbooks/test/test-s3-validation.yml -vvv
+#
 - name: Validate test-s3 Pulumi project with S3 backend
   hosts: localhost
   connection: local
@@ -401,28 +426,3 @@
             - name: Fail with error message
               ansible.builtin.fail:
                 msg: "Test validation failed. See error above for details."
-
-# 実行例とトラブルシューティング用の情報をコメントとして追加
-# 
-# 使用方法:
-# 1. 環境変数の設定:
-#    export PULUMI_CONFIG_PASSPHRASE="your-passphrase"
-#    export AWS_PROFILE="your-profile"
-#    export PULUMI_S3_BUCKET="your-bucket"  # オプション
-#    export PULUMI_S3_REGION="ap-northeast-1"  # オプション
-#
-# 2. 実行:
-#    # フルテスト（デプロイ、検証、削除）
-#    ansible-playbook test-s3-validation.yml
-#    
-#    # デプロイのみ
-#    ansible-playbook test-s3-validation.yml -e op=deploy-only
-#    
-#    # 削除のみ
-#    ansible-playbook test-s3-validation.yml -e op=destroy-only
-#    
-#    # 成功時もスタックを削除
-#    ansible-playbook test-s3-validation.yml -e remove_stack_on_success=true
-#
-# 3. デバッグ:
-#    ansible-playbook test-s3-validation.yml -vvv

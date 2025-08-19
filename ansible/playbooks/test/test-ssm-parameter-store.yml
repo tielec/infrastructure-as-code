@@ -1,6 +1,28 @@
 ---
 # ansible/playbooks/test-ssm-parameter-store.yml
 # SSM Parameter Storeロールの包括的なテスト（シンプル版対応）
+#
+# 実行例
+# =====
+# 
+# フルテスト（デフォルト）:
+#   ansible-playbook playbooks/test/test-ssm-parameter-store.yml
+#
+# 作成のみ:
+#   ansible-playbook playbooks/test/test-ssm-parameter-store.yml -e op=create-only
+#
+# テストのみ（既存パラメータに対して）:
+#   ansible-playbook playbooks/test/test-ssm-parameter-store.yml -e op=test-only
+#
+# クリーンアップのみ:
+#   ansible-playbook playbooks/test/test-ssm-parameter-store.yml -e op=cleanup-only
+#
+# 詳細出力:
+#   ansible-playbook playbooks/test/test-ssm-parameter-store.yml -v
+#
+# デバッグモード:
+#   ansible-playbook playbooks/test/test-ssm-parameter-store.yml -vvv
+#
 - name: Validate SSM Parameter Store role functionality
   hosts: localhost
   connection: local
@@ -414,23 +436,3 @@
               ansible.builtin.fail:
                 msg: "SSM Parameter Store test failed. See error above for details."
 
-# 実行例
-# =====
-# 
-# フルテスト（デフォルト）:
-#   ansible-playbook test-ssm-parameter-store.yml
-#
-# 作成のみ:
-#   ansible-playbook test-ssm-parameter-store.yml -e op=create-only
-#
-# テストのみ（既存パラメータに対して）:
-#   ansible-playbook test-ssm-parameter-store.yml -e op=test-only
-#
-# クリーンアップのみ:
-#   ansible-playbook test-ssm-parameter-store.yml -e op=cleanup-only
-#
-# 詳細出力:
-#   ansible-playbook test-ssm-parameter-store.yml -v
-#
-# デバッグモード:
-#   ansible-playbook test-ssm-parameter-store.yml -vvv

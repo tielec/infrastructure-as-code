@@ -30,6 +30,36 @@ AWS CLIコマンドの実行を標準化し、エラーハンドリング、リ�
     operation_name: "list_s3_buckets"
 ```
 
+### 重要な制約事項
+
+**aws_commandは1行で記述する必要があります**
+
+```yaml
+# ✅ 正しい例：1行で記述
+- name: Execute AWS command correctly
+  ansible.builtin.include_role:
+    name: aws_cli_helper
+    tasks_from: execute
+  vars:
+    aws_command: "aws imagebuilder list-image-pipeline-images --image-pipeline-arn {{ arn }} --query 'imageSummaryList[0].image' --output text"
+    operation_name: "get_ami"
+
+# ❌ 間違った例：複数行で記述（エラーになります）
+- name: This will fail
+  ansible.builtin.include_role:
+    name: aws_cli_helper
+    tasks_from: execute
+  vars:
+    aws_command: |
+      aws imagebuilder list-image-pipeline-images 
+      --image-pipeline-arn {{ arn }} 
+      --query 'imageSummaryList[0].image' 
+      --output text
+    operation_name: "get_ami"
+```
+
+複数行に分割すると、bashが各行を別のコマンドとして解釈してエラーになります。長いコマンドでも必ず1行で記述してください。
+
 ### リトライ付き実行
 
 ```yaml

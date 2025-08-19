@@ -101,6 +101,8 @@
    ```
 
    このスクリプトは以下の順序で処理を実行します：
+   
+   ※ `setup-bootstrap.sh`はモジュラー設計により、`bootstrap/lib/`ディレクトリ内のライブラリ関数を使用します
 
    **前提条件チェック（軽量処理）**
    1. OS情報の表示（Amazon Linux 2023の確認）
@@ -174,7 +176,9 @@ cat ~/.ssh/id_rsa.pub
 4. 秘密鍵をPKCS#8形式に変換してSSMに手動登録:
 
 ```bash
-# PKCS#8形式に変換
+# PKCS#8形式に変換（Jenkinsで必要）
+# GitHubからダウンロードした鍵はPKCS#1形式（BEGIN RSA PRIVATE KEY）
+# JenkinsにはPKCS#8形式（BEGIN PRIVATE KEY）が必要
 openssl pkcs8 -topk8 -inform PEM -outform PEM -nocrypt \
   -in github-app-key.pem \
   -out github-app-key-pkcs8.pem
@@ -304,6 +308,8 @@ tmux attach -t jenkins-deploy
 # セッション一覧: tmux ls
 ```
 
+**注意**: tmux内でPulumiが実行される際、進捗表示のエスケープシーケンス（`^[[A`、`^[[B`など）が文字として表示される場合があります。これは表示上の問題で、デプロイ処理には影響しません。
+
 **デプロイ順序**（jenkins_setup_pipeline.ymlが自動的に実行）:
 1. jenkins-ssm-init（SSMパラメータ初期化、パスワード生成）
 2. jenkins-network（VPC、サブネット）
@@ -321,6 +327,33 @@ tmux attach -t jenkins-deploy
 - 基本インフラ: 約30-45分
 - Agent AMI作成: 追加で最大1時間
 - 合計: 1.5〜2時間
+
+**トラブルシューティング**:
+全体デプロイメント中にエラーが発生した場合、タグを使用して特定のコンポーネントのみを再実行できます：
+
+```bash
+# jenkins-agentのみ再実行
+ansible-playbook playbooks/jenkins/jenkins_setup_pipeline.yml -e "env=dev" --tags agent
+
+# jenkins-applicationのみ再実行
+ansible-playbook playbooks/jenkins/jenkins_setup_pipeline.yml -e "env=dev" --tags application
+
+# jenkins-agentとjenkins-applicationの両方を再実行
+ansible-playbook playbooks/jenkins/jenkins_setup_pipeline.yml -e "env=dev" --tags agent,application
+```
+
+利用可能なタグ:
+- `ssm-init`: SSMパラメータ初期化
+- `network`: ネットワーク
+- `security`: セキュリティグループ
+- `nat`: NATゲートウェイ
+- `storage`: EFSストレージ
+- `loadbalancer`: ロードバランサー
+- `controller`: Jenkinsコントローラー
+- `config`: Jenkins設定
+- `agent-ami`: Agent AMIビルド
+- `agent`: Jenkinsエージェント
+- `application`: Jenkinsアプリケーション設定
 
 #### 個別コンポーネントのデプロイ
 
@@ -423,38 +456,42 @@ ansible-playbook playbooks/jenkins/deploy/deploy_jenkins_application.yml \
 
 ## ブートストラップ環境の管理
 
-### インスタンスの再作成
+### インスタンスの再作成（AWSコンソール操作）
 
-ブートストラップインスタンスを再作成する場合、CloudFormationスタックの`InstanceVersion`パラメータを更新します：
+ブートストラップインスタンスを再作成する場合：
 
-```bash
-# CloudFormation出力の RecreateInstanceCommand を使用
-aws cloudformation update-stack --stack-name bootstrap-iac-environment \
-  --use-previous-template \
-  --parameters ParameterKey=InstanceVersion,ParameterValue=$(date +%s) \
-  --capabilities CAPABILITY_NAMED_IAM
-```
+1. **AWSコンソールにログイン**
+2. **CloudFormationサービスに移動**
+3. **スタック一覧から`bootstrap-iac-environment`を選択**
+4. **「更新」ボタンをクリック**
+5. **「既存のテンプレートを使用」を選択して「次へ」**
+6. **パラメータ画面で`InstanceVersion`の値を変更**（例：v1 → v2、または現在時刻）
+7. **他のパラメータはそのままで「次へ」**
+8. **スタックオプションはデフォルトのまま「次へ」**
+9. **確認画面で「スタックの更新」をクリック**
 
 再作成後も以下の情報は保持されます：
 - Pulumi S3バケットとその内容
 - SSMパラメータストア内の設定（GitHub SSHキー、Pulumiパスフレーズなど）
 - VPCやセキュリティグループなどのネットワーク設定
 
-### ブートストラップ環境の完全削除
+### ブートストラップ環境の完全削除（AWSコンソール操作）
 
 ブートストラップ環境を完全に削除する場合：
 
-```bash
-# CloudFormationスタックの削除
-aws cloudformation delete-stack --stack-name bootstrap-iac-environment
+1. **CloudFormationサービスに移動**
+2. **スタック一覧から`bootstrap-iac-environment`を選択**
+3. **「削除」ボタンをクリック**
+4. **確認ダイアログで「削除」を確認**
 
-# 注意: これにより以下が削除されます：
-# - EC2インスタンス
-# - VPCとネットワーク関連リソース
-# - Pulumi S3バケット（データも含む）
-# - SSMパラメータ
-# - IAMロールとポリシー
-```
+**警告**: スタック削除により以下がすべて削除されます：
+- EC2インスタンス
+- VPCとネットワーク関連リソース
+- Pulumi S3バケット（**状態データも含む**）
+- SSMパラメータ（保存された設定）
+- IAMロールとポリシー
+
+削除前に必要なデータのバックアップを取ることを強く推奨します。
 
 ## インフラストラクチャの削除
 
@@ -475,15 +512,26 @@ ansible-playbook playbooks/jenkins/jenkins_teardown_pipeline.yml -e "env=dev con
 
 ### 特定コンポーネントの削除
 
-```bash
-# ネットワークとセキュリティグループを残して他を削除
-ansible-playbook playbooks/jenkins/jenkins_teardown_pipeline.yml \
-  -e "env=dev confirm=true destroy_network=false destroy_security=false"
+個別のコンポーネントを削除する場合は、専用のremoveプレイブックを使用します：
 
-# エージェントとコントローラーのみ削除
-ansible-playbook playbooks/jenkins/jenkins_teardown_pipeline.yml \
-  -e "env=dev confirm=true destroy_config=false destroy_loadbalancer=false destroy_storage=false destroy_security=false destroy_network=false"
+```bash
+# 例: Jenkinsアプリケーション設定のみ削除
+ansible-playbook playbooks/jenkins/remove/remove_jenkins_application.yml -e "env=dev confirm=true"
+
+# 例: エージェントのみ削除
+ansible-playbook playbooks/jenkins/remove/remove_jenkins_agent.yml -e "env=dev confirm=true"
+
+# 例: コントローラーのみ削除
+ansible-playbook playbooks/jenkins/remove/remove_jenkins_controller.yml -e "env=dev confirm=true"
+
+# 例: 設定リソースのみ削除
+ansible-playbook playbooks/jenkins/remove/remove_jenkins_config.yml -e "env=dev confirm=true"
 ```
+
+**削除順序の注意事項**:
+- 依存関係の逆順で削除する必要があります
+- 例: applicationを削除してからagent、その後controller
+- ネットワークやセキュリティグループは最後に削除
 
 **注意**: 削除操作は破壊的な操作です。以下の点に注意してください：
 - 必ず `confirm=true` の指定が必要です
