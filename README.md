@@ -91,10 +91,16 @@
 
    このスクリプトは以下の処理を自動的に行います：
    - GitHubアクセス用のSSHキー設定（SSMパラメータストアと連携）
-   - Node.js, AWS CLI, Pulumi, Dockerなどの必要なツールのインストール
+   - OpenAI APIキーの設定（対話形式またはSSMから復元）
+   - GitHub App認証の設定（対話形式、秘密鍵は手動設定必要）
+   - Pulumiバックエンドの設定（S3バックエンド、パスフレーズ管理）
+   - Node.js 20 LTS, Java 21, AWS CLI v2, Pulumi, Docker, Ansibleなどのインストール
    - AWS認証情報の設定
+   - systemdサービスによるEC2パブリックIP自動更新の設定
 
-#### GitHub SSHキーの自動管理
+#### 手動設定が必要な項目
+
+##### 1. GitHub SSHキーの登録
 
 `setup-bootstrap.sh`は、GitHub SSHキーをSSMパラメータストアで管理します：
 
@@ -102,6 +108,12 @@
   - SSHキーを自動生成
   - メールアドレスの入力は初回のみ必要
   - SSMパラメータストアに自動保存（秘密鍵は暗号化）
+  - **手動作業**: 生成された公開鍵をGitHubに登録
+    ```bash
+    # 公開鍵を表示
+    cat ~/.ssh/id_rsa.pub
+    # GitHubの Settings > SSH and GPG keys > New SSH key で登録
+    ```
   
 - **2回目以降（新しいインスタンス）**:
   - SSMから自動的にキーを復元
@@ -112,7 +124,73 @@
   - `/bootstrap/github/ssh-private-key` - 秘密鍵（SecureString）
   - `/bootstrap/github/ssh-public-key` - 公開鍵
 
-これにより、インスタンスの再作成時でも同じSSHキーを使用でき、GitHubへの再登録が不要になります。
+##### 2. OpenAI APIキーの設定
+
+OpenAI APIキーの管理（オプション）：
+
+- **初回実行時**:
+  - 対話形式でAPIキーの入力を求められる
+  - スキップ可能（後から設定も可能）
+  - SSMパラメータストアに暗号化して保存
+  
+- **保存先**:
+  - `/bootstrap/openai/api-key` - APIキー（SecureString）
+
+- **手動取得が必要**:
+  - [OpenAI Platform](https://platform.openai.com/api-keys)でAPIキーを生成
+  - `sk-`で始まる形式のキーを取得
+
+##### 3. GitHub App認証の設定
+
+GitHub App認証の設定（オプション）：
+
+- **対話形式の設定**:
+  - App IDの入力
+  - 組織名/ユーザー名の入力（オプション）
+  
+- **手動作業が必要**:
+  1. [GitHub Apps](https://github.com/settings/apps)でAppを作成
+  2. App IDをメモ
+  3. Private Keyを生成してダウンロード
+  4. PKCS#8形式に変換:
+     ```bash
+     openssl pkcs8 -topk8 -inform PEM -outform PEM -nocrypt \
+       -in github-app-key.pem \
+       -out github-app-key-pkcs8.pem
+     ```
+  5. SSMに手動登録:
+     ```bash
+     aws ssm put-parameter \
+       --name "/bootstrap/github/app-private-key" \
+       --value file://github-app-key-pkcs8.pem \
+       --type SecureString \
+       --overwrite \
+       --region ap-northeast-1
+     ```
+
+- **保存されるパラメータ**:
+  - `/bootstrap/github/app-id` - App ID
+  - `/bootstrap/github/app-private-key` - 秘密鍵（要手動設定）
+  - `/bootstrap/github/app-owner` - 組織名（オプション）
+
+##### 4. Pulumiパスフレーズの管理
+
+Pulumiのパスフレーズは自動生成されますが、以下の点に注意：
+
+- **初回設定時**:
+  - 自動生成または手動入力を選択
+  - SSMパラメータストアに暗号化保存
+  - **重要**: 一度設定したパスフレーズは変更しないこと（既存スタックにアクセスできなくなる）
+
+- **バックアップ推奨**:
+  ```bash
+  # パスフレーズの確認（安全な場所に保存）
+  aws ssm get-parameter \
+    --name "/bootstrap/pulumi/config-passphrase" \
+    --with-decryption \
+    --query 'Parameter.Value' \
+    --output text
+  ```
 
 ### 4. Pulumiバックエンドの設定
 
@@ -220,6 +298,79 @@ ansible-playbook playbooks/jenkins/deploy/deploy_jenkins_agent_ami.yml -e "env=d
 
 # その他のコンポーネントも同様に個別デプロイ可能
 ```
+
+#### バックグラウンドデプロイメント（tmux使用）
+
+長時間かかるデプロイメントをバックグラウンドで実行・管理する方法：
+
+##### 基本的な使い方
+
+```bash
+# tmuxセッション作成
+tmux new-session -d -s jenkins-deploy
+
+# コマンド実行
+tmux send-keys -t jenkins-deploy "cd ~/infrastructure-as-code/ansible" C-m
+tmux send-keys -t jenkins-deploy "ansible-playbook playbooks/jenkins/jenkins_setup_pipeline.yml -e 'env=dev'" C-m
+
+# セッションにアタッチして進捗確認
+tmux attach -t jenkins-deploy
+
+# 操作方法
+# デタッチ（バックグラウンドに戻す）: Ctrl+b, d
+# 再アタッチ: tmux attach -t jenkins-deploy
+# セッション一覧: tmux ls
+# セッション削除: tmux kill-session -t jenkins-deploy
+```
+
+##### 複数コンポーネントの並行デプロイ
+
+```bash
+# 複数ウィンドウでの管理
+tmux new-session -d -s jenkins
+tmux new-window -t jenkins:1 -n network
+tmux new-window -t jenkins:2 -n controller
+tmux new-window -t jenkins:3 -n agent-ami
+tmux new-window -t jenkins:4 -n agent
+
+# 各ウィンドウでコマンド実行
+cd ~/infrastructure-as-code/ansible
+tmux send-keys -t jenkins:1 "ansible-playbook playbooks/jenkins/deploy/deploy_jenkins_network.yml -e 'env=dev'" C-m
+tmux send-keys -t jenkins:2 "ansible-playbook playbooks/jenkins/deploy/deploy_jenkins_controller.yml -e 'env=dev'" C-m
+tmux send-keys -t jenkins:3 "ansible-playbook playbooks/jenkins/deploy/deploy_jenkins_agent_ami.yml -e 'env=dev'" C-m
+tmux send-keys -t jenkins:4 "ansible-playbook playbooks/jenkins/deploy/deploy_jenkins_agent.yml -e 'env=dev'" C-m
+
+# 特定のウィンドウを確認
+tmux attach -t jenkins:2
+
+# ウィンドウ間の移動
+# 次のウィンドウ: Ctrl+b, n
+# 前のウィンドウ: Ctrl+b, p
+# ウィンドウ一覧: Ctrl+b, w
+```
+
+##### ログ出力の保存
+
+```bash
+# tmux内でログを保存しながら実行
+tmux new-session -d -s jenkins-deploy
+tmux send-keys -t jenkins-deploy "cd ~/infrastructure-as-code/ansible" C-m
+tmux send-keys -t jenkins-deploy "ansible-playbook playbooks/jenkins/jenkins_setup_pipeline.yml -e 'env=dev' | tee ~/jenkins-deploy-$(date +%Y%m%d-%H%M%S).log" C-m
+
+# ログをキャプチャ（セッション全体の出力を保存）
+tmux pipe-pane -t jenkins-deploy -o "cat >> ~/jenkins-deploy.log"
+```
+
+**tmuxの利点**:
+- SSHセッションが切れても処理が継続
+- 実行中のプロセスに後から再接続可能
+- リアルタイムで進捗確認
+- 複数のデプロイを並行管理
+- エラー時の対話的な対処が可能
+
+**実行時間の目安**:
+- 全体デプロイ: 約30-45分
+- Agent AMI作成（Image Builder）: 追加で最大1時間
 
 ### 6. Jenkins環境構築後の設定管理
 
