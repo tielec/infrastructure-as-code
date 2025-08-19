@@ -297,7 +297,7 @@ Resources:
             
             # システムの更新
             dnf update -y
-            dnf install -y git python3 python3-pip jq
+            dnf install -y git python3 python3-pip jq tmux
             
             # Amazon SSM Agent は Amazon Linux 2023 にプリインストール済み
             
