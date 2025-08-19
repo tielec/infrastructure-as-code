@@ -7,13 +7,16 @@ pipeline {
         // AWS認証情報
         AWS_REGION = "${params.AWS_REGION}"
         
-        // SSMパラメータ名
-        CONTROLLER_INSTANCE_ID_PARAM = '/jenkins/infra/controller/instance-id'
-        NAT_INSTANCE_ID_PARAM = '/jenkins/infra/nat/instance-id'
-        SPOTFLEET_REQUEST_ID_PARAM = '/jenkins/infra/agent/spotfleet-request-id'
+        // 環境名（dev/staging/prod）
+        ENVIRONMENT = "${params.ENVIRONMENT}"
+        
+        // SSMパラメータ名（実際のパス構造に合わせて修正）
+        CONTROLLER_INSTANCE_ID_PARAM = "/jenkins-infra/${ENVIRONMENT}/ec2/controller/instance-id"
+        NAT_INSTANCE_ID_PARAM = "/jenkins-infra/${ENVIRONMENT}/ec2/nat/instance-id"
+        SPOTFLEET_REQUEST_ID_PARAM = "/jenkins-infra/${ENVIRONMENT}/spotfleet/request-id"
         
         // タグフィルター
-        JENKINS_ENV_TAG = 'jenkins-infra'
+        PROJECT_NAME = 'jenkins-infra'
     }
 
     stages {
@@ -26,6 +29,7 @@ pipeline {
                     }
                     
                     echo "=== 環境停止ジョブ開始 ==="
+                    echo "対象環境: ${params.ENVIRONMENT}"
                     echo "リージョン: ${params.AWS_REGION}"
                     echo "停止モード: ${params.SHUTDOWN_MODE}"
                     echo "待機タイムアウト: ${params.WAIT_TIMEOUT_MINUTES}分"
@@ -95,7 +99,8 @@ pipeline {
                         def instances = sh(
                             script: '''
                                 aws ec2 describe-instances \
-                                    --filters "Name=tag:Environment,Values=''' + JENKINS_ENV_TAG + '''" \
+                                    --filters "Name=tag:Environment,Values=''' + ENVIRONMENT + '''" \
+                                              "Name=tag:ManagedBy,Values=pulumi" \
                                               "Name=instance-state-name,Values=running" \
                                     --region ''' + AWS_REGION + ''' \
                                     --query 'Reservations[*].Instances[*].[InstanceId,Tags[?Key==`Name`]|[0].Value]' \

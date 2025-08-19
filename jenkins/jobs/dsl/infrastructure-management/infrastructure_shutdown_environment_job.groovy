@@ -58,6 +58,11 @@ pipelineJob(fullJobName) {
 
     // パラメータ設定
     parameters {
+        choiceParam('ENVIRONMENT', ['dev', 'staging', 'prod'], '''対象環境
+
+停止するJenkins環境を選択します。
+''')
+        
         choiceParam('AWS_REGION', ['ap-northeast-1', 'us-east-1', 'us-west-2'], 'AWSリージョン')
         
         booleanParam('CONFIRM_SHUTDOWN', false, '''環境停止の確認
