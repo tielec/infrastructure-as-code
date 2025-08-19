@@ -22,311 +22,79 @@
 
 ## Pulumiベストプラクティス
 
-### プロジェクト構造
-```
-pulumi/{component-name}/
-├── Pulumi.yaml           # プロジェクト定義
-├── Pulumi.{env}.yaml     # 環境別設定（必要に応じて）
-├── index.ts              # メインエントリーポイント
-├── package.json          # Node.js依存関係
-└── tsconfig.json         # TypeScript設定
-```
+**Pulumiスタックの開発・使用方法については [pulumi/README.md](pulumi/README.md) を参照してください。**
 
-### コーディング規約
+### 重要な注意事項
 
-#### 1. SSMパラメータの活用
-```typescript
-// ✅ 良い例：SSMから設定を取得
-const environment = pulumi.getStack();
-const ssmPrefix = `/jenkins-infra/${environment}`;
-const projectNameParam = aws.ssm.getParameter({
-    name: `${ssmPrefix}/config/project-name`,
-});
-
-// ❌ 悪い例：ハードコーディング
-const projectName = "jenkins-project";
-```
-
-#### 2. リソースタグの統一
-```typescript
-// すべてのリソースに共通タグを設定
-tags: {
-    Name: pulumi.interpolate`${projectName}-${resourceType}-${environment}`,
-    Environment: environment,
-    ManagedBy: "pulumi",
-    Project: projectName,
-}
-```
-
-#### 3. スタック間の参照
-```typescript
-// 他スタックの出力を参照
-const networkStack = new pulumi.StackReference(`organization/jenkins-network/${environment}`);
-const vpcId = networkStack.getOutput("vpcId");
-```
-
-### エラーハンドリング
-- すべての非同期操作に`.apply()`を使用
-- 適切なエラーメッセージとログ出力を実装
-- リソース削除時の依存関係を`dependsOn`で明示
+- **Pulumi開発時**: Pulumiスタックを修正・追加した場合、必ず `pulumi/README.md` の更新が必要かチェックすること
+- **ドキュメント更新対象**:
+  - 新しいスタックの追加
+  - スタック間の依存関係変更
+  - 設定パラメータの変更
+  - コーディング規約の追加
+  - トラブルシューティング情報の追加
 
 ## Jenkinsベストプラクティス
 
-### ジョブ管理
+**Jenkinsの設定、Job DSL、パイプライン、共有ライブラリについては [jenkins/README.md](jenkins/README.md) を参照してください。**
 
-#### 1. Job DSLによる管理
-```groovy
-// jenkins/jobs/dsl/folders.groovy
-folder('Admin_Jobs') {
-    displayName('管理ジョブ')
-    description('システム管理用のジョブ群')
-}
-```
+### 重要な注意事項
 
-#### 2. Jenkinsfileの構造
-```groovy
-pipeline {
-    agent { label 'ec2-fleet' }
-    
-    environment {
-        // 環境変数は大文字スネークケース
-        AWS_REGION = 'ap-northeast-1'
-    }
-    
-    stages {
-        stage('準備') {
-            steps {
-                // 日本語でステージ名を記述
-            }
-        }
-    }
-    
-    post {
-        always {
-            // クリーンアップ処理
-        }
-    }
-}
-```
-
-#### 3. Shared Library活用
-```groovy
-// vars/gitUtils.groovy
-def deployKeys(Map config) {
-    // 共通処理をライブラリ化
-}
-```
-
-### 設定管理
-
-#### Configuration as Code (JCasC)
-```yaml
-# scripts/jenkins/casc/jenkins.yaml.template
-jenkins:
-  systemMessage: "Jenkins ${JENKINS_VERSION} - 管理者: ${ADMIN_EMAIL}"
-  numExecutors: 2
-  mode: NORMAL
-```
-
-#### Groovy初期化スクリプト
-- `basic-settings.groovy`: 基本設定
-- `install-plugins.groovy`: プラグイン管理
-- `setup-users.groovy`: ユーザー管理
-- `recovery-mode.groovy`: リカバリーモード
-
-### セキュリティ考慮事項
-- クレデンシャルはJenkins Credentials Storeで管理
-- APIトークンは自動生成してSSMに保存
-- 管理者パスワードはSSM SecureStringで暗号化
+- **Jenkins開発時**: Jenkins設定、ジョブ定義、パイプラインを修正・追加した場合、必ず `jenkins/README.md` の更新が必要かチェックすること
+- **ドキュメント更新対象**:
+  - 新しいジョブの追加
+  - パイプラインの変更
+  - 共有ライブラリの追加・変更
+  - プラグインの変更
+  - セキュリティ設定の変更
+  - トラブルシューティング情報の追加
 
 ## Ansibleベストプラクティス
 
-### プレイブック構造
+**Ansibleプレイブックの開発・使用方法については [ansible/README.md](ansible/README.md) を参照してください。**
 
-#### ファイル構成規約
-```
-ansible/playbooks/
-├── jenkins/          # Jenkinsメインプレイブック
-│   ├── deploy/      # デプロイ用
-│   ├── remove/      # 削除用
-│   └── misc/        # その他ユーティリティ
-├── test/            # テストプレイブック
-│   └── test-*.yml   # テスト用ファイル
-└── *.yml            # その他のプレイブック
-```
+### 重要な注意事項
 
-#### テストプレイブックの記述規約
-```yaml
----
-# ファイルの説明
-#
-# 実行例
-# ======
-#
-# 基本実行:
-#   ansible-playbook playbooks/test/test-example.yml
-#
-# パラメータ指定:
-#   ansible-playbook playbooks/test/test-example.yml -e param=value
-#
-# デバッグモード:
-#   ansible-playbook playbooks/test/test-example.yml -vvv
-#
-- name: プレイブック名
-  hosts: localhost
-  # ... 実装
-```
-
-**重要**: 
-- 実行例は必ずファイル先頭にコメントとして記載
-- 実行パスは`ansible/`ディレクトリ基準で記載（`playbooks/test/`を含む）
-- テスト用プレイブックは`test/`サブディレクトリに配置
-
-#### 1. 役割の明確化
-```yaml
-# ✅ 良い例：単一責任の原則
-- name: Jenkinsネットワークをデプロイ
-  include_role:
-    name: jenkins_network
-    tasks_from: deploy
-
-# ❌ 悪い例：複数の責任を混在
-- name: すべてをデプロイ
-  shell: pulumi up -y
-```
-
-#### 2. 冪等性の確保
-```yaml
-# 常にchanged_whenで状態を管理
-- name: Pulumiスタックをデプロイ
-  command: pulumi up -y
-  changed_when: pulumi_result.stdout is search('Resources:.*created|updated|deleted')
-```
-
-#### 3. エラーハンドリング
-```yaml
-- name: リソースをデプロイ
-  block:
-    - include_role:
-        name: pulumi_helper
-        tasks_from: deploy
-  rescue:
-    - name: エラー情報を表示
-      debug:
-        msg: "デプロイ失敗: {{ ansible_failed_result.msg }}"
-    - fail:
-        msg: "デプロイを中止します"
-```
-
-### 変数管理
-
-#### グループ変数 (group_vars/all.yml)
-```yaml
-# 環境共通設定
-project_name: jenkins-infra
-aws_region: ap-northeast-1
-
-# 環境別設定は実行時に指定
-# ansible-playbook playbook.yml -e "env=dev"
-```
-
-#### ロール変数
-```yaml
-# roles/{role_name}/defaults/main.yml
-jenkins_version: "{{ lookup('env', 'JENKINS_VERSION') | default('2.426.1') }}"
-```
-
-### 必須コマンド
-
-#### Jenkins完全デプロイメント
-```bash
-cd ansible
-ansible-playbook playbooks/jenkins/jenkins_setup_pipeline.yml -e "env=dev"
-```
-
-#### インフラストラクチャ削除
-```bash
-cd ansible
-ansible-playbook playbooks/jenkins/jenkins_teardown_pipeline.yml -e "env=dev confirm=true"
-```
-
-### ヘルパーロールの活用
-
-#### pulumi_helper
-- S3バックエンド対応
-- 自動的なスタック初期化
-- 出力値の取得と参照
-
-#### ssm_parameter_store
-- パラメータの一括管理
-- 暗号化対応
-- 環境変数へのエクスポート
-
-#### aws_cli_helper
-- リトライ機能付きAWS CLI実行
-- JSON解析とエラーハンドリング
+- **Ansible開発時**: Ansibleプレイブックやロールを修正・追加した場合、必ず `ansible/README.md` の更新が必要かチェックすること
+- **ドキュメント更新対象**:
+  - 新しいプレイブックの追加
+  - 新しいロールの追加
+  - パラメータ変更
+  - 依存関係の変更
+  - 実行手順の変更
+  - トラブルシューティング情報の追加
 
 ## デプロイメントアーキテクチャ
 
-### コンポーネント依存関係
-```mermaid
-graph TD
-    SSM[jenkins-ssm-init] --> N[jenkins-network]
-    N --> S[jenkins-security]
-    S --> NAT[jenkins-nat]
-    S --> ST[jenkins-storage]
-    S --> LB[jenkins-loadbalancer]
-    S --> AMI[jenkins-agent-ami]
-    NAT --> C[jenkins-controller]
-    ST --> C
-    LB --> C
-    AMI --> A[jenkins-agent]
-    C --> CF[jenkins-config]
-    CF --> APP[jenkins-application]
-    A --> APP
-```
+**各システムのコンポーネント依存関係やデプロイ順序については [ansible/README.md#デプロイメントアーキテクチャ](ansible/README.md#デプロイメントアーキテクチャ) を参照してください。**
 
-### デプロイ順序
-1. **初期化**: jenkins-ssm-init（パラメータ準備）
-2. **基盤**: jenkins-network → jenkins-security
-3. **ネットワーク**: jenkins-nat
-4. **ストレージ**: jenkins-storage
-5. **ロードバランサー**: jenkins-loadbalancer
-6. **コンピュート**: jenkins-controller → jenkins-agent-ami → jenkins-agent
-7. **アプリケーション**: jenkins-config → jenkins-application
+### 一般的なデプロイ原則
 
-### 削除順序（デプロイの逆順）
-1. jenkins-application
-2. jenkins-config
-3. jenkins-agent
-4. jenkins-agent-ami
-5. jenkins-controller
-6. jenkins-loadbalancer
-7. jenkins-storage
-8. jenkins-nat
-9. jenkins-security
-10. jenkins-network
-11. jenkins-ssm-init
+1. **初期化**: SSMパラメータの準備
+2. **基盤**: ネットワーク → セキュリティ
+3. **インフラ**: ストレージ、ロードバランサー等
+4. **コンピュート**: EC2、Lambda等
+5. **アプリケーション**: 設定、デプロイ
+
+### 削除原則
+
+削除は常にデプロイの逆順で実行すること。
 
 ## 開発ワークフロー
 
-### 1. 新機能追加時
+### 1. 新機能追加時（Pulumiスタック）
 ```bash
 # 1. Pulumiスタック作成
 cd pulumi
-mkdir jenkins-{new-component}
-cd jenkins-{new-component}
+mkdir {system}-{new-component}
+cd {system}-{new-component}
 pulumi new aws-typescript
 
-# 2. Ansibleロール作成
-cd ansible/roles
-ansible-galaxy init jenkins_{new_component}
+# 2. デプロイテスト
+npm run preview
 
-# 3. デプロイプレイブック追加
-# ansible/playbooks/jenkins/deploy/deploy_jenkins_{new_component}.yml
-
-# 4. 削除プレイブック追加
-# ansible/playbooks/jenkins/remove/remove_jenkins_{new_component}.yml
+# 3. Ansibleプレイブック統合
+# ansible/README.mdの手順を参照
 ```
 
 ### 2. 既存コンポーネント修正時
@@ -335,9 +103,8 @@ ansible-galaxy init jenkins_{new_component}
 cd pulumi/{component}
 npm run preview
 
-# 2. 個別デプロイでテスト
-cd ansible
-ansible-playbook playbooks/jenkins/deploy/deploy_jenkins_{component}.yml -e "env=dev"
+# 2. デプロイテスト
+# ansible/README.mdの手順を参照
 
 # 3. 依存コンポーネントも更新
 # 依存関係図を参照して下流コンポーネントを特定
@@ -361,43 +128,70 @@ vi README.md
 # InstanceVersionパラメータを変更して再作成
 ```
 
+### 4. Ansible開発時
+```bash
+# 1. プレイブック・ロールの開発
+cd ansible
+# 開発作業を実施
+
+# 2. ansible/README.md更新確認 ⚠️ 重要
+# 以下の項目で更新が必要か確認：
+# - プレイブック一覧（新規追加・変更）
+# - ロール一覧（新規追加・変更）
+# - パラメータ説明（追加・変更）
+# - 実行例（新規・変更）
+# - 依存関係図（変更があれば）
+# - トラブルシューティング（新規問題）
+vi ansible/README.md
+```
+
+### 5. Pulumi開発時
+```bash
+# 1. Pulumiスタックの開発
+cd pulumi
+# 開発作業を実施
+
+# 2. pulumi/README.md更新確認 ⚠️ 重要
+# 以下の項目で更新が必要か確認：
+# - スタック一覧（新規追加・変更）
+# - 依存関係（スタック間の参照変更）
+# - 設定パラメータ（追加・変更）
+# - 使用方法（新規コマンド・手順）
+# - コーディング規約（新規パターン）
+# - トラブルシューティング（新規問題）
+vi pulumi/README.md
+```
+
+### 6. Jenkins開発時
+```bash
+# 1. Jenkins設定・ジョブの開発
+cd jenkins
+# 開発作業を実施
+
+# 2. jenkins/README.md更新確認 ⚠️ 重要
+# 以下の項目で更新が必要か確認：
+# - ジョブ一覧（新規追加・変更）
+# - パイプライン（新規・変更）
+# - 共有ライブラリ（追加・変更）
+# - プラグイン一覧（追加・削除）
+# - 設定変更（JCasC、Groovyスクリプト）
+# - トラブルシューティング（新規問題）
+vi jenkins/README.md
+```
+
 ## トラブルシューティングガイド
 
 ### Pulumi関連
-```bash
-# スタック状態確認
-pulumi stack --show-ids
 
-# 強制リフレッシュ
-pulumi refresh -y
-
-# スタックエクスポート（バックアップ）
-pulumi stack export > stack-backup.json
-```
+**詳細なトラブルシューティング方法は [pulumi/README.md#トラブルシューティング](pulumi/README.md#トラブルシューティング) を参照してください。**
 
 ### Ansible関連
-```bash
-# デバッグモード実行
-ansible-playbook playbook.yml -vvv
 
-# チェックモード（ドライラン）
-ansible-playbook playbook.yml --check
-
-# 特定タスクのみ実行
-ansible-playbook playbook.yml --tags "deploy"
-```
+**詳細なトラブルシューティング方法は [ansible/README.md#トラブルシューティング](ansible/README.md#トラブルシューティング) を参照してください。**
 
 ### Jenkins関連
-```bash
-# ログ確認
-sudo tail -f /var/log/jenkins/jenkins.log
 
-# 設定バックアップ
-tar -czf jenkins-backup.tar.gz /var/lib/jenkins
-
-# プラグイン一覧取得
-java -jar jenkins-cli.jar -s http://localhost:8080 list-plugins
-```
+**詳細なトラブルシューティング方法は [jenkins/README.md#トラブルシューティング](jenkins/README.md#トラブルシューティング) を参照してください。**
 
 ## コミットメッセージ規約
 
@@ -425,19 +219,16 @@ Action: add|update|fix|remove|refactor
 ## パフォーマンス最適化
 
 ### Pulumi
-- 大規模スタックは分割して管理
-- 不要なリフレッシュを避ける
-- 並列実行可能な操作は並列化
+
+**Pulumiのパフォーマンス最適化については [pulumi/README.md#パフォーマンス最適化](pulumi/README.md#パフォーマンス最適化) を参照してください。**
 
 ### Ansible
-- 不要なfact収集を無効化: `gather_facts: no`
-- 並列実行数を調整: `ansible.cfg`の`forks`設定
-- ローカル接続を活用: `connection: local`
+
+**Ansibleのパフォーマンス最適化については [ansible/README.md#ベストプラクティス](ansible/README.md#ベストプラクティス) を参照してください。**
 
 ### Jenkins
-- エージェント数の適切な設定
-- ビルドアーティファクトの定期削除
-- プラグインは必要最小限に
+
+**Jenkinsのパフォーマンス最適化については [jenkins/README.md#パフォーマンス最適化](jenkins/README.md#パフォーマンス最適化) を参照してください。**
 
 ## リソース命名規則
 
@@ -487,4 +278,7 @@ DEPLOY_ENV               # デプロイ環境（dev/staging/prod）
 重要な変更は以下のドキュメントを更新：
 1. **README.md**: ユーザー向け手順
 2. **CLAUDE.md**: 開発者向けガイド（このファイル）
-3. **CONTRIBUTION.md**: コントリビューションガイド
+3. **ansible/README.md**: Ansibleプレイブック・ロールの詳細
+4. **pulumi/README.md**: Pulumiスタックの詳細
+5. **jenkins/README.md**: Jenkins設定・ジョブの詳細
+6. **CONTRIBUTION.md**: コントリビューションガイド
