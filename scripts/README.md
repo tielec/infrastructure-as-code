@@ -345,60 +345,18 @@ DEBUG=true ./scripts/script.sh
 ./scripts/script.sh 2>&1 | tee debug.log
 ```
 
-## ベストプラクティス
+## 開発者向け情報
 
-### スクリプト作成時の規約
-
-1. **ヘッダーコメント**: 目的、使用方法、環境変数を明記
-2. **エラーハンドリング**: `set -euo pipefail` を使用
-3. **ログ出力**: 重要な処理はログ出力
-4. **冪等性**: 複数回実行しても安全
-
-### テンプレート
-
-```bash
-#!/bin/bash
-#
-# スクリプトの説明
-#
-# 使用方法:
-#   ./script.sh [options]
-#
-# 環境変数:
-#   VAR1 - 説明（必須/オプション）
-#   VAR2 - 説明（デフォルト: value）
-#
-# 例:
-#   VAR1=value ./script.sh
-#
-
-set -euo pipefail
-
-# デフォルト値の設定
-VAR1="${VAR1:?Error: VAR1 is required}"
-VAR2="${VAR2:-default_value}"
-
-# メイン処理
-main() {
-    echo "Starting script..."
-    # 処理内容
-    echo "Script completed successfully"
-}
-
-# エラーハンドリング
-trap 'echo "Error occurred at line $LINENO"' ERR
-
-# 実行
-main "$@"
-```
+スクリプトの開発方法については[CONTRIBUTION.md](CONTRIBUTION.md)を参照してください。
 
 ## 関連ドキュメント
 
+### プロジェクトドキュメント
 - [メインREADME](../README.md) - プロジェクト全体の概要
 - [Ansible README](../ansible/README.md) - Ansibleプレイブックとの連携
 - [Pulumi README](../pulumi/README.md) - Pulumiスタックとの連携
 - [Jenkins README](../jenkins/README.md) - Jenkins設定の詳細
-- [CLAUDE.md](../CLAUDE.md) - 開発者向けガイドライン
+- [CONTRIBUTION.md](CONTRIBUTION.md) - スクリプト開発規約
 
 ## サポート
 

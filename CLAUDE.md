@@ -22,7 +22,8 @@
 
 ## Pulumiベストプラクティス
 
-**Pulumiスタックの開発・使用方法については [pulumi/README.md](pulumi/README.md) を参照してください。**
+**Pulumiスタックの使用方法については [pulumi/README.md](pulumi/README.md) を参照してください。**
+**開発者向けの詳細な実装方法は [pulumi/CONTRIBUTION.md](pulumi/CONTRIBUTION.md) を参照してください。**
 
 ### 重要な注意事項
 
@@ -37,6 +38,7 @@
 ## Jenkinsベストプラクティス
 
 **Jenkinsの設定、Job DSL、パイプライン、共有ライブラリについては [jenkins/README.md](jenkins/README.md) を参照してください。**
+**開発者向けの詳細な実装方法は [jenkins/CONTRIBUTION.md](jenkins/CONTRIBUTION.md) を参照してください。**
 
 ### 重要な注意事項
 
@@ -49,9 +51,33 @@
   - セキュリティ設定の変更
   - トラブルシューティング情報の追加
 
+### ⚠️ Jenkinsパラメータ定義ルール
+
+**重要**: Jenkinsfileでのパラメータ定義は禁止です。パラメータは必ずJob DSLファイルで定義してください。
+
+```groovy
+// ✅ 正しい: DSLファイルでパラメータ定義
+pipelineJob(jobName) {
+    parameters {
+        stringParam('VERSION', '1.0.0', 'バージョン')
+        choiceParam('ENV', ['dev', 'staging', 'prod'], '環境')
+    }
+}
+
+// ❌ 間違い: Jenkinsfileでパラメータ定義
+pipeline {
+    parameters {  // 禁止！初回実行時に問題が発生
+        string(name: 'VERSION', defaultValue: '1.0.0')
+    }
+}
+```
+
+詳細は [jenkins/CONTRIBUTION.md#重要-パラメータ定義のルール](jenkins/CONTRIBUTION.md#重要-パラメータ定義のルール) を参照。
+
 ## Ansibleベストプラクティス
 
 **Ansibleプレイブックの開発・使用方法については [ansible/README.md](ansible/README.md) を参照してください。**
+**開発者向けの詳細な実装方法は [ansible/CONTRIBUTION.md](ansible/CONTRIBUTION.md) を参照してください。**
 
 ### 重要な注意事項
 
@@ -63,6 +89,8 @@
   - 依存関係の変更
   - 実行手順の変更
   - トラブルシューティング情報の追加
+- **ヘルパーロールの活用**: `pulumi_helper`、`ssm_parameter_store`、`aws_cli_helper`、`aws_setup`を積極的に使用すること
+- **meta/main.yml必須**: ヘルパーロールを使用する場合は、必ず`meta/main.yml`に依存関係を定義すること
 
 ## デプロイメントアーキテクチャ
 
@@ -134,7 +162,13 @@ vi README.md
 cd ansible
 # 開発作業を実施
 
-# 2. ansible/README.md更新確認 ⚠️ 重要
+# 2. ヘルパーロール使用時は meta/main.yml に依存関係を追加
+vi roles/your_role/meta/main.yml
+# dependencies:
+#   - pulumi_helper
+#   - ssm_parameter_store
+
+# 3. ansible/README.md更新確認 ⚠️ 重要
 # 以下の項目で更新が必要か確認：
 # - プレイブック一覧（新規追加・変更）
 # - ロール一覧（新規追加・変更）
@@ -143,6 +177,10 @@ cd ansible
 # - 依存関係図（変更があれば）
 # - トラブルシューティング（新規問題）
 vi ansible/README.md
+
+# 4. ansible/CONTRIBUTION.md更新確認
+# 開発者向けガイドラインの追加・変更があれば更新
+vi ansible/CONTRIBUTION.md
 ```
 
 ### 5. Pulumi開発時
@@ -157,16 +195,28 @@ cd pulumi
 # - 依存関係（スタック間の参照変更）
 # - 設定パラメータ（追加・変更）
 # - 使用方法（新規コマンド・手順）
-# - コーディング規約（新規パターン）
 # - トラブルシューティング（新規問題）
 vi pulumi/README.md
+
+# 3. pulumi/CONTRIBUTION.md更新確認
+# 開発者向けガイドラインの追加・変更があれば更新
+vi pulumi/CONTRIBUTION.md
 ```
 
 ### 6. Jenkins開発時
 ```bash
-# 1. Jenkins設定・ジョブの開発
-cd jenkins
-# 開発作業を実施
+# 1. 新規ジョブ作成の場合
+# a. job-config.yamlにジョブ定義を追加
+vi jenkins/jobs/pipeline/_seed/job-creator/job-config.yaml
+
+# b. DSLファイルを作成（パラメータは必ずここで定義）
+vi jenkins/jobs/dsl/category/your_job.groovy
+
+# c. Jenkinsfileを作成（パラメータ定義は禁止）
+vi jenkins/jobs/pipeline/category/your-job/Jenkinsfile
+
+# d. シードジョブを実行
+# Jenkins UI: Admin_Jobs/job-creator を実行
 
 # 2. jenkins/README.md更新確認 ⚠️ 重要
 # 以下の項目で更新が必要か確認：
@@ -177,13 +227,23 @@ cd jenkins
 # - 設定変更（JCasC、Groovyスクリプト）
 # - トラブルシューティング（新規問題）
 vi jenkins/README.md
+
+# 3. jenkins/CONTRIBUTION.md更新確認
+# 開発者向けガイドラインの追加・変更があれば更新
+vi jenkins/CONTRIBUTION.md
 ```
 
 ### 7. スクリプト開発時
 ```bash
-# 1. スクリプトの開発
-cd scripts
-# 開発作業を実施
+# 1. 新規スクリプト作成の場合
+# a. スクリプトファイルを作成
+vi scripts/{category}/{action}-{target}.sh
+
+# b. ヘッダーコメントテンプレートを記載
+# scripts/CONTRIBUTION.mdのテンプレートを参照
+
+# c. ShellCheckで検証
+shellcheck scripts/{category}/*.sh
 
 # 2. scripts/README.md更新確認 ⚠️ 重要
 # 以下の項目で更新が必要か確認：
@@ -194,6 +254,10 @@ cd scripts
 # - セキュリティ設定（権限・認証）
 # - トラブルシューティング（新規問題）
 vi scripts/README.md
+
+# 3. scripts/CONTRIBUTION.md更新確認
+# 開発者向けガイドラインの追加・変更があれば更新
+vi scripts/CONTRIBUTION.md
 ```
 
 ## トラブルシューティングガイド
@@ -241,15 +305,15 @@ Action: add|update|fix|remove|refactor
 
 ### Pulumi
 
-**Pulumiのパフォーマンス最適化については [pulumi/README.md#パフォーマンス最適化](pulumi/README.md#パフォーマンス最適化) を参照してください。**
+**Pulumiのパフォーマンス最適化については [pulumi/CONTRIBUTION.md](pulumi/CONTRIBUTION.md) を参照してください。**
 
 ### Ansible
 
-**Ansibleのパフォーマンス最適化については [ansible/README.md#ベストプラクティス](ansible/README.md#ベストプラクティス) を参照してください。**
+**Ansibleのパフォーマンス最適化については [ansible/CONTRIBUTION.md#ベストプラクティス](ansible/CONTRIBUTION.md#ベストプラクティス) を参照してください。**
 
 ### Jenkins
 
-**Jenkinsのパフォーマンス最適化については [jenkins/README.md#パフォーマンス最適化](jenkins/README.md#パフォーマンス最適化) を参照してください。**
+**Jenkinsのパフォーマンス最適化については [jenkins/CONTRIBUTION.md#ベストプラクティス](jenkins/CONTRIBUTION.md#ベストプラクティス) を参照してください。**
 
 ## リソース命名規則
 
@@ -279,7 +343,8 @@ DEPLOY_ENV               # デプロイ環境（dev/staging/prod）
 
 ## スクリプトベストプラクティス
 
-**スクリプトの開発・使用方法については [scripts/README.md](scripts/README.md) を参照してください。**
+**スクリプトの使用方法については [scripts/README.md](scripts/README.md) を参照してください。**
+**開発者向けの詳細な実装方法は [scripts/CONTRIBUTION.md](scripts/CONTRIBUTION.md) を参照してください。**
 
 ### 重要な注意事項
 
@@ -292,13 +357,17 @@ DEPLOY_ENV               # デプロイ環境（dev/staging/prod）
   - セキュリティ設定の変更
   - トラブルシューティング情報の追加
 
-### スクリプト作成規約
+### スクリプト作成の基本ルール
 
 1. **ヘッダーコメント必須**: 目的、使用方法、環境変数を明記
 2. **エラーハンドリング**: `set -euo pipefail` を使用
 3. **ログ出力**: 重要な処理はログ出力
 4. **冪等性**: 複数回実行しても安全に動作
 5. **セキュリティ**: 認証情報のハードコーディング禁止
+6. **ShellCheck準拠**: 静的解析でエラーがないこと
+7. **命名規則**: `{action}-{target}.sh` 形式（例: `setup-aws-credentials.sh`）
+
+詳細な実装方法は [scripts/CONTRIBUTION.md](scripts/CONTRIBUTION.md) を参照。
 
 ## CI/CDパイプライン統合
 
@@ -317,10 +386,23 @@ DEPLOY_ENV               # デプロイ環境（dev/staging/prod）
 ## 更新履歴管理
 
 重要な変更は以下のドキュメントを更新：
-1. **README.md**: ユーザー向け手順
-2. **CLAUDE.md**: 開発者向けガイド（このファイル）
-3. **ansible/README.md**: Ansibleプレイブック・ロールの詳細
-4. **pulumi/README.md**: Pulumiスタックの詳細
-5. **jenkins/README.md**: Jenkins設定・ジョブの詳細
-6. **scripts/README.md**: スクリプトの詳細
-7. **CONTRIBUTION.md**: コントリビューションガイド
+
+### ユーザー向けドキュメント（README.md）
+1. **README.md**: プロジェクト全体の使用方法
+2. **ansible/README.md**: Ansibleプレイブックの使用方法
+3. **pulumi/README.md**: Pulumiスタックの使用方法
+4. **jenkins/README.md**: Jenkinsジョブの使用方法
+5. **scripts/README.md**: スクリプトの使用方法
+
+### 開発者向けドキュメント（CONTRIBUTION.md）
+1. **CLAUDE.md**: Claude Code向けガイド（このファイル）
+2. **CONTRIBUTION.md**: プロジェクト全体の開発ガイドライン
+3. **ansible/CONTRIBUTION.md**: Ansible開発の詳細ガイド（ヘルパーロール、meta/main.yml）
+4. **pulumi/CONTRIBUTION.md**: Pulumi開発の詳細ガイド（TypeScript、スタック管理）
+5. **jenkins/CONTRIBUTION.md**: Jenkins開発の詳細ガイド（シードジョブ、DSL、パラメータルール）
+6. **scripts/CONTRIBUTION.md**: スクリプト開発の詳細ガイド（Bash、ShellCheck、命名規則）
+
+### ドキュメント責任分担の原則
+- **README.md**: エンドユーザー向け（使い方、実行方法、トラブルシューティング）
+- **CONTRIBUTION.md**: 開発者向け（実装方法、コーディング規約、ベストプラクティス）
+- **CLAUDE.md**: AI向け（プロジェクト全体の文脈、重要な制約、開発フロー）

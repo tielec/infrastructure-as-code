@@ -9,7 +9,8 @@ Infrastructure as Code (IaC) を実現するPulumiスタック集です。AWS上
 - [ディレクトリ構造](#ディレクトリ構造)
 - [スタック一覧](#スタック一覧)
 - [使用方法](#使用方法)
-- [開発ガイドライン](#開発ガイドライン)
+- [クイックスタート](#クイックスタート)
+- [セキュリティ考慮事項](#セキュリティ考慮事項)
 - [トラブルシューティング](#トラブルシューティング)
 
 ## 概要
@@ -251,181 +252,48 @@ pulumi login s3://your-pulumi-state-bucket
 export PULUMI_BACKEND_URL=s3://your-pulumi-state-bucket
 ```
 
-## 開発ガイドライン
+## クイックスタート
 
-### プロジェクト構造
+### 最小構成でのテスト（test-s3スタック）
 
-#### 基本的なindex.ts構造
+```bash
+# 1. 環境準備
+export PULUMI_CONFIG_PASSPHRASE=your-secure-passphrase
+export AWS_REGION=ap-northeast-1
 
-```typescript
-import * as pulumi from "@pulumi/pulumi";
-import * as aws from "@pulumi/aws";
+# 2. テストスタックでPulumiの動作確認
+cd pulumi/test-s3
+npm install
 
-// 環境名の取得
-const environment = pulumi.getStack();
-const config = new pulumi.Config();
+# 3. スタック初期化とデプロイ
+pulumi stack init dev
+pulumi config set aws:region ap-northeast-1
+pulumi up
 
-// SSMパラメータの参照
-const ssmPrefix = `/jenkins-infra/${environment}`;
-const projectNameParam = await aws.ssm.getParameter({
-    name: `${ssmPrefix}/config/project-name`,
-});
+# 4. リソース確認
+pulumi stack output
 
-// リソースの作成
-const vpc = new aws.ec2.Vpc("main", {
-    cidrBlock: "10.0.0.0/16",
-    enableDnsHostnames: true,
-    enableDnsSupport: true,
-    tags: {
-        Name: pulumi.interpolate`${projectName}-vpc-${environment}`,
-        Environment: environment,
-        ManagedBy: "pulumi",
-    },
-});
-
-// 出力のエクスポート
-export const vpcId = vpc.id;
-export const vpcCidr = vpc.cidrBlock;
+# 5. クリーンアップ
+pulumi destroy -y
+pulumi stack rm dev -y
 ```
 
-### コーディング規約
+### S3バックエンドへの移行
 
-#### 1. SSMパラメータの活用
+```bash
+# S3バックエンドへログイン（本番運用時）
+pulumi login s3://your-pulumi-state-bucket
 
-```typescript
-// ✅ 良い例：SSMから設定を取得
-const environment = pulumi.getStack();
-const ssmPrefix = `/jenkins-infra/${environment}`;
-const projectNameParam = await aws.ssm.getParameter({
-    name: `${ssmPrefix}/config/project-name`,
-});
-const projectName = projectNameParam.value;
-
-// ❌ 悪い例：ハードコーディング
-const projectName = "jenkins-project";
+# 既存スタックのエクスポート/インポート
+pulumi stack export > stack-backup.json
+pulumi logout
+pulumi login s3://your-pulumi-state-bucket
+pulumi stack import --file stack-backup.json
 ```
 
-#### 2. リソースタグの統一
+### 完全なJenkins環境のデプロイ
 
-```typescript
-// 共通タグの定義
-const commonTags = {
-    Environment: environment,
-    ManagedBy: "pulumi",
-    Project: projectName,
-    CreatedAt: new Date().toISOString(),
-};
-
-// すべてのリソースに適用
-const resource = new aws.ec2.Instance("example", {
-    // ... 他の設定
-    tags: {
-        ...commonTags,
-        Name: pulumi.interpolate`${projectName}-instance-${environment}`,
-        Type: "web-server",
-    },
-});
-```
-
-#### 3. スタック間の参照
-
-```typescript
-// 他スタックの出力を参照
-const networkStack = new pulumi.StackReference(
-    `organization/jenkins-network/${environment}`
-);
-const vpcId = networkStack.getOutput("vpcId");
-const privateSubnetIds = networkStack.getOutput("privateSubnetIds");
-
-// 参照した値の使用
-const instance = new aws.ec2.Instance("app", {
-    subnetId: privateSubnetIds[0],
-    // ... 他の設定
-});
-```
-
-#### 4. エラーハンドリング
-
-```typescript
-// 非同期操作の適切な処理
-const securityGroup = pulumi.output(vpcId).apply(async (id) => {
-    if (!id) {
-        throw new Error("VPC ID is required");
-    }
-    
-    return new aws.ec2.SecurityGroup("app", {
-        vpcId: id,
-        // ... 他の設定
-    });
-});
-
-// リソース削除時の依存関係
-const database = new aws.rds.Instance("db", {
-    // ... 設定
-    skipFinalSnapshot: true, // 削除時のスナップショットをスキップ
-}, {
-    dependsOn: [securityGroup], // 明示的な依存関係
-});
-```
-
-### ベストプラクティス
-
-#### 1. 設定の外部化
-
-```typescript
-// Pulumi.yaml で設定スキーマを定義
-const config = new pulumi.Config();
-const instanceType = config.get("instanceType") || "t3.medium";
-const volumeSize = config.getNumber("volumeSize") || 100;
-const enableMonitoring = config.getBoolean("enableMonitoring") ?? false;
-```
-
-#### 2. コンポーネントリソースの活用
-
-```typescript
-// 再利用可能なコンポーネントクラス
-class WebServerComponent extends pulumi.ComponentResource {
-    public readonly instance: aws.ec2.Instance;
-    public readonly securityGroup: aws.ec2.SecurityGroup;
-    
-    constructor(name: string, args: WebServerArgs, opts?: pulumi.ComponentResourceOptions) {
-        super("custom:app:WebServer", name, {}, opts);
-        
-        // リソースの作成
-        this.securityGroup = new aws.ec2.SecurityGroup(`${name}-sg`, {
-            // ... 設定
-        }, { parent: this });
-        
-        this.instance = new aws.ec2.Instance(`${name}-instance`, {
-            // ... 設定
-        }, { parent: this });
-    }
-}
-```
-
-#### 3. 出力の適切な管理
-
-```typescript
-// 構造化された出力
-export const outputs = {
-    network: {
-        vpcId: vpc.id,
-        publicSubnetIds: publicSubnets.map(s => s.id),
-        privateSubnetIds: privateSubnets.map(s => s.id),
-    },
-    loadBalancer: {
-        dnsName: alb.dnsName,
-        zoneId: alb.zoneId,
-    },
-};
-
-// SSMパラメータへの出力保存
-const vpcIdParameter = new aws.ssm.Parameter("vpc-id", {
-    name: `${ssmPrefix}/network/vpc-id`,
-    type: "String",
-    value: vpc.id,
-});
-```
+[Ansible README](../ansible/README.md#jenkins-setup-pipeline)のジェンキンスセットアップパイプラインを参照してください。
 
 ## トラブルシューティング
 
@@ -583,93 +451,26 @@ pipeline {
 }
 ```
 
-## リソース命名規則
+## セキュリティ考慮事項
 
-```
-{project-name}-{component}-{resource-type}-{environment}
+- **機密情報**: 必ず`pulumi config set --secret`またはSSM SecureStringを使用
+- **IAMロール**: 最小権限の原則に従う
+- **ネットワーク**: プライベートサブネット優先、セキュリティグループの最小化
+- **暗号化**: S3、EBS、RDSなどの暗号化を有効化
 
-例:
-jenkins-infra-vpc-dev
-jenkins-infra-controller-ec2-prod
-lambda-functions-api-gateway-staging
-```
-
-## セキュリティベストプラクティス
-
-### 1. 機密情報の管理
-
-```typescript
-// ✅ 良い例：Pulumi Secretsを使用
-const dbPassword = config.requireSecret("dbPassword");
-
-// ✅ 良い例：SSM SecureStringを使用
-const password = new aws.ssm.Parameter("password", {
-    type: "SecureString",
-    value: dbPassword,
-});
-
-// ❌ 悪い例：平文でハードコード
-const dbPassword = "mypassword123";
-```
-
-### 2. IAMロールの最小権限
-
-```typescript
-const role = new aws.iam.Role("app", {
-    assumeRolePolicy: aws.iam.assumeRolePolicyForPrincipal({
-        Service: "ec2.amazonaws.com",
-    }),
-});
-
-// 必要最小限の権限のみ付与
-const policy = new aws.iam.RolePolicy("app-policy", {
-    role: role.id,
-    policy: pulumi.output({
-        Version: "2012-10-17",
-        Statement: [{
-            Effect: "Allow",
-            Action: ["s3:GetObject"],
-            Resource: ["arn:aws:s3:::my-bucket/*"],
-        }],
-    }),
-});
-```
-
-### 3. ネットワークセキュリティ
-
-```typescript
-// プライベートサブネットの使用
-const privateSubnet = new aws.ec2.Subnet("private", {
-    vpcId: vpc.id,
-    cidrBlock: "10.0.1.0/24",
-    mapPublicIpOnLaunch: false, // パブリックIPを割り当てない
-});
-
-// セキュリティグループの厳格な設定
-const sg = new aws.ec2.SecurityGroup("app", {
-    vpcId: vpc.id,
-    ingress: [{
-        protocol: "tcp",
-        fromPort: 443,
-        toPort: 443,
-        cidrBlocks: ["10.0.0.0/16"], // 内部ネットワークのみ
-    }],
-    egress: [{
-        protocol: "-1",
-        fromPort: 0,
-        toPort: 0,
-        cidrBlocks: ["0.0.0.0/0"],
-    }],
-});
-```
+詳細は[CONTRIBUTION.md](CONTRIBUTION.md#セキュリティベストプラクティス)を参照してください。
 
 ## 関連ドキュメント
 
+### プロジェクトドキュメント
 - [メインREADME](../README.md) - プロジェクト全体の概要
+- [CONTRIBUTION.md](CONTRIBUTION.md) - Pulumi開発規約とベストプラクティス
 - [Ansible README](../ansible/README.md) - Ansibleプレイブックとの連携
 - [Jenkins README](../jenkins/README.md) - Jenkins設定の詳細
-- [CLAUDE.md](../CLAUDE.md) - 開発者向けガイドライン
+
+### 外部リソース
 - [Pulumi公式ドキュメント](https://www.pulumi.com/docs/)
+- [AWS公式ドキュメント](https://docs.aws.amazon.com/)
 
 ## サポート
 

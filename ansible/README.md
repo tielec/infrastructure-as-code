@@ -169,30 +169,6 @@ ansible-playbook playbooks/lambda_ip_whitelist.yml -e "action=add ip_address=1.2
 | `test-s3-validation.yml` | S3バケット検証 | `ansible-playbook playbooks/test/test-s3-validation.yml` |
 | `test-ssm-parameter-store.yml` | SSMパラメータストアのテスト | `ansible-playbook playbooks/test/test-ssm-parameter-store.yml` |
 
-#### テストプレイブックの記述規約
-
-テストプレイブックを作成する際は、以下の形式でファイル先頭に実行例を記載してください：
-
-```yaml
----
-# ファイルの説明
-#
-# 実行例
-# ======
-#
-# 基本実行:
-#   ansible-playbook playbooks/test/test-example.yml
-#
-# パラメータ指定:
-#   ansible-playbook playbooks/test/test-example.yml -e param=value
-#
-# デバッグモード:
-#   ansible-playbook playbooks/test/test-example.yml -vvv
-#
-- name: テストプレイブック名
-  hosts: localhost
-  # ... 実装
-```
 
 ## ロール一覧
 
@@ -364,32 +340,6 @@ source .env
 | `confirm` | 削除の確認 | Yes | false |
 | `force_delete` | 強制削除 | No | false |
 
-## グループ変数
-
-`inventory/group_vars/all.yml`で定義される主要な変数：
-
-```yaml
-# プロジェクト共通設定
-aws_region: ap-northeast-1
-
-# Pulumi設定
-pulumi_org: "{{ lookup('env', 'PULUMI_ORG', default='organization') }}"
-pulumi_backend_type: s3
-
-# システム別設定 - Jenkins
-jenkins_project_name: jenkins-infra
-jenkins_version: "{{ lookup('env', 'JENKINS_VERSION', default='2.426.1') }}"
-jenkins_home: /var/lib/jenkins
-
-# システム別設定 - Lambda
-lambda_project_name: lambda-functions
-lambda_runtime: python3.9
-
-# タグ設定
-default_tags:
-  ManagedBy: ansible
-  Environment: "{{ env | default('dev') }}"
-```
 
 ## デプロイメントアーキテクチャ
 
@@ -442,47 +392,27 @@ graph TD
 10. jenkins-network
 11. jenkins-ssm-init
 
-## 開発ワークフロー
+## クイックスタート
 
-### 新システム/コンポーネント追加時
-
-新しいシステムやコンポーネントを追加する際の標準的なワークフローです：
+### 最初に試す：AWS接続テスト
 
 ```bash
-# 1. Ansibleロール作成
-cd ansible/roles
-ansible-galaxy init {system}_{component}
+# AWS CLIヘルパーのテスト
+cd ansible
+ansible-playbook playbooks/test/test-aws-cli-helper.yml
 
-# 2. デプロイプレイブック追加
-vi ansible/playbooks/{system}/deploy/deploy_{system}_{component}.yml
-
-# 3. 削除プレイブック追加
-vi ansible/playbooks/{system}/remove/remove_{system}_{component}.yml
-
-# 4. パイプラインプレイブックに統合
-vi ansible/playbooks/{system}/{system}_setup_pipeline.yml
-vi ansible/playbooks/{system}/{system}_teardown_pipeline.yml
-
-# 5. テストプレイブック作成（必要に応じて）
-vi ansible/playbooks/test/test-{system}-{component}.yml
-
-# 6. READMEを更新
-vi ansible/README.md
+# SSMパラメータストアのテスト
+ansible-playbook playbooks/test/test-ssm-parameter-store.yml
 ```
 
-### 既存コンポーネント修正時
+### Jenkins環境の構築
 
 ```bash
-# 1. 変更の影響範囲を確認（Pulumi使用時）
-cd pulumi/{component}
-npm run preview
+# 完全デプロイ（約20-30分）
+ansible-playbook playbooks/jenkins/jenkins_setup_pipeline.yml -e "env=dev"
 
-# 2. 個別デプロイでテスト
-cd ansible
-ansible-playbook playbooks/{system}/deploy/deploy_{system}_{component}.yml -e "env=dev"
-
-# 3. 依存コンポーネントも更新
-# 依存関係図を参照して下流コンポーネントを特定
+# ステータス確認
+ansible-playbook playbooks/jenkins/misc/jenkins_status_check.yml -e "env=dev"
 ```
 
 ## トラブルシューティング
@@ -560,42 +490,9 @@ pulumi logs --follow
 sudo tail -f /var/log/jenkins/jenkins.log
 ```
 
-## ベストプラクティス
+## セキュリティ
 
-### 1. 環境の分離
-
-```bash
-# 環境ごとに異なるPulumiスタックを使用
-ansible-playbook playbook.yml -e "env=dev"    # dev スタック
-ansible-playbook playbook.yml -e "env=prod"   # prod スタック
-```
-
-### 2. 冪等性の確保
-
-```yaml
-# changed_whenで状態を管理
-- name: リソースをデプロイ
-  command: pulumi up -y
-  changed_when: result.stdout is search('Resources:.*created|updated|deleted')
-```
-
-### 3. エラーハンドリング
-
-```yaml
-# block/rescueでエラー処理
-- block:
-    - include_role:
-        name: jenkins_controller
-        tasks_from: deploy
-  rescue:
-    - name: エラー情報を記録
-      debug:
-        msg: "デプロイ失敗: {{ ansible_failed_result }}"
-    - fail:
-        msg: "処理を中止します"
-```
-
-### 4. 機密情報の管理
+### 機密情報の管理
 
 ```bash
 # Ansible Vaultで暗号化
@@ -605,13 +502,28 @@ ansible-vault encrypt inventory/group_vars/prod.yml
 ansible-playbook playbook.yml --ask-vault-pass
 ```
 
+### 推奨事項
+
+- SSMパラメータストアで機密情報を管理
+- IAMロールベースの認証を使用
+- 本番環境では最小権限の原則を適用
+
+## 開発者向け情報
+
+プレイブックやロールの開発方法については[CONTRIBUTION.md](CONTRIBUTION.md)を参照してください。
+
 
 ## 関連ドキュメント
 
+### プロジェクトドキュメント
 - [メインREADME](../README.md) - プロジェクト全体の概要
+- [CONTRIBUTION.md](CONTRIBUTION.md) - Ansibleプレイブック開発規約
 - [Pulumi README](../pulumi/README.md) - Pulumiスタックの詳細
 - [Bootstrap README](../bootstrap/README.md) - Bootstrap環境の構築手順
-- [CLAUDE.md](../CLAUDE.md) - 開発者向けガイドライン
+
+### 外部リソース
+- [Ansible公式ドキュメント](https://docs.ansible.com/)
+- [AWS公式ドキュメント](https://docs.aws.amazon.com/)
 
 ## サポート
 
