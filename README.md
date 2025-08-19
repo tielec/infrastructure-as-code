@@ -53,9 +53,9 @@
 
 #### インスタンスの自動停止機能
 
-ブートストラップインスタンスは、コスト削減のため毎日日本時間午前1時（UTC 16:00）に自動停止されます。この機能はSSM Maintenance Windowを使用して実装されています。
+ブートストラップインスタンスは、コスト削減のため毎日日本時間午前0時（UTC 15:00）に自動停止されます。この機能はSSM Maintenance Windowを使用して実装されています。
 
-- **自動停止時刻**: 毎日 1:00 AM JST
+- **自動停止時刻**: 毎日 0:00 AM JST
 - **手動起動方法**: CloudFormation出力の`ManualStartCommand`に表示されるコマンドを使用
   ```bash
   aws ec2 start-instances --instance-ids <instance-id> --region ap-northeast-1
