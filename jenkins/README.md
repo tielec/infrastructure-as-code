@@ -279,6 +279,46 @@ SHUTDOWN_MODE=graceful
 WAIT_TIMEOUT_MINUTES=30
 ```
 
+#### Infrastructure_Management/Shutdown-Environment-Scheduler
+
+**目的**: 開発環境を毎日定時に自動停止してコストを最適化
+
+**実行タイミング**:
+- 日本時間（JST）午前0時
+- 平日のみ（月曜日〜金曜日）
+- 週末（土日）は実行されません
+
+**動作内容**:
+- `Infrastructure_Management/Shutdown_Jenkins_Environment`ジョブを自動トリガー
+- 固定パラメータで実行:
+  - `ENVIRONMENT`: dev（開発環境のみ）
+  - `AWS_REGION`: ap-northeast-1
+  - `SHUTDOWN_MODE`: graceful
+  - `WAIT_TIMEOUT_MINUTES`: 30
+  - `CONFIRM_SHUTDOWN`: true
+  - `DRY_RUN`: false
+
+**特徴**:
+- Freestyleジョブ（Pipelineではない）
+- パラメータは固定値（スケジュール実行のため変更不可）
+- 並行実行は無効化
+- ビルド履歴は30日間/90ビルド保持
+
+**注意事項**:
+- 本番環境（prod）は対象外
+- dev環境のみが自動停止されます
+- 停止を防ぐには、ジョブを手動で無効化してください
+- 祝日の自動スキップは現在未対応
+
+**管理方法**:
+```bash
+# スケジュールを一時的に無効化
+Jenkins UI > Infrastructure_Management > Shutdown-Environment-Scheduler > 設定 > ビルドトリガから"Build periodically"のチェックを外す
+
+# 手動実行
+Jenkins UI > Infrastructure_Management > Shutdown-Environment-Scheduler > "Build Now"をクリック
+```
+
 ## トラブルシューティング
 
 ### よくある問題と解決方法

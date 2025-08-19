@@ -197,6 +197,13 @@ jenkins-jobs:
     dslfile: jenkins/jobs/dsl/infrastructure-management/infrastructure_shutdown_environment_job.groovy
     jenkinsfile: jenkins/jobs/pipeline/infrastructure-management/shutdown-environment/Jenkinsfile
 
+  # スケジューラージョブ（freestyleジョブのため、jenkinsfileは不要）
+  infrastructure_shutdown_scheduler:
+    name: 'Shutdown_Environment_Scheduler'
+    displayName: 'Environment Auto Shutdown Scheduler'
+    dslfile: jenkins/jobs/dsl/infrastructure-management/infrastructure_shutdown_scheduler_job.groovy
+    # jenkinsfile: 不要（freestyleジョブ）
+
 # docs-generator 生成対象リポジトリ設定
 jenkins-managed-repositories:
   infrastructure-as-code:
