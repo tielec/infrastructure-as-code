@@ -30,7 +30,7 @@ def getResourceIdFromSSM(paramName, resourceType) {
                     --region ${AWS_REGION} \
                     --query 'Parameter.Value' \
                     --output text 2>/dev/null || echo ""
-            """,
+            """.stripIndent(),
             returnStdout: true
         ).trim()
         
@@ -53,11 +53,11 @@ def getAllResourceIds() {
     env.SPOTFLEET_REQUEST_ID = getResourceIdFromSSM(SPOTFLEET_REQUEST_ID_PARAM, "SpotFleet Request")
     
     echo """
-停止対象リソース:
-- Controller Instance: ${env.CONTROLLER_INSTANCE_ID ?: 'Not found'}
-- NAT Instance: ${env.NAT_INSTANCE_ID ?: 'Not found'}
-- SpotFleet Request: ${env.SPOTFLEET_REQUEST_ID ?: 'Not found'}
-"""
+        |停止対象リソース:
+        |- Controller Instance: ${env.CONTROLLER_INSTANCE_ID ?: 'Not found'}
+        |- NAT Instance: ${env.NAT_INSTANCE_ID ?: 'Not found'}
+        |- SpotFleet Request: ${env.SPOTFLEET_REQUEST_ID ?: 'Not found'}
+    """.stripMargin()
 }
 
 /**
@@ -71,7 +71,7 @@ def getSpotFleetCapacity(spotFleetRequestId) {
                 --region ${AWS_REGION} \
                 --query 'SpotFleetRequestConfigs[0].SpotFleetRequestConfig.TargetCapacity' \
                 --output text 2>/dev/null || echo "0"
-        """,
+        """.stripIndent(),
         returnStdout: true
     ).trim()
 }
@@ -85,7 +85,7 @@ def scaleDownSpotFleet(spotFleetRequestId) {
             --spot-fleet-request-id ${spotFleetRequestId} \
             --target-capacity 0 \
             --region ${AWS_REGION}
-    """
+    """.stripIndent()
     echo "SpotFleetのキャパシティを0に設定しました"
 }
 
@@ -104,7 +104,7 @@ def waitForSpotFleetTermination(spotFleetRequestId, timeoutMinutes) {
                         --region ${AWS_REGION} \
                         --query 'ActiveInstances[*].InstanceId' \
                         --output json 2>/dev/null || echo "[]"
-                """,
+                """.stripIndent(),
                 returnStdout: true
             ).trim()
             
@@ -156,7 +156,7 @@ def getInstanceState(instanceId) {
                 --region ${AWS_REGION} \
                 --query 'Reservations[0].Instances[0].State.Name' \
                 --output text 2>/dev/null || echo "unknown"
-        """,
+        """.stripIndent(),
         returnStdout: true
     ).trim()
 }
@@ -207,18 +207,18 @@ def stopNATAndControllerInstances() {
                 aws ec2 stop-instances \
                     --instance-ids ${instanceIds} \
                     --region ${AWS_REGION}
-            """
+            """.stripIndent()
             echo "インスタンス停止コマンドを送信しました"
             
             echo """
-===================================
-インスタンスの停止コマンドを送信しました：
-- NAT Instance: ${env.NAT_INSTANCE_ID ?: 'N/A'}
-- Controller Instance: ${env.CONTROLLER_INSTANCE_ID ?: 'N/A'}
-
-注意: まもなくJenkinsへのアクセスが失われます。
-===================================
-"""
+                |===================================
+                |インスタンスの停止コマンドを送信しました：
+                |- NAT Instance: ${env.NAT_INSTANCE_ID ?: 'N/A'}
+                |- Controller Instance: ${env.CONTROLLER_INSTANCE_ID ?: 'N/A'}
+                |
+                |注意: まもなくJenkinsへのアクセスが失われます。
+                |===================================
+            """.stripMargin()
         } else {
             echo "停止対象のインスタンスが見つかりません"
         }
@@ -233,17 +233,17 @@ def stopNATAndControllerInstances() {
  */
 def showExecutionSummary() {
     echo """
-===================================
-環境停止ジョブが完了しました
-===================================
-
-実行された操作:
-1. EC2 Fleet (SpotFleet): ${env.SPOTFLEET_REQUEST_ID ? 'キャパシティを0に設定' : 'スキップ（ID未検出）'}
-2. NAT & Controller インスタンス: ${(env.NAT_INSTANCE_ID || env.CONTROLLER_INSTANCE_ID) ? '停止コマンド送信' : 'スキップ（ID未検出）'}
-
-注意: Controllerの停止により、このJenkinsへのアクセスは間もなく失われます。
-環境を再開するには、AWSコンソールからインスタンスを起動してください。
-"""
+        |===================================
+        |環境停止ジョブが完了しました
+        |===================================
+        |
+        |実行された操作:
+        |1. EC2 Fleet (SpotFleet): ${env.SPOTFLEET_REQUEST_ID ? 'キャパシティを0に設定' : 'スキップ（ID未検出）'}
+        |2. NAT & Controller インスタンス: ${(env.NAT_INSTANCE_ID || env.CONTROLLER_INSTANCE_ID) ? '停止コマンド送信' : 'スキップ（ID未検出）'}
+        |
+        |注意: Controllerの停止により、このJenkinsへのアクセスは間もなく失われます。
+        |環境を再開するには、AWSコンソールからインスタンスを起動してください。
+    """.stripMargin()
 }
 
 /**
@@ -251,23 +251,23 @@ def showExecutionSummary() {
  */
 def showDryRunSummary() {
     echo """
-===================================
-ドライラン実行結果
-===================================
-
-以下のリソースが停止対象として検出されました:
-
-1. EC2 Fleet (SpotFleet)
-   - Request ID: ${env.SPOTFLEET_REQUEST_ID ?: 'Not found'}
-   
-2. NAT インスタンス
-   - Instance ID: ${env.NAT_INSTANCE_ID ?: 'Not found'}
-   
-3. Controller インスタンス
-   - Instance ID: ${env.CONTROLLER_INSTANCE_ID ?: 'Not found'}
-
-実際の停止を行うには、DRY_RUNをfalseに設定して再実行してください。
-"""
+        |===================================
+        |ドライラン実行結果
+        |===================================
+        |
+        |以下のリソースが停止対象として検出されました:
+        |
+        |1. EC2 Fleet (SpotFleet)
+        |   - Request ID: ${env.SPOTFLEET_REQUEST_ID ?: 'Not found'}
+        |   
+        |2. NAT インスタンス
+        |   - Instance ID: ${env.NAT_INSTANCE_ID ?: 'Not found'}
+        |   
+        |3. Controller インスタンス
+        |   - Instance ID: ${env.CONTROLLER_INSTANCE_ID ?: 'Not found'}
+        |
+        |実際の停止を行うには、DRY_RUNをfalseに設定して再実行してください。
+    """.stripMargin()
 }
 
 // ========================
