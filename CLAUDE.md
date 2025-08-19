@@ -143,6 +143,45 @@ jenkins:
 
 ### プレイブック構造
 
+#### ファイル構成規約
+```
+ansible/playbooks/
+├── jenkins/          # Jenkinsメインプレイブック
+│   ├── deploy/      # デプロイ用
+│   ├── remove/      # 削除用
+│   └── misc/        # その他ユーティリティ
+├── test/            # テストプレイブック
+│   └── test-*.yml   # テスト用ファイル
+└── *.yml            # その他のプレイブック
+```
+
+#### テストプレイブックの記述規約
+```yaml
+---
+# ファイルの説明
+#
+# 実行例
+# ======
+#
+# 基本実行:
+#   ansible-playbook playbooks/test/test-example.yml
+#
+# パラメータ指定:
+#   ansible-playbook playbooks/test/test-example.yml -e param=value
+#
+# デバッグモード:
+#   ansible-playbook playbooks/test/test-example.yml -vvv
+#
+- name: プレイブック名
+  hosts: localhost
+  # ... 実装
+```
+
+**重要**: 
+- 実行例は必ずファイル先頭にコメントとして記載
+- 実行パスは`ansible/`ディレクトリ基準で記載（`playbooks/test/`を含む）
+- テスト用プレイブックは`test/`サブディレクトリに配置
+
 #### 1. 役割の明確化
 ```yaml
 # ✅ 良い例：単一責任の原則
