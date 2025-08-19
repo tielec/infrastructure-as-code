@@ -95,14 +95,14 @@ pipeline {
                         echo "タグベースでインスタンスを検索..."
                         
                         def instances = sh(
-                            script: """
+                            script: '''
                                 aws ec2 describe-instances \
-                                    --filters "Name=tag:Environment,Values=${JENKINS_ENV_TAG}" \
+                                    --filters "Name=tag:Environment,Values=''' + JENKINS_ENV_TAG + '''" \
                                               "Name=instance-state-name,Values=running" \
-                                    --region ${AWS_REGION} \
-                                    --query 'Reservations[*].Instances[*].[InstanceId,Tags[?Key==\`Name\`]|[0].Value]' \
+                                    --region ''' + AWS_REGION + ''' \
+                                    --query 'Reservations[*].Instances[*].[InstanceId,Tags[?Key==`Name`]|[0].Value]' \
                                     --output json
-                            """,
+                            ''',
                             returnStdout: true
                         )
                         
