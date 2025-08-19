@@ -33,6 +33,7 @@ Jenkins環境の設定、ジョブ定義、パイプライン、共有ライブ�
 - **Account Setup**: ユーザーアカウント管理
 - **Code Quality Checker**: コード品質分析
 - **Docs Generator**: ドキュメント自動生成
+- **Infrastructure Management**: インフラストラクチャー管理
 - **Shared Library Tests**: 共有ライブラリのテスト
 
 ## ディレクトリ構造
@@ -108,6 +109,7 @@ aws ssm get-parameter --name /jenkins-infra/dev/jenkins/admin-password \
 | **Account_Setup** | アカウント管理 | account-self-activation（アカウント自己有効化） |
 | **Code_Quality_Checker** | コード品質分析 | pr-complexity-analyzer（PR複雑度分析）<br>rust-code-analysis（Rustコード解析） |
 | **Document_Generator** | ドキュメント生成 | auto-insert-doxygen-comment（Doxygenコメント自動挿入）<br>generate-doxygen-html（DoxygenHTML生成）<br>technical-docs-writer（技術文書作成）<br>pr-comment-builder（PRコメントビルダー） |
+| **Infrastructure_Management** | インフラ管理 | shutdown-jenkins-environment（Jenkins環境停止） |
 | **Shared_Library** | ライブラリテスト | git-webhook-operation（Git Webhook操作）<br>jenkins-credentials-operation（認証情報操作）<br>aws-sqs-check-operation（SQS操作）<br>github-apps-basic-operation（GitHub Apps操作） |
 
 ### ジョブの実行方法
@@ -242,6 +244,40 @@ Jenkins設定は以下の方法で管理されています：
 - **マスター実行制限**: マスターノードでのビルド無効化
 - **監査ログ**: すべての操作を記録
 
+### 重要なジョブの詳細
+
+#### Infrastructure_Management/Shutdown_Jenkins_Environment
+
+**目的**: Jenkins環境全体を安全に停止
+
+**停止対象**:
+- EC2 Fleet (SpotFleet) エージェント - キャパシティを0に設定
+- NAT インスタンス - インスタンスを停止
+- Jenkins Controller インスタンス - 非同期で停止
+
+**パラメータ**:
+- `AWS_REGION`: 対象のAWSリージョン
+- `CONFIRM_SHUTDOWN`: 停止実行の確認（必須）
+- `SHUTDOWN_MODE`: graceful（推奨）またはimmediate
+- `WAIT_TIMEOUT_MINUTES`: エージェント完了待機時間（デフォルト30分）
+- `DRY_RUN`: 実際の停止を行わず確認のみ
+
+**注意事項**:
+- このジョブはJenkins自身を停止するため、実行後アクセスできなくなります
+- 停止処理は非同期で実行され、ジョブは成功として終了します
+- 環境の再起動はAWSコンソールから手動で行う必要があります
+- 実行前に他の実行中ジョブがないことを確認してください
+
+**使用例**:
+```bash
+# ドライランで停止対象を確認
+DRY_RUN=true で実行
+
+# 本番環境を安全に停止
+CONFIRM_SHUTDOWN=true
+SHUTDOWN_MODE=graceful
+WAIT_TIMEOUT_MINUTES=30
+```
 
 ## トラブルシューティング
 

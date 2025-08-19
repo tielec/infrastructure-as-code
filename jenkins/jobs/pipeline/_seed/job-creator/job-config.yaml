@@ -190,6 +190,13 @@ jenkins-jobs:
     dslfile: jenkins/jobs/dsl/shared-library/shared_library_jenkins_credentials_operation_test_job.groovy
     jenkinsfile: jenkins/jobs/pipeline/shared-library/test-jenkins-utils/credentials-operation/Jenkinsfile
 
+  # Infrastructure Management Jobs
+  infrastructure_shutdown_environment_job:
+    name: 'Shutdown_Jenkins_Environment'
+    displayName: 'Shutdown Jenkins Environment'
+    dslfile: jenkins/jobs/dsl/infrastructure-management/infrastructure_shutdown_environment_job.groovy
+    jenkinsfile: jenkins/jobs/pipeline/infrastructure-management/shutdown-environment/Jenkinsfile
+
 # docs-generator 生成対象リポジトリ設定
 jenkins-managed-repositories:
   infrastructure-as-code:
