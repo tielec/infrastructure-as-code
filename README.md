@@ -305,16 +305,17 @@ tmux attach -t jenkins-deploy
 ```
 
 **デプロイ順序**（jenkins_setup_pipeline.ymlが自動的に実行）:
-1. jenkins-network（VPC、サブネット）
-2. jenkins-security（セキュリティグループ、IAMロール）
-3. jenkins-nat（NATゲートウェイ/インスタンス）
-4. jenkins-storage（EFSファイルシステム）
-5. jenkins-loadbalancer（ALB）
-6. jenkins-controller（Jenkinsコントローラー）
-7. jenkins-agent-ami（カスタムAMI作成）※最大1時間
-8. jenkins-agent（SpotFleet）
-9. jenkins-config（設定リソース）
-10. jenkins-application（Jenkins設定、プラグイン）
+1. jenkins-ssm-init（SSMパラメータ初期化、パスワード生成）
+2. jenkins-network（VPC、サブネット）
+3. jenkins-security（セキュリティグループ、IAMロール）
+4. jenkins-nat（NATゲートウェイ/インスタンス）
+5. jenkins-storage（EFSファイルシステム）
+6. jenkins-loadbalancer（ALB）
+7. jenkins-controller（Jenkinsコントローラー）
+8. jenkins-config（設定リソース）
+9. jenkins-agent-ami（カスタムAMI作成）※最大1時間
+10. jenkins-agent（SpotFleet）
+11. jenkins-application（Jenkins設定、プラグイン）
 
 **実行時間の目安**:
 - 基本インフラ: 約30-45分
@@ -336,44 +337,34 @@ ansible-playbook playbooks/jenkins/deploy/deploy_jenkins_agent_ami.yml -e "env=d
 ansible-playbook playbooks/jenkins/deploy/deploy_jenkins_application.yml -e "env=dev"
 ```
 
-**コンポーネント依存関係**:
+```mermaid
+graph TD
+    SSM[jenkins-ssm-init<br/>SSMパラメータ初期化] --> N[jenkins-network<br/>VPC/サブネット]
+    N --> S[jenkins-security<br/>セキュリティグループ/IAM]
+    S --> NAT[jenkins-nat<br/>NATゲートウェイ]
+    S --> ST[jenkins-storage<br/>EFS]
+    S --> LB[jenkins-loadbalancer<br/>ALB]
+    S --> AMI[jenkins-agent-ami<br/>カスタムAMI作成]
+    NAT --> C[jenkins-controller<br/>EC2インスタンス]
+    ST --> C
+    LB --> C
+    AMI --> A[jenkins-agent<br/>SpotFleet]
+    C --> CF[jenkins-config<br/>設定リソース]
+    CF --> APP[jenkins-application<br/>Jenkins設定/プラグイン]
+    A --> APP
 
+    style SSM fill:#f3e5f5,stroke:#9c27b0,stroke-width:2px
+    style N fill:#e3f2fd,stroke:#2196f3,stroke-width:2px
+    style S fill:#e3f2fd,stroke:#2196f3,stroke-width:2px
+    style NAT fill:#fff3e0,stroke:#ff9800,stroke-width:2px
+    style ST fill:#fff3e0,stroke:#ff9800,stroke-width:2px
+    style LB fill:#fff3e0,stroke:#ff9800,stroke-width:2px
+    style C fill:#e8f5e9,stroke:#4caf50,stroke-width:2px
+    style AMI fill:#fce4ec,stroke:#e91e63,stroke-width:2px
+    style A fill:#fce4ec,stroke:#e91e63,stroke-width:2px
+    style CF fill:#f1f8e9,stroke:#8bc34a,stroke-width:2px
+    style APP fill:#ffecb3,stroke:#ffc107,stroke-width:2px
 ```
-jenkins-network
-    ↓
-jenkins-security
-    ↓
-jenkins-nat ────────┐
-    ↓               ↓
-jenkins-storage     ↓
-    ↓               ↓
-jenkins-loadbalancer
-    ↓
-jenkins-controller
-    ↓
-jenkins-agent-ami
-    ↓
-jenkins-agent
-    ↓
-jenkins-config
-    ↓
-jenkins-application
-```
-
-**依存関係の詳細**:
-
-| 変更対象 | 再デプロイが必要なコンポーネント |
-|---------|--------------------------------|
-| jenkins-network | すべてのコンポーネント |
-| jenkins-security | nat, storage, loadbalancer, controller, agent-ami, agent, config, application |
-| jenkins-nat | controller, agent（プライベートサブネット接続） |
-| jenkins-storage | controller（EFSマウント） |
-| jenkins-loadbalancer | controller（ターゲットグループ） |
-| jenkins-controller | agent（接続設定）, application（Jenkins設定） |
-| jenkins-agent-ami | agent（AMI ID変更） |
-| jenkins-agent | なし（最下流） |
-| jenkins-config | application（設定参照） |
-| jenkins-application | なし（最下流） |
 
 **運用上の注意**:
 - 上流コンポーネントを変更した場合、矢印の下流すべての再デプロイが必要
