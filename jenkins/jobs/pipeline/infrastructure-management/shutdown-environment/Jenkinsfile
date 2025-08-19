@@ -92,41 +92,6 @@ pipeline {
                         env.SPOTFLEET_REQUEST_ID = ""
                     }
                     
-                    // タグベースでインスタンスを検索（フォールバック）
-                    if (!env.CONTROLLER_INSTANCE_ID || !env.NAT_INSTANCE_ID) {
-                        echo "タグベースでインスタンスを検索..."
-                        
-                        def instances = sh(
-                            script: '''
-                                aws ec2 describe-instances \
-                                    --filters "Name=tag:Environment,Values=''' + ENVIRONMENT + '''" \
-                                              "Name=tag:ManagedBy,Values=pulumi" \
-                                              "Name=instance-state-name,Values=running" \
-                                    --region ''' + AWS_REGION + ''' \
-                                    --query 'Reservations[*].Instances[*].[InstanceId,Tags[?Key==`Name`]|[0].Value]' \
-                                    --output json
-                            ''',
-                            returnStdout: true
-                        )
-                        
-                        def instanceList = readJSON(text: instances)
-                        instanceList.each { reservation ->
-                            reservation.each { instance ->
-                                def instanceId = instance[0]
-                                def name = instance[1]
-                                
-                                if (name?.contains('controller') && !env.CONTROLLER_INSTANCE_ID) {
-                                    env.CONTROLLER_INSTANCE_ID = instanceId
-                                    echo "Controller Instance found by tag: ${instanceId}"
-                                }
-                                if (name?.contains('nat') && !env.NAT_INSTANCE_ID) {
-                                    env.NAT_INSTANCE_ID = instanceId
-                                    echo "NAT Instance found by tag: ${instanceId}"
-                                }
-                            }
-                        }
-                    }
-                    
                     echo """
 停止対象リソース:
 - Controller Instance: ${env.CONTROLLER_INSTANCE_ID ?: 'Not found'}
@@ -207,113 +172,56 @@ pipeline {
             }
         }
 
-        stage('Stop NAT Instance') {
+        stage('Stop NAT and Controller Instances') {
             when {
                 expression { 
-                    return env.NAT_INSTANCE_ID && !params.DRY_RUN 
+                    return (env.NAT_INSTANCE_ID || env.CONTROLLER_INSTANCE_ID) && !params.DRY_RUN 
                 }
             }
             steps {
                 script {
-                    echo "=== NAT インスタンスの停止 ==="
+                    echo "=== NAT と Controller インスタンスの同時停止 ==="
                     
                     try {
-                        // インスタンスの状態を確認
-                        def instanceState = sh(
-                            script: """
-                                aws ec2 describe-instances \
-                                    --instance-ids ${env.NAT_INSTANCE_ID} \
-                                    --region ${AWS_REGION} \
-                                    --query 'Reservations[0].Instances[0].State.Name' \
-                                    --output text 2>/dev/null || echo "unknown"
-                            """,
-                            returnStdout: true
-                        ).trim()
+                        // 停止するインスタンスIDのリストを作成
+                        def instancesToStop = []
                         
-                        echo "NAT インスタンスの現在の状態: ${instanceState}"
-                        
-                        if (instanceState == 'running') {
-                            sh """
-                                aws ec2 stop-instances \
-                                    --instance-ids ${env.NAT_INSTANCE_ID} \
-                                    --region ${AWS_REGION}
-                            """
-                            echo "NAT インスタンスの停止コマンドを送信しました"
-                            
-                            // 停止開始を待つ（最大1分）
-                            timeout(time: 1, unit: 'MINUTES') {
-                                waitUntil {
-                                    def state = sh(
-                                        script: """
-                                            aws ec2 describe-instances \
-                                                --instance-ids ${env.NAT_INSTANCE_ID} \
-                                                --region ${AWS_REGION} \
-                                                --query 'Reservations[0].Instances[0].State.Name' \
-                                                --output text 2>/dev/null || echo "unknown"
-                                        """,
-                                        returnStdout: true
-                                    ).trim()
-                                    return state == 'stopping' || state == 'stopped'
-                                }
-                            }
-                            echo "NAT インスタンスの停止処理を開始しました"
-                        } else if (instanceState == 'stopped') {
-                            echo "NAT インスタンスは既に停止しています"
+                        if (env.NAT_INSTANCE_ID) {
+                            instancesToStop.add(env.NAT_INSTANCE_ID)
                         }
-                    } catch (Exception e) {
-                        echo "NAT インスタンスの停止でエラー: ${e.message}"
-                        // NAT停止の失敗は継続可能
-                    }
-                }
-            }
-        }
-
-        stage('Stop Controller Instance') {
-            when {
-                expression { 
-                    return env.CONTROLLER_INSTANCE_ID && !params.DRY_RUN 
-                }
-            }
-            steps {
-                script {
-                    echo "=== Controller インスタンスの停止（非同期） ==="
-                    
-                    try {
-                        // インスタンスの状態を確認
-                        def instanceState = sh(
-                            script: """
-                                aws ec2 describe-instances \
-                                    --instance-ids ${env.CONTROLLER_INSTANCE_ID} \
-                                    --region ${AWS_REGION} \
-                                    --query 'Reservations[0].Instances[0].State.Name' \
-                                    --output text 2>/dev/null || echo "unknown"
-                            """,
-                            returnStdout: true
-                        ).trim()
                         
-                        echo "Controller インスタンスの現在の状態: ${instanceState}"
+                        if (env.CONTROLLER_INSTANCE_ID) {
+                            instancesToStop.add(env.CONTROLLER_INSTANCE_ID)
+                        }
                         
-                        if (instanceState == 'running') {
-                            // 非同期で停止コマンドを実行（nohupとバックグラウンド実行）
+                        if (instancesToStop.size() > 0) {
+                            def instanceIds = instancesToStop.join(' ')
+                            
+                            echo "停止対象インスタンス: ${instanceIds}"
+                            
+                            // 10秒後に両インスタンスを同時に停止するコマンドをバックグラウンドで実行
                             sh """
-                                # 10秒後にControllerを停止するコマンドをバックグラウンドで実行
-                                nohup sh -c 'sleep 10 && aws ec2 stop-instances --instance-ids ${env.CONTROLLER_INSTANCE_ID} --region ${AWS_REGION}' > /dev/null 2>&1 &
+                                # 10秒後にインスタンスを停止するコマンドをバックグラウンドで実行
+                                nohup sh -c 'sleep 10 && aws ec2 stop-instances --instance-ids ${instanceIds} --region ${AWS_REGION}' > /dev/null 2>&1 &
                                 
-                                echo "Controller停止コマンドをスケジュールしました（10秒後に実行）"
+                                echo "インスタンス停止コマンドをスケジュールしました（10秒後に実行）"
                             """
                             
                             echo """
 ===================================
-Controller インスタンスの停止をスケジュールしました。
-10秒後に停止処理が開始されます。
+インスタンスの停止をスケジュールしました。
+10秒後に以下のインスタンスが停止されます：
+- NAT Instance: ${env.NAT_INSTANCE_ID ?: 'N/A'}
+- Controller Instance: ${env.CONTROLLER_INSTANCE_ID ?: 'N/A'}
+
 このジョブは正常に完了としてマークされます。
 ===================================
 """
-                        } else if (instanceState == 'stopped') {
-                            echo "Controller インスタンスは既に停止しています"
+                        } else {
+                            echo "停止対象のインスタンスが見つかりません"
                         }
                     } catch (Exception e) {
-                        echo "Controller インスタンスの停止スケジュールでエラー: ${e.message}"
+                        echo "インスタンスの停止スケジュールでエラー: ${e.message}"
                         // 自身の停止なので、エラーでもジョブは成功とする
                     }
                 }
@@ -333,8 +241,7 @@ Controller インスタンスの停止をスケジュールしました。
 
 実行された操作:
 1. EC2 Fleet (SpotFleet): ${env.SPOTFLEET_REQUEST_ID ? 'キャパシティを0に設定' : 'スキップ（ID未検出）'}
-2. NAT インスタンス: ${env.NAT_INSTANCE_ID ? '停止コマンド送信' : 'スキップ（ID未検出）'}
-3. Controller インスタンス: ${env.CONTROLLER_INSTANCE_ID ? '停止スケジュール済み（10秒後）' : 'スキップ（ID未検出）'}
+2. NAT & Controller インスタンス: ${(env.NAT_INSTANCE_ID || env.CONTROLLER_INSTANCE_ID) ? '停止スケジュール済み（10秒後）' : 'スキップ（ID未検出）'}
 
 注意: Controllerの停止により、このJenkinsへのアクセスは間もなく失われます。
 環境を再開するには、AWSコンソールからインスタンスを起動してください。
