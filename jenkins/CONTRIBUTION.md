@@ -444,6 +444,135 @@ pipelineJob(fullJobName) {
 }
 ```
 
+#### Freestyleジョブ（既存ジョブのトリガー）
+
+既存のジョブをトリガーするだけのシンプルなジョブには、Freestyleジョブが適しています。
+
+```groovy
+// DSLファイル - Freestyleジョブの定義
+freeStyleJob(fullJobName) {
+    displayName('ジョブ表示名')
+    description('ジョブの説明')
+    
+    // 並行実行を無効化
+    concurrentBuild(false)
+    
+    // ビルド履歴の保持
+    logRotator {
+        daysToKeep(30)
+        numToKeep(90)
+    }
+    
+    // 既存ジョブをトリガー
+    steps {
+        downstreamParameterized {
+            trigger('Target/Job/Path') {
+                // 固定パラメータを渡す
+                parameters {
+                    predefinedProp('PARAM1', 'value1')
+                    predefinedProp('PARAM2', 'value2')
+                    booleanParam('FLAG', true)
+                }
+                
+                // ビルド結果の扱い
+                block {
+                    buildStepFailure('FAILURE')
+                    failure('FAILURE')
+                    unstable('UNSTABLE')
+                }
+            }
+        }
+    }
+    
+    // タイムアウト設定
+    wrappers {
+        timeout {
+            absolute(60)
+            failBuild()
+        }
+    }
+}
+
+// 注意: FreestyleジョブにはJenkinsfileは不要
+// job-config.yamlでの定義例:
+// my_freestyle_job:
+//   name: 'My_Freestyle_Job'
+//   dslfile: jenkins/jobs/dsl/category/my_freestyle_job.groovy
+//   # jenkinsfile: 不要（freestyleジョブ）
+```
+
+#### スケジューラージョブのパターン
+
+定期的に他のジョブをトリガーする場合の実装パターン：
+
+```groovy
+// DSLファイル - スケジューラージョブ
+freeStyleJob(fullJobName) {
+    displayName('自動実行スケジューラー')
+    description('''
+        |定期実行の説明
+        |実行タイミング: 毎日午前0時
+        |対象: 開発環境のみ
+    '''.stripMargin())
+    
+    // トリガー設定（cronフォーマット）
+    triggers {
+        // Jenkins cron: 分 時 日 月 曜日
+        // H: ハッシュ（負荷分散）
+        // 例: 日本時間午前0時（UTC 15:00）、平日のみ
+        cron('H 15 * * 1-5')  // UTC 15:00 = JST 00:00
+        
+        // その他の例:
+        // cron('H 2 * * *')     // 毎日2時頃
+        // cron('H H * * 0')     // 毎週日曜日
+        // cron('H 9-17 * * 1-5') // 平日9-17時の間で1時間ごと
+    }
+    
+    // 固定パラメータで他ジョブを実行
+    steps {
+        downstreamParameterized {
+            trigger('Path/To/Target/Job') {
+                parameters {
+                    // スケジュール実行では固定値を使用
+                    predefinedProp('ENVIRONMENT', 'dev')
+                    predefinedProp('MODE', 'auto')
+                    predefinedProp('CONFIRM', 'true')
+                }
+            }
+        }
+    }
+    
+    // 環境変数（タイムゾーン設定など）
+    environmentVariables {
+        env('TZ', 'Asia/Tokyo')
+    }
+}
+```
+
+##### スケジューラージョブの設計原則
+
+1. **パラメータは固定値**: スケジュール実行では変更できないため
+2. **Freestyleジョブを使用**: シンプルなトリガー処理に最適
+3. **タイムゾーンを明示**: 特に国際的な環境では重要
+4. **実行対象を限定**: 本番環境の自動操作は避ける
+5. **ログ保持期間を長めに**: トラブルシューティング用
+
+##### Cron式のタイムゾーン注意点
+
+```groovy
+// JenkinsのcronはUTCベース
+// 日本時間（JST = UTC+9）への変換が必要
+
+// 日本時間での設定例:
+// JST 00:00 = UTC 15:00 (前日)
+// JST 09:00 = UTC 00:00
+// JST 18:00 = UTC 09:00
+
+cron('0 15 * * *')   // 日本時間 午前0時
+cron('0 0 * * *')    // 日本時間 午前9時
+cron('0 9 * * *')    // 日本時間 午後6時
+```
+
 #### パラメータ化ジョブ
 
 ```groovy
