@@ -62,43 +62,52 @@ Jenkinsのジョブは**シードジョブパターン**で管理されていま
 
 ### アーキテクチャ
 
+```mermaid
+flowchart TB
+    subgraph config["設定ファイル"]
+        folder_config["folder-config.yaml<br/>フォルダ構造定義"]
+        job_config["job-config.yaml<br/>ジョブ定義"]
+    end
+    
+    subgraph seed["シードジョブ"]
+        job_creator["Admin_Jobs/job-creator<br/>ジョブ生成エンジン"]
+    end
+    
+    subgraph dsl["DSLスクリプト"]
+        folders_groovy["folders.groovy<br/>フォルダ生成"]
+        job_dsl["各種job DSL<br/>ジョブ生成"]
+    end
+    
+    subgraph generated["生成される構造"]
+        folder_structure["フォルダ構造<br/>Admin_Jobs/<br/>Account_Setup/<br/>Code_Quality_Checker/<br/>Document_Generator/<br/>Shared_Library/"]
+        
+        jobs["各ジョブ<br/>Admin_Jobs/xxx<br/>Account_Setup/xxx<br/>Code_Quality_Checker/xxx<br/>Document_Generator/xxx<br/>Shared_Library/xxx"]
+    end
+    
+    folder_config -->|"1 読み込み"| job_creator
+    job_config -->|"2 読み込み"| job_creator
+    job_creator -->|"3 実行"| folders_groovy
+    job_creator -->|"4 実行"| job_dsl
+    folders_groovy -->|"5 生成"| folder_structure
+    job_dsl -->|"6 生成"| jobs
+    folder_structure -->|依存| jobs
+    
+    style folder_config fill:#e1f5e1
+    style job_config fill:#e1f5e1
+    style job_creator fill:#ffe1e1
+    style folders_groovy fill:#e1e1ff
+    style job_dsl fill:#e1e1ff
+    style folder_structure fill:#fff5e1
+    style jobs fill:#fff5e1
 ```
-┌─────────────────────────────────────┐
-│        job-config.yaml              │  ← 1. ジョブ定義を追加
-│   (全ジョブの設定を集約管理)           │
-└────────────┬────────────────────────┘
-             │
-┌─────────────────────────────────────┐
-│      folder-config.yaml             │  ← フォルダ構造定義
-│   (フォルダ設定を集約管理)             │
-└────────────┬────────────────────────┘
-             │
-             ↓ 読み取り
-┌─────────────────────────────────────┐
-│    Admin_Jobs/job-creator           │  ← 4. シードジョブを実行
-│     (シードジョブ)                    │
-└────────────┬────────────────────────┘
-             │
-             ↓ 生成
-┌─────────────────────────────────────┐
-│     フォルダ構造（folders.groovy）     │  ← 設定駆動で自動生成
-│  - Admin_Jobs/                      │
-│  - Account_Setup/                   │
-│  - Code_Quality_Checker/            │
-│  - Document_Generator/              │
-│  - Shared_Library/                  │
-└─────────────────────────────────────┘
-             │
-             ↓
-┌─────────────────────────────────────┐
-│        各カテゴリのジョブ              │
-│  - Admin_Jobs/xxx                   │
-│  - Account_Setup/xxx                │  ← 自動生成される
-│  - Code_Quality_Checker/xxx         │
-│  - Document_Generator/xxx           │
-│  - Shared_Library/xxx               │
-└─────────────────────────────────────┘
-```
+
+#### 処理フロー
+
+1. **フォルダ設定読み込み**: `folder-config.yaml`からフォルダ構造を読み込み
+2. **ジョブ設定読み込み**: `job-config.yaml`からジョブ定義を読み込み
+3. **フォルダ生成**: `folders.groovy`が最初に実行されフォルダ構造を作成
+4. **ジョブ生成**: 各DSLファイルが実行されジョブを生成
+5. **依存関係**: ジョブはフォルダ内に配置されるため、フォルダが先に必要
 
 ### 新規ジョブ作成手順
 
