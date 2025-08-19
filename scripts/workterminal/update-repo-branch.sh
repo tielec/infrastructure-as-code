@@ -120,8 +120,37 @@ if ! git diff --quiet || ! git diff --cached --quiet; then
             echo ""
             if [[ $REPLY =~ ^[Yy]$ ]]; then
                 info_msg "変更を破棄します..."
+                
+                # まずgitで管理されているファイルをリセット
                 git reset --hard HEAD
-                git clean -fd
+                
+                # node_modulesディレクトリの処理
+                if find . -type d -name "node_modules" 2>/dev/null | grep -q .; then
+                    warn_msg "node_modulesディレクトリが検出されました"
+                    echo "node_modulesディレクトリをどう処理しますか？"
+                    echo "  1) 削除する（sudoを使用）"
+                    echo "  2) そのまま残す"
+                    read -p "選択してください (1/2) [デフォルト: 2]: " -n 1 -r
+                    echo ""
+                    
+                    if [[ $REPLY == "1" ]]; then
+                        info_msg "node_modulesディレクトリを削除します..."
+                        find . -type d -name "node_modules" -exec sudo rm -rf {} + 2>/dev/null || \
+                            warn_msg "一部のnode_modulesディレクトリを削除できませんでした"
+                    fi
+                fi
+                
+                # 未追跡ファイルのクリーンアップ（node_modules以外）
+                git clean -fd -e node_modules || {
+                    warn_msg "一部のファイルを削除できませんでした。権限の問題がある可能性があります。"
+                    echo "強制的に削除を試みますか？（sudoを使用）"
+                    read -p "(y/N): " -n 1 -r
+                    echo ""
+                    if [[ $REPLY =~ ^[Yy]$ ]]; then
+                        sudo git clean -fd -e node_modules
+                    fi
+                }
+                
                 success_msg "変更を破棄しました"
             else
                 error_exit "操作をキャンセルしました"
@@ -129,7 +158,11 @@ if ! git diff --quiet || ! git diff --cached --quiet; then
             ;;
         2)
             info_msg "変更を一時退避します..."
-            git stash push -m "Auto-stash before branch update $(date +%Y%m%d_%H%M%S)"
+            # node_modulesを除外してstash
+            git stash push -m "Auto-stash before branch update $(date +%Y%m%d_%H%M%S)" -- . ':!**/node_modules' || {
+                warn_msg "node_modulesを除外したstashに失敗しました。通常のstashを試みます..."
+                git stash push -m "Auto-stash before branch update $(date +%Y%m%d_%H%M%S)"
+            }
             success_msg "変更を一時退避しました"
             STASHED=true
             ;;
