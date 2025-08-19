@@ -297,7 +297,7 @@ Resources:
             
             # システムの更新
             dnf update -y
-            dnf install -y git python3 python3-pip jq
+            dnf install -y git python3 python3-pip jq tmux
             
             # Amazon SSM Agent は Amazon Linux 2023 にプリインストール済み
             
@@ -409,13 +409,13 @@ Resources:
         - Key: Name
           Value: Maintenance-Window-Role
 
-  # SSM Maintenance Window (日本時間午前1時に停止)
+  # SSM Maintenance Window (日本時間午前0時に停止)
   StopInstanceMaintenanceWindow:
     Type: AWS::SSM::MaintenanceWindow
     Properties:
       Name: !Sub '${AWS::StackName}-StopInstance'
-      Description: 'Stop Bootstrap instance daily at 1:00 AM JST'
-      Schedule: 'cron(0 16 ? * * *)'  # 毎日UTC 16:00（日本時間午前1時）
+      Description: 'Stop Bootstrap instance daily at 0:00 AM JST'
+      Schedule: 'cron(0 15 ? * * *)'  # 毎日UTC 15:00（日本時間午前0時）
       Duration: 1  # 1時間のウィンドウ
       Cutoff: 0    # ウィンドウ終了前に新しいタスクを開始しない
       AllowUnassociatedTargets: false
@@ -515,7 +515,7 @@ Outputs:
 
   StopScheduleStatus:
     Description: Daily stop schedule status
-    Value: !Sub 'Instance will be stopped daily at 1:00 AM JST (16:00 UTC) via SSM Maintenance Window'
+    Value: !Sub 'Instance will be stopped daily at 0:00 AM JST (15:00 UTC) via SSM Maintenance Window'
 
   ManualStartCommand:
     Description: Command to manually start the instance

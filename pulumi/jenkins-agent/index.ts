@@ -359,7 +359,7 @@ systemctl start amazon-ssm-agent
 
 # Javaのインストール（最後に実行）
 echo "Installing Java..."
-dnf install -y java-17-amazon-corretto
+dnf install -y java-21-amazon-corretto
 
 # 起動完了のマーク
 echo "$(date) - Agent bootstrap completed" > /home/jenkins/agent/bootstrap-complete
@@ -488,7 +488,7 @@ systemctl start amazon-ssm-agent
 
 # Javaのインストール（最後に実行）
 echo "Installing Java..."
-dnf install -y java-17-amazon-corretto
+dnf install -y java-21-amazon-corretto
 
 # 起動完了のマーク
 echo "$(date) - Agent bootstrap completed" > /home/jenkins/agent/bootstrap-complete

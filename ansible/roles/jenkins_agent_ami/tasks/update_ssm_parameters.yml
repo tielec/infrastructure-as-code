@@ -98,7 +98,7 @@
         name: ssm_parameter_store
         tasks_from: set_parameter
       vars:
-        parameter_name: "/{{ project_name }}/{{ env }}/jenkins/agent/custom-ami-x86"
+        parameter_name: "/{{ project_name }}/{{ env }}/agent-ami/custom-ami-x86"
         parameter_value: "{{ latest_x86_ami.stdout }}"
         parameter_type: "String"
         description: "Jenkins Agent x86_64 AMI ID created by Image Builder"
@@ -125,7 +125,7 @@
         name: ssm_parameter_store
         tasks_from: set_parameter
       vars:
-        parameter_name: "/{{ project_name }}/{{ env }}/jenkins/agent/custom-ami-arm"
+        parameter_name: "/{{ project_name }}/{{ env }}/agent-ami/custom-ami-arm"
         parameter_value: "{{ latest_arm_ami.stdout }}"
         parameter_type: "String"
         description: "Jenkins Agent ARM64 AMI ID created by Image Builder"
@@ -168,4 +168,4 @@
         msg:
           - "WARNING: Failed to update SSM parameters with new AMI IDs"
           - "You may need to update them manually after builds complete"
-          - "Use: aws ssm put-parameter --name /{{ project_name }}/{{ env }}/jenkins/agent/custom-ami-[x86|arm] --value ami-xxxxx --overwrite"
+          - "Use: aws ssm put-parameter --name /{{ project_name }}/{{ env }}/agent-ami/custom-ami-[x86|arm] --value ami-xxxxx --overwrite"

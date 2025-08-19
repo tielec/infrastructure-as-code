@@ -5,9 +5,8 @@
 ## 前提条件
 
 - AWSアカウント
-- 有効なEC2キーペア
+- 有効なEC2キーペア  
 - CloudFormationスタックをデプロイする権限
-- Pulumiアカウント（アクセストークンが必要）
 
 ## セットアップ手順
 
@@ -34,10 +33,17 @@
 
 ### 2. ブートストラップ環境の構築
 
-基本的なツールをインストールしたEC2踏み台サーバーをCloudFormationで構築します。
+基本的なツールをプリインストールしたEC2踏み台サーバーをCloudFormationで構築します。
 
 1. AWSコンソールのCloudFormationから以下のテンプレートをアップロード：
     - `bootstrap/cfn-bootstrap-template.yaml`
+
+   **このテンプレートが作成するリソース**:
+   - EC2インスタンス（t4g.small、ARM64）
+   - VPC、サブネット、セキュリティグループ
+   - Pulumi用S3バケット（状態管理用）
+   - SSMパラメータストア（設定保存用）
+   - 自動停止用Maintenance Window（毎日0:00 AM JST）
 
 2. スタック作成時に以下のスタック名とパラメータを指定：
     - スタック名: bootstrap-iac-environment
@@ -53,9 +59,9 @@
 
 #### インスタンスの自動停止機能
 
-ブートストラップインスタンスは、コスト削減のため毎日日本時間午前1時（UTC 16:00）に自動停止されます。この機能はSSM Maintenance Windowを使用して実装されています。
+ブートストラップインスタンスは、コスト削減のため毎日日本時間午前0時（UTC 15:00）に自動停止されます。この機能はSSM Maintenance Windowを使用して実装されています。
 
-- **自動停止時刻**: 毎日 1:00 AM JST
+- **自動停止時刻**: 毎日 0:00 AM JST
 - **手動起動方法**: CloudFormation出力の`ManualStartCommand`に表示されるコマンドを使用
   ```bash
   aws ec2 start-instances --instance-ids <instance-id> --region ap-northeast-1
@@ -75,12 +81,17 @@
    sudo less +F /var/log/cloud-init-output.log
    ```
    
-   以下のメッセージが表示されていれば、セットアップが完了しています：
+   以下のメッセージが表示されていれば、初期セットアップが完了しています：
    ```
    Bootstrap setup complete!
    ```
    
    ※ `Ctrl+C`でリアルタイム表示を終了し、`q`でlessを終了します
+
+   **プリインストールされているツール**:
+   - git、python3、python3-pip、jq、tmux
+   - Ansible、boto3、botocore（userspace）
+   - リポジトリは既にクローン済み: `~/infrastructure-as-code`
 
 3. セットアップが完了していたら、以下のコマンドでブートストラップセットアップを実行します：
 
@@ -89,30 +100,128 @@
    ./infrastructure-as-code/bootstrap/setup-bootstrap.sh
    ```
 
-   このスクリプトは以下の処理を自動的に行います：
-   - GitHubアクセス用のSSHキー設定（SSMパラメータストアと連携）
-   - Node.js, AWS CLI, Pulumi, Dockerなどの必要なツールのインストール
-   - AWS認証情報の設定
+   このスクリプトは以下の順序で処理を実行します：
 
-#### GitHub SSHキーの自動管理
+   **前提条件チェック（軽量処理）**
+   1. OS情報の表示（Amazon Linux 2023の確認）
+   2. Python環境の確認（Python3とpip3の存在確認）
+   3. スクリプト実行権限の修正（リポジトリ内の全.shファイル）
+   4. Docker状態の確認（インストールとデーモン状態の確認）
 
-`setup-bootstrap.sh`は、GitHub SSHキーをSSMパラメータストアで管理します：
+   **AWS関連設定（ネットワーク処理）**
+   5. AWS認証情報の確認（IAMロールまたは認証情報の設定）
+   6. GitHub SSHキーの設定（SSMパラメータストアと連携）
+   7. OpenAI APIキーの設定（対話形式またはSSMから復元）
+   8. GitHub App認証の設定（App IDと組織名の入力、秘密鍵は手動設定）
+   9. Pulumi設定（S3バックエンド、パスフレーズ管理）
 
-- **初回実行時**: 
-  - SSHキーを自動生成
-  - メールアドレスの入力は初回のみ必要
-  - SSMパラメータストアに自動保存（秘密鍵は暗号化）
-  
-- **2回目以降（新しいインスタンス）**:
-  - SSMから自動的にキーを復元
-  - ユーザー入力不要で処理を継続
-  
-- **保存されるパラメータ**:
-  - `/bootstrap/github/email` - GitHubメールアドレス
-  - `/bootstrap/github/ssh-private-key` - 秘密鍵（SecureString）
-  - `/bootstrap/github/ssh-public-key` - 公開鍵
+   **重い処理（インストールと実行）**
+   10. Ansibleのインストール確認と必要に応じたインストール
+   11. Ansible環境の準備（collections パスの設定とクリーンアップ）
+   12. Ansibleプレイブック実行（Node.js 20、Java 21、AWS CLI v2、Docker等のインストール）
+   13. systemdサービスの設定（EC2パブリックIP自動更新）
 
-これにより、インスタンスの再作成時でも同じSSHキーを使用でき、GitHubへの再登録が不要になります。
+#### 手動設定が必要な項目
+
+セットアップスクリプト（`setup-bootstrap.sh`）は対話形式で進行し、以下の設定を順番に行います。各項目はSSMパラメータストアで永続化され、インスタンス再作成時に自動復元されます。
+
+##### 1. GitHub SSHキーの設定（手順6で実行）
+
+**初回実行時**:
+- SSHキーペアを自動生成
+- GitHubメールアドレスの入力を求められる
+- SSMパラメータストアに自動保存
+
+**必要な手動作業**:
+```bash
+# 生成された公開鍵を表示
+cat ~/.ssh/id_rsa.pub
+
+# GitHubの Settings > SSH and GPG keys > New SSH key で上記の公開鍵を登録
+```
+
+**2回目以降の実行時**:
+- SSMから自動復元（ユーザー入力不要）
+
+**SSMパラメータ**:
+- `/bootstrap/github/email` - メールアドレス
+- `/bootstrap/github/ssh-private-key` - 秘密鍵（SecureString）
+- `/bootstrap/github/ssh-public-key` - 公開鍵
+
+##### 2. OpenAI APIキーの設定（手順7で実行・オプション）
+
+**初回実行時**:
+- APIキーの入力を求められる（スキップ可能）
+- 入力した場合はSSMに暗号化保存
+
+**事前準備**:
+- [OpenAI Platform](https://platform.openai.com/api-keys)でAPIキーを生成
+- `sk-`で始まる形式のキーを用意
+
+**SSMパラメータ**:
+- `/bootstrap/openai/api-key` - APIキー（SecureString）
+
+##### 3. GitHub App認証の設定（手順8で実行・オプション）
+
+**対話形式の入力**:
+- App IDの入力（スキップ可能）
+- 組織名/ユーザー名の入力（オプション）
+
+**必要な手動作業**:
+1. [GitHub Apps](https://github.com/settings/apps)でAppを作成
+2. App IDをメモ
+3. Private Keyを生成してダウンロード
+4. 秘密鍵をPKCS#8形式に変換してSSMに手動登録:
+
+```bash
+# PKCS#8形式に変換
+openssl pkcs8 -topk8 -inform PEM -outform PEM -nocrypt \
+  -in github-app-key.pem \
+  -out github-app-key-pkcs8.pem
+
+# SSMパラメータストアに登録
+aws ssm put-parameter \
+  --name "/bootstrap/github/app-private-key" \
+  --value file://github-app-key-pkcs8.pem \
+  --type SecureString \
+  --overwrite \
+  --region ap-northeast-1
+```
+
+**SSMパラメータ**:
+- `/bootstrap/github/app-id` - App ID
+- `/bootstrap/github/app-private-key` - 秘密鍵（要手動登録）
+- `/bootstrap/github/app-owner` - 組織名（オプション）
+
+##### 4. Pulumiパスフレーズの設定（手順9で実行）
+
+**初回実行時**:
+- 自動生成または手動入力を選択
+- SSMパラメータストアに暗号化保存
+
+**重要な注意事項**:
+- **一度設定したパスフレーズは変更不可**（既存スタックへのアクセスが失われる）
+- バックアップを強く推奨
+
+**バックアップ方法**:
+```bash
+# パスフレーズを取得して安全な場所に保存
+aws ssm get-parameter \
+  --name "/bootstrap/pulumi/config-passphrase" \
+  --with-decryption \
+  --query 'Parameter.Value' \
+  --output text
+```
+
+**SSMパラメータ**:
+- `/bootstrap/pulumi/config-passphrase` - パスフレーズ（SecureString）
+
+##### 設定値の永続性
+
+すべての設定はSSMパラメータストアに保存されるため：
+- EC2インスタンスを再作成しても設定が保持される
+- 2回目以降の実行では自動的に復元される
+- 手動作業が必要なのは初回のみ（GitHub公開鍵登録、GitHub App秘密鍵登録）
 
 ### 4. Pulumiバックエンドの設定
 
@@ -172,85 +281,145 @@ export PULUMI_STATE_BUCKET_NAME=$(aws cloudformation describe-stacks \
 
 **重要**: パスフレーズは一度設定したら変更しないでください。変更すると既存のPulumiスタックにアクセスできなくなります。
 
-#### Pulumi Cloudバックエンドの使用（代替）
+### 5. Jenkinsインフラのデプロイ
 
-Pulumi Cloudを使用する場合：
+#### 全体デプロイ（推奨）
 
-1. [Pulumi Console](https://app.pulumi.com/account/tokens)からアクセストークンを取得
-2. 環境変数を設定：
-   ```bash
-   export PULUMI_ACCESS_TOKEN="pul-YOUR_ACCESS_TOKEN"
-   ```
-3. Ansible実行時にバックエンドタイプを指定：
-   ```bash
-   ansible-playbook playbooks/jenkins/jenkins_setup_pipeline.yml \
-     -e "env=dev pulumi_backend_type=cloud"
-   ```
-
-### 5. Jenkinsインフラの段階的デプロイ
-
-環境準備ができたら、以下のコマンドでインフラをデプロイします：
+Jenkins環境の初期構築には`jenkins_setup_pipeline.yml`を使用します。**実行時間が1時間以上かかる可能性があるため、tmuxの使用を強く推奨します**。
 
 ```bash
-# infrastructure-as-codeディレクトリに移動
-cd ~/infrastructure-as-code
+# tmuxセッションを作成してバックグラウンドで実行
+tmux new-session -d -s jenkins-deploy
 
-# 全体のデプロイパイプラインを実行（初期構築）
-cd ansible
-ansible-playbook playbooks/jenkins/jenkins_setup_pipeline.yml -e "env=dev"
+# コマンドを送信
+tmux send-keys -t jenkins-deploy "cd ~/infrastructure-as-code/ansible" C-m
+tmux send-keys -t jenkins-deploy "ansible-playbook playbooks/jenkins/jenkins_setup_pipeline.yml -e 'env=dev' | tee ~/jenkins-deploy-$(date +%Y%m%d-%H%M%S).log" C-m
 
-# 特定のコンポーネントだけをデプロイする場合
-ansible-playbook playbooks/jenkins/jenkins_setup_pipeline.yml -e "env=dev run_network=true run_security=false run_storage=false"
+# 進捗を確認
+tmux attach -t jenkins-deploy
+
+# tmux操作方法
+# デタッチ（バックグラウンドに戻す）: Ctrl+b, d
+# 再アタッチ: tmux attach -t jenkins-deploy
+# セッション一覧: tmux ls
 ```
 
-各コンポーネントを個別にデプロイすることも可能です：
+**デプロイ順序**（jenkins_setup_pipeline.ymlが自動的に実行）:
+1. jenkins-ssm-init（SSMパラメータ初期化、パスワード生成）
+2. jenkins-network（VPC、サブネット）
+3. jenkins-security（セキュリティグループ、IAMロール）
+4. jenkins-nat（NATゲートウェイ/インスタンス）
+5. jenkins-storage（EFSファイルシステム）
+6. jenkins-loadbalancer（ALB）
+7. jenkins-controller（Jenkinsコントローラー）
+8. jenkins-config（設定リソース）
+9. jenkins-agent-ami（カスタムAMI作成）※最大1時間
+10. jenkins-agent（SpotFleet）
+11. jenkins-application（Jenkins設定、プラグイン）
+
+**実行時間の目安**:
+- 基本インフラ: 約30-45分
+- Agent AMI作成: 追加で最大1時間
+- 合計: 1.5〜2時間
+
+#### 個別コンポーネントのデプロイ
+
+特定のコンポーネントのみを更新する場合は個別デプロイが可能ですが、**依存関係に注意が必要です**。
 
 ```bash
-# ネットワークコンポーネントのみをデプロイ
+# 例: ネットワークのみ更新
 ansible-playbook playbooks/jenkins/deploy/deploy_jenkins_network.yml -e "env=dev"
 
-# セキュリティグループのみをデプロイ
-ansible-playbook playbooks/jenkins/deploy/deploy_jenkins_security.yml -e "env=dev"
-
-# Jenkins Agent AMIビルダーをデプロイ（デフォルトでImage Builderパイプライン自動実行）
-ansible-playbook playbooks/jenkins/deploy/deploy_jenkins_agent_ami.yml -e "env=dev"
-
-# Jenkins Agent AMIビルダーをデプロイ（パイプライン実行を抑制）
+# 例: Jenkins Agent AMIのみ再作成（ビルドをスキップ）
 ansible-playbook playbooks/jenkins/deploy/deploy_jenkins_agent_ami.yml -e "env=dev trigger_ami_build=false"
 
-# その他のコンポーネントも同様に個別デプロイ可能
+# 例: Jenkinsアプリケーション設定のみ更新
+ansible-playbook playbooks/jenkins/deploy/deploy_jenkins_application.yml -e "env=dev"
 ```
 
-### 6. Jenkins環境構築後の設定管理
+```mermaid
+graph TD
+    SSM[jenkins-ssm-init<br/>SSMパラメータ初期化] --> N[jenkins-network<br/>VPC/サブネット]
+    N --> S[jenkins-security<br/>セキュリティグループ/IAM]
+    S --> NAT[jenkins-nat<br/>NATゲートウェイ]
+    S --> ST[jenkins-storage<br/>EFS]
+    S --> LB[jenkins-loadbalancer<br/>ALB]
+    S --> AMI[jenkins-agent-ami<br/>カスタムAMI作成]
+    NAT --> C[jenkins-controller<br/>EC2インスタンス]
+    ST --> C
+    LB --> C
+    AMI --> A[jenkins-agent<br/>SpotFleet]
+    C --> CF[jenkins-config<br/>設定リソース]
+    CF --> APP[jenkins-application<br/>Jenkins設定/プラグイン]
+    A --> APP
 
-Jenkins環境が構築された後、アプリケーションレベルの設定を管理できます：
+    style SSM fill:#f3e5f5,stroke:#9c27b0,stroke-width:2px
+    style N fill:#e3f2fd,stroke:#2196f3,stroke-width:2px
+    style S fill:#e3f2fd,stroke:#2196f3,stroke-width:2px
+    style NAT fill:#fff3e0,stroke:#ff9800,stroke-width:2px
+    style ST fill:#fff3e0,stroke:#ff9800,stroke-width:2px
+    style LB fill:#fff3e0,stroke:#ff9800,stroke-width:2px
+    style C fill:#e8f5e9,stroke:#4caf50,stroke-width:2px
+    style AMI fill:#fce4ec,stroke:#e91e63,stroke-width:2px
+    style A fill:#fce4ec,stroke:#e91e63,stroke-width:2px
+    style CF fill:#f1f8e9,stroke:#8bc34a,stroke-width:2px
+    style APP fill:#ffecb3,stroke:#ffc107,stroke-width:2px
+```
+
+**運用上の注意**:
+- 上流コンポーネントを変更した場合、矢印の下流すべての再デプロイが必要
+- 依存関係が不明な場合は全体デプロイ（jenkins_setup_pipeline.yml）を使用
+- 個別デプロイは変更影響を完全に理解している場合のみ推奨
+
+### 6. Jenkins環境の運用管理
+
+#### Jenkinsアプリケーション設定の更新
+
+構築済みのJenkins環境に対して、以下の管理タスクを実行できます：
 
 ```bash
-# Jenkinsのバージョン更新、プラグインインストール、CLIユーザー作成、シードジョブ作成、再起動を実行
+# すべての設定を更新（バージョン更新、プラグイン、ユーザー、ジョブ）
 ansible-playbook playbooks/jenkins/deploy/deploy_jenkins_application.yml -e "env=dev"
 
-# Jenkinsバージョンのみ更新（プラグインインストールはスキップ）
-ansible-playbook playbooks/jenkins/deploy/deploy_jenkins_application.yml -e "env=dev version=2.426.1 plugins=false"
+# Jenkinsバージョンのみ更新
+ansible-playbook playbooks/jenkins/deploy/deploy_jenkins_application.yml \
+  -e "env=dev version=2.426.1 plugins=false setup_cli_user=false setup_seed_job=false"
 
-# プラグインのみインストール（Gitリポジトリ更新はスキップ）
-ansible-playbook playbooks/jenkins/deploy/deploy_jenkins_application.yml -e "env=dev update_git=false plugins=true restart=false"
+# プラグインのみ更新
+ansible-playbook playbooks/jenkins/deploy/deploy_jenkins_application.yml \
+  -e "env=dev jenkins_version=latest setup_cli_user=false setup_seed_job=false"
 
-# シードジョブのみ作成（他の設定はスキップ）
-ansible-playbook playbooks/jenkins/deploy/deploy_jenkins_application.yml -e "env=dev jenkins_version=latest install_plugins=false setup_cli_user=false restart_jenkins=false"
+# シードジョブのみ更新
+ansible-playbook playbooks/jenkins/deploy/deploy_jenkins_application.yml \
+  -e "env=dev jenkins_version=latest install_plugins=false setup_cli_user=false"
 ```
 
-#### シードジョブのカスタマイズ
+#### シードジョブによるジョブ管理
 
-シードジョブは、Gitリポジトリ内のJenkinsfileを実行して他のすべてのJenkinsジョブを管理します。以下の変数でカスタマイズ可能です：
+シードジョブはGitリポジトリからJob DSL/Jenkinsfileを読み込み、Jenkinsジョブを自動管理します：
 
 ```bash
-# カスタムGitリポジトリとブランチを指定してシードジョブを作成
+# デフォルトのシードジョブ作成
+ansible-playbook playbooks/jenkins/deploy/deploy_jenkins_application.yml \
+  -e "env=dev" \
+  -e "jenkins_version=latest install_plugins=false setup_cli_user=false"
+
+# カスタムリポジトリを使用
 ansible-playbook playbooks/jenkins/deploy/deploy_jenkins_application.yml \
   -e "env=dev" \
   -e "jenkins_jobs_repo=https://github.com/myorg/jenkins-jobs.git" \
-  -e "jenkins_jobs_branch=develop" \
-  -e "jenkins_jobs_jenkinsfile=pipelines/seed-job/Jenkinsfile"
+  -e "jenkins_jobs_branch=main" \
+  -e "jenkins_jobs_jenkinsfile=seed-job/Jenkinsfile"
 ```
+
+#### 管理タスクの実行頻度
+
+| タスク | 推奨頻度 | 実行時間 |
+|--------|----------|----------|
+| Jenkinsバージョン更新 | 月1回 | 5-10分 |
+| プラグイン更新 | 週1回 | 3-5分 |
+| シードジョブ実行 | ジョブ定義変更時 | 1-3分 |
+| 全体再デプロイ | 大規模変更時のみ | 1-2時間 |
 
 ## ブートストラップ環境の管理
 
@@ -447,14 +616,6 @@ infrastructure-as-code/
     # S3バケットの存在確認
     aws s3 ls | grep pulumi-state
     ```
-  - Pulumi Cloud使用時: 環境変数`PULUMI_ACCESS_TOKEN`が正しく設定されているか確認
-    ```bash
-    # トークンが設定されているか確認
-    echo $PULUMI_ACCESS_TOKEN
-    
-    # 再設定が必要な場合
-    export PULUMI_ACCESS_TOKEN="pul-YOUR_ACCESS_TOKEN"
-    ```
 - **Jenkinsへのアクセス問題**: セキュリティグループの設定を確認
 - **EFSマウント問題**: マウントターゲットの可用性を確認
 - **削除時のリソース依存関係エラー**: 削除順序が正しいか確認（ネットワークは最後に削除）
@@ -487,7 +648,7 @@ ansible-playbook playbooks/jenkins/jenkins_setup_pipeline.yml -e "env=dev" --che
 - AdministratorAccess権限は開発段階のみに使用し、本番環境では最小権限原則に従ってください
 - バックアップ戦略の実装を忘れずに行ってください
 - AWS認証情報は定期的に更新が必要です。セッションが切れた場合は`source scripts/aws/setup-aws-credentials.sh`を実行してください
-- Pulumiアクセストークンは安全に管理してください。環境変数として設定する場合は、他のユーザーに見えないように注意してください
+- Pulumiパスフレーズは安全に管理してください。SSMパラメータストアから取得した値は他のユーザーに見えないように注意してください
 - **削除操作は取り消せません**。本番環境での削除操作は特に注意して実行してください
 - Jenkinsバージョン更新前には必ずバックアップを取得してください
 - シードジョブで管理されるジョブは、手動で変更しても次回シードジョブ実行時に上書きされます
