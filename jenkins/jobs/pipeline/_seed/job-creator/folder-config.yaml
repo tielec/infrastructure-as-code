@@ -219,6 +219,16 @@ folders:
       * ドキュメント自動生成パイプラインの機能をテストするためのジョブを管理
       * パイプラインスクリプトの検証やデバッグに使用
 
+  # パイプラインテスト - インフラストラクチャ
+  - path: "Pipeline_Tests/Infrastructure"
+    displayName: "Infrastructure Tests"
+    description: |
+      このフォルダーには、インフラストラクチャ関連のパイプラインテストジョブが含まれています。
+      
+      ### 概要
+      * Pulumi、Terraform等のIaCツールのパイプラインテスト
+      * インフラストラクチャのデプロイメント・管理パイプラインの検証
+
   # インフラストラクチャー管理フォルダ  
   - path: "Infrastructure_Management"
     displayName: "Infrastructure Management Jobs"
