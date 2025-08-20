@@ -1,0 +1,362 @@
+@Library('jenkins-shared-lib') _
+
+/**
+ * Pulumi Projects Dashboard Pipeline
+ * S3バックエンドから全Pulumiプロジェクトの状態を収集し、ダッシュボードを生成
+ */
+pipeline {
+    agent {
+        label 'ec2-fleet'
+    }
+    
+    environment {
+        // ディレクトリ構造
+        JENKINS_REPO_DIR = 'jenkins-repo'
+        DASHBOARD_DIR = 'pulumi-dashboard'
+        DATA_DIR = "${DASHBOARD_DIR}/data"
+        HTML_DIR = "${DASHBOARD_DIR}/html"
+        
+        // Python仮想環境
+        VENV_PATH = "${WORKSPACE}/venv"
+        
+        // スクリプトとテンプレートのパス
+        SCRIPT_PATH = 'jenkins/jobs/pipeline/infrastructure/pulumi-dashboard/src'
+        TEMPLATE_PATH = 'jenkins/jobs/pipeline/infrastructure/pulumi-dashboard/templates'
+        
+        // タイムスタンプ
+        TIME_STAMP = sh(script: 'TZ="Asia/Tokyo" date "+%Y/%m/%d %H:%M:%S"', returnStdout: true).trim()
+        BUILD_TIME_STAMP = sh(script: 'TZ="Asia/Tokyo" date "+%Y%m%d-%H%M%S"', returnStdout: true).trim()
+        
+        // Jenkinsリポジトリ設定
+        JENKINS_REPO_URL = 'https://github.com/tielec/infrastructure-as-code'
+        JENKINS_REPO_BRANCH = 'main'
+        JENKINS_GIT_CREDENTIALS_ID = 'github-app-credentials'
+    }
+    
+    stages {
+        stage('Initialize') {
+            steps {
+                script {
+                    // ビルド表示名を設定
+                    currentBuild.displayName = "#${env.BUILD_NUMBER} - ${params.ENVIRONMENT} Dashboard"
+                    
+                    validateParameters()
+                    prepareWorkspace()
+                    checkoutJenkinsRepository()
+                }
+            }
+        }
+        
+        stage('Verify AWS Credentials') {
+            steps {
+                script {
+                    verifyAwsCredentials()
+                }
+            }
+        }
+        
+        stage('Collect Pulumi States') {
+            agent {
+                docker {
+                    label 'ec2-fleet'
+                    image 'amazon/aws-cli:latest'
+                    args "--entrypoint='' -v ${WORKSPACE}:/workspace -w /workspace -u root"
+                    reuseNode true
+                }
+            }
+            environment {
+                AWS_ACCESS_KEY_ID     = "${params.AWS_ACCESS_KEY_ID}"
+                AWS_SECRET_ACCESS_KEY = "${params.AWS_SECRET_ACCESS_KEY}"
+                AWS_SESSION_TOKEN     = "${params.AWS_SESSION_TOKEN}"
+                AWS_DEFAULT_REGION    = "${params.AWS_REGION}"
+            }
+            steps {
+                script {
+                    collectPulumiStates()
+                }
+            }
+        }
+        
+        stage('Process State Data') {
+            agent {
+                docker {
+                    label 'ec2-fleet'
+                    image 'pulumi/pulumi:latest'
+                    args "--entrypoint='' -v ${WORKSPACE}:/workspace -w /workspace -u root"
+                    reuseNode true
+                }
+            }
+            steps {
+                script {
+                    processStateData()
+                }
+            }
+        }
+        
+        stage('Generate Dashboard') {
+            steps {
+                script {
+                    generateDashboard()
+                }
+            }
+        }
+    }
+    
+    post {
+        always {
+            script {
+                publishDashboard()
+                printSummary()
+            }
+        }
+        
+        success {
+            echo "✅ Pulumiダッシュボードが正常に生成されました"
+        }
+        
+        failure {
+            echo "❌ ダッシュボード生成が失敗しました。ログを確認してください"
+        }
+        
+        cleanup {
+            cleanWs()
+        }
+    }
+}
+
+// ================================================================================
+// Helper Functions
+// ================================================================================
+
+/**
+ * パラメータの検証
+ */
+def validateParameters() {
+    echo "パラメータの検証中..."
+    
+    if (!params.AWS_ACCESS_KEY_ID || !params.AWS_SECRET_ACCESS_KEY) {
+        error "AWS認証情報が設定されていません"
+    }
+    
+    // S3_BUCKETが指定されていない場合、クレデンシャルから取得
+    if (!params.S3_BUCKET) {
+        withCredentials([string(credentialsId: 'pulumi-s3bucket-name', variable: 'BUCKET_NAME')]) {
+            env.S3_BUCKET = BUCKET_NAME
+            echo "S3バケット名をクレデンシャルから取得: ${env.S3_BUCKET}"
+        }
+    } else {
+        env.S3_BUCKET = params.S3_BUCKET
+    }
+    
+    echo "✅ パラメータ検証完了"
+}
+
+/**
+ * ワークスペースの準備
+ */
+def prepareWorkspace() {
+    sh """
+        mkdir -p ${JENKINS_REPO_DIR} ${DASHBOARD_DIR} ${DATA_DIR} ${HTML_DIR}
+        chmod -R 777 ${DASHBOARD_DIR}
+    """
+}
+
+/**
+ * Jenkinsリポジトリのチェックアウト
+ */
+def checkoutJenkinsRepository() {
+    dir(env.JENKINS_REPO_DIR) {
+        gitUtils.checkoutRepository(
+            env.JENKINS_REPO_URL,
+            env.JENKINS_REPO_BRANCH,
+            env.JENKINS_GIT_CREDENTIALS_ID
+        )
+    }
+}
+
+/**
+ * AWS認証情報の検証
+ */
+def verifyAwsCredentials() {
+    echo """
+        =============================================
+        AWS認証情報の検証
+        =============================================
+        環境: ${params.ENVIRONMENT}
+        リージョン: ${params.AWS_REGION}
+        S3バケット: ${env.S3_BUCKET}
+        =============================================
+    """.stripIndent()
+    
+    def awsUtils = awsUtils()
+    
+    try {
+        def authResult
+        if (params.ENVIRONMENT == 'prod') {
+            authResult = awsUtils.general.verifyProdAwsCredentials(
+                params.AWS_ACCESS_KEY_ID,
+                params.AWS_SECRET_ACCESS_KEY,
+                params.AWS_SESSION_TOKEN,
+                params.AWS_REGION
+            )
+        } else {
+            authResult = awsUtils.general.verifyDevAwsCredentials(
+                params.AWS_ACCESS_KEY_ID,
+                params.AWS_SECRET_ACCESS_KEY,
+                params.AWS_SESSION_TOKEN,
+                params.AWS_REGION
+            )
+        }
+        
+        env.AWS_ACCOUNT_ID = authResult.accountId
+        env.AWS_PRINCIPAL_ARN = authResult.arn
+        
+        echo """
+            ✅ AWS認証検証完了
+            アカウントID: ${authResult.accountId}
+            プリンシパル: ${authResult.arn}
+        """.stripIndent()
+        
+    } catch (Exception e) {
+        error "AWS認証検証に失敗しました: ${e.message}"
+    }
+}
+
+/**
+ * S3からPulumiステートファイルを収集
+ */
+def collectPulumiStates() {
+    echo """
+        =============================================
+        Pulumiステートファイルの収集
+        =============================================
+        S3バケット: ${env.S3_BUCKET}
+        フィルタ: ${params.PROJECT_FILTER}
+        =============================================
+    """.stripIndent()
+    
+    // スクリプトファイルをコピーして実行
+    sh """
+        cp ${JENKINS_REPO_DIR}/${SCRIPT_PATH}/collect_states.sh .
+        chmod +x collect_states.sh
+        
+        # 環境変数を設定して実行
+        export S3_BUCKET="${env.S3_BUCKET}"
+        export PROJECT_FILTER="${params.PROJECT_FILTER}"
+        export STACK_FILTER="${params.STACK_FILTER}"
+        export DATA_DIR="${DATA_DIR}"
+        
+        ./collect_states.sh
+    """
+}
+
+/**
+ * ステートデータの処理
+ */
+def processStateData() {
+    echo "ステートデータを処理中..."
+    
+    sh """
+        # 基本ツールのインストール
+        apt-get update -qq && apt-get install -qq -y jq python3 python3-pip
+        
+        # スクリプトファイルをコピーして実行
+        cp ${JENKINS_REPO_DIR}/${SCRIPT_PATH}/process_states.sh .
+        chmod +x process_states.sh
+        
+        export DATA_DIR="${DATA_DIR}"
+        ./process_states.sh
+    """
+}
+
+/**
+ * ダッシュボードの生成
+ */
+def generateDashboard() {
+    echo "ダッシュボードを生成中..."
+    
+    sh """
+        # Python仮想環境のセットアップ
+        echo "Python仮想環境のセットアップ..."
+        python3 -m venv ${VENV_PATH}
+        . ${VENV_PATH}/bin/activate
+        
+        # 必要なパッケージのインストール
+        pip install --upgrade pip
+        pip install jinja2 matplotlib seaborn pandas plotly
+        
+        # スクリプトとテンプレートファイルのコピー
+        echo "必要なファイルをコピー中..."
+        cp ${JENKINS_REPO_DIR}/${SCRIPT_PATH}/dashboard_generator.py .
+        cp ${JENKINS_REPO_DIR}/${SCRIPT_PATH}/data_analyzer.py .
+        cp -r ${JENKINS_REPO_DIR}/${TEMPLATE_PATH}/* ${HTML_DIR}/
+        
+        # ダッシュボードの生成
+        echo "HTMLダッシュボードの生成..."
+        python3 dashboard_generator.py \\
+            --data-dir "${DATA_DIR}" \\
+            --output-dir "${HTML_DIR}" \\
+            --environment "${params.ENVIRONMENT}" \\
+            --timestamp "${env.TIME_STAMP}"
+        
+        # クリーンアップ
+        rm -f dashboard_generator.py data_analyzer.py
+        deactivate || true
+    """
+    
+    echo "ダッシュボード生成完了: ${HTML_DIR}/index.html"
+}
+
+/**
+ * ダッシュボードの公開
+ */
+def publishDashboard() {
+    // データファイルのアーカイブ
+    archiveArtifacts artifacts: "${DATA_DIR}/**/*.json", allowEmptyArchive: true
+    
+    // HTMLダッシュボードの公開
+    if (fileExists("${HTML_DIR}/index.html")) {
+        publishHTML([
+            allowMissing: false,
+            alwaysLinkToLastBuild: true,
+            keepAll: true,
+            reportDir: "${HTML_DIR}",
+            reportFiles: 'index.html',
+            reportName: "Pulumi Dashboard - ${params.ENVIRONMENT}",
+            reportTitles: "Pulumi Projects Dashboard",
+            includes: '**/*.html,**/*.css,**/*.js,**/*.png,**/*.svg'
+        ])
+    }
+}
+
+/**
+ * 実行結果のサマリー表示
+ */
+def printSummary() {
+    def summaryFile = "${DATA_DIR}/summary.json"
+    def summary = [:]
+    
+    if (fileExists(summaryFile)) {
+        summary = readJSON file: summaryFile
+    }
+    
+    echo """
+        =============================================
+        Pulumi Dashboard 生成結果
+        =============================================
+        実行時刻: ${env.TIME_STAMP}
+        環境: ${params.ENVIRONMENT}
+        S3バケット: ${env.S3_BUCKET}
+        AWSアカウント: ${env.AWS_ACCOUNT_ID}
+        
+        --- 統計情報 ---
+        総プロジェクト数: ${summary.total_projects ?: 0}
+        総スタック数: ${summary.total_stacks ?: 0}
+        総リソース数: ${summary.total_resources ?: 0}
+        
+        フィルタ:
+        - プロジェクト: ${params.PROJECT_FILTER}
+        - スタック: ${params.STACK_FILTER}
+        =============================================
+    """.stripIndent()
+}

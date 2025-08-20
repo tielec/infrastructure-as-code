@@ -1,0 +1,1045 @@
+@Library('jenkins-shared-lib') _
+
+/**
+ * Pulumi Infrastructure Pipeline
+ * 汎用的なPulumiスタック管理パイプライン
+ */
+pipeline {
+    agent {
+        label 'ec2-fleet'
+    }
+    
+    environment {
+        // ディレクトリ構造
+        SOURCE_CODE_DIR = 'source-code'
+        JENKINS_REPO_DIR = 'jenkins-repo'
+        REPORT_DIR = 'pulumi-deployment-report'
+        HTML_DIR = "${REPORT_DIR}/html"
+        ARTIFACTS_DIR = "${REPORT_DIR}/artifacts"
+        
+        // Python仮想環境
+        VENV_PATH = "${WORKSPACE}/venv"
+        
+        // スクリプトとテンプレートのパス
+        SCRIPT_PATH = 'jenkins/jobs/pipeline/infrastructure/pulumi-stack-action/src'
+        TEMPLATE_PATH = 'jenkins/jobs/pipeline/infrastructure/pulumi-stack-action/templates'
+        
+        // タイムスタンプ
+        TIME_STAMP = sh(script: 'TZ="Asia/Tokyo" date "+%Y/%m/%d %H:%M:%S"', returnStdout: true).trim()
+        BUILD_TIME_STAMP = sh(script: 'TZ="Asia/Tokyo" date "+%Y%m%d-%H%M%S"', returnStdout: true).trim()
+
+        // Jenkinsリポジトリ設定
+        JENKINS_REPO_URL = 'https://github.com/tielec/infrastructure-as-code'
+        JENKINS_REPO_BRANCH = 'main'
+        JENKINS_GIT_CREDENTIALS_ID = 'github-app-credentials' // GitHub App認証を使用
+        
+        // 環境別の設定（ENVIRONMENTパラメータに基づく）
+        PULUMI_STACK_NAME = "${params.ENVIRONMENT}"
+        // S3バケット名をクレデンシャルから動的に取得してバックエンドURLを構築
+        PULUMI_BACKEND_URL = "${params.PULUMI_BACKEND_URL ?: ''}" // 初期値は空、後でクレデンシャルから構築
+        PULUMI_CONFIG_PASSPHRASE_ID = "${params.PULUMI_CONFIG_PASSPHRASE_CREDENTIAL_ID ?: 'pulumi-config-passphrase'}"
+        
+    }
+    
+    stages {
+        stage('Initialize and Validate') {
+            steps {
+                script {
+                    // ビルド表示名を設定
+                    currentBuild.displayName = "#${env.BUILD_NUMBER} - ${params.ENVIRONMENT} ${params.ACTION}"
+                    
+                    // PULUMI_BACKEND_URLが指定されていない場合、クレデンシャルから構築
+                    if (!env.PULUMI_BACKEND_URL) {
+                        withCredentials([string(credentialsId: 'pulumi-s3bucket-name', variable: 'S3_BUCKET_NAME')]) {
+                            env.PULUMI_BACKEND_URL = "s3://${S3_BUCKET_NAME}"
+                            echo "Pulumi backend URL set to: ${env.PULUMI_BACKEND_URL}"
+                        }
+                    }
+                    
+                    validateParameters()
+                    prepareWorkspace()
+                    checkoutRepositories()
+                    verifyAwsCredentials()                   
+                    // Pulumi設定ファイルの処理（早期検証）
+                    dir("${SOURCE_CODE_DIR}/${params.PULUMI_PROJECT_PATH}") {
+                        handlePulumiConfigFile()
+                    }                    
+                }
+            }
+        }
+                
+        stage('Execute Pulumi Operations') {
+            agent {
+                docker {
+                    label 'ec2-fleet'
+                    image 'pulumi/pulumi:latest'
+                    args "--entrypoint='' -v ${WORKSPACE}:/workspace -w /workspace -u root"
+                    reuseNode true
+                }
+            }
+            environment {
+                // AWS認証情報
+                AWS_ACCESS_KEY_ID     = "${params.AWS_ACCESS_KEY_ID}"
+                AWS_SECRET_ACCESS_KEY = "${params.AWS_SECRET_ACCESS_KEY}"
+                AWS_SESSION_TOKEN     = "${params.AWS_SESSION_TOKEN}"
+                AWS_DEFAULT_REGION    = "${params.AWS_REGION}"
+                
+                // Pulumi設定
+                PULUMI_BACKEND_URL       = "${env.PULUMI_BACKEND_URL}"
+                PULUMI_CONFIG_PASSPHRASE = credentials("${env.PULUMI_CONFIG_PASSPHRASE_ID}")
+                PULUMI_SKIP_UPDATE_CHECK = 'true'
+                PULUMI_ACTION_ERROR = 'false'
+            }
+            stages {
+                stage('Setup Environment') {
+                    steps {
+                        script {
+                            printHeader()
+                            setupEnvironment(params.PROJECT_TYPE)
+                        }
+                    }
+                }
+                
+                stage('Verify Authentication') {
+                    steps {
+                        script {
+                            verifyAWSAuthentication()
+                            loginToPulumi()
+                        }
+                    }
+                }
+                
+                stage('Setup Project') {
+                    steps {
+                        script {
+                            dir("${SOURCE_CODE_DIR}/${params.PULUMI_PROJECT_PATH}") {
+                                setupProject(params.PROJECT_TYPE)
+                                selectOrCreateStack(env.PULUMI_STACK_NAME)
+                            }
+                        }
+                    }
+                }
+                
+                stage('Refresh Stack State') {
+                    when {
+                        expression { 
+                            params.ACTION == 'destroy' || 
+                            (params.ACTION in ['deploy', 'preview'] && params.REFRESH_BEFORE_ACTION)
+                        }
+                    }
+                    steps {
+                        script {
+                            dir("${SOURCE_CODE_DIR}/${params.PULUMI_PROJECT_PATH}") {
+                                refreshStackState()
+                            }
+                        }
+                    }
+                }
+                
+                stage('Collect Pre-Action Stack Info') {
+                    when {
+                        expression { 
+                            (params.ACTION == 'destroy' || params.ACTION == 'deploy') && params.GENERATE_REPORT 
+                        }
+                    }
+                    steps {
+                        script {
+                            dir("${SOURCE_CODE_DIR}/${params.PULUMI_PROJECT_PATH}") {
+                                collectStackInfo('pre-action')
+                            }
+                        }
+                    }
+                }
+                
+                stage('Execute Pulumi Action') {
+                    steps {
+                        script {
+                            dir("${SOURCE_CODE_DIR}/${params.PULUMI_PROJECT_PATH}") {
+                                // Pulumiアクションを実行し、エラーをキャッチ
+                                try {
+                                    executePulumiAction(params.ACTION)
+                                } catch (Exception e) {
+                                    echo "警告: Pulumiアクション実行中にエラーが発生しました: ${e.message}"
+                                    env.PULUMI_ACTION_ERROR = 'true'
+                                    // エラーをキャッチして処理を継続
+                                }
+                            }
+                        }
+                    }
+                }
+                
+                stage('Collect Post-Action Stack Info') {
+                    when {
+                        expression { 
+                            (params.ACTION == 'destroy' || params.ACTION == 'deploy') && params.GENERATE_REPORT 
+                        }
+                    }
+                    steps {
+                        script {
+                            dir("${SOURCE_CODE_DIR}/${params.PULUMI_PROJECT_PATH}") {
+                                collectStackInfo('post-action')
+                            }
+                        }
+                    }
+                }
+                
+                stage('Process Results') {
+                    when {
+                        expression { 
+                            params.ACTION == 'deploy' || params.ACTION == 'destroy'
+                        }
+                    }
+                    steps {
+                        script {
+                            if (params.GENERATE_REPORT) {
+                                // レポート生成
+                                try {
+                                    echo "HTMLレポートを生成..."
+                                    generatePythonHtmlReport()
+                                } catch (Exception e) {
+                                    echo "警告: HTMLレポートの生成中にエラーが発生しました: ${e.message}"
+                                    currentBuild.result = 'UNSTABLE'
+                                }
+                            } else {
+                                // スタック出力の処理（レポート生成しない場合）
+                                if (params.ACTION == 'deploy' && fileExists("${ARTIFACTS_DIR}/stack-outputs-post-action.json")) {
+                                    processStackOutputs()
+                                }
+                            }
+                            
+                            // Pulumiアクションでエラーがあった場合、最終的にUNSTABLEに設定
+                            if (env.PULUMI_ACTION_ERROR == 'true') {
+                                echo "Pulumiアクション実行中にエラーが発生したため、ビルドをUNSTABLEに設定します"
+                                currentBuild.result = 'UNSTABLE'
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    
+    post {
+        always {
+            script {
+                publishArtifacts()
+                printSummary()
+            }
+        }
+        
+        success {
+            echo "✅ Pulumiパイプラインが正常に完了しました"
+        }
+        
+        failure {
+            echo "❌ Pulumiパイプラインが失敗しました。ログを確認してください"
+        }
+        
+        cleanup {
+            cleanWs()
+        }
+    }
+}
+
+// ================================================================================
+// Helper Functions
+// ================================================================================
+
+/**
+ * パラメータの検証
+ */
+def validateParameters() {
+    echo "パラメータの検証中..."
+    
+    // 必須パラメータのチェック
+    if (!params.AWS_ACCESS_KEY_ID || !params.AWS_SECRET_ACCESS_KEY) {
+        error "AWS認証情報が設定されていません"
+    }
+    
+    if (!params.PULUMI_PROJECT_PATH) {
+        error "Pulumiプロジェクトパスが指定されていません"
+    }
+    
+    // 環境とアクションの組み合わせチェック
+    if (params.ENVIRONMENT == 'prod' && params.ACTION == 'destroy') {
+        echo "⚠️ 警告: 本番環境のリソースを削除しようとしています"
+    }
+    
+    echo "✅ パラメータ検証完了"
+}
+
+/**
+ * AWS認証情報の検証（Jenkinsノード上で実行）
+ */
+def verifyAwsCredentials() {
+    echo """
+        =============================================
+        AWS認証情報の検証
+        =============================================
+        環境: ${params.ENVIRONMENT}
+        リージョン: ${params.AWS_REGION}
+        =============================================
+    """.stripIndent()
+    
+    // AWS認証チェック用のユーティリティを初期化
+    def awsUtils = awsUtils()
+    
+    try {
+        def authResult
+        if (params.ENVIRONMENT == 'prod') {
+            // 本番環境の認証チェック
+            authResult = awsUtils.general.verifyProdAwsCredentials(
+                params.AWS_ACCESS_KEY_ID,
+                params.AWS_SECRET_ACCESS_KEY,
+                params.AWS_SESSION_TOKEN,
+                params.AWS_REGION
+            )
+        } else {
+            // 開発環境の認証チェック
+            authResult = awsUtils.general.verifyDevAwsCredentials(
+                params.AWS_ACCESS_KEY_ID,
+                params.AWS_SECRET_ACCESS_KEY,
+                params.AWS_SESSION_TOKEN,
+                params.AWS_REGION
+            )
+        }
+        
+        // 認証結果を環境変数に保存（後続ステージで使用）
+        env.AWS_ACCOUNT_ID = authResult.accountId
+        env.AWS_PRINCIPAL_ARN = authResult.arn
+        
+        echo """
+            ✅ AWS認証検証完了
+            アカウントID: ${authResult.accountId}
+            プリンシパル: ${authResult.arn}
+        """.stripIndent()
+        
+    } catch (Exception e) {
+        error "AWS認証検証に失敗しました: ${e.message}"
+    }
+}
+
+/**
+ * 破壊的操作の確認（dev/prod両環境対応）
+ * @return 承認者のID（承認された場合）、null（エラーの場合）
+ */
+def confirmDestructiveAction() {
+    def envLabel = params.ENVIRONMENT == 'prod' ? '本番環境' : '開発環境'
+    def actionLabel = params.ACTION == 'deploy' ? 'デプロイ' : '削除'
+    def warningIcon = params.ENVIRONMENT == 'prod' ? '⚠️' : 'ℹ️'
+    
+    // Build User Vars Pluginでビルド開始者を取得
+    wrap([$class: 'BuildUser']) {
+        def buildUserId = env.BUILD_USER_ID ?: 'unknown'
+        def buildUserName = env.BUILD_USER ?: 'Unknown User'
+        
+        // 事前にコンソールに詳細を表示
+        echo """
+        ====================================
+        ${warningIcon} ${envLabel} - ${actionLabel.toUpperCase()}
+        ====================================
+        対象: ${params.PULUMI_PROJECT_PATH}
+        環境: ${params.ENVIRONMENT.toUpperCase()} (${env.AWS_ACCOUNT_ID})
+        アクション: ${params.ACTION}
+        実行者: ${buildUserName} (${buildUserId})
+        ====================================
+        """
+        
+        // シンプルなメッセージ
+        def confirmMessage = "${warningIcon} ${envLabel} ${actionLabel} - ${params.PULUMI_PROJECT_PATH}"
+        
+        // シンプルなボタンラベル
+        def okButtonLabel = params.ENVIRONMENT == 'prod' ? "承認（本番）" : "承認"
+        def cancelButtonLabel = "中止"
+        
+        try {
+            def userInput = input(
+                id: 'DestructiveActionConfirmation',
+                message: confirmMessage,
+                parameters: [
+                    booleanParam(
+                        name: 'CONFIRM',
+                        defaultValue: false,
+                        description: "内容確認済み"
+                    )
+                ],
+                submitterParameter: 'APPROVER',
+                ok: okButtonLabel,
+                cancel: cancelButtonLabel
+            )
+            
+            // userInputはMapとして返される（CONFIRM: boolean, APPROVER: string）
+            if (!userInput.CONFIRM) {
+                error "${envLabel}への${actionLabel}がキャンセルされました（チェックボックス未選択）"
+            }
+            
+            // 自己承認のチェック（大文字小文字を無視、前後の空白を除去）
+            def normalizedBuildUser = buildUserId.toLowerCase().trim()
+            def normalizedApprover = userInput.APPROVER.toLowerCase().trim()
+            
+            echo "承認チェック - 実行者: '${buildUserId}' / 承認者: '${userInput.APPROVER}'"
+            
+            if (normalizedApprover == normalizedBuildUser) {
+                error "❌ 自己承認は許可されていません。実行者（${buildUserId}）と承認者（${userInput.APPROVER}）が同じです。別の承認者による承認が必要です。"
+            }
+            
+            echo "✅ ${userInput.APPROVER}が承認 → ${envLabel}への${actionLabel}を実行します"
+            echo "   実行者: ${buildUserId} / 承認者: ${userInput.APPROVER}"
+            
+            // 承認者情報を返す
+            return userInput.APPROVER
+            
+        } catch (org.jenkinsci.plugins.workflow.steps.FlowInterruptedException e) {
+            // キャンセルボタンが押された場合の処理
+            error "${envLabel}への${actionLabel}が中止されました"
+        }
+    }
+}
+
+/**
+ * ワークスペースの準備
+ */
+def prepareWorkspace() {
+    sh """
+        mkdir -p ${SOURCE_CODE_DIR} ${JENKINS_REPO_DIR} ${REPORT_DIR} ${HTML_DIR} ${ARTIFACTS_DIR}
+        chmod -R 777 ${REPORT_DIR}
+    """
+}
+
+/**
+ * リポジトリのチェックアウト
+ */
+def checkoutRepositories() {
+    // Pulumiプロジェクトのリポジトリ
+    dir(env.SOURCE_CODE_DIR) {
+        gitUtils.checkoutRepository(
+            params.PULUMI_REPO_URL,
+            params.PULUMI_TARGET_BRANCH,
+            params.PULUMI_GIT_CREDENTIALS_ID
+        )
+    }
+
+    // Jenkinsパイプラインのリポジトリ（レポートツール用）
+    dir(env.JENKINS_REPO_DIR) {
+        gitUtils.checkoutRepository(
+            env.JENKINS_REPO_URL,
+            env.JENKINS_REPO_BRANCH,
+            env.JENKINS_GIT_CREDENTIALS_ID
+        )
+    }
+}
+
+/**
+ * ヘッダー情報の出力
+ */
+def printHeader() {
+    echo """
+        =============================================
+        Pulumi Infrastructure Pipeline
+        =============================================
+        実行時刻: ${env.TIME_STAMP}
+        環境: ${params.ENVIRONMENT}
+        アクション: ${params.ACTION}
+        スタック: ${env.PULUMI_STACK_NAME}
+        プロジェクト: ${params.PULUMI_PROJECT_PATH}
+        プロジェクトタイプ: ${params.PROJECT_TYPE}
+        AWSアカウント: ${env.AWS_ACCOUNT_ID}
+        AWSリージョン: ${params.AWS_REGION}
+        Pulumiバックエンド: ${env.PULUMI_BACKEND_URL}
+        確認スキップ: ${params.SKIP_CONFIRMATION ? 'はい' : 'いいえ'}
+        Refresh実行: ${params.ACTION == 'destroy' ? '必須' : params.REFRESH_BEFORE_ACTION ? 'あり' : 'なし'}
+        =============================================
+    """.stripIndent()
+}
+
+/**
+ * 環境のセットアップ
+ */
+def setupEnvironment(projectType) {
+    def setupCommands = getEnvironmentSetupCommands(projectType)
+    sh """
+        # 基本ツールのインストール
+        apt-get update -qq && apt-get install -qq -y git curl jq graphviz
+        
+        # プロジェクトタイプ別のセットアップ
+        ${setupCommands}
+        
+        # Pulumiバージョンの確認
+        echo "Pulumiバージョン:"
+        pulumi version
+    """
+}
+
+/**
+ * AWS認証の確認
+ */
+def verifyAWSAuthentication() {
+    sh """
+        echo "AWS認証情報の確認..."
+        if [ -n "\${AWS_SESSION_TOKEN}" ]; then
+            echo "一時認証情報を使用します"
+        fi
+        
+        aws sts get-caller-identity || {
+            echo "AWS認証に失敗しました。認証情報を確認してください。"
+            exit 1
+        }
+    """
+}
+
+/**
+ * Pulumiへのログイン
+ */
+def loginToPulumi() {
+    sh """
+        echo "S3バックエンドへのログイン..."
+        pulumi login \${PULUMI_BACKEND_URL} || {
+            echo "Pulumiログインに失敗しました。"
+            echo "PULUMI_BACKEND_URL: \${PULUMI_BACKEND_URL}"
+            exit 1
+        }
+        
+        echo "現在のユーザー情報:"
+        pulumi whoami -v
+    """
+}
+
+/**
+ * プロジェクトのセットアップ
+ */
+def setupProject(projectType) {
+    def setupScript = getProjectSetupScript(projectType)
+    sh setupScript
+}
+
+/**
+ * スタックの選択または作成
+ */
+def selectOrCreateStack(stackName) {
+    sh """
+        echo "スタックの確認..."
+        if pulumi stack ls 2>&1 | grep -q "^${stackName}"; then
+            echo "既存のスタック '${stackName}' を選択します"
+            pulumi stack select ${stackName}
+        else
+            echo "新しいスタック '${stackName}' を作成します"
+            pulumi stack init ${stackName}
+        fi
+        
+        echo "現在のスタック:"
+        pulumi stack
+    """
+}
+
+/**
+ * スタック状態のリフレッシュ
+ */
+def refreshStackState() {
+    echo "スタック状態をリフレッシュしています..."
+    
+    def actionMessage = params.ACTION == 'destroy' ? 
+        "Destroy前の必須リフレッシュ" : 
+        "手動変更の可能性があるためリフレッシュ"
+    
+    sh """
+        echo "====================================="
+        echo "Pulumi Refresh 実行"
+        echo "理由: ${actionMessage}"
+        echo "====================================="
+        echo "クラウドの実際の状態とPulumiの状態を同期します"
+        
+        # 現在の状態を確認
+        echo "リフレッシュ前の状態:"
+        pulumi stack --show-urns || true
+        
+        # リフレッシュ実行
+        echo "実行中..."
+        pulumi refresh --yes --diff || {
+            echo "警告: リフレッシュ中にエラーが発生しましたが、処理を続行します"
+        }
+        
+        echo "リフレッシュ後の状態:"
+        pulumi stack --show-urns || true
+        
+        echo "====================================="
+        echo "Refresh 完了"
+        echo "====================================="
+    """
+}
+
+/**
+ * スタック情報の収集
+ */
+def collectStackInfo(actionType) {
+    echo "スタック情報を収集中 (${actionType})..."
+    
+    // ファイル名にactionTypeを含める
+    sh """
+        # スタック情報のエクスポート
+        pulumi stack export > ${WORKSPACE}/${ARTIFACTS_DIR}/stack-export-${actionType}.json || echo "{}" > ${WORKSPACE}/${ARTIFACTS_DIR}/stack-export-${actionType}.json
+        
+        # スタック履歴の取得
+        pulumi stack history --json > ${WORKSPACE}/${ARTIFACTS_DIR}/stack-history-${actionType}.json || echo "[]" > ${WORKSPACE}/${ARTIFACTS_DIR}/stack-history-${actionType}.json
+        
+        # 現在の設定の保存
+        pulumi config --json > ${WORKSPACE}/${ARTIFACTS_DIR}/stack-config-${actionType}.json || echo "{}" > ${WORKSPACE}/${ARTIFACTS_DIR}/stack-config-${actionType}.json
+        
+        # スタック出力の保存
+        pulumi stack output --json > ${WORKSPACE}/${ARTIFACTS_DIR}/stack-outputs-${actionType}.json || echo "{}" > ${WORKSPACE}/${ARTIFACTS_DIR}/stack-outputs-${actionType}.json
+        
+        # メタデータの作成
+        echo '{"action": "${actionType}", "timestamp": "'\$(date -u +"%Y-%m-%dT%H:%M:%SZ")'"}' > ${WORKSPACE}/${ARTIFACTS_DIR}/action-metadata-${actionType}.json
+    """
+    
+    // 依存関係グラフの生成
+    generateDependencyGraph(actionType)
+    
+    echo "スタック情報の収集が完了しました (${actionType})"
+}
+
+/**
+ * 依存関係グラフの生成
+ */
+def generateDependencyGraph(actionType) {
+    echo "依存関係グラフを生成 (${actionType})..."
+    
+    sh """
+        # グラフの生成を試行
+        pulumi stack graph ${WORKSPACE}/${ARTIFACTS_DIR}/stack-graph-${actionType}.dot 2>/dev/null || {
+            echo "標準的なグラフ生成に失敗。リダイレクトを試行..."
+            pulumi stack graph > ${WORKSPACE}/${ARTIFACTS_DIR}/stack-graph-${actionType}.dot 2>&1 || {
+                echo "グラフ生成に失敗。空のグラフを作成..."
+                echo "digraph G {}" > ${WORKSPACE}/${ARTIFACTS_DIR}/stack-graph-${actionType}.dot
+            }
+        }
+        
+        # グラフファイルの検証
+        if [ -s ${WORKSPACE}/${ARTIFACTS_DIR}/stack-graph-${actionType}.dot ]; then
+            echo "DOTファイルサイズ: \$(wc -c < ${WORKSPACE}/${ARTIFACTS_DIR}/stack-graph-${actionType}.dot) bytes"
+        else
+            echo "警告: 空のグラフファイルが生成されました"
+        fi
+    """
+}
+
+/**
+ * Pulumiアクションの実行（常にnon-interactive mode）
+ */
+def executePulumiAction(action) {
+    // Jenkinsでは常に--yesフラグを使用（non-interactive mode）
+    
+    switch(action) {
+        case 'preview':
+            executePreview()
+            break
+            
+        case 'deploy':
+            executePreview()
+            executeDeploy()
+            break
+            
+        case 'destroy':
+            executeDestroy()
+            break
+            
+        default:
+            error "不明なアクション: ${action}"
+    }
+}
+
+/**
+ * プレビューの実行
+ */
+def executePreview() {
+    sh '''#!/bin/bash
+        echo "変更内容のプレビュー..."
+        # JSON形式で出力を保存（パイプラインエラーを適切に処理）
+        set +e
+        pulumi preview --diff --save-plan=plan.json --json 2>&1 | tee ${WORKSPACE}/${ARTIFACTS_DIR}/pulumi-preview.json
+        # パイプの最初のコマンド（pulumi）の終了コードを取得
+        PULUMI_EXIT_CODE=${PIPESTATUS[0]}
+        set -e
+        
+        if [ ${PULUMI_EXIT_CODE} -ne 0 ]; then
+            echo "Pulumiプレビューが失敗しました（終了コード: ${PULUMI_EXIT_CODE}）"
+            # エラーコードを保存して後で処理
+            echo ${PULUMI_EXIT_CODE} > ${WORKSPACE}/${ARTIFACTS_DIR}/pulumi-exit-code.txt
+        fi
+        
+        # エラーがあった場合は例外をスロー
+        if [ -f ${WORKSPACE}/${ARTIFACTS_DIR}/pulumi-exit-code.txt ]; then
+            EXIT_CODE=$(cat ${WORKSPACE}/${ARTIFACTS_DIR}/pulumi-exit-code.txt)
+            rm -f ${WORKSPACE}/${ARTIFACTS_DIR}/pulumi-exit-code.txt
+            exit ${EXIT_CODE}
+        fi
+    '''
+}
+
+/**
+ * デプロイの実行（常に--yesを使用）
+ */
+def executeDeploy() {
+    sh '''#!/bin/bash
+        echo "リソースのデプロイ..."
+        # JSON形式で出力を保存（パイプラインエラーを適切に処理）
+        set +e
+        pulumi up --yes --diff --json 2>&1 | tee ${WORKSPACE}/${ARTIFACTS_DIR}/pulumi-up.json
+        # パイプの最初のコマンド（pulumi）の終了コードを取得
+        PULUMI_EXIT_CODE=${PIPESTATUS[0]}
+        set -e
+        
+        if [ ${PULUMI_EXIT_CODE} -ne 0 ]; then
+            echo "Pulumiデプロイが失敗しました（終了コード: ${PULUMI_EXIT_CODE}）"
+            # エラーコードを保存して後で処理
+            echo ${PULUMI_EXIT_CODE} > ${WORKSPACE}/${ARTIFACTS_DIR}/pulumi-exit-code.txt
+        fi
+        
+        echo "デプロイ完了後のスタック出力:"
+        pulumi stack output --json > ${WORKSPACE}/${ARTIFACTS_DIR}/stack-outputs-post-action.json || echo "{}" > ${WORKSPACE}/${ARTIFACTS_DIR}/stack-outputs-post-action.json
+        cat ${WORKSPACE}/${ARTIFACTS_DIR}/stack-outputs-post-action.json | jq '.' || true
+        
+        # エラーがあった場合は例外をスロー
+        if [ -f ${WORKSPACE}/${ARTIFACTS_DIR}/pulumi-exit-code.txt ]; then
+            EXIT_CODE=$(cat ${WORKSPACE}/${ARTIFACTS_DIR}/pulumi-exit-code.txt)
+            rm -f ${WORKSPACE}/${ARTIFACTS_DIR}/pulumi-exit-code.txt
+            exit ${EXIT_CODE}
+        fi
+    '''
+}
+
+/**
+ * 削除の実行（常に--yesを使用）
+ */
+def executeDestroy() {
+    sh '''#!/bin/bash
+        echo "リソースの削除..."
+        # JSON形式で出力を保存（パイプラインエラーを適切に処理）
+        set +e
+        pulumi destroy --yes --json 2>&1 | tee ${WORKSPACE}/${ARTIFACTS_DIR}/pulumi-destroy.json
+        # パイプの最初のコマンド（pulumi）の終了コードを取得
+        PULUMI_EXIT_CODE=${PIPESTATUS[0]}
+        set -e
+        
+        if [ ${PULUMI_EXIT_CODE} -ne 0 ]; then
+            echo "Pulumi削除が失敗しました（終了コード: ${PULUMI_EXIT_CODE}）"
+            # エラーコードを保存して後で処理
+            echo ${PULUMI_EXIT_CODE} > ${WORKSPACE}/${ARTIFACTS_DIR}/pulumi-exit-code.txt
+        fi
+        
+        echo "リソースが削除されました"
+        
+        # エラーがあった場合は例外をスロー
+        if [ -f ${WORKSPACE}/${ARTIFACTS_DIR}/pulumi-exit-code.txt ]; then
+            EXIT_CODE=$(cat ${WORKSPACE}/${ARTIFACTS_DIR}/pulumi-exit-code.txt)
+            rm -f ${WORKSPACE}/${ARTIFACTS_DIR}/pulumi-exit-code.txt
+            exit ${EXIT_CODE}
+        fi
+    '''
+}
+
+/**
+ * スタック出力の処理
+ */
+def processStackOutputs() {
+    script {
+        def stackOutputsFile = "${ARTIFACTS_DIR}/stack-outputs-post-action.json"
+        if (fileExists(stackOutputsFile)) {
+            def outputs = readJSON file: stackOutputsFile
+            
+            echo "=== スタック出力情報 ==="
+            outputs.each { key, value ->
+                echo "${key}: ${value}"
+            }
+        }
+    }
+}
+
+/**
+ * 環境セットアップコマンドの取得
+ */
+def getEnvironmentSetupCommands(projectType) {
+    def commands = [
+        'nodejs': 'apt-get install -qq -y nodejs npm && npm install -g typescript',
+        'python': 'apt-get install -qq -y python3 python3-pip python3-venv && pip3 install --upgrade pip',
+        'go': 'apt-get install -qq -y golang',
+        'dotnet': 'apt-get install -qq -y dotnet-sdk-6.0'
+    ]
+    return commands[projectType] ?: "echo 'No specific setup required'"
+}
+
+/**
+ * プロジェクトセットアップスクリプトの取得
+ */
+def getProjectSetupScript(projectType) {
+    def scripts = [
+        'nodejs': '''
+            if [ -f package.json ]; then
+                echo "Node.js依存関係のインストール..."
+                npm install
+                
+                if [ -f tsconfig.json ]; then
+                    echo "TypeScriptコンパイルチェック..."
+                    npx tsc --noEmit || true
+                fi
+            fi
+        ''',
+        'python': '''
+            if [ -f requirements.txt ]; then
+                echo "Python依存関係のインストール..."
+                pip3 install -r requirements.txt
+            fi
+            
+            if [ -f Pipfile ]; then
+                echo "Pipenv依存関係のインストール..."
+                pip3 install pipenv
+                pipenv install
+            fi
+        ''',
+        'go': '''
+            if [ -f go.mod ]; then
+                echo "Go依存関係のインストール..."
+                go mod download
+            fi
+        ''',
+        'dotnet': '''
+            if [ -f *.csproj ]; then
+                echo ".NET依存関係の復元..."
+                dotnet restore
+            fi
+        '''
+    ]
+    return scripts[projectType] ?: "echo 'No specific project setup required'"
+}
+
+/**
+ * PythonベースのHTMLレポートを生成
+ */
+def generatePythonHtmlReport() {
+    sh """
+        # Graphvizの確認とインストール
+        if ! command -v dot &> /dev/null; then
+            echo "Graphvizをインストール..."
+            apt-get update -qq && apt-get install -qq -y graphviz
+        fi
+        
+        # Python仮想環境のセットアップ
+        echo "Python仮想環境のセットアップ..."
+        python3 -m venv ${VENV_PATH}
+        . ${VENV_PATH}/bin/activate
+        
+        # 必要なパッケージのインストール
+        pip install --upgrade pip
+        pip install jinja2 matplotlib seaborn numpy
+        
+        # Pythonスクリプトファイルのコピー
+        echo "Pythonスクリプトファイルのコピー..."
+        cp ${JENKINS_REPO_DIR}/${SCRIPT_PATH}/main.py .
+        cp ${JENKINS_REPO_DIR}/${SCRIPT_PATH}/config.py .
+        cp ${JENKINS_REPO_DIR}/${SCRIPT_PATH}/dot_processor.py .
+        cp ${JENKINS_REPO_DIR}/${SCRIPT_PATH}/report_generator.py .
+        cp ${JENKINS_REPO_DIR}/${SCRIPT_PATH}/data_processor.py .
+        cp ${JENKINS_REPO_DIR}/${SCRIPT_PATH}/charts.py .
+        cp ${JENKINS_REPO_DIR}/${SCRIPT_PATH}/graph_processor.py .
+        
+        # テンプレートファイルのコピー
+        echo "テンプレートファイルのコピー..."
+        cp ${JENKINS_REPO_DIR}/${TEMPLATE_PATH}/pulumi_report.html .
+        cp ${JENKINS_REPO_DIR}/${TEMPLATE_PATH}/pulumi_styles.css ${HTML_DIR}/
+        
+        # HTMLレポートの生成
+        echo "HTMLレポートの生成..."
+        python3 main.py \\
+            --artifacts-dir "${ARTIFACTS_DIR}" \\
+            --output-dir "${HTML_DIR}" \\
+            --template-dir "." \\
+            --stack-name "${env.PULUMI_STACK_NAME}" \\
+            --project-path "${params.PULUMI_PROJECT_PATH}" \\
+            --branch "${params.PULUMI_TARGET_BRANCH}" \\
+            --build-number "${env.BUILD_NUMBER}" \\
+            --timestamp "${env.TIME_STAMP}" \\
+            --action-type "${params.ACTION}"
+        
+        # クリーンアップ
+        rm -f main.py config.py dot_processor.py report_generator.py data_processor.py charts.py graph_processor.py pulumi_report.html
+        deactivate || true
+    """
+    
+    echo "HTMLレポートが生成されました: ${HTML_DIR}/index.html"
+}
+
+/**
+ * アーティファクトの公開
+ */
+def publishArtifacts() {
+    // JSONとDOTファイルのアーカイブ（Pulumi実行ログも含む）
+    archiveArtifacts artifacts: "${ARTIFACTS_DIR}/**/*.json,${ARTIFACTS_DIR}/**/*.dot", allowEmptyArchive: true
+    
+    // HTMLレポートの公開
+    if ((params.ACTION == 'deploy' || params.ACTION == 'destroy') && 
+        params.GENERATE_REPORT && 
+        fileExists("${HTML_DIR}/index.html")) {
+        
+        def reportTitle = params.ACTION == 'destroy' ? 
+            "Pulumi Destruction Report - ${env.PULUMI_STACK_NAME}" : 
+            "Pulumi Deployment Report - ${env.PULUMI_STACK_NAME}"
+        
+        // 高解像度グラフファイルも含める
+        publishHTML([
+            allowMissing: true,
+            alwaysLinkToLastBuild: true,
+            keepAll: true,
+            reportDir: "${HTML_DIR}",
+            reportFiles: 'index.html',
+            reportName: reportTitle,
+            reportTitles: reportTitle,
+            includes: '**/*.html,**/*.css,**/*.png,**/*.svg,**/*.jpg'
+        ])
+    }
+}
+
+/**
+ * 実行結果のサマリー表示
+ */
+def printSummary() {
+    echo """
+        =============================================
+        Pulumi実行結果サマリー
+        =============================================
+        実行時刻: ${env.TIME_STAMP}
+        環境: ${params.ENVIRONMENT}
+        アクション: ${params.ACTION}
+        スタック: ${env.PULUMI_STACK_NAME}
+        プロジェクト: ${params.PULUMI_PROJECT_PATH}
+        AWSアカウント: ${env.AWS_ACCOUNT_ID}
+        ビルド番号: ${env.BUILD_NUMBER}
+        設定ファイル: ${env.PULUMI_CONFIG_OVERRIDDEN == 'true' ? 'カスタム（アップロード）' : 'デフォルト（リポジトリ）'}
+        確認スキップ: ${params.SKIP_CONFIRMATION ? 'はい' : 'いいえ'}
+        Refresh実行: ${params.ACTION == 'destroy' ? '必須' : params.REFRESH_BEFORE_ACTION ? 'あり' : 'なし'}
+        実行結果: ${currentBuild.result ?: 'SUCCESS'}
+        =============================================
+    """.stripIndent()
+}
+
+/**
+ * Pulumi設定ファイルの処理
+ * USE_CUSTOM_CONFIG_FILEがtrueの場合、inputステップでファイルをアップロード
+ */
+def handlePulumiConfigFile() {
+    def configFileName = "Pulumi.${params.ENVIRONMENT}.yaml"
+    
+    echo """
+        =============================================
+        Pulumi設定ファイルの処理
+        =============================================
+        対象ファイル: ${configFileName}
+        カスタム設定使用: ${params.USE_CUSTOM_CONFIG_FILE}
+        =============================================
+    """.stripIndent()
+    
+    // カスタム設定ファイルを使用する場合
+    if (params.USE_CUSTOM_CONFIG_FILE) {
+        echo "カスタム設定ファイルのアップロードを待機中..."
+        
+        try {
+            // inputステップでファイルをアップロード（base64File使用）
+            def uploadedFile = input(
+                id: 'PulumiConfigUpload',
+                message: "Pulumi設定ファイル (Pulumi.${params.ENVIRONMENT}.yaml) をアップロードしてください",
+                parameters: [
+                    base64File(name: 'configFile', description: """
+                        |アップロードするPulumi設定ファイル
+                        |* 環境: ${params.ENVIRONMENT}
+                        |* 配置先: Pulumi.${params.ENVIRONMENT}.yaml
+                        |* 形式: YAML
+                        """.stripMargin())
+                ],
+                ok: 'アップロード',
+                submitterParameter: 'UPLOADED_BY'
+            )
+            
+            echo "ファイルがアップロードされました (アップロード者: ${uploadedFile.UPLOADED_BY ?: 'unknown'})"
+            
+            // Base64エンコードされたファイルをデコード
+            if (uploadedFile.configFile) {
+                withEnv(["UPLOADED_FILE_B64=${uploadedFile.configFile}"]) {
+                    sh """
+                        echo "Base64デコード中..."
+                        echo \$UPLOADED_FILE_B64 | base64 -d > '${configFileName}.tmp'
+                        
+                        # ファイルサイズ確認
+                        FILE_SIZE=\$(stat -c%s '${configFileName}.tmp' 2>/dev/null || echo 0)
+                        echo "ファイルサイズ: \${FILE_SIZE} bytes"
+                        
+                        if [ "\${FILE_SIZE}" -eq "0" ]; then
+                            echo "アップロードされたファイルが空です"
+                            rm -f '${configFileName}.tmp'
+                            exit 1
+                        fi
+                    """
+                }
+                
+                // 既存ファイルのバックアップ
+                if (fileExists(configFileName)) {
+                    echo "既存の${configFileName}をバックアップします"
+                    sh "cp '${configFileName}' '${configFileName}.backup'"
+                    echo "バックアップ完了: ${configFileName}.backup"
+                }
+                
+                // アップロードされたファイルを正式に配置
+                sh "mv '${configFileName}.tmp' '${configFileName}'"
+                
+                // YAMLの検証
+                try {
+                    echo "YAML形式を検証中..."
+                    def yamlContent = readYaml file: configFileName
+                    echo "✅ YAML形式の検証: OK"
+                    env.PULUMI_CONFIG_OVERRIDDEN = 'true'
+                    echo "✅ カスタム設定ファイルの配置が完了しました"
+                } catch (Exception e) {
+                    // エラー時はバックアップから復元
+                    if (fileExists("${configFileName}.backup")) {
+                        sh "mv '${configFileName}.backup' '${configFileName}'"
+                        echo "エラーのため、バックアップから復元しました"
+                    }
+                    error "⚠️ YAML形式が不正です: ${e.message}"
+                }
+            } else {
+                echo "ファイルがアップロードされませんでした"
+                env.PULUMI_CONFIG_OVERRIDDEN = 'false'
+            }
+            
+        } catch (org.jenkinsci.plugins.workflow.steps.FlowInterruptedException e) {
+            echo "ファイルアップロードがキャンセルされました"
+            env.PULUMI_CONFIG_OVERRIDDEN = 'false'
+        }
+        
+    } else {
+        echo "カスタム設定ファイルは使用しません"
+        env.PULUMI_CONFIG_OVERRIDDEN = 'false'
+    }
+    
+    // カスタム設定を使用しない場合の既存ファイル確認
+    if (env.PULUMI_CONFIG_OVERRIDDEN != 'true') {
+        if (fileExists(configFileName)) {
+            echo "✅ リポジトリ内の${configFileName}を使用します"
+            
+            // 既存ファイルの検証
+            try {
+                def yamlContent = readYaml file: configFileName
+                echo "既存設定ファイルの検証: OK"
+            } catch (Exception e) {
+                echo "⚠️ 既存設定ファイルの読み込みに問題があります: ${e.message}"
+            }
+        } else {
+            echo "⚠️ ${configFileName}が存在しません。Pulumiのデフォルト設定を使用します"
+        }
+    }
+    
+    // 最終的な設定ファイル状態の表示
+    echo """
+        =============================================
+        設定ファイル処理完了
+        状態: ${env.PULUMI_CONFIG_OVERRIDDEN == 'true' ? 'カスタム設定使用' : 'デフォルト設定使用'}
+        =============================================
+    """.stripIndent()
+}
