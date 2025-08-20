@@ -9,7 +9,7 @@
 ## コーディングガイドライン
 
 ### 基本原則
-- **思考**: 英語で論理的に考える (Think in English for logical reasoning)
+- **思考**: 技術的な内容は英語、プロジェクト固有の内容は日本語で柔軟に思考
 - **対話**: 日本語で対話 (Dialogue in Japanese with users)
 - **ドキュメント**: 日本語で記述 (Documentation in Japanese)
 - **コメント**: ソースコード内のコメントは日本語
@@ -110,8 +110,21 @@ pipeline {
 
 ## 開発ワークフロー
 
+### ⚠️ 開発開始前の必須確認事項
+
+**重要**: 開発を開始する前に、必ず対応するCONTRIBUTION.mdを確認してください。
+- **Ansible開発**: `ansible/CONTRIBUTION.md` を必ず確認
+- **Pulumi開発**: `pulumi/CONTRIBUTION.md` を必ず確認
+- **Jenkins開発**: `jenkins/CONTRIBUTION.md` を必ず確認
+- **スクリプト開発**: `scripts/CONTRIBUTION.md` を必ず確認
+
+これらのドキュメントには、実装方法、コーディング規約、ベストプラクティスが記載されています。
+
 ### 1. 新機能追加時（Pulumiスタック）
 ```bash
+# 0. 開発前にCONTRIBUTION.mdを確認 ⚠️ 必須
+cat pulumi/CONTRIBUTION.md
+
 # 1. Pulumiスタック作成
 cd pulumi
 mkdir {system}-{new-component}
@@ -127,6 +140,9 @@ npm run preview
 
 ### 2. 既存コンポーネント修正時
 ```bash
+# 0. 開発前にCONTRIBUTION.mdを確認 ⚠️ 必須
+cat pulumi/CONTRIBUTION.md
+
 # 1. 変更の影響範囲を確認
 cd pulumi/{component}
 npm run preview
@@ -158,6 +174,9 @@ vi README.md
 
 ### 4. Ansible開発時
 ```bash
+# 0. 開発前にCONTRIBUTION.mdを確認 ⚠️ 必須
+cat ansible/CONTRIBUTION.md
+
 # 1. プレイブック・ロールの開発
 cd ansible
 # 開発作業を実施
@@ -185,6 +204,9 @@ vi ansible/CONTRIBUTION.md
 
 ### 5. Pulumi開発時
 ```bash
+# 0. 開発前にCONTRIBUTION.mdを確認 ⚠️ 必須
+cat pulumi/CONTRIBUTION.md
+
 # 1. Pulumiスタックの開発
 cd pulumi
 # 開発作業を実施
@@ -205,6 +227,9 @@ vi pulumi/CONTRIBUTION.md
 
 ### 6. Jenkins開発時
 ```bash
+# 0. 開発前にCONTRIBUTION.mdを確認 ⚠️ 必須
+cat jenkins/CONTRIBUTION.md
+
 # 1. 新規ジョブ作成の場合
 # a. job-config.yamlにジョブ定義を追加
 vi jenkins/jobs/pipeline/_seed/job-creator/job-config.yaml
@@ -235,6 +260,9 @@ vi jenkins/CONTRIBUTION.md
 
 ### 7. スクリプト開発時
 ```bash
+# 0. 開発前にCONTRIBUTION.mdを確認 ⚠️ 必須
+cat scripts/CONTRIBUTION.md
+
 # 1. 新規スクリプト作成の場合
 # a. スクリプトファイルを作成
 vi scripts/{category}/{action}-{target}.sh
