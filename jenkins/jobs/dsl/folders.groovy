@@ -114,6 +114,56 @@ if (folderConfig.dynamic_folders) {
                 println "Created dynamic folder: ${subfolderPath}"
             }
         }
+        // Pulumiプロジェクト用の動的フォルダ作成を追加
+        if (dynamicRule.source == 'pulumi-projects' && 
+            binding.hasVariable('pulumi_projects')) {
+            
+            def pulumiProjects = binding.getVariable('pulumi_projects')
+            def template = dynamicRule.template
+            
+            println "Creating Pulumi project folders in: ${dynamicRule.parent_path}"
+            
+            pulumiProjects.each { repoKey, repoConfig ->
+                def subfolderPath = "${dynamicRule.parent_path}/${template.path_suffix.replace('{repo_name}', repoConfig.repo_name)}"
+                def folderDisplayName = template.displayName.replace('{repo_name}', repoConfig.repo_name)
+                def folderDescription = template.description
+                    .replace('{repo_name}', repoConfig.repo_name)
+                    .replace('{display_name}', repoConfig.display_name ?: repoConfig.repo_name)
+                
+                // プロジェクトパスの置換（最初のプロジェクトのパスを使用）
+                if (repoConfig.projects && repoConfig.projects.size() > 0) {
+                    def firstProject = repoConfig.projects.values().first()
+                    folderDescription = folderDescription.replace('{project_path}', firstProject.project_path)
+                }
+                
+                // 親フォルダが存在することを確認
+                def parentParts = subfolderPath.split('/')
+                def parentPath = ''
+                
+                parentParts.eachWithIndex { part, index ->
+                    parentPath = parentPath ? "${parentPath}/${part}" : part
+                    
+                    // 最後の要素以外は親フォルダとして作成
+                    if (index < parentParts.size() - 1) {
+                        if (!createdFolders.contains(parentPath)) {
+                            folder(parentPath) {
+                                displayName(part)
+                                description("Auto-generated parent folder")
+                            }
+                            createdFolders.add(parentPath)
+                        }
+                    }
+                }
+                
+                // 動的フォルダを作成
+                folder(subfolderPath) {
+                    displayName(folderDisplayName)
+                    description(folderDescription.stripIndent().trim())
+                }
+                createdFolders.add(subfolderPath)
+                println "Created Pulumi project folder: ${subfolderPath}"
+            }
+        }
     }
 }
 

@@ -134,12 +134,18 @@ pipeline {
                         additionalParams['jenkinsFoldersConfig'] = folderConfig
                     }
                     
-                    // 他の設定が存在する場合は追加
+                    // リポジトリ設定が存在する場合は追加
                     if (config['jenkins-managed-repositories']) {
                         echo "Repositories configured: ${config['jenkins-managed-repositories'].size()}"
                         additionalParams['jenkinsManagedRepositories'] = config['jenkins-managed-repositories']
                     }
-                    
+
+                    // Pulumiプロジェクト設定が存在する場合は追加（この部分を追加）
+                    if (jobConfig['pulumi-projects']) {
+                        echo "Pulumi projects: ${jobConfig['pulumi-projects'].size()}"
+                        additionalParams['pulumi_projects'] = jobConfig['pulumi-projects']
+                    }
+
                     if (config['common-settings']) {
                         echo "Common settings loaded: Yes"
                         additionalParams['commonSettings'] = config['common-settings']
