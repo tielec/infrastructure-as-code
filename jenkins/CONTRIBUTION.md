@@ -278,6 +278,8 @@ pipeline {
     
     environment {
         AWS_REGION = 'ap-northeast-1'
+        // Jenkins全体の環境変数を参照可能
+        // 例: env.GITHUB_APP_CREDENTIALS_ID, env.GITHUB_PAT_CREDENTIALS_ID
     }
     
     stages {
@@ -331,6 +333,48 @@ def executeMainProcess() {
 | Jenkinsfile | ❌ | 初回実行時にパラメータが認識されない |
 
 **例外**: Playgroundsフォルダ内での実験的なジョブのみ、Jenkinsfileでのパラメータ定義を許可
+
+##### 環境変数の利用
+
+###### Jenkins全体の環境変数
+
+JCaSCで定義されている環境変数を使用できます：
+
+| 環境変数 | 用途 | 使用例 |
+|---------|------|--------|
+| `GITHUB_APP_CREDENTIALS_ID` | GitHub App認証 | `env.GITHUB_APP_CREDENTIALS_ID` |
+| `GITHUB_PAT_CREDENTIALS_ID` | GitHub PAT認証 | `env.GITHUB_PAT_CREDENTIALS_ID` |
+| `GIT_INFRASTRUCTURE_REPO_URL` | リポジトリURL | `env.GIT_INFRASTRUCTURE_REPO_URL` |
+| `GIT_INFRASTRUCTURE_REPO_BRANCH` | ブランチ名 | `env.GIT_INFRASTRUCTURE_REPO_BRANCH` |
+
+###### DSLでの環境変数取得
+
+```groovy
+// DSLファイル内で環境変数から取得
+pipelineJob(jobName) {
+    parameters {
+        // 環境変数からデフォルト値を取得
+        stringParam('CREDENTIALS_ID', 
+                   System.getenv("GITHUB_APP_CREDENTIALS_ID") ?: 'github-app-credentials',
+                   'GitHub認証情報ID')
+    }
+}
+```
+
+###### 共有ライブラリでの環境変数取得
+
+```groovy
+// 共有ライブラリクラス内
+class GitHubApiClient {
+    def script
+    
+    GitHubApiClient(def script) {
+        this.script = script
+        // Jenkinsの環境変数から取得
+        def credentialsId = script.env.GITHUB_APP_CREDENTIALS_ID ?: 'github-app-credentials'
+    }
+}
+```
 
 #### 2.1.2 Job DSL開発
 
