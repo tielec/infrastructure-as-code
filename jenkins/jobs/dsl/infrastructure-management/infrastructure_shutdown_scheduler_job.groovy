@@ -19,7 +19,7 @@ freeStyleJob(fullJobName) {
         |- 平日のみ実行（月曜日〜金曜日）
         |
         |実行内容:
-        |- Infrastructure_Management/Shutdown-Environment ジョブをトリガー
+        |- Infrastructure_Management/Shutdown_Jenkins_Environment ジョブをトリガー
         |- 環境: dev
         |- モード: graceful（実行中ジョブの完了を待つ）
         |
@@ -47,17 +47,17 @@ freeStyleJob(fullJobName) {
 
     // ビルドステップ - 既存ジョブをトリガー
     steps {
-        // Shutdown-Environment ジョブを実行
+        // Shutdown_Jenkins_Environment ジョブを実行
         downstreamParameterized {
-            trigger('Infrastructure_Management/Shutdown-Environment') {
+            trigger('Infrastructure_Management/Shutdown_Jenkins_Environment') {
                 // 固定パラメータを設定
                 parameters {
                     predefinedProp('ENVIRONMENT', 'dev')
                     predefinedProp('AWS_REGION', 'ap-northeast-1')
                     predefinedProp('SHUTDOWN_MODE', 'graceful')
                     predefinedProp('WAIT_TIMEOUT_MINUTES', '30')
-                    predefinedProp('CONFIRM_SHUTDOWN', 'true')
-                    predefinedProp('DRY_RUN', 'false')
+                    booleanParam('CONFIRM_SHUTDOWN', true)
+                    booleanParam('DRY_RUN', false)
                 }
                 
                 // ビルド結果の扱い
