@@ -27,10 +27,6 @@ pipeline {
         // タイムスタンプ
         TIME_STAMP = sh(script: 'TZ="Asia/Tokyo" date "+%Y/%m/%d %H:%M:%S"', returnStdout: true).trim()
         BUILD_TIME_STAMP = sh(script: 'TZ="Asia/Tokyo" date "+%Y%m%d-%H%M%S"', returnStdout: true).trim()
-
-        // Jenkinsリポジトリ設定
-        GIT_INFRASTRUCTURE_REPO_URL = 'https://github.com/tielec/infrastructure-as-code'
-        GIT_INFRASTRUCTURE_REPO_BRANCH = 'main'
         
         // 環境別の設定（ENVIRONMENTパラメータに基づく）
         PULUMI_STACK_NAME = "${params.ENVIRONMENT}"

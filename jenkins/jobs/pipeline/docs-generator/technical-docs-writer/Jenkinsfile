@@ -19,10 +19,6 @@ pipeline {
         // 認証情報
         OPENAI_API_KEY = credentials('openai-api-key')
         
-        // API/リポジトリ設定
-        GIT_INFRASTRUCTURE_REPO_URL = 'https://github.com/tielec/infrastructure-as-code.git'
-        GIT_INFRASTRUCTURE_REPO_BRANCH = 'main'
-        
         // ディレクトリ構造
         COMMENTS_DIR = "pr-comments"
         ORIGINAL_CODE_DIR = "original-code"

@@ -513,11 +513,9 @@ def createDirectories() {
 def checkoutJenkinsRepo() {
     echo "Jenkinsリポジトリをチェックアウト中..."
     dir(CONFIG_DIR) {
-        // GIT_INFRASTRUCTURE_REPO_BRANCHが設定されていない場合はmainを使用
-        def branch = env.GIT_INFRASTRUCTURE_REPO_BRANCH ?: 'main'
         gitUtils.checkoutRepository(
             env.GIT_INFRASTRUCTURE_REPO_URL,
-            branch,
+            env.GIT_INFRASTRUCTURE_REPO_BRANCH,
             env.GITHUB_APP_CREDENTIALS_ID
         )
     }
