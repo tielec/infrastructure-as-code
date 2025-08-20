@@ -444,6 +444,168 @@ pipelineJob(fullJobName) {
 }
 ```
 
+#### Freestyleジョブ（非同期トリガー専用）
+
+既存のジョブを**非同期で**トリガーする場合にFreestyleジョブを使用します。同期実行が必要な場合はPipelineジョブを使用してください。
+
+##### Freestyleジョブの使用場面
+
+- ✅ **スケジューラージョブ** - 定期実行で他のジョブをトリガー
+- ✅ **通知専用ジョブ** - 結果を待たずに通知を送信
+- ✅ **自己停止処理** - Jenkinsが自身を停止する場合
+- ❌ **順次実行** - Pipelineジョブを使用
+- ❌ **結果の確認が必要** - Pipelineジョブを使用
+- ❌ **複雑な条件分岐** - Pipelineジョブを使用
+
+##### 非同期実行パターン（推奨）
+
+```groovy
+// DSLファイル - ポストビルドで非同期実行
+freeStyleJob(fullJobName) {
+    displayName('非同期トリガージョブ')
+    description('他のジョブを非同期でトリガー')
+    
+    // 並行実行を無効化
+    concurrentBuild(false)
+    
+    // ビルドステップは最小限に
+    steps {
+        shell('echo "ジョブをトリガーします..."')
+    }
+    
+    // ポストビルドアクションで非同期トリガー
+    publishers {
+        downstreamParameterized {
+            trigger('Target/Job/Path') {
+                // 実行条件
+                condition('ALWAYS')  // または 'SUCCESS', 'UNSTABLE', 'FAILED'
+                
+                // パラメータ設定
+                parameters {
+                    predefinedProp('PARAM1', 'value1')
+                    predefinedProp('PARAM2', 'value2')
+                    booleanParam('FLAG', true)
+                }
+                
+                // 結果を待たない（非同期）
+                triggerWithNoParameters(false)
+            }
+        }
+    }
+}
+```
+
+##### ジョブタイプの選択基準
+
+| ジョブタイプ | 使用場面 | メリット | デメリット |
+|------------|---------|---------|-----------|
+| **Freestyle + 非同期** | スケジューラー<br>単純なトリガー<br>自己停止処理 | シンプル<br>即座に完了<br>キューに残らない | 結果の確認が困難<br>複雑な処理は不可 |
+| **Pipeline + 同期** | 順次実行<br>結果確認が必要<br>複雑な処理フロー | 柔軟な制御<br>エラーハンドリング<br>ステージ管理 | 設定が複雑<br>実行時間が長い |
+
+⚠️ **重要**: Freestyleジョブで同期実行（結果を待つ）は推奨しません。同期実行が必要な場合はPipelineジョブを使用してください。
+
+##### 実装上の注意点
+
+```groovy
+// ⚠️ 非同期実行時の注意
+// 1. エラーが発生してもトリガー元は成功扱い
+// 2. トリガー先の実行状況は別途確認が必要
+// 3. パラメータの検証はトリガー先で実施
+
+// 推奨: ログに実行情報を記録
+steps {
+    shell("""
+        echo "========================================="
+        echo "トリガー対象: Target/Job/Path"
+        echo "パラメータ:"
+        echo "  PARAM1: value1"
+        echo "  PARAM2: value2"
+        echo "実行時刻: \$(date)"
+        echo "========================================="
+    """)
+}
+```
+
+// 注意: FreestyleジョブにはJenkinsfileは不要
+// job-config.yamlでの定義例:
+// my_freestyle_job:
+//   name: 'My_Freestyle_Job'
+//   dslfile: jenkins/jobs/dsl/category/my_freestyle_job.groovy
+//   # jenkinsfile: 不要（freestyleジョブ）
+```
+
+#### スケジューラージョブのパターン
+
+定期的に他のジョブをトリガーする場合は、必ずFreestyleジョブ + 非同期実行を使用：
+
+```groovy
+// DSLファイル - スケジューラージョブ
+freeStyleJob(fullJobName) {
+    displayName('自動実行スケジューラー')
+    description('''
+        |定期実行の説明
+        |実行タイミング: 毎日午前0時
+        |対象: 開発環境のみ
+    '''.stripMargin())
+    
+    // トリガー設定（cronフォーマット）
+    triggers {
+        // Jenkins cron: 分 時 日 月 曜日
+        // H: ハッシュ（負荷分散）
+        // 例: 日本時間午前0時（UTC 15:00）、平日のみ
+        cron('H 15 * * 1-5')  // UTC 15:00 = JST 00:00
+        
+        // その他の例:
+        // cron('H 2 * * *')     // 毎日2時頃
+        // cron('H H * * 0')     // 毎週日曜日
+        // cron('H 9-17 * * 1-5') // 平日9-17時の間で1時間ごと
+    }
+    
+    // 固定パラメータで他ジョブを実行
+    steps {
+        downstreamParameterized {
+            trigger('Path/To/Target/Job') {
+                parameters {
+                    // スケジュール実行では固定値を使用
+                    predefinedProp('ENVIRONMENT', 'dev')
+                    predefinedProp('MODE', 'auto')
+                    predefinedProp('CONFIRM', 'true')
+                }
+            }
+        }
+    }
+    
+    // 環境変数（タイムゾーン設定など）
+    environmentVariables {
+        env('TZ', 'Asia/Tokyo')
+    }
+}
+```
+
+##### スケジューラージョブの設計原則
+
+1. **パラメータは固定値**: スケジュール実行では変更できないため
+2. **Freestyleジョブを使用**: シンプルなトリガー処理に最適
+3. **タイムゾーンを明示**: 特に国際的な環境では重要
+4. **実行対象を限定**: 本番環境の自動操作は避ける
+5. **ログ保持期間を長めに**: トラブルシューティング用
+
+##### Cron式のタイムゾーン注意点
+
+```groovy
+// JenkinsのcronはUTCベース
+// 日本時間（JST = UTC+9）への変換が必要
+
+// 日本時間での設定例:
+// JST 00:00 = UTC 15:00 (前日)
+// JST 09:00 = UTC 00:00
+// JST 18:00 = UTC 09:00
+
+cron('0 15 * * *')   // 日本時間 午前0時
+cron('0 0 * * *')    // 日本時間 午前9時
+cron('0 9 * * *')    // 日本時間 午後6時
+```
+
 #### パラメータ化ジョブ
 
 ```groovy
@@ -683,6 +845,300 @@ environments.each { env ->
 ```
 
 ## パイプライン開発
+
+### Groovy内でのBashコマンド実行
+
+#### 重要な注意事項
+
+Jenkins PipelineのGroovy内でBashコマンドを実行する際、文字列処理とエスケープに関して注意が必要です。
+
+#### 1. 文字列リテラルの使い分け
+
+```groovy
+// ❌ 問題のあるパターン：複数行文字列（"""）内での変数展開
+sh """
+    aws ec2 describe-instances \
+        --filters "Name=tag:Environment,Values=${ENVIRONMENT}" \
+        --query 'Reservations[*].Instances[*].Tags[?Key==\`Name\`]' \
+        --output json
+"""
+// 問題点：
+// - Groovy変数の展開タイミング
+// - クエリ内のバッククォートエスケープ
+// - ダブルクォート内のシングルクォート処理
+
+// ✅ 推奨パターン1：文字列連結を使用
+sh '''
+    aws ec2 describe-instances \
+        --filters "Name=tag:Environment,Values=''' + ENVIRONMENT + '''" \
+        --query 'Reservations[*].Instances[*].Tags[?Key==`Name`]' \
+        --output json
+'''
+// 利点：
+// - Groovy変数は明示的に連結
+// - バッククォートのエスケープ不要
+// - 引用符の階層が明確
+
+// ✅ 推奨パターン2：環境変数経由
+sh '''
+    aws ec2 describe-instances \
+        --filters "Name=tag:Environment,Values=${ENVIRONMENT}" \
+        --query 'Reservations[*].Instances[*].Tags[?Key==`Name`]' \
+        --output json
+'''
+// 前提：ENVIRONMENT が environment ブロックで定義済み
+```
+
+#### 2. 変数展開のタイミング
+
+```groovy
+// Groovy変数とBash変数の違いを理解する
+
+def groovyVar = "value1"
+env.ENV_VAR = "value2"
+
+// ❌ 混在は避ける
+sh """
+    echo "${groovyVar}"     # Groovyによる展開
+    echo "\${ENV_VAR}"      # Bashによる展開（エスケープ必要）
+"""
+
+// ✅ 明確に分離
+sh '''
+    echo "''' + groovyVar + '''"    # Groovy変数は連結
+    echo "${ENV_VAR}"                # 環境変数はBashで展開
+'''
+```
+
+#### 3. AWS CLIクエリのエスケープ
+
+```groovy
+// JMESPathクエリを含むAWS CLIコマンドの場合
+
+// ❌ エスケープ地獄
+sh """
+    aws ec2 describe-instances \
+        --query 'Reservations[0].Instances[0].Tags[?Key==\`Name\`]|[0].Value' \
+        --output text
+"""
+
+// ✅ シンプルな引用符使用
+sh '''
+    aws ec2 describe-instances \
+        --query 'Reservations[0].Instances[0].Tags[?Key==`Name`]|[0].Value' \
+        --output text
+'''
+
+// ✅ 複雑なクエリは変数に分離
+def query = 'Reservations[0].Instances[0].Tags[?Key==`Name`]|[0].Value'
+sh """
+    aws ec2 describe-instances \
+        --query '${query}' \
+        --output text
+"""
+```
+
+#### 4. 複数のインスタンスIDを扱う場合
+
+```groovy
+// ✅ リストから文字列への変換
+def instanceIds = ['i-123', 'i-456', 'i-789']
+def instanceIdsString = instanceIds.join(' ')
+
+sh """
+    aws ec2 stop-instances \
+        --instance-ids ${instanceIdsString} \
+        --region ${AWS_REGION}
+"""
+```
+
+#### 5. デバッグのコツ
+
+```groovy
+// コマンドを事前に確認
+def command = """
+    aws ec2 describe-instances \
+        --filters "Name=tag:Environment,Values=${ENVIRONMENT}" \
+        --region ${AWS_REGION}
+"""
+echo "実行するコマンド: ${command}"
+sh command
+
+// または dry-run モードを活用
+sh """
+    set -x  # デバッグ出力を有効化
+    aws ec2 describe-instances \
+        --filters "Name=tag:Environment,Values=${ENVIRONMENT}" \
+        --region ${AWS_REGION}
+"""
+```
+
+### 関数分離によるパイプラインの構造化
+
+#### 推奨パターン
+
+Jenkinsfileの可読性と保守性を向上させるため、ビジネスロジックを関数として分離します。
+
+```groovy
+// ========================
+// 関数定義セクション
+// ========================
+
+/**
+ * パラメータの検証
+ * @return void
+ * @throws error パラメータが不正な場合
+ */
+def validateParameters() {
+    if (!params.REQUIRED_PARAM) {
+        error("必須パラメータが設定されていません")
+    }
+    echo "パラメータ検証完了"
+}
+
+/**
+ * AWS CLIを使用してリソース情報を取得
+ * @param resourceId リソースID
+ * @return String リソースの状態
+ */
+def getResourceStatus(String resourceId) {
+    return sh(
+        script: """
+            aws ec2 describe-instances \
+                --instance-ids ${resourceId} \
+                --query 'Reservations[0].Instances[0].State.Name' \
+                --output text
+        """.stripIndent(),
+        returnStdout: true
+    ).trim()
+}
+
+/**
+ * 複雑な処理をオーケストレーション
+ */
+def executeComplexProcess() {
+    try {
+        def status = getResourceStatus(env.INSTANCE_ID)
+        if (status == 'running') {
+            performAction()
+        }
+    } catch (Exception e) {
+        handleError(e)
+    }
+}
+
+// ========================
+// パイプライン定義
+// ========================
+pipeline {
+    agent any
+    
+    stages {
+        stage('Validate') {
+            steps {
+                script {
+                    validateParameters()
+                }
+            }
+        }
+        
+        stage('Process') {
+            steps {
+                script {
+                    executeComplexProcess()
+                }
+            }
+        }
+    }
+}
+```
+
+#### 関数分離のメリット
+
+1. **単一責任原則**: 各関数は1つの明確な責任を持つ
+2. **再利用性**: 共通処理を関数化して複数箇所から呼び出し可能
+3. **テスタビリティ**: 関数単位でのテストが容易
+4. **可読性**: パイプラインのステージが簡潔になる
+5. **保守性**: 変更が必要な箇所が明確
+
+### 複数行文字列の処理
+
+#### stripIndent() と stripMargin() の使い分け
+
+```groovy
+// 1. stripIndent() - インデントを除去
+// AWS CLIコマンドなど、実行時にインデントが不要な場合
+def executeCommand() {
+    sh """
+        aws s3 cp \
+            --recursive \
+            --exclude "*.tmp" \
+            s3://source-bucket/ \
+            s3://dest-bucket/
+    """.stripIndent()
+}
+
+// 2. stripMargin() - マージン文字（|）を基準に整形
+// ログ出力やレポートなど、フォーマットを保持したい場合
+def showReport() {
+    echo """
+        |===================================
+        |デプロイメント完了レポート
+        |===================================
+        |
+        |環境: ${env.ENVIRONMENT}
+        |バージョン: ${env.VERSION}
+        |
+        |実行結果:
+        |  - ビルド: 成功
+        |  - テスト: 成功
+        |  - デプロイ: 成功
+        |===================================
+    """.stripMargin()
+}
+
+// 3. 組み合わせパターン
+def generateYamlConfig() {
+    return """
+        |apiVersion: v1
+        |kind: ConfigMap
+        |metadata:
+        |  name: ${APP_NAME}-config
+        |data:
+        |  database_url: ${DB_URL}
+        |  cache_enabled: "true"
+        |  log_level: "info"
+    """.stripMargin()
+}
+```
+
+#### 使用上の注意点
+
+```groovy
+// ❌ 避けるべきパターン
+sh """
+aws ec2 describe-instances \
+    --filters "Name=tag:Environment,Values=${ENV}" \
+    --query 'Reservations[*].Instances[*]'
+"""
+// 問題: インデントがそのままコマンドに含まれる
+
+// ✅ 推奨パターン
+sh """
+    aws ec2 describe-instances \
+        --filters "Name=tag:Environment,Values=${ENV}" \
+        --query 'Reservations[*].Instances[*]'
+""".stripIndent()
+// 解決: stripIndent()でインデントを除去
+
+// マージンを使った表示の例
+echo """
+    |エラーが発生しました:
+    |  ファイル: ${filename}
+    |  行番号: ${lineNumber}
+    |  詳細: ${errorMessage}
+""".stripMargin()
+```
 
 ### Declarative Pipeline
 
