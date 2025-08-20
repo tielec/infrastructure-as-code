@@ -165,9 +165,11 @@ userConfigs.each { config ->
             }
             def apiTokenProperty = cliUser.getProperty(ApiTokenProperty.class)
             
-            // 既存のトークンをクリア
-            apiTokenProperty.getTokenList().each { token ->
-                apiTokenProperty.deleteApiToken(token.uuid)
+            // 既存のトークンをクリア（すべて削除）
+            try {
+                apiTokenProperty.deleteApiToken()
+            } catch (Exception e) {
+                println("  Note: No existing tokens to delete or deletion failed: ${e.message}")
             }
             
             // 新しいAPIトークンを生成
