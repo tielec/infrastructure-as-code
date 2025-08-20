@@ -45,11 +45,19 @@ freeStyleJob(fullJobName) {
         numToKeep(90)       // 最大90ビルド保持
     }
 
-    // ビルドステップ - 既存ジョブをトリガー
+    // ビルドステップは空（ポストビルドで実行するため）
     steps {
-        // Shutdown_Jenkins_Environment ジョブを実行
+        shell('echo "環境停止ジョブをトリガーします..."')
+    }
+    
+    // ポストビルドアクション - 非同期でジョブをトリガー
+    publishers {
+        // 他のジョブをトリガー（待機なし）
         downstreamParameterized {
             trigger('Infrastructure_Management/Shutdown_Jenkins_Environment') {
+                // 条件: 常に実行
+                condition('ALWAYS')
+                
                 // 固定パラメータを設定
                 parameters {
                     predefinedProp('ENVIRONMENT', 'dev')
@@ -60,12 +68,8 @@ freeStyleJob(fullJobName) {
                     booleanParam('DRY_RUN', false)
                 }
                 
-                // ビルド結果の扱い
-                block {
-                    buildStepFailure('FAILURE')
-                    failure('FAILURE')
-                    unstable('UNSTABLE')
-                }
+                // 結果を待たない（非同期実行）
+                triggerWithNoParameters(false)
             }
         }
     }
