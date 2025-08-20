@@ -4,43 +4,74 @@ Jenkinsジョブ、パイプライン、共有ライブラリの開発者向け�
 
 ## 📋 目次
 
-- [開発環境](#開発環境)
-- [ジョブ作成の開発フロー](#ジョブ作成の開発フロー)
-- [コーディング規約](#コーディング規約)
-- [Job DSL開発](#job-dsl開発)
-- [パイプライン開発](#パイプライン開発)
-- [共有ライブラリ開発](#共有ライブラリ開発)
-- [テスト](#テスト)
-- [ベストプラクティス](#ベストプラクティス)
-- [トラブルシューティング](#トラブルシューティング)
+### Part 1: 基礎編（Getting Started）
+- [1.1 開発環境セットアップ](#11-開発環境セットアップ)
+- [1.2 アーキテクチャ概要](#12-アーキテクチャ概要)
+- [1.3 開発フロー](#13-開発フロー)
 
-## 開発環境
+### Part 2: 実装編（Implementation）
+- [2.1 ジョブ管理](#21-ジョブ管理)
+  - [2.1.1 シードジョブパターン](#211-シードジョブパターン)
+  - [2.1.2 Job DSL開発](#212-job-dsl開発)
+  - [2.1.3 フォルダ構造管理](#213-フォルダ構造管理)
+- [2.2 パイプライン開発](#22-パイプライン開発)
+  - [2.2.1 パイプラインタイプの選択](#221-パイプラインタイプの選択)
+  - [2.2.2 Groovy実装パターン](#222-groovy実装パターン)
+  - [2.2.3 関数分離と構造化](#223-関数分離と構造化)
+- [2.3 共有ライブラリ](#23-共有ライブラリ)
+  - [2.3.1 ライブラリ構造](#231-ライブラリ構造)
+  - [2.3.2 実装パターン](#232-実装パターン)
 
-### ローカル開発環境
+### Part 3: 運用編（Operations）
+- [3.1 セキュリティ](#31-セキュリティ)
+- [3.2 監視とログ管理](#32-監視とログ管理)
+- [3.3 バックアップとリストア](#33-バックアップとリストア)
+- [3.4 パフォーマンス最適化](#34-パフォーマンス最適化)
+
+### Part 4: リファレンス（Reference）
+- [4.1 コーディング規約](#41-コーディング規約)
+- [4.2 よくあるパターン集](#42-よくあるパターン集)
+- [4.3 トラブルシューティング](#43-トラブルシューティング)
+- [4.4 テスト手法](#44-テスト手法)
+
+---
+
+## Part 1: 基礎編（Getting Started）
+
+### 1.1 開発環境セットアップ
+
+#### 必要なツール
+
+| ツール | バージョン | 用途 | 必須 |
+|--------|------------|------|------|
+| Jenkins | 2.426.1以上 | 本体 | ✓ |
+| Groovy | 3.0以上 | スクリプト言語 | ✓ |
+| Docker | 20.10以上 | テスト環境 | ✓ |
+| Git | 2.30以上 | バージョン管理 | ✓ |
+| IntelliJ IDEA | Community以上 | IDE | 推奨 |
+
+#### ローカル開発環境の構築
 
 ```bash
-# Jenkins Test Harness (JTH) のセットアップ
-git clone https://github.com/jenkinsci/jenkins-test-harness.git
-cd jenkins-test-harness
-mvn clean install
-
-# ローカルJenkinsインスタンスの起動
+# 1. Jenkinsコンテナの起動
 docker run -d \
   -p 8080:8080 \
   -p 50000:50000 \
   -v jenkins_home:/var/jenkins_home \
+  -v /var/run/docker.sock:/var/run/docker.sock \
+  --name jenkins-dev \
   jenkins/jenkins:lts
+
+# 2. 初期パスワードの取得
+docker exec jenkins-dev cat /var/jenkins_home/secrets/initialAdminPassword
+
+# 3. Jenkins Test Harness（テスト用）
+git clone https://github.com/jenkinsci/jenkins-test-harness.git
+cd jenkins-test-harness
+mvn clean install
 ```
 
-### 必要なツール
-
-- Jenkins 2.426.1以上
-- Groovy 3.0以上
-- Docker（テスト環境用）
-- Git
-- IDE（IntelliJ IDEA推奨）
-
-### IDE設定（IntelliJ IDEA）
+#### IDE設定（IntelliJ IDEA）
 
 ```xml
 <!-- .idea/libraries/Jenkins_Pipeline.xml -->
@@ -49,116 +80,163 @@ docker run -d \
     <CLASSES>
       <root url="jar://$PROJECT_DIR$/libs/workflow-cps.jar!/" />
       <root url="jar://$PROJECT_DIR$/libs/workflow-api.jar!/" />
+      <root url="jar://$PROJECT_DIR$/libs/job-dsl-core.jar!/" />
     </CLASSES>
   </library>
 </component>
 ```
 
-## ジョブ作成の開発フロー
+### 1.2 アーキテクチャ概要
 
-### 概要
-
-Jenkinsのジョブは**シードジョブパターン**で管理されています。シードジョブ（`Admin_Jobs/job-creator`）が設定ファイル（`job-config.yaml`）を読み取り、定義されたDSLスクリプトとJenkinsfileを使用して全ジョブを自動生成します。
-
-### アーキテクチャ
+#### システム構成
 
 ```mermaid
 flowchart TB
-    subgraph config["設定ファイル"]
+    subgraph config["設定層"]
         folder_config["folder-config.yaml<br/>フォルダ構造定義"]
         job_config["job-config.yaml<br/>ジョブ定義"]
     end
     
-    subgraph seed["シードジョブ"]
-        job_creator["Admin_Jobs/job-creator<br/>ジョブ生成エンジン"]
+    subgraph engine["エンジン層"]
+        job_creator["Admin_Jobs/job-creator<br/>シードジョブ"]
     end
     
-    subgraph dsl["DSLスクリプト"]
-        folders_groovy["folders.groovy<br/>フォルダ生成"]
-        job_dsl["各種job DSL<br/>ジョブ生成"]
+    subgraph dsl["DSL層"]
+        folders_groovy["folders.groovy"]
+        job_dsl["Job DSLスクリプト"]
     end
     
-    subgraph generated["生成される構造"]
-        folder_structure["フォルダ構造<br/>Admin_Jobs/<br/>Account_Setup/<br/>Code_Quality_Checker/<br/>Document_Generator/<br/>Shared_Library/"]
-        
-        jobs["各ジョブ<br/>Admin_Jobs/xxx<br/>Account_Setup/xxx<br/>Code_Quality_Checker/xxx<br/>Document_Generator/xxx<br/>Shared_Library/xxx"]
+    subgraph pipeline["パイプライン層"]
+        jenkinsfile["Jenkinsfile"]
+        shared_lib["共有ライブラリ"]
     end
     
-    folder_config -->|"1 読み込み"| job_creator
-    job_config -->|"2 読み込み"| job_creator
-    job_creator -->|"3 実行"| folders_groovy
-    job_creator -->|"4 実行"| job_dsl
-    folders_groovy -->|"5 生成"| folder_structure
-    job_dsl -->|"6 生成"| jobs
-    folder_structure -->|依存| jobs
+    subgraph output["出力層"]
+        folders["フォルダ構造"]
+        jobs["Jenkinsジョブ"]
+    end
     
-    style folder_config fill:#e1f5e1
-    style job_config fill:#e1f5e1
-    style job_creator fill:#ffe1e1
-    style folders_groovy fill:#e1e1ff
-    style job_dsl fill:#e1e1ff
-    style folder_structure fill:#fff5e1
-    style jobs fill:#fff5e1
+    config --> engine
+    engine --> dsl
+    dsl --> output
+    pipeline --> jobs
+    shared_lib --> pipeline
+    
+    style config fill:#e1f5e1
+    style engine fill:#ffe1e1
+    style dsl fill:#e1e1ff
+    style pipeline fill:#f5e1ff
+    style output fill:#fff5e1
 ```
 
-#### 処理フロー
+#### ディレクトリ構造
 
-1. **フォルダ設定読み込み**: `folder-config.yaml`からフォルダ構造を読み込み
-2. **ジョブ設定読み込み**: `job-config.yaml`からジョブ定義を読み込み
-3. **フォルダ生成**: `folders.groovy`が最初に実行されフォルダ構造を作成
-4. **ジョブ生成**: 各DSLファイルが実行されジョブを生成
-5. **依存関係**: ジョブはフォルダ内に配置されるため、フォルダが先に必要
+```
+jenkins/
+├── jobs/
+│   ├── dsl/                    # Job DSLスクリプト
+│   │   ├── folders.groovy      # フォルダ生成用
+│   │   └── {category}/         # カテゴリ別DSL
+│   ├── pipeline/               # Jenkinsfile
+│   │   ├── _seed/             # シードジョブ
+│   │   └── {category}/        # カテゴリ別パイプライン
+│   └── shared/                # 共有ライブラリ
+│       ├── src/               # Groovyクラス
+│       ├── vars/              # グローバル変数
+│       └── resources/         # リソースファイル
+├── config/                    # Jenkins設定
+│   ├── jcasc.yaml            # Configuration as Code
+│   └── plugins.txt           # プラグインリスト
+└── scripts/                   # ユーティリティスクリプト
+```
 
-### 新規ジョブ作成手順
+### 1.3 開発フロー
 
-#### ステップ1: job-config.yamlへジョブ定義を追加
+#### 標準的な開発フロー
+
+```mermaid
+flowchart LR
+    A[要件定義] --> B[設計]
+    B --> C{ジョブタイプ}
+    C -->|Pipeline| D[DSL作成]
+    C -->|Freestyle| E[DSL作成]
+    D --> F[Jenkinsfile作成]
+    E --> G[設定完了]
+    F --> H[job-config.yaml更新]
+    G --> H
+    H --> I[シードジョブ実行]
+    I --> J[テスト]
+    J --> K{OK?}
+    K -->|Yes| L[デプロイ]
+    K -->|No| B
+```
+
+---
+
+## Part 2: 実装編（Implementation）
+
+### 2.1 ジョブ管理
+
+#### 2.1.1 シードジョブパターン
+
+##### 概要
+
+シードジョブは、設定ファイルを読み込んで全ジョブを自動生成する中心的な仕組みです。
+
+##### 実装の流れ
+
+1. **設定ファイルの準備**
+2. **DSLスクリプトの作成**
+3. **シードジョブの実行**
+4. **生成されたジョブの確認**
+
+##### 新規ジョブ作成の完全ガイド
+
+###### Step 1: job-config.yamlへの追加
 
 ```yaml
 # jenkins/jobs/pipeline/_seed/job-creator/job-config.yaml
 
 jenkins-jobs:
-  # 既存のジョブ定義...
-  
-  # 新規ジョブを追加
+  # 新規ジョブ定義
   your_new_job:
-    name: 'Your_Job_Name'              # Jenkins上での実際のジョブ名
-    displayName: 'Your Job Display'    # 表示名
-    dslfile: jenkins/jobs/dsl/category/your_job.groovy      # DSLファイルパス
-    jenkinsfile: jenkins/jobs/pipeline/category/your-job/Jenkinsfile  # Jenkinsfileパス
+    name: 'Your_Job_Name'              # Jenkins上の実ジョブ名
+    displayName: 'Your Job Display'    # UI表示名
+    dslfile: jenkins/jobs/dsl/category/your_job.groovy
+    jenkinsfile: jenkins/jobs/pipeline/category/your-job/Jenkinsfile
+    # オプション設定
+    folder: 'Category_Name'             # 配置フォルダ
+    triggers:
+      cron: 'H 2 * * *'                # 定期実行
+      github: true                      # GitHub連携
 ```
 
-#### ステップ2: Job DSLスクリプトを作成
+###### Step 2: DSLスクリプトの作成
 
 ```groovy
 // jenkins/jobs/dsl/category/your_job.groovy
 
-// 共通設定を取得
-def jenkinsPipelineRepo = commonSettings['jenkins-pipeline-repo']
-
-// ジョブ設定を取得
-def jobKey = 'your_new_job'  // job-config.yamlのキーと一致させる
+// 設定の取得
+def jobKey = 'your_new_job'
 def jobConfig = jenkinsJobsConfig[jobKey]
-
-// フォルダとジョブ名を組み合わせる
-def fullJobName = "Category_Name/${jobConfig.name}"
+def fullJobName = "${jobConfig.folder}/${jobConfig.name}"
 
 pipelineJob(fullJobName) {
     displayName(jobConfig.displayName)
-    
     description('ジョブの説明')
     
-    // ビルド履歴の保持設定
-    logRotator {
-        daysToKeep(30)
-        numToKeep(30)
-    }
-    
-    // ⚠️ 重要: パラメータは必ずDSLで定義すること
-    // Jenkinsfileでのパラメータ定義は禁止
+    // ⚠️ 重要: パラメータは必ずここで定義
     parameters {
-        stringParam('PARAMETER_NAME', 'default_value', '説明')
+        stringParam('VERSION', '1.0.0', 'バージョン番号')
         choiceParam('ENVIRONMENT', ['dev', 'staging', 'prod'], '実行環境')
         booleanParam('DRY_RUN', false, 'ドライラン実行')
+    }
+    
+    // トリガー設定
+    if (jobConfig.triggers?.cron) {
+        triggers {
+            cron(jobConfig.triggers.cron)
+        }
     }
     
     // パイプライン定義
@@ -176,318 +254,160 @@ pipelineJob(fullJobName) {
             scriptPath(jobConfig.jenkinsfile)
         }
     }
+    
+    // ビルド履歴設定
+    logRotator {
+        daysToKeep(30)
+        numToKeep(30)
+    }
 }
 ```
 
-#### ステップ3: Jenkinsfileを作成
+###### Step 3: Jenkinsfileの作成
 
 ```groovy
 // jenkins/jobs/pipeline/category/your-job/Jenkinsfile
 
-@Library('jenkins-shared-library@main') _
+@Library('jenkins-shared-lib@main') _
 
 pipeline {
-    agent {
-        label 'your-agent-label'
-    }
+    agent { label 'docker' }
     
-    // ⚠️ 重要: parametersブロックは使用禁止！
-    // パラメータはDSLファイルで定義すること
-    // NG例:
-    // parameters {
-    //     string(name: 'PARAMETER_NAME', defaultValue: 'default', description: '説明')
-    // }
+    // ❌ parametersブロックは使用禁止！
+    // パラメータはDSLファイルで定義済み
     
     environment {
-        // 環境変数
+        AWS_REGION = 'ap-northeast-1'
     }
     
     stages {
         stage('Initialize') {
             steps {
-                echo "Starting job: ${env.JOB_NAME}"
-                // DSLで定義したパラメータを使用
-                echo "Parameter value: ${params.PARAMETER_NAME}"
-                echo "Environment: ${params.ENVIRONMENT}"
-            }
-        }
-        
-        stage('Main Process') {
-            steps {
                 script {
-                    // メイン処理
-                    if (params.DRY_RUN) {
-                        echo "Dry run mode - skipping actual execution"
-                    } else {
-                        // 実際の処理
-                    }
+                    // DSLで定義したパラメータを使用
+                    echo "Version: ${params.VERSION}"
+                    echo "Environment: ${params.ENVIRONMENT}"
+                    validateParameters()
                 }
             }
         }
         
-        stage('Cleanup') {
+        stage('Process') {
+            when {
+                expression { !params.DRY_RUN }
+            }
             steps {
-                cleanWs()
+                script {
+                    executeMainProcess()
+                }
             }
         }
     }
     
     post {
-        success {
-            echo 'Job completed successfully'
-        }
-        failure {
-            echo 'Job failed'
-        }
+        always { cleanWs() }
+        success { notifySuccess() }
+        failure { notifyFailure() }
     }
+}
+
+// 関数定義
+def validateParameters() {
+    if (!params.VERSION) {
+        error "VERSION is required"
+    }
+}
+
+def executeMainProcess() {
+    // メイン処理
 }
 ```
 
-#### ステップ4: シードジョブを実行
+##### ⚠️ パラメータ定義の絶対ルール
 
-```bash
-# Jenkins UIから
-1. Admin_Jobs/job-creator にアクセス
-2. 「ビルド実行」をクリック
-3. コンソール出力でジョブ生成を確認
+| 場所 | 許可 | 理由 |
+|------|------|------|
+| DSLファイル | ✅ | シードジョブ実行時に即座に反映 |
+| Jenkinsfile | ❌ | 初回実行時にパラメータが認識されない |
 
-# または Jenkins CLIから
-java -jar jenkins-cli.jar -s http://jenkins.example.com \
-  build Admin_Jobs/job-creator
-```
+**例外**: Playgroundsフォルダ内での実験的なジョブのみ、Jenkinsfileでのパラメータ定義を許可
 
-### フォルダ構造の管理
+#### 2.1.2 Job DSL開発
 
-フォルダ構造は設定ファイル駆動型で管理されています。新しいフォルダカテゴリが必要な場合は、`folder-config.yaml`を更新：
+##### ジョブタイプの選択基準
 
-#### folder-config.yamlの構造
+| タイプ | 使用場面 | メリット | デメリット |
+|--------|----------|---------|------------|
+| **Pipeline** | 複雑な処理<br>条件分岐<br>並列実行 | 柔軟性が高い<br>コード管理 | 設定が複雑 |
+| **Freestyle** | 単純なトリガー<br>非同期実行 | シンプル<br>高速 | 柔軟性が低い |
+| **Multibranch** | ブランチ別ビルド | 自動検出<br>並列開発 | 設定の制約 |
 
-```yaml
-# jenkins/jobs/pipeline/_seed/job-creator/folder-config.yaml
-
-# 静的フォルダ定義
-folders:
-  - path: "New_Category"
-    displayName: "New Category Display Name"
-    description: |
-      フォルダの説明
-      
-      ### 概要
-      このフォルダーの目的
-
-  - path: "Parent/Child"  # 階層構造も自動処理
-    displayName: "Child Folder"
-    description: "サブフォルダの説明"
-
-# 動的フォルダ生成ルール
-dynamic_folders:
-  - parent_path: "Code_Quality_Checker"
-    source: "jenkins-managed-repositories"  # job-config.yamlのリポジトリ定義から生成
-    template:
-      path_suffix: "{name}"  # {name}はリポジトリ名に置換
-      displayName: "Code Quality - {name}"
-      description: |
-        {name}リポジトリのコード品質チェックジョブ
-```
-
-#### フォルダ生成の仕組み
-
-1. **設定ファイル読み込み**: シードジョブが`folder-config.yaml`を読み込む
-2. **folders.groovy実行**: 設定をもとに`folders.groovy`がフォルダを生成
-3. **階層自動処理**: 親フォルダが存在しない場合は自動作成
-4. **動的生成**: `jenkins-managed-repositories`などから動的にフォルダを生成
-
-#### フォルダ追加手順
-
-```bash
-# 1. folder-config.yamlを編集
-vi jenkins/jobs/pipeline/_seed/job-creator/folder-config.yaml
-
-# 2. 静的フォルダを追加（例）
-folders:
-  - path: "Infrastructure"
-    displayName: "Infrastructure Jobs"
-    description: |
-      インフラストラクチャ関連のジョブ
-
-# 3. シードジョブを実行してフォルダ生成
-# Jenkins UI: Admin_Jobs/job-creator を実行
-```
-
-### ⚠️ 重要: パラメータ定義のルール
-
-**このプロジェクトでは、Jenkinsfileでのパラメータ定義は禁止されています。**
-
-#### 理由
-
-Jenkinsfileにパラメータを定義した場合、シードジョブで自動生成されたジョブを初回実行する際に以下の問題が発生します：
-
-1. **初回実行時の問題**: パラメータが認識されず、パラメータ指定ができない
-2. **パラメータ反映の遅延**: 初回実行後にようやくパラメータが反映される
-3. **運用上の混乱**: 初回と2回目以降で動作が異なる
-
-#### 正しい実装方法
+##### Pipelineジョブの実装
 
 ```groovy
-// ✅ 正しい: DSLファイルでパラメータを定義
-// jenkins/jobs/dsl/category/your_job.groovy
-pipelineJob(fullJobName) {
+pipelineJob(jobName) {
+    // 基本設定
+    displayName('表示名')
+    description('説明')
+    
+    // パラメータ
     parameters {
-        stringParam('VERSION', '1.0.0', 'バージョン番号')
-        choiceParam('ENVIRONMENT', ['dev', 'staging', 'prod'], '実行環境')
-        booleanParam('SKIP_TESTS', false, 'テストをスキップ')
-        textParam('CONFIG', '', '追加設定（YAML形式）')
+        // 文字列
+        stringParam('NAME', 'default', '説明')
+        // 選択肢
+        choiceParam('TYPE', ['A', 'B', 'C'], '説明')
+        // ブール値
+        booleanParam('FLAG', false, '説明')
+        // テキスト（複数行）
+        textParam('CONFIG', '', '説明')
+        // パスワード
+        nonStoredPasswordParam('SECRET', '説明')
     }
-    // ...
-}
-
-// Jenkinsfileではparams.XXXで参照するのみ
-pipeline {
-    stages {
-        stage('Process') {
-            steps {
-                echo "Version: ${params.VERSION}"
-                echo "Environment: ${params.ENVIRONMENT}"
+    
+    // プロパティ
+    properties {
+        // ビルド履歴
+        buildDiscarder {
+            logRotator {
+                daysToKeep(30)
+                numToKeep(10)
             }
         }
-    }
-}
-```
-
-```groovy
-// ❌ 間違い: Jenkinsfileでパラメータを定義
-pipeline {
-    parameters {  // これは禁止！
-        string(name: 'VERSION', defaultValue: '1.0.0')
-    }
-}
-```
-
-#### 開発段階での例外
-
-開発・テスト段階では、以下の条件でJenkinsfileでのパラメータ定義を許容します：
-
-1. **Playgroundsフォルダ内のジョブ**: 個人の実験用
-2. **テストジョブ**: `*_test`サフィックスのジョブ
-3. **一時的な検証**: PRレビュー前の動作確認
-
-ただし、本番環境へのマージ前には必ずDSLファイルに移行すること。
-
-### 設定の検証
-
-シードジョブは自動的に以下を検証します：
-
-1. **DSLファイルの存在確認**: 指定されたパスにDSLファイルが存在するか
-2. **Jenkinsfileの存在確認**: 指定されたパスにJenkinsfileが存在するか
-3. **folder-config.yamlの存在確認**: フォルダ設定ファイルが存在するか
-4. **構文チェック**: Groovy構文の妥当性
-5. **依存関係チェック**: 必要なライブラリやクレデンシャルの存在
-6. **パラメータ定義の確認**: DSLでパラメータが適切に定義されているか
-
-#### folders.groovyの実装詳細
-
-```groovy
-// jenkins/jobs/dsl/folders.groovy
-// このファイルは設定ファイルから自動的にフォルダを生成
-
-// Jenkinsfileから設定を受け取る
-def folderConfig = binding.hasVariable('jenkinsFoldersConfig') ? 
-    binding.getVariable('jenkinsFoldersConfig') : 
-    [:]
-
-// 1. 静的フォルダの作成
-if (folderConfig.folders) {
-    // 階層順にソート（親→子）
-    def sortedFolders = folderConfig.folders.sort { a, b -> 
-        a.path.count('/') - b.path.count('/')
+        // GitHub連携
+        githubProjectUrl('https://github.com/org/repo')
     }
     
-    sortedFolders.each { folderDef ->
-        folder(folderDef.path) {
-            displayName(folderDef.displayName)
-            description(folderDef.description)
-        }
-    }
-}
-
-// 2. 動的フォルダの作成
-if (folderConfig.dynamic_folders) {
-    folderConfig.dynamic_folders.each { rule ->
-        // リポジトリベースの動的生成など
-    }
-}
-```
-
-### よくあるパターン
-
-#### GitHub連携ジョブ
-
-```yaml
-# job-config.yaml
-github_triggered_job:
-  name: 'GitHub_Triggered_Job'
-  displayName: 'GitHub Triggered Job'
-  dslfile: jenkins/jobs/dsl/category/github_job.groovy
-  jenkinsfile: jenkins/jobs/pipeline/category/github-job/Jenkinsfile
-  github_trigger: true  # GitHub Webhookトリガーを有効化
-```
-
-#### 定期実行ジョブ
-
-```groovy
-// DSLファイル
-pipelineJob(fullJobName) {
+    // トリガー
     triggers {
-        cron('H 2 * * *')  // 毎日2時に実行
+        cron('H 2 * * *')
+        githubPush()
     }
-    // 他の設定...
 }
 ```
 
-#### Freestyleジョブ（非同期トリガー専用）
-
-既存のジョブを**非同期で**トリガーする場合にFreestyleジョブを使用します。同期実行が必要な場合はPipelineジョブを使用してください。
-
-##### Freestyleジョブの使用場面
-
-- ✅ **スケジューラージョブ** - 定期実行で他のジョブをトリガー
-- ✅ **通知専用ジョブ** - 結果を待たずに通知を送信
-- ✅ **自己停止処理** - Jenkinsが自身を停止する場合
-- ❌ **順次実行** - Pipelineジョブを使用
-- ❌ **結果の確認が必要** - Pipelineジョブを使用
-- ❌ **複雑な条件分岐** - Pipelineジョブを使用
-
-##### 非同期実行パターン（推奨）
+##### Freestyleジョブの実装（非同期トリガー専用）
 
 ```groovy
-// DSLファイル - ポストビルドで非同期実行
-freeStyleJob(fullJobName) {
+freeStyleJob(jobName) {
     displayName('非同期トリガージョブ')
-    description('他のジョブを非同期でトリガー')
     
-    // 並行実行を無効化
+    // 並行実行の制御
     concurrentBuild(false)
     
-    // ビルドステップは最小限に
+    // ビルドステップ
     steps {
-        shell('echo "ジョブをトリガーします..."')
+        shell('echo "Starting trigger..."')
     }
     
-    // ポストビルドアクションで非同期トリガー
+    // ポストビルドアクション（非同期）
     publishers {
         downstreamParameterized {
-            trigger('Target/Job/Path') {
-                // 実行条件
-                condition('ALWAYS')  // または 'SUCCESS', 'UNSTABLE', 'FAILED'
-                
-                // パラメータ設定
+            trigger('Target/Job') {
+                condition('ALWAYS')
                 parameters {
-                    predefinedProp('PARAM1', 'value1')
-                    predefinedProp('PARAM2', 'value2')
-                    booleanParam('FLAG', true)
+                    predefinedProp('PARAM', 'value')
                 }
-                
-                // 結果を待たない（非同期）
+                // 非同期実行（結果を待たない）
                 triggerWithNoParameters(false)
             }
         }
@@ -495,305 +415,42 @@ freeStyleJob(fullJobName) {
 }
 ```
 
-##### ジョブタイプの選択基準
-
-| ジョブタイプ | 使用場面 | メリット | デメリット |
-|------------|---------|---------|-----------|
-| **Freestyle + 非同期** | スケジューラー<br>単純なトリガー<br>自己停止処理 | シンプル<br>即座に完了<br>キューに残らない | 結果の確認が困難<br>複雑な処理は不可 |
-| **Pipeline + 同期** | 順次実行<br>結果確認が必要<br>複雑な処理フロー | 柔軟な制御<br>エラーハンドリング<br>ステージ管理 | 設定が複雑<br>実行時間が長い |
-
-⚠️ **重要**: Freestyleジョブで同期実行（結果を待つ）は推奨しません。同期実行が必要な場合はPipelineジョブを使用してください。
-
-##### 実装上の注意点
+##### 動的ジョブ生成
 
 ```groovy
-// ⚠️ 非同期実行時の注意
-// 1. エラーが発生してもトリガー元は成功扱い
-// 2. トリガー先の実行状況は別途確認が必要
-// 3. パラメータの検証はトリガー先で実施
-
-// 推奨: ログに実行情報を記録
-steps {
-    shell("""
-        echo "========================================="
-        echo "トリガー対象: Target/Job/Path"
-        echo "パラメータ:"
-        echo "  PARAM1: value1"
-        echo "  PARAM2: value2"
-        echo "実行時刻: \$(date)"
-        echo "========================================="
-    """)
-}
-```
-
-// 注意: FreestyleジョブにはJenkinsfileは不要
-// job-config.yamlでの定義例:
-// my_freestyle_job:
-//   name: 'My_Freestyle_Job'
-//   dslfile: jenkins/jobs/dsl/category/my_freestyle_job.groovy
-//   # jenkinsfile: 不要（freestyleジョブ）
-```
-
-#### スケジューラージョブのパターン
-
-定期的に他のジョブをトリガーする場合は、必ずFreestyleジョブ + 非同期実行を使用：
-
-```groovy
-// DSLファイル - スケジューラージョブ
-freeStyleJob(fullJobName) {
-    displayName('自動実行スケジューラー')
-    description('''
-        |定期実行の説明
-        |実行タイミング: 毎日午前0時
-        |対象: 開発環境のみ
-    '''.stripMargin())
-    
-    // トリガー設定（cronフォーマット）
-    triggers {
-        // Jenkins cron: 分 時 日 月 曜日
-        // H: ハッシュ（負荷分散）
-        // 例: 日本時間午前0時（UTC 15:00）、平日のみ
-        cron('H 15 * * 1-5')  // UTC 15:00 = JST 00:00
-        
-        // その他の例:
-        // cron('H 2 * * *')     // 毎日2時頃
-        // cron('H H * * 0')     // 毎週日曜日
-        // cron('H 9-17 * * 1-5') // 平日9-17時の間で1時間ごと
-    }
-    
-    // 固定パラメータで他ジョブを実行
-    steps {
-        downstreamParameterized {
-            trigger('Path/To/Target/Job') {
-                parameters {
-                    // スケジュール実行では固定値を使用
-                    predefinedProp('ENVIRONMENT', 'dev')
-                    predefinedProp('MODE', 'auto')
-                    predefinedProp('CONFIRM', 'true')
-                }
+// 環境×アプリケーションのマトリックス生成
+['dev', 'staging', 'prod'].each { env ->
+    ['web', 'api', 'batch'].each { app ->
+        pipelineJob("Deploy/${app}-${env}") {
+            displayName("${app} ${env}環境")
+            parameters {
+                stringParam('VERSION', '', 'バージョン')
             }
-        }
-    }
-    
-    // 環境変数（タイムゾーン設定など）
-    environmentVariables {
-        env('TZ', 'Asia/Tokyo')
-    }
-}
-```
-
-##### スケジューラージョブの設計原則
-
-1. **パラメータは固定値**: スケジュール実行では変更できないため
-2. **Freestyleジョブを使用**: シンプルなトリガー処理に最適
-3. **タイムゾーンを明示**: 特に国際的な環境では重要
-4. **実行対象を限定**: 本番環境の自動操作は避ける
-5. **ログ保持期間を長めに**: トラブルシューティング用
-
-##### Cron式のタイムゾーン注意点
-
-```groovy
-// JenkinsのcronはUTCベース
-// 日本時間（JST = UTC+9）への変換が必要
-
-// 日本時間での設定例:
-// JST 00:00 = UTC 15:00 (前日)
-// JST 09:00 = UTC 00:00
-// JST 18:00 = UTC 09:00
-
-cron('0 15 * * *')   // 日本時間 午前0時
-cron('0 0 * * *')    // 日本時間 午前9時
-cron('0 9 * * *')    // 日本時間 午後6時
-```
-
-#### パラメータ化ジョブ
-
-```groovy
-// DSLファイル（パラメータは必ずここで定義）
-pipelineJob(fullJobName) {
-    parameters {
-        // 文字列パラメータ
-        stringParam('VERSION', '1.0.0', 'デプロイするバージョン')
-        
-        // 選択肢パラメータ
-        choiceParam('ENVIRONMENT', ['dev', 'staging', 'prod'], '実行環境')
-        
-        // ブール値パラメータ
-        booleanParam('DRY_RUN', false, 'ドライラン実行')
-        
-        // テキストパラメータ（複数行）
-        textParam('CUSTOM_CONFIG', '', 'カスタム設定（YAML形式）')
-        
-        // パスワードパラメータ
-        nonStoredPasswordParam('SECRET_TOKEN', 'APIトークン')
-    }
-    // 他の設定...
-}
-
-// Jenkinsfile（パラメータの使用のみ、定義は禁止）
-pipeline {
-    stages {
-        stage('Use Parameters') {
-            steps {
-                script {
-                    echo "Version: ${params.VERSION}"
-                    if (params.DRY_RUN) {
-                        echo "Running in dry-run mode"
-                    }
-                }
-            }
+            // 他の設定...
         }
     }
 }
 ```
 
-### トラブルシューティング
+#### 2.1.3 フォルダ構造管理
 
-| 問題 | 原因 | 解決方法 |
-|-----|------|---------|
-| ジョブが生成されない | job-config.yamlの構文エラー | YAMLリンターで検証、インデント確認 |
-| DSLエラー | Groovy構文エラー | Jenkins Script Consoleでテスト |
-| Jenkinsfile not found | パス指定ミス | scriptPathとファイルパスの一致確認 |
-| 権限エラー | Job DSL権限不足 | Script Securityで承認 |
-
-## コーディング規約
-
-### Groovy規約
-
-```groovy
-// ファイル命名規則
-// - Job DSL: {component}_{action}_job.groovy
-// - Pipeline: Jenkinsfile
-// - Library: PascalCase.groovy (クラス名と一致)
-
-// インデント: スペース4文字
-// 行の最大長: 120文字
-
-// クラス定義
-class MyUtility implements Serializable {
-    private static final String DEFAULT_VALUE = "default"
-    
-    // プロパティは private + getter/setter
-    private String name
-    
-    String getName() {
-        return this.name
-    }
-    
-    void setName(String name) {
-        this.name = name
-    }
-}
-
-// メソッド定義
-def processData(Map config) {
-    // 必須パラメータのチェック
-    assert config.input : "Input is required"
-    
-    // 処理
-    return config.input.toUpperCase()
-}
-```
-
-### 命名規則
-
-```groovy
-// Job DSL
-pipelineJob('Category_Name/job-name') {
-    displayName('ジョブ表示名')
-}
-
-// Pipeline stages
-stage('Setup Environment') { }
-stage('Run Tests') { }
-stage('Deploy Application') { }
-
-// 共有ライブラリメソッド
-def deployToEnvironment(Map args) { }
-def validateConfiguration(Map config) { }
-```
-
-## Job DSL開発
-
-### Job DSL構造
-
-```groovy
-// jobs/dsl/{category}/{job_name}_job.groovy
-
-// インポート
-import javaposse.jobdsl.dsl.Job
-
-// ジョブ定義
-pipelineJob('Category/job-name') {
-    // 表示設定
-    displayName('ジョブ表示名')
-    description('''
-        ジョブの詳細説明
-        - 機能1
-        - 機能2
-    '''.stripIndent())
-    
-    // パラメータ定義
-    parameters {
-        stringParam('BRANCH', 'main', 'ブランチ名')
-        choiceParam('ENVIRONMENT', ['dev', 'staging', 'prod'], '環境')
-        booleanParam('SKIP_TESTS', false, 'テストをスキップ')
-    }
-    
-    // トリガー設定
-    triggers {
-        cron('H 2 * * *')
-        githubPush()
-    }
-    
-    // Pipeline定義
-    definition {
-        cpsScm {
-            scm {
-                git {
-                    remote {
-                        url('https://github.com/org/repo.git')
-                        credentials('github-credentials')
-                    }
-                    branches('*/\${BRANCH}')
-                }
-            }
-            scriptPath('jobs/pipeline/category/job-name/Jenkinsfile')
-        }
-    }
-    
-    // プロパティ設定
-    properties {
-        buildDiscarder {
-            logRotator {
-                daysToKeep(30)
-                numToKeep(10)
-                artifactDaysToKeep(7)
-                artifactNumToKeep(5)
-            }
-        }
-        
-        githubProjectUrl('https://github.com/org/repo')
-    }
-}
-```
-
-### フォルダー構造定義（設定ファイル駆動型）
+##### folder-config.yamlの構造
 
 ```yaml
-# folder-config.yamlで定義（設定ファイル駆動型）
+# jenkins/jobs/pipeline/_seed/job-creator/folder-config.yaml
+
+# 静的フォルダ定義
 folders:
   - path: "Admin_Jobs"
     displayName: "管理ジョブ"
-    description: "システム管理用のジョブ群"
-    
-  - path: "CI_CD"
-    displayName: "CI/CDパイプライン"
-    description: "継続的インテグレーション/デプロイメント"
-    
-  - path: "Testing"
-    displayName: "テストジョブ"
-    description: "各種テスト実行用"
+    description: |
+      システム管理用のジョブ群
+      - シードジョブ
+      - メンテナンスジョブ
+      
+  - path: "CI_CD/Build"  # 階層構造
+    displayName: "ビルドジョブ"
+    description: "ビルド関連"
 
 # 動的フォルダ生成
 dynamic_folders:
@@ -802,182 +459,167 @@ dynamic_folders:
     template:
       path_suffix: "{name}"
       displayName: "Test - {name}"
-      description: "{name}リポジトリのテスト"
+      description: "{name}のテスト"
 ```
 
-folders.groovyは設定を読み込んで自動的にフォルダを生成します。
-
-### 動的ジョブ生成
+##### folders.groovyの実装
 
 ```groovy
-// 環境ごとのジョブを動的生成
-def environments = ['dev', 'staging', 'prod']
-def applications = ['web', 'api', 'batch']
+// jenkins/jobs/dsl/folders.groovy
 
-environments.each { env ->
-    applications.each { app ->
-        pipelineJob("Deploy/${app}-${env}") {
-            displayName("${app.toUpperCase()} ${env}環境デプロイ")
-            
-            parameters {
-                stringParam('VERSION', '', 'デプロイバージョン')
+// 設定の読み込み
+def folderConfig = binding.getVariable('jenkinsFoldersConfig')
+
+// 静的フォルダの生成
+folderConfig.folders.sort { a, b -> 
+    a.path.count('/') - b.path.count('/')
+}.each { folderDef ->
+    folder(folderDef.path) {
+        displayName(folderDef.displayName)
+        description(folderDef.description)
+    }
+}
+
+// 動的フォルダの生成
+folderConfig.dynamic_folders?.each { rule ->
+    // ソースに応じた動的生成ロジック
+}
+```
+
+### 2.2 パイプライン開発
+
+#### 2.2.1 パイプラインタイプの選択
+
+##### Declarative vs Scripted
+
+| 特徴 | Declarative | Scripted |
+|------|-------------|----------|
+| 構文 | 構造化・制限的 | 自由・柔軟 |
+| 学習曲線 | 緩やか | 急 |
+| エラーチェック | コンパイル時 | 実行時 |
+| 推奨度 | ✅ 推奨 | 特殊ケースのみ |
+
+##### Declarative Pipeline テンプレート
+
+```groovy
+pipeline {
+    agent { label 'docker && linux' }
+    
+    options {
+        timestamps()
+        ansiColor('xterm')
+        timeout(time: 1, unit: 'HOURS')
+        disableConcurrentBuilds()
+    }
+    
+    environment {
+        // 環境変数
+    }
+    
+    stages {
+        stage('Stage Name') {
+            when {
+                // 実行条件
             }
-            
-            definition {
-                cps {
-                    script("""
-                        pipeline {
-                            agent any
-                            stages {
-                                stage('Deploy') {
-                                    steps {
-                                        echo 'Deploying ${app} to ${env}'
-                                    }
-                                }
-                            }
-                        }
-                    """.stripIndent())
-                }
+            steps {
+                // 処理
             }
         }
+    }
+    
+    post {
+        always { /* 必ず実行 */ }
+        success { /* 成功時 */ }
+        failure { /* 失敗時 */ }
     }
 }
 ```
 
-## パイプライン開発
+#### 2.2.2 Groovy実装パターン
 
-### Groovy内でのBashコマンド実行
+##### 文字列処理のベストプラクティス
 
-#### 重要な注意事項
-
-Jenkins PipelineのGroovy内でBashコマンドを実行する際、文字列処理とエスケープに関して注意が必要です。
-
-#### 1. 文字列リテラルの使い分け
+###### 1. 引用符の使い分け
 
 ```groovy
-// ❌ 問題のあるパターン：複数行文字列（"""）内での変数展開
-sh """
-    aws ec2 describe-instances \
-        --filters "Name=tag:Environment,Values=${ENVIRONMENT}" \
-        --query 'Reservations[*].Instances[*].Tags[?Key==\`Name\`]' \
-        --output json
-"""
-// 問題点：
-// - Groovy変数の展開タイミング
-// - クエリ内のバッククォートエスケープ
-// - ダブルクォート内のシングルクォート処理
+// シングルクォート: 変数展開なし
+def literal = 'This is a literal string'
 
-// ✅ 推奨パターン1：文字列連結を使用
-sh '''
-    aws ec2 describe-instances \
-        --filters "Name=tag:Environment,Values=''' + ENVIRONMENT + '''" \
-        --query 'Reservations[*].Instances[*].Tags[?Key==`Name`]' \
-        --output json
-'''
-// 利点：
-// - Groovy変数は明示的に連結
-// - バッククォートのエスケープ不要
-// - 引用符の階層が明確
+// ダブルクォート: Groovy変数を展開
+def name = "Jenkins"
+def interpolated = "Hello, ${name}"
 
-// ✅ 推奨パターン2：環境変数経由
-sh '''
-    aws ec2 describe-instances \
-        --filters "Name=tag:Environment,Values=${ENVIRONMENT}" \
-        --query 'Reservations[*].Instances[*].Tags[?Key==`Name`]' \
-        --output json
-'''
-// 前提：ENVIRONMENT が environment ブロックで定義済み
-```
-
-#### 2. 変数展開のタイミング
-
-```groovy
-// Groovy変数とBash変数の違いを理解する
-
-def groovyVar = "value1"
-env.ENV_VAR = "value2"
-
-// ❌ 混在は避ける
-sh """
-    echo "${groovyVar}"     # Groovyによる展開
-    echo "\${ENV_VAR}"      # Bashによる展開（エスケープ必要）
-"""
-
-// ✅ 明確に分離
-sh '''
-    echo "''' + groovyVar + '''"    # Groovy変数は連結
-    echo "${ENV_VAR}"                # 環境変数はBashで展開
+// トリプルクォート: 複数行（''' or """）
+def multiline = '''
+    Line 1
+    Line 2
 '''
 ```
 
-#### 3. AWS CLIクエリのエスケープ
+###### 2. Bashコマンドでの変数展開
 
 ```groovy
-// JMESPathクエリを含むAWS CLIコマンドの場合
+// ✅ 推奨: 環境変数経由
+environment {
+    MY_VAR = 'value'
+}
+steps {
+    sh '''
+        echo "Value: ${MY_VAR}"  # Bash変数展開
+    '''
+}
 
-// ❌ エスケープ地獄
+// ✅ 推奨: 文字列連結
+def groovyVar = 'value'
+sh '''echo "Value: ''' + groovyVar + '''"'''
+
+// ❌ 避ける: 混在
 sh """
-    aws ec2 describe-instances \
-        --query 'Reservations[0].Instances[0].Tags[?Key==\`Name\`]|[0].Value' \
-        --output text
+    echo "${groovyVar}"     # Groovy展開（エスケープ問題）
+    echo "\${BASH_VAR}"     # Bash展開（エスケープ必要）
 """
+```
 
-// ✅ シンプルな引用符使用
+###### 3. 複数行文字列の処理
+
+```groovy
+// stripIndent(): インデント除去
+sh """
+    aws s3 cp \\
+        --recursive \\
+        s3://source/ \\
+        s3://dest/
+""".stripIndent()
+
+// stripMargin(): マージン文字基準
+echo """
+    |=================
+    |レポート
+    |=================
+    |結果: 成功
+""".stripMargin()
+```
+
+###### 4. AWS CLIクエリのエスケープ
+
+```groovy
+// ✅ シンプルな引用符
 sh '''
     aws ec2 describe-instances \
-        --query 'Reservations[0].Instances[0].Tags[?Key==`Name`]|[0].Value' \
+        --query 'Reservations[0].Instances[0].Tags[?Key==`Name`]' \
         --output text
 '''
 
-// ✅ 複雑なクエリは変数に分離
-def query = 'Reservations[0].Instances[0].Tags[?Key==`Name`]|[0].Value'
+// ✅ 変数分離
+def query = 'Reservations[0].Instances[0].Tags[?Key==`Name`]'
 sh """
-    aws ec2 describe-instances \
-        --query '${query}' \
-        --output text
+    aws ec2 describe-instances --query '${query}'
 """
 ```
 
-#### 4. 複数のインスタンスIDを扱う場合
+#### 2.2.3 関数分離と構造化
 
-```groovy
-// ✅ リストから文字列への変換
-def instanceIds = ['i-123', 'i-456', 'i-789']
-def instanceIdsString = instanceIds.join(' ')
-
-sh """
-    aws ec2 stop-instances \
-        --instance-ids ${instanceIdsString} \
-        --region ${AWS_REGION}
-"""
-```
-
-#### 5. デバッグのコツ
-
-```groovy
-// コマンドを事前に確認
-def command = """
-    aws ec2 describe-instances \
-        --filters "Name=tag:Environment,Values=${ENVIRONMENT}" \
-        --region ${AWS_REGION}
-"""
-echo "実行するコマンド: ${command}"
-sh command
-
-// または dry-run モードを活用
-sh """
-    set -x  # デバッグ出力を有効化
-    aws ec2 describe-instances \
-        --filters "Name=tag:Environment,Values=${ENVIRONMENT}" \
-        --region ${AWS_REGION}
-"""
-```
-
-### 関数分離によるパイプラインの構造化
-
-#### 推奨パターン
-
-Jenkinsfileの可読性と保守性を向上させるため、ビジネスロジックを関数として分離します。
+##### 推奨パターン
 
 ```groovy
 // ========================
@@ -985,41 +627,22 @@ Jenkinsfileの可読性と保守性を向上させるため、ビジネスロジ
 // ========================
 
 /**
- * パラメータの検証
- * @return void
- * @throws error パラメータが不正な場合
+ * パラメータ検証
+ * @throws Exception 検証エラー
  */
 def validateParameters() {
-    if (!params.REQUIRED_PARAM) {
-        error("必須パラメータが設定されていません")
+    if (!params.REQUIRED) {
+        error "Required parameter missing"
     }
-    echo "パラメータ検証完了"
 }
 
 /**
- * AWS CLIを使用してリソース情報を取得
- * @param resourceId リソースID
- * @return String リソースの状態
+ * メイン処理のオーケストレーション
  */
-def getResourceStatus(String resourceId) {
-    return sh(
-        script: """
-            aws ec2 describe-instances \
-                --instance-ids ${resourceId} \
-                --query 'Reservations[0].Instances[0].State.Name' \
-                --output text
-        """.stripIndent(),
-        returnStdout: true
-    ).trim()
-}
-
-/**
- * 複雑な処理をオーケストレーション
- */
-def executeComplexProcess() {
+def executeMainProcess() {
     try {
-        def status = getResourceStatus(env.INSTANCE_ID)
-        if (status == 'running') {
+        def status = checkStatus()
+        if (status == 'ready') {
             performAction()
         }
     } catch (Exception e) {
@@ -1036,297 +659,65 @@ pipeline {
     stages {
         stage('Validate') {
             steps {
-                script {
-                    validateParameters()
-                }
+                script { validateParameters() }
             }
         }
         
         stage('Process') {
             steps {
-                script {
-                    executeComplexProcess()
-                }
+                script { executeMainProcess() }
             }
         }
     }
 }
 ```
 
-#### 関数分離のメリット
-
-1. **単一責任原則**: 各関数は1つの明確な責任を持つ
-2. **再利用性**: 共通処理を関数化して複数箇所から呼び出し可能
-3. **テスタビリティ**: 関数単位でのテストが容易
-4. **可読性**: パイプラインのステージが簡潔になる
-5. **保守性**: 変更が必要な箇所が明確
-
-### 複数行文字列の処理
-
-#### stripIndent() と stripMargin() の使い分け
+##### 並列実行パターン
 
 ```groovy
-// 1. stripIndent() - インデントを除去
-// AWS CLIコマンドなど、実行時にインデントが不要な場合
-def executeCommand() {
-    sh """
-        aws s3 cp \
-            --recursive \
-            --exclude "*.tmp" \
-            s3://source-bucket/ \
-            s3://dest-bucket/
-    """.stripIndent()
-}
-
-// 2. stripMargin() - マージン文字（|）を基準に整形
-// ログ出力やレポートなど、フォーマットを保持したい場合
-def showReport() {
-    echo """
-        |===================================
-        |デプロイメント完了レポート
-        |===================================
-        |
-        |環境: ${env.ENVIRONMENT}
-        |バージョン: ${env.VERSION}
-        |
-        |実行結果:
-        |  - ビルド: 成功
-        |  - テスト: 成功
-        |  - デプロイ: 成功
-        |===================================
-    """.stripMargin()
-}
-
-// 3. 組み合わせパターン
-def generateYamlConfig() {
-    return """
-        |apiVersion: v1
-        |kind: ConfigMap
-        |metadata:
-        |  name: ${APP_NAME}-config
-        |data:
-        |  database_url: ${DB_URL}
-        |  cache_enabled: "true"
-        |  log_level: "info"
-    """.stripMargin()
-}
-```
-
-#### 使用上の注意点
-
-```groovy
-// ❌ 避けるべきパターン
-sh """
-aws ec2 describe-instances \
-    --filters "Name=tag:Environment,Values=${ENV}" \
-    --query 'Reservations[*].Instances[*]'
-"""
-// 問題: インデントがそのままコマンドに含まれる
-
-// ✅ 推奨パターン
-sh """
-    aws ec2 describe-instances \
-        --filters "Name=tag:Environment,Values=${ENV}" \
-        --query 'Reservations[*].Instances[*]'
-""".stripIndent()
-// 解決: stripIndent()でインデントを除去
-
-// マージンを使った表示の例
-echo """
-    |エラーが発生しました:
-    |  ファイル: ${filename}
-    |  行番号: ${lineNumber}
-    |  詳細: ${errorMessage}
-""".stripMargin()
-```
-
-### Declarative Pipeline
-
-```groovy
-// Jenkinsfile
-pipeline {
-    agent {
-        label 'docker && linux'
-    }
-    
-    options {
-        timestamps()
-        ansiColor('xterm')
-        timeout(time: 1, unit: 'HOURS')
-        buildDiscarder(logRotator(numToKeep: 10))
-        skipDefaultCheckout()
-        disableConcurrentBuilds()
-    }
-    
-    environment {
-        AWS_REGION = 'ap-northeast-1'
-        MAVEN_OPTS = '-Xmx1024m'
-        GITHUB_TOKEN = credentials('github-token')
-    }
-    
-    parameters {
-        string(name: 'VERSION', defaultValue: '', description: 'ビルドバージョン')
-        choice(name: 'TARGET', choices: ['all', 'backend', 'frontend'], description: 'ビルド対象')
-    }
-    
-    stages {
-        stage('Checkout') {
-            steps {
-                checkout scm
-            }
+stage('Parallel Tasks') {
+    parallel {
+        stage('Task A') {
+            steps { /* ... */ }
         }
-        
-        stage('Build') {
-            parallel {
-                stage('Backend') {
-                    when {
-                        expression { params.TARGET in ['all', 'backend'] }
-                    }
-                    steps {
-                        dir('backend') {
-                            sh './gradlew build'
-                        }
-                    }
-                }
-                
-                stage('Frontend') {
-                    when {
-                        expression { params.TARGET in ['all', 'frontend'] }
-                    }
-                    steps {
-                        dir('frontend') {
-                            sh 'npm ci && npm run build'
-                        }
-                    }
-                }
-            }
+        stage('Task B') {
+            steps { /* ... */ }
         }
-        
-        stage('Test') {
-            steps {
-                sh './run-tests.sh'
-                junit '**/target/test-results/**/*.xml'
-            }
-        }
-        
-        stage('Deploy') {
-            when {
-                branch 'main'
-                expression { currentBuild.result == null || currentBuild.result == 'SUCCESS' }
-            }
-            input {
-                message '本番環境へデプロイしますか？'
-                ok 'デプロイ実行'
-                parameters {
-                    choice(name: 'CONFIRM', choices: ['yes', 'no'], description: '確認')
-                }
-            }
-            steps {
-                script {
-                    if (params.CONFIRM == 'yes') {
-                        sh './deploy.sh prod'
-                    }
-                }
-            }
-        }
-    }
-    
-    post {
-        always {
-            cleanWs()
-        }
-        success {
-            slackSend(color: 'good', message: "ビルド成功: ${env.JOB_NAME} #${env.BUILD_NUMBER}")
-        }
-        failure {
-            slackSend(color: 'danger', message: "ビルド失敗: ${env.JOB_NAME} #${env.BUILD_NUMBER}")
+        stage('Task C') {
+            steps { /* ... */ }
         }
     }
 }
 ```
 
-### Scripted Pipeline
+### 2.3 共有ライブラリ
 
-```groovy
-// Scripted Pipelineの例
-node('docker') {
-    try {
-        stage('Checkout') {
-            checkout scm
-        }
-        
-        stage('Build') {
-            docker.image('maven:3.8-jdk-11').inside {
-                sh 'mvn clean package'
-            }
-        }
-        
-        stage('Test') {
-            parallel(
-                'Unit Tests': {
-                    sh './run-unit-tests.sh'
-                },
-                'Integration Tests': {
-                    sh './run-integration-tests.sh'
-                },
-                'Lint': {
-                    sh './run-lint.sh'
-                }
-            )
-        }
-        
-        if (env.BRANCH_NAME == 'main') {
-            stage('Deploy') {
-                input 'Deploy to production?'
-                sh './deploy-prod.sh'
-            }
-        }
-    } catch (Exception e) {
-        currentBuild.result = 'FAILURE'
-        throw e
-    } finally {
-        stage('Cleanup') {
-            cleanWs()
-        }
-    }
-}
-```
-
-## 共有ライブラリ開発
-
-### ライブラリ構造
+#### 2.3.1 ライブラリ構造
 
 ```
-jobs/shared/
-├── src/
-│   └── jp/co/tielec/jenkins/
-│       ├── utils/
+shared/
+├── src/                          # Groovyクラス
+│   └── jp/co/company/
+│       ├── utils/               # ユーティリティ
 │       │   ├── GitUtils.groovy
-│       │   ├── DockerUtils.groovy
 │       │   └── AwsUtils.groovy
-│       ├── steps/
-│       │   ├── BuildStep.groovy
-│       │   └── DeployStep.groovy
-│       └── models/
-│           ├── BuildConfig.groovy
-│           └── DeployConfig.groovy
-├── vars/
-│   ├── gitUtils.groovy
-│   ├── dockerUtils.groovy
-│   └── standardPipeline.groovy
-├── resources/
+│       ├── steps/               # カスタムステップ
+│       └── models/              # データモデル
+├── vars/                        # グローバル変数
+│   ├── standardPipeline.groovy # パイプラインテンプレート
+│   └── utilities.groovy        # ユーティリティ関数
+├── resources/                   # リソースファイル
 │   └── templates/
-│       └── email.html
-└── test/
-    └── unit/
-        └── GitUtilsTest.groovy
+└── test/                       # テストコード
 ```
 
-### クラスライブラリ
+#### 2.3.2 実装パターン
+
+##### クラスライブラリ
 
 ```groovy
-// src/jp/co/tielec/jenkins/utils/GitUtils.groovy
-package jp.co.tielec.jenkins.utils
+// src/jp/co/company/utils/GitUtils.groovy
+package jp.co.company.utils
 
 class GitUtils implements Serializable {
     private def script
@@ -1342,56 +733,33 @@ class GitUtils implements Serializable {
         ).trim()
     }
     
-    String getCommitHash(Boolean shortHash = false) {
-        def flag = shortHash ? '--short' : ''
-        return script.sh(
-            script: "git rev-parse ${flag} HEAD",
+    Boolean hasChangesIn(String path) {
+        def changes = script.sh(
+            script: "git diff --name-only HEAD~1 -- ${path}",
             returnStdout: true
         ).trim()
-    }
-    
-    List<String> getChangedFiles(String baseRef = 'HEAD~1') {
-        def output = script.sh(
-            script: "git diff --name-only ${baseRef}",
-            returnStdout: true
-        ).trim()
-        
-        return output.split('\n').toList()
-    }
-    
-    Boolean hasChangesIn(String path, String baseRef = 'HEAD~1') {
-        def changedFiles = getChangedFiles(baseRef)
-        return changedFiles.any { it.startsWith(path) }
+        return !changes.isEmpty()
     }
 }
 ```
 
-### グローバル変数
+##### グローバル変数
 
 ```groovy
-// vars/gitUtils.groovy
-import jp.co.tielec.jenkins.utils.GitUtils
+// vars/utilities.groovy
+import jp.co.company.utils.GitUtils
 
 def checkoutWithSubmodules(Map config = [:]) {
-    def defaultConfig = [
+    def defaults = [
         branch: 'main',
-        credentialsId: 'github-credentials',
-        url: ''
+        credentialsId: 'github-credentials'
     ]
-    
-    def finalConfig = defaultConfig + config
+    def finalConfig = defaults + config
     
     checkout([
         $class: 'GitSCM',
         branches: [[name: finalConfig.branch]],
-        extensions: [
-            [$class: 'SubmoduleOption',
-             disableSubmodules: false,
-             parentCredentials: true,
-             recursiveSubmodules: true,
-             reference: '',
-             trackingSubmodules: false]
-        ],
+        extensions: [[$class: 'SubmoduleOption']],
         userRemoteConfigs: [[
             credentialsId: finalConfig.credentialsId,
             url: finalConfig.url
@@ -1399,173 +767,595 @@ def checkoutWithSubmodules(Map config = [:]) {
     ])
 }
 
-def tagRelease(String version) {
-    def utils = new GitUtils(this)
-    def currentBranch = utils.getCurrentBranch()
-    
-    if (currentBranch != 'main') {
-        error "Releases can only be tagged from main branch"
-    }
-    
-    sh """
-        git tag -a v${version} -m "Release version ${version}"
-        git push origin v${version}
-    """
-    
-    return "v${version}"
-}
-
-// Pipeline で使用
+// NonCPSメソッド（シリアライズ不可能な処理）
 @NonCPS
-def parseCommitMessage(String message) {
-    def pattern = ~/^(\w+)(?:\((.+)\))?: (.+)$/
-    def matcher = message =~ pattern
-    
-    if (matcher.matches()) {
-        return [
-            type: matcher[0][1],
-            scope: matcher[0][2] ?: '',
-            subject: matcher[0][3]
-        ]
-    }
-    
-    return null
+def parseJson(String jsonText) {
+    return new groovy.json.JsonSlurper().parseText(jsonText)
 }
 ```
 
-### カスタムステップ
+##### パイプラインテンプレート
 
 ```groovy
 // vars/standardPipeline.groovy
-def call(Map pipelineParams) {
+def call(Map config) {
     pipeline {
-        agent { label pipelineParams.agent ?: 'docker' }
-        
-        options {
-            timestamps()
-            timeout(time: pipelineParams.timeout ?: 60, unit: 'MINUTES')
-        }
+        agent { label config.agent ?: 'docker' }
         
         stages {
-            stage('Setup') {
-                steps {
-                    script {
-                        echo "Pipeline: ${pipelineParams.name}"
-                        pipelineParams.setup?.call()
-                    }
-                }
-            }
-            
             stage('Build') {
                 when {
-                    expression { pipelineParams.build != null }
+                    expression { config.build != null }
                 }
                 steps {
-                    script {
-                        pipelineParams.build.call()
-                    }
+                    script { config.build.call() }
                 }
             }
             
             stage('Test') {
                 when {
-                    expression { pipelineParams.test != null }
+                    expression { config.test != null }
                 }
                 steps {
-                    script {
-                        pipelineParams.test.call()
-                    }
-                }
-            }
-            
-            stage('Deploy') {
-                when {
-                    expression { pipelineParams.deploy != null }
-                    branch pipelineParams.deployBranch ?: 'main'
-                }
-                steps {
-                    script {
-                        pipelineParams.deploy.call()
-                    }
+                    script { config.test.call() }
                 }
             }
         }
         
         post {
             always {
+                script { config.cleanup?.call() }
+            }
+        }
+    }
+}
+```
+
+---
+
+## Part 3: 運用編（Operations）
+
+### 3.1 セキュリティ
+
+#### 3.1.1 認証・認可設定
+
+##### Script Security
+
+```groovy
+// Script Consoleでの承認
+import org.jenkinsci.plugins.scriptsecurity.scripts.*
+
+ScriptApproval sa = ScriptApproval.get()
+// 保留中のスクリプトを承認
+sa.pendingScripts.each { ps ->
+    sa.approveScript(ps.hash)
+}
+```
+
+##### クレデンシャル管理
+
+```groovy
+// ✅ 安全な方法
+withCredentials([
+    string(credentialsId: 'api-key', variable: 'API_KEY'),
+    usernamePassword(
+        credentialsId: 'db-creds',
+        usernameVariable: 'DB_USER',
+        passwordVariable: 'DB_PASS'
+    )
+]) {
+    sh '''
+        curl -H "Authorization: Bearer ${API_KEY}" \\
+             https://api.example.com
+    '''
+}
+
+// ❌ 危険な方法
+def password = 'hardcoded-password'  // 絶対NG！
+```
+
+#### 3.1.2 CSRF対策
+
+```groovy
+// JCasC設定
+jenkins:
+  crumbIssuer:
+    standard:
+      excludeClientIPFromCrumb: false
+```
+
+#### 3.1.3 権限管理
+
+```groovy
+// Role-based Authorization Strategy
+jenkins:
+  authorizationStrategy:
+    roleBased:
+      roles:
+        global:
+          - name: "admin"
+            permissions:
+              - "Overall/Administer"
+          - name: "developer"
+            permissions:
+              - "Job/Build"
+              - "Job/Read"
+```
+
+### 3.2 監視とログ管理
+
+#### 3.2.1 ログレベル設定
+
+```groovy
+// System Logの設定
+import java.util.logging.Logger
+import java.util.logging.Level
+
+// 特定パッケージのログレベル変更
+Logger.getLogger("hudson.model").setLevel(Level.FINE)
+Logger.getLogger("jenkins.branch").setLevel(Level.FINEST)
+```
+
+#### 3.2.2 メトリクス収集
+
+```groovy
+pipeline {
+    stages {
+        stage('Metrics') {
+            steps {
                 script {
-                    pipelineParams.cleanup?.call()
+                    // ビルド時間の記録
+                    def startTime = System.currentTimeMillis()
+                    
+                    // 処理実行
+                    doSomething()
+                    
+                    def duration = System.currentTimeMillis() - startTime
+                    echo "Duration: ${duration}ms"
+                    
+                    // カスタムメトリクス送信
+                    sendMetrics([
+                        'build.duration': duration,
+                        'build.status': currentBuild.result
+                    ])
                 }
             }
         }
     }
 }
-
-// 使用例
-standardPipeline(
-    name: 'My Application',
-    agent: 'linux && docker',
-    build: {
-        sh 'make build'
-    },
-    test: {
-        sh 'make test'
-    },
-    deploy: {
-        sh 'make deploy'
-    }
-)
 ```
 
-## テスト
-
-### Job DSLテスト
+#### 3.2.3 監査ログ
 
 ```groovy
-// test/jobdsl/JobDslTest.groovy
-import javaposse.jobdsl.dsl.DslScriptLoader
-import javaposse.jobdsl.plugin.JenkinsJobManagement
-import org.junit.Test
-import static org.junit.Assert.*
+// 重要な操作をログに記録
+def auditLog(String action, Map details) {
+    def timestamp = new Date().format('yyyy-MM-dd HH:mm:ss')
+    def user = env.BUILD_USER ?: 'system'
+    
+    echo """
+    [AUDIT] ${timestamp}
+    User: ${user}
+    Action: ${action}
+    Details: ${details}
+    """
+    
+    // 外部システムへの送信も可能
+    writeFile file: "audit/${env.BUILD_NUMBER}.log", 
+              text: "${timestamp},${user},${action},${details}"
+}
+```
 
-class JobDslTest {
-    @Test
-    void 'test job creation'() {
-        def jobManagement = new JenkinsJobManagement()
-        def loader = new DslScriptLoader(jobManagement)
-        
-        def script = '''
-            pipelineJob('test-job') {
-                displayName('Test Job')
+### 3.3 バックアップとリストア
+
+#### 3.3.1 ジョブ定義のバックアップ
+
+```groovy
+// バックアップスクリプト
+pipeline {
+    agent any
+    
+    stages {
+        stage('Backup Jobs') {
+            steps {
+                script {
+                    def backupDir = "/backup/jenkins/${new Date().format('yyyyMMdd')}"
+                    
+                    // ジョブ設定のエクスポート
+                    sh """
+                        mkdir -p ${backupDir}
+                        
+                        # ジョブ設定をXMLで保存
+                        for job in \$(jenkins-cli list-jobs); do
+                            jenkins-cli get-job "\$job" > "${backupDir}/\${job}.xml"
+                        done
+                        
+                        # 圧縮
+                        tar -czf ${backupDir}.tar.gz ${backupDir}
+                    """
+                }
             }
-        '''
-        
-        def jobs = loader.runScript(script)
-        
-        assertEquals(1, jobs.size())
-        assertEquals('test-job', jobs[0].jobName)
+        }
     }
 }
 ```
 
-### パイプラインテスト
+#### 3.3.2 設定のエクスポート/インポート
+
+```groovy
+// JCasCによる設定管理
+jenkins:
+  systemMessage: "Jenkins Managed by Code"
+  numExecutors: 5
+  
+  # 設定のエクスポート
+  # Jenkins UI > Manage Jenkins > Configuration as Code > View Configuration
+
+// 設定の適用
+def applyConfiguration() {
+    sh '''
+        curl -X POST \\
+            -H "Content-Type: application/yaml" \\
+            --data-binary @jcasc.yaml \\
+            http://localhost:8080/configuration-as-code/apply
+    '''
+}
+```
+
+#### 3.3.3 災害復旧計画
+
+```yaml
+# disaster-recovery.yaml
+recovery_plan:
+  backup_frequency: "daily"
+  retention: "30 days"
+  
+  components:
+    - name: "Job Configurations"
+      path: "/var/jenkins_home/jobs"
+      critical: true
+      
+    - name: "Shared Libraries"
+      path: "/var/jenkins_home/workflow-libs"
+      critical: true
+      
+    - name: "Credentials"
+      path: "/var/jenkins_home/credentials.xml"
+      critical: true
+      encrypted: true
+```
+
+### 3.4 パフォーマンス最適化
+
+#### 3.4.1 ビルドキューの最適化
+
+```groovy
+// 並列度の制御
+options {
+    throttle(['deployment-category'])
+    lock(resource: 'shared-resource')
+}
+```
+
+#### 3.4.2 キャッシュ戦略
+
+```groovy
+stage('Build with Cache') {
+    steps {
+        cache(maxCacheSize: 500, caches: [
+            arbitraryFileCache(
+                path: 'node_modules',
+                includes: '**/*',
+                fingerprinting: true
+            ),
+            arbitraryFileCache(
+                path: '.gradle',
+                includes: '**/*',
+                fingerprinting: false
+            )
+        ]) {
+            sh 'npm install'
+            sh './gradlew build'
+        }
+    }
+}
+```
+
+#### 3.4.3 エージェントの効率化
+
+```groovy
+// Dockerエージェントの再利用
+pipeline {
+    agent {
+        docker {
+            image 'maven:3.8-jdk-11'
+            args '-v /tmp/cache:/cache'
+            reuseNode true  // ノードを再利用
+        }
+    }
+}
+```
+
+---
+
+## Part 4: リファレンス（Reference）
+
+### 4.1 コーディング規約
+
+#### 4.1.1 命名規則
+
+| 要素 | 規則 | 例 |
+|------|------|-----|
+| ジョブ名 | PascalCase | `BuildApplication` |
+| フォルダ名 | PascalCase_Underscore | `Admin_Jobs` |
+| パラメータ | UPPER_SNAKE | `BUILD_VERSION` |
+| 関数名 | camelCase | `validateInput()` |
+| クラス名 | PascalCase | `GitUtils` |
+
+#### 4.1.2 ファイル構成
+
+```groovy
+// 1. ヘッダーコメント
+/**
+ * ジョブ名: BuildApplication
+ * 説明: アプリケーションのビルド
+ * 作成者: @username
+ * 作成日: 2024-01-01
+ */
+
+// 2. インポート
+import jp.co.company.utils.*
+
+// 3. 定数定義
+def CONSTANTS = [
+    TIMEOUT: 60,
+    RETRY: 3
+]
+
+// 4. メイン処理
+pipeline {
+    // ...
+}
+
+// 5. ヘルパー関数
+def helperFunction() {
+    // ...
+}
+```
+
+#### 4.1.3 コメント規約
+
+```groovy
+// 単一行コメント: 簡潔な説明
+
+/**
+ * ブロックコメント:
+ * 複雑な処理の説明
+ * @param name パラメータ説明
+ * @return 戻り値の説明
+ */
+
+// TODO: 後で実装予定
+// FIXME: 修正が必要
+// HACK: 一時的な回避策
+```
+
+### 4.2 よくあるパターン集
+
+#### 4.2.1 条件分岐パターン
+
+```groovy
+// when条件
+stage('Deploy') {
+    when {
+        allOf {
+            branch 'main'
+            expression { params.DEPLOY == true }
+            not { changelog '.*\\[skip-deploy\\].*' }
+        }
+    }
+    steps { /* ... */ }
+}
+```
+
+#### 4.2.2 エラーハンドリングパターン
+
+```groovy
+// リトライ付きエラーハンドリング
+retry(3) {
+    timeout(time: 5, unit: 'MINUTES') {
+        try {
+            // 処理
+        } catch (Exception e) {
+            echo "Error: ${e.message}"
+            if (currentBuild.number == 3) {
+                error "Max retries reached"
+            }
+            sleep(time: 30, unit: 'SECONDS')
+            throw e
+        }
+    }
+}
+```
+
+#### 4.2.3 通知パターン
+
+```groovy
+def notifyBuildStatus() {
+    def status = currentBuild.result ?: 'SUCCESS'
+    def color = status == 'SUCCESS' ? 'good' : 'danger'
+    
+    slackSend(
+        channel: '#ci-cd',
+        color: color,
+        message: """
+            Job: ${env.JOB_NAME}
+            Build: #${env.BUILD_NUMBER}
+            Status: ${status}
+            Duration: ${currentBuild.durationString}
+        """.stripIndent()
+    )
+}
+```
+
+#### 4.2.4 スケジューラージョブパターン
+
+```groovy
+// Freestyleジョブで定期実行
+freeStyleJob('Nightly_Cleanup') {
+    triggers {
+        // JST 00:00 = UTC 15:00
+        cron('0 15 * * *')
+    }
+    
+    steps {
+        shell('''
+            echo "Starting cleanup at $(date)"
+            # クリーンアップ処理
+        ''')
+    }
+    
+    publishers {
+        // 非同期で他ジョブをトリガー
+        downstreamParameterized {
+            trigger('Maintenance/Job') {
+                condition('SUCCESS')
+                parameters {
+                    predefinedProp('MODE', 'scheduled')
+                }
+            }
+        }
+    }
+}
+```
+
+### 4.3 トラブルシューティング
+
+#### 4.3.1 デバッグ手法
+
+##### 環境情報の出力
+
+```groovy
+stage('Debug Info') {
+    steps {
+        sh 'printenv | sort'
+        script {
+            echo "Workspace: ${env.WORKSPACE}"
+            echo "Node: ${env.NODE_NAME}"
+            echo "Executor: ${env.EXECUTOR_NUMBER}"
+            
+            // Jenkins情報
+            echo "Jenkins URL: ${env.JENKINS_URL}"
+            echo "Jenkins Version: ${jenkins.model.Jenkins.VERSION}"
+        }
+    }
+}
+```
+
+##### Script Consoleでのデバッグ
+
+```groovy
+// Jenkins > Manage > Script Console
+
+// プラグイン一覧
+Jenkins.instance.pluginManager.plugins.each {
+    println "${it.shortName}:${it.version}"
+}
+
+// ジョブ一覧
+Jenkins.instance.items.each { job ->
+    println "${job.name}: ${job.class.simpleName}"
+}
+
+// ノード情報
+Jenkins.instance.nodes.each { node ->
+    println "${node.name}: ${node.toComputer().isOnline()}"
+}
+```
+
+#### 4.3.2 よくあるエラーと解決策
+
+| エラー | 原因 | 解決策 |
+|--------|------|--------|
+| `NotSerializableException` | クロージャ内で非シリアライズ可能オブジェクト使用 | `@NonCPS`アノテーション追加 |
+| `No such DSL method` | DSLメソッドが見つからない | プラグインのインストール確認 |
+| `Script not permitted` | Script Securityによるブロック | Script Approvalで承認 |
+| `Cannot find credentials` | クレデンシャルID不一致 | IDの確認、スコープ確認 |
+| `Timeout has been exceeded` | 処理がタイムアウト | タイムアウト値増加、処理最適化 |
+
+#### 4.3.3 パフォーマンス問題の診断
+
+```groovy
+// ステージごとの実行時間測定
+def stageTimes = [:]
+
+stage('Build') {
+    script {
+        def start = System.currentTimeMillis()
+        // ビルド処理
+        stageTimes['Build'] = System.currentTimeMillis() - start
+    }
+}
+
+post {
+    always {
+        script {
+            echo "Stage execution times:"
+            stageTimes.each { stage, time ->
+                echo "  ${stage}: ${time}ms"
+            }
+        }
+    }
+}
+```
+
+### 4.4 テスト手法
+
+#### 4.4.1 Job DSLテスト
+
+```groovy
+// test/jobdsl/JobDslTest.groovy
+import javaposse.jobdsl.dsl.*
+import spock.lang.Specification
+
+class JobDslTest extends Specification {
+    def "test job creation"() {
+        given:
+        def jobManagement = new MemoryJobManagement()
+        def jobDslExecutor = new DslScriptLoader(jobManagement)
+        
+        when:
+        jobDslExecutor.runScript("""
+            pipelineJob('test-job') {
+                displayName('Test Job')
+            }
+        """)
+        
+        then:
+        jobManagement.savedJobs.size() == 1
+        jobManagement.savedJobs['test-job'] != null
+    }
+}
+```
+
+#### 4.4.2 パイプラインテスト
 
 ```groovy
 // test/pipeline/PipelineTest.groovy
 import org.jenkinsci.plugins.workflow.cps.CpsFlowDefinition
 import org.jenkinsci.plugins.workflow.job.WorkflowJob
 import org.junit.Rule
-import org.junit.Test
 import org.jvnet.hudson.test.JenkinsRule
+import spock.lang.Specification
 
-class PipelineTest {
+class PipelineTest extends Specification {
     @Rule
-    public JenkinsRule jenkins = new JenkinsRule()
+    JenkinsRule jenkins = new JenkinsRule()
     
-    @Test
-    void 'test pipeline execution'() {
-        def job = jenkins.createProject(WorkflowJob, 'test-pipeline')
-        def pipeline = '''
+    def "test pipeline execution"() {
+        given:
+        def job = jenkins.createProject(WorkflowJob, 'test')
+        job.definition = new CpsFlowDefinition('''
             pipeline {
                 agent any
                 stages {
@@ -1576,284 +1366,123 @@ class PipelineTest {
                     }
                 }
             }
-        '''
+        ''', true)
         
-        job.definition = new CpsFlowDefinition(pipeline, true)
+        when:
         def build = jenkins.buildAndAssertSuccess(job)
         
+        then:
         jenkins.assertLogContains('Testing', build)
     }
 }
 ```
 
-### 共有ライブラリテスト
+#### 4.4.3 共有ライブラリテスト
 
 ```groovy
-// test/library/GitUtilsTest.groovy
-import jp.co.tielec.jenkins.utils.GitUtils
+// test/library/SharedLibraryTest.groovy
+import com.lesfurets.jenkins.unit.BasePipelineTest
 import org.junit.Before
 import org.junit.Test
-import static org.mockito.Mockito.*
 
-class GitUtilsTest {
-    def mockScript
-    def gitUtils
-    
+class SharedLibraryTest extends BasePipelineTest {
     @Before
-    void setup() {
-        mockScript = mock(Object)
-        gitUtils = new GitUtils(mockScript)
+    void setUp() {
+        super.setUp()
+        // ライブラリの登録
+        def library = library()
+            .name('jenkins-shared-library')
+            .retriever(localSource('/path/to/library'))
+            .targetPath('/')
+            .defaultVersion('main')
+            .implicit(true)
+            .build()
+        helper.registerSharedLibrary(library)
     }
     
     @Test
-    void 'test getCurrentBranch'() {
-        when(mockScript.sh([
-            script: 'git rev-parse --abbrev-ref HEAD',
-            returnStdout: true
-        ])).thenReturn('feature/test\n')
+    void testUtilityFunction() {
+        // スクリプトの実行
+        runScript('test/resources/testPipeline.groovy')
         
-        def branch = gitUtils.getCurrentBranch()
-        
-        assert branch == 'feature/test'
+        // アサーション
+        assertJobStatusSuccess()
+        assertCallStackContains('echo Testing')
     }
 }
 ```
 
-## ベストプラクティス
+---
 
-### ジョブ設計
+## 付録
 
-1. **単一責任の原則**
-   ```groovy
-   // ✅ 良い例：単一の目的
-   pipelineJob('test-unit') {
-       // ユニットテストのみ
-   }
-   
-   // ❌ 悪い例：複数の責任
-   pipelineJob('test-build-deploy-all') {
-       // すべてを1つのジョブで
-   }
-   ```
+### クイックリファレンス
 
-2. **パラメータ化**
-   ```groovy
-   parameters {
-       string(name: 'BRANCH', defaultValue: 'main')
-       choice(name: 'ENV', choices: ['dev', 'staging', 'prod'])
-       booleanParam(name: 'SKIP_TESTS', defaultValue: false)
-   }
-   ```
-
-3. **エラーハンドリング**
-   ```groovy
-   stage('Critical Step') {
-       steps {
-           script {
-               try {
-                   // 重要な処理
-               } catch (Exception e) {
-                   currentBuild.result = 'FAILURE'
-                   error "Critical step failed: ${e.message}"
-               }
-           }
-       }
-   }
-   ```
-
-### パイプライン設計
-
-1. **ステージの明確化**
-   ```groovy
-   stages {
-       stage('準備') { /* ... */ }
-       stage('ビルド') { /* ... */ }
-       stage('テスト') { /* ... */ }
-       stage('デプロイ') { /* ... */ }
-   }
-   ```
-
-2. **並列実行の活用**
-   ```groovy
-   stage('Tests') {
-       parallel {
-           stage('Unit Tests') { /* ... */ }
-           stage('Integration Tests') { /* ... */ }
-           stage('Lint') { /* ... */ }
-       }
-   }
-   ```
-
-3. **適切なエージェント選択**
-   ```groovy
-   agent {
-       label 'docker && linux'
-   }
-   // または
-   agent {
-       docker {
-           image 'python:3.9'
-       }
-   }
-   ```
-
-### 共有ライブラリ設計
-
-1. **インターフェース統一**
-   ```groovy
-   // すべてのメソッドでMapパラメータを使用
-   def deploy(Map config) {
-       validateConfig(config)
-       // 処理
-   }
-   ```
-
-2. **エラー処理**
-   ```groovy
-   def validateConfig(Map config) {
-       if (!config.repo) {
-           error "Repository is required"
-       }
-   }
-   ```
-
-3. **ログ出力**
-   ```groovy
-   def process(Map config) {
-       echo "[INFO] Starting process: ${config.name}"
-       // 処理
-       echo "[INFO] Process completed: ${config.name}"
-   }
-   ```
-
-### パフォーマンス最適化
-
-1. **キャッシュの活用**
-   ```groovy
-   // 依存関係のキャッシュ
-   stage('Cache Dependencies') {
-       steps {
-           cache(maxCacheSize: 250, caches: [
-               arbitraryFileCache(
-                   path: 'node_modules',
-                   includes: '**/*',
-                   fingerprinting: true
-               )
-           ]) {
-               sh 'npm install'
-           }
-       }
-   }
-   ```
-
-2. **条件付き実行**
-   ```groovy
-   // 不要なステップのスキップ
-   when {
-       not {
-           changelog '.*\\[skip ci\\].*'
-       }
-   }
-   ```
-
-3. **リソースの効率的利用**
-   ```groovy
-   options {
-       lock(resource: 'deployment-lock')
-       throttle(['deployment-category'])
-   }
-   ```
-
-## トラブルシューティング
-
-### デバッグテクニック
+#### よく使うDSLメソッド
 
 ```groovy
-// 環境変数の確認
-stage('Debug Info') {
-    steps {
-        sh 'printenv | sort'
-        script {
-            echo "Workspace: ${env.WORKSPACE}"
-            echo "Build: ${currentBuild.number}"
-            echo "Result: ${currentBuild.result}"
-        }
-    }
-}
+// パラメータ
+stringParam(name, defaultValue, description)
+choiceParam(name, choices, description)
+booleanParam(name, defaultValue, description)
+textParam(name, defaultValue, description)
 
-// Groovyスクリプトコンソール
-// Jenkins > Manage Jenkins > Script Console
-println Jenkins.instance.pluginManager.plugins.collect { 
-    "${it.shortName}:${it.version}" 
-}.sort()
+// トリガー
+cron(expression)
+githubPush()
+upstream(threshold, jobs)
 
-// Pipeline実行ログの詳細表示
-pipeline {
-    options {
-        timestamps()
-        ansiColor('xterm')
-    }
-}
+// ビルド後アクション
+archiveArtifacts(artifacts)
+junit(testResults)
+publishHTML(target)
 ```
 
-### よくある問題と解決策
-
-#### シリアライズエラー
+#### Pipeline構文チートシート
 
 ```groovy
-// ❌ 問題のあるコード
-def result = sh(script: 'ls', returnStdout: true)
-result.split('\n').each { line ->  // NotSerializableException
-    echo line
+// 条件
+when {
+    branch pattern
+    environment name: pattern
+    expression { }
+    not { }
+    allOf { }
+    anyOf { }
 }
 
-// ✅ 解決策: @NonCPSを使用
-@NonCPS
-def processLines(String text) {
-    text.split('\n').each { line ->
-        println line
-    }
-}
-```
-
-#### クレデンシャルの扱い
-
-```groovy
-// ❌ セキュリティリスク
-def password = 'hardcoded-password'
-
-// ✅ 安全な方法
-withCredentials([string(credentialsId: 'api-key', variable: 'API_KEY')]) {
-    sh "curl -H 'Authorization: Bearer ${API_KEY}' https://api.example.com"
+// post条件
+post {
+    always { }
+    success { }
+    failure { }
+    unstable { }
+    changed { }
+    fixed { }
+    regression { }
+    aborted { }
+    cleanup { }
 }
 ```
 
-## コントリビューション
-
-### コミット規約
-
-```
-[jenkins] action: 詳細な説明
-
-action: add|update|fix|remove|refactor
-
-例:
-[jenkins] add: PR自動ビルド用の新しいパイプラインを追加
-[jenkins] fix: Deploy stageのタイムアウト問題を修正
-[jenkins] refactor: 共有ライブラリのGitUtilsを最適化
-```
-
-### プルリクエスト
-
-1. featureブランチを作成
-2. Job DSL/Pipelineの構文チェック
-3. テストを追加・実行
-4. ドキュメントを更新
-5. PRを作成
-
-## 関連ドキュメント
+### 関連ドキュメント
 
 - [Jenkins README](README.md) - 使用方法
-- [メインCLAUDE.md](../CLAUDE.md) - 開発ガイドライン
-- [Jenkins公式ドキュメント](https://www.jenkins.io/doc/book/pipeline/)
-- [Job DSL Plugin API](https://jenkinsci.github.io/job-dsl-plugin/)
+- [メインCLAUDE.md](../CLAUDE.md) - プロジェクト全体のガイドライン
+- [Jenkins公式ドキュメント](https://www.jenkins.io/doc/)
+- [Job DSL API](https://jenkinsci.github.io/job-dsl-plugin/)
+- [Pipeline Syntax](https://www.jenkins.io/doc/book/pipeline/syntax/)
+
+### 変更履歴
+
+| バージョン | 日付 | 内容 |
+|------------|------|------|
+| v2.0 | 2024-01-XX | MECE原則に基づく全面改訂 |
+| | | - 重複内容の統合 |
+| | | - 運用編（セキュリティ、監視、バックアップ）追加 |
+| | | - 構造の再編成 |
+
+---
+
+**最終更新**: 2024年1月
+**メンテナー**: @infrastructure-team
