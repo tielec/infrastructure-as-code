@@ -58,17 +58,17 @@ SEED_JOB_NAME="${SEED_JOB_NAME:-seed-job}"
 # SSMパラメータから設定を取得（オプション）
 if command -v aws &> /dev/null; then
     # Gitリポジトリ設定
-    if [ -z "$JENKINS_JOBS_REPO" ]; then
-        JENKINS_JOBS_REPO=$(aws ssm get-parameter --name "/jenkins-infra/${ENVIRONMENT}/config/git-repo" --query "Parameter.Value" --output text 2>/dev/null || echo "https://github.com/tielec/infrastructure-as-code.git")
+    if [ -z "$GIT_INFRASTRUCTURE_REPO_URL" ]; then
+        GIT_INFRASTRUCTURE_REPO_URL=$(aws ssm get-parameter --name "/jenkins-infra/${ENVIRONMENT}/config/git-repo" --query "Parameter.Value" --output text 2>/dev/null || echo "https://github.com/tielec/infrastructure-as-code.git")
     fi
     
-    if [ -z "$JENKINS_JOBS_BRANCH" ]; then
-        JENKINS_JOBS_BRANCH=$(aws ssm get-parameter --name "/jenkins-infra/${ENVIRONMENT}/config/git-branch" --query "Parameter.Value" --output text 2>/dev/null || echo "main")
+    if [ -z "$GIT_INFRASTRUCTURE_REPO_BRANCH" ]; then
+        GIT_INFRASTRUCTURE_REPO_BRANCH=$(aws ssm get-parameter --name "/jenkins-infra/${ENVIRONMENT}/config/git-branch" --query "Parameter.Value" --output text 2>/dev/null || echo "main")
     fi
 else
     # SSMが使えない場合のデフォルト値
-    JENKINS_JOBS_REPO="${JENKINS_JOBS_REPO:-https://github.com/tielec/infrastructure-as-code.git}"
-    JENKINS_JOBS_BRANCH="${JENKINS_JOBS_BRANCH:-main}"
+    GIT_INFRASTRUCTURE_REPO_URL="${GIT_INFRASTRUCTURE_REPO_URL:-https://github.com/tielec/infrastructure-as-code.git}"
+    GIT_INFRASTRUCTURE_REPO_BRANCH="${GIT_INFRASTRUCTURE_REPO_BRANCH:-main}"
 fi
 
 # その他のデフォルト値
@@ -78,8 +78,8 @@ RUN_INITIAL_BUILD="${RUN_INITIAL_BUILD:-false}"
 
 # 環境変数をエクスポート
 export SEED_JOB_NAME
-export JENKINS_JOBS_REPO
-export JENKINS_JOBS_BRANCH
+export GIT_INFRASTRUCTURE_REPO_URL
+export GIT_INFRASTRUCTURE_REPO_BRANCH
 export JOB_DSL_SCRIPTS_PATH
 export UPDATE_EXISTING_JOB
 export RUN_INITIAL_BUILD
@@ -87,8 +87,8 @@ export RUN_INITIAL_BUILD
 log "Configuration:"
 log "  JENKINS_HOME: $JENKINS_HOME"
 log "  SEED_JOB_NAME: $SEED_JOB_NAME"
-log "  JENKINS_JOBS_REPO: $JENKINS_JOBS_REPO"
-log "  JENKINS_JOBS_BRANCH: $JENKINS_JOBS_BRANCH"
+log "  GIT_INFRASTRUCTURE_REPO_URL: $GIT_INFRASTRUCTURE_REPO_URL"
+log "  GIT_INFRASTRUCTURE_REPO_BRANCH: $GIT_INFRASTRUCTURE_REPO_BRANCH"
 log "  JENKINSFILE_PATH: $JOB_DSL_SCRIPTS_PATH"
 
 # プラグインの確認（パイプラインジョブなのでworkflow-jobプラグインを確認）
@@ -198,7 +198,7 @@ log ""
 log "After restart, the following will happen:"
 log "1. Seed job '$SEED_JOB_NAME' will be created/updated"
 log "2. Job will be configured with:"
-log "   - Repository: $JENKINS_JOBS_REPO"
-log "   - Branch: $JENKINS_JOBS_BRANCH"
+log "   - Repository: $GIT_INFRASTRUCTURE_REPO_URL"
+log "   - Branch: $GIT_INFRASTRUCTURE_REPO_BRANCH"
 log "   - Jenkinsfile path: $JOB_DSL_SCRIPTS_PATH"
 log "3. Run the seed job to create all other jobs"

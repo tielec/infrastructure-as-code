@@ -19,11 +19,13 @@ jenkins:
   globalNodeProperties:
   - envVars:
       env:
-      - key: "GIT_JENKINS_CREDENTIALS_ID"
+      - key: "GITHUB_APP_CREDENTIALS_ID"
         value: "github-app-credentials"
-      - key: "GIT_JENKINS_REPO_BRANCH"
+      - key: "GITHUB_PAT_CREDENTIALS_ID"
+        value: "github-pat"
+      - key: "GIT_INFRASTRUCTURE_REPO_BRANCH"
         value: "main"
-      - key: "GIT_JENKINS_REPO_URL"
+      - key: "GIT_INFRASTRUCTURE_REPO_URL"
         value: "https://github.com/tielec/infrastructure-as-code.git"
   clouds:
     - eC2Fleet:

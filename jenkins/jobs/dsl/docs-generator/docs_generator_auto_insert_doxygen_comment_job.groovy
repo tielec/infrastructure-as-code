@@ -59,7 +59,6 @@ def createDocumentGeneratorJob(repoConfig) {
         parameters {
             stringParam('REPO_URL', repoConfig.url, 'リポジトリURL')
             stringParam('TARGET_BRANCH', repoConfig.branch, 'ドキュメント生成元のブランチ')
-            stringParam('GIT_CREDENTIALS_ID', repoConfig.credentialsId, 'GitHub認証情報ID')
             stringParam('PR_TARGET_BRANCH', repoConfig.docBranch, 'PRのマージ先ブランチ')
             choiceParam('COMMIT_MODE', ['DIRECT_PUSH', 'CREATE_PR'], 'コミットモード（直接プッシュ or PR作成）')
             booleanParam('OVERWRITE_DOCS', true, 'Python,shellの既存のコメントを上書きするかどうか')

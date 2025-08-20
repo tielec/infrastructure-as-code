@@ -27,8 +27,10 @@ class GitHubApiClient implements Serializable {
      */
     GitHubApiClient(def script) {
         this.script = script
+        // 環境変数から取得、未定義の場合はデフォルト値を使用
+        def defaultCredentialsId = script.env.GITHUB_APP_CREDENTIALS_ID ?: 'github-app-credentials'
         this.defaultConfig = [
-            credentialsId: 'github-app-credentials',
+            credentialsId: defaultCredentialsId,
             acceptType: 'application/vnd.github.v3+json',
             authType: AuthType.GITHUB_APP // デフォルトはGitHub App認証
         ]
@@ -414,9 +416,11 @@ class GitHubApiClient implements Serializable {
             def updatedConfig = [:] + config
             updatedConfig.authType = authType
             
-            // デフォルトの認証情報IDを設定
+            // デフォルトの認証情報IDを設定（環境変数から取得）
             if (!updatedConfig.credentialsId) {
-                updatedConfig.credentialsId = (authType == AuthType.GITHUB_APP) ? 'github-app-credentials' : 'github-pat'
+                def githubAppCredentialsId = script.env.GITHUB_APP_CREDENTIALS_ID ?: 'github-app-credentials'
+                def githubPatCredentialsId = script.env.GITHUB_PAT_CREDENTIALS_ID ?: 'github-pat'
+                updatedConfig.credentialsId = (authType == AuthType.GITHUB_APP) ? githubAppCredentialsId : githubPatCredentialsId
             }
             
             // レート制限情報を取得して接続テスト

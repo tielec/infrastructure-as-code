@@ -15,7 +15,6 @@ class GitClientBase implements Serializable {
     // 定数定義
     private static final String DEFAULT_GIT_EMAIL = 'tielec-dev-jenkins@tielec.net'
     private static final String DEFAULT_GIT_USERNAME = 'TIELEC Dev Jenkins'
-    private static final String DEFAULT_PAT_CREDENTIALS_ID = 'github-pat'
     private static final int DEFAULT_CHECKOUT_TIMEOUT = 60
     private static final int DEFAULT_CLONE_DEPTH = 1
     private static final String DEFAULT_BASE_BRANCH = 'main'
@@ -29,10 +28,12 @@ class GitClientBase implements Serializable {
      */
     GitClientBase(def script) {
         this.script = script
+        // 環境変数から取得、未定義の場合はデフォルト値を使用
+        def defaultPatCredentialsId = script.env.GITHUB_PAT_CREDENTIALS_ID ?: 'github-pat'
         this.defaultConfig = [
             email: DEFAULT_GIT_EMAIL,
             username: DEFAULT_GIT_USERNAME,
-            credentialsId: DEFAULT_PAT_CREDENTIALS_ID,
+            credentialsId: defaultPatCredentialsId,
             checkoutTimeout: DEFAULT_CHECKOUT_TIMEOUT,
             shallowClone: true,
             cloneDepth: DEFAULT_CLONE_DEPTH,

@@ -227,14 +227,28 @@ Jenkins設定は以下の方法で管理されています：
 
 ## セキュリティ
 
+### 環境変数
+
+Jenkins全体で使用される環境変数（JCaSCで定義）：
+
+| 環境変数名 | デフォルト値 | 用途 |
+|-----------|------------|------|
+| `GITHUB_APP_CREDENTIALS_ID` | `github-app-credentials` | GitHub App認証用のクレデンシャルID |
+| `GITHUB_PAT_CREDENTIALS_ID` | `github-pat` | GitHub Personal Access Token用のクレデンシャルID |
+| `GIT_INFRASTRUCTURE_REPO_URL` | `https://github.com/tielec/infrastructure-as-code.git` | インフラストラクチャーリポジトリのURL |
+| `GIT_INFRASTRUCTURE_REPO_BRANCH` | `main` | デフォルトブランチ |
+
+これらの環境変数は、Jenkinsfile内で`env.VARIABLE_NAME`として参照できます。
+
 ### クレデンシャル管理
 
-| クレデンシャルID | 用途 | 種別 |
-|-----------------|------|------|
-| github-token | GitHub API アクセス | Secret Text |
-| github-credentials | GitHub リポジトリアクセス | Username/Password |
-| aws-credentials | AWS リソースアクセス | AWS Credentials |
-| docker-registry | Docker Registry認証 | Username/Password |
+| クレデンシャルID | 用途 | 種別 | 環境変数での参照 |
+|-----------------|------|------|-----------------|
+| github-token | GitHub API アクセス | Secret Text | - |
+| github-app-credentials | GitHub リポジトリアクセス | Username/Password | `${GITHUB_APP_CREDENTIALS_ID}` |
+| github-pat | GitHub Personal Access Token | Secret Text | `${GITHUB_PAT_CREDENTIALS_ID}` |
+| aws-credentials | AWS リソースアクセス | AWS Credentials | - |
+| docker-registry | Docker Registry認証 | Username/Password | - |
 
 ### セキュリティ設定
 

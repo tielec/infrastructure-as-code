@@ -58,7 +58,7 @@ pipeline {
                         gitUtils.checkoutRepository(
                             params.REPO_URL,
                             params.TARGET_BRANCH,  // ドキュメント生成対象のブランチ
-                            params.GIT_CREDENTIALS_ID  // 認証情報ID
+                            env.GITHUB_APP_CREDENTIALS_ID  // 認証情報ID
                         )
                     }
 
@@ -67,16 +67,16 @@ pipeline {
                         gitUtils.checkoutRepository(
                             params.REPO_URL,
                             params.PR_TARGET_BRANCH,  // PRのマージ先となるブランチ
-                            params.GIT_CREDENTIALS_ID  // 認証情報ID
+                            env.GITHUB_APP_CREDENTIALS_ID  // 認証情報ID
                         )
                     }
 
                     // 3. ドキュメント生成ツールのコードをチェックアウト
                     dir(PROJECT_HOME_DIR) {
                         gitUtils.checkoutRepository(
-                            env.GIT_JENKINS_REPO_URL,
-                            env.GIT_JENKINS_REPO_BRANCH,
-                            env.GIT_JENKINS_CREDENTIALS_ID
+                            env.GIT_INFRASTRUCTURE_REPO_URL,
+                            env.GIT_INFRASTRUCTURE_REPO_BRANCH,
+                            env.GITHUB_APP_CREDENTIALS_ID
                         )
                     }
                     
@@ -233,7 +233,7 @@ pipeline {
                                     env.BRANCH_NAME,             // ブランチ名 
                                     commitMessage,               // コミットメッセージ
                                     changedFiles,                // 変更されたファイル一覧
-                                    params.GIT_CREDENTIALS_ID,   // 認証情報ID
+                                    env.GITHUB_APP_CREDENTIALS_ID,   // 認証情報ID
                                     [
                                         repoUrl: params.REPO_URL,
                                         createNewBranch: true,
@@ -247,7 +247,7 @@ pipeline {
                                     params.PR_TARGET_BRANCH,     // ターゲットブランチ
                                     commitMessage,               // コミットメッセージ 
                                     changedFiles,                // 変更されたファイル一覧
-                                    params.GIT_CREDENTIALS_ID,   // 認証情報ID
+                                    env.GITHUB_APP_CREDENTIALS_ID,   // 認証情報ID
                                     [
                                         repoUrl: params.REPO_URL,
                                         createNewBranch: false,

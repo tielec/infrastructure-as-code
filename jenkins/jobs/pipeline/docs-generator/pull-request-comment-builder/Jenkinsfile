@@ -101,9 +101,9 @@ pipeline {
                     // ツールのチェックアウト
                     dir(PROJECT_HOME_DIR) {
                         gitUtils.checkoutRepository(
-                            env.GIT_JENKINS_REPO_URL,
-                            env.GIT_JENKINS_REPO_BRANCH,
-                            env.GIT_JENKINS_CREDENTIALS_ID
+                            env.GIT_INFRASTRUCTURE_REPO_URL,
+                            env.GIT_INFRASTRUCTURE_REPO_BRANCH,
+                            env.GITHUB_APP_CREDENTIALS_ID
                         )
                     }
                     
@@ -225,7 +225,7 @@ pipeline {
                         sh "mkdir -p ${WORKSPACE}/prompts"
                         
                         withCredentials([
-                            usernamePassword(credentialsId: 'github-app-credentials', 
+                            usernamePassword(credentialsId: env.GITHUB_APP_CREDENTIALS_ID , 
                                             usernameVariable: 'GITHUB_APP_ID',
                                             passwordVariable: 'GITHUB_ACCESS_TOKEN'),
                             string(credentialsId: 'openai-api-key', 

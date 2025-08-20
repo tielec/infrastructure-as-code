@@ -19,11 +19,6 @@ pipeline {
         // 認証情報
         OPENAI_API_KEY = credentials('openai-api-key')
         
-        // API/リポジトリ設定
-        GIT_JENKINS_REPO_URL = 'https://github.com/tielec/infrastructure-as-code.git'
-        GIT_JENKINS_REPO_BRANCH = 'main'
-        GIT_JENKINS_REPO_CREDENTIALS_ID = 'github-app-credentials'
-        
         // ディレクトリ構造
         COMMENTS_DIR = "pr-comments"
         ORIGINAL_CODE_DIR = "original-code"
@@ -95,16 +90,16 @@ pipeline {
                         gitUtils.checkoutRepository(
                             params.GIT_REPO_URL,
                             params.GIT_DOCUMENT_BRANCH,
-                            params.GIT_CREDENTIALS_ID 
+                            env.GITHUB_APP_CREDENTIALS_ID 
                         )
                     }
 
                     // ツールのチェックアウト
                     dir(PROJECT_HOME_DIR) {
                         gitUtils.checkoutRepository(
-                            env.GIT_JENKINS_REPO_URL,
-                            env.GIT_JENKINS_REPO_BRANCH,
-                            env.GIT_JENKINS_REPO_CREDENTIALS_ID 
+                            env.GIT_INFRASTRUCTURE_REPO_URL,
+                            env.GIT_INFRASTRUCTURE_REPO_BRANCH,
+                            env.GITHUB_APP_CREDENTIALS_ID 
                         )
                     }
                     
@@ -296,7 +291,7 @@ pipeline {
                                 env.BRANCH_NAME,                    // ブランチ名 
                                 commitMessage,                      // コミットメッセージ
                                 changedFiles,                       // 変更されたファイル一覧
-                                params.GIT_CREDENTIALS_ID,          // 認証情報ID
+                                env.GITHUB_APP_CREDENTIALS_ID,          // 認証情報ID
                                 [
                                     repoUrl: params.GIT_REPO_URL,
                                     createNewBranch: true,

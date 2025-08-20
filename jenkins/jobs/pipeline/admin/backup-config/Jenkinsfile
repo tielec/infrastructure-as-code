@@ -9,7 +9,6 @@ pipeline {
     environment {
         JENKINS_PAT = credentials('cli-user-token')
         REPO_URL = "https://github.com/tielec/config-management.git"
-        GITHUB_CREDENTIALS_ID = 'github-app-credentials'
         TIMESTAMP = sh(script: 'date "+%Y%m%d-%H%M%S"', returnStdout: true).trim()
         BRANCH_NAME = "config_backup/${TIMESTAMP}"
         CONFIG_DIR = "jenkins/config/casc"
@@ -27,7 +26,7 @@ pipeline {
                     gitUtils.checkoutRepository(
                         env.REPO_URL,
                         params.TARGET_BRANCH,
-                        env.GITHUB_CREDENTIALS_ID
+                        env.GITHUB_APP_CREDENTIALS_ID
                     )
                     gitUtils.setupGit()
 
@@ -129,7 +128,7 @@ pipeline {
                         env.BRANCH_NAME,             // ブランチ名 
                         commitMessage,               // コミットメッセージ
                         env.CONFIG_FILE,               // 変更されたファイル一覧
-                        env.GITHUB_CREDENTIALS_ID,   // 認証情報ID
+                        env.GITHUB_APP_CREDENTIALS_ID,   // 認証情報ID
                         [
                             repoUrl: env.REPO_URL,
                             createNewBranch: true,

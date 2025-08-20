@@ -27,11 +27,6 @@ pipeline {
         // タイムスタンプ
         TIME_STAMP = sh(script: 'TZ="Asia/Tokyo" date "+%Y/%m/%d %H:%M:%S"', returnStdout: true).trim()
         BUILD_TIME_STAMP = sh(script: 'TZ="Asia/Tokyo" date "+%Y%m%d-%H%M%S"', returnStdout: true).trim()
-
-        // Jenkinsリポジトリ設定
-        JENKINS_REPO_URL = 'https://github.com/tielec/infrastructure-as-code'
-        JENKINS_REPO_BRANCH = 'main'
-        JENKINS_GIT_CREDENTIALS_ID = 'github-app-credentials' // GitHub App認証を使用
         
         // 環境別の設定（ENVIRONMENTパラメータに基づく）
         PULUMI_STACK_NAME = "${params.ENVIRONMENT}"
@@ -415,16 +410,16 @@ def checkoutRepositories() {
         gitUtils.checkoutRepository(
             params.PULUMI_REPO_URL,
             params.PULUMI_TARGET_BRANCH,
-            params.PULUMI_GIT_CREDENTIALS_ID
+            env.GITHUB_APP_CREDENTIALS_ID
         )
     }
 
     // Jenkinsパイプラインのリポジトリ（レポートツール用）
     dir(env.JENKINS_REPO_DIR) {
         gitUtils.checkoutRepository(
-            env.JENKINS_REPO_URL,
-            env.JENKINS_REPO_BRANCH,
-            env.JENKINS_GIT_CREDENTIALS_ID
+            env.GIT_INFRASTRUCTURE_REPO_URL,
+            env.GIT_INFRASTRUCTURE_REPO_BRANCH,
+            env.GITHUB_APP_CREDENTIALS_ID
         )
     }
 }
