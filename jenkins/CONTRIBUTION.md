@@ -444,54 +444,87 @@ pipelineJob(fullJobName) {
 }
 ```
 
-#### Freestyleジョブ（既存ジョブのトリガー）
+#### Freestyleジョブ（非同期トリガー専用）
 
-既存のジョブをトリガーするだけのシンプルなジョブには、Freestyleジョブが適しています。
+既存のジョブを**非同期で**トリガーする場合にFreestyleジョブを使用します。同期実行が必要な場合はPipelineジョブを使用してください。
+
+##### Freestyleジョブの使用場面
+
+- ✅ **スケジューラージョブ** - 定期実行で他のジョブをトリガー
+- ✅ **通知専用ジョブ** - 結果を待たずに通知を送信
+- ✅ **自己停止処理** - Jenkinsが自身を停止する場合
+- ❌ **順次実行** - Pipelineジョブを使用
+- ❌ **結果の確認が必要** - Pipelineジョブを使用
+- ❌ **複雑な条件分岐** - Pipelineジョブを使用
+
+##### 非同期実行パターン（推奨）
 
 ```groovy
-// DSLファイル - Freestyleジョブの定義
+// DSLファイル - ポストビルドで非同期実行
 freeStyleJob(fullJobName) {
-    displayName('ジョブ表示名')
-    description('ジョブの説明')
+    displayName('非同期トリガージョブ')
+    description('他のジョブを非同期でトリガー')
     
     // 並行実行を無効化
     concurrentBuild(false)
     
-    // ビルド履歴の保持
-    logRotator {
-        daysToKeep(30)
-        numToKeep(90)
+    // ビルドステップは最小限に
+    steps {
+        shell('echo "ジョブをトリガーします..."')
     }
     
-    // 既存ジョブをトリガー
-    steps {
+    // ポストビルドアクションで非同期トリガー
+    publishers {
         downstreamParameterized {
             trigger('Target/Job/Path') {
-                // 固定パラメータを渡す
+                // 実行条件
+                condition('ALWAYS')  // または 'SUCCESS', 'UNSTABLE', 'FAILED'
+                
+                // パラメータ設定
                 parameters {
                     predefinedProp('PARAM1', 'value1')
                     predefinedProp('PARAM2', 'value2')
                     booleanParam('FLAG', true)
                 }
                 
-                // ビルド結果の扱い
-                block {
-                    buildStepFailure('FAILURE')
-                    failure('FAILURE')
-                    unstable('UNSTABLE')
-                }
+                // 結果を待たない（非同期）
+                triggerWithNoParameters(false)
             }
         }
     }
-    
-    // タイムアウト設定
-    wrappers {
-        timeout {
-            absolute(60)
-            failBuild()
-        }
-    }
 }
+```
+
+##### ジョブタイプの選択基準
+
+| ジョブタイプ | 使用場面 | メリット | デメリット |
+|------------|---------|---------|-----------|
+| **Freestyle + 非同期** | スケジューラー<br>単純なトリガー<br>自己停止処理 | シンプル<br>即座に完了<br>キューに残らない | 結果の確認が困難<br>複雑な処理は不可 |
+| **Pipeline + 同期** | 順次実行<br>結果確認が必要<br>複雑な処理フロー | 柔軟な制御<br>エラーハンドリング<br>ステージ管理 | 設定が複雑<br>実行時間が長い |
+
+⚠️ **重要**: Freestyleジョブで同期実行（結果を待つ）は推奨しません。同期実行が必要な場合はPipelineジョブを使用してください。
+
+##### 実装上の注意点
+
+```groovy
+// ⚠️ 非同期実行時の注意
+// 1. エラーが発生してもトリガー元は成功扱い
+// 2. トリガー先の実行状況は別途確認が必要
+// 3. パラメータの検証はトリガー先で実施
+
+// 推奨: ログに実行情報を記録
+steps {
+    shell("""
+        echo "========================================="
+        echo "トリガー対象: Target/Job/Path"
+        echo "パラメータ:"
+        echo "  PARAM1: value1"
+        echo "  PARAM2: value2"
+        echo "実行時刻: \$(date)"
+        echo "========================================="
+    """)
+}
+```
 
 // 注意: FreestyleジョブにはJenkinsfileは不要
 // job-config.yamlでの定義例:
@@ -503,7 +536,7 @@ freeStyleJob(fullJobName) {
 
 #### スケジューラージョブのパターン
 
-定期的に他のジョブをトリガーする場合の実装パターン：
+定期的に他のジョブをトリガーする場合は、必ずFreestyleジョブ + 非同期実行を使用：
 
 ```groovy
 // DSLファイル - スケジューラージョブ
