@@ -73,7 +73,6 @@ freeStyleJob(fullJobName) {
     // ビルドラッパー
     wrappers {
         timestamps()
-        ansiColorBuildWrapper()
         
         // タイムアウト設定（停止ジョブが長引いた場合の保険）
         timeout {
