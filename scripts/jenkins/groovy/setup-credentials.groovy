@@ -74,12 +74,19 @@ def upsertCredential = { credentialId, credential ->
         
         if (existingCredential != null) {
             println("  Updating existing credential: ${credentialId}")
-            credentialsStore.removeCredentials(globalDomain, existingCredential)
+            // 既存のクレデンシャルを更新する
+            def removed = credentialsStore.updateCredentials(globalDomain, existingCredential, credential)
+            if (!removed) {
+                // updateCredentialsが失敗した場合、削除して再作成
+                println("    Update failed, trying remove and add...")
+                credentialsStore.removeCredentials(globalDomain, existingCredential)
+                credentialsStore.addCredentials(globalDomain, credential)
+            }
         } else {
             println("  Creating new credential: ${credentialId}")
+            credentialsStore.addCredentials(globalDomain, credential)
         }
         
-        credentialsStore.addCredentials(globalDomain, credential)
         println("  ✓ Successfully saved credential: ${credentialId}")
         return true
     } catch (Exception e) {

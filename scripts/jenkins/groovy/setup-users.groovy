@@ -117,8 +117,14 @@ userConfigs.each { config ->
     
     if (existingUser != null) {
         println("User '${config.username}' already exists. Updating password.")
-        existingUser.setPassword(password)
-        existingUser.save()
+        // HudsonPrivateSecurityRealm.Details.fromPlainPasswordを使用してパスワードを更新
+        def user = User.get(config.username)
+        def passwordProperty = HudsonPrivateSecurityRealm.Details.fromPlainPassword(password)
+        user.addProperty(passwordProperty)
+        user.setFullName(config.fullname)
+        def mailProperty = new hudson.tasks.Mailer.UserProperty(config.email)
+        user.addProperty(mailProperty)
+        user.save()
         createdUsers.add([username: config.username, existed: true])
     } else {
         println("Creating new user: ${config.username}")
@@ -151,12 +157,19 @@ userConfigs.each { config ->
         println("Generating API token for CLI user...")
         
         try {
-            def cliUser = User.get(config.username, false, null)
+            // ユーザーが作成されたばかりなので、Userオブジェクトを取得
+            def cliUser = User.getById(config.username, false)
+            if (cliUser == null) {
+                println("WARNING: Failed to get CLI user object")
+                return
+            }
             def apiTokenProperty = cliUser.getProperty(ApiTokenProperty.class)
             
-            // 既存のトークンをクリア
-            apiTokenProperty.getApiTokenList().each { token ->
-                apiTokenProperty.deleteApiToken(token.uuid)
+            // 既存のトークンをクリア（すべて削除）
+            try {
+                apiTokenProperty.deleteApiToken()
+            } catch (Exception e) {
+                println("  Note: No existing tokens to delete or deletion failed: ${e.message}")
             }
             
             // 新しいAPIトークンを生成
@@ -170,9 +183,12 @@ userConfigs.each { config ->
             // SSMにユーザー名とトークンを保存
             def saveToSSM = { name, value ->
                 try {
+                    def paramPath = "/${PROJECT_NAME}/${ENVIRONMENT}/jenkins/${name}"
+                    println("  Saving to SSM: ${paramPath}")
+                    
                     def command = [
                         "aws", "ssm", "put-parameter",
-                        "--name", "/${PROJECT_NAME}/${ENVIRONMENT}/jenkins/${name}",
+                        "--name", paramPath,
                         "--value", value,
                         "--type", "SecureString",
                         "--overwrite",
@@ -180,17 +196,25 @@ userConfigs.each { config ->
                     ]
                     
                     def process = command.execute()
+                    def output = new StringBuilder()
+                    def error = new StringBuilder()
+                    
+                    process.consumeProcessOutput(output, error)
                     process.waitForOrKill(30000)
                     
                     if (process.exitValue() == 0) {
-                        println("✓ Saved ${name} to SSM")
+                        println("  ✓ Successfully saved ${name} to SSM")
                         return true
                     } else {
-                        println("WARNING: Failed to save ${name} to SSM")
+                        println("  ✗ Failed to save ${name} to SSM")
+                        if (error.toString()) {
+                            println("  Error: ${error.toString()}")
+                        }
                         return false
                     }
                 } catch (Exception e) {
-                    println("WARNING: Exception while saving ${name} to SSM: ${e.message}")
+                    println("  ✗ Exception while saving ${name} to SSM: ${e.message}")
+                    e.printStackTrace()
                     return false
                 }
             }

@@ -179,7 +179,7 @@ const ssmCustomPolicy = new aws.iam.Policy(`jenkins-ssm-custom-policy`, {
                     "ssm:PutParameter"
                 ],
                 Resource: [
-                    `arn:aws:ssm:*:*:parameter/jenkins-infra/${environment}/jenkins/status/*`
+                    `arn:aws:ssm:*:*:parameter/jenkins-infra/${environment}/jenkins/*`
                 ]
             }
         ]
