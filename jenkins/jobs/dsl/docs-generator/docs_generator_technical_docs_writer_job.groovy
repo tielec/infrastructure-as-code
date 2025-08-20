@@ -68,7 +68,6 @@ def createDocumentGeneratorJob(repoConfig) {
             // 文字列パラメータ
             stringParam('GIT_REPO_URL', repoConfig.url, 'GitHubリポジトリのURL')
             stringParam('GIT_TARGET_BRANCH', repoConfig.targetBranch, 'PRのマージ先ブランチ')
-            stringParam('GIT_CREDENTIALS_ID', repoConfig.credentialsId, 'GitHubの認証情報ID')
             stringParam('GIT_DOCUMENT_BRANCH', repoConfig.docBranch, 'ドキュメント用ブランチ')
             stringParam('START_DATE', repoConfig.startDate, '処理開始日 (YYYY-MM-DD形式)')
             stringParam('END_DATE', '', '処理終了日 (YYYY-MM-DD形式、空の場合は現在日時まで)')

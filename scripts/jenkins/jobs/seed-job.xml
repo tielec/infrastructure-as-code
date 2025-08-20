@@ -3,8 +3,8 @@
   <description>このジョブは、Gitリポジトリ内のJenkinsfileを実行して、他のすべてのJenkinsジョブを自動的に作成・更新・削除します。
 
 【設定内容】
-- リポジトリ: ${JENKINS_JOBS_REPO}
-- ブランチ: ${JENKINS_JOBS_BRANCH}
+- リポジトリ: ${GIT_INFRASTRUCTURE_REPO_URL}
+- ブランチ: ${GIT_INFRASTRUCTURE_REPO_BRANCH}
 - Jenkinsfile: ${JENKINSFILE_PATH}
 
 【役割】

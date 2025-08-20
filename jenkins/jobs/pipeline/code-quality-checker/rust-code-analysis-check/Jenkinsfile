@@ -61,9 +61,9 @@ pipeline {
                     // Jenkins のリポジトリをチェックアウト（設定ファイル用）
                     dir(env.CONFIG_DIR) {
                         gitUtils.checkoutRepository(
-                            env.GIT_JENKINS_REPO_URL,
-                            env.GIT_JENKINS_REPO_BRANCH,
-                            env.GIT_JENKINS_CREDENTIALS_ID
+                            env.GIT_INFRASTRUCTURE_REPO_URL,
+                            env.GIT_INFRASTRUCTURE_REPO_BRANCH,
+                            env.GITHUB_APP_CREDENTIALS_ID
                         )
                     }
 

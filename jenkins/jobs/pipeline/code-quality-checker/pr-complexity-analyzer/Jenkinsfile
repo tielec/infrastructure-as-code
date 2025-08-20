@@ -33,7 +33,7 @@ pipeline {
         // OpenAI API設定
         OPENAI_API_KEY = credentials('openai-api-key')
         OPENAI_MODEL = "gpt-4.1"
-        // GIT_JENKINS_REPO_BRANCH = "main"  // 開発時に必要な場合はコメントを外して使用
+        // GIT_INFRASTRUCTURE_REPO_BRANCH = "main"  // 開発時に必要な場合はコメントを外して使用
         
         // 作業ディレクトリ
         ANALYSIS_DIR = "${DIRECTORIES.ANALYSIS}"
@@ -513,12 +513,12 @@ def createDirectories() {
 def checkoutJenkinsRepo() {
     echo "Jenkinsリポジトリをチェックアウト中..."
     dir(CONFIG_DIR) {
-        // GIT_JENKINS_REPO_BRANCHが設定されていない場合はmainを使用
-        def branch = env.GIT_JENKINS_REPO_BRANCH ?: 'main'
+        // GIT_INFRASTRUCTURE_REPO_BRANCHが設定されていない場合はmainを使用
+        def branch = env.GIT_INFRASTRUCTURE_REPO_BRANCH ?: 'main'
         gitUtils.checkoutRepository(
-            env.GIT_JENKINS_REPO_URL,
+            env.GIT_INFRASTRUCTURE_REPO_URL,
             branch,
-            env.GIT_JENKINS_CREDENTIALS_ID
+            env.GITHUB_APP_CREDENTIALS_ID
         )
     }
     echo "✓ Jenkinsリポジトリのチェックアウトが完了しました"
@@ -795,7 +795,7 @@ def processAnalysisResults() {
 def generatePRComment() {
     try {
         withCredentials([
-            usernamePassword(credentialsId: 'github-app-credentials', 
+            usernamePassword(credentialsId: env.GITHUB_APP_CREDENTIALS_ID , 
                             usernameVariable: 'GITHUB_APP_ID',
                             passwordVariable: 'GITHUB_ACCESS_TOKEN'),
             string(credentialsId: 'openai-api-key', 

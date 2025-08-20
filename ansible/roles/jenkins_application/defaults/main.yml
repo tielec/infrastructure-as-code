@@ -18,4 +18,4 @@ setup_cli_user: true
 seed_job_name: "seed-job"
 jenkins_jobs_repo: "https://github.com/tielec/infrastructure-as-code.git"
 jenkins_jobs_branch: "main"
-git_credentials_id: "github-credentials"
+git_credentials_id: "github-app-credentials"

@@ -14,25 +14,25 @@ import hudson.plugins.git.*
 def instance = Jenkins.getInstance()
 
 // 設定
-def SEED_JOB_NAME = System.getenv("SEED_JOB_NAME") ?: "seed-job"
-def GIT_REPO_URL = System.getenv("JENKINS_JOBS_REPO") ?: "https://github.com/tielec/infrastructure-as-code.git"
-def GIT_BRANCH = System.getenv("JENKINS_JOBS_BRANCH") ?: "main"
-def GIT_CREDENTIALS_ID = System.getenv("GIT_CREDENTIALS_ID") ?: "github-credentials"
-def JOB_DSL_SCRIPTS_PATH = System.getenv("JOB_DSL_SCRIPTS_PATH") ?: "jenkins/jobs/pipeline/_seed/job-creator/Jenkinsfile"
+def seedJobNmae = System.getenv("SEED_JOB_NAME") ?: "seed-job"
+def gitRepoUrl = System.getenv("GIT_INFRASTRUCTURE_REPO_URL") ?: "https://github.com/tielec/infrastructure-as-code.git"
+def gitBranch = System.getenv("GIT_INFRASTRUCTURE_REPO_BRANCH") ?: "main"
+def gitCredentialsId = System.getenv("GITHUB_APP_CREDENTIALS_ID") ?: "github-app-credentials"
+def jobDslScriptsPath = System.getenv("JOB_DSL_SCRIPTS_PATH") ?: "jenkins/jobs/pipeline/_seed/job-creator/Jenkinsfile"
 
 println("=== Starting Seed Job Setup ===")
-println("Job Name: ${SEED_JOB_NAME}")
-println("Git Repository: ${GIT_REPO_URL}")
-println("Git Branch: ${GIT_BRANCH}")
-println("Jenkinsfile Path: ${JOB_DSL_SCRIPTS_PATH}")
+println("Job Name: ${seedJobNmae}")
+println("Git Repository: ${gitRepoUrl}")
+println("Git Branch: ${gitBranch}")
+println("Jenkinsfile Path: ${jobDslScriptsPath}")
 
 // Job DSLプラグインの確認は不要（パイプラインジョブなので）
 println("Creating pipeline job for seed job management")
 
 // 既存のジョブをチェック
-def existingJob = instance.getItem(SEED_JOB_NAME)
+def existingJob = instance.getItem(seedJobNmae)
 if (existingJob != null) {
-    println("Job '${SEED_JOB_NAME}' already exists.")
+    println("Job '${seedJobNmae}' already exists.")
     
     // 既存ジョブの更新オプション
     if (System.getenv("UPDATE_EXISTING_JOB") == "true") {
@@ -49,15 +49,15 @@ if (existingJob != null) {
             if (jobXmlFile.exists()) {
                 def jobXml = jobXmlFile.text
                 // Git URLとブランチを置換
-                jobXml = jobXml.replaceAll('https://github.com/tielec/infrastructure-as-code.git', GIT_REPO_URL)
-                jobXml = jobXml.replaceAll('\\*/main', "*/${GIT_BRANCH}")
-                jobXml = jobXml.replaceAll('jenkins/jobs/pipeline/_seed/job-creator/Jenkinsfile', JOB_DSL_SCRIPTS_PATH)
+                jobXml = jobXml.replaceAll('https://github.com/tielec/infrastructure-as-code.git', gitRepoUrl)
+                jobXml = jobXml.replaceAll('\\*/main', "*/${gitBranch}")
+                jobXml = jobXml.replaceAll('jenkins/jobs/pipeline/_seed/job-creator/Jenkinsfile', jobDslScriptsPath)
                 
                 // ジョブを更新
                 def xmlStream = new ByteArrayInputStream(jobXml.getBytes("UTF-8"))
                 existingJob.updateByXml(new StreamSource(xmlStream))
                 existingJob.save()
-                println("Job '${SEED_JOB_NAME}' updated successfully")
+                println("Job '${seedJobNmae}' updated successfully")
             } else {
                 println("WARNING: seed-job.xml not found, skipping update")
             }
@@ -72,7 +72,7 @@ if (existingJob != null) {
 }
 
 // 新規ジョブの作成
-println("Creating new seed job: ${SEED_JOB_NAME}")
+println("Creating new seed job: ${seedJobNmae}")
 
 try {
     // XMLファイルから設定を読み込む
@@ -107,14 +107,14 @@ try {
     def jobXml = jobXmlFile.text
     
     // プレースホルダーを実際の値に置換
-    jobXml = jobXml.replaceAll('https://github.com/tielec/infrastructure-as-code.git', GIT_REPO_URL)
-    jobXml = jobXml.replaceAll('\\*/main', "*/${GIT_BRANCH}")
-    jobXml = jobXml.replaceAll('jenkins/jobs/pipeline/_seed/job-creator/Jenkinsfile', JOB_DSL_SCRIPTS_PATH)
+    jobXml = jobXml.replaceAll('https://github.com/tielec/infrastructure-as-code.git', gitRepoUrl)
+    jobXml = jobXml.replaceAll('\\*/main', "*/${gitBranch}")
+    jobXml = jobXml.replaceAll('jenkins/jobs/pipeline/_seed/job-creator/Jenkinsfile', jobDslScriptsPath)
     
     // 説明文内の変数も置換
-    jobXml = jobXml.replaceAll('\\$\\{JENKINS_JOBS_REPO\\}', GIT_REPO_URL)
-    jobXml = jobXml.replaceAll('\\$\\{JENKINS_JOBS_BRANCH\\}', GIT_BRANCH)
-    jobXml = jobXml.replaceAll('\\$\\{JENKINSFILE_PATH\\}', JOB_DSL_SCRIPTS_PATH)
+    jobXml = jobXml.replaceAll('\\$\\{GIT_INFRASTRUCTURE_REPO_URL\\}', gitRepoUrl)
+    jobXml = jobXml.replaceAll('\\$\\{GIT_INFRASTRUCTURE_REPO_BRANCH\\}', gitBranch)
+    jobXml = jobXml.replaceAll('\\$\\{JENKINSFILE_PATH\\}', jobDslScriptsPath)
     
     // ジョブを作成
     def xmlStream = new ByteArrayInputStream(jobXml.getBytes("UTF-8"))
@@ -123,12 +123,12 @@ try {
     // 適切なジョブタイプを指定して作成する必要がある
     try {
         // Jenkins.instanceのcreateProjectFromXMLメソッドを使用
-        def job = instance.createProjectFromXML(SEED_JOB_NAME, xmlStream)
-        println("Seed job '${SEED_JOB_NAME}' created successfully")
+        def job = instance.createProjectFromXML(seedJobNmae, xmlStream)
+        println("Seed job '${seedJobNmae}' created successfully")
         println("\nJob Configuration:")
-        println("  - Repository: ${GIT_REPO_URL}")
-        println("  - Branch: ${GIT_BRANCH}")
-        println("  - Jenkinsfile: ${JOB_DSL_SCRIPTS_PATH}")
+        println("  - Repository: ${gitRepoUrl}")
+        println("  - Branch: ${gitBranch}")
+        println("  - Jenkinsfile: ${jobDslScriptsPath}")
         println("\nNext step: Run this job to create all other Jenkins jobs from your repository")
     } catch (Exception e) {
         // エラーが発生した場合は、別の方法を試す
@@ -140,9 +140,9 @@ try {
         try {
             // ItemLoaderを使用して作成
             def loader = new hudson.model.Items()
-            def job = loader.load(instance, new File("/tmp/"), SEED_JOB_NAME, xmlStream)
+            def job = loader.load(instance, new File("/tmp/"), seedJobNmae, xmlStream)
             instance.putItem(job)
-            println("Seed job '${SEED_JOB_NAME}' created successfully using alternative method")
+            println("Seed job '${seedJobNmae}' created successfully using alternative method")
         } catch (Exception e2) {
             println("ERROR: Both methods failed to create job")
             println("Error 1: ${e.message}")
@@ -152,7 +152,7 @@ try {
         }
     }
     
-    println("Seed job '${SEED_JOB_NAME}' created successfully")
+    println("Seed job '${seedJobNmae}' created successfully")
     
     // 初回ビルドを実行するかどうか
     if (System.getenv("RUN_INITIAL_BUILD") == "true") {
@@ -171,21 +171,21 @@ println("\nChecking Git credentials...")
 def credentialsStore = SystemCredentialsProvider.getInstance().getStore()
 def globalDomain = Domain.global()
 def credentials = credentialsStore.getCredentials(globalDomain)
-def gitCredential = credentials.find { it.id == GIT_CREDENTIALS_ID }
+def gitCredential = credentials.find { it.id == gitCredentialsId }
 
 if (gitCredential != null) {
-    println("✓ Git credential '${GIT_CREDENTIALS_ID}' found")
+    println("✓ Git credential '${gitCredentialsId}' found")
 } else {
-    println("✗ WARNING: Git credential '${GIT_CREDENTIALS_ID}' not found")
+    println("✗ WARNING: Git credential '${gitCredentialsId}' not found")
     println("  The seed job will fail to checkout from Git without proper credentials")
-    println("  Please create credentials with ID: ${GIT_CREDENTIALS_ID}")
+    println("  Please create credentials with ID: ${gitCredentialsId}")
 }
 
 println("\n=== Seed Job Setup Completed ===")
 
 // サンプルJenkinsfileの情報を表示
 println("\nNext steps:")
-println("1. Create a Jenkinsfile in your Git repository at: ${JOB_DSL_SCRIPTS_PATH}")
+println("1. Create a Jenkinsfile in your Git repository at: ${jobDslScriptsPath}")
 println("2. The Jenkinsfile should use Job DSL to create other jobs")
 println("\nExample Jenkinsfile content:")
 println("""

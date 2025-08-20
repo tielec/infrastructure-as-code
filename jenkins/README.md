@@ -232,7 +232,7 @@ Jenkins設定は以下の方法で管理されています：
 | クレデンシャルID | 用途 | 種別 |
 |-----------------|------|------|
 | github-token | GitHub API アクセス | Secret Text |
-| github-credentials | GitHub リポジトリアクセス | Username/Password |
+| github-app-credentials | GitHub リポジトリアクセス | Username/Password |
 | aws-credentials | AWS リソースアクセス | AWS Credentials |
 | docker-registry | Docker Registry認証 | Username/Password |
 

@@ -54,7 +54,6 @@ pipelineJob(fullJobName) {
         choiceParam('PULUMI_CONFIG_PASSPHRASE_CREDENTIAL_ID', ['pulumi-config-passphrase'], 'Pulumiスタック暗号化パスフレーズのCredential ID')
         
         // === オプション設定 ===
-        choiceParam('PULUMI_GIT_CREDENTIALS_ID', ['github-app-credentials'], 'Git認証情報ID')
         booleanParam('SKIP_CONFIRMATION', true, 'デプロイ/削除時の確認をスキップ')
         booleanParam('GENERATE_REPORT', true, 'HTMLレポートを生成する')
         

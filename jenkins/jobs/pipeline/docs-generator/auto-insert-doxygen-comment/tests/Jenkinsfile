@@ -16,7 +16,6 @@ pipeline {
     parameters {
         string(name: 'GIT_REPO_URL', defaultValue: 'https://github.com/tielec/infrastructure-as-code.git', description: 'ドキュメント生成ツールのリポジトリURL')
         string(name: 'GIT_BRANCH', defaultValue: 'main', description: 'ドキュメント生成ツールのブランチ')
-        string(name: 'GIT_CREDENTIALS_ID', defaultValue: 'github-app-credentials', description: 'GitHub認証情報ID')
         booleanParam(name: 'OVERWRITE_DOCS', defaultValue: true, description: '既存のドキュメントを上書きする')
         string(name: 'MAX_RETRIES', defaultValue: '3', description: '処理失敗時の最大リトライ回数')
     }
@@ -67,7 +66,7 @@ pipeline {
                         gitUtils.checkoutRepository(
                             params.GIT_REPO_URL,
                             params.GIT_BRANCH,
-                            params.GIT_CREDENTIALS_ID
+                            env.GITHUB_APP_CREDENTIALS_ID
                         )
                     }
                     

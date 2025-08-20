@@ -88,9 +88,7 @@ pulumiProjects.each { repoKey, repoConfig ->
                     } else {
                         choiceParam('PULUMI_TARGET_BRANCH', [projectConfig.branch ?: 'main'], 'ブランチ（固定） - 本番環境では固定ブランチを使用')
                     }
-                    
-                    choiceParam('PULUMI_GIT_CREDENTIALS_ID', ['github-app-credentials'], 'Git認証情報（固定） - リポジトリアクセス用の認証情報')
-                    
+                                        
                     choiceParam('PROJECT_TYPE', [projectConfig.project_type], 'プロジェクトタイプ（固定） - Pulumiプロジェクトの言語/フレームワーク')
                     
                     // === 実行オプション ===
