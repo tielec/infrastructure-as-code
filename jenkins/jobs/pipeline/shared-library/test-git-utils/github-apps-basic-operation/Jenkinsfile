@@ -98,7 +98,7 @@ pipeline {
                             // PRの詳細情報も取得
                             try {
                                 echo "PRの詳細情報を取得します..."
-                                def prFiles = gitUtils.getPullRequestFiles(latestPR.number, [
+                                def prFiles = gitUtils.getPullRequestFiles(latestPR.number, params.BASE_BRANCH ?: 'main', [
                                     authType: selectedAuthType,
                                     credentialsId: credentialsId,
                                     repoOwner: params.REPO_OWNER,
