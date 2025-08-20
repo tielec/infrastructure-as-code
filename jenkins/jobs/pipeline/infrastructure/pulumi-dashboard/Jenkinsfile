@@ -47,14 +47,6 @@ pipeline {
             }
         }
         
-        stage('Verify AWS Credentials') {
-            steps {
-                script {
-                    verifyAwsCredentials()
-                }
-            }
-        }
-        
         stage('Collect Pulumi States') {
             agent {
                 docker {
@@ -171,54 +163,6 @@ def checkoutJenkinsRepository() {
             env.JENKINS_REPO_BRANCH,
             env.JENKINS_GIT_CREDENTIALS_ID
         )
-    }
-}
-
-/**
- * AWS認証情報の検証
- */
-def verifyAwsCredentials() {
-    echo """
-        =============================================
-        AWS認証情報の検証
-        =============================================
-        環境: ${params.ENVIRONMENT}
-        リージョン: ${params.AWS_REGION}
-        S3バケット: ${env.S3_BUCKET}
-        =============================================
-    """.stripIndent()
-    
-    def awsUtils = awsUtils()
-    
-    try {
-        def authResult
-        if (params.ENVIRONMENT == 'prod') {
-            authResult = awsUtils.general.verifyProdAwsCredentials(
-                params.AWS_ACCESS_KEY_ID,
-                params.AWS_SECRET_ACCESS_KEY,
-                params.AWS_SESSION_TOKEN,
-                params.AWS_REGION
-            )
-        } else {
-            authResult = awsUtils.general.verifyDevAwsCredentials(
-                params.AWS_ACCESS_KEY_ID,
-                params.AWS_SECRET_ACCESS_KEY,
-                params.AWS_SESSION_TOKEN,
-                params.AWS_REGION
-            )
-        }
-        
-        env.AWS_ACCOUNT_ID = authResult.accountId
-        env.AWS_PRINCIPAL_ARN = authResult.arn
-        
-        echo """
-            ✅ AWS認証検証完了
-            アカウントID: ${authResult.accountId}
-            プリンシパル: ${authResult.arn}
-        """.stripIndent()
-        
-    } catch (Exception e) {
-        error "AWS認証検証に失敗しました: ${e.message}"
     }
 }
 
@@ -347,7 +291,7 @@ def printSummary() {
         実行時刻: ${env.TIME_STAMP}
         環境: ${params.ENVIRONMENT}
         S3バケット: ${env.S3_BUCKET}
-        AWSアカウント: ${env.AWS_ACCOUNT_ID}
+        AWSアカウント: ${params.ENVIRONMENT}
         
         --- 統計情報 ---
         総プロジェクト数: ${summary.total_projects ?: 0}
