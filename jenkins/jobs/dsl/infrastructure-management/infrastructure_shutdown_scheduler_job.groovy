@@ -88,19 +88,4 @@ freeStyleJob(fullJobName) {
     environmentVariables {
         env('TZ', 'Asia/Tokyo')
     }
-
-    // ポストビルドアクション
-    publishers {
-        // ビルド結果に応じた説明を追加
-        buildDescription('', '''
-            |環境: dev
-            |実行時刻: ${BUILD_TIMESTAMP}
-            |結果: ${BUILD_STATUS}
-        '''.stripMargin())
-        
-        // 必要に応じてメール通知を追加
-        /*
-        mailer('devops-team@example.com', false, true)
-        */
-    }
 }
