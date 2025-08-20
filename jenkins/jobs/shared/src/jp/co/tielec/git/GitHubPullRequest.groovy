@@ -131,9 +131,10 @@ class GitHubPullRequest implements Serializable {
                 throw new IllegalArgumentException("リポジトリオーナーとリポジトリ名は必須です")
             }
             
-            // デフォルト設定
+            // デフォルト設定（環境変数から取得）
+            def defaultCredentialsId = script.env.GITHUB_APP_CREDENTIALS_ID ?: 'github-app-credentials'
             def defaultConfig = [
-                credentialsId: 'github-app-credentials',
+                credentialsId: defaultCredentialsId,
                 base: 'main',
                 maxResults: 10,
                 sort: 'merged',
@@ -219,9 +220,10 @@ class GitHubPullRequest implements Serializable {
             def startDateFormatted = DateUtils.formatDateToIso(config.startDate, true)
             def endDateFormatted = DateUtils.formatDateToIso(config.endDate, false)
             
-            // デフォルト設定
+            // デフォルト設定（環境変数から取得）
+            def defaultCredentialsId = script.env.GITHUB_APP_CREDENTIALS_ID ?: 'github-app-credentials'
             def defaultConfig = [
-                credentialsId: 'github-app-credentials',
+                credentialsId: defaultCredentialsId,
                 base: 'main',
                 sort: 'updated',  // 'merged' から 'updated' に変更
                 direction: 'desc', // 新しいものから取得するようにdescに変更
@@ -463,9 +465,10 @@ class GitHubPullRequest implements Serializable {
                 throw new IllegalArgumentException("リポジトリオーナーとリポジトリ名は必須です")
             }
             
-            // デフォルト設定
+            // デフォルト設定（環境変数から取得）
+            def defaultCredentialsId = script.env.GITHUB_APP_CREDENTIALS_ID ?: 'github-app-credentials'
             def defaultConfig = [
-                credentialsId: 'github-app-credentials',
+                credentialsId: defaultCredentialsId,
                 commentTag: 'auto-generated-comment'
             ]
             config = defaultConfig + config

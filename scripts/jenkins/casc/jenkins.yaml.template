@@ -21,6 +21,8 @@ jenkins:
       env:
       - key: "GITHUB_APP_CREDENTIALS_ID"
         value: "github-app-credentials"
+      - key: "GITHUB_PAT_CREDENTIALS_ID"
+        value: "github-pat"
       - key: "GIT_INFRASTRUCTURE_REPO_BRANCH"
         value: "main"
       - key: "GIT_INFRASTRUCTURE_REPO_URL"
