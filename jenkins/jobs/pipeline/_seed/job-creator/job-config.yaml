@@ -159,6 +159,25 @@ jenkins-jobs:
     dslfile: jenkins/jobs/dsl/docs-generator/docs_generator_technical_docs_writer_schedule_trigger_job.groovy
     downstreamJob: 'technical-docs-writer'
 
+# Pulumi IaC Jobs
+  infrastructure_pulumi_stack_action_test_job:
+    name: "pulumi_stack_action_test"
+    displayName: "Test Pulumi Stack Action"
+    dslfile: jenkins/jobs/dsl/infrastructure/infrastructure_pulumi_stack_action_test_job.groovy
+    jenkinsfile: jenkins/jobs/pipeline/infrastructure/pulumi-stack-action/Jenkinsfile
+
+  infrastructure_pulumi_stack_action_job:
+    name: "pulumi_stack_action"
+    displayName: "Pulumi Stack Action Job"
+    dslfile: jenkins/jobs/dsl/infrastructure/infrastructure_pulumi_stack_action_job.groovy
+    jenkinsfile: jenkins/jobs/pipeline/infrastructure/pulumi-stack-action/Jenkinsfile
+
+  infrastructure_pulumi_dashboard_job:
+    name: "pulumi_dashboard"
+    displayName: "Pulumi Projects Dashboard"
+    dslfile: jenkins/jobs/dsl/infrastructure/infrastructure_pulumi_dashboard_job.groovy
+    jenkinsfile: jenkins/jobs/pipeline/infrastructure/pulumi-dashboard/Jenkinsfile
+
   # Shared Library Jobs
   shared_library_aws_sqs_check_operation_test_job:
     name: 'SQS_Check_Operation_Test'

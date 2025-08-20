@@ -1,0 +1,394 @@
+/* dashboard.css - Pulumi Dashboard Styles */
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+    background: #f5f7fa;
+    color: #333;
+    line-height: 1.6;
+}
+
+.container {
+    max-width: 1400px;
+    margin: 0 auto;
+    padding: 20px;
+}
+
+/* Header */
+.header {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    padding: 30px;
+    border-radius: 10px;
+    margin-bottom: 30px;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+.header h1 {
+    font-size: 2.5em;
+    margin-bottom: 10px;
+}
+
+.header-info {
+    display: flex;
+    gap: 30px;
+    font-size: 1.1em;
+    opacity: 0.95;
+}
+
+.environment strong {
+    color: #ffd700;
+    text-transform: uppercase;
+}
+
+/* Summary Cards */
+.summary-section {
+    margin-bottom: 40px;
+}
+
+.summary-section h2 {
+    color: #2c3e50;
+    margin-bottom: 20px;
+    font-size: 1.8em;
+    border-bottom: 2px solid #667eea;
+    padding-bottom: 10px;
+}
+
+.summary-cards {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 20px;
+    margin-bottom: 30px;
+}
+
+.summary-card {
+    background: white;
+    padding: 25px;
+    border-radius: 10px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    text-align: center;
+    transition: transform 0.3s, box-shadow 0.3s;
+}
+
+.summary-card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+}
+
+.card-title {
+    font-size: 0.95em;
+    color: #7f8c8d;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin-bottom: 10px;
+}
+
+.card-value {
+    font-size: 3em;
+    font-weight: bold;
+    color: #667eea;
+}
+
+/* Tables */
+.stacks-section {
+    margin-bottom: 40px;
+}
+
+.stacks-section h2,
+.resources-section h2 {
+    color: #2c3e50;
+    margin-bottom: 20px;
+    font-size: 1.8em;
+    border-bottom: 2px solid #667eea;
+    padding-bottom: 10px;
+}
+
+.data-table {
+    width: 100%;
+    background: white;
+    border-radius: 10px;
+    overflow: hidden;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.data-table thead {
+    background: #34495e;
+}
+
+.data-table th {
+    color: white;
+    padding: 15px;
+    text-align: left;
+    font-weight: 600;
+    text-transform: uppercase;
+    font-size: 0.9em;
+    letter-spacing: 0.5px;
+}
+
+/* スタック詳細テーブルのカラム幅設定 */
+.data-table th:nth-child(1) {
+    width: 18%;  /* プロジェクト - 中 */
+}
+
+.data-table th:nth-child(2) {
+    width: 10%;  /* スタック - 小 */
+}
+
+.data-table th:nth-child(3) {
+    width: 10%;  /* 状態 - 小 */
+    text-align: center;
+}
+
+.data-table th:nth-child(4) {
+    width: 10%;  /* リソース数 - 小 */
+    text-align: center;
+}
+
+.data-table th:nth-child(5) {
+    width: 34%;  /* リソースタイプ - 大 */
+}
+
+.data-table th:nth-child(6) {
+    width: 18%;  /* 最終更新 - 中 */
+}
+
+.data-table tbody tr {
+    border-bottom: 1px solid #ecf0f1;
+    transition: background-color 0.2s;
+}
+
+.data-table tbody tr:hover {
+    background-color: #f8f9fa;
+}
+
+.data-table td {
+    padding: 12px 15px;
+    color: #2c3e50;
+}
+
+.project-name,
+.stack-name {
+    font-weight: 600;
+    color: #667eea;
+}
+
+.center {
+    text-align: center;
+}
+
+.timestamp {
+    color: #7f8c8d;
+    font-size: 0.9em;
+}
+
+.days-ago {
+    color: #95a5a6;
+    font-size: 0.85em;
+    margin-left: 5px;
+}
+
+/* Status Badges */
+.status-badge {
+    display: inline-block;
+    padding: 4px 10px;
+    border-radius: 15px;
+    font-size: 0.85em;
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+.status-ok {
+    background: #d4edda;
+    color: #155724;
+}
+
+.status-warning {
+    background: #fff3cd;
+    color: #856404;
+}
+
+.status-critical {
+    background: #f8d7da;
+    color: #721c24;
+}
+
+.status-error {
+    background: #f8d7da;
+    color: #721c24;
+}
+
+/* Stack Row States */
+.stack-row-warning {
+    background-color: #fff9e6 !important;
+}
+
+.stack-row-critical {
+    background-color: #ffe6e6 !important;
+}
+
+/* Resource Type Badges */
+.resource-types-cell {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    align-items: center;
+}
+
+.resource-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 3px 8px;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    border-radius: 12px;
+    font-size: 0.75em;
+    font-weight: 500;
+    white-space: nowrap;
+}
+
+.resource-badge .badge-count {
+    background: rgba(255, 255, 255, 0.3);
+    padding: 1px 5px;
+    border-radius: 8px;
+    font-weight: bold;
+}
+
+.resource-badge.more {
+    background: #95a5a6;
+    font-style: italic;
+}
+
+/* Resource Types */
+.resources-section {
+    margin-bottom: 40px;
+}
+
+.resource-table {
+    width: 100%;
+    background: white;
+    border-radius: 10px;
+    overflow: hidden;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.resource-table thead {
+    background: #34495e;
+}
+
+.resource-table th {
+    color: white;
+    padding: 15px;
+    text-align: left;
+    font-weight: 600;
+    text-transform: uppercase;
+    font-size: 0.9em;
+    letter-spacing: 0.5px;
+}
+
+.resource-table th:nth-child(1) {
+    width: 40%;
+}
+
+.resource-table th:nth-child(2) {
+    width: 10%;
+    text-align: center;
+}
+
+.resource-table th:nth-child(3) {
+    width: 50%;
+}
+
+.resource-table tbody tr {
+    border-bottom: 1px solid #ecf0f1;
+    transition: background-color 0.2s;
+}
+
+.resource-table tbody tr:hover {
+    background-color: #f8f9fa;
+}
+
+.resource-table td {
+    padding: 12px 15px;
+    color: #2c3e50;
+}
+
+.resource-type-name {
+    font-family: 'Courier New', monospace;
+    color: #667eea;
+}
+
+.resource-count-cell {
+    text-align: center;
+    font-weight: bold;
+    color: #34495e;
+}
+
+.project-list-cell {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    align-items: center;
+}
+
+.project-badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 3px 10px;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    border-radius: 12px;
+    font-size: 0.75em;
+    font-weight: 500;
+    white-space: nowrap;
+    cursor: help;
+}
+
+.project-badge.more {
+    background: #95a5a6;
+    font-style: italic;
+}
+
+/* Footer */
+.footer {
+    text-align: center;
+    padding: 20px;
+    color: #7f8c8d;
+    font-size: 0.9em;
+    margin-top: 50px;
+    border-top: 1px solid #ecf0f1;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+    .container {
+        padding: 10px;
+    }
+    
+    .header h1 {
+        font-size: 1.8em;
+    }
+    
+    .header-info {
+        flex-direction: column;
+        gap: 10px;
+    }
+    
+    .summary-cards {
+        grid-template-columns: 1fr;
+    }
+    
+    .data-table {
+        font-size: 0.9em;
+    }
+    
+    .data-table th,
+    .data-table td {
+        padding: 8px;
+    }
+}

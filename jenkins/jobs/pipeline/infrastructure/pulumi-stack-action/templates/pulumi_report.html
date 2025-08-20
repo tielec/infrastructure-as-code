@@ -1,0 +1,430 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pulumi Deployment Report - {{ stack_name }}</title>
+    <link rel="stylesheet" href="pulumi_styles.css">
+</head>
+<body>
+    <div class="container">
+        <h1>Pulumi {% if action_type == 'destroy' %}Destruction{% else %}Deployment{% endif %} Report</h1>
+        
+        {% if action_type == 'destroy' %}
+        <div class="destruction-notice">
+            <h2>⚠️ リソース削除レポート</h2>
+            <p>このレポートは、リソース削除の実行結果を記録したものです。</p>
+            <p>実行時刻: {{ timestamp }}</p>
+        </div>
+        {% endif %}
+        
+        {% if change_summary %}
+        <div class="change-summary">
+            <h2>実行結果サマリー</h2>
+            <div class="change-summary-content">
+                <div class="resource-change-flow">
+                    アクション: <strong>{{ action_type|upper }}</strong><br>
+                    実行前: <span class="count">{{ change_summary.before_total }}</span>個
+                    <span class="arrow">→</span>
+                    実行後: <span class="count">{{ change_summary.after_total }}</span>個 のリソース
+                </div>
+                <div class="change-details">
+                    <div class="change-item">
+                        <div class="change-content">
+                            <div class="count">{{ change_summary.added }}</div>
+                            <div class="label">追加</div>
+                        </div>
+                    </div>
+                    <div class="change-item">
+                        <div class="change-content">
+                            <div class="count">{{ change_summary.updated }}</div>
+                            <div class="label">更新</div>
+                        </div>
+                    </div>
+                    <div class="change-item">
+                        <div class="change-content">
+                            <div class="count">{{ change_summary.deleted }}</div>
+                            <div class="label">削除</div>
+                        </div>
+                    </div>
+                    <div class="change-item">
+                        <div class="change-content">
+                            <div class="count">{{ change_summary.unchanged }}</div>
+                            <div class="label">変更なし</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+        
+        
+        <!-- 概要メトリクス（拡張版） -->
+        <div class="metrics-grid">
+            <div class="metric-card">
+                <div class="metric-label">Total Resources</div>
+                {% if metrics_comparison %}
+                <div class="metric-comparison">
+                    <div class="metric-before-after">
+                        <span>{{ metrics_comparison.before_total }}</span>
+                        <span class="arrow">→</span>
+                        <span>{{ metrics_comparison.after_total }}</span>
+                    </div>
+                    <div class="metric-change {% if metrics_comparison.total_diff > 0 %}positive{% elif metrics_comparison.total_diff < 0 %}negative{% else %}neutral{% endif %}">
+                        {% if metrics_comparison.total_diff > 0 %}+{% endif %}{{ metrics_comparison.total_diff }}
+                    </div>
+                </div>
+                {% else %}
+                <div class="metric-value">{{ total_resources }}</div>
+                {% endif %}
+            </div>
+            <div class="metric-card">
+                <div class="metric-label">Resource Types</div>
+                {% if metrics_comparison %}
+                <div class="metric-comparison">
+                    <div class="metric-before-after">
+                        <span>{{ metrics_comparison.before_types }}</span>
+                        <span class="arrow">→</span>
+                        <span>{{ metrics_comparison.after_types }}</span>
+                    </div>
+                    <div class="metric-change {% if metrics_comparison.types_diff > 0 %}positive{% elif metrics_comparison.types_diff < 0 %}negative{% else %}neutral{% endif %}">
+                        {% if metrics_comparison.types_diff > 0 %}+{% endif %}{{ metrics_comparison.types_diff }}
+                    </div>
+                </div>
+                {% else %}
+                <div class="metric-value">{{ resource_types_count }}</div>
+                {% endif %}
+            </div>
+            <div class="metric-card">
+                <div class="metric-label">Providers</div>
+                {% if metrics_comparison %}
+                <div class="metric-comparison">
+                    <div class="metric-before-after">
+                        <span>{{ metrics_comparison.before_providers }}</span>
+                        <span class="arrow">→</span>
+                        <span>{{ metrics_comparison.after_providers }}</span>
+                    </div>
+                    <div class="metric-change {% if metrics_comparison.providers_diff > 0 %}positive{% elif metrics_comparison.providers_diff < 0 %}negative{% else %}neutral{% endif %}">
+                        {% if metrics_comparison.providers_diff > 0 %}+{% elif metrics_comparison.providers_diff == 0 %}±{% endif %}{{ metrics_comparison.providers_diff }}
+                    </div>
+                </div>
+                {% else %}
+                <div class="metric-value">{{ resource_providers_count }}</div>
+                {% endif %}
+            </div>
+            <div class="metric-card">
+                <div class="metric-label">Status</div>
+                <div class="metric-value">
+                    {% if action_type == 'destroy' %}
+                        <span class="status-badge status-deleted">Destroyed</span>
+                    {% else %}
+                        <span class="status-badge status-success">Active</span>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+        
+        <!-- リソースサマリーチャート -->
+        {% if summary_chart %}
+        <div class="card">
+            <h2>📊 スタックサマリー</h2>
+            <div class="chart-container">
+                <img src="{{ summary_chart }}" alt="Stack Summary" class="chart-image">
+            </div>
+        </div>
+        {% endif %}
+        
+        <!-- スタック情報 -->
+        <div class="card">
+            <h2>📋 スタック情報</h2>
+            <div class="info-grid">
+                <div class="info-item">
+                    <div class="info-label">スタック名</div>
+                    <div class="info-value">{{ stack_name }}</div>
+                </div>
+                <div class="info-item">
+                    <div class="info-label">プロジェクト</div>
+                    <div class="info-value">{{ project_path }}</div>
+                </div>
+                <div class="info-item">
+                    <div class="info-label">ブランチ</div>
+                    <div class="info-value">{{ branch }}</div>
+                </div>
+                <div class="info-item">
+                    <div class="info-label">ビルド番号</div>
+                    <div class="info-value">#{{ build_number }}</div>
+                </div>
+                <div class="info-item">
+                    <div class="info-label">実行時刻</div>
+                    <div class="info-value">{{ timestamp }}</div>
+                </div>
+                <div class="info-item">
+                    <div class="info-label">Pulumiバージョン</div>
+                    <div class="info-value">{{ pulumi_version }}</div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- デプロイメント統計 -->
+        {% if deployment_stats %}
+        <div class="card">
+            <h2>📈 デプロイメント統計</h2>
+            <div class="stats-grid">
+                <div class="stat-item">
+                    <div class="stat-value">{{ deployment_stats.total_deployments }}</div>
+                    <div class="stat-label">総デプロイメント数</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-value success">{{ deployment_stats.success_count }}</div>
+                    <div class="stat-label">成功</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-value error">{{ deployment_stats.failure_count }}</div>
+                    <div class="stat-label">失敗</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-value">{{ deployment_stats.success_rate }}%</div>
+                    <div class="stat-label">成功率</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-value">{{ deployment_stats.avg_changes }}</div>
+                    <div class="stat-label">平均変更数</div>
+                </div>
+            </div>
+            <div class="deployment-stats-note">
+                ※ 今回の実行結果を含む統計です
+            </div>
+        </div>
+        {% endif %}
+        
+        <!-- リソース分布チャート -->
+        {% if resource_chart %}
+        <div class="card">
+            <h2>📊 リソース分布（実行後）</h2>
+            <div class="chart-container">
+                <img src="{{ resource_chart }}" alt="Resource Distribution" class="chart-image">
+            </div>
+            <div class="provider-legend">
+                <h3>プロバイダー別リソース数</h3>
+                <div class="provider-grid">
+                    {% for provider, count in resource_providers.items() %}
+                    <div class="provider-item">
+                        <span class="provider-name">{{ provider }}</span>
+                        <span class="provider-count">{{ count }}</span>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+        {% endif %}
+        
+        <!-- 依存関係グラフ -->
+        {% if dependency_graph %}
+        <div class="card">
+            <h2>🔗 リソース依存関係（実行後）</h2>
+            <div class="dependency-graph-info">
+                <p>このグラフはリソース間の依存関係を表示しています。スタックを中心に、プロバイダーとリソースの階層構造を示しています。</p>
+                <p><strong>ヒント:</strong> 画像をクリックすると拡大表示できます。</p>
+                <div class="graph-legend">
+                    <span class="legend-item">
+                        <span class="legend-box aws"></span>AWSリソース
+                    </span>
+                    <span class="legend-item">
+                        <span class="legend-box pulumi"></span>Pulumiリソース
+                    </span>
+                    <span class="legend-item">
+                        <span class="legend-box default"></span>その他
+                    </span>
+                </div>
+            </div>
+            <div class="chart-container dependency-graph-container">
+                <input type="checkbox" id="graph-toggle" class="graph-toggle">
+                <label for="graph-toggle" class="graph-wrapper">
+                    <span class="graph-toggle-label">拡大</span>
+                    <img src="{{ dependency_graph }}" alt="Resource Dependency Graph" class="dependency-graph-image">
+                </label>
+            </div>
+            <div class="graph-note">
+                <p>※ 画像を右クリックして「画像を保存」でダウンロードできます</p>
+                <p>※ 拡大ボタンをクリックすると全画面表示になります</p>
+            </div>
+        </div>
+        {% else %}
+        <div class="card">
+            <h2>🔗 リソース依存関係</h2>
+            <div class="dependency-graph-info">
+                <p>依存関係グラフは生成されませんでした。リソースが存在しないか、グラフ生成中にエラーが発生した可能性があります。</p>
+            </div>
+        </div>
+        {% endif %}
+        
+        <!-- デプロイメントトレンド -->
+        {% if trends_chart %}
+        <div class="card">
+            <h2>📈 デプロイメントトレンド</h2>
+            <div class="chart-container">
+                <img src="{{ trends_chart }}" alt="Deployment Trends" class="chart-image">
+            </div>
+        </div>
+        {% endif %}
+        
+        <!-- スタック設定 -->
+        {% if stack_config %}
+        <div class="card">
+            <h2>⚙️ スタック設定（実行後）</h2>
+            <div class="config-grid">
+                {% for key, config in stack_config.items() %}
+                <div class="config-item">
+                    <div class="config-key">{{ key }}</div>
+                    <div class="config-value">
+                        {% if config.secret %}
+                            <span class="secret-value">[Secret]</span>
+                        {% else %}
+                            {{ config.value }}
+                        {% endif %}
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
+        
+        <!-- スタック出力 -->
+        {% if stack_outputs %}
+        <div class="card">
+            <h2>📤 スタック出力（実行後）</h2>
+            <div class="outputs-grid">
+                {% for key, value in stack_outputs.items() %}
+                <div class="output-item">
+                    <div class="output-label">{{ key }}</div>
+                    <div class="output-value-container">
+                        <code class="output-value">{{ value }}</code>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
+        
+        <!-- リソース一覧（拡張版） -->
+        <div class="card">
+            <h2>🗂️ リソース一覧</h2>
+            <div class="resource-summary">
+                <p>合計 <strong>{{ total_resources_all if total_resources_all is defined else total_resources }}</strong> 個のリソース（<strong>{{ resource_types_count }}</strong> 種類）</p>
+                {% if action_type == 'destroy' %}
+                <p style="color: var(--error-color);">※ 削除されたリソースも含めて表示しています</p>
+                {% endif %}
+            </div>
+            
+            <div class="table-wrapper">
+                <table class="resource-table">
+                    <thead>
+                        <tr>
+                            <th>リソース名</th>
+                            <th>プロバイダー</th>
+                            <th>タイプ</th>
+                            <th>変更状態</th>
+                            <th>作成日時</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for resource in resources_with_change_status %}
+                        <tr>
+                            <td class="resource-name">{{ resource.urn.split('::')[-1] }}</td>
+                            <td>
+                                <span class="provider-badge">{{ resource.type.split(':')[0] }}</span>
+                            </td>
+                            <td>
+                                <span class="resource-type">{{ resource.type.split(':')[-1] }}</span>
+                            </td>
+                            <td>
+                                <span class="change-status {{ resource.change_status }}">
+                                    {% if resource.change_status == 'added' %}
+                                        <span>🟢</span> 追加
+                                    {% elif resource.change_status == 'updated' %}
+                                        <span>🟡</span> 更新
+                                    {% elif resource.change_status == 'deleted' %}
+                                        <span>🔴</span> 削除
+                                    {% else %}
+                                        <span>⚪</span> 変更なし
+                                    {% endif %}
+                                </span>
+                            </td>
+                            <td class="timestamp">
+                                {% if resource.created %}
+                                    {{ resource.created[:19].replace('T', ' ') }}
+                                {% else %}
+                                    N/A
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        
+        <!-- デプロイメント履歴 -->
+        <div class="card">
+            <h2>🕐 デプロイメント履歴</h2>
+            <div class="history-timeline">
+                {% for history in deployment_history %}
+                <div class="history-item">
+                    <div class="history-header">
+                        <span class="history-date">
+                            {% if history.startTime %}
+                                {{ history.startTime[:19].replace('T', ' ') }}
+                            {% else %}
+                                N/A
+                            {% endif %}
+                        </span>
+                        <span class="history-result status-badge status-{{ 'success' if history.result == 'succeeded' else 'error' }}">
+                            {{ history.result or 'unknown' }}
+                        </span>
+                    </div>
+                    <div class="history-details">
+                        <div class="history-info">
+                            <span class="info-label">操作:</span>
+                            <span class="info-value">{{ history.kind or 'update' }}</span>
+                        </div>
+                        {% if history.message %}
+                        <div class="history-info">
+                            <span class="info-label">メッセージ:</span>
+                            <span class="info-value">{{ history.message }}</span>
+                        </div>
+                        {% endif %}
+                        <div class="history-changes">
+                            {% set changes = history.resourceChanges or {} %}
+                            {% if changes.get('create', 0) > 0 %}
+                                <span class="change-badge change-create">作成: {{ changes.create }}</span>
+                            {% endif %}
+                            {% if changes.get('update', 0) > 0 %}
+                                <span class="change-badge change-update">更新: {{ changes.get('update') }}</span>
+                            {% endif %}
+                            {% if changes.get('replace', 0) > 0 %}
+                                <span class="change-badge change-replace">置換: {{ changes.replace }}</span>
+                            {% endif %}
+                            {% if changes.get('delete', 0) > 0 %}
+                                <span class="change-badge change-delete">削除: {{ changes.delete }}</span>
+                            {% endif %}
+                            {% if changes.get('same', 0) > 0 %}
+                                <span class="change-badge change-same">変更なし: {{ changes.same }}</span>
+                            {% endif %}
+                            {% if changes.get('read', 0) > 0 %}
+                                <span class="change-badge change-read">読取: {{ changes.read }}</span>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        
+        <!-- フッター -->
+        <div class="footer">
+            <p>Generated by Pulumi Deployment Pipeline - Build #{{ build_number }}</p>
+            <p>{{ timestamp }}</p>
+        </div>
+    </div>
+</body>
+</html>

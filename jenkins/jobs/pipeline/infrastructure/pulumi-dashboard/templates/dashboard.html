@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pulumi Projects Dashboard - {{ environment }}</title>
+    <link rel="stylesheet" href="dashboard.css">
+</head>
+<body>
+    <div class="container">
+        <header class="header">
+            <h1>Pulumi Projects Dashboard</h1>
+            <div class="header-info">
+                <span class="environment">環境: <strong>{{ environment }}</strong></span>
+                <span class="timestamp">更新日時: {{ timestamp }}</span>
+            </div>
+        </header>
+
+        <section class="summary-section">
+            <h2>概要</h2>
+            <div class="summary-cards">
+                <div class="summary-card">
+                    <div class="card-title">総プロジェクト数</div>
+                    <div class="card-value">{{ summary.total_projects }}</div>
+                </div>
+                <div class="summary-card">
+                    <div class="card-title">総スタック数</div>
+                    <div class="card-value">{{ summary.total_stacks }}</div>
+                </div>
+                <div class="summary-card">
+                    <div class="card-title">総リソース数</div>
+                    <div class="card-value">{{ summary.total_resources }}</div>
+                </div>
+            </div>
+        </section>
+
+        <section class="stacks-section">
+            <h2>スタック詳細</h2>
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>プロジェクト</th>
+                        <th>スタック</th>
+                        <th>状態</th>
+                        <th>リソース数</th>
+                        <th>リソースタイプ</th>
+                        <th>最終更新</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for state in states %}
+                    <tr class="stack-row-{{ state.staleness_status|default('ok') }}">
+                        <td>{{ state.project }}</td>
+                        <td class="stack-name">{{ state.stack }}</td>
+                        <td class="center">
+                            {% if state.staleness_status == 'critical' %}
+                                <span class="status-badge status-critical" title="{{ state.days_since_update }}日間更新なし">⚠️ 要確認</span>
+                            {% elif state.staleness_status == 'warning' %}
+                                <span class="status-badge status-warning" title="{{ state.days_since_update }}日間更新なし">⚠️ 古い</span>
+                            {% elif state.last_operation_result == 'failed' %}
+                                <span class="status-badge status-error" title="最終操作が失敗">❌ エラー</span>
+                            {% else %}
+                                <span class="status-badge status-ok">✅ 正常</span>
+                            {% endif %}
+                        </td>
+                        <td class="center">{{ state.resources }}</td>
+                        <td class="resource-types-cell">
+                            {% for rt in state.resource_types[:5] %}
+                            <span class="resource-badge" title="{% if rt.original_types %}{{ rt.original_types|join(', ') }}{% else %}{{ rt.type }}{% endif %}">
+                                {{ rt.simple_type }} <span class="badge-count">{{ rt.count }}</span>
+                            </span>
+                            {% endfor %}
+                            {% if state.resource_types|length > 5 %}
+                            <span class="resource-badge more">+{{ state.resource_types|length - 5 }}</span>
+                            {% endif %}
+                        </td>
+                        <td class="timestamp">
+                            {{ state.formatted_time|default('N/A') }}
+                            {% if state.days_since_update %}
+                                <span class="days-ago">({{ state.days_since_update }}日前)</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </section>
+
+        <section class="resources-section">
+            <h2>リソースタイプ別集計</h2>
+            <table class="resource-table">
+                <thead>
+                    <tr>
+                        <th>リソースタイプ</th>
+                        <th>数量</th>
+                        <th>使用プロジェクト</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for resource in summary.resource_summary %}
+                    <tr>
+                        <td class="resource-type-name">{{ resource.type|extract_service_resource }}</td>
+                        <td class="resource-count-cell">{{ resource.total }}</td>
+                        <td class="project-list-cell">
+                            {% for project in resource.projects[:5] %}
+                            <span class="project-badge" title="{{ project }}">
+                                {{ project }}
+                            </span>
+                            {% endfor %}
+                            {% if resource.projects|length > 5 %}
+                            <span class="project-badge more" title="{{ resource.projects[5:]|join(', ') }}">
+                                +{{ resource.projects|length - 5 }}
+                            </span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </section>
+
+        <footer class="footer">
+            <p>Generated by Pulumi Dashboard Generator</p>
+        </footer>
+    </div>
+</body>
+</html>

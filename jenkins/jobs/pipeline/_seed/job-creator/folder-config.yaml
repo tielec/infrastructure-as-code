@@ -90,6 +90,77 @@ folders:
       * GitHub連携による自動実行とマニュアル実行の両方に対応
       * Doxygen、技術文書生成、PRコメント機能を提供
 
+  # デリバリー管理ジョブフォルダ
+  - path: "delivery-management-jobs"
+    displayName: "Delivery Management Jobs"
+    description: |
+      このフォルダーには、インフラストラクチャとアプリケーションの
+      デリバリー（配信・展開）を管理するジョブが含まれています。
+      
+      ### 概要
+      CI/CDパイプラインの最終段階として、各種サービスやインフラの
+      本番環境・開発環境へのデプロイメントを統括管理します。
+      
+      ### 構成
+      * development: 開発環境向けデリバリー
+      * production: 本番環境向けデリバリー
+      
+      ### 対象
+      * インフラストラクチャ（Pulumi等）
+      * アプリケーション（各種サービス）
+      * 設定・構成管理
+      
+      ### 注意事項
+      * 環境別に権限が設定されています
+      * 本番環境へのデリバリーは承認プロセスが必要です
+
+  # 開発環境デリバリーフォルダ
+  - path: "delivery-management-jobs/development"
+    displayName: "Development"
+    description: |
+      開発環境向けのデリバリージョブ
+      
+      ### 実行権限
+      開発チームメンバーが実行可能
+      
+      ### 特徴
+      * 迅速なフィードバックサイクル
+      * 実験的な変更の検証が可能
+
+  # 開発環境Pulumiデプロイメント
+  - path: "delivery-management-jobs/development/pulumi-deployments"
+    displayName: "Pulumi Deployments"
+    description: |
+      開発環境のPulumiインフラストラクチャデプロイメント
+      
+      Infrastructure as Codeによる環境構築・更新を管理
+
+  # 本番環境デリバリーフォルダ
+  - path: "delivery-management-jobs/production"
+    displayName: "Production"
+    description: |
+      本番環境向けのデリバリージョブ
+      
+      ### 実行権限
+      本番デプロイ権限を持つメンバーのみ実行可能
+      
+      ### プロセス
+      * すべてのデリバリーに承認が必要
+      * 変更内容の事前レビュー必須
+      * ロールバック手順の確認必須
+      
+      ### 注意事項
+      * 実行前に必ず影響範囲を確認
+      * 関係者への通知を忘れずに
+
+  # 本番環境Pulumiデプロイメント
+  - path: "delivery-management-jobs/production/pulumi-deployments"
+    displayName: "Pulumi Deployments"
+    description: |
+      本番環境のPulumiインフラストラクチャデプロイメント
+      
+      本番環境の安定性を保ちながら、計画的な更新を実施
+
   # 共有ライブラリフォルダ
   - path: "Shared_Library"
     displayName: "Shared Library Tests & Examples"
