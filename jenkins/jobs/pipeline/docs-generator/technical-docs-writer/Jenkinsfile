@@ -593,7 +593,7 @@ def preparePRData(prData) {
         
         // PR変更ファイル情報を取得して保存
         try {
-            def changedFiles = gitUtils.getPullRequestFiles(pr.number)
+            def changedFiles = gitUtils.getPullRequestFiles(pr.number, params.GIT_TARGET_BRANCH ?: 'main', [:])
 
             if (changedFiles) {
                 writeJSON file: "${WORKSPACE}/${COMMENTS_DIR}/pr_${index + 1}_changed_files.json", json: changedFiles, pretty: 4

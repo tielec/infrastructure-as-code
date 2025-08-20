@@ -398,7 +398,7 @@ def processLanguageFiles(Map config) {
     // 2. ファイル選択モードに基づいたフィルタリング
     if (params.FILE_SELECTION_MODE == 'LATEST_PR' || params.FILE_SELECTION_MODE == 'SPECIFIC_PR') {
         def prNumber = params.FILE_SELECTION_MODE == 'LATEST_PR' ? 'Latest' : params.PR_NUMBER
-        def prFiles = gitUtils.getPullRequestFiles(prNumber)
+        def prFiles = gitUtils.getPullRequestFiles(prNumber, params.PR_TARGET_BRANCH ?: 'main', [:])
         
         if (prFiles.isEmpty()) {
             if (params.FILE_SELECTION_MODE == 'LATEST_PR') {

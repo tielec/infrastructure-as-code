@@ -27,8 +27,10 @@ pipelineJob(fullJobName) {
     parameters {
         choiceParam('AUTH_TYPE', ['GITHUB_APP', 'PAT'], 'GitHub認証タイプの選択')
         stringParam('GITHUB_APP_CREDENTIALS_ID', System.getenv("GITHUB_APP_CREDENTIALS_ID") ?: 'github-app-credentials', 'GitHub App認証用のJenkins認証情報ID')
+        stringParam('PAT_CREDENTIALS_ID', 'github-pat', 'Personal Access Token用のJenkins認証情報ID')
         stringParam('REPO_OWNER', 'tielec', 'リポジトリオーナー名')
         stringParam('REPO_NAME', 'infrastructure-as-code', 'リポジトリ名')
+        stringParam('BASE_BRANCH', 'main', 'PRのベースブランチ（マージ先のブランチ）')
     }
 
     // プロパティ設定
