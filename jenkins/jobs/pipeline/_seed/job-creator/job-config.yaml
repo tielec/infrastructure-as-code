@@ -233,3 +233,13 @@ jenkins-managed-repositories:
     technicalDocsStartDate: '2025-01-01'
     technicalDocsFile: REPODOC.md
     updatePullRequestTitle: 'true'
+
+# Pulumiプロジェクト定義
+pulumi-projects:
+  infrastructure-as-code:
+    projects:
+      jenkins_agent:
+        project_path: "jenkins_agent"
+        display_name: "Jenkins Agent Management"
+        project_type: "nodejs"
+        description: "Jenkinsエージェントの管理とデプロイメント"
