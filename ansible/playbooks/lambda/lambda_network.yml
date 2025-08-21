@@ -61,7 +61,7 @@
           Please run: ansible-playbook playbooks/lambda/lambda_ssm_init.yml -e "env={{ env_name }}"
       when:
         - operation | default('deploy') == 'deploy'
-        - ssm_parameter_value | default('false') != 'true'
+        - ssm_init_check | default('false') != 'true'
   
   roles:
     - aws_setup
