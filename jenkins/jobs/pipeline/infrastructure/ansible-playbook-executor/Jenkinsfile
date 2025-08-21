@@ -228,8 +228,8 @@ pipeline {
                                 def exitCode = sh(
                                     script: """
                                         cd ~/infrastructure-as-code
-                                        chmod +x scripts/jenkins/run-ansible-in-tmux.sh
-                                        ./scripts/jenkins/run-ansible-in-tmux.sh \
+                                        chmod +x scripts/workterminal/run-ansible-in-tmux.sh
+                                        ./scripts/workterminal/run-ansible-in-tmux.sh \
                                             "${tmuxSessionName}" \
                                             "${windowName}" \
                                             "${tmuxTimeoutMinutes}" \
