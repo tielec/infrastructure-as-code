@@ -3,12 +3,13 @@
 # インフラリポジトリのブランチ更新とJenkins設定更新スクリプト
 #
 # 使用方法:
-#   ./update-repo-branch.sh [ブランチ名]
+#   ./update-repo-branch.sh [ブランチ名] [--ci]
 #   
 # 例:
 #   ./update-repo-branch.sh          # 現在のブランチで最新化
 #   ./update-repo-branch.sh main     # mainブランチに切り替え
 #   ./update-repo-branch.sh fix-2025-08-19
+#   ./update-repo-branch.sh main --ci  # CI環境での非対話実行
 
 set -e  # エラーが発生したら即座に終了
 
@@ -21,18 +22,22 @@ NC='\033[0m' # No Color
 
 # ヘルプメッセージ
 show_help() {
-    echo "使用方法: $0 [ブランチ名]"
+    echo "使用方法: $0 [ブランチ名] [--ci]"
     echo ""
     echo "インフラストラクチャリポジトリを指定したブランチに更新し、"
     echo "Jenkins設定ファイルのブランチ指定も同時に更新します。"
     echo ""
     echo "引数を指定しない場合は、現在のブランチで最新の状態に更新します。"
     echo ""
+    echo "オプション:"
+    echo "  --ci    CI環境での非対話実行（確認プロンプトをスキップ）"
+    echo ""
     echo "例:"
     echo "  $0                     # 現在のブランチで最新化"
     echo "  $0 main                # mainブランチに切り替え"
     echo "  $0 feature/new-feature # featureブランチに切り替え"
     echo "  $0 fix-2025-08-19      # 特定のfixブランチに切り替え"
+    echo "  $0 main --ci           # CI環境でmainブランチに切り替え"
     exit 0
 }
 
@@ -57,10 +62,26 @@ warn_msg() {
     echo -e "${YELLOW}⚠ $1${NC}"
 }
 
-# ヘルプオプションチェック
-if [ "$1" = "-h" ] || [ "$1" = "--help" ]; then
-    show_help
-fi
+# CIモードフラグ
+CI_MODE=false
+
+# 引数の解析
+BRANCH_NAME=""
+for arg in "$@"; do
+    case "$arg" in
+        -h|--help)
+            show_help
+            ;;
+        --ci)
+            CI_MODE=true
+            ;;
+        *)
+            if [ -z "$BRANCH_NAME" ]; then
+                BRANCH_NAME="$arg"
+            fi
+            ;;
+    esac
+done
 
 REPO_PATH="$HOME/infrastructure-as-code"
 CONFIG_FILE="$REPO_PATH/ansible/inventory/group_vars/all.yml"
@@ -89,11 +110,10 @@ cd "$REPO_PATH" || error_exit "ディレクトリ移動に失敗: $REPO_PATH"
 CURRENT_BRANCH=$(git branch --show-current)
 
 # ブランチ名の決定（引数がなければ現在のブランチを使用）
-if [ "$#" -eq 0 ]; then
+if [ -z "$BRANCH_NAME" ]; then
     BRANCH_NAME="$CURRENT_BRANCH"
     info_msg "現在のブランチ '$BRANCH_NAME' で最新化します"
 else
-    BRANCH_NAME="$1"
     if [ "$BRANCH_NAME" = "$CURRENT_BRANCH" ]; then
         info_msg "指定されたブランチは現在のブランチと同じです: $BRANCH_NAME"
     else
@@ -105,16 +125,27 @@ fi
 if ! git diff --quiet || ! git diff --cached --quiet; then
     warn_msg "未コミットの変更があります:"
     git status --short
-    echo ""
-    echo "どのように処理しますか？"
-    echo "  1) 変更を破棄して続行"
-    echo "  2) 変更を一時退避(stash)して続行"
-    echo "  3) 操作をキャンセル"
-    echo ""
-    read -p "選択してください (1/2/3) [デフォルト: 3]: " -n 1 -r
-    echo ""
     
-    case "$REPLY" in
+    if [ "$CI_MODE" = true ]; then
+        # CIモードでは自動的にstashして続行
+        info_msg "CIモード: 変更を自動的に一時退避します..."
+        git stash push -m "Auto-stash before branch update $(date +%Y%m%d_%H%M%S)" -- . ':!**/node_modules' || {
+            warn_msg "node_modulesを除外したstashに失敗しました。通常のstashを試みます..."
+            git stash push -m "Auto-stash before branch update $(date +%Y%m%d_%H%M%S)"
+        }
+        success_msg "変更を一時退避しました"
+        STASHED=true
+    else
+        echo ""
+        echo "どのように処理しますか？"
+        echo "  1) 変更を破棄して続行"
+        echo "  2) 変更を一時退避(stash)して続行"
+        echo "  3) 操作をキャンセル"
+        echo ""
+        read -p "選択してください (1/2/3) [デフォルト: 3]: " -n 1 -r
+        echo ""
+        
+        case "$REPLY" in
         1)
             read -p "本当に変更を破棄しますか？ (y/N): " -n 1 -r
             echo ""
@@ -169,7 +200,8 @@ if ! git diff --quiet || ! git diff --cached --quiet; then
         *)
             error_exit "操作をキャンセルしました"
             ;;
-    esac
+        esac
+    fi
 fi
 
 # リモートの最新情報を取得
@@ -252,13 +284,21 @@ fi
 
 # 設定ファイルの変更をコミット（変更がある場合のみ）
 if [ "$CONFIG_UPDATED" = true ]; then
-    echo ""
-    read -p "設定ファイルの変更をコミットしますか？ (y/N): " -n 1 -r
-    echo ""
-    if [[ $REPLY =~ ^[Yy]$ ]]; then
+    if [ "$CI_MODE" = true ]; then
+        # CIモードでは自動的にコミット
+        info_msg "CIモード: 設定ファイルの変更を自動的にコミットします"
         git add "$CONFIG_FILE"
         git commit -m "[config] Update Jenkins branch to $BRANCH_NAME" || warn_msg "コミットに失敗しました（変更がない可能性があります）"
         success_msg "変更をコミットしました"
+    else
+        echo ""
+        read -p "設定ファイルの変更をコミットしますか？ (y/N): " -n 1 -r
+        echo ""
+        if [[ $REPLY =~ ^[Yy]$ ]]; then
+            git add "$CONFIG_FILE"
+            git commit -m "[config] Update Jenkins branch to $BRANCH_NAME" || warn_msg "コミットに失敗しました（変更がない可能性があります）"
+            success_msg "変更をコミットしました"
+        fi
     fi
 fi
 

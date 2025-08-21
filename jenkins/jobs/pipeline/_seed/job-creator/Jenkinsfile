@@ -153,6 +153,12 @@ pipeline {
                         additionalParams['pulumi_projects'] = jobConfig['pulumi-projects']
                     }
                     
+                    // Ansibleプレイブック設定が存在する場合は追加
+                    if (jobConfig['ansible-playbooks']) {
+                        echo "Ansible playbooks: ${jobConfig['ansible-playbooks'].size()}"
+                        additionalParams['ansible_playbooks'] = jobConfig['ansible-playbooks']
+                    }
+                    
                     // 共通設定が存在する場合は追加
                     if (jobConfig['common-settings']) {
                         echo "Common settings: Available"

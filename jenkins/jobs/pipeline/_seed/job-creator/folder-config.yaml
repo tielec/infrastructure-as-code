@@ -102,17 +102,45 @@ folders:
       本番環境・開発環境へのデプロイメントを統括管理します。
       
       ### 構成
+      * common: 両環境共通のジョブ
       * development: 開発環境向けデリバリー
       * production: 本番環境向けデリバリー
       
       ### 対象
       * インフラストラクチャ（Pulumi等）
       * アプリケーション（各種サービス）
-      * 設定・構成管理
+      * 設定・構成管理（Ansible等）
       
       ### 注意事項
       * 環境別に権限が設定されています
       * 本番環境へのデリバリーは承認プロセスが必要です
+
+  # 共通環境フォルダ
+  - path: "delivery-management-jobs/common"
+    displayName: "Common"
+    description: |
+      両環境共通のジョブ
+      
+      ### 概要
+      開発・本番両環境で使用可能な共通ジョブ
+      
+      ### 対象
+      * Bootstrap設定
+      * Jenkins環境管理
+      * 基盤インフラストラクチャ
+
+  # 共通環境Ansibleデプロイメント
+  - path: "delivery-management-jobs/common/ansible-deployments"
+    displayName: "Ansible Deployments"
+    description: |
+      共通環境のAnsibleプレイブック実行
+      
+      ### 含まれるジョブ
+      * Bootstrap設定
+      * Jenkins環境のデプロイ・削除
+      * Jenkinsメンテナンスタスク
+      
+      Configuration as Codeによる環境構成・管理
 
   # 開発環境デリバリーフォルダ
   - path: "delivery-management-jobs/development"
@@ -134,6 +162,18 @@ folders:
       開発環境のPulumiインフラストラクチャデプロイメント
       
       Infrastructure as Codeによる環境構築・更新を管理
+
+  # 開発環境Ansibleデプロイメント
+  - path: "delivery-management-jobs/development/ansible-deployments"
+    displayName: "Ansible Deployments"
+    description: |
+      開発環境のAnsibleプレイブック実行
+      
+      ### 含まれるジョブ
+      * Lambda関数管理（IPホワイトリスト、セットアップ/削除）
+      * テストプレイブック（AWS CLI、S3、SSMパラメータストア）
+      
+      Configuration as Codeによる環境構成・管理を実施
 
   # 本番環境デリバリーフォルダ
   - path: "delivery-management-jobs/production"
@@ -160,6 +200,23 @@ folders:
       本番環境のPulumiインフラストラクチャデプロイメント
       
       本番環境の安定性を保ちながら、計画的な更新を実施
+
+  # 本番環境Ansibleデプロイメント
+  - path: "delivery-management-jobs/production/ansible-deployments"
+    displayName: "Ansible Deployments"
+    description: |
+      本番環境のAnsibleプレイブック実行
+      
+      ⚠️ **注意**: 本番環境の変更は慎重に行ってください
+      
+      ### 含まれるジョブ
+      * Lambda関数管理（IPホワイトリスト、セットアップ/削除）
+      
+      ### 注意事項
+      * 本番環境のLambda関数に影響します
+      * 実行前に開発環境でテストすることを推奨
+      
+      Configuration as Codeによる本番環境の構成管理
 
   # 共有ライブラリフォルダ
   - path: "Shared_Library"
