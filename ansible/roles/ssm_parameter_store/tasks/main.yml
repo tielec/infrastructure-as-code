@@ -7,18 +7,11 @@
     name: aws_cli_helper
   run_once: true
 
-# セキュアキーワードの読み込み
-- name: Load secure keywords
+# セキュアキーワードの読み込み（オプション）
+- name: Load additional secure keywords
   ansible.builtin.include_vars:
     file: secure_keywords.yml
-
-- name: Compile secure keywords list
-  ansible.builtin.set_fact:
-    ssm_parameter_store_all_secure_keywords: >-
-      {{
-        ssm_parameter_store_secure_keywords +
-        ssm_parameter_store_additional_secure_keywords | default([])
-      }}
+  failed_when: false
 
 # 結果変数の初期化
 - name: Initialize result variables
