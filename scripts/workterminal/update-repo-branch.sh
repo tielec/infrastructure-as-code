@@ -214,7 +214,7 @@ if [ "$BRANCH_NAME" = "$CURRENT_BRANCH" ]; then
     # 同じブランチの場合は更新のみ
     if git show-ref --verify --quiet "refs/remotes/origin/$BRANCH_NAME"; then
         info_msg "リモートから最新の変更を取得中..."
-        git pull origin "$BRANCH_NAME" || error_exit "pullに失敗しました"
+        git pull --rebase origin "$BRANCH_NAME" || error_exit "pullに失敗しました"
         success_msg "ブランチを最新状態に更新しました"
     else
         warn_msg "リモートブランチ 'origin/$BRANCH_NAME' が存在しません（ローカルのみのブランチ）"
@@ -229,7 +229,7 @@ else
         # リモートブランチが存在する場合はpull
         if git show-ref --verify --quiet "refs/remotes/origin/$BRANCH_NAME"; then
             info_msg "リモートから最新の変更を取得中..."
-            git pull origin "$BRANCH_NAME" || error_exit "pullに失敗しました"
+            git pull --rebase origin "$BRANCH_NAME" || error_exit "pullに失敗しました"
             success_msg "ブランチを最新状態に更新しました"
         else
             warn_msg "リモートブランチ 'origin/$BRANCH_NAME' が存在しません"
