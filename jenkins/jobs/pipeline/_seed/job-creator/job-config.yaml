@@ -483,8 +483,8 @@ ansible-playbooks:
         description: "Jenkinsアプリケーションのデプロイ（Jenkins自体の更新）"
         category: "jenkins-deploy"
         enable_nohup: true  # Jenkins自体の更新がかかるためWorkterminalに処理を任せる
-        nohup_timeout_minutes: 30
-        continue_on_timeout: false  # アプリケーションは完全にデプロイする必要がある
+        nohup_timeout_minutes: 1  # Jenkinsの再起動でタイムアウトするため短時間に設定
+        continue_on_timeout: true  # Jenkins再起動後も処理は継続される
         environments: ['common']  # 共通環境
       
       # Jenkins Pipeline (グループ化されたプレイブックを使用)
