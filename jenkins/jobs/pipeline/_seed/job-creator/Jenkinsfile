@@ -173,7 +173,7 @@ pipeline {
                     // removedJobAction: 'DELETE' - DSLから削除されたジョブを自動削除
                     // removedViewAction: 'DELETE' - DSLから削除されたビューを自動削除
                     // removedConfigFilesAction: 'DELETE' - DSLから削除された設定ファイルを自動削除
-                    def dslResult = jobDsl(
+                    jobDsl(
                         targets: dslFiles.join('\n'),
                         lookupStrategy: 'SEED_JOB',
                         additionalParameters: additionalParams,
@@ -182,43 +182,8 @@ pipeline {
                         removedConfigFilesAction: 'DELETE'
                     )
                     
-                    // DSL実行結果のサマリー表示
-                    echo "\n=== Job DSL Execution Summary ==="
-                    echo "Jobs created: ${dslResult.createdJobs.size()}"
-                    echo "Jobs updated: ${dslResult.updatedJobs.size()}"
-                    echo "Jobs removed: ${dslResult.removedJobs.size()}"
-                    echo "Views created: ${dslResult.createdViews.size()}"
-                    echo "Views updated: ${dslResult.updatedViews.size()}"
-                    echo "Views removed: ${dslResult.removedViews.size()}"
-                    echo "Config files created: ${dslResult.createdConfigFiles.size()}"
-                    echo "Config files updated: ${dslResult.updatedConfigFiles.size()}"
-                    echo "Config files removed: ${dslResult.removedConfigFiles.size()}"
-                    
-                    // 削除されたジョブがある場合は詳細を表示
-                    if (dslResult.removedJobs.size() > 0) {
-                        echo "\n⚠️ The following jobs were removed:"
-                        dslResult.removedJobs.each { job ->
-                            echo "  - ${job}"
-                        }
-                    }
-                    
-                    // 削除されたビューがある場合は詳細を表示
-                    if (dslResult.removedViews.size() > 0) {
-                        echo "\n⚠️ The following views were removed:"
-                        dslResult.removedViews.each { view ->
-                            echo "  - ${view}"
-                        }
-                    }
-                    
-                    // 削除された設定ファイルがある場合は詳細を表示
-                    if (dslResult.removedConfigFiles.size() > 0) {
-                        echo "\n⚠️ The following config files were removed:"
-                        dslResult.removedConfigFiles.each { configFile ->
-                            echo "  - ${configFile}"
-                        }
-                    }
-                    
                     echo "\n✅ Job DSL execution completed!"
+                    echo "Note: Items no longer defined in DSL have been automatically removed."
                 }
             }
         }
