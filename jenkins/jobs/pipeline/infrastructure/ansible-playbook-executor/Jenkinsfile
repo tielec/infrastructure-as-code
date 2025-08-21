@@ -254,7 +254,7 @@ pipeline {
                                         fi
                                         
                                         # 最後の出力を取得
-                                        LAST_OUTPUT=\$(tmux capture-pane -t ${tmuxSessionName}:${windowName} -p -S -\$(echo 50))
+                                        LAST_OUTPUT=\$(tmux capture-pane -t ${tmuxSessionName}:${windowName} -p -S -\\$(echo 50))
                                         
                                         # Ansibleの完了を複数の条件でチェック
                                         ANSIBLE_COMPLETED=false
@@ -289,7 +289,7 @@ pipeline {
                                                 
                                                 # ログをキャプチャして表示
                                                 echo "=== 実行結果（最後の100行） ==="
-                                                tmux capture-pane -t ${tmuxSessionName}:${windowName} -p -S -\$(echo 100) | tail -100
+                                                tmux capture-pane -t ${tmuxSessionName}:${windowName} -p -S -\\$(echo 100) | tail -100
                                                 
                                                 # エラーチェック（failed=の数値をチェック）
                                                 if echo "\$LAST_OUTPUT" | grep -E "failed=[1-9]" > /dev/null; then
@@ -329,7 +329,7 @@ pipeline {
                                             echo "実行中... (\$ELAPSED秒経過)"
                                             # 最新の5行を表示
                                             echo "--- 最新の出力 ---"
-                                            tmux capture-pane -t ${tmuxSessionName}:${windowName} -p -S -\$(echo 5) | sed "s/^/  > /"
+                                            tmux capture-pane -t ${tmuxSessionName}:${windowName} -p -S -\\$(echo 5) | sed "s/^/  > /"
                                         fi
                                         
                                         sleep \$INTERVAL
@@ -351,7 +351,7 @@ pipeline {
                                             echo "警告: タイムアウトしましたが、CONTINUE_ON_TIMEOUTが有効なため続行します"
                                             # ログをキャプチャして保存
                                             echo "=== タイムアウト時のログ（最後の100行） ==="
-                                            tmux capture-pane -t ${tmuxSessionName}:${windowName} -p -S -\$(echo 100) > /tmp/${tmuxSessionName}_${index}.log
+                                            tmux capture-pane -t ${tmuxSessionName}:${windowName} -p -S -\\$(echo 100) > /tmp/${tmuxSessionName}_${index}.log
                                             tail -100 /tmp/${tmuxSessionName}_${index}.log
                                             # タイムアウトフラグファイルを作成
                                             touch /tmp/${tmuxSessionName}_${index}.timeout
@@ -379,7 +379,7 @@ pipeline {
                                    tmux capture-pane -t ${tmuxSessionName}:${windowName} -p -S - > ansible_log.txt
                                 
                                 3. 最新のログを確認:
-                                   tmux capture-pane -t ${tmuxSessionName}:${windowName} -p -S -\$(echo 50)
+                                   tmux capture-pane -t ${tmuxSessionName}:${windowName} -p -S -\\$(echo 50)
                                 ========================================
                                 """
                                 
