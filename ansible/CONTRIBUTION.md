@@ -185,28 +185,83 @@ _temp_password: "temporary"
 
 ### パイプラインプレイブック
 
+**⚠️ 重要：import_playbook の正しい使い方**
+
+パイプラインプレイブックでは、複数のプレイブックを連携させる際に `import_playbook` を使用します。以下の点に注意してください：
+
+1. **`import_playbook` を使用する**（`ansible.builtin.import_playbook` ではない）
+2. **`vars` と `when` パラメータがサポートされている**
+3. **変数の循環参照を避ける**ため、中間変数を使用する
+
 ```yaml
 ---
-# 複数のプレイブックを連携させるパイプライン
-- name: Setup Pipeline
+# ✅ 正しい実装例：import_playbook を使用
+- import_playbook: lambda/lambda_ssm_init.yml
+  vars:
+    env: "{{ env | default('dev') }}"  # 変数の受け渡し
+  when: run_ssm_init | default(true) | bool  # 条件付き実行
+  tags:
+    - ssm-init
+    - always
+
+# ❌ 間違った実装例：ansible.builtin.import_playbook
+- ansible.builtin.import_playbook: lambda/lambda_ssm_init.yml  # エラーになる
+  vars:
+    env: "{{ env | default('dev') }}"
+  when: run_ssm_init | default(true) | bool
+
+# 完全なパイプライン例
+---
+- name: Lambda Setup Pipeline
   hosts: localhost
   gather_facts: no
   
   vars:
-    pipeline_steps:
-      - name: "SSMパラメータ初期化"
-        playbook: "deploy_jenkins_ssm_init.yml"
-      - name: "ネットワーク構築"
-        playbook: "deploy_jenkins_network.yml"
-      - name: "セキュリティ設定"
-        playbook: "deploy_jenkins_security.yml"
-        
-  tasks:
-    - name: パイプライン実行
-      include_tasks: "{{ item.playbook }}"
-      loop: "{{ pipeline_steps }}"
-      loop_control:
-        label: "{{ item.name }}"
+    env: "{{ env | default('dev') }}"
+    
+# 各プレイブックを条件付きでインポート
+- import_playbook: lambda/lambda_ssm_init.yml
+  vars:
+    env: "{{ env }}"
+  when: run_ssm_init | default(true) | bool
+  tags:
+    - ssm-init
+
+- import_playbook: lambda/lambda_network.yml
+  vars:
+    env: "{{ env }}"
+  when: run_network | default(true) | bool
+  tags:
+    - network
+
+- import_playbook: lambda/lambda_security.yml
+  vars:
+    env: "{{ env }}"
+  when: run_security | default(true) | bool
+  tags:
+    - security
+```
+
+**変数の循環参照を避ける方法：**
+
+```yaml
+# ❌ 間違い：循環参照が発生
+- name: Execute deployment
+  ansible.builtin.include_role:
+    name: lambda_ssm_init
+  vars:
+    operation: "{{ operation | default('deploy') }}"  # 自己参照でエラー
+
+# ✅ 正解：中間変数を使用
+- name: Set operation variable
+  ansible.builtin.set_fact:
+    role_operation: "{{ operation | default('deploy') }}"
+    
+- name: Execute deployment
+  ansible.builtin.include_role:
+    name: lambda_ssm_init
+  vars:
+    operation: "{{ role_operation }}"  # 中間変数を使用
 ```
 
 ### テストプレイブック記述規約
@@ -250,7 +305,30 @@ _temp_password: "temporary"
 
 Pulumiスタックの操作を標準化するロール。直接Pulumiコマンドを実行する代わりに、このロールを使用してください。
 
+**⚠️ 重要な実装パターン：**
+- **必ず `tasks_from` パラメータを使用**して特定のタスクファイルを呼び出す
+- `pulumi_action` 変数によるアクション制御は使用しない（エラーの原因となる）
+- スタック初期化には `tasks_from: init_stack` を使用する
+
 ```yaml
+# ✅ 正しい実装例：tasks_from を使用
+- name: Pulumiスタックを初期化
+  ansible.builtin.include_role:
+    name: pulumi_helper
+    tasks_from: init_stack  # 特定のタスクファイルを直接指定
+  vars:
+    pulumi_project_path: "{{ playbook_dir }}/../../pulumi/lambda-ssm-init"
+    stack_name: "{{ env_name }}"
+
+# ❌ 間違った実装例：pulumi_action を使用
+- name: Pulumiスタックを初期化（動作しない）
+  ansible.builtin.include_role:
+    name: pulumi_helper
+  vars:
+    pulumi_action: "init"  # これは動作しない
+    pulumi_project_path: "{{ playbook_dir }}/../../pulumi/lambda-ssm-init"
+    stack_name: "{{ env_name }}"
+
 # デプロイ
 - name: Pulumiスタックをデプロイ
   ansible.builtin.include_role:
@@ -964,6 +1042,88 @@ ansible-playbook playbook.yml --check --diff
       setup:
         gather_subset:
           - min
+```
+
+#### Pulumiヘルパーロールが実行されない問題
+
+**症状：** `pulumi_helper` ロールを呼び出してもPulumiコマンドが実行されない
+
+```yaml
+# 問題の原因: pulumi_action変数を使用している
+- name: Initialize stack (動作しない)
+  ansible.builtin.include_role:
+    name: pulumi_helper
+  vars:
+    pulumi_action: "init"  # これは動作しない
+
+# 解決方法: tasks_fromを使用して特定のタスクファイルを指定
+- name: Initialize stack (正しい)
+  ansible.builtin.include_role:
+    name: pulumi_helper
+    tasks_from: init_stack  # 直接タスクファイルを指定
+  vars:
+    pulumi_project_path: "{{ stack_path }}"
+    stack_name: "{{ env_name }}"
+```
+
+#### import_playbookでエラーが発生する問題
+
+**症状：** `ansible.builtin.import_playbook` を使用すると "has extra params" エラーが発生
+
+```yaml
+# 問題の原因: ansible.builtin.import_playbook を使用
+- ansible.builtin.import_playbook: playbook.yml  # エラー
+  vars:
+    env: "{{ env }}"
+  when: condition
+
+# 解決方法: import_playbook を使用（ansible.builtin. プレフィックスなし）
+- import_playbook: playbook.yml  # 正しい
+  vars:
+    env: "{{ env }}"
+  when: condition
+```
+
+#### 変数の循環参照エラー
+
+**症状：** "An unhandled exception occurred while templating" エラーが発生
+
+```yaml
+# 問題の原因: 変数が自己参照している
+- name: Execute role
+  ansible.builtin.include_role:
+    name: my_role
+  vars:
+    operation: "{{ operation | default('deploy') }}"  # 循環参照
+
+# 解決方法: 中間変数を使用
+- name: Set operation variable
+  ansible.builtin.set_fact:
+    role_operation: "{{ operation | default('deploy') }}"
+    
+- name: Execute role
+  ansible.builtin.include_role:
+    name: my_role
+  vars:
+    operation: "{{ role_operation }}"  # 中間変数を使用
+```
+
+#### SSMパラメータが初期化されない問題
+
+**症状：** SSM初期化ロールを実行してもパラメータが作成されない
+
+```yaml
+# 原因の調査方法
+1. ロールのtasks/main.ymlが正しくタスクを振り分けているか確認
+2. deploy.ymlが実際のPulumiコマンドを呼び出しているか確認
+3. pulumi_helperのtasks_fromパラメータが正しく設定されているか確認
+
+# デバッグ方法
+- name: Debug role execution
+  ansible.builtin.include_role:
+    name: ssm_init
+  vars:
+    ansible_verbosity: 3  # デバッグログを有効化
 ```
 
 ## コントリビューション
