@@ -72,6 +72,11 @@
     pulumi_project_path: "{{ lambda_ssm_init_path }}"
     pulumi_skip_preview: "{{ not preview_only | default(true) }}"
 
+- name: Wait for SSM parameters to be available
+  ansible.builtin.pause:
+    seconds: 5
+  when: not preview_only | default(false)
+
 - name: Get stack outputs
   ansible.builtin.include_role:
     name: pulumi_helper
@@ -79,8 +84,14 @@
     pulumi_action: "output"
     pulumi_stack_name: "{{ env_name }}"
     pulumi_project_path: "{{ lambda_ssm_init_path }}"
-  register: ssm_init_outputs
   when: not preview_only | default(false)
+
+- name: Store stack outputs
+  ansible.builtin.set_fact:
+    ssm_init_outputs: "{{ pulumi_output | default({}) }}"
+  when: 
+    - not preview_only | default(false)
+    - pulumi_output is defined
 
 - name: Verify SSM parameter initialization
   ansible.builtin.include_role:
@@ -89,6 +100,8 @@
   vars:
     parameter_name: "/{{ project_name }}/{{ env_name }}/common/init-complete"
     store_as: "init_complete_check"
+    default_value: "false"
+    ssm_parameter_store_fail_on_missing: false
   when: not preview_only | default(false)
 
 - name: Display initialization status
@@ -96,14 +109,13 @@
     msg: |
       SSM Parameter Initialization Status
       ==================================
-      Initialization: {{ 'Complete' if ssm_parameter_value == 'true' else 'Failed' }}
-      Total Parameters Created: {{ ssm_init_outputs.outputs.parametersCreated | default('N/A') }}
-      Parameter Prefix: {{ ssm_init_outputs.outputs.parameterPrefix | default('N/A') }}
+      Initialization: {{ 'Complete' if (ssm_parameter_value | default('false')) == 'true' else 'Pending' }}
+      Total Parameters Created: {{ ssm_init_outputs.deploymentInfo.parametersCreated | default('N/A') if ssm_init_outputs.deploymentInfo is defined else 'N/A' }}
+      Parameter Prefix: {{ ssm_init_outputs.deploymentInfo.ssmParameterPrefix | default('N/A') if ssm_init_outputs.deploymentInfo is defined else 'N/A' }}
   when: 
     - not preview_only | default(false)
-    - ssm_parameter_value is defined
 
 - name: Set deployment fact
   ansible.builtin.set_fact:
-    ssm_init_deployed: true
+    ssm_init_deployed: "{{ (ssm_parameter_value | default('false')) == 'true' }}"
   when: not preview_only | default(false)

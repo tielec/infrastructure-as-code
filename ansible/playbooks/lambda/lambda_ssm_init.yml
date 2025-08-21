@@ -1,0 +1,68 @@
+---
+# lambda_ssm_init.yml
+# Lambda API用SSMパラメータ初期化プレイブック
+# 
+# 使用方法:
+#   ansible-playbook playbooks/lambda/lambda_ssm_init.yml -e "env=dev"
+#   ansible-playbook playbooks/lambda/lambda_ssm_init.yml -e "env=dev operation=destroy"
+
+- name: Lambda API SSM Parameter Initialization
+  hosts: localhost
+  connection: local
+  gather_facts: yes
+  
+  vars:
+    env_name: "{{ env | default('dev') }}"
+    operation: "{{ operation | default('deploy') }}"
+    preview_only: "{{ preview | default(false) }}"
+    
+  pre_tasks:
+    - name: Include group_vars/all.yml
+      ansible.builtin.include_vars:
+        file: "{{ inventory_dir }}/group_vars/all.yml"
+    
+    - name: Set required variables
+      ansible.builtin.set_fact:
+        project_name: "{{ lambda_api_infra.project_name }}"
+        aws_region_name: "{{ lambda_api_infra.aws.default_region }}"
+        pulumi_path: "{{ inventory_dir }}/../../pulumi"
+        scripts_dir: "{{ inventory_dir }}/../../scripts"
+        
+    - name: Display operation info
+      ansible.builtin.debug:
+        msg: |
+          ==========================================
+          Lambda API SSM Parameter Initialization
+          ==========================================
+          Operation: {{ operation }}
+          Environment: {{ env_name }}
+          Project: {{ project_name }}
+          Region: {{ aws_region_name }}
+          Preview Only: {{ preview_only }}
+          ==========================================
+  
+  roles:
+    - aws_setup
+    - pulumi_helper
+    
+  tasks:
+    - name: Execute SSM parameter initialization
+      ansible.builtin.include_role:
+        name: lambda_ssm_init
+      vars:
+        operation: "{{ operation }}"
+        
+    - name: Display results
+      ansible.builtin.debug:
+        msg: |
+          ==========================================
+          SSM Parameter Initialization {{ 'Preview' if preview_only else operation | title }} Complete
+          ==========================================
+          {% if operation == 'deploy' and not preview_only %}
+          Status: {{ 'Success' if ssm_init_deployed | default(false) else 'Failed' }}
+          
+          Next step:
+          ansible-playbook playbooks/lambda/lambda_network.yml -e "env={{ env_name }}"
+          {% elif operation == 'destroy' %}
+          SSM parameters have been removed.
+          {% endif %}

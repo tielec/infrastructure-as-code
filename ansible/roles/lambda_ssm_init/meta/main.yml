@@ -4,4 +4,4 @@
 
 dependencies:
   - role: pulumi_helper
-  - role: aws_cli_helper
+  # aws_cli_helperはssm_parameter_storeロールから呼ばれるため、ここでは不要

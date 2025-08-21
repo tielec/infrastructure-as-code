@@ -1,0 +1,95 @@
+---
+# lambda_api_gateway.yml
+# API Gatewayデプロイメントプレイブック
+# 
+# 使用方法:
+#   ansible-playbook playbooks/lambda/lambda_api_gateway.yml -e "env=dev"
+#   ansible-playbook playbooks/lambda/lambda_api_gateway.yml -e "env=dev operation=destroy"
+
+- name: API Gateway Deployment
+  hosts: localhost
+  connection: local
+  gather_facts: yes
+  
+  vars:
+    env_name: "{{ env | default('dev') }}"
+    operation: "{{ operation | default('deploy') }}"
+    preview_only: "{{ preview | default(false) }}"
+    
+  pre_tasks:
+    - name: Include group_vars/all.yml
+      ansible.builtin.include_vars:
+        file: "{{ inventory_dir }}/group_vars/all.yml"
+    
+    - name: Set required variables
+      ansible.builtin.set_fact:
+        project_name: "{{ lambda_api_infra.project_name }}"
+        aws_region_name: "{{ lambda_api_infra.aws.default_region }}"
+        api_gateway_project_name: "{{ lambda_api_infra.pulumi.api_gateway_project }}"
+        pulumi_path: "{{ inventory_dir }}/../../pulumi"
+        scripts_dir: "{{ inventory_dir }}/../../scripts"
+        environment_config: "{{ lambda_api_infra.environments[env_name] }}"
+        api_rate_limit: "{{ environment_config.api_rate_limit | default(1000) }}"
+        
+    - name: Display operation info
+      ansible.builtin.debug:
+        msg: |
+          ==========================================
+          API Gateway Deployment
+          ==========================================
+          Operation: {{ operation }}
+          Environment: {{ env_name }}
+          Project: {{ api_gateway_project_name }}
+          Region: {{ aws_region_name }}
+          Rate Limit: {{ api_rate_limit }} req/s
+          Preview Only: {{ preview_only }}
+          ==========================================
+          
+    - name: Check Lambda functions deployment
+      ansible.builtin.include_role:
+        name: ssm_parameter_store
+        tasks_from: get_parameter
+      vars:
+        parameter_name: "/{{ project_name }}/{{ env_name }}/lambda/functions-deployed"
+        store_as: "functions_check"
+        default_value: "false"
+        ssm_parameter_store_fail_on_missing: false
+        
+    - name: Verify Lambda functions deployment
+      ansible.builtin.fail:
+        msg: |
+          Lambda functions are not deployed!
+          Please run: ansible-playbook playbooks/lambda/lambda_functions.yml -e "env={{ env_name }}"
+      when:
+        - operation == 'deploy'
+        - functions_check | default('false') != 'true'
+  
+  roles:
+    - aws_setup
+    - pulumi_helper
+    
+  tasks:
+    - name: Execute API Gateway deployment
+      ansible.builtin.include_role:
+        name: lambda_api_gateway
+      vars:
+        operation: "{{ operation }}"
+        
+    - name: Display results
+      ansible.builtin.debug:
+        msg: |
+          ==========================================
+          API Gateway {{ 'Preview' if preview_only else operation | title }} Complete
+          ==========================================
+          {% if operation == 'deploy' and not preview_only %}
+          Status: {{ 'Success' if api_gateway_deployed | default(false) else 'Failed' }}
+          API Endpoint: {{ api_endpoint | default('Not available') }}
+          
+          To get API Key:
+          pulumi stack output apiKeyInfo -C {{ pulumi_path }}/{{ api_gateway_project_name }}
+          
+          Next step (optional):
+          ansible-playbook playbooks/lambda/lambda_waf.yml -e "env={{ env_name }}"
+          {% elif operation == 'destroy' %}
+          API Gateway has been removed.
+          {% endif %}
