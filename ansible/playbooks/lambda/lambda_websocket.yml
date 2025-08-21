@@ -90,16 +90,16 @@
       ansible.builtin.debug:
         msg: |
           ==========================================
-          WebSocket API {{ 'Preview' if preview_only else operation | title }} Complete
+          WebSocket API {{ 'Preview' if preview_only else role_operation | title }} Complete
           ==========================================
           {% if enable_websocket %}
-          {% if operation | default('deploy') == 'deploy' and not preview_only %}
+          {% if role_operation | default('deploy') == 'deploy' and not preview_only %}
           Status: {{ 'Success' if websocket_deployed | default(false) else 'Failed' }}
           WebSocket Endpoint: {{ websocket_endpoint | default('Not available') }}
           
           Optional next step:
           - Database: ansible-playbook playbooks/lambda/lambda_database.yml -e "env={{ env_name }}"
-          {% elif operation == 'destroy' %}
+          {% elif role_operation == 'destroy' %}
           WebSocket API has been removed.
           {% endif %}
           {% else %}

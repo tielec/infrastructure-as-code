@@ -90,16 +90,16 @@
       ansible.builtin.debug:
         msg: |
           ==========================================
-          WAF {{ 'Preview' if preview_only else operation | title }} Complete
+          WAF {{ 'Preview' if preview_only else role_operation | title }} Complete
           ==========================================
           {% if enable_waf %}
-          {% if operation | default('deploy') == 'deploy' and not preview_only %}
+          {% if role_operation | default('deploy') == 'deploy' and not preview_only %}
           Status: {{ 'Success' if waf_deployed | default(false) else 'Failed' }}
           
           Optional next steps:
           - WebSocket API: ansible-playbook playbooks/lambda/lambda_websocket.yml -e "env={{ env_name }}"
           - Database: ansible-playbook playbooks/lambda/lambda_database.yml -e "env={{ env_name }}"
-          {% elif operation == 'destroy' %}
+          {% elif role_operation == 'destroy' %}
           WAF has been removed.
           {% endif %}
           {% else %}

@@ -82,14 +82,14 @@
       ansible.builtin.debug:
         msg: |
           ==========================================
-          Network Infrastructure {{ 'Preview' if preview_only else operation | title }} Complete
+          Network Infrastructure {{ 'Preview' if preview_only else role_operation | title }} Complete
           ==========================================
-          {% if operation == 'deploy' and not preview_only %}
+          {% if role_operation == 'deploy' and not preview_only %}
           Status: {{ 'Success' if network_deployed | default(false) else 'Failed' }}
           VPC ID: {{ vpc_id | default('N/A') }}
           
           Next step:
           ansible-playbook playbooks/lambda/lambda_security.yml -e "env={{ env_name }}"
-          {% elif operation == 'destroy' %}
+          {% elif role_operation == 'destroy' %}
           Network infrastructure has been removed.
           {% endif %}

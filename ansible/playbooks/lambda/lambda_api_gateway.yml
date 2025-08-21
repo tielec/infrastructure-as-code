@@ -82,9 +82,9 @@
       ansible.builtin.debug:
         msg: |
           ==========================================
-          API Gateway {{ 'Preview' if preview_only else operation | title }} Complete
+          API Gateway {{ 'Preview' if preview_only else role_operation | title }} Complete
           ==========================================
-          {% if operation == 'deploy' and not preview_only %}
+          {% if role_operation == 'deploy' and not preview_only %}
           Status: {{ 'Success' if api_gateway_deployed | default(false) else 'Failed' }}
           API Endpoint: {{ api_endpoint | default('Not available') }}
           
@@ -93,6 +93,6 @@
           
           Next step (optional):
           ansible-playbook playbooks/lambda/lambda_waf.yml -e "env={{ env_name }}"
-          {% elif operation == 'destroy' %}
+          {% elif role_operation == 'destroy' %}
           API Gateway has been removed.
           {% endif %}

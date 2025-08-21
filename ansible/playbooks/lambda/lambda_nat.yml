@@ -106,14 +106,14 @@
       ansible.builtin.debug:
         msg: |
           ==========================================
-          NAT Infrastructure {{ 'Preview' if preview_only else operation | title }} Complete
+          NAT Infrastructure {{ 'Preview' if preview_only else role_operation | title }} Complete
           ==========================================
-          {% if operation == 'deploy' and not preview_only %}
+          {% if role_operation == 'deploy' and not preview_only %}
           Status: {{ 'Success' if nat_deployed | default(false) else 'Failed' }}
           NAT Type: {{ nat_type | default('N/A') }}
           
           Next step:
           ansible-playbook playbooks/lambda/lambda_functions.yml -e "env={{ env_name }}"
-          {% elif operation == 'destroy' %}
+          {% elif role_operation == 'destroy' %}
           NAT infrastructure has been removed.
           {% endif %}

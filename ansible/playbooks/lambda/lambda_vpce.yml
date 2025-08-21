@@ -101,13 +101,13 @@
       ansible.builtin.debug:
         msg: |
           ==========================================
-          VPC Endpoints {{ 'Preview' if preview_only else operation | title }} Complete
+          VPC Endpoints {{ 'Preview' if preview_only else role_operation | title }} Complete
           ==========================================
-          {% if operation == 'deploy' and not preview_only %}
+          {% if role_operation == 'deploy' and not preview_only %}
           Status: {{ 'Success' if vpce_deployed | default(false) else 'Failed' }}
           
           Next step:
           ansible-playbook playbooks/lambda/lambda_nat.yml -e "env={{ env_name }}"
-          {% elif operation == 'destroy' %}
+          {% elif role_operation == 'destroy' %}
           VPC endpoints have been removed.
           {% endif %}

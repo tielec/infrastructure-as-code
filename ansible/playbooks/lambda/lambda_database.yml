@@ -111,15 +111,15 @@
       ansible.builtin.debug:
         msg: |
           ==========================================
-          Database Infrastructure {{ 'Preview' if preview_only else operation | title }} Complete
+          Database Infrastructure {{ 'Preview' if preview_only else role_operation | title }} Complete
           ==========================================
           {% if enable_database %}
-          {% if operation | default('deploy') == 'deploy' and not preview_only %}
+          {% if role_operation | default('deploy') == 'deploy' and not preview_only %}
           Status: {{ 'Success' if database_deployed | default(false) else 'Failed' }}
           Database Type: {{ database_type | default('N/A') }}
           
           All Lambda API infrastructure components have been deployed!
-          {% elif operation == 'destroy' %}
+          {% elif role_operation == 'destroy' %}
           Database infrastructure has been removed.
           {% endif %}
           {% else %}

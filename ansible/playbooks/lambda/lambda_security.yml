@@ -79,13 +79,13 @@
       ansible.builtin.debug:
         msg: |
           ==========================================
-          Security Groups {{ 'Preview' if preview_only else operation | title }} Complete
+          Security Groups {{ 'Preview' if preview_only else role_operation | title }} Complete
           ==========================================
-          {% if operation == 'deploy' and not preview_only %}
+          {% if role_operation == 'deploy' and not preview_only %}
           Status: {{ 'Success' if security_deployed | default(false) else 'Failed' }}
           
           Next step:
           ansible-playbook playbooks/lambda/lambda_vpce.yml -e "env={{ env_name }}"
-          {% elif operation == 'destroy' %}
+          {% elif role_operation == 'destroy' %}
           Security groups have been removed.
           {% endif %}
