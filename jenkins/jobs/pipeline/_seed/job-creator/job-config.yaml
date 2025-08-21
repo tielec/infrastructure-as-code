@@ -318,6 +318,13 @@ pulumi-projects:
         environments: ['common']  # 共通環境
       
       # Lambda関連プロジェクト
+      lambda_ssm_init:
+        project_path: "lambda-ssm-init"
+        display_name: "Lambda SSM Init"
+        project_type: "nodejs"
+        description: "Lambda SSMパラメータの初期化"
+        environments: ['dev', 'prod']  # 両環境に配置
+      
       lambda_network:
         project_path: "lambda-network"
         display_name: "Lambda Network"
@@ -535,11 +542,86 @@ ansible-playbooks:
         category: "lambda"
         environments: ['dev', 'prod']  # 両環境に配置
       
+      # Lambda Individual Deploy Playbooks
+      lambda_ssm_init:
+        playbook_path: "lambda/lambda_ssm_init.yml"
+        display_name: "Lambda SSM Init"
+        description: "Lambda SSMパラメータの初期化"
+        category: "lambda-deploy"
+        environments: ['dev', 'prod']
+      
+      lambda_network:
+        playbook_path: "lambda/lambda_network.yml"
+        display_name: "Lambda Network"
+        description: "Lambdaネットワークインフラのデプロイ"
+        category: "lambda-deploy"
+        environments: ['dev', 'prod']
+      
+      lambda_security:
+        playbook_path: "lambda/lambda_security.yml"
+        display_name: "Lambda Security"
+        description: "Lambdaセキュリティグループのデプロイ"
+        category: "lambda-deploy"
+        environments: ['dev', 'prod']
+      
+      lambda_vpce:
+        playbook_path: "lambda/lambda_vpce.yml"
+        display_name: "Lambda VPC Endpoints"
+        description: "Lambda VPCエンドポイントのデプロイ"
+        category: "lambda-deploy"
+        environments: ['dev', 'prod']
+      
+      lambda_nat:
+        playbook_path: "lambda/lambda_nat.yml"
+        display_name: "Lambda NAT"
+        description: "Lambda NATインスタンスのデプロイ"
+        category: "lambda-deploy"
+        environments: ['dev', 'prod']
+      
+      lambda_functions:
+        playbook_path: "lambda/lambda_functions.yml"
+        display_name: "Lambda Functions"
+        description: "Lambda関数のデプロイ"
+        category: "lambda-deploy"
+        enable_tmux: true  # Lambda関数のデプロイは時間がかかる
+        tmux_timeout_minutes: 30
+        continue_on_timeout: false
+        environments: ['dev', 'prod']
+      
+      lambda_api_gateway:
+        playbook_path: "lambda/lambda_api_gateway.yml"
+        display_name: "Lambda API Gateway"
+        description: "API Gatewayのデプロイ"
+        category: "lambda-deploy"
+        environments: ['dev', 'prod']
+      
+      lambda_waf:
+        playbook_path: "lambda/lambda_waf.yml"
+        display_name: "Lambda WAF"
+        description: "WAFのデプロイ（オプション）"
+        category: "lambda-deploy"
+        environments: ['prod']  # 本番環境のみ
+      
+      lambda_websocket:
+        playbook_path: "lambda/lambda_websocket.yml"
+        display_name: "Lambda WebSocket API"
+        description: "WebSocket APIのデプロイ（オプション）"
+        category: "lambda-deploy"
+        environments: ['dev', 'prod']
+      
+      lambda_database:
+        playbook_path: "lambda/lambda_database.yml"
+        display_name: "Lambda Database"
+        description: "データベースインフラのデプロイ（Phase 2）"
+        category: "lambda-deploy"
+        environments: ['dev', 'prod']
+      
+      # Lambda Pipeline Playbooks
       lambda_setup_pipeline:
         playbook_path: "lambda_setup_pipeline.yml"
         display_name: "Lambda Setup Pipeline"
         description: "Lambda完全セットアップパイプライン"
-        category: "lambda"
+        category: "lambda-pipeline"
         enable_tmux: true  # Lambda関数のデプロイも時間がかかる可能性
         tmux_timeout_minutes: 60
         continue_on_timeout: false  # Lambda関数は完全にデプロイされる必要がある
@@ -549,7 +631,7 @@ ansible-playbooks:
         playbook_path: "lambda_teardown_pipeline.yml"
         display_name: "Lambda Teardown Pipeline"
         description: "Lambda完全削除パイプライン"
-        category: "lambda"
+        category: "lambda-pipeline"
         enable_nohup: true
         nohup_timeout_minutes: 30
         continue_on_timeout: true  # 削除処理なので続行可能
