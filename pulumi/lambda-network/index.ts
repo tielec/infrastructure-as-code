@@ -18,43 +18,29 @@ interface NetworkConfig {
 
 // 環境変数とスタック名を取得
 const environment = pulumi.getStack();
-const config = new pulumi.Config();
 
-// SSMパラメータストアから共通設定を取得
-async function getSSMParameters() {
-    const ssm = new aws.sdk.SSM();
-    const projectNameParam = await ssm.getParameter({
-        Name: `/lambda-api/${environment}/common/project-name`,
-    }).promise();
-    const vpcCidrParam = await ssm.getParameter({
-        Name: `/lambda-api/${environment}/network/vpc-cidr`,
-    }).promise();
-    const enableFlowLogsParam = await ssm.getParameter({
-        Name: `/lambda-api/${environment}/network/enable-flow-logs`,
-    }).promise();
-    const isolatedSubnetsParam = await ssm.getParameter({
-        Name: `/lambda-api/${environment}/phase/isolated-subnets-enabled`,
-    }).promise();
-    
-    return {
-        projectName: projectNameParam.Parameter?.Value || "lambda-api",
-        vpcCidr: vpcCidrParam.Parameter?.Value || "10.1.0.0/16",
-        enableFlowLogs: enableFlowLogsParam.Parameter?.Value === "true",
-        createIsolatedSubnets: isolatedSubnetsParam.Parameter?.Value === "true",
-    };
-}
-
-// SSMパラメータを取得して設定
-const ssmParams = pulumi.runtime.invoke("aws:ssm:getParameter", {
+// SSMパラメータストアから設定を取得（Single Source of Truth）
+const projectNameParam = aws.ssm.getParameter({
     name: `/lambda-api/${environment}/common/project-name`,
-}).then(result => result.value).catch(() => "lambda-api");
+});
 
-const projectName = config.get("projectName") || "lambda-api";
-const vpcCidrBlock = config.get("vpcCidr") || "10.1.0.0/16";
+const vpcCidrParam = aws.ssm.getParameter({
+    name: `/lambda-api/${environment}/network/vpc-cidr`,
+});
 
-// SSMから設定を取得（同期的に）
-const enableFlowLogs = config.getBoolean("enableFlowLogs") || false;
-const createIsolatedSubnets = config.getBoolean("createIsolatedSubnets") || false;
+const enableFlowLogsParam = aws.ssm.getParameter({
+    name: `/lambda-api/${environment}/network/enable-flow-logs`,
+});
+
+const createIsolatedSubnetsParam = aws.ssm.getParameter({
+    name: `/lambda-api/${environment}/phase/isolated-subnets-enabled`,
+});
+
+// SSMから取得した値を使用
+const projectName = projectNameParam.value;
+const vpcCidrBlock = vpcCidrParam.value;
+const enableFlowLogs = pulumi.output(enableFlowLogsParam.value).apply(v => v === "true");
+const createIsolatedSubnets = pulumi.output(createIsolatedSubnetsParam.value).apply(v => v === "true");
 
 // VPC作成
 const vpc = new aws.ec2.Vpc(`${projectName}-vpc`, {

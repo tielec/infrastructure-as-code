@@ -7,13 +7,17 @@
 import * as pulumi from "@pulumi/pulumi";
 import * as aws from "@pulumi/aws";
 
-// コンフィグから設定を取得
-const config = new pulumi.Config();
-const projectName = config.get("projectName") || "lambda-api";
+// 環境変数を取得
 const environment = pulumi.getStack();
 
-// スタック参照名を設定から取得
-const functionsStackName = config.get("functionsStackName") || "lambda-functions";
+// SSMパラメータストアから設定を取得（Single Source of Truth）
+const projectNameParam = aws.ssm.getParameter({
+    name: `/lambda-api/${environment}/common/project-name`,
+});
+const projectName = projectNameParam.value;
+
+// スタック参照名は固定（コンベンションとして）
+const functionsStackName = "lambda-functions";
 
 // 既存のスタックから値を取得
 const functionsStack = new pulumi.StackReference(`${pulumi.getOrganization()}/${functionsStackName}/${environment}`);

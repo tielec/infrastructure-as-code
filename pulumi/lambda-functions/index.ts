@@ -7,19 +7,33 @@
 import * as pulumi from "@pulumi/pulumi";
 import * as aws from "@pulumi/aws";
 
-// コンフィグから設定を取得
-const config = new pulumi.Config();
-const projectName = config.get("projectName") || "lambda-api";
+// 環境変数を取得
 const environment = pulumi.getStack();
 
-// スタック参照名を設定から取得
-const networkStackName = config.get("networkStackName") || "lambda-network";
-const securityStackName = config.get("securityStackName") || "lambda-security";
+// SSMパラメータストアから設定を取得（Single Source of Truth）
+const projectNameParam = aws.ssm.getParameter({
+    name: `/lambda-api/${environment}/common/project-name`,
+});
+const projectName = projectNameParam.value;
 
-// Lambda関数の基本設定（環境別）
-const memorySize = config.getNumber("memorySize") || 256;
-const timeout = config.getNumber("timeout") || 30;
-const logRetentionDays = environment === "dev" ? 3 : environment === "staging" ? 7 : 14;
+// Lambda関数の設定をSSMから取得
+const memorySizeParam = aws.ssm.getParameter({
+    name: `/lambda-api/${environment}/lambda/memory-size`,
+});
+const timeoutParam = aws.ssm.getParameter({
+    name: `/lambda-api/${environment}/lambda/timeout`,
+});
+const logRetentionDaysParam = aws.ssm.getParameter({
+    name: `/lambda-api/${environment}/lambda/log-retention-days`,
+});
+
+const memorySize = pulumi.output(memorySizeParam.value).apply(v => parseInt(v) || 256);
+const timeout = pulumi.output(timeoutParam.value).apply(v => parseInt(v) || 30);
+const logRetentionDays = pulumi.output(logRetentionDaysParam.value).apply(v => parseInt(v) || (environment === "dev" ? 3 : environment === "staging" ? 7 : 14));
+
+// スタック参照名は固定（コンベンションとして）
+const networkStackName = "lambda-network";
+const securityStackName = "lambda-security";
 
 // 既存のスタックから値を取得
 const networkStack = new pulumi.StackReference(`${pulumi.getOrganization()}/${networkStackName}/${environment}`);

@@ -8,17 +8,21 @@
 import * as pulumi from "@pulumi/pulumi";
 import * as aws from "@pulumi/aws";
 
-// コンフィグから設定を取得
-const config = new pulumi.Config();
-const projectName = config.get("projectName") || "lambda-api";
+// 環境変数を取得
 const environment = pulumi.getStack();
+
+// SSMパラメータストアから設定を取得（Single Source of Truth）
+const projectNameParam = aws.ssm.getParameter({
+    name: `/lambda-api/${environment}/common/project-name`,
+});
+const projectName = projectNameParam.value;
 
 // SSMパラメータストアからVPC情報を取得
 const vpcIdParam = aws.ssm.getParameter({
-    name: `/${projectName}/${environment}/network/vpc-id`,
+    name: `/lambda-api/${environment}/network/vpc-id`,
 });
 const vpcCidrParam = aws.ssm.getParameter({
-    name: `/${projectName}/${environment}/network/vpc-cidr`,
+    name: `/lambda-api/${environment}/network/vpc-cidr`,
 });
 
 const vpcId = vpcIdParam.then(p => p.value);
@@ -143,7 +147,10 @@ const dlqSecurityGroup = new aws.ec2.SecurityGroup(`${projectName}-dlq-sg`, {
 
 // ===== Phase 2: RDS/DynamoDB用セキュリティグループ（将来用） =====
 // Phase 2で有効化する場合のみ作成
-const createDatabaseSecurityGroups = config.getBoolean("createDatabaseSecurityGroups") || false;
+const createDatabaseSecurityGroupsParam = aws.ssm.getParameter({
+    name: `/lambda-api/${environment}/phase/database-sg-enabled`,
+});
+const createDatabaseSecurityGroups = pulumi.output(createDatabaseSecurityGroupsParam.value).apply(v => v === "true");
 
 let rdsSecurityGroup: aws.ec2.SecurityGroup | undefined;
 let dynamodbVpceSecurityGroup: aws.ec2.SecurityGroup | undefined;
