@@ -68,81 +68,78 @@
           ==========================================
     
   tasks:
+    # import_playbookはwhen条件をサポートしないため、すべて実行
+    # 各playbookの内部で条件制御を行う
+    
     # 1. SSMパラメータ初期化
     - name: SSM Parameters Initialization
       ansible.builtin.import_playbook: lambda/lambda_ssm_init.yml
       vars:
         env: "{{ env_name }}"
-      when: run_ssm_init | default(true) | bool
+        skip_execution: "{{ not (run_ssm_init | default(true) | bool) }}"
     
     # 2. ネットワークインフラ
     - name: Network Infrastructure Setup
       ansible.builtin.import_playbook: lambda/lambda_network.yml
       vars:
         env: "{{ env_name }}"
-      when: run_network | default(true) | bool
+        skip_execution: "{{ not (run_network | default(true) | bool) }}"
     
     # 3. セキュリティグループ
     - name: Security Groups Setup
       ansible.builtin.import_playbook: lambda/lambda_security.yml
       vars:
         env: "{{ env_name }}"
-      when: run_security | default(true) | bool
+        skip_execution: "{{ not (run_security | default(true) | bool) }}"
     
     # 4. VPCエンドポイント
     - name: VPC Endpoints Setup
       ansible.builtin.import_playbook: lambda/lambda_vpce.yml
       vars:
         env: "{{ env_name }}"
-      when: run_vpce | default(true) | bool
+        skip_execution: "{{ not (run_vpce | default(true) | bool) }}"
     
     # 5. NAT設定
     - name: NAT Infrastructure Setup
       ansible.builtin.import_playbook: lambda/lambda_nat.yml
       vars:
         env: "{{ env_name }}"
-      when: run_nat | default(true) | bool
+        skip_execution: "{{ not (run_nat | default(true) | bool) }}"
     
     # 6. Lambda関数
     - name: Lambda Functions Deployment
       ansible.builtin.import_playbook: lambda/lambda_functions.yml
       vars:
         env: "{{ env_name }}"
-      when: run_functions | default(true) | bool
+        skip_execution: "{{ not (run_functions | default(true) | bool) }}"
     
     # 7. API Gateway
     - name: API Gateway Setup
       ansible.builtin.import_playbook: lambda/lambda_api_gateway.yml
       vars:
         env: "{{ env_name }}"
-      when: run_api_gateway | default(true) | bool
+        skip_execution: "{{ not (run_api_gateway | default(true) | bool) }}"
     
     # 8. WAF（オプション）
     - name: WAF Setup
       ansible.builtin.import_playbook: lambda/lambda_waf.yml
       vars:
         env: "{{ env_name }}"
-      when: 
-        - run_waf | default(true) | bool
-        - environment_config.enable_waf | default(false)
+        skip_execution: "{{ not (run_waf | default(true) | bool) or not (environment_config.enable_waf | default(false)) }}"
     
     # 9. WebSocket API（オプション）
     - name: WebSocket API Setup
       ansible.builtin.import_playbook: lambda/lambda_websocket.yml
       vars:
         env: "{{ env_name }}"
-      when: 
-        - run_websocket | default(true) | bool
-        - enable_websocket | bool
+        skip_execution: "{{ not (run_websocket | default(true) | bool) or not enable_websocket | bool }}"
     
     # 10. データベース（Phase 2）
     - name: Database Infrastructure Setup
       ansible.builtin.import_playbook: lambda/lambda_database.yml
       vars:
         env: "{{ env_name }}"
-      when: 
-        - run_database | default(true) | bool
-        - enable_database | bool
+        skip_execution: "{{ not (run_database | default(true) | bool) or not enable_database | bool }}"
     
     # デプロイメント完了メッセージ
     - name: Display completion message

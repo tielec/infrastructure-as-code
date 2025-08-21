@@ -98,6 +98,7 @@
     
   tasks:
     # 削除は作成の逆順で実行
+    # import_playbookはwhen条件とignore_errorsをサポートしないため、各playbookで制御
     
     # 1. データベース削除（Phase 2、存在する場合）
     - name: Database Infrastructure Teardown
@@ -105,8 +106,7 @@
       vars:
         env: "{{ env_name }}"
         operation: "destroy"
-      when: destroy_database | default(true) | bool
-      ignore_errors: yes
+        skip_execution: "{{ not (destroy_database | default(true) | bool) }}"
     
     # 2. WebSocket API削除（オプション、存在する場合）
     - name: WebSocket API Teardown
@@ -114,8 +114,7 @@
       vars:
         env: "{{ env_name }}"
         operation: "destroy"
-      when: destroy_websocket | default(true) | bool
-      ignore_errors: yes
+        skip_execution: "{{ not (destroy_websocket | default(true) | bool) }}"
     
     # 3. WAF削除
     - name: WAF Teardown
@@ -123,8 +122,7 @@
       vars:
         env: "{{ env_name }}"
         operation: "destroy"
-      when: destroy_waf | default(true) | bool
-      ignore_errors: yes
+        skip_execution: "{{ not (destroy_waf | default(true) | bool) }}"
     
     # 4. API Gateway削除
     - name: API Gateway Teardown
@@ -132,8 +130,7 @@
       vars:
         env: "{{ env_name }}"
         operation: "destroy"
-      when: destroy_api_gateway | default(true) | bool
-      ignore_errors: yes
+        skip_execution: "{{ not (destroy_api_gateway | default(true) | bool) }}"
     
     # 5. Lambda関数削除
     - name: Lambda Functions Teardown
@@ -141,8 +138,7 @@
       vars:
         env: "{{ env_name }}"
         operation: "destroy"
-      when: destroy_functions | default(true) | bool
-      ignore_errors: yes
+        skip_execution: "{{ not (destroy_functions | default(true) | bool) }}"
     
     # 6. NAT削除
     - name: NAT Infrastructure Teardown
@@ -150,8 +146,7 @@
       vars:
         env: "{{ env_name }}"
         operation: "destroy"
-      when: destroy_nat | default(true) | bool
-      ignore_errors: yes
+        skip_execution: "{{ not (destroy_nat | default(true) | bool) }}"
     
     # 7. VPCエンドポイント削除
     - name: VPC Endpoints Teardown
@@ -159,8 +154,7 @@
       vars:
         env: "{{ env_name }}"
         operation: "destroy"
-      when: destroy_vpce | default(true) | bool
-      ignore_errors: yes
+        skip_execution: "{{ not (destroy_vpce | default(true) | bool) }}"
     
     # 8. セキュリティグループ削除
     - name: Security Groups Teardown
@@ -168,8 +162,7 @@
       vars:
         env: "{{ env_name }}"
         operation: "destroy"
-      when: destroy_security | default(true) | bool
-      ignore_errors: yes
+        skip_execution: "{{ not (destroy_security | default(true) | bool) }}"
     
     # 9. ネットワーク削除
     - name: Network Infrastructure Teardown
@@ -177,8 +170,7 @@
       vars:
         env: "{{ env_name }}"
         operation: "destroy"
-      when: destroy_network | default(true) | bool
-      ignore_errors: yes
+        skip_execution: "{{ not (destroy_network | default(true) | bool) }}"
     
     # 10. SSMパラメータ削除（オプション、通常は残す）
     - name: SSM Parameters Teardown
@@ -186,10 +178,7 @@
       vars:
         env: "{{ env_name }}"
         operation: "destroy"
-      when: 
-        - remove_ssm | default(false) | bool
-        - destroy_ssm | default(false) | bool
-      ignore_errors: yes
+        skip_execution: "{{ not ((remove_ssm | default(false) | bool) and (destroy_ssm | default(false) | bool)) }}"
     
     # 削除完了メッセージ
     - name: Display completion message
