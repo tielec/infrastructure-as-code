@@ -54,6 +54,12 @@
         default_value: "false"
         ssm_parameter_store_fail_on_missing: false
         
+    - name: Debug SSM parameter value
+      ansible.builtin.debug:
+        msg: |
+          ssm_init_check value: {{ ssm_init_check | default('not set') }}
+          ssm_parameter_value: {{ ssm_parameter_value | default('not set') }}
+          
     - name: Verify SSM initialization
       ansible.builtin.fail:
         msg: |
