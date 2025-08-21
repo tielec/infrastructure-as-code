@@ -166,15 +166,24 @@ pipeline {
                     }
                     
                     echo "\n=== Executing Job DSL ==="
+                    echo "⚠️ Note: Jobs, views, and config files no longer defined in DSL will be automatically deleted."
+                    echo "This ensures that the Jenkins configuration stays in sync with the DSL definitions."
                     
                     // Job DSLを実行
+                    // removedJobAction: 'DELETE' - DSLから削除されたジョブを自動削除
+                    // removedViewAction: 'DELETE' - DSLから削除されたビューを自動削除
+                    // removedConfigFilesAction: 'DELETE' - DSLから削除された設定ファイルを自動削除
                     jobDsl(
                         targets: dslFiles.join('\n'),
                         lookupStrategy: 'SEED_JOB',
-                        additionalParameters: additionalParams
+                        additionalParameters: additionalParams,
+                        removedJobAction: 'DELETE',
+                        removedViewAction: 'DELETE',
+                        removedConfigFilesAction: 'DELETE'
                     )
                     
                     echo "\n✅ Job DSL execution completed!"
+                    echo "Note: Items no longer defined in DSL have been automatically removed."
                 }
             }
         }

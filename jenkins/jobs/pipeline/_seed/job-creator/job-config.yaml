@@ -29,12 +29,6 @@ jenkins-jobs:
     displayName: 'GitHub App Key Converter'
     dslfile: jenkins/jobs/dsl/admin/admin_convert_key_job.groovy
 
-  admin_github_deploykeys_setting_job:
-    name: 'Github_DeployKeys_Setting'
-    displayName: 'GitHub Deploy Keys Setting Job'
-    dslfile: jenkins/jobs/dsl/admin/admin_github_deploykeys_setting_job.groovy
-    jenkinsfile: jenkins/jobs/pipeline/admin/github-deploykeys-setting/Jenkinsfile
-
   admin_github_webhooks_setting_job:
     name: 'Github_Webhooks_Setting'
     displayName: 'GitHub Webhooks Setting Job'
