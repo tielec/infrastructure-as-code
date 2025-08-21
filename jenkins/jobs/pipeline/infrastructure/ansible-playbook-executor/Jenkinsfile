@@ -253,48 +253,75 @@ pipeline {
                                             exit 1
                                         fi
                                         
-                                        # ansibleプロセスが実行中かチェック（より確実な方法）
-                                        # tmuxペインで実行中のコマンドをチェック
-                                        PANE_COMMAND=\$(tmux list-panes -t ${tmuxSessionName}:${windowName} -F '#{pane_current_command}' 2>/dev/null || echo "")
+                                        # 最後の出力を取得
+                                        LAST_OUTPUT=\$(tmux capture-pane -t ${tmuxSessionName}:${windowName} -p -S -50)
                                         
-                                        # ansible-playbookが実行中か、または子プロセスとして存在するかチェック
-                                        if [[ "\$PANE_COMMAND" != *"ansible"* ]] && ! pgrep -f "ansible-playbook.*${playbook}" > /dev/null 2>&1; then
-                                            echo "Ansibleプロセスが完了したか、まだ開始されていません"
-                                            
-                                            # 最後の出力を確認して、実際に完了したかチェック
-                                            LAST_OUTPUT=\$(tmux capture-pane -t ${tmuxSessionName}:${windowName} -p -S -50)
-                                            
-                                            # PLAYBOOKの実行が実際に開始されたかチェック
+                                        # Ansibleの完了を複数の条件でチェック
+                                        ANSIBLE_COMPLETED=false
+                                        
+                                        # 1. PLAY RECAPが表示されている（正常終了/エラー終了の両方）
+                                        if echo "\$LAST_OUTPUT" | grep -q "PLAY RECAP"; then
+                                            echo "PLAY RECAPを検出 - Ansibleが完了しました"
+                                            ANSIBLE_COMPLETED=true
+                                        fi
+                                        
+                                        # 2. シェルプロンプトが表示されている
+                                        if echo "\$LAST_OUTPUT" | grep -qE "\\[.+@.+\\]\\\\?\\\$|bash-.*\\\\$"; then
+                                            echo "シェルプロンプトを検出 - Ansibleが完了しました"
+                                            ANSIBLE_COMPLETED=true
+                                        fi
+                                        
+                                        # 3. tmuxペインで実行中のコマンドをチェック
+                                        PANE_COMMAND=\$(tmux list-panes -t ${tmuxSessionName}:${windowName} -F '#{pane_current_command}' 2>/dev/null || echo "")
+                                        if [[ "\$PANE_COMMAND" == "bash" ]] || [[ "\$PANE_COMMAND" == "sh" ]]; then
+                                            # ansible-playbookプロセスが存在しない
+                                            if ! pgrep -f "ansible-playbook.*${playbook}" > /dev/null 2>&1; then
+                                                echo "bashに戻っています - Ansibleが完了しました"
+                                                ANSIBLE_COMPLETED=true
+                                            fi
+                                        fi
+                                        
+                                        # Ansibleが完了している場合
+                                        if [ "\$ANSIBLE_COMPLETED" = true ]; then
+                                            # PLAYBOOKの実行が実際に開始されていたかチェック
                                             if echo "\$LAST_OUTPUT" | grep -q "PLAY \\["; then
-                                                echo "Ansibleの実行が完了しました"
+                                                echo "Ansible実行が完了しました"
                                                 
                                                 # ログをキャプチャして表示
                                                 echo "=== 実行結果（最後の100行） ==="
                                                 tmux capture-pane -t ${tmuxSessionName}:${windowName} -p -S -100 | tail -100
                                                 
-                                                # エラーチェック
-                                                if echo "\$LAST_OUTPUT" | grep -qE "(failed|FAILED|ERROR|Fatal|unreachable=|failed=)"; then
-                                                    echo "Ansibleの実行が失敗した可能性があります"
+                                                # エラーチェック（failed=の数値をチェック）
+                                                if echo "\$LAST_OUTPUT" | grep -E "failed=[1-9]" > /dev/null; then
+                                                    echo "エラー: Ansibleの実行が失敗しました（failed taskあり）"
                                                     # 全ログを保存
                                                     tmux capture-pane -t ${tmuxSessionName}:${windowName} -p -S - > /tmp/${tmuxSessionName}_${index}.log
                                                     echo "完全なログは /tmp/${tmuxSessionName}_${index}.log に保存されました"
                                                     exit 1
                                                 fi
                                                 
-                                                # PLAY RECAPをチェックして正常終了を確認
-                                                if echo "\$LAST_OUTPUT" | grep -q "PLAY RECAP"; then
-                                                    echo "Ansibleが正常に完了しました"
+                                                # unreachableチェック
+                                                if echo "\$LAST_OUTPUT" | grep -E "unreachable=[1-9]" > /dev/null; then
+                                                    echo "エラー: 到達不可能なホストがあります"
+                                                    tmux capture-pane -t ${tmuxSessionName}:${windowName} -p -S - > /tmp/${tmuxSessionName}_${index}.log
+                                                    exit 1
                                                 fi
+                                                
+                                                echo "Ansibleが正常に完了しました"
                                                 break
                                             elif [ \$ELAPSED -lt 30 ]; then
                                                 # 最初の30秒は起動待ち
                                                 echo "Ansibleの起動を待機中... (\$ELAPSED秒経過)"
                                             else
-                                                # 30秒経っても開始されない場合は問題がある可能性
-                                                echo "警告: Ansibleがまだ開始されていません"
+                                                # 30秒経っても開始されない場合
+                                                echo "警告: Ansibleが開始されずに終了した可能性があります"
                                                 echo "--- 現在の出力 ---"
                                                 echo "\$LAST_OUTPUT" | tail -20
+                                                break
                                             fi
+                                        elif [ \$ELAPSED -lt 30 ]; then
+                                            # 最初の30秒は起動待ち
+                                            echo "Ansibleの起動を待機中... (\$ELAPSED秒経過)"
                                         fi
                                         
                                         # 進捗表示（30秒ごと）
