@@ -114,17 +114,14 @@ ${playbookListText}
                 // 実行制御
                 booleanParam('DRY_RUN', false, '実行コマンドの確認のみ（実際には実行しない）')
                 
-                // nohup実行オプション（設定で有効な場合のみ表示）
-                if (playbookConfig.enable_nohup) {
-                    booleanParam('USE_NOHUP', playbookConfig.enable_nohup, 
-                        'バックグラウンド実行（nohup）を使用\n長時間実行のプレイブックで推奨')
+                // tmux実行オプション（設定で有効な場合のみ表示）
+                if (playbookConfig.enable_tmux ?: playbookConfig.enable_nohup) {
+                    booleanParam('USE_TMUX', playbookConfig.enable_tmux ?: playbookConfig.enable_nohup, 
+                        'tmuxセッションでバックグラウンド実行\n長時間実行のプレイブックで推奨、リアルタイムログ確認可能')
                     
-                    def timeoutMinutes = playbookConfig.nohup_timeout_minutes ?: 60
-                    stringParam('NOHUP_TIMEOUT_MINUTES', timeoutMinutes.toString(), 
-                        'nohup実行時のタイムアウト時間（分）')
-                    
-                    stringParam('NOHUP_LOG_PATH', '/tmp/ansible_${BUILD_NUMBER}.log', 
-                        'nohup実行時のログファイルパス')
+                    def timeoutMinutes = playbookConfig.tmux_timeout_minutes ?: playbookConfig.nohup_timeout_minutes ?: 60
+                    stringParam('TMUX_TIMEOUT_MINUTES', timeoutMinutes.toString(), 
+                        'tmux実行時のタイムアウト時間（分）')
                     
                     // 複数プレイブックの場合、タイムアウト時の動作を追加
                     if (playbookPaths.size() > 1) {
