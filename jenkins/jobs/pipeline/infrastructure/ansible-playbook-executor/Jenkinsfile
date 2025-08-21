@@ -84,6 +84,7 @@ pipeline {
                     // リポジトリの更新（CIモードで実行）
                     sh """
                         cd ~/infrastructure-as-code
+                        chmod +x scripts/workterminal/update-repo-branch.sh
                         ./scripts/workterminal/update-repo-branch.sh ${params.BRANCH} --ci
                     """
                 }
