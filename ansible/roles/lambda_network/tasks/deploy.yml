@@ -1,6 +1,37 @@
 ---
 # Lambda APIネットワークインフラのデプロイタスク
 
+# SSMパラメータから設定を取得（ヘルパーロール使用）
+- name: Get VPC CIDR from SSM
+  ansible.builtin.include_role:
+    name: ssm_parameter_store
+    tasks_from: get_parameter
+  vars:
+    parameter_name: "/{{ project_name }}/{{ env_name }}/network/vpc-cidr"
+    store_as: "vpc_cidr_param"
+
+- name: Get isolated subnets flag from SSM
+  ansible.builtin.include_role:
+    name: ssm_parameter_store
+    tasks_from: get_parameter
+  vars:
+    parameter_name: "/{{ project_name }}/{{ env_name }}/phase/isolated-subnets-enabled"
+    store_as: "isolated_subnets_param"
+
+- name: Get flow logs flag from SSM
+  ansible.builtin.include_role:
+    name: ssm_parameter_store
+    tasks_from: get_parameter
+  vars:
+    parameter_name: "/{{ project_name }}/{{ env_name }}/network/enable-flow-logs"
+    store_as: "flow_logs_param"
+
+- name: Set network configuration from SSM
+  ansible.builtin.set_fact:
+    vpc_cidr: "{{ ssm_parameter_value | default('10.1.0.0/16') }}"
+    enable_isolated_subnets: "{{ ssm_parameter_store_isolated_subnets_param | default('false') | bool }}"
+    enable_flow_logs: "{{ ssm_parameter_store_flow_logs_param | default('false') | bool }}"
+
 - name: Display network deployment information
   ansible.builtin.debug:
     msg: |
@@ -8,8 +39,9 @@
       - Project: {{ project_name }}
       - Network Pulumi Project: {{ network_project_name }}
       - Environment: {{ env_name }}
-      - VPC CIDR: {{ lambda_api_infra.aws.vpc_cidr }}
+      - VPC CIDR: {{ vpc_cidr }}
       - Create Isolated Subnets: {{ enable_isolated_subnets }}
+      - Enable Flow Logs: {{ enable_flow_logs }}
 
 # ファイル権限設定
 - name: Ensure aws-env.sh has execute permissions
@@ -66,7 +98,7 @@
       vars:
         pulumi_project_path: "{{ pulumi_path }}/lambda-network"
         config_key: "{{ network_project_name }}:vpcCidr"
-        config_value: "{{ lambda_api_infra.aws.vpc_cidr }}"
+        config_value: "{{ vpc_cidr }}"
 
     - name: Configure network stack - isolated subnets
       ansible.builtin.include_role:
@@ -84,7 +116,7 @@
       vars:
         pulumi_project_path: "{{ pulumi_path }}/lambda-network"
         config_key: "{{ network_project_name }}:enableFlowLogs"
-        config_value: "{{ (env_name == 'prod') | string | lower }}"
+        config_value: "{{ enable_flow_logs | string | lower }}"
     
     # Pulumiプレビュー
     - name: Preview network deployment

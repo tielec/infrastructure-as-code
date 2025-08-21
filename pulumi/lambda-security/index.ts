@@ -3,6 +3,7 @@
  * 
  * Lambda APIインフラのセキュリティグループを構築するPulumiスクリプト
  * Lambda、VPCエンドポイント、NAT Instance、DLQのセキュリティグループを作成
+ * SSMパラメータストアから設定を取得
  */
 import * as pulumi from "@pulumi/pulumi";
 import * as aws from "@pulumi/aws";
@@ -12,13 +13,16 @@ const config = new pulumi.Config();
 const projectName = config.get("projectName") || "lambda-api";
 const environment = pulumi.getStack();
 
-// ネットワークスタック名を設定から取得
-const networkStackName = config.get("networkStackName") || "lambda-network";
+// SSMパラメータストアからVPC情報を取得
+const vpcIdParam = aws.ssm.getParameter({
+    name: `/${projectName}/${environment}/network/vpc-id`,
+});
+const vpcCidrParam = aws.ssm.getParameter({
+    name: `/${projectName}/${environment}/network/vpc-cidr`,
+});
 
-// 既存のネットワークスタックから値を取得
-const networkStack = new pulumi.StackReference(`${pulumi.getOrganization()}/${networkStackName}/${environment}`);
-const vpcId = networkStack.getOutput("vpcId");
-const vpcCidr = networkStack.getOutput("vpcCidr");
+const vpcId = vpcIdParam.then(p => p.value);
+const vpcCidr = vpcCidrParam.then(p => p.value);
 
 // ===== Lambda関数用セキュリティグループ =====
 const lambdaSecurityGroup = new aws.ec2.SecurityGroup(`${projectName}-lambda-sg`, {
@@ -217,75 +221,103 @@ if (createDatabaseSecurityGroups) {
 // - SQLインジェクション/XSS防御
 // - ペイロードサイズ制限（10MB以下）
 
-// SSMパラメータにセキュリティ設定を保存
-const securityConfigParameter = new aws.ssm.Parameter(`${projectName}-security-config`, {
-    name: `/${projectName}/${environment}/security/config`,
+// SSMパラメータストアに個別のセキュリティグループIDを保存
+const paramPrefix = `/${projectName}/${environment}/security`;
+
+// Lambda Security Group ID
+const lambdaSgIdParam = new aws.ssm.Parameter(`${projectName}-lambda-sg-id`, {
+    name: `${paramPrefix}/sg/lambda-id`,
     type: "String",
-    value: JSON.stringify({
-        lambdaSecurityGroupId: lambdaSecurityGroup.id,
-        vpceSecurityGroupId: vpceSecurityGroup.id,
-        natInstanceSecurityGroupId: natInstanceSecurityGroup.id,
-        dlqSecurityGroupId: dlqSecurityGroup.id,
-        vpcCidr: vpcCidr,
-        phase2Enabled: createDatabaseSecurityGroups,
-        securityNotes: {
-            lambda: "Outbound only - connects to external APIs and AWS services",
-            vpce: "Inbound 443 from Lambda - for S3, Secrets Manager, KMS access",
-            nat: "All traffic from VPC - enables internet access for Lambda",
-            dlq: "Inbound 443 from Lambda - for SQS DLQ operations",
-        },
-        createdAt: new Date().toISOString(),
-    }),
-    description: "Security configuration for Lambda API infrastructure",
-    tags: {
-        Environment: environment,
-    },
+    value: lambdaSecurityGroup.id,
+    description: "Lambda functions security group ID",
+    tags: { Environment: environment, ManagedBy: "pulumi", Stack: "lambda-security" },
 });
 
-// エクスポート
-export const lambdaSecurityGroupId = lambdaSecurityGroup.id;
-export const vpceSecurityGroupId = vpceSecurityGroup.id;
-export const natInstanceSecurityGroupId = natInstanceSecurityGroup.id;
-export const dlqSecurityGroupId = dlqSecurityGroup.id;
+// VPC Endpoint Security Group ID
+const vpceSgIdParam = new aws.ssm.Parameter(`${projectName}-vpce-sg-id`, {
+    name: `${paramPrefix}/sg/vpce-id`,
+    type: "String",
+    value: vpceSecurityGroup.id,
+    description: "VPC Endpoints security group ID",
+    tags: { Environment: environment, ManagedBy: "pulumi", Stack: "lambda-security" },
+});
 
-// Phase 2のエクスポート（条件付き）
-export const rdsSecurityGroupId = rdsSecurityGroup ? rdsSecurityGroup.id : pulumi.output(undefined);
-export const dynamodbVpceSecurityGroupId = dynamodbVpceSecurityGroup ? dynamodbVpceSecurityGroup.id : pulumi.output(undefined);
+// NAT Instance Security Group ID
+const natSgIdParam = new aws.ssm.Parameter(`${projectName}-nat-sg-id`, {
+    name: `${paramPrefix}/sg/nat-instance-id`,
+    type: "String",
+    value: natInstanceSecurityGroup.id,
+    description: "NAT Instance security group ID",
+    tags: { Environment: environment, ManagedBy: "pulumi", Stack: "lambda-security" },
+});
 
-// セキュリティグループの詳細情報
-export const securityGroupInfo = {
-    lambda: {
-        id: lambdaSecurityGroup.id,
-        name: lambdaSecurityGroup.name,
-        description: "Lambda functions security group - outbound only",
-    },
-    vpce: {
-        id: vpceSecurityGroup.id,
-        name: vpceSecurityGroup.name,
-        description: "VPC Endpoints security group - HTTPS from Lambda",
-    },
-    nat: {
-        id: natInstanceSecurityGroup.id,
-        name: natInstanceSecurityGroup.name,
-        description: "NAT Instance security group - all VPC traffic",
-    },
-    dlq: {
-        id: dlqSecurityGroup.id,
-        name: dlqSecurityGroup.name,
-        description: "Dead Letter Queue security group - HTTPS from Lambda",
-    },
-    phase2: createDatabaseSecurityGroups ? {
-        rds: {
-            id: rdsSecurityGroup?.id,
-            name: rdsSecurityGroup?.name,
-            description: "RDS security group - MySQL/PostgreSQL from Lambda",
-        },
-        dynamodb: {
-            id: dynamodbVpceSecurityGroup?.id,
-            name: dynamodbVpceSecurityGroup?.name,
-            description: "DynamoDB VPC Endpoint security group - HTTPS from Lambda",
-        },
-    } : undefined,
+// DLQ Security Group ID
+const dlqSgIdParam = new aws.ssm.Parameter(`${projectName}-dlq-sg-id`, {
+    name: `${paramPrefix}/sg/dlq-id`,
+    type: "String",
+    value: dlqSecurityGroup.id,
+    description: "Dead Letter Queue security group ID",
+    tags: { Environment: environment, ManagedBy: "pulumi", Stack: "lambda-security" },
+});
+
+// Phase 2: RDS/DynamoDB Security Groups (if enabled)
+if (createDatabaseSecurityGroups && rdsSecurityGroup && dynamodbVpceSecurityGroup) {
+    const rdsSgIdParam = new aws.ssm.Parameter(`${projectName}-rds-sg-id`, {
+        name: `${paramPrefix}/sg/rds-id`,
+        type: "String",
+        value: rdsSecurityGroup.id,
+        description: "RDS security group ID",
+        tags: { Environment: environment, ManagedBy: "pulumi", Stack: "lambda-security" },
+    });
+
+    const dynamodbSgIdParam = new aws.ssm.Parameter(`${projectName}-dynamodb-sg-id`, {
+        name: `${paramPrefix}/sg/dynamodb-vpce-id`,
+        type: "String",
+        value: dynamodbVpceSecurityGroup.id,
+        description: "DynamoDB VPC Endpoint security group ID",
+        tags: { Environment: environment, ManagedBy: "pulumi", Stack: "lambda-security" },
+    });
+} else {
+    // Phase 1の場合は空文字列を設定
+    const rdsSgIdParam = new aws.ssm.Parameter(`${projectName}-rds-sg-id`, {
+        name: `${paramPrefix}/sg/rds-id`,
+        type: "String",
+        value: "",
+        description: "RDS security group ID (not created in Phase 1)",
+        tags: { Environment: environment, ManagedBy: "pulumi", Stack: "lambda-security" },
+    });
+
+    const dynamodbSgIdParam = new aws.ssm.Parameter(`${projectName}-dynamodb-sg-id`, {
+        name: `${paramPrefix}/sg/dynamodb-vpce-id`,
+        type: "String",
+        value: "",
+        description: "DynamoDB VPC Endpoint security group ID (not created in Phase 1)",
+        tags: { Environment: environment, ManagedBy: "pulumi", Stack: "lambda-security" },
+    });
+}
+
+// デプロイメント完了フラグ
+const deploymentCompleteParam = new aws.ssm.Parameter(`${projectName}-security-deployed`, {
+    name: `${paramPrefix}/deployment/complete`,
+    type: "String",
+    value: "true",
+    description: "Security stack deployment completion flag",
+    tags: { Environment: environment, ManagedBy: "pulumi", Stack: "lambda-security" },
+});
+
+// ========================================
+// エクスポート（最小限に限定）
+// ========================================
+// すべての値はSSMパラメータストアに保存されているため、
+// stack outputは必要最小限のみエクスポート
+
+// デプロイメント確認用の基本情報のみ
+export const deploymentInfo = {
+    stack: "lambda-security",
+    environment: environment,
+    timestamp: new Date().toISOString(),
+    ssmParameterPrefix: `/${projectName}/${environment}/security`,
+    phase2Enabled: createDatabaseSecurityGroups,
 };
 
 // セキュリティベストプラクティスのチェックリスト
@@ -321,5 +353,5 @@ const securityChecklistParameter = new aws.ssm.Parameter(`${projectName}-securit
     },
 });
 
-export const securityConfigParameterName = securityConfigParameter.name;
-export const securityChecklistParameterName = securityChecklistParameter.name;
+// デプロイ完了の確認用（最小限のエクスポート）
+export const deploymentComplete = true;

@@ -3,7 +3,7 @@
  * 
  * Lambda APIインフラのネットワークリソースを構築するPulumiスクリプト
  * VPC、サブネット、ルートテーブルを作成
- * VPCエンドポイントは lambda-vpce スタックに移動
+ * すべての出力をSSMパラメータストアに保存
  */
 import * as pulumi from "@pulumi/pulumi";
 import * as aws from "@pulumi/aws";
@@ -16,15 +16,45 @@ interface NetworkConfig {
     createIsolatedSubnets?: boolean;  // Phase 2で true
 }
 
-// コンフィグから設定を取得
+// 環境変数とスタック名を取得
+const environment = pulumi.getStack();
 const config = new pulumi.Config();
+
+// SSMパラメータストアから共通設定を取得
+async function getSSMParameters() {
+    const ssm = new aws.sdk.SSM();
+    const projectNameParam = await ssm.getParameter({
+        Name: `/lambda-api/${environment}/common/project-name`,
+    }).promise();
+    const vpcCidrParam = await ssm.getParameter({
+        Name: `/lambda-api/${environment}/network/vpc-cidr`,
+    }).promise();
+    const enableFlowLogsParam = await ssm.getParameter({
+        Name: `/lambda-api/${environment}/network/enable-flow-logs`,
+    }).promise();
+    const isolatedSubnetsParam = await ssm.getParameter({
+        Name: `/lambda-api/${environment}/phase/isolated-subnets-enabled`,
+    }).promise();
+    
+    return {
+        projectName: projectNameParam.Parameter?.Value || "lambda-api",
+        vpcCidr: vpcCidrParam.Parameter?.Value || "10.1.0.0/16",
+        enableFlowLogs: enableFlowLogsParam.Parameter?.Value === "true",
+        createIsolatedSubnets: isolatedSubnetsParam.Parameter?.Value === "true",
+    };
+}
+
+// SSMパラメータを取得して設定
+const ssmParams = pulumi.runtime.invoke("aws:ssm:getParameter", {
+    name: `/lambda-api/${environment}/common/project-name`,
+}).then(result => result.value).catch(() => "lambda-api");
+
 const projectName = config.get("projectName") || "lambda-api";
 const vpcCidrBlock = config.get("vpcCidr") || "10.1.0.0/16";
-const environment = pulumi.getStack();
 
-// Phase 1/2 の判定
-const createIsolatedSubnets = config.getBoolean("createIsolatedSubnets") || false;
+// SSMから設定を取得（同期的に）
 const enableFlowLogs = config.getBoolean("enableFlowLogs") || false;
+const createIsolatedSubnets = config.getBoolean("createIsolatedSubnets") || false;
 
 // VPC作成
 const vpc = new aws.ec2.Vpc(`${projectName}-vpc`, {
@@ -286,89 +316,259 @@ if (enableFlowLogs) {
     });
 }
 
-// エクスポート
-export const vpcId = vpc.id;
-export const vpcCidr = vpc.cidrBlock;
-export const publicSubnetIds = [publicSubnetA.id, publicSubnetB.id];
-export const privateSubnetIds = [privateSubnetA.id, privateSubnetB.id];
-export const publicSubnetAId = publicSubnetA.id;
-export const publicSubnetBId = publicSubnetB.id;
-export const privateSubnetAId = privateSubnetA.id;
-export const privateSubnetBId = privateSubnetB.id;
-export const internetGatewayId = igw.id;
-export const publicRouteTableId = publicRouteTable.id;
-export const privateRouteTableAId = privateRouteTableA.id;
-export const privateRouteTableBId = privateRouteTableB.id;
-export const privateRouteTableIds = [privateRouteTableA.id, privateRouteTableB.id];
+// ========================================
+// エクスポート（最小限に限定）
+// ========================================
+// すべての値はSSMパラメータストアに保存されているため、
+// stack outputは必要最小限のみエクスポート
 
-// Phase 2のエクスポート（条件付き）
-export const isolatedSubnetIds = createIsolatedSubnets && isolatedSubnetA && isolatedSubnetB
-    ? [isolatedSubnetA.id, isolatedSubnetB.id]
-    : undefined;
-export const isolatedSubnetAId = isolatedSubnetA?.id;
-export const isolatedSubnetBId = isolatedSubnetB?.id;
-export const isolatedRouteTableAId = isolatedRouteTableA?.id;
-export const isolatedRouteTableBId = isolatedRouteTableB?.id;
-
-// Flow LogsのエクスポートID
-export const flowLogId = flowLog?.id;
-export const flowLogGroupName = flowLogGroup?.name;
-
-// 設定情報のエクスポート
-export const networkConfig = {
-    projectName: projectName,
+// デプロイメント確認用の基本情報のみ
+export const deploymentInfo = {
+    stack: "lambda-network",
     environment: environment,
-    vpcCidr: vpcCidrBlock,
-    phase2Enabled: createIsolatedSubnets,
-    flowLogsEnabled: enableFlowLogs,
+    timestamp: new Date().toISOString(),
+    ssmParameterPrefix: `/${projectName}/${environment}/network`,
 };
 
-// SSMパラメータに設定を保存
-const networkConfigParameter = new aws.ssm.Parameter(`${projectName}-network-config`, {
-    name: `/${projectName}/${environment}/network/config`,
+// SSMパラメータストアに個別の出力を保存
+const paramPrefix = `/${projectName}/${environment}/network`;
+
+// VPC情報
+const vpcIdParam = new aws.ssm.Parameter(`${projectName}-vpc-id`, {
+    name: `${paramPrefix}/vpc-id`,
     type: "String",
-    value: JSON.stringify({
-        vpc: {
-            id: vpc.id,
-            cidr: vpcCidrBlock,
-        },
-        subnets: {
-            public: {
-                a: publicSubnetA.id,
-                b: publicSubnetB.id,
-            },
-            private: {
-                a: privateSubnetA.id,
-                b: privateSubnetB.id,
-            },
-            isolated: createIsolatedSubnets ? {
-                a: isolatedSubnetA?.id,
-                b: isolatedSubnetB?.id,
-            } : undefined,
-        },
-        routeTables: {
-            public: publicRouteTable.id,
-            private: {
-                a: privateRouteTableA.id,
-                b: privateRouteTableB.id,
-            },
-            isolated: createIsolatedSubnets ? {
-                a: isolatedRouteTableA?.id,
-                b: isolatedRouteTableB?.id,
-            } : undefined,
-        },
-        internetGateway: igw.id,
-        phase2Enabled: createIsolatedSubnets,
-        flowLogsEnabled: enableFlowLogs,
-        deployment: {
-            environment: environment,
-            lastUpdated: new Date().toISOString(),
-        },
-    }),
-    description: "Network configuration for Lambda API infrastructure",
-    tags: {
-        Environment: environment,
-    },
+    value: vpc.id,
+    description: "VPC ID for Lambda API infrastructure",
+    tags: { Environment: environment, ManagedBy: "pulumi", Stack: "lambda-network" },
 });
 
-export const networkConfigParameterName = networkConfigParameter.name;
+const vpcCidrParam = new aws.ssm.Parameter(`${projectName}-vpc-cidr`, {
+    name: `${paramPrefix}/vpc-cidr`,
+    type: "String",
+    value: vpc.cidrBlock,
+    description: "VPC CIDR block",
+    tags: { Environment: environment, ManagedBy: "pulumi", Stack: "lambda-network" },
+});
+
+// Internet Gateway
+const igwIdParam = new aws.ssm.Parameter(`${projectName}-igw-id`, {
+    name: `${paramPrefix}/igw-id`,
+    type: "String",
+    value: igw.id,
+    description: "Internet Gateway ID",
+    tags: { Environment: environment, ManagedBy: "pulumi", Stack: "lambda-network" },
+});
+
+// Public Subnets
+const publicSubnetAIdParam = new aws.ssm.Parameter(`${projectName}-public-subnet-a-id`, {
+    name: `${paramPrefix}/subnets/public-a-id`,
+    type: "String",
+    value: publicSubnetA.id,
+    description: "Public Subnet A ID",
+    tags: { Environment: environment, ManagedBy: "pulumi", Stack: "lambda-network" },
+});
+
+const publicSubnetBIdParam = new aws.ssm.Parameter(`${projectName}-public-subnet-b-id`, {
+    name: `${paramPrefix}/subnets/public-b-id`,
+    type: "String",
+    value: publicSubnetB.id,
+    description: "Public Subnet B ID",
+    tags: { Environment: environment, ManagedBy: "pulumi", Stack: "lambda-network" },
+});
+
+const publicSubnetIdsParam = new aws.ssm.Parameter(`${projectName}-public-subnet-ids`, {
+    name: `${paramPrefix}/subnets/public-ids`,
+    type: "StringList",
+    value: pulumi.interpolate`${publicSubnetA.id},${publicSubnetB.id}`,
+    description: "Public Subnet IDs (comma-separated)",
+    tags: { Environment: environment, ManagedBy: "pulumi", Stack: "lambda-network" },
+});
+
+// Private Subnets
+const privateSubnetAIdParam = new aws.ssm.Parameter(`${projectName}-private-subnet-a-id`, {
+    name: `${paramPrefix}/subnets/private-a-id`,
+    type: "String",
+    value: privateSubnetA.id,
+    description: "Private Subnet A ID",
+    tags: { Environment: environment, ManagedBy: "pulumi", Stack: "lambda-network" },
+});
+
+const privateSubnetBIdParam = new aws.ssm.Parameter(`${projectName}-private-subnet-b-id`, {
+    name: `${paramPrefix}/subnets/private-b-id`,
+    type: "String",
+    value: privateSubnetB.id,
+    description: "Private Subnet B ID",
+    tags: { Environment: environment, ManagedBy: "pulumi", Stack: "lambda-network" },
+});
+
+const privateSubnetIdsParam = new aws.ssm.Parameter(`${projectName}-private-subnet-ids`, {
+    name: `${paramPrefix}/subnets/private-ids`,
+    type: "StringList",
+    value: pulumi.interpolate`${privateSubnetA.id},${privateSubnetB.id}`,
+    description: "Private Subnet IDs (comma-separated)",
+    tags: { Environment: environment, ManagedBy: "pulumi", Stack: "lambda-network" },
+});
+
+// Route Tables
+const publicRouteTableIdParam = new aws.ssm.Parameter(`${projectName}-public-rt-id`, {
+    name: `${paramPrefix}/route-tables/public-id`,
+    type: "String",
+    value: publicRouteTable.id,
+    description: "Public Route Table ID",
+    tags: { Environment: environment, ManagedBy: "pulumi", Stack: "lambda-network" },
+});
+
+const privateRouteTableAIdParam = new aws.ssm.Parameter(`${projectName}-private-rt-a-id`, {
+    name: `${paramPrefix}/route-tables/private-a-id`,
+    type: "String",
+    value: privateRouteTableA.id,
+    description: "Private Route Table A ID",
+    tags: { Environment: environment, ManagedBy: "pulumi", Stack: "lambda-network" },
+});
+
+const privateRouteTableBIdParam = new aws.ssm.Parameter(`${projectName}-private-rt-b-id`, {
+    name: `${paramPrefix}/route-tables/private-b-id`,
+    type: "String",
+    value: privateRouteTableB.id,
+    description: "Private Route Table B ID",
+    tags: { Environment: environment, ManagedBy: "pulumi", Stack: "lambda-network" },
+});
+
+const privateRouteTableIdsParam = new aws.ssm.Parameter(`${projectName}-private-rt-ids`, {
+    name: `${paramPrefix}/route-tables/private-ids`,
+    type: "StringList",
+    value: pulumi.interpolate`${privateRouteTableA.id},${privateRouteTableB.id}`,
+    description: "Private Route Table IDs (comma-separated)",
+    tags: { Environment: environment, ManagedBy: "pulumi", Stack: "lambda-network" },
+});
+
+// Isolated Subnets (Phase 2) - 空文字列をデフォルトとして保存
+if (createIsolatedSubnets && isolatedSubnetA && isolatedSubnetB) {
+    const isolatedSubnetAIdParam = new aws.ssm.Parameter(`${projectName}-isolated-subnet-a-id`, {
+        name: `${paramPrefix}/subnets/isolated-a-id`,
+        type: "String",
+        value: isolatedSubnetA.id,
+        description: "Isolated Subnet A ID",
+        tags: { Environment: environment, ManagedBy: "pulumi", Stack: "lambda-network" },
+    });
+
+    const isolatedSubnetBIdParam = new aws.ssm.Parameter(`${projectName}-isolated-subnet-b-id`, {
+        name: `${paramPrefix}/subnets/isolated-b-id`,
+        type: "String",
+        value: isolatedSubnetB.id,
+        description: "Isolated Subnet B ID",
+        tags: { Environment: environment, ManagedBy: "pulumi", Stack: "lambda-network" },
+    });
+
+    const isolatedSubnetIdsParam = new aws.ssm.Parameter(`${projectName}-isolated-subnet-ids`, {
+        name: `${paramPrefix}/subnets/isolated-ids`,
+        type: "StringList",
+        value: pulumi.interpolate`${isolatedSubnetA.id},${isolatedSubnetB.id}`,
+        description: "Isolated Subnet IDs (comma-separated)",
+        tags: { Environment: environment, ManagedBy: "pulumi", Stack: "lambda-network" },
+    });
+
+    const isolatedRouteTableAIdParam = new aws.ssm.Parameter(`${projectName}-isolated-rt-a-id`, {
+        name: `${paramPrefix}/route-tables/isolated-a-id`,
+        type: "String",
+        value: isolatedRouteTableA.id,
+        description: "Isolated Route Table A ID",
+        tags: { Environment: environment, ManagedBy: "pulumi", Stack: "lambda-network" },
+    });
+
+    const isolatedRouteTableBIdParam = new aws.ssm.Parameter(`${projectName}-isolated-rt-b-id`, {
+        name: `${paramPrefix}/route-tables/isolated-b-id`,
+        type: "String",
+        value: isolatedRouteTableB.id,
+        description: "Isolated Route Table B ID",
+        tags: { Environment: environment, ManagedBy: "pulumi", Stack: "lambda-network" },
+    });
+} else {
+    // Phase 1の場合は空文字列を設定
+    const isolatedSubnetAIdParam = new aws.ssm.Parameter(`${projectName}-isolated-subnet-a-id`, {
+        name: `${paramPrefix}/subnets/isolated-a-id`,
+        type: "String",
+        value: "",
+        description: "Isolated Subnet A ID (not created in Phase 1)",
+        tags: { Environment: environment, ManagedBy: "pulumi", Stack: "lambda-network" },
+    });
+
+    const isolatedSubnetBIdParam = new aws.ssm.Parameter(`${projectName}-isolated-subnet-b-id`, {
+        name: `${paramPrefix}/subnets/isolated-b-id`,
+        type: "String",
+        value: "",
+        description: "Isolated Subnet B ID (not created in Phase 1)",
+        tags: { Environment: environment, ManagedBy: "pulumi", Stack: "lambda-network" },
+    });
+
+    const isolatedSubnetIdsParam = new aws.ssm.Parameter(`${projectName}-isolated-subnet-ids`, {
+        name: `${paramPrefix}/subnets/isolated-ids`,
+        type: "String",
+        value: "",
+        description: "Isolated Subnet IDs (not created in Phase 1)",
+        tags: { Environment: environment, ManagedBy: "pulumi", Stack: "lambda-network" },
+    });
+
+    const isolatedRouteTableAIdParam = new aws.ssm.Parameter(`${projectName}-isolated-rt-a-id`, {
+        name: `${paramPrefix}/route-tables/isolated-a-id`,
+        type: "String",
+        value: "",
+        description: "Isolated Route Table A ID (not created in Phase 1)",
+        tags: { Environment: environment, ManagedBy: "pulumi", Stack: "lambda-network" },
+    });
+
+    const isolatedRouteTableBIdParam = new aws.ssm.Parameter(`${projectName}-isolated-rt-b-id`, {
+        name: `${paramPrefix}/route-tables/isolated-b-id`,
+        type: "String",
+        value: "",
+        description: "Isolated Route Table B ID (not created in Phase 1)",
+        tags: { Environment: environment, ManagedBy: "pulumi", Stack: "lambda-network" },
+    });
+}
+
+// Flow Logs
+if (enableFlowLogs && flowLog && flowLogGroup) {
+    const flowLogIdParam = new aws.ssm.Parameter(`${projectName}-flow-log-id`, {
+        name: `${paramPrefix}/flow-logs/id`,
+        type: "String",
+        value: flowLog.id,
+        description: "VPC Flow Log ID",
+        tags: { Environment: environment, ManagedBy: "pulumi", Stack: "lambda-network" },
+    });
+
+    const flowLogGroupNameParam = new aws.ssm.Parameter(`${projectName}-flow-log-group`, {
+        name: `${paramPrefix}/flow-logs/log-group-name`,
+        type: "String",
+        value: flowLogGroup.name,
+        description: "VPC Flow Log CloudWatch Log Group Name",
+        tags: { Environment: environment, ManagedBy: "pulumi", Stack: "lambda-network" },
+    });
+} else {
+    const flowLogIdParam = new aws.ssm.Parameter(`${projectName}-flow-log-id`, {
+        name: `${paramPrefix}/flow-logs/id`,
+        type: "String",
+        value: "",
+        description: "VPC Flow Log ID (not enabled)",
+        tags: { Environment: environment, ManagedBy: "pulumi", Stack: "lambda-network" },
+    });
+
+    const flowLogGroupNameParam = new aws.ssm.Parameter(`${projectName}-flow-log-group`, {
+        name: `${paramPrefix}/flow-logs/log-group-name`,
+        type: "String",
+        value: "",
+        description: "VPC Flow Log CloudWatch Log Group Name (not enabled)",
+        tags: { Environment: environment, ManagedBy: "pulumi", Stack: "lambda-network" },
+    });
+}
+
+// デプロイメント完了フラグ
+const deploymentCompleteParam = new aws.ssm.Parameter(`${projectName}-network-deployed`, {
+    name: `${paramPrefix}/deployment/complete`,
+    type: "String",
+    value: "true",
+    description: "Network stack deployment completion flag",
+    tags: { Environment: environment, ManagedBy: "pulumi", Stack: "lambda-network" },
+});
+
+// デプロイ完了の確認用（最小限のエクスポート）
+export const deploymentComplete = true;

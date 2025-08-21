@@ -4,6 +4,7 @@
  * Lambda APIインフラのNATリソースを構築するPulumiスクリプト
  * ハイアベイラビリティモード: NAT Gateway（2つ）
  * ノーマルモード: NAT Instance（1つ）- Amazon Linux 2023 + nftables使用
+ * SSMパラメータストアから設定を取得
  */
 import * as pulumi from "@pulumi/pulumi";
 import * as aws from "@pulumi/aws";
@@ -14,48 +15,57 @@ import * as path from "path";
 declare const __dirname: string;
 declare const process: NodeJS.Process;
 
-// 設計書に基づいたNatConfig interface
-interface NatConfig {
-    projectName: string;
-    highAvailabilityMode: boolean;
-    natInstanceType?: string;
-    keyName?: string;
-    networkStackName: string;
-    securityStackName: string;
-}
-
 // コンフィグから設定を取得
 const config = new pulumi.Config();
 const projectName = config.get("projectName") || "lambda-api";
 const environment = pulumi.getStack();
 
-// NATモード設定（本番環境はデフォルトでHA）
-const highAvailabilityMode = config.getBoolean("highAvailabilityMode") || (environment === "prod");
+// SSMパラメータストアからNAT設定を取得
+const natHighAvailabilityParam = aws.ssm.getParameter({
+    name: `/${projectName}/${environment}/nat/high-availability`,
+});
+const natInstanceTypeParam = aws.ssm.getParameter({
+    name: `/${projectName}/${environment}/nat/instance-type`,
+});
 
-// NAT Instance設定（設計書のデフォルト値に基づく）
-const natInstanceType = config.get("natInstanceType") || (
-    environment === "dev" ? "t4g.nano" :
-    environment === "staging" ? "t4g.micro" :
-    "t4g.small" // 本番でNAT Instanceを使う場合
-);
+// SSMパラメータストアからネットワーク情報を取得
+const vpcIdParam = aws.ssm.getParameter({
+    name: `/${projectName}/${environment}/network/vpc-id`,
+});
+const vpcCidrParam = aws.ssm.getParameter({
+    name: `/${projectName}/${environment}/network/vpc-cidr`,
+});
+const publicSubnetAIdParam = aws.ssm.getParameter({
+    name: `/${projectName}/${environment}/network/subnets/public-a-id`,
+});
+const publicSubnetBIdParam = aws.ssm.getParameter({
+    name: `/${projectName}/${environment}/network/subnets/public-b-id`,
+});
+const privateRouteTableAIdParam = aws.ssm.getParameter({
+    name: `/${projectName}/${environment}/network/route-tables/private-a-id`,
+});
+const privateRouteTableBIdParam = aws.ssm.getParameter({
+    name: `/${projectName}/${environment}/network/route-tables/private-b-id`,
+});
+
+// SSMパラメータストアからセキュリティ情報を取得
+const natInstanceSecurityGroupIdParam = aws.ssm.getParameter({
+    name: `/${projectName}/${environment}/security/sg/nat-instance-id`,
+});
+
+// 値の取得
+const highAvailabilityMode = natHighAvailabilityParam.then(p => p.value === "true");
+const natInstanceType = natInstanceTypeParam.then(p => p.value || "t4g.nano");
+const vpcId = vpcIdParam.then(p => p.value);
+const vpcCidr = vpcCidrParam.then(p => p.value);
+const publicSubnetAId = publicSubnetAIdParam.then(p => p.value);
+const publicSubnetBId = publicSubnetBIdParam.then(p => p.value);
+const privateRouteTableAId = privateRouteTableAIdParam.then(p => p.value);
+const privateRouteTableBId = privateRouteTableBIdParam.then(p => p.value);
+const natInstanceSecurityGroupId = natInstanceSecurityGroupIdParam.then(p => p.value);
+
+// キー名はコンフィグから取得（オプション）
 const keyName = config.get("keyName");
-
-// スタック参照名を設定から取得
-const networkStackName = config.get("networkStackName") || "lambda-network";
-const securityStackName = config.get("securityStackName") || "lambda-security";
-
-// 既存のスタックから値を取得
-const networkStack = new pulumi.StackReference(`${pulumi.getOrganization()}/${networkStackName}/${environment}`);
-const securityStack = new pulumi.StackReference(`${pulumi.getOrganization()}/${securityStackName}/${environment}`);
-
-// 必要なリソースIDを取得
-const vpcId = networkStack.getOutput("vpcId");
-const vpcCidr = networkStack.getOutput("vpcCidr");
-const publicSubnetAId = networkStack.getOutput("publicSubnetAId");
-const publicSubnetBId = networkStack.getOutput("publicSubnetBId");
-const privateRouteTableAId = networkStack.getOutput("privateRouteTableAId");
-const privateRouteTableBId = networkStack.getOutput("privateRouteTableBId");
-const natInstanceSecurityGroupId = securityStack.getOutput("natInstanceSecurityGroupId");
 
 // 出力用の変数（条件に応じて後で設定）
 let natResourceIds: pulumi.Output<string>[] = [];
@@ -358,26 +368,97 @@ The script should be located in the 'scripts' directory relative to your project
     natInstancePrivateIp = natInstance.privateIp;
 }
 
-// 共通エクスポート
-export const natTypeExport = natType;
-export const natResourceIdsExport = natResourceIds;
-export const highAvailabilityEnabled = highAvailabilityMode;
+// ===== SSMパラメータストアに個別の出力を保存 =====
+const paramPrefix = `/${projectName}/${environment}/nat`;
 
-// 条件付きエクスポート（NAT Gateway用）
-export const natGatewayAIdExport = natGatewayAId;
-export const natGatewayBIdExport = natGatewayBId;
-export const natGatewayEipA = natGatewayEipAAddress;
-export const natGatewayEipB = natGatewayEipBAddress;
+// NATタイプを保存
+const natTypeParam = new aws.ssm.Parameter(`${projectName}-nat-type`, {
+    name: `${paramPrefix}/type`,
+    type: "String",
+    value: natType,
+    description: "NAT type (gateway-ha or instance)",
+    tags: { Environment: environment, ManagedBy: "pulumi", Stack: "lambda-nat" },
+});
 
-// 条件付きエクスポート（NAT Instance用）
-export const natInstanceIdExport = natInstanceId;
-export const natInstancePublicIpExport = natInstancePublicIp;
-export const natInstancePrivateIpExport = natInstancePrivateIp;
-export const natInstanceTypeExport = natInstanceType;
+// NAT Gateway IDを保存（HAモードの場合）
+if (natGatewayAId) {
+    const natGatewayAIdParam = new aws.ssm.Parameter(`${projectName}-nat-gateway-a-id`, {
+        name: `${paramPrefix}/gateway/a-id`,
+        type: "String",
+        value: natGatewayAId,
+        description: "NAT Gateway A ID",
+        tags: { Environment: environment, ManagedBy: "pulumi", Stack: "lambda-nat" },
+    });
+}
+if (natGatewayBId) {
+    const natGatewayBIdParam = new aws.ssm.Parameter(`${projectName}-nat-gateway-b-id`, {
+        name: `${paramPrefix}/gateway/b-id`,
+        type: "String",
+        value: natGatewayBId,
+        description: "NAT Gateway B ID",
+        tags: { Environment: environment, ManagedBy: "pulumi", Stack: "lambda-nat" },
+    });
+}
+if (natGatewayEipAAddress) {
+    const natGatewayEipAParam = new aws.ssm.Parameter(`${projectName}-nat-gateway-eip-a`, {
+        name: `${paramPrefix}/gateway/eip-a`,
+        type: "String",
+        value: natGatewayEipAAddress,
+        description: "NAT Gateway A Elastic IP",
+        tags: { Environment: environment, ManagedBy: "pulumi", Stack: "lambda-nat" },
+    });
+}
+if (natGatewayEipBAddress) {
+    const natGatewayEipBParam = new aws.ssm.Parameter(`${projectName}-nat-gateway-eip-b`, {
+        name: `${paramPrefix}/gateway/eip-b`,
+        type: "String",
+        value: natGatewayEipBAddress,
+        description: "NAT Gateway B Elastic IP",
+        tags: { Environment: environment, ManagedBy: "pulumi", Stack: "lambda-nat" },
+    });
+}
 
-// SSMパラメータにNAT設定を保存
+// NAT Instance IDを保存（ノーマルモードの場合）
+if (natInstanceId) {
+    const natInstanceIdParam = new aws.ssm.Parameter(`${projectName}-nat-instance-id`, {
+        name: `${paramPrefix}/instance/id`,
+        type: "String",
+        value: natInstanceId,
+        description: "NAT Instance ID",
+        tags: { Environment: environment, ManagedBy: "pulumi", Stack: "lambda-nat" },
+    });
+}
+if (natInstancePublicIp) {
+    const natInstancePublicIpParam = new aws.ssm.Parameter(`${projectName}-nat-instance-public-ip`, {
+        name: `${paramPrefix}/instance/public-ip`,
+        type: "String",
+        value: natInstancePublicIp,
+        description: "NAT Instance Public IP",
+        tags: { Environment: environment, ManagedBy: "pulumi", Stack: "lambda-nat" },
+    });
+}
+if (natInstancePrivateIp) {
+    const natInstancePrivateIpParam = new aws.ssm.Parameter(`${projectName}-nat-instance-private-ip`, {
+        name: `${paramPrefix}/instance/private-ip`,
+        type: "String",
+        value: natInstancePrivateIp,
+        description: "NAT Instance Private IP",
+        tags: { Environment: environment, ManagedBy: "pulumi", Stack: "lambda-nat" },
+    });
+}
+
+// デプロイメント完了フラグ
+const deploymentCompleteParam = new aws.ssm.Parameter(`${projectName}-nat-deployed`, {
+    name: `${paramPrefix}/deployment/complete`,
+    type: "String",
+    value: "true",
+    description: "NAT stack deployment completion flag",
+    tags: { Environment: environment, ManagedBy: "pulumi", Stack: "lambda-nat" },
+});
+
+// NAT設定情報を保存
 const natConfigParameter = new aws.ssm.Parameter(`${projectName}-nat-config`, {
-    name: `/${projectName}/${environment}/nat/config`,
+    name: `${paramPrefix}/config`,
     type: "String",
     value: JSON.stringify({
         type: natType,
@@ -415,5 +496,20 @@ const costOptimizationParameter = new aws.ssm.Parameter(`${projectName}-nat-cost
     },
 });
 
-export const natConfigParameterName = natConfigParameter.name;
-export const costInfoParameterName = costOptimizationParameter.name;
+// ========================================
+// エクスポート（最小限に限定）
+// ========================================
+// すべての値はSSMパラメータストアに保存されているため、
+// stack outputは必要最小限のみエクスポート
+
+// デプロイメント確認用の基本情報のみ
+export const deploymentInfo = {
+    stack: "lambda-nat",
+    environment: environment,
+    timestamp: new Date().toISOString(),
+    ssmParameterPrefix: paramPrefix,
+    natType: natType,
+};
+
+// デプロイ完了の確認用
+export const deploymentComplete = true;
