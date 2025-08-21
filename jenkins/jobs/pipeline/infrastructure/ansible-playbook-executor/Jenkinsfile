@@ -25,6 +25,65 @@ def resolvePlaybookPath(String playbookName, def playbooksConfig) {
     error("プレイブック '${playbookName}' が設定に見つかりません")
 }
 
+// tmuxセッション名を生成
+def generateTmuxSessionName() {
+    def jobNameShort = env.JOB_NAME.split('/')[-1].replaceAll('[^a-zA-Z0-9_-]', '_').take(20)
+    return "ansible_${jobNameShort}_${env.BUILD_NUMBER}"
+}
+
+// Ansibleコマンドを構築
+def buildAnsibleCommand(playbook, params) {
+    def cmd = "ansible-playbook"
+    
+    // プレイブックパス
+    cmd += " ${env.ANSIBLE_PLAYBOOKS_DIR}/${playbook}"
+    
+    // インベントリ
+    cmd += " -i ${env.ANSIBLE_INVENTORY}"
+    
+    // 環境変数
+    cmd += " -e env=${params.ENVIRONMENT}"
+    
+    // teardown_pipelineの場合、confirm=trueを自動追加
+    if (playbook.contains('teardown_pipeline.yml')) {
+        cmd += " -e confirm=true"
+    }
+    
+    // 追加変数
+    if (params.ANSIBLE_EXTRA_VARS?.trim()) {
+        params.ANSIBLE_EXTRA_VARS.split(' ').each { var ->
+            cmd += " -e ${var}"
+        }
+    }
+    
+    // 詳細出力
+    if (params.ANSIBLE_VERBOSE) {
+        cmd += " -vvv"
+    }
+    
+    // チェックモード
+    if (params.ANSIBLE_CHECK) {
+        cmd += " --check"
+    }
+    
+    // ホスト制限
+    if (params.ANSIBLE_LIMIT?.trim()) {
+        cmd += " --limit ${params.ANSIBLE_LIMIT}"
+    }
+    
+    // タグ
+    if (params.ANSIBLE_TAGS?.trim()) {
+        cmd += " --tags ${params.ANSIBLE_TAGS}"
+    }
+    
+    // スキップタグ
+    if (params.ANSIBLE_SKIP_TAGS?.trim()) {
+        cmd += " --skip-tags ${params.ANSIBLE_SKIP_TAGS}"
+    }
+    
+    return cmd
+}
+
 pipeline {
     agent {
         label 'bootstrap-workterminal'
@@ -65,6 +124,7 @@ pipeline {
                     タグ: ${params.ANSIBLE_TAGS}
                     スキップタグ: ${params.ANSIBLE_SKIP_TAGS}
                     ドライラン: ${params.DRY_RUN}
+                    tmuxモード: ${params.USE_TMUX}
                     ========================================
                     """
                     
@@ -115,16 +175,15 @@ pipeline {
             steps {
                 script {
                     def playbookList = env.RESOLVED_PLAYBOOKS.split(',')
-                    
-                    // tmux設定の確認
                     def useTmux = params.USE_TMUX ?: false
-                    env.useTmux = useTmux.toString()  // post処理で使用するため環境変数に保存
                     def tmuxTimeoutMinutes = params.TMUX_TIMEOUT_MINUTES ?: '60'
-                    // ジョブ名とビルド番号を組み合わせてユニークなセッション名を生成
-                    def jobNameShort = env.JOB_NAME.split('/')[-1].replaceAll('[^a-zA-Z0-9_-]', '_').take(20)
-                    def tmuxSessionName = "ansible_${jobNameShort}_${env.BUILD_NUMBER}"
-                    env.tmuxSessionName = tmuxSessionName  // post処理で使用
                     def continueOnTimeout = params.CONTINUE_ON_TIMEOUT ?: false
+                    def timedOutPlaybooks = []
+                    
+                    // tmuxセッション名を生成（全プレイブックで共有）
+                    def tmuxSessionName = generateTmuxSessionName()
+                    env.tmuxSessionName = tmuxSessionName // post処理で使用
+                    env.useTmux = useTmux.toString()
                     
                     if (useTmux) {
                         echo """
@@ -137,9 +196,6 @@ pipeline {
                         """
                     }
                     
-                    // タイムアウトしたプレイブックを記録
-                    def timedOutPlaybooks = []
-                    
                     playbookList.eachWithIndex { playbook, index ->
                         def stageName = "プレイブック ${index + 1}/${playbookList.size()}: ${playbook}"
                         
@@ -150,53 +206,11 @@ pipeline {
                         """
                         
                         // Ansibleコマンドの構築
-                        def ansibleCmd = "ansible-playbook"
+                        def ansibleCmd = buildAnsibleCommand(playbook, params)
                         
-                        // プレイブックパス
-                        ansibleCmd += " ${ANSIBLE_PLAYBOOKS_DIR}/${playbook}"
-                        
-                        // インベントリ
-                        ansibleCmd += " -i ${ANSIBLE_INVENTORY}"
-                        
-                        // 環境変数
-                        ansibleCmd += " -e env=${params.ENVIRONMENT}"
-                        
-                        // teardown_pipelineの場合、confirm=trueを自動追加
+                        // teardown確認
                         if (playbook.contains('teardown_pipeline.yml')) {
-                            ansibleCmd += " -e confirm=true"
                             echo "⚠️ 注意: Teardown pipelineを実行します - confirm=trueが自動的に設定されます"
-                        }
-                        
-                        // 追加変数
-                        if (params.ANSIBLE_EXTRA_VARS?.trim()) {
-                            params.ANSIBLE_EXTRA_VARS.split(' ').each { var ->
-                                ansibleCmd += " -e ${var}"
-                            }
-                        }
-                        
-                        // 詳細出力
-                        if (params.ANSIBLE_VERBOSE) {
-                            ansibleCmd += " -vvv"
-                        }
-                        
-                        // チェックモード
-                        if (params.ANSIBLE_CHECK) {
-                            ansibleCmd += " --check"
-                        }
-                        
-                        // ホスト制限
-                        if (params.ANSIBLE_LIMIT?.trim()) {
-                            ansibleCmd += " --limit ${params.ANSIBLE_LIMIT}"
-                        }
-                        
-                        // タグ
-                        if (params.ANSIBLE_TAGS?.trim()) {
-                            ansibleCmd += " --tags ${params.ANSIBLE_TAGS}"
-                        }
-                        
-                        // スキップタグ
-                        if (params.ANSIBLE_SKIP_TAGS?.trim()) {
-                            ansibleCmd += " --skip-tags ${params.ANSIBLE_SKIP_TAGS}"
                         }
                         
                         echo "実行コマンド: ${ansibleCmd}"
@@ -210,163 +224,32 @@ pipeline {
                                 echo "tmuxセッション内で実行を開始します..."
                                 echo "セッション: ${tmuxSessionName}, ウィンドウ: ${windowName}"
                                 
-                                sh """
-                                    cd ~/infrastructure-as-code/ansible
+                                // 外部スクリプトを使用してtmux実行
+                                def exitCode = sh(
+                                    script: """
+                                        cd ~/infrastructure-as-code
+                                        chmod +x scripts/jenkins/run-ansible-in-tmux.sh
+                                        ./scripts/jenkins/run-ansible-in-tmux.sh \
+                                            "${tmuxSessionName}" \
+                                            "${windowName}" \
+                                            "${tmuxTimeoutMinutes}" \
+                                            "${ansibleCmd}"
+                                    """,
+                                    returnStatus: true
+                                )
+                                
+                                if (exitCode == 2) {
+                                    // タイムアウト
+                                    timedOutPlaybooks.add(playbook)
+                                    echo "⚠️ 警告: このプレイブックはタイムアウトしました"
                                     
-                                    # 数値定数を変数として定義（Groovyエスケープ問題回避）
-                                    LINES_50=50
-                                    LINES_100=100
-                                    LINES_5=5
-                                    
-                                    # tmuxセッションが存在しない場合は作成
-                                    if ! tmux has-session -t ${tmuxSessionName} 2>/dev/null; then
-                                        tmux new-session -d -s ${tmuxSessionName} -n ${windowName}
-                                    else
-                                        # 新しいウィンドウを作成
-                                        tmux new-window -t ${tmuxSessionName} -n ${windowName}
-                                    fi
-                                    
-                                    # コマンドを実行
-                                    tmux send-keys -t ${tmuxSessionName}:${windowName} "cd ~/infrastructure-as-code/ansible" C-m
-                                    tmux send-keys -t ${tmuxSessionName}:${windowName} "${ansibleCmd}" C-m
-                                    
-                                    # コマンドの実行開始を待機
-                                    echo "Ansibleプロセスの起動を待機中..."
-                                    sleep 3
-                                    
-                                    # タイムアウト時間（秒）
-                                    TIMEOUT_SECONDS=\$((${tmuxTimeoutMinutes} * 60))
-                                    ELAPSED=0
-                                    INTERVAL=10
-                                    
-                                    echo "プロセスの完了を待機中（最大${tmuxTimeoutMinutes}分）..."
-                                    echo "リアルタイムログ確認: tmux attach -t ${tmuxSessionName}"
-                                    
-                                    # プロセスの監視
-                                    while [ \$ELAPSED -lt \$TIMEOUT_SECONDS ]; do
-                                        # ウィンドウが存在し、コマンドが実行中かチェック
-                                        if ! tmux list-windows -t ${tmuxSessionName} -F '#{window_name}' | grep -q "^${windowName}\$"; then
-                                            echo "tmuxウィンドウが見つかりません"
-                                            exit 1
-                                        fi
-                                        
-                                        # paneの状態を確認（コマンドが終了したかチェック）
-                                        PANE_PID=\$(tmux list-panes -t ${tmuxSessionName}:${windowName} -F '#{pane_pid}' 2>/dev/null || echo "")
-                                        
-                                        if [ -z "\$PANE_PID" ]; then
-                                            echo "paneが見つかりません"
-                                            exit 1
-                                        fi
-                                        
-                                        # 最後の出力を取得
-                                        LAST_OUTPUT=\$(tmux capture-pane -t ${tmuxSessionName}:${windowName} -p -S -\$LINES_50)
-                                        
-                                        # Ansibleの完了を複数の条件でチェック
-                                        ANSIBLE_COMPLETED=false
-                                        
-                                        # 1. PLAY RECAPが表示されている（正常終了/エラー終了の両方）
-                                        if echo "\$LAST_OUTPUT" | grep -q "PLAY RECAP"; then
-                                            echo "PLAY RECAPを検出 - Ansibleが完了しました"
-                                            ANSIBLE_COMPLETED=true
-                                        fi
-                                        
-                                        # 2. シェルプロンプトが表示されている
-                                        if echo "\$LAST_OUTPUT" | grep -qE "\\[.+@.+\\]\\\\?\\\$|bash-.*\\\\$"; then
-                                            echo "シェルプロンプトを検出 - Ansibleが完了しました"
-                                            ANSIBLE_COMPLETED=true
-                                        fi
-                                        
-                                        # 3. tmuxペインで実行中のコマンドをチェック
-                                        PANE_COMMAND=\$(tmux list-panes -t ${tmuxSessionName}:${windowName} -F '#{pane_current_command}' 2>/dev/null || echo "")
-                                        if [[ "\$PANE_COMMAND" == "bash" ]] || [[ "\$PANE_COMMAND" == "sh" ]]; then
-                                            # ansible-playbookプロセスが存在しない
-                                            if ! pgrep -f "ansible-playbook.*${playbook}" > /dev/null 2>&1; then
-                                                echo "bashに戻っています - Ansibleが完了しました"
-                                                ANSIBLE_COMPLETED=true
-                                            fi
-                                        fi
-                                        
-                                        # Ansibleが完了している場合
-                                        if [ "\$ANSIBLE_COMPLETED" = true ]; then
-                                            # PLAYBOOKの実行が実際に開始されていたかチェック
-                                            if echo "\$LAST_OUTPUT" | grep -q "PLAY \\["; then
-                                                echo "Ansible実行が完了しました"
-                                                
-                                                # ログをキャプチャして表示
-                                                echo "=== 実行結果（最後の100行） ==="
-                                                tmux capture-pane -t ${tmuxSessionName}:${windowName} -p -S -\$LINES_100 | tail -100
-                                                
-                                                # エラーチェック（failed=の数値をチェック）
-                                                if echo "\$LAST_OUTPUT" | grep -E "failed=[1-9]" > /dev/null; then
-                                                    echo "エラー: Ansibleの実行が失敗しました（failed taskあり）"
-                                                    # 全ログを保存
-                                                    tmux capture-pane -t ${tmuxSessionName}:${windowName} -p -S - > /tmp/${tmuxSessionName}_${index}.log
-                                                    echo "完全なログは /tmp/${tmuxSessionName}_${index}.log に保存されました"
-                                                    exit 1
-                                                fi
-                                                
-                                                # unreachableチェック
-                                                if echo "\$LAST_OUTPUT" | grep -E "unreachable=[1-9]" > /dev/null; then
-                                                    echo "エラー: 到達不可能なホストがあります"
-                                                    tmux capture-pane -t ${tmuxSessionName}:${windowName} -p -S - > /tmp/${tmuxSessionName}_${index}.log
-                                                    exit 1
-                                                fi
-                                                
-                                                echo "Ansibleが正常に完了しました"
-                                                break
-                                            elif [ \$ELAPSED -lt 30 ]; then
-                                                # 最初の30秒は起動待ち
-                                                echo "Ansibleの起動を待機中... (\$ELAPSED秒経過)"
-                                            else
-                                                # 30秒経っても開始されない場合
-                                                echo "警告: Ansibleが開始されずに終了した可能性があります"
-                                                echo "--- 現在の出力 ---"
-                                                echo "\$LAST_OUTPUT" | tail -20
-                                                break
-                                            fi
-                                        elif [ \$ELAPSED -lt 30 ]; then
-                                            # 最初の30秒は起動待ち
-                                            echo "Ansibleの起動を待機中... (\$ELAPSED秒経過)"
-                                        fi
-                                        
-                                        # 進捗表示（30秒ごと）
-                                        if [ \$((ELAPSED % 30)) -eq 0 ]; then
-                                            echo "実行中... (\$ELAPSED秒経過)"
-                                            # 最新の5行を表示
-                                            echo "--- 最新の出力 ---"
-                                            tmux capture-pane -t ${tmuxSessionName}:${windowName} -p -S -\$LINES_5 | sed "s/^/  > /"
-                                        fi
-                                        
-                                        sleep \$INTERVAL
-                                        ELAPSED=\$((ELAPSED + INTERVAL))
-                                    done
-                                    
-                                    # タイムアウトチェック
-                                    if [ \$ELAPSED -ge \$TIMEOUT_SECONDS ]; then
-                                        echo "タイムアウト: ${tmuxTimeoutMinutes}分を超えました"
-                                        
-                                        # プロセスを終了
-                                        tmux send-keys -t ${tmuxSessionName}:${windowName} C-c
-                                        sleep 2
-                                        tmux kill-window -t ${tmuxSessionName}:${windowName} 2>/dev/null || true
-                                        echo "Ansibleプロセスを強制終了しました"
-                                        
-                                        # タイムアウト時のエラー処理設定
-                                        if [ "${continueOnTimeout}" = "true" ]; then
-                                            echo "警告: タイムアウトしましたが、CONTINUE_ON_TIMEOUTが有効なため続行します"
-                                            # ログをキャプチャして保存
-                                            echo "=== タイムアウト時のログ（最後の100行） ==="
-                                            tmux capture-pane -t ${tmuxSessionName}:${windowName} -p -S -\$LINES_100 > /tmp/${tmuxSessionName}_${index}.log
-                                            tail -100 /tmp/${tmuxSessionName}_${index}.log
-                                            # タイムアウトフラグファイルを作成
-                                            touch /tmp/${tmuxSessionName}_${index}.timeout
-                                            # エラーとして扱わない
-                                            exit 0
-                                        else
-                                            exit 1
-                                        fi
-                                    fi
-                                """
+                                    if (!continueOnTimeout && index < playbookList.size() - 1) {
+                                        error("タイムアウトのため実行を中止します")
+                                    }
+                                } else if (exitCode != 0) {
+                                    // その他のエラー
+                                    error("Ansibleの実行が失敗しました（終了コード: ${exitCode}）")
+                                }
                                 
                                 echo """
                                 ========================================
@@ -380,28 +263,10 @@ pipeline {
                                    tmux attach -t ${tmuxSessionName}
                                    (終了: Ctrl+b, d でデタッチ)
                                 
-                                2. ログをファイルに保存:
-                                   tmux capture-pane -t ${tmuxSessionName}:${windowName} -p -S - > ansible_log.txt
-                                
-                                3. 最新のログを確認:
-                                   tmux capture-pane -t ${tmuxSessionName}:${windowName} -p -S -\$LINES_50
+                                2. ログファイル:
+                                   /tmp/${tmuxSessionName}_${windowName}.log
                                 ========================================
                                 """
-                                
-                                // タイムアウトチェック
-                                def timeoutFlagFile = "/tmp/${tmuxSessionName}_${index}.timeout"
-                                if (sh(script: "test -f ${timeoutFlagFile} && echo 'true' || echo 'false'", returnStdout: true).trim() == 'true') {
-                                    timedOutPlaybooks.add(playbook)
-                                    echo "⚠️ 警告: このプレイブックはタイムアウトしました"
-                                }
-                                
-                                // タイムアウトで続行する場合の警告
-                                if (continueOnTimeout && index < playbookList.size() - 1) {
-                                    echo """
-                                    ⚠️ 注意: CONTINUE_ON_TIMEOUTが有効です
-                                    このプレイブックがタイムアウトしても次のプレイブックに進みます
-                                    """
-                                }
                             } else {
                                 // 通常実行
                                 sh """
@@ -430,7 +295,6 @@ pipeline {
                         ========================================
                         """
                         
-                        // タイムアウトがあった場合は警告として扱う
                         currentBuild.result = 'UNSTABLE'
                     }
                 }
@@ -482,9 +346,9 @@ pipeline {
                             echo "tmuxセッションをクリーンアップしました"
                         fi
                         
-                        # 一時ファイルのクリーンアップ（セッション名ベース）
+                        # 一時ファイルのクリーンアップ
                         rm -f /tmp/${env.tmuxSessionName}_*.log
-                        rm -f /tmp/${env.tmuxSessionName}_*.timeout
+                        rm -f /tmp/${env.tmuxSessionName}_*.log.timeout
                     """ 
                 }
             }
