@@ -329,7 +329,7 @@ pipeline {
                                             echo "実行中... (\$ELAPSED秒経過)"
                                             # 最新の5行を表示
                                             echo "--- 最新の出力 ---"
-                                            tmux capture-pane -t ${tmuxSessionName}:${windowName} -p -S -5 | sed "s/^/  > /"
+                                            tmux capture-pane -t ${tmuxSessionName}:${windowName} -p -S -\$5 | sed "s/^/  > /"
                                         fi
                                         
                                         sleep \$INTERVAL
