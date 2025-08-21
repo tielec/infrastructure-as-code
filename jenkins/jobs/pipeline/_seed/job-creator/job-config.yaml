@@ -245,11 +245,169 @@ jenkins-managed-repositories:
 pulumi-projects:
   infrastructure-as-code:
     projects:
-      jenkins_agent:
-        project_path: "jenkins_agent"
-        display_name: "Jenkins Agent Management"
+      # Jenkins関連プロジェクト
+      jenkins_ssm_init:
+        project_path: "jenkins-ssm-init"
+        display_name: "Jenkins SSM Init"
         project_type: "nodejs"
-        description: "Jenkinsエージェントの管理とデプロイメント"
+        description: "Jenkins SSMパラメータの初期化"
+        environments: ['common']  # 共通環境
+      
+      jenkins_network:
+        project_path: "jenkins-network"
+        display_name: "Jenkins Network"
+        project_type: "nodejs"
+        description: "Jenkinsネットワーク構成"
+        environments: ['common']  # 共通環境
+      
+      jenkins_security:
+        project_path: "jenkins-security"
+        display_name: "Jenkins Security"
+        project_type: "nodejs"
+        description: "Jenkinsセキュリティグループとロール"
+        environments: ['common']  # 共通環境
+      
+      jenkins_storage:
+        project_path: "jenkins-storage"
+        display_name: "Jenkins Storage"
+        project_type: "nodejs"
+        description: "JenkinsストレージEFS"
+        environments: ['common']  # 共通環境
+      
+      jenkins_loadbalancer:
+        project_path: "jenkins-loadbalancer"
+        display_name: "Jenkins Load Balancer"
+        project_type: "nodejs"
+        description: "Jenkinsロードバランサー"
+        environments: ['common']  # 共通環境
+      
+      jenkins_nat:
+        project_path: "jenkins-nat"
+        display_name: "Jenkins NAT"
+        project_type: "nodejs"
+        description: "Jenkins NATインスタンス"
+        environments: ['common']  # 共通環境
+      
+      jenkins_controller:
+        project_path: "jenkins-controller"
+        display_name: "Jenkins Controller"
+        project_type: "nodejs"
+        description: "Jenkinsコントローラーインスタンス"
+        environments: ['common']  # 共通環境
+      
+      jenkins_config:
+        project_path: "jenkins-config"
+        display_name: "Jenkins Config"
+        project_type: "nodejs"
+        description: "Jenkins設定管理"
+        environments: ['common']  # 共通環境
+      
+      jenkins_agent_ami:
+        project_path: "jenkins-agent-ami"
+        display_name: "Jenkins Agent AMI"
+        project_type: "nodejs"
+        description: "JenkinsエージェントAMI作成"
+        environments: ['common']  # 共通環境
+      
+      jenkins_agent:
+        project_path: "jenkins-agent"
+        display_name: "Jenkins Agent Fleet"
+        project_type: "nodejs"
+        description: "JenkinsエージェントFleet管理"
+        environments: ['common']  # 共通環境
+      
+      jenkins_application:
+        project_path: "jenkins-application"
+        display_name: "Jenkins Application"
+        project_type: "nodejs"
+        description: "Jenkinsアプリケーション設定"
+        environments: ['common']  # 共通環境
+      
+      # Lambda関連プロジェクト
+      lambda_network:
+        project_path: "lambda-network"
+        display_name: "Lambda Network"
+        project_type: "nodejs"
+        description: "Lambda用ネットワーク構成"
+        environments: ['dev', 'prod']  # 両環境に配置
+      
+      lambda_security:
+        project_path: "lambda-security"
+        display_name: "Lambda Security"
+        project_type: "nodejs"
+        description: "Lambdaセキュリティグループとロール"
+        environments: ['dev', 'prod']  # 両環境に配置
+      
+      lambda_nat:
+        project_path: "lambda-nat"
+        display_name: "Lambda NAT"
+        project_type: "nodejs"
+        description: "Lambda用NATインスタンス"
+        environments: ['dev', 'prod']  # 両環境に配置
+      
+      lambda_vpce:
+        project_path: "lambda-vpce"
+        display_name: "Lambda VPC Endpoint"
+        project_type: "nodejs"
+        description: "Lambda用VPCエンドポイント"
+        environments: ['dev', 'prod']  # 両環境に配置
+      
+      lambda_database:
+        project_path: "lambda-database"
+        display_name: "Lambda Database"
+        project_type: "nodejs"
+        description: "Lambda用データベース"
+        environments: ['dev', 'prod']  # 両環境に配置
+      
+      lambda_functions:
+        project_path: "lambda-functions"
+        display_name: "Lambda Functions"
+        project_type: "nodejs"
+        description: "Lambda関数定義"
+        environments: ['dev', 'prod']  # 両環境に配置
+      
+      lambda_api_gateway:
+        project_path: "lambda-api-gateway"
+        display_name: "Lambda API Gateway"
+        project_type: "nodejs"
+        description: "Lambda用API Gateway"
+        environments: ['dev', 'prod']  # 両環境に配置
+      
+      lambda_waf:
+        project_path: "lambda-waf"
+        display_name: "Lambda WAF"
+        project_type: "nodejs"
+        description: "Lambda用WAF設定"
+        environments: ['prod']  # 本番環境のみ
+      
+      lambda_websocket:
+        project_path: "lambda-websocket"
+        display_name: "Lambda WebSocket"
+        project_type: "nodejs"
+        description: "Lambda WebSocket API"
+        environments: ['dev', 'prod']  # 両環境に配置
+      
+      lambda_account_setup:
+        project_path: "lambda-account-setup"
+        display_name: "Lambda Account Setup"
+        project_type: "nodejs"
+        description: "Lambdaアカウント設定"
+        environments: ['dev', 'prod']  # 両環境に配置
+      
+      lambda_ip_whitelist:
+        project_path: "lambda-ip-whitelist"
+        display_name: "Lambda IP Whitelist"
+        project_type: "nodejs"
+        description: "Lambda IPホワイトリスト管理"
+        environments: ['dev', 'prod']  # 両環境に配置
+      
+      # テスト用プロジェクト
+      test_s3:
+        project_path: "test-s3"
+        display_name: "Test S3"
+        project_type: "nodejs"
+        description: "S3テスト用リソース"
+        environments: ['dev']  # 開発環境のみ
 
 # Ansibleプレイブック定義
 ansible-playbooks:

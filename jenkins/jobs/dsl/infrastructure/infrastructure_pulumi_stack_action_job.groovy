@@ -12,6 +12,15 @@ def pulumiProjects = pulumi_projects ?: [:]
 
 // 環境設定
 def environments = [
+    'common': [
+        folderName: 'common',
+        displayEnv: 'Common',
+        awsAccountHint: '共通AWSアカウント',
+        defaultSkipConfirmation: false,
+        defaultRefresh: false,
+        backendUrl: '', // S3バケット名は実行時にクレデンシャルから動的に取得
+        passphraseCredentialId: 'pulumi-config-passphrase'
+    ],
     'dev': [
         folderName: 'development',
         displayEnv: 'Development',
@@ -35,7 +44,17 @@ def environments = [
 // Pulumiプロジェクトごとにジョブを生成
 pulumiProjects.each { repoKey, repoConfig ->
     repoConfig.projects?.each { projectKey, projectConfig ->
-        environments.each { env, envConfig ->
+        // プロジェクトが対応する環境をチェック
+        def projectEnvironments = projectConfig.environments ?: ['common']
+        
+        projectEnvironments.each { envName ->
+            def env = envName
+            def envConfig = environments[env]
+            
+            if (!envConfig) {
+                println "Warning: Unknown environment '${env}' for project ${projectKey}"
+                return
+            }
             
             // ジョブパス
             def jobPath = "delivery-management-jobs/${envConfig.folderName}/pulumi-deployments/${repoKey}-${projectKey}"
@@ -45,7 +64,8 @@ pulumiProjects.each { repoKey, repoConfig ->
                 displayName("${repoKey} - ${projectKey}")
                 
                 // 環境に応じた説明文（簡潔版）
-                def envWarning = env == 'prod' ? "⚠️ **本番環境** - 変更前に影響範囲を必ず確認してください\n\n" : ""
+                def envWarning = env == 'prod' ? "⚠️ **本番環境** - 変更前に影響範囲を必ず確認してください\n\n" : 
+                                env == 'common' ? "⚠️ **共通環境** - Jenkins基盤に影響する変更です\n\n" : ""
                 
                 description("""\
                     |${envWarning}${projectConfig.description ?: 'Pulumi Infrastructure Deployment'}
@@ -93,25 +113,27 @@ pulumiProjects.each { repoKey, repoConfig ->
                     
                     // === 実行オプション ===
                     
-                    // SKIP_CONFIRMATION（本番環境では無効化）
+                    // SKIP_CONFIRMATION（本番環境と共通環境では無効化）
                     if (env == 'dev') {
                         booleanParam('SKIP_CONFIRMATION', envConfig.defaultSkipConfirmation, 
                             '確認プロンプトをスキップ - 開発環境では効率化のため有効にできます。')
                     } else {
-                        // 本番環境ではchoiceParamを使用して強制的にfalseに固定
+                        // 本番環境と共通環境ではchoiceParamを使用して強制的にfalseに固定
+                        def warningMsg = env == 'prod' ? '本番環境' : '共通環境'
                         choiceParam('SKIP_CONFIRMATION', ['false'], 
-                            '確認プロンプトをスキップ - ⚠️ 本番環境では無効化されています。安全のため、すべての操作で確認が必要です。')
+                            "確認プロンプトをスキップ - ⚠️ ${warningMsg}では無効化されています。安全のため、すべての操作で確認が必要です。")
                     }
                     
                     booleanParam('REFRESH_BEFORE_ACTION', envConfig.defaultRefresh, '''アクション前にリフレッシュ実行 - pulumi refreshを実行して、クラウドの実際の状態とPulumiの状態を同期します。
                         |* 手動でリソースを変更した場合は有効にしてください
                         |* destroyアクションでは常に実行されます'''.stripMargin())
                     
-                    // GENERATE_REPORT（本番環境では常にtrue）
+                    // GENERATE_REPORT（本番環境と共通環境では常にtrue）
                     if (env == 'dev') {
                         booleanParam('GENERATE_REPORT', true, 'HTMLレポートを生成 - deploy/destroy時に詳細なHTMLレポートを生成します')
                     } else {
-                        choiceParam('GENERATE_REPORT', ['true'], 'HTMLレポートを生成 - 本番環境では常にレポートが生成されます')
+                        def envMsg = env == 'prod' ? '本番環境' : '共通環境'
+                        choiceParam('GENERATE_REPORT', ['true'], "HTMLレポートを生成 - ${envMsg}では常にレポートが生成されます")
                     }
                     
                     // === Pulumi設定ファイルのアップロード（オプション） ===
