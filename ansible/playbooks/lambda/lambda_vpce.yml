@@ -13,7 +13,6 @@
   
   vars:
     env_name: "{{ env | default('dev') }}"
-    operation: "{{ operation | default('deploy') }}"
     preview_only: "{{ preview | default(false) }}"
     
   pre_tasks:
@@ -37,7 +36,7 @@
           ==========================================
           Lambda API VPC Endpoints
           ==========================================
-          Operation: {{ operation }}
+          Operation: {{ operation | default('deploy') }}
           Environment: {{ env_name }}
           Project: {{ vpce_project_name }}
           Region: {{ aws_region_name }}
@@ -80,7 +79,7 @@
           
           Please deploy missing components first.
       when:
-        - operation == 'deploy'
+        - operation | default('deploy') == 'deploy'
         - (vpc_check | default('') | length == 0 or sg_check | default('') | length == 0)
   
   roles:
@@ -92,7 +91,7 @@
       ansible.builtin.include_role:
         name: lambda_vpce
       vars:
-        operation: "{{ operation }}"
+        operation: "{{ operation | default('deploy') }}"
         
     - name: Display results
       ansible.builtin.debug:

@@ -13,7 +13,6 @@
   
   vars:
     env_name: "{{ env | default('dev') }}"
-    operation: "{{ operation | default('deploy') }}"
     preview_only: "{{ preview | default(false) }}"
     
   pre_tasks:
@@ -35,7 +34,7 @@
           ==========================================
           Lambda API Security Groups
           ==========================================
-          Operation: {{ operation }}
+          Operation: {{ operation | default('deploy') }}
           Environment: {{ env_name }}
           Project: {{ security_project_name }}
           Region: {{ aws_region_name }}
@@ -58,7 +57,7 @@
           Network infrastructure is not deployed!
           Please run: ansible-playbook playbooks/lambda/lambda_network.yml -e "env={{ env_name }}"
       when:
-        - operation == 'deploy'
+        - operation | default('deploy') == 'deploy'
         - ssm_parameter_value | default('') | length == 0
   
   roles:
@@ -70,7 +69,7 @@
       ansible.builtin.include_role:
         name: lambda_security
       vars:
-        operation: "{{ operation }}"
+        operation: "{{ operation | default('deploy') }}"
         
     - name: Display results
       ansible.builtin.debug:

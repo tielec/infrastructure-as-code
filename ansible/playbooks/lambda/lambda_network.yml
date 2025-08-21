@@ -13,7 +13,6 @@
   
   vars:
     env_name: "{{ env | default('dev') }}"
-    operation: "{{ operation | default('deploy') }}"
     preview_only: "{{ preview | default(false) }}"
     
   pre_tasks:
@@ -37,7 +36,7 @@
           ==========================================
           Lambda API Network Infrastructure
           ==========================================
-          Operation: {{ operation }}
+          Operation: {{ operation | default('deploy') }}
           Environment: {{ env_name }}
           Project: {{ network_project_name }}
           Region: {{ aws_region_name }}
@@ -61,7 +60,7 @@
           SSM parameters are not initialized!
           Please run: ansible-playbook playbooks/lambda/lambda_ssm_init.yml -e "env={{ env_name }}"
       when:
-        - operation == 'deploy'
+        - operation | default('deploy') == 'deploy'
         - ssm_parameter_value | default('false') != 'true'
   
   roles:
@@ -73,7 +72,7 @@
       ansible.builtin.include_role:
         name: lambda_network
       vars:
-        operation: "{{ operation }}"
+        operation: "{{ operation | default('deploy') }}"
         
     - name: Display results
       ansible.builtin.debug:

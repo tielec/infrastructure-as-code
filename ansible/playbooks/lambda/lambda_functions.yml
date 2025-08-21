@@ -13,7 +13,6 @@
   
   vars:
     env_name: "{{ env | default('dev') }}"
-    operation: "{{ operation | default('deploy') }}"
     preview_only: "{{ preview | default(false) }}"
     
   pre_tasks:
@@ -40,7 +39,7 @@
           ==========================================
           Lambda Functions Deployment
           ==========================================
-          Operation: {{ operation }}
+          Operation: {{ operation | default('deploy') }}
           Environment: {{ env_name }}
           Project: {{ functions_project_name }}
           Region: {{ aws_region_name }}
@@ -112,7 +111,7 @@
           
           Please deploy missing components first.
       when:
-        - operation == 'deploy'
+        - operation | default('deploy') == 'deploy'
         - (vpc_check | default('') | length == 0 or sg_check | default('') | length == 0 or vpce_check | default('') | length == 0 or nat_check | default('') | length == 0)
   
   roles:
@@ -124,7 +123,7 @@
       ansible.builtin.include_role:
         name: lambda_functions
       vars:
-        operation: "{{ operation }}"
+        operation: "{{ operation | default('deploy') }}"
         
     - name: Display results
       ansible.builtin.debug:

@@ -13,7 +13,6 @@
   
   vars:
     env_name: "{{ env | default('dev') }}"
-    operation: "{{ operation | default('deploy') }}"
     preview_only: "{{ preview | default(false) }}"
     
   pre_tasks:
@@ -37,7 +36,7 @@
           ==========================================
           WebSocket API Deployment
           ==========================================
-          Operation: {{ operation }}
+          Operation: {{ operation | default('deploy') }}
           Environment: {{ env_name }}
           Project: {{ websocket_project_name }}
           Region: {{ aws_region_name }}
@@ -68,7 +67,7 @@
           Please run: ansible-playbook playbooks/lambda/lambda_functions.yml -e "env={{ env_name }}"
       when:
         - enable_websocket
-        - operation == 'deploy'
+        - operation | default('deploy') == 'deploy'
         - functions_check | default('false') != 'true'
   
   roles:
@@ -80,7 +79,7 @@
       ansible.builtin.include_role:
         name: lambda_websocket
       vars:
-        operation: "{{ operation }}"
+        operation: "{{ operation | default('deploy') }}"
       when: enable_websocket
         
     - name: Display results
@@ -90,7 +89,7 @@
           WebSocket API {{ 'Preview' if preview_only else operation | title }} Complete
           ==========================================
           {% if enable_websocket %}
-          {% if operation == 'deploy' and not preview_only %}
+          {% if operation | default('deploy') == 'deploy' and not preview_only %}
           Status: {{ 'Success' if websocket_deployed | default(false) else 'Failed' }}
           WebSocket Endpoint: {{ websocket_endpoint | default('Not available') }}
           

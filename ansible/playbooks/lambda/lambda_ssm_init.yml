@@ -13,7 +13,6 @@
   
   vars:
     env_name: "{{ env | default('dev') }}"
-    operation: "{{ operation | default('deploy') }}"
     preview_only: "{{ preview | default(false) }}"
     
   pre_tasks:
@@ -34,7 +33,7 @@
           ==========================================
           Lambda API SSM Parameter Initialization
           ==========================================
-          Operation: {{ operation }}
+          Operation: {{ operation | default('deploy') }}
           Environment: {{ env_name }}
           Project: {{ project_name }}
           Region: {{ aws_region_name }}
@@ -50,7 +49,7 @@
       ansible.builtin.include_role:
         name: lambda_ssm_init
       vars:
-        operation: "{{ operation }}"
+        operation: "{{ operation | default('deploy') }}"
         
     - name: Display results
       ansible.builtin.debug:
@@ -58,11 +57,11 @@
           ==========================================
           SSM Parameter Initialization {{ 'Preview' if preview_only else operation | title }} Complete
           ==========================================
-          {% if operation == 'deploy' and not preview_only %}
+          {% if operation | default('deploy') == 'deploy' and not preview_only %}
           Status: {{ 'Success' if ssm_init_deployed | default(false) else 'Failed' }}
           
           Next step:
           ansible-playbook playbooks/lambda/lambda_network.yml -e "env={{ env_name }}"
-          {% elif operation == 'destroy' %}
+          {% elif operation | default('deploy') == 'destroy' %}
           SSM parameters have been removed.
           {% endif %}

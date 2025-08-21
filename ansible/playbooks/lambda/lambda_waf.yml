@@ -13,7 +13,6 @@
   
   vars:
     env_name: "{{ env | default('dev') }}"
-    operation: "{{ operation | default('deploy') }}"
     preview_only: "{{ preview | default(false) }}"
     
   pre_tasks:
@@ -37,7 +36,7 @@
           ==========================================
           WAF Deployment for API Gateway
           ==========================================
-          Operation: {{ operation }}
+          Operation: {{ operation | default('deploy') }}
           Environment: {{ env_name }}
           Project: {{ waf_project_name }}
           Region: {{ aws_region_name }}
@@ -68,7 +67,7 @@
           Please run: ansible-playbook playbooks/lambda/lambda_api_gateway.yml -e "env={{ env_name }}"
       when:
         - enable_waf
-        - operation == 'deploy'
+        - operation | default('deploy') == 'deploy'
         - api_check | default('') | length == 0
   
   roles:
@@ -80,7 +79,7 @@
       ansible.builtin.include_role:
         name: lambda_waf
       vars:
-        operation: "{{ operation }}"
+        operation: "{{ operation | default('deploy') }}"
       when: enable_waf
         
     - name: Display results
@@ -90,7 +89,7 @@
           WAF {{ 'Preview' if preview_only else operation | title }} Complete
           ==========================================
           {% if enable_waf %}
-          {% if operation == 'deploy' and not preview_only %}
+          {% if operation | default('deploy') == 'deploy' and not preview_only %}
           Status: {{ 'Success' if waf_deployed | default(false) else 'Failed' }}
           
           Optional next steps:

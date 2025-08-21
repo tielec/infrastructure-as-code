@@ -13,7 +13,6 @@
   
   vars:
     env_name: "{{ env | default('dev') }}"
-    operation: "{{ operation | default('deploy') }}"
     preview_only: "{{ preview | default(false) }}"
     
   pre_tasks:
@@ -37,7 +36,7 @@
           ==========================================
           Database Infrastructure Deployment (Phase 2)
           ==========================================
-          Operation: {{ operation }}
+          Operation: {{ operation | default('deploy') }}
           Environment: {{ env_name }}
           Project: {{ database_project_name }}
           Region: {{ aws_region_name }}
@@ -89,7 +88,7 @@
           Please deploy missing components first.
       when:
         - enable_database
-        - operation == 'deploy'
+        - operation | default('deploy') == 'deploy'
         - (vpc_check | default('') | length == 0 or sg_check | default('') | length == 0)
   
   roles:
@@ -101,7 +100,7 @@
       ansible.builtin.include_role:
         name: lambda_database
       vars:
-        operation: "{{ operation }}"
+        operation: "{{ operation | default('deploy') }}"
       when: enable_database
         
     - name: Display results
@@ -111,7 +110,7 @@
           Database Infrastructure {{ 'Preview' if preview_only else operation | title }} Complete
           ==========================================
           {% if enable_database %}
-          {% if operation == 'deploy' and not preview_only %}
+          {% if operation | default('deploy') == 'deploy' and not preview_only %}
           Status: {{ 'Success' if database_deployed | default(false) else 'Failed' }}
           Database Type: {{ database_type | default('N/A') }}
           
