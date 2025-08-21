@@ -544,10 +544,10 @@ roles/
     ├── vars/
     │   └── main.yml       # ロール変数
     ├── tasks/
-    │   ├── main.yml       # メインタスク
-    │   ├── deploy.yml     # デプロイタスク
-    │   ├── destroy.yml    # 削除タスク
-    │   └── validate.yml   # 検証タスク
+    │   ├── main.yml       # ⚠️ 必須：エントリーポイント（deploy/destroy の振り分け）
+    │   ├── deploy.yml     # ⚠️ 必須：デプロイタスク
+    │   ├── destroy.yml    # ⚠️ 必須：削除タスク
+    │   └── validate.yml   # オプション：検証タスク
     ├── handlers/
     │   └── main.yml       # ハンドラー
     ├── templates/
@@ -557,6 +557,11 @@ roles/
     └── meta/
         └── main.yml       # ⚠️ 重要：依存関係の定義（ヘルパーロール等）
 ```
+
+**注意事項:**
+- `tasks/main.yml`、`tasks/deploy.yml`、`tasks/destroy.yml` の3ファイルは必須
+- main.yml は operation 変数に基づいて deploy/destroy を振り分ける役割のみ
+- 実際の処理は deploy.yml と destroy.yml に実装する
 
 #### meta/main.ymlの例
 
@@ -592,16 +597,24 @@ dependencies:
       aws_region: "{{ aws_region | default('ap-northeast-1') }}"
 ```
 
-### タスク分割パターン
+### タスク分割パターン（重要）
+
+**⚠️ 基本運用ルール: すべてのロールは必ず `deploy.yml` と `destroy.yml` に分割して実装してください。**
+
+このリポジトリでは、インフラストラクチャの作成と削除を明確に分離するため、すべてのAnsibleロールで以下の構造を採用しています：
 
 ```yaml
-# tasks/main.yml
+# tasks/main.yml - 必須：エントリーポイント
 ---
-- name: アクションの選択
-  include_tasks: "{{ action }}.yml"
-  when: action is defined
-  
-# tasks/deploy.yml
+- name: Include deploy tasks
+  ansible.builtin.include_tasks: deploy.yml
+  when: operation | default('deploy') == 'deploy'
+
+- name: Include destroy tasks
+  ansible.builtin.include_tasks: destroy.yml
+  when: operation | default('deploy') == 'destroy'
+
+# tasks/deploy.yml - 必須：デプロイメント処理
 ---
 - name: 事前検証
   include_tasks: validate.yml
@@ -626,8 +639,15 @@ dependencies:
     parameter_value: "{{ ansible_date_time.iso8601 }}"
     parameter_type: "String"
     
-# tasks/destroy.yml
+# tasks/destroy.yml - 必須：削除処理
 ---
+- name: 削除前の確認
+  ansible.builtin.pause:
+    prompt: "Press ENTER to confirm deletion, or Ctrl+C to cancel"
+  when: 
+    - force_destroy is not defined or not force_destroy
+    - not preview_only | default(false)
+
 # ✅ AWS CLIヘルパーでリソースの存在確認
 - name: リソースの存在確認
   include_role:
@@ -657,6 +677,44 @@ dependencies:
   vars:
     parameter_name: "/{{ project_name }}/{{ env }}/{{ component_name }}/deployed_at"
 ```
+
+#### deploy/destroy 分割の利点
+
+1. **明確な責任分離**: 作成と削除のロジックが混在しない
+2. **安全性の向上**: 誤った削除を防ぐための確認処理を標準化
+3. **保守性の向上**: 各ファイルが単一の目的を持つ
+4. **再利用性**: deploy/destroy を個別に呼び出し可能
+
+#### 実装ガイドライン
+
+```yaml
+# 呼び出し例（プレイブックから）
+- name: デプロイ実行
+  include_role:
+    name: jenkins_controller
+  vars:
+    operation: deploy  # デフォルト値なので省略可能
+
+- name: 削除実行
+  include_role:
+    name: jenkins_controller
+  vars:
+    operation: destroy
+    force_destroy: true  # 確認プロンプトをスキップ
+```
+
+#### 必須変数と推奨変数
+
+**deploy.yml で使用する変数:**
+- `preview_only`: プレビューのみ実行（デフォルト: false）
+- `env_name` または `env`: 環境名（dev/prod）
+- `project_name`: プロジェクト名
+
+**destroy.yml で使用する変数:**
+- `force_destroy`: 確認なしで削除（デフォルト: false）
+- `preview_only`: 削除のプレビューのみ（デフォルト: false）
+- `remove_stack`: Pulumiスタック自体も削除（デフォルト: true）
+- `force_manual_cleanup`: 手動削除を強制（デフォルト: false）
 
 ### 変数管理
 
