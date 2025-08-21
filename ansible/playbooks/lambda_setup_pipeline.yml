@@ -1,160 +1,134 @@
 ---
 # lambda_setup_pipeline.yml
-# Lambda API環境構築の全体フローを管理するマスタープレイブック
-# 個別のコンポーネントplaybookを順番に呼び出します
+# Lambda API環境構築の全体フローを管理するプレイブック
+# 各lambda_*.ymlプレイブックを順番に実行
+#
+# 使用方法 (ansibleディレクトリから実行):
+#   ansible-playbook playbooks/lambda_setup_pipeline.yml -e "env=dev"
+#   ansible-playbook playbooks/lambda_setup_pipeline.yml -e "env=dev run_network=true run_security=false"
 
-- name: Lambda API Infrastructure Setup Pipeline
+- name: Lambda API Infrastructure Setup Pipeline - Start
   hosts: localhost
   connection: local
-  gather_facts: yes
+  gather_facts: no
   
   vars:
     # 環境名はコマンドラインから指定可能
     env_name: "{{ env | default('dev') }}"
-    # パスを明示的に定義
-    scripts_dir: "{{ inventory_dir }}/../../scripts"
-    pulumi_path: "{{ inventory_dir }}/../../pulumi"
-    # Phase 1/2の切り替え
-    enable_database: "{{ create_database | default(false) }}"
-    enable_websocket: "{{ create_websocket | default(false) }}"
   
-  pre_tasks:
-    # all.yml から変数を読み込む
-    - name: Include group_vars/all.yml
-      ansible.builtin.include_vars:
-        file: "{{ inventory_dir }}/group_vars/all.yml"
-        
-    # 必要な変数を設定
-    - name: Set required variables from all.yml
-      ansible.builtin.set_fact:
-        project_name: "{{ lambda_api_infra.project_name }}"
-        aws_region_name: "{{ lambda_api_infra.aws.default_region }}"
-        environment_config: "{{ lambda_api_infra.environments[env_name] }}"
-        
-    - name: Check for check mode
-      ansible.builtin.debug:
-        msg: |
-          ⚠️  WARNING: Check mode is not supported for Pulumi deployments.
-          Pulumi has its own preview functionality. Use 'preview_only=true' instead.
-      when: ansible_check_mode
-
-    - name: Fail if check mode
-      ansible.builtin.fail:
-        msg: "Check mode is not supported. Use 'preview_only=true' instead."
-      when: ansible_check_mode
-      
-    - name: Display pipeline information
-      ansible.builtin.debug:
-        msg: |
-          ==========================================
-          Lambda API Infrastructure Setup Pipeline
-          ==========================================
-          Project: {{ project_name }}
-          Environment: {{ env_name }}
-          AWS Region: {{ aws_region_name }}
-          Phase: {{ 'Phase 2 (with Database)' if enable_database else 'Phase 1 (API Only)' }}
-          
-          Deployment Order:
-          1. SSM Parameters Initialization
-          2. Network Infrastructure
-          3. Security Groups
-          4. VPC Endpoints
-          5. NAT Infrastructure
-          6. Lambda Functions
-          7. API Gateway
-          8. WAF (optional)
-          9. WebSocket API (optional)
-          10. Database (Phase 2)
-          ==========================================
-    
   tasks:
-    # import_playbookはwhen条件をサポートしないため、すべて実行
-    # 各playbookの内部で条件制御を行う
-    
-    # 1. SSMパラメータ初期化
-    - name: SSM Parameters Initialization
-      ansible.builtin.import_playbook: lambda/lambda_ssm_init.yml
-      vars:
-        env: "{{ env_name }}"
-        skip_execution: "{{ not (run_ssm_init | default(true) | bool) }}"
-    
-    # 2. ネットワークインフラ
-    - name: Network Infrastructure Setup
-      ansible.builtin.import_playbook: lambda/lambda_network.yml
-      vars:
-        env: "{{ env_name }}"
-        skip_execution: "{{ not (run_network | default(true) | bool) }}"
-    
-    # 3. セキュリティグループ
-    - name: Security Groups Setup
-      ansible.builtin.import_playbook: lambda/lambda_security.yml
-      vars:
-        env: "{{ env_name }}"
-        skip_execution: "{{ not (run_security | default(true) | bool) }}"
-    
-    # 4. VPCエンドポイント
-    - name: VPC Endpoints Setup
-      ansible.builtin.import_playbook: lambda/lambda_vpce.yml
-      vars:
-        env: "{{ env_name }}"
-        skip_execution: "{{ not (run_vpce | default(true) | bool) }}"
-    
-    # 5. NAT設定
-    - name: NAT Infrastructure Setup
-      ansible.builtin.import_playbook: lambda/lambda_nat.yml
-      vars:
-        env: "{{ env_name }}"
-        skip_execution: "{{ not (run_nat | default(true) | bool) }}"
-    
-    # 6. Lambda関数
-    - name: Lambda Functions Deployment
-      ansible.builtin.import_playbook: lambda/lambda_functions.yml
-      vars:
-        env: "{{ env_name }}"
-        skip_execution: "{{ not (run_functions | default(true) | bool) }}"
-    
-    # 7. API Gateway
-    - name: API Gateway Setup
-      ansible.builtin.import_playbook: lambda/lambda_api_gateway.yml
-      vars:
-        env: "{{ env_name }}"
-        skip_execution: "{{ not (run_api_gateway | default(true) | bool) }}"
-    
-    # 8. WAF（オプション）
-    - name: WAF Setup
-      ansible.builtin.import_playbook: lambda/lambda_waf.yml
-      vars:
-        env: "{{ env_name }}"
-        skip_execution: "{{ not (run_waf | default(true) | bool) or not (environment_config.enable_waf | default(false)) }}"
-    
-    # 9. WebSocket API（オプション）
-    - name: WebSocket API Setup
-      ansible.builtin.import_playbook: lambda/lambda_websocket.yml
-      vars:
-        env: "{{ env_name }}"
-        skip_execution: "{{ not (run_websocket | default(true) | bool) or not enable_websocket | bool }}"
-    
-    # 10. データベース（Phase 2）
-    - name: Database Infrastructure Setup
-      ansible.builtin.import_playbook: lambda/lambda_database.yml
-      vars:
-        env: "{{ env_name }}"
-        skip_execution: "{{ not (run_database | default(true) | bool) or not enable_database | bool }}"
-    
-    # デプロイメント完了メッセージ
-    - name: Display completion message
+    - name: Display setup information
       ansible.builtin.debug:
         msg: |
-          ==========================================
-          Lambda API Infrastructure Setup Complete!
+          Lambda API Infrastructure Setup Pipeline
+          ==================================
+          Environment: {{ env_name }}
+          Starting infrastructure deployment...
+
+# SSMパラメータストアの初期化（最初に実行）
+- import_playbook: lambda/lambda_ssm_init.yml
+  vars:
+    env: "{{ env | default('dev') }}"
+  when: run_ssm_init | default(true) | bool
+  tags:
+    - ssm-init
+    - always
+
+# ネットワークインフラのデプロイ
+- import_playbook: lambda/lambda_network.yml
+  vars:
+    env: "{{ env | default('dev') }}"
+  when: run_network | default(true) | bool
+  tags:
+    - network
+
+# セキュリティグループのデプロイ
+- import_playbook: lambda/lambda_security.yml
+  vars:
+    env: "{{ env | default('dev') }}"
+  when: run_security | default(true) | bool
+  tags:
+    - security
+
+# VPCエンドポイントのデプロイ
+- import_playbook: lambda/lambda_vpce.yml
+  vars:
+    env: "{{ env | default('dev') }}"
+  when: run_vpce | default(true) | bool
+  tags:
+    - vpce
+
+# NATインフラのデプロイ
+- import_playbook: lambda/lambda_nat.yml
+  vars:
+    env: "{{ env | default('dev') }}"
+  when: run_nat | default(true) | bool
+  tags:
+    - nat
+
+# Lambda関数のデプロイ
+- import_playbook: lambda/lambda_functions.yml
+  vars:
+    env: "{{ env | default('dev') }}"
+  when: run_functions | default(true) | bool
+  tags:
+    - functions
+
+# API Gatewayのデプロイ
+- import_playbook: lambda/lambda_api_gateway.yml
+  vars:
+    env: "{{ env | default('dev') }}"
+  when: run_api_gateway | default(true) | bool
+  tags:
+    - api-gateway
+
+# WAFのデプロイ（オプション）
+- import_playbook: lambda/lambda_waf.yml
+  vars:
+    env: "{{ env | default('dev') }}"
+  when: run_waf | default(true) | bool
+  tags:
+    - waf
+
+# WebSocket APIのデプロイ（オプション）
+- import_playbook: lambda/lambda_websocket.yml
+  vars:
+    env: "{{ env | default('dev') }}"
+  when: run_websocket | default(true) | bool
+  tags:
+    - websocket
+
+# データベースのデプロイ（Phase 2）
+- import_playbook: lambda/lambda_database.yml
+  vars:
+    env: "{{ env | default('dev') }}"
+  when: run_database | default(true) | bool
+  tags:
+    - database
+
+- name: Setup Complete
+  hosts: localhost
+  connection: local
+  gather_facts: no
+  
+  vars:
+    env_name: "{{ env | default('dev') }}"
+  
+  tasks:
+    - name: Display deployment summary
+      ansible.builtin.debug:
+        msg: |
+          Lambda API Infrastructure Deployment Complete
           ==========================================
           
-          All components have been successfully deployed.
+          Environment: {{ env_name }}
           
-          To access your API:
-          1. Get the API endpoint from API Gateway outputs
+          All specified components have been processed for deployment.
+          
+          Next steps:
+          1. Access your API through the API Gateway endpoint
           2. Use the API key for authentication
+          3. Monitor Lambda functions through CloudWatch
           
           To destroy this infrastructure:
           ansible-playbook playbooks/lambda_teardown_pipeline.yml -e "env={{ env_name }}"
-          ==========================================

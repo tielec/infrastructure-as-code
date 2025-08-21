@@ -1,66 +1,47 @@
 ---
 # lambda_teardown_pipeline.yml
-# Lambda API環境の削除を管理するマスタープレイブック
-# 個別のコンポーネントplaybookを逆順で呼び出します
+# Lambda API環境削除の全体フローを管理するプレイブック
+# 各lambda_*.ymlプレイブックを逆順で実行
+#
+# 使用方法 (ansibleディレクトリから実行):
+#   ansible-playbook playbooks/lambda_teardown_pipeline.yml -e "env=dev"
+#   ansible-playbook playbooks/lambda_teardown_pipeline.yml -e "env=dev force_destroy=true"
 
-- name: Lambda API Infrastructure Teardown Pipeline
+- name: Lambda API Infrastructure Teardown Pipeline - Start
   hosts: localhost
   connection: local
-  gather_facts: yes
-  any_errors_fatal: true
+  gather_facts: no
   
   vars:
     # 環境名はコマンドラインから指定可能
     env_name: "{{ env | default('dev') }}"
-    # パスを明示的に定義
-    scripts_dir: "{{ inventory_dir }}/../../scripts"
-    pulumi_path: "{{ inventory_dir }}/../../pulumi"
-    # スタック自体も削除するかどうか
-    remove_stacks: "{{ remove_stack | default(false) }}"
-  
-  pre_tasks:
-    # all.yml から変数を読み込む
-    - name: Include group_vars/all.yml
-      ansible.builtin.include_vars:
-        file: "{{ inventory_dir }}/group_vars/all.yml"
-        
-    # 必要な変数を設定
-    - name: Set required variables from all.yml
-      ansible.builtin.set_fact:
-        project_name: "{{ lambda_api_infra.project_name }}"
-        aws_region_name: "{{ lambda_api_infra.aws.default_region }}"
-        environment_config: "{{ lambda_api_infra.environments[env_name] }}"
-        
+    
+  tasks:
     # 対話モードと非対話モードの処理
     - name: Check if running interactively
       ansible.builtin.set_fact:
         is_interactive: "{{ ansible_connection == 'local' and lookup('env', 'CI') == '' and lookup('env', 'JENKINS_HOME') == '' }}"
     
-    - name: Display destruction warning
+    - name: Display teardown warning
       ansible.builtin.debug:
         msg: |
+          Lambda API Infrastructure Teardown Pipeline
           ==========================================
-          ⚠️  WARNING: Lambda API Infrastructure Teardown
-          ==========================================
+          ⚠️  WARNING: You are about to destroy Lambda API infrastructure!
           
           Environment: {{ env_name }}
-          Project: {{ project_name }}
-          Region: {{ aws_region_name }}
-          Remove stacks: {{ remove_stacks }}
           
           This will destroy (in reverse order):
-          1. Database (if exists)
-          2. WebSocket API (if exists)
-          3. WAF
-          4. API Gateway
-          5. Lambda Functions
-          6. NAT Infrastructure
-          7. VPC Endpoints
-          8. Security Groups
-          9. Network Infrastructure
-          10. SSM Parameters (if remove_ssm=true)
-          
-          ==========================================
+          - Database (Phase 2)
+          - WebSocket API
+          - WAF
+          - API Gateway
+          - Lambda Functions
+          - NAT Infrastructure
+          - VPC Endpoints
+          - Security Groups
+          - Network Infrastructure
+          - SSM Parameters (if specified)
     
     # 対話モードの場合のみ確認
     - name: Confirm destruction (interactive mode)
@@ -95,106 +76,122 @@
         msg: |
           {{ '✅ Destruction confirmed by user' if is_interactive | bool else '✅ Force destroy enabled' }}
           Proceeding with infrastructure destruction...
-    
+
+# 削除は作成の逆順で実行
+
+# データベースの削除（Phase 2）
+- import_playbook: lambda/lambda_database.yml
+  vars:
+    env: "{{ env | default('dev') }}"
+    operation: "destroy"
+  when: destroy_database | default(true) | bool
+  tags:
+    - database
+
+# WebSocket APIの削除
+- import_playbook: lambda/lambda_websocket.yml
+  vars:
+    env: "{{ env | default('dev') }}"
+    operation: "destroy"
+  when: destroy_websocket | default(true) | bool
+  tags:
+    - websocket
+
+# WAFの削除
+- import_playbook: lambda/lambda_waf.yml
+  vars:
+    env: "{{ env | default('dev') }}"
+    operation: "destroy"
+  when: destroy_waf | default(true) | bool
+  tags:
+    - waf
+
+# API Gatewayの削除
+- import_playbook: lambda/lambda_api_gateway.yml
+  vars:
+    env: "{{ env | default('dev') }}"
+    operation: "destroy"
+  when: destroy_api_gateway | default(true) | bool
+  tags:
+    - api-gateway
+
+# Lambda関数の削除
+- import_playbook: lambda/lambda_functions.yml
+  vars:
+    env: "{{ env | default('dev') }}"
+    operation: "destroy"
+  when: destroy_functions | default(true) | bool
+  tags:
+    - functions
+
+# NATインフラの削除
+- import_playbook: lambda/lambda_nat.yml
+  vars:
+    env: "{{ env | default('dev') }}"
+    operation: "destroy"
+  when: destroy_nat | default(true) | bool
+  tags:
+    - nat
+
+# VPCエンドポイントの削除
+- import_playbook: lambda/lambda_vpce.yml
+  vars:
+    env: "{{ env | default('dev') }}"
+    operation: "destroy"
+  when: destroy_vpce | default(true) | bool
+  tags:
+    - vpce
+
+# セキュリティグループの削除
+- import_playbook: lambda/lambda_security.yml
+  vars:
+    env: "{{ env | default('dev') }}"
+    operation: "destroy"
+  when: destroy_security | default(true) | bool
+  tags:
+    - security
+
+# ネットワークインフラの削除
+- import_playbook: lambda/lambda_network.yml
+  vars:
+    env: "{{ env | default('dev') }}"
+    operation: "destroy"
+  when: destroy_network | default(true) | bool
+  tags:
+    - network
+
+# SSMパラメータの削除（最後、オプション）
+- import_playbook: lambda/lambda_ssm_init.yml
+  vars:
+    env: "{{ env | default('dev') }}"
+    operation: "destroy"
+  when: destroy_ssm | default(false) | bool
+  tags:
+    - ssm-destroy
+
+- name: Teardown Complete
+  hosts: localhost
+  connection: local
+  gather_facts: no
+  
+  vars:
+    env_name: "{{ env | default('dev') }}"
+  
   tasks:
-    # 削除は作成の逆順で実行
-    # import_playbookはwhen条件とignore_errorsをサポートしないため、各playbookで制御
-    
-    # 1. データベース削除（Phase 2、存在する場合）
-    - name: Database Infrastructure Teardown
-      ansible.builtin.import_playbook: lambda/lambda_database.yml
-      vars:
-        env: "{{ env_name }}"
-        operation: "destroy"
-        skip_execution: "{{ not (destroy_database | default(true) | bool) }}"
-    
-    # 2. WebSocket API削除（オプション、存在する場合）
-    - name: WebSocket API Teardown
-      ansible.builtin.import_playbook: lambda/lambda_websocket.yml
-      vars:
-        env: "{{ env_name }}"
-        operation: "destroy"
-        skip_execution: "{{ not (destroy_websocket | default(true) | bool) }}"
-    
-    # 3. WAF削除
-    - name: WAF Teardown
-      ansible.builtin.import_playbook: lambda/lambda_waf.yml
-      vars:
-        env: "{{ env_name }}"
-        operation: "destroy"
-        skip_execution: "{{ not (destroy_waf | default(true) | bool) }}"
-    
-    # 4. API Gateway削除
-    - name: API Gateway Teardown
-      ansible.builtin.import_playbook: lambda/lambda_api_gateway.yml
-      vars:
-        env: "{{ env_name }}"
-        operation: "destroy"
-        skip_execution: "{{ not (destroy_api_gateway | default(true) | bool) }}"
-    
-    # 5. Lambda関数削除
-    - name: Lambda Functions Teardown
-      ansible.builtin.import_playbook: lambda/lambda_functions.yml
-      vars:
-        env: "{{ env_name }}"
-        operation: "destroy"
-        skip_execution: "{{ not (destroy_functions | default(true) | bool) }}"
-    
-    # 6. NAT削除
-    - name: NAT Infrastructure Teardown
-      ansible.builtin.import_playbook: lambda/lambda_nat.yml
-      vars:
-        env: "{{ env_name }}"
-        operation: "destroy"
-        skip_execution: "{{ not (destroy_nat | default(true) | bool) }}"
-    
-    # 7. VPCエンドポイント削除
-    - name: VPC Endpoints Teardown
-      ansible.builtin.import_playbook: lambda/lambda_vpce.yml
-      vars:
-        env: "{{ env_name }}"
-        operation: "destroy"
-        skip_execution: "{{ not (destroy_vpce | default(true) | bool) }}"
-    
-    # 8. セキュリティグループ削除
-    - name: Security Groups Teardown
-      ansible.builtin.import_playbook: lambda/lambda_security.yml
-      vars:
-        env: "{{ env_name }}"
-        operation: "destroy"
-        skip_execution: "{{ not (destroy_security | default(true) | bool) }}"
-    
-    # 9. ネットワーク削除
-    - name: Network Infrastructure Teardown
-      ansible.builtin.import_playbook: lambda/lambda_network.yml
-      vars:
-        env: "{{ env_name }}"
-        operation: "destroy"
-        skip_execution: "{{ not (destroy_network | default(true) | bool) }}"
-    
-    # 10. SSMパラメータ削除（オプション、通常は残す）
-    - name: SSM Parameters Teardown
-      ansible.builtin.import_playbook: lambda/lambda_ssm_init.yml
-      vars:
-        env: "{{ env_name }}"
-        operation: "destroy"
-        skip_execution: "{{ not ((remove_ssm | default(false) | bool) and (destroy_ssm | default(false) | bool)) }}"
-    
-    # 削除完了メッセージ
-    - name: Display completion message
+    - name: Display teardown summary
       ansible.builtin.debug:
         msg: |
-          ==========================================
-          Lambda API Infrastructure Teardown Complete!
+          Lambda API Infrastructure Teardown Complete
           ==========================================
           
           Environment: {{ env_name }}
           
-          {% if not remove_ssm | default(false) %}
+          All specified components have been removed.
+          
+          {% if not destroy_ssm | default(false) %}
           Note: SSM parameters were preserved.
-          To remove them, use: remove_ssm=true
+          To remove them, use: destroy_ssm=true
           {% endif %}
           
           To recreate this infrastructure:
           ansible-playbook playbooks/lambda_setup_pipeline.yml -e "env={{ env_name }}"
-          ==========================================

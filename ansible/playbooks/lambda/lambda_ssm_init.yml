@@ -45,15 +45,6 @@
     - pulumi_helper
     
   tasks:
-    - name: Check if execution should be skipped
-      ansible.builtin.debug:
-        msg: "Skipping SSM parameter initialization as requested"
-      when: skip_execution | default(false) | bool
-      
-    - name: End play if skip_execution is true
-      ansible.builtin.meta: end_play
-      when: skip_execution | default(false) | bool
-      
     - name: Set operation variable
       ansible.builtin.set_fact:
         role_operation: "{{ operation | default('deploy') }}"
