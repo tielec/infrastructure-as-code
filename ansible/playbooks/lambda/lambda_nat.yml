@@ -92,11 +92,15 @@
     - pulumi_helper
     
   tasks:
+    - name: Set operation variable
+      ansible.builtin.set_fact:
+        role_operation: "{{ operation | default('deploy') }}"
+        
     - name: Execute NAT deployment
       ansible.builtin.include_role:
         name: lambda_nat
       vars:
-        operation: "{{ operation | default('deploy') }}"
+        operation: "{{ role_operation }}"
         
     - name: Display results
       ansible.builtin.debug:

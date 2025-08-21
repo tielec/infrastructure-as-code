@@ -68,11 +68,15 @@
     - pulumi_helper
     
   tasks:
+    - name: Set operation variable
+      ansible.builtin.set_fact:
+        role_operation: "{{ operation | default('deploy') }}"
+        
     - name: Execute API Gateway deployment
       ansible.builtin.include_role:
         name: lambda_api_gateway
       vars:
-        operation: "{{ operation | default('deploy') }}"
+        operation: "{{ role_operation }}"
         
     - name: Display results
       ansible.builtin.debug:

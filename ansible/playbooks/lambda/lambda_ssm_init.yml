@@ -45,11 +45,15 @@
     - pulumi_helper
     
   tasks:
+    - name: Set operation variable
+      ansible.builtin.set_fact:
+        role_operation: "{{ operation | default('deploy') }}"
+        
     - name: Execute SSM parameter initialization
       ansible.builtin.include_role:
         name: lambda_ssm_init
       vars:
-        operation: "{{ operation | default('deploy') }}"
+        operation: "{{ role_operation }}"
         
     - name: Display results
       ansible.builtin.debug:

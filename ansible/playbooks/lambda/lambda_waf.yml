@@ -75,11 +75,15 @@
     - pulumi_helper
     
   tasks:
+    - name: Set operation variable
+      ansible.builtin.set_fact:
+        role_operation: "{{ operation | default('deploy') }}"
+        
     - name: Execute WAF deployment
       ansible.builtin.include_role:
         name: lambda_waf
       vars:
-        operation: "{{ operation | default('deploy') }}"
+        operation: "{{ role_operation }}"
       when: enable_waf
         
     - name: Display results

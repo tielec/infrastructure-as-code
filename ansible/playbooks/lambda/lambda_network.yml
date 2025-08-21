@@ -68,11 +68,15 @@
     - pulumi_helper
     
   tasks:
+    - name: Set operation variable
+      ansible.builtin.set_fact:
+        role_operation: "{{ operation | default('deploy') }}"
+        
     - name: Execute network deployment
       ansible.builtin.include_role:
         name: lambda_network
       vars:
-        operation: "{{ operation | default('deploy') }}"
+        operation: "{{ role_operation }}"
         
     - name: Display results
       ansible.builtin.debug:
