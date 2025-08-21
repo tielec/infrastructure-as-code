@@ -26,6 +26,7 @@ def plugins = [
     "cloudbees-folder",
     "antisamy-markup-formatter",
     "dark-theme",
+    "ansicolor",
     
     // ビルド管理プラグイン
     "build-name-setter",

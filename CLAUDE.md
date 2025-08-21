@@ -320,6 +320,10 @@ Action: add|update|fix|remove|refactor
 [bootstrap] update: Node.js v20へアップグレード（README更新含む）
 ```
 
+### Gitコミット時の注意事項
+
+**重要**: Gitコミットを作成する際は、Co-Authorにクレジットを追加しないでください。コミットメッセージは簡潔にし、変更内容のみを記載してください。
+
 ## セキュリティチェックリスト
 
 - [ ] クレデンシャルのハードコーディングなし
