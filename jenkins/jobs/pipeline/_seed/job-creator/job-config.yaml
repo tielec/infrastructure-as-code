@@ -460,8 +460,8 @@ ansible-playbooks:
         display_name: "Jenkins Controller & Config"
         description: "Jenkinsコントローラーと設定のデプロイ"
         category: "jenkins-deploy"
-        enable_nohup: true  # EC2インスタンスの起動と設定に時間がかかる
-        nohup_timeout_minutes: 45
+        enable_tmux: true  # EC2インスタンスの起動と設定に時間がかかる
+        tmux_timeout_minutes: 45
         continue_on_timeout: false  # コントローラーは確実にデプロイする必要がある
         environments: ['common']  # 共通環境
       
@@ -472,8 +472,8 @@ ansible-playbooks:
         display_name: "Jenkins Agents (AMI & Fleet)"
         description: "JenkinsエージェントAMIとFleetのデプロイ"
         category: "jenkins-deploy"
-        enable_nohup: true  # AMI作成に時間がかかる
-        nohup_timeout_minutes: 60
+        enable_tmux: true  # AMI作成に時間がかかる
+        tmux_timeout_minutes: 60
         continue_on_timeout: false  # エージェントは完全にデプロイする必要がある
         environments: ['common']  # 共通環境
       
@@ -482,8 +482,8 @@ ansible-playbooks:
         display_name: "Jenkins Application"
         description: "Jenkinsアプリケーションのデプロイ（Jenkins自体の更新）"
         category: "jenkins-deploy"
-        enable_nohup: true  # Jenkins自体の更新がかかるためWorkterminalに処理を任せる
-        nohup_timeout_minutes: 1  # Jenkinsの再起動でタイムアウトするため短時間に設定
+        enable_tmux: true  # Jenkins自体の更新がかかるためWorkterminalに処理を任せる
+        tmux_timeout_minutes: 1  # Jenkinsの再起動でタイムアウトするため短時間に設定
         continue_on_timeout: true  # Jenkins再起動後も処理は継続される
         environments: ['common']  # 共通環境
       
@@ -504,8 +504,8 @@ ansible-playbooks:
         display_name: "Jenkins Setup Pipeline (Full)"
         description: "Jenkins完全セットアップパイプライン（全コンポーネントを順番にデプロイ）"
         category: "jenkins-pipeline"
-        enable_nohup: true  # 長時間実行のためnohupを有効化
-        nohup_timeout_minutes: 180  # タイムアウト時間（分）
+        enable_tmux: true  # 長時間実行のためtmuxを有効化
+        tmux_timeout_minutes: 180  # タイムアウト時間（分）
         continue_on_timeout: false  # セットアップは完全に実行する必要がある
         environments: ['common']  # 共通環境
       
@@ -514,8 +514,8 @@ ansible-playbooks:
         display_name: "Jenkins Teardown Pipeline"
         description: "Jenkins完全削除パイプライン（全コンポーネントを削除）"
         category: "jenkins-pipeline"
-        enable_nohup: true  # Jenkinsがすぐに使えなくなるためnohupが必要
-        nohup_timeout_minutes: 1  # Jenkinsがすぐに停止するため短時間でOK
+        enable_tmux: true  # Jenkinsがすぐに使えなくなるためtmuxが必要
+        tmux_timeout_minutes: 1  # Jenkinsがすぐに停止するため短時間でOK
         continue_on_timeout: true  # タイムアウト後も削除処理は続行される
         environments: ['common']  # 共通環境
       
@@ -540,8 +540,8 @@ ansible-playbooks:
         display_name: "Lambda Setup Pipeline"
         description: "Lambda完全セットアップパイプライン"
         category: "lambda"
-        enable_nohup: true  # Lambda関数のデプロイも時間がかかる可能性
-        nohup_timeout_minutes: 60
+        enable_tmux: true  # Lambda関数のデプロイも時間がかかる可能性
+        tmux_timeout_minutes: 60
         continue_on_timeout: false  # Lambda関数は完全にデプロイされる必要がある
         environments: ['dev', 'prod']  # 両環境に配置
       

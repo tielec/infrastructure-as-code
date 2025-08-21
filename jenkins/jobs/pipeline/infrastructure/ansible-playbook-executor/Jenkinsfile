@@ -116,19 +116,20 @@ pipeline {
                 script {
                     def playbookList = env.RESOLVED_PLAYBOOKS.split(',')
                     
-                    // nohup設定の確認
-                    def useNohup = params.USE_NOHUP ?: false
-                    def nohupTimeoutMinutes = params.NOHUP_TIMEOUT_MINUTES ?: '60'
-                    def nohupLogPath = params.NOHUP_LOG_PATH ?: "/tmp/ansible_${env.BUILD_NUMBER}.log"
+                    // tmux設定の確認
+                    def useTmux = params.USE_TMUX ?: false
+                    env.useTmux = useTmux.toString()  // post処理で使用するため環境変数に保存
+                    def tmuxTimeoutMinutes = params.TMUX_TIMEOUT_MINUTES ?: '60'
+                    def tmuxSessionName = "ansible_${env.BUILD_NUMBER}"
                     def continueOnTimeout = params.CONTINUE_ON_TIMEOUT ?: false
                     
-                    if (useNohup) {
+                    if (useTmux) {
                         echo """
                         ========================================
-                         nohupモードで実行
+                         tmuxモードで実行
                         ========================================
-                        タイムアウト: ${nohupTimeoutMinutes}分
-                        ログファイル: ${nohupLogPath}
+                        セッション名: ${tmuxSessionName}
+                        タイムアウト: ${tmuxTimeoutMinutes}分
                         タイムアウト時の続行: ${continueOnTimeout ? '有効' : '無効'}
                         """
                     }
@@ -200,45 +201,66 @@ pipeline {
                         if (params.DRY_RUN) {
                             echo "ドライランモード: 実際の実行はスキップされました"
                         } else {
-                            if (useNohup) {
-                                // nohupで実行
-                                def playbookLogPath = "${nohupLogPath}.${index}"
-                                echo "バックグラウンド実行を開始します..."
-                                echo "ログファイル: ${playbookLogPath}"
+                            if (useTmux) {
+                                // tmuxで実行
+                                def windowName = "playbook_${index}"
+                                echo "tmuxセッション内で実行を開始します..."
+                                echo "セッション: ${tmuxSessionName}, ウィンドウ: ${windowName}"
                                 
                                 sh """
                                     cd ~/infrastructure-as-code/ansible
                                     
-                                    # nohupでバックグラウンド実行
-                                    nohup ${ansibleCmd} > ${playbookLogPath} 2>&1 &
-                                    ANSIBLE_PID=\$!
-                                    echo "Ansible PID: \$ANSIBLE_PID"
+                                    # tmuxセッションが存在しない場合は作成
+                                    if ! tmux has-session -t ${tmuxSessionName} 2>/dev/null; then
+                                        tmux new-session -d -s ${tmuxSessionName} -n ${windowName}
+                                    else
+                                        # 新しいウィンドウを作成
+                                        tmux new-window -t ${tmuxSessionName} -n ${windowName}
+                                    fi
                                     
-                                    # PIDファイルに保存
-                                    echo \$ANSIBLE_PID > /tmp/ansible_${env.BUILD_NUMBER}_${index}.pid
+                                    # コマンドを実行
+                                    tmux send-keys -t ${tmuxSessionName}:${windowName} "cd ~/infrastructure-as-code/ansible" C-m
+                                    tmux send-keys -t ${tmuxSessionName}:${windowName} "${ansibleCmd}" C-m
                                     
                                     # タイムアウト時間（秒）
-                                    TIMEOUT_SECONDS=\$((${nohupTimeoutMinutes} * 60))
+                                    TIMEOUT_SECONDS=\$((${tmuxTimeoutMinutes} * 60))
                                     ELAPSED=0
                                     INTERVAL=10
                                     
-                                    echo "プロセスの完了を待機中（最大${nohupTimeoutMinutes}分）..."
+                                    echo "プロセスの完了を待機中（最大${tmuxTimeoutMinutes}分）..."
+                                    echo "リアルタイムログ確認: tmux attach -t ${tmuxSessionName}"
                                     
                                     # プロセスの監視
                                     while [ \$ELAPSED -lt \$TIMEOUT_SECONDS ]; do
-                                        if ! kill -0 \$ANSIBLE_PID 2>/dev/null; then
-                                            # プロセスが終了
-                                            wait \$ANSIBLE_PID
-                                            EXIT_CODE=\$?
-                                            echo "Ansibleプロセスが完了しました（終了コード: \$EXIT_CODE）"
+                                        # ウィンドウが存在し、コマンドが実行中かチェック
+                                        if ! tmux list-windows -t ${tmuxSessionName} -F '#{window_name}' | grep -q "^${windowName}\$"; then
+                                            echo "tmuxウィンドウが見つかりません"
+                                            exit 1
+                                        fi
+                                        
+                                        # paneの状態を確認（コマンドが終了したかチェック）
+                                        PANE_PID=\$(tmux list-panes -t ${tmuxSessionName}:${windowName} -F '#{pane_pid}' 2>/dev/null || echo "")
+                                        
+                                        if [ -z "\$PANE_PID" ]; then
+                                            echo "paneが見つかりません"
+                                            exit 1
+                                        fi
+                                        
+                                        # ansibleプロセスが実行中かチェック
+                                        if ! pgrep -P \$PANE_PID ansible-playbook > /dev/null 2>&1; then
+                                            echo "Ansibleプロセスが完了しました"
                                             
-                                            # ログの最後の部分を表示
-                                            echo "=== ログの最後の50行 ==="
-                                            tail -n 50 ${playbookLogPath}
+                                            # ログをキャプチャして表示
+                                            echo "=== 実行結果（最後の100行） ==="
+                                            tmux capture-pane -t ${tmuxSessionName}:${windowName} -p -S -100 | tail -100
                                             
-                                            if [ \$EXIT_CODE -ne 0 ]; then
-                                                echo "Ansibleの実行が失敗しました"
-                                                exit \$EXIT_CODE
+                                            # エラーチェック（最後の出力にfailedやERRORが含まれるか）
+                                            LAST_OUTPUT=\$(tmux capture-pane -t ${tmuxSessionName}:${windowName} -p -S -20)
+                                            if echo "\$LAST_OUTPUT" | grep -qE "(failed|FAILED|ERROR|Fatal)"; then
+                                                echo "Ansibleの実行が失敗した可能性があります"
+                                                # 全ログを保存
+                                                tmux capture-pane -t ${tmuxSessionName}:${windowName} -p -S - > /tmp/ansible_${env.BUILD_NUMBER}_${index}.log
+                                                exit 1
                                             fi
                                             break
                                         fi
@@ -246,8 +268,9 @@ pipeline {
                                         # 進捗表示（30秒ごと）
                                         if [ \$((ELAPSED % 30)) -eq 0 ]; then
                                             echo "実行中... (\$ELAPSED秒経過)"
-                                            # ログの最新行を表示
-                                            tail -n 5 ${playbookLogPath} | sed 's/^/  > /'
+                                            # 最新の5行を表示
+                                            echo "--- 最新の出力 ---"
+                                            tmux capture-pane -t ${tmuxSessionName}:${windowName} -p -S -5 | sed 's/^/  > /'
                                         fi
                                         
                                         sleep \$INTERVAL
@@ -256,18 +279,21 @@ pipeline {
                                     
                                     # タイムアウトチェック
                                     if [ \$ELAPSED -ge \$TIMEOUT_SECONDS ]; then
-                                        echo "タイムアウト: ${nohupTimeoutMinutes}分を超えました"
-                                        kill -TERM \$ANSIBLE_PID 2>/dev/null || true
-                                        sleep 5
-                                        kill -KILL \$ANSIBLE_PID 2>/dev/null || true
+                                        echo "タイムアウト: ${tmuxTimeoutMinutes}分を超えました"
+                                        
+                                        # プロセスを終了
+                                        tmux send-keys -t ${tmuxSessionName}:${windowName} C-c
+                                        sleep 2
+                                        tmux kill-window -t ${tmuxSessionName}:${windowName} 2>/dev/null || true
                                         echo "Ansibleプロセスを強制終了しました"
                                         
                                         # タイムアウト時のエラー処理設定
                                         if [ "${continueOnTimeout}" = "true" ]; then
                                             echo "警告: タイムアウトしましたが、CONTINUE_ON_TIMEOUTが有効なため続行します"
-                                            # ログファイルの内容を保存
+                                            # ログをキャプチャして保存
                                             echo "=== タイムアウト時のログ（最後の100行） ==="
-                                            tail -n 100 ${playbookLogPath}
+                                            tmux capture-pane -t ${tmuxSessionName}:${windowName} -p -S -100 > /tmp/ansible_${env.BUILD_NUMBER}_${index}.log
+                                            tail -100 /tmp/ansible_${env.BUILD_NUMBER}_${index}.log
                                             # タイムアウトフラグファイルを作成
                                             touch /tmp/ansible_${env.BUILD_NUMBER}_${index}.timeout
                                             # エラーとして扱わない
@@ -278,7 +304,8 @@ pipeline {
                                     fi
                                 """
                                 
-                                echo "完全なログファイルは Workterminal の ${playbookLogPath} に保存されています"
+                                echo "tmuxセッション '${tmuxSessionName}' のウィンドウ '${windowName}' で実行中"
+                                echo "リアルタイムログ確認コマンド: tmux attach -t ${tmuxSessionName}"
                                 
                                 // タイムアウトチェック
                                 def timeoutFlagFile = "/tmp/ansible_${env.BUILD_NUMBER}_${index}.timeout"
@@ -363,6 +390,24 @@ pipeline {
         }
         
         always {
+            script {
+                // tmuxセッションのクリーンアップ
+                if (env.useTmux == 'true') {
+                    def tmuxSessionName = "ansible_${env.BUILD_NUMBER}"
+                    sh """
+                        # tmuxセッションが存在する場合は削除
+                        if tmux has-session -t ${tmuxSessionName} 2>/dev/null; then
+                            echo "tmuxセッション '${tmuxSessionName}' をクリーンアップしています..."
+                            tmux kill-session -t ${tmuxSessionName}
+                            echo "tmuxセッションをクリーンアップしました"
+                        fi
+                        
+                        # 一時ファイルのクリーンアップ
+                        rm -f /tmp/ansible_${env.BUILD_NUMBER}_*.log
+                        rm -f /tmp/ansible_${env.BUILD_NUMBER}_*.timeout
+                    """ 
+                }
+            }
             cleanWs()
         }
     }
