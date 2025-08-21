@@ -178,6 +178,13 @@ jenkins-jobs:
     dslfile: jenkins/jobs/dsl/infrastructure/infrastructure_pulumi_dashboard_job.groovy
     jenkinsfile: jenkins/jobs/pipeline/infrastructure/pulumi-dashboard/Jenkinsfile
 
+  # Ansible Playbook Executor Job
+  infrastructure_ansible_playbook_executor_job:
+    name: "ansible_playbook_executor"
+    displayName: "Ansible Playbook Executor"
+    dslfile: jenkins/jobs/dsl/infrastructure/infrastructure_ansible_playbook_executor_job.groovy
+    jenkinsfile: jenkins/jobs/pipeline/infrastructure/ansible-playbook-executor/Jenkinsfile
+
   # Shared Library Jobs
   shared_library_aws_sqs_check_operation_test_job:
     name: 'SQS_Check_Operation_Test'
@@ -243,3 +250,177 @@ pulumi-projects:
         display_name: "Jenkins Agent Management"
         project_type: "nodejs"
         description: "Jenkinsエージェントの管理とデプロイメント"
+
+# Ansibleプレイブック定義
+ansible-playbooks:
+  infrastructure-as-code:
+    playbooks:
+      # Bootstrap
+      bootstrap_setup:
+        playbook_path: "bootstrap-setup.yml"
+        display_name: "Bootstrap Setup"
+        description: "ブートストラップ環境のセットアップ"
+        category: "bootstrap"
+        environments: ['common']  # 共通環境
+      
+      # Jenkins Deploy
+      jenkins_deploy_ssm_init:
+        playbook_path: "jenkins/deploy/deploy_jenkins_ssm_init.yml"
+        display_name: "Jenkins SSM Init"
+        description: "Jenkins SSMパラメータの初期化"
+        category: "jenkins-deploy"
+        environments: ['common']  # 共通環境
+      
+      jenkins_deploy_network_security:
+        playbook_path:
+          - "jenkins/deploy/deploy_jenkins_network.yml"
+          - "jenkins/deploy/deploy_jenkins_security.yml"
+        display_name: "Jenkins Network & Security"
+        description: "Jenkinsネットワークとセキュリティ設定のデプロイ"
+        category: "jenkins-deploy"
+        environments: ['common']  # 共通環境
+      
+      jenkins_deploy_storage:
+        playbook_path: "jenkins/deploy/deploy_jenkins_storage.yml"
+        display_name: "Jenkins Storage"
+        description: "Jenkinsストレージのデプロイ"
+        category: "jenkins-deploy"
+        environments: ['common']  # 共通環境
+      
+      jenkins_deploy_loadbalancer:
+        playbook_path: "jenkins/deploy/deploy_jenkins_loadbalancer.yml"
+        display_name: "Jenkins Load Balancer"
+        description: "Jenkinsロードバランサーのデプロイ"
+        category: "jenkins-deploy"
+        environments: ['common']  # 共通環境
+      
+      jenkins_deploy_nat:
+        playbook_path: "jenkins/deploy/deploy_jenkins_nat.yml"
+        display_name: "Jenkins NAT"
+        description: "Jenkins NATのデプロイ"
+        category: "jenkins-deploy"
+        environments: ['common']  # 共通環境
+      
+      jenkins_deploy_controller_config:
+        playbook_path:
+          - "jenkins/deploy/deploy_jenkins_controller.yml"
+          - "jenkins/deploy/deploy_jenkins_config.yml"
+        display_name: "Jenkins Controller & Config"
+        description: "Jenkinsコントローラーと設定のデプロイ"
+        category: "jenkins-deploy"
+        enable_nohup: true  # EC2インスタンスの起動と設定に時間がかかる
+        nohup_timeout_minutes: 45
+        continue_on_timeout: false  # コントローラーは確実にデプロイする必要がある
+        environments: ['common']  # 共通環境
+      
+      jenkins_deploy_agents:
+        playbook_path:
+          - "jenkins/deploy/deploy_jenkins_agent_ami.yml"
+          - "jenkins/deploy/deploy_jenkins_agent.yml"
+        display_name: "Jenkins Agents (AMI & Fleet)"
+        description: "JenkinsエージェントAMIとFleetのデプロイ"
+        category: "jenkins-deploy"
+        enable_nohup: true  # AMI作成に時間がかかる
+        nohup_timeout_minutes: 60
+        continue_on_timeout: false  # エージェントは完全にデプロイする必要がある
+        environments: ['common']  # 共通環境
+      
+      jenkins_deploy_application:
+        playbook_path: "jenkins/deploy/deploy_jenkins_application.yml"
+        display_name: "Jenkins Application"
+        description: "Jenkinsアプリケーションのデプロイ（Jenkins自体の更新）"
+        category: "jenkins-deploy"
+        enable_nohup: true  # Jenkins自体の更新がかかるためWorkterminalに処理を任せる
+        nohup_timeout_minutes: 30
+        continue_on_timeout: false  # アプリケーションは完全にデプロイする必要がある
+        environments: ['common']  # 共通環境
+      
+      # Jenkins Pipeline (グループ化されたプレイブックを使用)
+      jenkins_setup_pipeline:
+        playbook_path:
+          - "jenkins/deploy/deploy_jenkins_ssm_init.yml"
+          - "jenkins/deploy/deploy_jenkins_network.yml"
+          - "jenkins/deploy/deploy_jenkins_security.yml"
+          - "jenkins/deploy/deploy_jenkins_storage.yml"
+          - "jenkins/deploy/deploy_jenkins_loadbalancer.yml"
+          - "jenkins/deploy/deploy_jenkins_nat.yml"
+          - "jenkins/deploy/deploy_jenkins_controller.yml"
+          - "jenkins/deploy/deploy_jenkins_config.yml"
+          - "jenkins/deploy/deploy_jenkins_agent_ami.yml"
+          - "jenkins/deploy/deploy_jenkins_agent.yml"
+          - "jenkins/deploy/deploy_jenkins_application.yml"
+        display_name: "Jenkins Setup Pipeline (Full)"
+        description: "Jenkins完全セットアップパイプライン（全コンポーネントを順番にデプロイ）"
+        category: "jenkins-pipeline"
+        enable_nohup: true  # 長時間実行のためnohupを有効化
+        nohup_timeout_minutes: 180  # タイムアウト時間（分）
+        continue_on_timeout: false  # セットアップは完全に実行する必要がある
+        environments: ['common']  # 共通環境
+      
+      jenkins_teardown_pipeline:
+        playbook_path: "jenkins/jenkins_teardown_pipeline.yml"
+        display_name: "Jenkins Teardown Pipeline"
+        description: "Jenkins完全削除パイプライン（全コンポーネントを削除）"
+        category: "jenkins-pipeline"
+        enable_nohup: true  # Jenkinsがすぐに使えなくなるためnohupが必要
+        nohup_timeout_minutes: 1  # Jenkinsがすぐに停止するため短時間でOK
+        continue_on_timeout: true  # タイムアウト後も削除処理は続行される
+        environments: ['common']  # 共通環境
+      
+      # Jenkins Misc
+      update_jenkins_ami_ssm:
+        playbook_path: "jenkins/misc/update_jenkins_ami_ssm.yml"
+        display_name: "Update Jenkins AMI SSM"
+        description: "Jenkins AMI SSMパラメータの更新"
+        category: "jenkins-misc"
+        environments: ['common']  # 共通環境
+      
+      # Lambda
+      lambda_ip_whitelist:
+        playbook_path: "lambda_ip_whitelist.yml"
+        display_name: "Lambda IP Whitelist"
+        description: "Lambda IPホワイトリストの管理"
+        category: "lambda"
+        environments: ['dev', 'prod']  # 両環境に配置
+      
+      lambda_setup_pipeline:
+        playbook_path: "lambda_setup_pipeline.yml"
+        display_name: "Lambda Setup Pipeline"
+        description: "Lambda完全セットアップパイプライン"
+        category: "lambda"
+        enable_nohup: true  # Lambda関数のデプロイも時間がかかる可能性
+        nohup_timeout_minutes: 60
+        continue_on_timeout: false  # Lambda関数は完全にデプロイされる必要がある
+        environments: ['dev', 'prod']  # 両環境に配置
+      
+      lambda_teardown_pipeline:
+        playbook_path: "lambda_teardown_pipeline.yml"
+        display_name: "Lambda Teardown Pipeline"
+        description: "Lambda完全削除パイプライン"
+        category: "lambda"
+        enable_nohup: true
+        nohup_timeout_minutes: 30
+        continue_on_timeout: true  # 削除処理なので続行可能
+        environments: ['dev', 'prod']  # 両環境に配置
+      
+      # Test
+      test_aws_cli_helper:
+        playbook_path: "test/test-aws-cli-helper.yml"
+        display_name: "Test AWS CLI Helper"
+        description: "AWS CLIヘルパーのテスト"
+        category: "test"
+        environments: ['dev']  # 開発環境のみ
+      
+      test_s3_validation:
+        playbook_path: "test/test-s3-validation.yml"
+        display_name: "Test S3 Validation"
+        description: "S3バリデーションのテスト"
+        category: "test"
+        environments: ['dev']  # 開発環境のみ
+      
+      test_ssm_parameter_store:
+        playbook_path: "test/test-ssm-parameter-store.yml"
+        display_name: "Test SSM Parameter Store"
+        description: "SSMパラメータストアのテスト"
+        category: "test"
+        environments: ['dev']  # 開発環境のみ

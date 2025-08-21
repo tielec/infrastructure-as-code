@@ -1,0 +1,368 @@
+#!/usr/bin/env groovy
+
+@Library('jenkins-shared-lib') _
+
+// Ansibleプレイブック設定の読み込み
+def loadPlaybookConfig() {
+    def configFile = readYaml file: 'jenkins/jobs/pipeline/_seed/job-creator/job-config.yaml'
+    return configFile['ansible-playbooks']['infrastructure-as-code']['playbooks']
+}
+
+// プレイブック名からパスを解決
+def resolvePlaybookPath(String playbookName, def playbooksConfig) {
+    // 完全パスが指定された場合はそのまま返す
+    if (playbookName.endsWith('.yml') || playbookName.endsWith('.yaml')) {
+        return playbookName
+    }
+    
+    // 設定から検索
+    def playbook = playbooksConfig[playbookName]
+    if (playbook) {
+        return playbook.playbook_path
+    }
+    
+    // 見つからない場合はエラー
+    error("プレイブック '${playbookName}' が設定に見つかりません")
+}
+
+pipeline {
+    agent {
+        label 'bootstrap-workterminal'
+    }
+    
+    options {
+        timestamps()
+        ansiColor('xterm')
+        buildDiscarder(logRotator(numToKeepStr: '30'))
+        timeout(time: 2, unit: 'HOURS')
+    }
+    
+    environment {
+        ANSIBLE_BASE_DIR = "${WORKSPACE}/ansible"
+        ANSIBLE_INVENTORY = "${ANSIBLE_BASE_DIR}/inventory"
+        ANSIBLE_PLAYBOOKS_DIR = "${ANSIBLE_BASE_DIR}/playbooks"
+        ANSIBLE_FORCE_COLOR = 'true'
+        ANSIBLE_HOST_KEY_CHECKING = 'False'
+        PYTHONUNBUFFERED = '1'
+    }
+    
+    stages {
+        stage('準備') {
+            steps {
+                script {
+                    // パラメータの表示
+                    echo """
+                    ========================================
+                     Ansible Playbook実行パラメータ
+                    ========================================
+                    プレイブック: ${params.PLAYBOOKS}
+                    環境: ${params.ENVIRONMENT}
+                    ブランチ: ${params.BRANCH}
+                    追加変数: ${params.ANSIBLE_EXTRA_VARS}
+                    詳細出力: ${params.ANSIBLE_VERBOSE}
+                    チェックモード: ${params.ANSIBLE_CHECK}
+                    ホスト制限: ${params.ANSIBLE_LIMIT}
+                    タグ: ${params.ANSIBLE_TAGS}
+                    スキップタグ: ${params.ANSIBLE_SKIP_TAGS}
+                    ドライラン: ${params.DRY_RUN}
+                    ========================================
+                    """
+                    
+                    // プレイブックパラメータの確認
+                    if (!params.PLAYBOOKS?.trim()) {
+                        error("プレイブックが指定されていません")
+                    }
+                }
+            }
+        }
+        
+        stage('リポジトリ更新') {
+            steps {
+                script {
+                    echo "Workterminalのリポジトリを更新中..."
+                    
+                    // リポジトリの更新（CIモードで実行）
+                    sh """
+                        cd ~/infrastructure-as-code
+                        ./scripts/workterminal/update-repo-branch.sh ${params.BRANCH} --ci
+                    """
+                }
+            }
+        }
+        
+        stage('プレイブック解析') {
+            steps {
+                script {
+                    // プレイブック設定の読み込み
+                    def playbooksConfig = loadPlaybookConfig()
+                    
+                    // プレイブックリストの解析
+                    def playbookList = params.PLAYBOOKS.split(',').collect { it.trim() }
+                    env.RESOLVED_PLAYBOOKS = playbookList.collect { playbookName ->
+                        resolvePlaybookPath(playbookName, playbooksConfig)
+                    }.join(',')
+                    
+                    echo "実行するプレイブック:"
+                    env.RESOLVED_PLAYBOOKS.split(',').each { playbook ->
+                        echo "  - ${playbook}"
+                    }
+                }
+            }
+        }
+        
+        stage('Ansible実行') {
+            steps {
+                script {
+                    def playbookList = env.RESOLVED_PLAYBOOKS.split(',')
+                    
+                    // nohup設定の確認
+                    def useNohup = params.USE_NOHUP ?: false
+                    def nohupTimeoutMinutes = params.NOHUP_TIMEOUT_MINUTES ?: '60'
+                    def nohupLogPath = params.NOHUP_LOG_PATH ?: "/tmp/ansible_${env.BUILD_NUMBER}.log"
+                    def continueOnTimeout = params.CONTINUE_ON_TIMEOUT ?: false
+                    
+                    if (useNohup) {
+                        echo """
+                        ========================================
+                         nohupモードで実行
+                        ========================================
+                        タイムアウト: ${nohupTimeoutMinutes}分
+                        ログファイル: ${nohupLogPath}
+                        タイムアウト時の続行: ${continueOnTimeout ? '有効' : '無効'}
+                        """
+                    }
+                    
+                    // タイムアウトしたプレイブックを記録
+                    def timedOutPlaybooks = []
+                    
+                    playbookList.eachWithIndex { playbook, index ->
+                        def stageName = "プレイブック ${index + 1}/${playbookList.size()}: ${playbook}"
+                        
+                        echo """
+                        ========================================
+                         ${stageName}
+                        ========================================
+                        """
+                        
+                        // Ansibleコマンドの構築
+                        def ansibleCmd = "ansible-playbook"
+                        
+                        // プレイブックパス
+                        ansibleCmd += " ${ANSIBLE_PLAYBOOKS_DIR}/${playbook}"
+                        
+                        // インベントリ
+                        ansibleCmd += " -i ${ANSIBLE_INVENTORY}"
+                        
+                        // 環境変数
+                        ansibleCmd += " -e env=${params.ENVIRONMENT}"
+                        
+                        // teardown_pipelineの場合、confirm=trueを自動追加
+                        if (playbook.contains('teardown_pipeline.yml')) {
+                            ansibleCmd += " -e confirm=true"
+                            echo "⚠️ 注意: Teardown pipelineを実行します - confirm=trueが自動的に設定されます"
+                        }
+                        
+                        // 追加変数
+                        if (params.ANSIBLE_EXTRA_VARS?.trim()) {
+                            params.ANSIBLE_EXTRA_VARS.split(' ').each { var ->
+                                ansibleCmd += " -e ${var}"
+                            }
+                        }
+                        
+                        // 詳細出力
+                        if (params.ANSIBLE_VERBOSE) {
+                            ansibleCmd += " -vvv"
+                        }
+                        
+                        // チェックモード
+                        if (params.ANSIBLE_CHECK) {
+                            ansibleCmd += " --check"
+                        }
+                        
+                        // ホスト制限
+                        if (params.ANSIBLE_LIMIT?.trim()) {
+                            ansibleCmd += " --limit ${params.ANSIBLE_LIMIT}"
+                        }
+                        
+                        // タグ
+                        if (params.ANSIBLE_TAGS?.trim()) {
+                            ansibleCmd += " --tags ${params.ANSIBLE_TAGS}"
+                        }
+                        
+                        // スキップタグ
+                        if (params.ANSIBLE_SKIP_TAGS?.trim()) {
+                            ansibleCmd += " --skip-tags ${params.ANSIBLE_SKIP_TAGS}"
+                        }
+                        
+                        echo "実行コマンド: ${ansibleCmd}"
+                        
+                        if (params.DRY_RUN) {
+                            echo "ドライランモード: 実際の実行はスキップされました"
+                        } else {
+                            if (useNohup) {
+                                // nohupで実行
+                                def playbookLogPath = "${nohupLogPath}.${index}"
+                                echo "バックグラウンド実行を開始します..."
+                                echo "ログファイル: ${playbookLogPath}"
+                                
+                                sh """
+                                    cd ~/infrastructure-as-code/ansible
+                                    
+                                    # nohupでバックグラウンド実行
+                                    nohup ${ansibleCmd} > ${playbookLogPath} 2>&1 &
+                                    ANSIBLE_PID=\$!
+                                    echo "Ansible PID: \$ANSIBLE_PID"
+                                    
+                                    # PIDファイルに保存
+                                    echo \$ANSIBLE_PID > /tmp/ansible_${env.BUILD_NUMBER}_${index}.pid
+                                    
+                                    # タイムアウト時間（秒）
+                                    TIMEOUT_SECONDS=\$((${nohupTimeoutMinutes} * 60))
+                                    ELAPSED=0
+                                    INTERVAL=10
+                                    
+                                    echo "プロセスの完了を待機中（最大${nohupTimeoutMinutes}分）..."
+                                    
+                                    # プロセスの監視
+                                    while [ \$ELAPSED -lt \$TIMEOUT_SECONDS ]; do
+                                        if ! kill -0 \$ANSIBLE_PID 2>/dev/null; then
+                                            # プロセスが終了
+                                            wait \$ANSIBLE_PID
+                                            EXIT_CODE=\$?
+                                            echo "Ansibleプロセスが完了しました（終了コード: \$EXIT_CODE）"
+                                            
+                                            # ログの最後の部分を表示
+                                            echo "=== ログの最後の50行 ==="
+                                            tail -n 50 ${playbookLogPath}
+                                            
+                                            if [ \$EXIT_CODE -ne 0 ]; then
+                                                echo "Ansibleの実行が失敗しました"
+                                                exit \$EXIT_CODE
+                                            fi
+                                            break
+                                        fi
+                                        
+                                        # 進捗表示（30秒ごと）
+                                        if [ \$((ELAPSED % 30)) -eq 0 ]; then
+                                            echo "実行中... (\$ELAPSED秒経過)"
+                                            # ログの最新行を表示
+                                            tail -n 5 ${playbookLogPath} | sed 's/^/  > /'
+                                        fi
+                                        
+                                        sleep \$INTERVAL
+                                        ELAPSED=\$((ELAPSED + INTERVAL))
+                                    done
+                                    
+                                    # タイムアウトチェック
+                                    if [ \$ELAPSED -ge \$TIMEOUT_SECONDS ]; then
+                                        echo "タイムアウト: ${nohupTimeoutMinutes}分を超えました"
+                                        kill -TERM \$ANSIBLE_PID 2>/dev/null || true
+                                        sleep 5
+                                        kill -KILL \$ANSIBLE_PID 2>/dev/null || true
+                                        echo "Ansibleプロセスを強制終了しました"
+                                        
+                                        # タイムアウト時のエラー処理設定
+                                        if [ "${continueOnTimeout}" = "true" ]; then
+                                            echo "警告: タイムアウトしましたが、CONTINUE_ON_TIMEOUTが有効なため続行します"
+                                            # ログファイルの内容を保存
+                                            echo "=== タイムアウト時のログ（最後の100行） ==="
+                                            tail -n 100 ${playbookLogPath}
+                                            # タイムアウトフラグファイルを作成
+                                            touch /tmp/ansible_${env.BUILD_NUMBER}_${index}.timeout
+                                            # エラーとして扱わない
+                                            exit 0
+                                        else
+                                            exit 1
+                                        fi
+                                    fi
+                                """
+                                
+                                echo "完全なログファイルは Workterminal の ${playbookLogPath} に保存されています"
+                                
+                                // タイムアウトチェック
+                                def timeoutFlagFile = "/tmp/ansible_${env.BUILD_NUMBER}_${index}.timeout"
+                                if (sh(script: "test -f ${timeoutFlagFile} && echo 'true' || echo 'false'", returnStdout: true).trim() == 'true') {
+                                    timedOutPlaybooks.add(playbook)
+                                    echo "⚠️ 警告: このプレイブックはタイムアウトしました"
+                                }
+                                
+                                // タイムアウトで続行する場合の警告
+                                if (continueOnTimeout && index < playbookList.size() - 1) {
+                                    echo """
+                                    ⚠️ 注意: CONTINUE_ON_TIMEOUTが有効です
+                                    このプレイブックがタイムアウトしても次のプレイブックに進みます
+                                    """
+                                }
+                            } else {
+                                // 通常実行
+                                sh """
+                                    cd ~/infrastructure-as-code/ansible
+                                    ${ansibleCmd}
+                                """
+                            }
+                        }
+                        
+                        if (index < playbookList.size() - 1) {
+                            echo "次のプレイブックに進みます..."
+                        }
+                    }
+                    
+                    // タイムアウトサマリーの表示
+                    if (timedOutPlaybooks.size() > 0) {
+                        echo """
+                        ========================================
+                         ⚠️ タイムアウト警告
+                        ========================================
+                        以下のプレイブックがタイムアウトしました:
+                        ${timedOutPlaybooks.collect { "  - ${it}" }.join('\n')}
+                        
+                        これらのプレイブックは完全に実行されていない可能性があります。
+                        ログファイルを確認して、必要に応じて再実行してください。
+                        ========================================
+                        """
+                        
+                        // タイムアウトがあった場合は警告として扱う
+                        currentBuild.result = 'UNSTABLE'
+                    }
+                }
+            }
+        }
+    }
+    
+    post {
+        success {
+            script {
+                if (currentBuild.result == 'UNSTABLE') {
+                    echo """
+                    ========================================
+                     Ansible実行完了（警告あり）
+                    ========================================
+                    実行は完了しましたが、一部のプレイブックが
+                    タイムアウトしました。詳細は上記の警告を確認してください。
+                    """
+                } else {
+                    echo """
+                    ========================================
+                     Ansible実行成功
+                    ========================================
+                    すべてのプレイブックが正常に実行されました。
+                    """
+                }
+            }
+        }
+        
+        failure {
+            echo """
+            ========================================
+             Ansible実行失敗
+            ========================================
+            プレイブックの実行中にエラーが発生しました。
+            ログを確認してください。
+            """
+        }
+        
+        always {
+            cleanWs()
+        }
+    }
+}

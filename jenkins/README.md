@@ -33,7 +33,7 @@ Jenkins環境の設定、ジョブ定義、パイプライン、共有ライブ�
 - **Account Setup**: ユーザーアカウント管理
 - **Code Quality Checker**: コード品質分析
 - **Docs Generator**: ドキュメント自動生成
-- **Infrastructure Management**: インフラストラクチャー管理
+- **Infrastructure Management**: インフラストラクチャー管理（Pulumi、Ansible）
 - **Shared Library Tests**: 共有ライブラリのテスト
 
 ## ディレクトリ構造
@@ -109,7 +109,7 @@ aws ssm get-parameter --name /jenkins-infra/dev/jenkins/admin-password \
 | **Account_Setup** | アカウント管理 | account-self-activation（アカウント自己有効化） |
 | **Code_Quality_Checker** | コード品質分析 | pr-complexity-analyzer（PR複雑度分析）<br>rust-code-analysis（Rustコード解析） |
 | **Document_Generator** | ドキュメント生成 | auto-insert-doxygen-comment（Doxygenコメント自動挿入）<br>generate-doxygen-html（DoxygenHTML生成）<br>technical-docs-writer（技術文書作成）<br>pr-comment-builder（PRコメントビルダー） |
-| **Infrastructure_Management** | インフラ管理 | shutdown-jenkins-environment（Jenkins環境停止） |
+| **Infrastructure_Management** | インフラ管理 | shutdown-jenkins-environment（Jenkins環境停止）、Ansible Playbook実行、Pulumi Stack管理 |
 | **Shared_Library** | ライブラリテスト | git-webhook-operation（Git Webhook操作）<br>jenkins-credentials-operation（認証情報操作）<br>aws-sqs-check-operation（SQS操作）<br>github-apps-basic-operation（GitHub Apps操作） |
 
 ### ジョブの実行方法
@@ -292,6 +292,63 @@ CONFIRM_SHUTDOWN=true
 SHUTDOWN_MODE=graceful
 WAIT_TIMEOUT_MINUTES=30
 ```
+
+#### Ansible Playbook Executor
+
+**目的**: Workterminalを使用してAnsibleプレイブックを実行
+
+**主な機能**:
+- 単一または複数のプレイブックを順番に実行
+- job-config.yamlで定義されたプレイブックを動的にジョブ化
+- チェックモード、タグ制御、詳細出力などのオプション
+
+**パラメータ**:
+- `PLAYBOOKS`: 実行するプレイブック（カンマ区切りで複数指定可能）
+- `ENVIRONMENT`: 実行環境（dev/staging/prod）
+- `BRANCH`: リポジトリブランチ
+- `ANSIBLE_EXTRA_VARS`: 追加のAnsible変数
+- `ANSIBLE_VERBOSE`: 詳細出力の有効化
+- `ANSIBLE_CHECK`: チェックモード（変更なし）
+- `ANSIBLE_LIMIT`: ホストの制限
+- `ANSIBLE_TAGS`: 実行するタグ
+- `ANSIBLE_SKIP_TAGS`: スキップするタグ
+- `DRY_RUN`: 実行コマンドの確認のみ
+- `USE_NOHUP`: バックグラウンド実行（長時間タスク用、job-configで有効化されたジョブのみ）
+- `NOHUP_TIMEOUT_MINUTES`: nohup実行時のタイムアウト時間
+- `NOHUP_LOG_PATH`: nohup実行時のログファイルパス
+
+**実行例**:
+```bash
+# 単一プレイブック実行
+PLAYBOOKS: jenkins/deploy/deploy_jenkins_network.yml
+ENVIRONMENT: dev
+
+# 複数プレイブック実行（Jenkins完全セットアップ）
+PLAYBOOKS: jenkins_deploy_ssm_init,jenkins_deploy_network,jenkins_deploy_security
+ENVIRONMENT: dev
+
+# nohupモードで長時間実行（job-configで有効化されたジョブのみ）
+PLAYBOOKS: jenkins_deploy_controller
+ENVIRONMENT: dev
+USE_NOHUP: true
+NOHUP_TIMEOUT_MINUTES: 30
+```
+
+**nohup実行について**:
+- `enable_nohup: true`が設定されたプレイブックではnohupオプションが表示されます
+- バックグラウンドで実行され、進捗状況は定期的に表示されます
+- ログファイルはWorkterminalの指定パスに保存されます
+- タイムアウト時間を超えるとプロセスは自動的に終了されます
+- `continue_on_timeout`設定により、タイムアウト時の動作を制御可能：
+  - `true`: タイムアウトしても次のプレイブックを実行（削除処理などで推奨）
+  - `false`: タイムアウトでエラー終了（重要なデプロイ処理で推奨）
+
+**定義済みプレイブック**:
+- `jenkins-deploy/*`: Jenkins環境のデプロイ
+- `jenkins-remove/*`: Jenkins環境の削除
+- `jenkins-pipeline/*`: 複数プレイブックのチェーン実行
+- `lambda/*`: Lambda関数の管理
+- `test/*`: テストプレイブック
 
 #### Infrastructure_Management/Shutdown-Environment-Scheduler
 
