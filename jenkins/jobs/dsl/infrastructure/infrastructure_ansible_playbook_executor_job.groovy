@@ -172,4 +172,4 @@ ${playbookListText}
 }
 
 // 処理完了メッセージ
-println "=== Ansible playbook jobs creation completed ==="${ansiblePlaybooks.size()}
+println "=== Ansible playbook jobs creation completed ==="
