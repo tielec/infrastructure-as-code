@@ -213,6 +213,11 @@ pipeline {
                                 sh """
                                     cd ~/infrastructure-as-code/ansible
                                     
+                                    # 数値定数を変数として定義（Groovyエスケープ問題回避）
+                                    LINES_50=50
+                                    LINES_100=100
+                                    LINES_5=5
+                                    
                                     # tmuxセッションが存在しない場合は作成
                                     if ! tmux has-session -t ${tmuxSessionName} 2>/dev/null; then
                                         tmux new-session -d -s ${tmuxSessionName} -n ${windowName}
@@ -254,7 +259,7 @@ pipeline {
                                         fi
                                         
                                         # 最後の出力を取得
-                                        LAST_OUTPUT=\$(tmux capture-pane -t ${tmuxSessionName}:${windowName} -p -S -\\$(echo 50))
+                                        LAST_OUTPUT=\$(tmux capture-pane -t ${tmuxSessionName}:${windowName} -p -S -\$LINES_50)
                                         
                                         # Ansibleの完了を複数の条件でチェック
                                         ANSIBLE_COMPLETED=false
@@ -289,7 +294,7 @@ pipeline {
                                                 
                                                 # ログをキャプチャして表示
                                                 echo "=== 実行結果（最後の100行） ==="
-                                                tmux capture-pane -t ${tmuxSessionName}:${windowName} -p -S -\\$(echo 100) | tail -100
+                                                tmux capture-pane -t ${tmuxSessionName}:${windowName} -p -S -\$LINES_100 | tail -100
                                                 
                                                 # エラーチェック（failed=の数値をチェック）
                                                 if echo "\$LAST_OUTPUT" | grep -E "failed=[1-9]" > /dev/null; then
@@ -329,7 +334,7 @@ pipeline {
                                             echo "実行中... (\$ELAPSED秒経過)"
                                             # 最新の5行を表示
                                             echo "--- 最新の出力 ---"
-                                            tmux capture-pane -t ${tmuxSessionName}:${windowName} -p -S -\\$(echo 5) | sed "s/^/  > /"
+                                            tmux capture-pane -t ${tmuxSessionName}:${windowName} -p -S -\$LINES_5 | sed "s/^/  > /"
                                         fi
                                         
                                         sleep \$INTERVAL
@@ -351,7 +356,7 @@ pipeline {
                                             echo "警告: タイムアウトしましたが、CONTINUE_ON_TIMEOUTが有効なため続行します"
                                             # ログをキャプチャして保存
                                             echo "=== タイムアウト時のログ（最後の100行） ==="
-                                            tmux capture-pane -t ${tmuxSessionName}:${windowName} -p -S -\\$(echo 100) > /tmp/${tmuxSessionName}_${index}.log
+                                            tmux capture-pane -t ${tmuxSessionName}:${windowName} -p -S -\$LINES_100 > /tmp/${tmuxSessionName}_${index}.log
                                             tail -100 /tmp/${tmuxSessionName}_${index}.log
                                             # タイムアウトフラグファイルを作成
                                             touch /tmp/${tmuxSessionName}_${index}.timeout
@@ -379,7 +384,7 @@ pipeline {
                                    tmux capture-pane -t ${tmuxSessionName}:${windowName} -p -S - > ansible_log.txt
                                 
                                 3. 最新のログを確認:
-                                   tmux capture-pane -t ${tmuxSessionName}:${windowName} -p -S -\\$(echo 50)
+                                   tmux capture-pane -t ${tmuxSessionName}:${windowName} -p -S -\$LINES_50
                                 ========================================
                                 """
                                 
