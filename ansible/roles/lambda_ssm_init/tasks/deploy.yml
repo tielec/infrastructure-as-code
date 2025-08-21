@@ -35,63 +35,90 @@
   register: npm_install
   changed_when: "'added' in npm_install.stdout or 'updated' in npm_install.stdout"
 
-- name: Build TypeScript
-  ansible.builtin.command:
-    cmd: npm run build
-    chdir: "{{ lambda_ssm_init_path }}"
-  register: build_result
-  changed_when: true
+- name: Deploy SSM parameters with Pulumi
+  block:
+    - name: Build TypeScript
+      ansible.builtin.command:
+        cmd: npm run build
+        chdir: "{{ lambda_ssm_init_path }}"
+      register: build_result
+      changed_when: true
 
-- name: Initialize Pulumi stack
-  ansible.builtin.include_role:
-    name: pulumi_helper
-  vars:
-    pulumi_action: "init"
-    pulumi_stack_name: "{{ env_name }}"
-    pulumi_project_path: "{{ lambda_ssm_init_path }}"
+    - name: Initialize Pulumi stack
+      ansible.builtin.include_role:
+        name: pulumi_helper
+        tasks_from: init_stack
+      vars:
+        pulumi_project_path: "{{ lambda_ssm_init_path }}"
+        stack_name: "{{ env_name }}"
 
-- name: Set Pulumi configuration
-  ansible.builtin.include_role:
-    name: pulumi_helper
-  vars:
-    pulumi_action: "config"
-    pulumi_stack_name: "{{ env_name }}"
-    pulumi_project_path: "{{ lambda_ssm_init_path }}"
-    pulumi_config_items:
-      - key: "projectName"
-        value: "{{ project_name }}"
-      - key: "aws:region"
-        value: "{{ aws_region_name }}"
+    - name: Set Pulumi configuration - project name
+      ansible.builtin.include_role:
+        name: pulumi_helper
+        tasks_from: set_config
+      vars:
+        pulumi_project_path: "{{ lambda_ssm_init_path }}"
+        config_key: "projectName"
+        config_value: "{{ project_name }}"
 
-- name: Deploy SSM parameters
-  ansible.builtin.include_role:
-    name: pulumi_helper
-  vars:
-    pulumi_action: "{{ 'preview' if preview_only | default(false) else 'up' }}"
-    pulumi_stack_name: "{{ env_name }}"
-    pulumi_project_path: "{{ lambda_ssm_init_path }}"
-    pulumi_skip_preview: "{{ not preview_only | default(true) }}"
+    - name: Set Pulumi configuration - AWS region
+      ansible.builtin.include_role:
+        name: pulumi_helper
+        tasks_from: set_config
+      vars:
+        pulumi_project_path: "{{ lambda_ssm_init_path }}"
+        config_key: "aws:region"
+        config_value: "{{ aws_region_name }}"
+
+    - name: Preview SSM parameter deployment
+      ansible.builtin.include_role:
+        name: pulumi_helper
+        tasks_from: preview
+      vars:
+        pulumi_project_path: "{{ lambda_ssm_init_path }}"
+      when: preview_only | default(false) | bool
+
+    - name: Deploy SSM parameters
+      ansible.builtin.include_role:
+        name: pulumi_helper
+        tasks_from: deploy
+      vars:
+        pulumi_project_path: "{{ lambda_ssm_init_path }}"
+      when: not preview_only | default(false)
+      
+    - name: Set SSM initialization success fact
+      ansible.builtin.set_fact:
+        ssm_init_deployed: true
+        
+  rescue:
+    - name: SSM initialization failed
+      ansible.builtin.debug:
+        msg: "SSM parameter initialization failed: {{ ansible_failed_result.msg | default('Unknown error') }}"
+      
+    - name: Set SSM initialization failure fact
+      ansible.builtin.set_fact:
+        ssm_init_deployed: false
+    
+    - name: Fail the playbook
+      ansible.builtin.fail:
+        msg: "SSM parameter initialization failed"
 
 - name: Wait for SSM parameters to be available
   ansible.builtin.pause:
     seconds: 5
-  when: not preview_only | default(false)
+  when: 
+    - not preview_only | default(false)
+    - ssm_init_deployed | default(false)
 
 - name: Get stack outputs
   ansible.builtin.include_role:
     name: pulumi_helper
+    tasks_from: get_outputs
   vars:
-    pulumi_action: "output"
-    pulumi_stack_name: "{{ env_name }}"
     pulumi_project_path: "{{ lambda_ssm_init_path }}"
-  when: not preview_only | default(false)
-
-- name: Store stack outputs
-  ansible.builtin.set_fact:
-    ssm_init_outputs: "{{ pulumi_output | default({}) }}"
   when: 
     - not preview_only | default(false)
-    - pulumi_output is defined
+    - ssm_init_deployed | default(false)
 
 - name: Verify SSM parameter initialization
   ansible.builtin.include_role:
@@ -109,13 +136,10 @@
     msg: |
       SSM Parameter Initialization Status
       ==================================
-      Initialization: {{ 'Complete' if (ssm_parameter_value | default('false')) == 'true' else 'Pending' }}
-      Total Parameters Created: {{ ssm_init_outputs.deploymentInfo.parametersCreated | default('N/A') if ssm_init_outputs.deploymentInfo is defined else 'N/A' }}
-      Parameter Prefix: {{ ssm_init_outputs.deploymentInfo.ssmParameterPrefix | default('N/A') if ssm_init_outputs.deploymentInfo is defined else 'N/A' }}
+      Initialization: {{ 'Complete' if ssm_init_deployed | default(false) else 'Failed' }}
+      {% if pulumi_output is defined %}
+      Total Parameters Created: {{ pulumi_output.parametersCreated | default('N/A') }}
+      Parameter Prefix: {{ pulumi_output.ssmParameterPrefix | default('N/A') }}
+      {% endif %}
   when: 
     - not preview_only | default(false)
-
-- name: Set deployment fact
-  ansible.builtin.set_fact:
-    ssm_init_deployed: "{{ (ssm_parameter_value | default('false')) == 'true' }}"
-  when: not preview_only | default(false)
