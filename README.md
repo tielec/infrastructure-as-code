@@ -2,6 +2,12 @@
 
 このリポジトリは、AWSクラウド上にJenkinsベースのCI/CD環境をAnsibleとPulumiを組み合わせて段階的に構築するためのコードを管理します。ブルーグリーンデプロイに対応したJenkinsコントローラー環境を実現し、効率的なCI/CDパイプラインを提供します。
 
+## 📚 重要なドキュメント
+
+- **[ARCHITECTURE.md](ARCHITECTURE.md)** - Platform Engineeringのアーキテクチャ設計思想
+- **[CLAUDE.md](CLAUDE.md)** - Claude Code向けガイダンス
+- **[CONTRIBUTION.md](CONTRIBUTION.md)** - 開発者向けコントリビューションガイド
+
 ## 前提条件
 
 - AWSアカウント

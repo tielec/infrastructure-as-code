@@ -6,6 +6,16 @@
 
 包括的なJenkins CI/CDインフラ自動化プロジェクトで、ブートストラップにCloudFormation、インフラプロビジョニングにPulumi (TypeScript)、オーケストレーションにAnsibleを使用しています。ブルーグリーンデプロイメント機能、自動スケーリングエージェント、高可用性機能を備えた本番環境対応のJenkins環境をAWS上にデプロイします。
 
+## アーキテクチャ設計思想
+
+**Platform Engineeringの設計思想とアーキテクチャの詳細は [ARCHITECTURE.md](ARCHITECTURE.md) を参照してください。**
+
+このプロジェクトは以下の原則に基づいて設計されています：
+- **Jenkins**: 統括司令塔（WHO & WHEN）
+- **Ansible**: オーケストレーター（HOW）
+- **Pulumi**: インフラ構築者（WHAT）
+- **SSM Parameter Store**: Single Source of Truth
+
 ## コーディングガイドライン
 
 ### 基本原則
