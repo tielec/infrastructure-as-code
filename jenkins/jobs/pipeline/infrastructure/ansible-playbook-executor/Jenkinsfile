@@ -120,7 +120,10 @@ pipeline {
                     def useTmux = params.USE_TMUX ?: false
                     env.useTmux = useTmux.toString()  // post処理で使用するため環境変数に保存
                     def tmuxTimeoutMinutes = params.TMUX_TIMEOUT_MINUTES ?: '60'
-                    def tmuxSessionName = "ansible_${env.BUILD_NUMBER}"
+                    // ジョブ名とビルド番号を組み合わせてユニークなセッション名を生成
+                    def jobNameShort = env.JOB_NAME.split('/')[-1].replaceAll('[^a-zA-Z0-9_-]', '_').take(20)
+                    def tmuxSessionName = "ansible_${jobNameShort}_${env.BUILD_NUMBER}"
+                    env.tmuxSessionName = tmuxSessionName  // post処理で使用
                     def continueOnTimeout = params.CONTINUE_ON_TIMEOUT ?: false
                     
                     if (useTmux) {
@@ -273,8 +276,8 @@ pipeline {
                                                 if echo "\$LAST_OUTPUT" | grep -qE "(failed|FAILED|ERROR|Fatal|unreachable=|failed=)"; then
                                                     echo "Ansibleの実行が失敗した可能性があります"
                                                     # 全ログを保存
-                                                    tmux capture-pane -t ${tmuxSessionName}:${windowName} -p -S - > /tmp/ansible_${env.BUILD_NUMBER}_${index}.log
-                                                    echo "完全なログは /tmp/ansible_${env.BUILD_NUMBER}_${index}.log に保存されました"
+                                                    tmux capture-pane -t ${tmuxSessionName}:${windowName} -p -S - > /tmp/${tmuxSessionName}_${index}.log
+                                                    echo "完全なログは /tmp/${tmuxSessionName}_${index}.log に保存されました"
                                                     exit 1
                                                 fi
                                                 
@@ -321,10 +324,10 @@ pipeline {
                                             echo "警告: タイムアウトしましたが、CONTINUE_ON_TIMEOUTが有効なため続行します"
                                             # ログをキャプチャして保存
                                             echo "=== タイムアウト時のログ（最後の100行） ==="
-                                            tmux capture-pane -t ${tmuxSessionName}:${windowName} -p -S -100 > /tmp/ansible_${env.BUILD_NUMBER}_${index}.log
-                                            tail -100 /tmp/ansible_${env.BUILD_NUMBER}_${index}.log
+                                            tmux capture-pane -t ${tmuxSessionName}:${windowName} -p -S -100 > /tmp/${tmuxSessionName}_${index}.log
+                                            tail -100 /tmp/${tmuxSessionName}_${index}.log
                                             # タイムアウトフラグファイルを作成
-                                            touch /tmp/ansible_${env.BUILD_NUMBER}_${index}.timeout
+                                            touch /tmp/${tmuxSessionName}_${index}.timeout
                                             # エラーとして扱わない
                                             exit 0
                                         else
@@ -354,7 +357,7 @@ pipeline {
                                 """
                                 
                                 // タイムアウトチェック
-                                def timeoutFlagFile = "/tmp/ansible_${env.BUILD_NUMBER}_${index}.timeout"
+                                def timeoutFlagFile = "/tmp/${tmuxSessionName}_${index}.timeout"
                                 if (sh(script: "test -f ${timeoutFlagFile} && echo 'true' || echo 'false'", returnStdout: true).trim() == 'true') {
                                     timedOutPlaybooks.add(playbook)
                                     echo "⚠️ 警告: このプレイブックはタイムアウトしました"
@@ -438,19 +441,18 @@ pipeline {
         always {
             script {
                 // tmuxセッションのクリーンアップ
-                if (env.useTmux == 'true') {
-                    def tmuxSessionName = "ansible_${env.BUILD_NUMBER}"
+                if (env.useTmux == 'true' && env.tmuxSessionName) {
                     sh """
                         # tmuxセッションが存在する場合は削除
-                        if tmux has-session -t ${tmuxSessionName} 2>/dev/null; then
-                            echo "tmuxセッション '${tmuxSessionName}' をクリーンアップしています..."
-                            tmux kill-session -t ${tmuxSessionName}
+                        if tmux has-session -t ${env.tmuxSessionName} 2>/dev/null; then
+                            echo "tmuxセッション '${env.tmuxSessionName}' をクリーンアップしています..."
+                            tmux kill-session -t ${env.tmuxSessionName}
                             echo "tmuxセッションをクリーンアップしました"
                         fi
                         
-                        # 一時ファイルのクリーンアップ
-                        rm -f /tmp/ansible_${env.BUILD_NUMBER}_*.log
-                        rm -f /tmp/ansible_${env.BUILD_NUMBER}_*.timeout
+                        # 一時ファイルのクリーンアップ（セッション名ベース）
+                        rm -f /tmp/${env.tmuxSessionName}_*.log
+                        rm -f /tmp/${env.tmuxSessionName}_*.timeout
                     """ 
                 }
             }
