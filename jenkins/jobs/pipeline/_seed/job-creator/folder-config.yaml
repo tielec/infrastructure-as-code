@@ -129,6 +129,18 @@ folders:
       * Jenkins環境管理
       * 基盤インフラストラクチャ
 
+  # 共通環境Pulumiデプロイメント
+  - path: "delivery-management-jobs/common/pulumi-deployments"
+    displayName: "Pulumi Deployments"
+    description: |
+      共通環境のPulumiインフラストラクチャデプロイメント
+      
+      ### 含まれるジョブ
+      * Jenkins関連インフラストラクチャ（ネットワーク、セキュリティ、ストレージ等）
+      * 共通基盤インフラストラクチャ
+      
+      Infrastructure as Codeによる環境構築・更新を管理
+
   # 共通環境Ansibleデプロイメント
   - path: "delivery-management-jobs/common/ansible-deployments"
     displayName: "Ansible Deployments"
