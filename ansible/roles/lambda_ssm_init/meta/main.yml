@@ -1,0 +1,7 @@
+---
+# lambda_ssm_init/meta/main.yml
+# ロールの依存関係定義
+
+dependencies:
+  - role: pulumi_helper
+  - role: aws_cli_helper

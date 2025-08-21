@@ -147,11 +147,19 @@
           - Instance Type: {{ nat_instance_type }}
           {% endif %}
 
-    # アカウントレベル設定（最初に実行）
+    # SSMパラメータ初期化（最初に実行 - すべての設定の基盤）
+    - name: Initialize SSM Parameters
+      ansible.builtin.include_role:
+        name: lambda_ssm_init
+      when: run_ssm_init | default(true) | bool
+
+    # アカウントレベル設定
     - name: Setup Account-level Configuration
       ansible.builtin.include_role:
         name: lambda_account_setup
-      when: run_account_setup | default(true) | bool
+      when: 
+        - ssm_init_deployed is defined and (ssm_init_deployed or ansible_check_mode)
+        - run_account_setup | default(true) | bool
 
     # ネットワークインフラのデプロイ
     - name: Deploy Network Infrastructure
