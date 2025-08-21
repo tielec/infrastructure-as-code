@@ -443,7 +443,7 @@ const privateRouteTableIdsParam = new aws.ssm.Parameter(`${projectName}-private-
 });
 
 // Isolated Subnets (Phase 2) - 空文字列をデフォルトとして保存
-if (createIsolatedSubnets && isolatedSubnetA && isolatedSubnetB) {
+if (createIsolatedSubnets && isolatedSubnetA && isolatedSubnetB && isolatedRouteTableA && isolatedRouteTableB) {
     const isolatedSubnetAIdParam = new aws.ssm.Parameter(`${projectName}-isolated-subnet-a-id`, {
         name: `${paramPrefix}/subnets/isolated-a-id`,
         type: "String",
