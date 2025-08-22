@@ -103,11 +103,13 @@ const natGatewayEipA = new aws.ec2.Eip("lambda-api-nat-eip-a", {
         },
     });
 
-    // プライベートサブネットAからのルート（NAT Gateway用）
-    const privateRouteAGateway = new aws.ec2.Route("lambda-api-private-route-a-gw", {
+    // プライベートサブネットAからのルート
+    // HAモードの場合はNAT Gateway A、通常モードの場合はNAT Instanceを使用
+    const privateRouteA = new aws.ec2.Route("lambda-api-private-route-a", {
         routeTableId: privateRouteTableAId,
         destinationCidrBlock: "0.0.0.0/0",
-        natGatewayId: natGatewayA.id,
+        natGatewayId: highAvailabilityMode.apply(ha => ha ? natGatewayA.id : undefined),
+        instanceId: highAvailabilityMode.apply(ha => ha ? undefined : natInstance.id),
     });
 
     // NAT Gateway B用のEIP
@@ -129,11 +131,13 @@ const natGatewayEipA = new aws.ec2.Eip("lambda-api-nat-eip-a", {
         },
     });
 
-    // プライベートサブネットBからのルート（NAT Gateway用）
-    const privateRouteBGateway = new aws.ec2.Route("lambda-api-private-route-b-gw", {
+    // プライベートサブネットBからのルート
+    // HAモードの場合はNAT Gateway B、通常モードの場合はNAT Instanceを使用
+    const privateRouteB = new aws.ec2.Route("lambda-api-private-route-b", {
         routeTableId: privateRouteTableBId,
         destinationCidrBlock: "0.0.0.0/0",
-        natGatewayId: natGatewayB.id,
+        natGatewayId: highAvailabilityMode.apply(ha => ha ? natGatewayB.id : undefined),
+        instanceId: highAvailabilityMode.apply(ha => ha ? undefined : natInstance.id),
     });
 
     natResourceIds = [natGatewayA.id, natGatewayB.id];
@@ -296,22 +300,7 @@ The script should be located in the 'scripts' directory relative to your project
         allocationId: natInstanceEip.id,
     });
 
-    // 両方のプライベートサブネットからのルート（単一NAT Instance経由）
-    const privateRouteAInstance = new aws.ec2.Route("lambda-api-private-route-a-inst", {
-        routeTableId: privateRouteTableAId,
-        destinationCidrBlock: "0.0.0.0/0",
-        instanceId: natInstance.id,
-    }, {
-        dependsOn: [natInstance],
-    });
-
-    const privateRouteBInstance = new aws.ec2.Route("lambda-api-private-route-b-inst", {
-        routeTableId: privateRouteTableBId,
-        destinationCidrBlock: "0.0.0.0/0",
-        instanceId: natInstance.id,
-    }, {
-        dependsOn: [natInstance],
-    });
+    // NAT Instance用のルートは既に上で定義済み（privateRouteA, privateRouteB）
 
     // NAT Instanceの自動復旧設定
     const natInstanceRecoveryAlarm = new aws.cloudwatch.MetricAlarm("lambda-api-nat-instance-recovery", {
