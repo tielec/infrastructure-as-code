@@ -235,7 +235,7 @@ const paramPrefix = pulumi.interpolate`/${projectName}/${environment}/security`;
 
 // Lambda Security Group ID
 const lambdaSgIdParam = new aws.ssm.Parameter("lambda-api-lambda-sg-id", {
-    name: pulumi.interpolate`${paramPrefix}/sg/lambda-id`,
+    name: pulumi.interpolate`${paramPrefix}/lambda-sg-id`,
     type: "String",
     value: lambdaSecurityGroup.id,
     description: "Lambda functions security group ID",
@@ -244,7 +244,7 @@ const lambdaSgIdParam = new aws.ssm.Parameter("lambda-api-lambda-sg-id", {
 
 // VPC Endpoint Security Group ID
 const vpceSgIdParam = new aws.ssm.Parameter("lambda-api-vpce-sg-id", {
-    name: pulumi.interpolate`${paramPrefix}/sg/vpce-id`,
+    name: pulumi.interpolate`${paramPrefix}/vpce-sg-id`,
     type: "String",
     value: vpceSecurityGroup.id,
     description: "VPC Endpoints security group ID",
@@ -253,7 +253,7 @@ const vpceSgIdParam = new aws.ssm.Parameter("lambda-api-vpce-sg-id", {
 
 // NAT Instance Security Group ID
 const natSgIdParam = new aws.ssm.Parameter("lambda-api-nat-sg-id", {
-    name: pulumi.interpolate`${paramPrefix}/sg/nat-instance-id`,
+    name: pulumi.interpolate`${paramPrefix}/nat-instance-sg-id`,
     type: "String",
     value: natInstanceSecurityGroup.id,
     description: "NAT Instance security group ID",
@@ -262,7 +262,7 @@ const natSgIdParam = new aws.ssm.Parameter("lambda-api-nat-sg-id", {
 
 // DLQ Security Group ID
 const dlqSgIdParam = new aws.ssm.Parameter("lambda-api-dlq-sg-id", {
-    name: pulumi.interpolate`${paramPrefix}/sg/dlq-id`,
+    name: pulumi.interpolate`${paramPrefix}/dlq-sg-id`,
     type: "String",
     value: dlqSecurityGroup.id,
     description: "Dead Letter Queue security group ID",
@@ -272,7 +272,7 @@ const dlqSgIdParam = new aws.ssm.Parameter("lambda-api-dlq-sg-id", {
 // Phase 2: RDS/DynamoDB Security Groups (if enabled)
 if (createDatabaseSecurityGroups && rdsSecurityGroup && dynamodbVpceSecurityGroup) {
     const rdsSgIdParam = new aws.ssm.Parameter("lambda-api-rds-sg-id", {
-        name: pulumi.interpolate`${paramPrefix}/sg/rds-id`,
+        name: pulumi.interpolate`${paramPrefix}/rds-sg-id`,
         type: "String",
         value: rdsSecurityGroup.id,
         description: "RDS security group ID",
@@ -280,7 +280,7 @@ if (createDatabaseSecurityGroups && rdsSecurityGroup && dynamodbVpceSecurityGrou
     });
 
     const dynamodbSgIdParam = new aws.ssm.Parameter("lambda-api-dynamodb-sg-id", {
-        name: pulumi.interpolate`${paramPrefix}/sg/dynamodb-vpce-id`,
+        name: pulumi.interpolate`${paramPrefix}/dynamodb-vpce-sg-id`,
         type: "String",
         value: dynamodbVpceSecurityGroup.id,
         description: "DynamoDB VPC Endpoint security group ID",
@@ -289,7 +289,7 @@ if (createDatabaseSecurityGroups && rdsSecurityGroup && dynamodbVpceSecurityGrou
 } else {
     // Phase 1の場合は空文字列を設定
     new aws.ssm.Parameter("lambda-api-rds-sg-id-empty", {
-        name: pulumi.interpolate`${paramPrefix}/sg/rds-id`,
+        name: pulumi.interpolate`${paramPrefix}/rds-sg-id`,
         type: "String",
         value: "",
         description: "RDS security group ID (not created in Phase 1)",
@@ -297,7 +297,7 @@ if (createDatabaseSecurityGroups && rdsSecurityGroup && dynamodbVpceSecurityGrou
     });
 
     new aws.ssm.Parameter("lambda-api-dynamodb-sg-id-empty", {
-        name: pulumi.interpolate`${paramPrefix}/sg/dynamodb-vpce-id`,
+        name: pulumi.interpolate`${paramPrefix}/dynamodb-vpce-sg-id`,
         type: "String",
         value: "",
         description: "DynamoDB VPC Endpoint security group ID (not created in Phase 1)",
