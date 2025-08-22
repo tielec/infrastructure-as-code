@@ -325,7 +325,9 @@ const vpcIdParam = new aws.ssm.Parameter("lambda-api-vpc-id", {
     type: "String",
     value: vpc.id,
     description: "VPC ID for Lambda API infrastructure",
-    tags: { Environment: environment, ManagedBy: "pulumi", Stack: "lambda-network" },
+            tags: { Environment: environment, ManagedBy: "pulumi", Stack: "lambda-network" },
+    overwrite: true,
+});
 });
 
 const vpcCidrSsmParam = new aws.ssm.Parameter("lambda-api-vpc-cidr", {
@@ -333,7 +335,9 @@ const vpcCidrSsmParam = new aws.ssm.Parameter("lambda-api-vpc-cidr", {
     type: "String",
     value: vpc.cidrBlock,
     description: "VPC CIDR block",
-    tags: { Environment: environment, ManagedBy: "pulumi", Stack: "lambda-network" },
+            tags: { Environment: environment, ManagedBy: "pulumi", Stack: "lambda-network" },
+    overwrite: true,
+});
 });
 
 // Internet Gateway
@@ -342,7 +346,9 @@ const igwIdParam = new aws.ssm.Parameter("lambda-api-igw-id", {
     type: "String",
     value: igw.id,
     description: "Internet Gateway ID",
-    tags: { Environment: environment, ManagedBy: "pulumi", Stack: "lambda-network" },
+            tags: { Environment: environment, ManagedBy: "pulumi", Stack: "lambda-network" },
+    overwrite: true,
+});
 });
 
 // Public Subnets
@@ -351,7 +357,9 @@ const publicSubnetAIdParam = new aws.ssm.Parameter("lambda-api-public-subnet-a-i
     type: "String",
     value: publicSubnetA.id,
     description: "Public Subnet A ID",
-    tags: { Environment: environment, ManagedBy: "pulumi", Stack: "lambda-network" },
+            tags: { Environment: environment, ManagedBy: "pulumi", Stack: "lambda-network" },
+    overwrite: true,
+});
 });
 
 const publicSubnetBIdParam = new aws.ssm.Parameter("lambda-api-public-subnet-b-id", {
@@ -359,7 +367,9 @@ const publicSubnetBIdParam = new aws.ssm.Parameter("lambda-api-public-subnet-b-i
     type: "String",
     value: publicSubnetB.id,
     description: "Public Subnet B ID",
-    tags: { Environment: environment, ManagedBy: "pulumi", Stack: "lambda-network" },
+            tags: { Environment: environment, ManagedBy: "pulumi", Stack: "lambda-network" },
+    overwrite: true,
+});
 });
 
 const publicSubnetIdsParam = new aws.ssm.Parameter("lambda-api-public-subnet-ids", {
@@ -367,7 +377,9 @@ const publicSubnetIdsParam = new aws.ssm.Parameter("lambda-api-public-subnet-ids
     type: "StringList",
     value: pulumi.interpolate`${publicSubnetA.id},${publicSubnetB.id}`,
     description: "Public Subnet IDs (comma-separated)",
-    tags: { Environment: environment, ManagedBy: "pulumi", Stack: "lambda-network" },
+            tags: { Environment: environment, ManagedBy: "pulumi", Stack: "lambda-network" },
+    overwrite: true,
+});
 });
 
 // Private Subnets
@@ -376,7 +388,9 @@ const privateSubnetAIdParam = new aws.ssm.Parameter("lambda-api-private-subnet-a
     type: "String",
     value: privateSubnetA.id,
     description: "Private Subnet A ID",
-    tags: { Environment: environment, ManagedBy: "pulumi", Stack: "lambda-network" },
+            tags: { Environment: environment, ManagedBy: "pulumi", Stack: "lambda-network" },
+    overwrite: true,
+});
 });
 
 const privateSubnetBIdParam = new aws.ssm.Parameter("lambda-api-private-subnet-b-id", {
@@ -384,7 +398,9 @@ const privateSubnetBIdParam = new aws.ssm.Parameter("lambda-api-private-subnet-b
     type: "String",
     value: privateSubnetB.id,
     description: "Private Subnet B ID",
-    tags: { Environment: environment, ManagedBy: "pulumi", Stack: "lambda-network" },
+            tags: { Environment: environment, ManagedBy: "pulumi", Stack: "lambda-network" },
+    overwrite: true,
+});
 });
 
 const privateSubnetIdsParam = new aws.ssm.Parameter("lambda-api-private-subnet-ids", {
@@ -392,7 +408,9 @@ const privateSubnetIdsParam = new aws.ssm.Parameter("lambda-api-private-subnet-i
     type: "StringList",
     value: pulumi.interpolate`${privateSubnetA.id},${privateSubnetB.id}`,
     description: "Private Subnet IDs (comma-separated)",
-    tags: { Environment: environment, ManagedBy: "pulumi", Stack: "lambda-network" },
+            tags: { Environment: environment, ManagedBy: "pulumi", Stack: "lambda-network" },
+    overwrite: true,
+});
 });
 
 // Route Tables
@@ -401,7 +419,9 @@ const publicRouteTableIdParam = new aws.ssm.Parameter("lambda-api-public-rt-id",
     type: "String",
     value: publicRouteTable.id,
     description: "Public Route Table ID",
-    tags: { Environment: environment, ManagedBy: "pulumi", Stack: "lambda-network" },
+            tags: { Environment: environment, ManagedBy: "pulumi", Stack: "lambda-network" },
+    overwrite: true,
+});
 });
 
 const privateRouteTableAIdParam = new aws.ssm.Parameter("lambda-api-private-rt-a-id", {
@@ -409,7 +429,9 @@ const privateRouteTableAIdParam = new aws.ssm.Parameter("lambda-api-private-rt-a
     type: "String",
     value: privateRouteTableA.id,
     description: "Private Route Table A ID",
-    tags: { Environment: environment, ManagedBy: "pulumi", Stack: "lambda-network" },
+            tags: { Environment: environment, ManagedBy: "pulumi", Stack: "lambda-network" },
+    overwrite: true,
+});
 });
 
 const privateRouteTableBIdParam = new aws.ssm.Parameter("lambda-api-private-rt-b-id", {
@@ -417,7 +439,9 @@ const privateRouteTableBIdParam = new aws.ssm.Parameter("lambda-api-private-rt-b
     type: "String",
     value: privateRouteTableB.id,
     description: "Private Route Table B ID",
-    tags: { Environment: environment, ManagedBy: "pulumi", Stack: "lambda-network" },
+            tags: { Environment: environment, ManagedBy: "pulumi", Stack: "lambda-network" },
+    overwrite: true,
+});
 });
 
 const privateRouteTableIdsParam = new aws.ssm.Parameter("lambda-api-private-rt-ids", {
@@ -425,7 +449,9 @@ const privateRouteTableIdsParam = new aws.ssm.Parameter("lambda-api-private-rt-i
     type: "StringList",
     value: pulumi.interpolate`${privateRouteTableA.id},${privateRouteTableB.id}`,
     description: "Private Route Table IDs (comma-separated)",
-    tags: { Environment: environment, ManagedBy: "pulumi", Stack: "lambda-network" },
+            tags: { Environment: environment, ManagedBy: "pulumi", Stack: "lambda-network" },
+    overwrite: true,
+});
 });
 
 // Isolated Subnets (Phase 2) - 空文字列をデフォルトとして保存
@@ -435,7 +461,9 @@ if (createIsolatedSubnets && isolatedSubnetA && isolatedSubnetB && isolatedRoute
         type: "String",
         value: isolatedSubnetA.id,
         description: "Isolated Subnet A ID",
-        tags: { Environment: environment, ManagedBy: "pulumi", Stack: "lambda-network" },
+                tags: { Environment: environment, ManagedBy: "pulumi", Stack: "lambda-network" },
+    overwrite: true,
+});
     });
 
     const isolatedSubnetBIdParam = new aws.ssm.Parameter("lambda-api-isolated-subnet-b-id", {
@@ -443,7 +471,9 @@ if (createIsolatedSubnets && isolatedSubnetA && isolatedSubnetB && isolatedRoute
         type: "String",
         value: isolatedSubnetB.id,
         description: "Isolated Subnet B ID",
-        tags: { Environment: environment, ManagedBy: "pulumi", Stack: "lambda-network" },
+                tags: { Environment: environment, ManagedBy: "pulumi", Stack: "lambda-network" },
+    overwrite: true,
+});
     });
 
     const isolatedSubnetIdsParam = new aws.ssm.Parameter("lambda-api-isolated-subnet-ids", {
@@ -451,7 +481,9 @@ if (createIsolatedSubnets && isolatedSubnetA && isolatedSubnetB && isolatedRoute
         type: "StringList",
         value: pulumi.interpolate`${isolatedSubnetA.id},${isolatedSubnetB.id}`,
         description: "Isolated Subnet IDs (comma-separated)",
-        tags: { Environment: environment, ManagedBy: "pulumi", Stack: "lambda-network" },
+                tags: { Environment: environment, ManagedBy: "pulumi", Stack: "lambda-network" },
+    overwrite: true,
+});
     });
 
     const isolatedRouteTableAIdParam = new aws.ssm.Parameter("lambda-api-isolated-rt-a-id", {
@@ -459,7 +491,9 @@ if (createIsolatedSubnets && isolatedSubnetA && isolatedSubnetB && isolatedRoute
         type: "String",
         value: isolatedRouteTableA.id,
         description: "Isolated Route Table A ID",
-        tags: { Environment: environment, ManagedBy: "pulumi", Stack: "lambda-network" },
+                tags: { Environment: environment, ManagedBy: "pulumi", Stack: "lambda-network" },
+    overwrite: true,
+});
     });
 
     const isolatedRouteTableBIdParam = new aws.ssm.Parameter("lambda-api-isolated-rt-b-id", {
@@ -467,7 +501,9 @@ if (createIsolatedSubnets && isolatedSubnetA && isolatedSubnetB && isolatedRoute
         type: "String",
         value: isolatedRouteTableB.id,
         description: "Isolated Route Table B ID",
-        tags: { Environment: environment, ManagedBy: "pulumi", Stack: "lambda-network" },
+                tags: { Environment: environment, ManagedBy: "pulumi", Stack: "lambda-network" },
+    overwrite: true,
+});
     });
 } else {
     // Phase 1の場合は空文字列を設定
@@ -476,7 +512,9 @@ if (createIsolatedSubnets && isolatedSubnetA && isolatedSubnetB && isolatedRoute
         type: "String",
         value: "",
         description: "Isolated Subnet A ID (not created in Phase 1)",
-        tags: { Environment: environment, ManagedBy: "pulumi", Stack: "lambda-network" },
+                tags: { Environment: environment, ManagedBy: "pulumi", Stack: "lambda-network" },
+    overwrite: true,
+});
     });
 
     const isolatedSubnetBIdParam = new aws.ssm.Parameter("lambda-api-isolated-subnet-b-id", {
@@ -484,7 +522,9 @@ if (createIsolatedSubnets && isolatedSubnetA && isolatedSubnetB && isolatedRoute
         type: "String",
         value: "",
         description: "Isolated Subnet B ID (not created in Phase 1)",
-        tags: { Environment: environment, ManagedBy: "pulumi", Stack: "lambda-network" },
+                tags: { Environment: environment, ManagedBy: "pulumi", Stack: "lambda-network" },
+    overwrite: true,
+});
     });
 
     const isolatedSubnetIdsParam = new aws.ssm.Parameter("lambda-api-isolated-subnet-ids", {
@@ -492,7 +532,9 @@ if (createIsolatedSubnets && isolatedSubnetA && isolatedSubnetB && isolatedRoute
         type: "String",
         value: "",
         description: "Isolated Subnet IDs (not created in Phase 1)",
-        tags: { Environment: environment, ManagedBy: "pulumi", Stack: "lambda-network" },
+                tags: { Environment: environment, ManagedBy: "pulumi", Stack: "lambda-network" },
+    overwrite: true,
+});
     });
 
     const isolatedRouteTableAIdParam = new aws.ssm.Parameter("lambda-api-isolated-rt-a-id", {
@@ -500,7 +542,9 @@ if (createIsolatedSubnets && isolatedSubnetA && isolatedSubnetB && isolatedRoute
         type: "String",
         value: "",
         description: "Isolated Route Table A ID (not created in Phase 1)",
-        tags: { Environment: environment, ManagedBy: "pulumi", Stack: "lambda-network" },
+                tags: { Environment: environment, ManagedBy: "pulumi", Stack: "lambda-network" },
+    overwrite: true,
+});
     });
 
     const isolatedRouteTableBIdParam = new aws.ssm.Parameter("lambda-api-isolated-rt-b-id", {
@@ -508,7 +552,9 @@ if (createIsolatedSubnets && isolatedSubnetA && isolatedSubnetB && isolatedRoute
         type: "String",
         value: "",
         description: "Isolated Route Table B ID (not created in Phase 1)",
-        tags: { Environment: environment, ManagedBy: "pulumi", Stack: "lambda-network" },
+                tags: { Environment: environment, ManagedBy: "pulumi", Stack: "lambda-network" },
+    overwrite: true,
+});
     });
 }
 
@@ -519,7 +565,9 @@ if (enableFlowLogs && flowLog && flowLogGroup) {
         type: "String",
         value: flowLog.id,
         description: "VPC Flow Log ID",
-        tags: { Environment: environment, ManagedBy: "pulumi", Stack: "lambda-network" },
+                tags: { Environment: environment, ManagedBy: "pulumi", Stack: "lambda-network" },
+    overwrite: true,
+});
     });
 
     const flowLogGroupNameParam = new aws.ssm.Parameter("lambda-api-flow-log-group", {
@@ -527,7 +575,9 @@ if (enableFlowLogs && flowLog && flowLogGroup) {
         type: "String",
         value: flowLogGroup.name,
         description: "VPC Flow Log CloudWatch Log Group Name",
-        tags: { Environment: environment, ManagedBy: "pulumi", Stack: "lambda-network" },
+                tags: { Environment: environment, ManagedBy: "pulumi", Stack: "lambda-network" },
+    overwrite: true,
+});
     });
 } else {
     const flowLogIdParam = new aws.ssm.Parameter("lambda-api-flow-log-id", {
@@ -535,7 +585,9 @@ if (enableFlowLogs && flowLog && flowLogGroup) {
         type: "String",
         value: "",
         description: "VPC Flow Log ID (not enabled)",
-        tags: { Environment: environment, ManagedBy: "pulumi", Stack: "lambda-network" },
+                tags: { Environment: environment, ManagedBy: "pulumi", Stack: "lambda-network" },
+    overwrite: true,
+});
     });
 
     const flowLogGroupNameParam = new aws.ssm.Parameter("lambda-api-flow-log-group", {
@@ -543,7 +595,9 @@ if (enableFlowLogs && flowLog && flowLogGroup) {
         type: "String",
         value: "",
         description: "VPC Flow Log CloudWatch Log Group Name (not enabled)",
-        tags: { Environment: environment, ManagedBy: "pulumi", Stack: "lambda-network" },
+                tags: { Environment: environment, ManagedBy: "pulumi", Stack: "lambda-network" },
+    overwrite: true,
+});
     });
 }
 
@@ -553,7 +607,9 @@ const deploymentCompleteParam = new aws.ssm.Parameter("lambda-api-network-deploy
     type: "String",
     value: "true",
     description: "Network stack deployment completion flag",
-    tags: { Environment: environment, ManagedBy: "pulumi", Stack: "lambda-network" },
+            tags: { Environment: environment, ManagedBy: "pulumi", Stack: "lambda-network" },
+    overwrite: true,
+});
 });
 
 // デプロイ完了の確認用（最小限のエクスポート）
