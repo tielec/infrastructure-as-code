@@ -108,8 +108,8 @@ const natGatewayEipA = new aws.ec2.Eip("lambda-api-nat-eip-a", {
     const privateRouteA = new aws.ec2.Route("lambda-api-private-route-a", {
         routeTableId: privateRouteTableAId,
         destinationCidrBlock: "0.0.0.0/0",
-        natGatewayId: highAvailabilityMode.apply(ha => ha ? natGatewayA.id : undefined),
-        instanceId: highAvailabilityMode.apply(ha => ha ? undefined : natInstance.id),
+        natGatewayId: pulumi.all([highAvailabilityMode, natGatewayA.id]).apply(([ha, gwId]) => ha ? gwId : undefined),
+        instanceId: pulumi.all([highAvailabilityMode, natInstance.id]).apply(([ha, instId]) => ha ? undefined : instId),
     });
 
     // NAT Gateway B用のEIP
@@ -136,8 +136,8 @@ const natGatewayEipA = new aws.ec2.Eip("lambda-api-nat-eip-a", {
     const privateRouteB = new aws.ec2.Route("lambda-api-private-route-b", {
         routeTableId: privateRouteTableBId,
         destinationCidrBlock: "0.0.0.0/0",
-        natGatewayId: highAvailabilityMode.apply(ha => ha ? natGatewayB.id : undefined),
-        instanceId: highAvailabilityMode.apply(ha => ha ? undefined : natInstance.id),
+        natGatewayId: pulumi.all([highAvailabilityMode, natGatewayB.id]).apply(([ha, gwId]) => ha ? gwId : undefined),
+        instanceId: pulumi.all([highAvailabilityMode, natInstance.id]).apply(([ha, instId]) => ha ? undefined : instId),
     });
 
     natResourceIds = [natGatewayA.id, natGatewayB.id];
