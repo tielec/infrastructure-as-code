@@ -31,22 +31,28 @@ const memorySize = pulumi.output(memorySizeParam).apply(p => parseInt(p.value) |
 const timeout = pulumi.output(timeoutParam).apply(p => parseInt(p.value) || 30);
 const logRetentionDays = pulumi.output(logRetentionDaysParam).apply(p => parseInt(p.value) || (environment === "dev" ? 3 : environment === "staging" ? 7 : 14));
 
-// スタック参照名は固定（コンベンションとして）
-const networkStackName = "lambda-network";
-const securityStackName = "lambda-security";
+// SSMパラメータストアからネットワーク情報を取得
+const privateSubnetAIdParam = aws.ssm.getParameter({
+    name: `/lambda-api/${environment}/network/subnets/private-a-id`,
+});
+const privateSubnetBIdParam = aws.ssm.getParameter({
+    name: `/lambda-api/${environment}/network/subnets/private-b-id`,
+});
+const lambdaSecurityGroupIdParam = aws.ssm.getParameter({
+    name: `/lambda-api/${environment}/security/lambda-sg-id`,
+});
 
-// 既存のスタックから値を取得
-const networkStack = new pulumi.StackReference(`${pulumi.getOrganization()}/${networkStackName}/${environment}`);
-const securityStack = new pulumi.StackReference(`${pulumi.getOrganization()}/${securityStackName}/${environment}`);
-
-const privateSubnetIds = networkStack.getOutput("privateSubnetIds");
-const lambdaSecurityGroupId = securityStack.getOutput("lambdaSecurityGroupId");
+const privateSubnetIds = pulumi.all([
+    pulumi.output(privateSubnetAIdParam).apply(p => p.value),
+    pulumi.output(privateSubnetBIdParam).apply(p => p.value),
+]);
+const lambdaSecurityGroupId = pulumi.output(lambdaSecurityGroupIdParam).apply(p => p.value);
 
 // ===== Dead Letter Queue (DLQ) - エラー処理用 =====
 const dlq = new aws.sqs.Queue("lambda-api-dlq", {
     name: pulumi.interpolate`${projectName}-dlq-${environment}`,
     messageRetentionSeconds: 14 * 24 * 60 * 60, // 14日間保持
-    visibilityTimeoutSeconds: timeout * 6, // Lambdaタイムアウトの6倍
+    visibilityTimeoutSeconds: timeout.apply(t => t * 6), // Lambdaタイムアウトの6倍
     tags: {
         Name: pulumi.interpolate`${projectName}-dlq-${environment}`,
         Environment: environment,
