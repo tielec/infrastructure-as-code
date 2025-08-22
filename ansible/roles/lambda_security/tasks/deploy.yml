@@ -98,7 +98,7 @@
         name: ssm_parameter_store
         tasks_from: get_parameter
       vars:
-        parameter_name: "/{{ project_name }}/{{ env_name }}/security/sg/lambda-id"
+        parameter_name: "/{{ project_name }}/{{ env_name }}/security/lambda-sg-id"
         store_as: "lambda_sg_id"
       when: not preview_only | default(false) | bool
     
@@ -107,7 +107,7 @@
         name: ssm_parameter_store
         tasks_from: get_parameter
       vars:
-        parameter_name: "/{{ project_name }}/{{ env_name }}/security/sg/vpce-id"
+        parameter_name: "/{{ project_name }}/{{ env_name }}/security/vpce-sg-id"
         store_as: "vpce_sg_id"
       when: not preview_only | default(false) | bool
     
