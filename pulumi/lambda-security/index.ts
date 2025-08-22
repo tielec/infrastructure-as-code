@@ -150,7 +150,7 @@ const dlqSecurityGroup = new aws.ec2.SecurityGroup("lambda-api-dlq-sg", {
 const createDatabaseSecurityGroupsParam = aws.ssm.getParameter({
     name: `/lambda-api/${environment}/phase/database-sg-enabled`,
 });
-const createDatabaseSecurityGroups = pulumi.output(createDatabaseSecurityGroupsParam.value).apply(v => v === "true");
+const createDatabaseSecurityGroups = pulumi.output(createDatabaseSecurityGroupsParam).apply(p => p.value === "true");
 
 let rdsSecurityGroup: aws.ec2.SecurityGroup | undefined;
 let dynamodbVpceSecurityGroup: aws.ec2.SecurityGroup | undefined;
