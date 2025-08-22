@@ -335,7 +335,7 @@ The script should be located in the 'scripts' directory relative to your project
     });
 
     // CPU使用率アラーム
-    const natInstanceCpuAlarm = new aws.cloudwatch.MetricAlarm(`${projectName}-nat-instance-cpu`, {
+    const natInstanceCpuAlarm = new aws.cloudwatch.MetricAlarm("lambda-api-nat-instance-cpu", {
         alarmDescription: "Alert when NAT instance CPU is high",
         metricName: "CPUUtilization",
         namespace: "AWS/EC2",
@@ -353,7 +353,7 @@ The script should be located in the 'scripts' directory relative to your project
     });
 
     // Lambda API用カスタムメトリクスアラーム（接続数）
-    const natInstanceConnectionsAlarm = new aws.cloudwatch.MetricAlarm(`${projectName}-nat-instance-connections`, {
+    const natInstanceConnectionsAlarm = new aws.cloudwatch.MetricAlarm("lambda-api-nat-instance-connections", {
         alarmDescription: "Alert when NAT instance has high connection count",
         metricName: "ActiveConnections",
         namespace: "LambdaAPI/NAT",
@@ -393,8 +393,8 @@ const natTypeParam = new aws.ssm.Parameter("lambda-api-nat-type", {
 
 // NAT Gateway IDを保存（HAモードの場合）
 if (natGatewayAId) {
-    const natGatewayAIdParam = new aws.ssm.Parameter(`${projectName}-nat-gateway-a-id`, {
-        name: `${paramPrefix}/gateway/a-id`,
+    const natGatewayAIdParam = new aws.ssm.Parameter("lambda-api-nat-gateway-a-id", {
+        name: pulumi.interpolate`${paramPrefix}/gateway/a-id`,
         type: "String",
         value: natGatewayAId,
         description: "NAT Gateway A ID",
@@ -402,8 +402,8 @@ if (natGatewayAId) {
     });
 }
 if (natGatewayBId) {
-    const natGatewayBIdParam = new aws.ssm.Parameter(`${projectName}-nat-gateway-b-id`, {
-        name: `${paramPrefix}/gateway/b-id`,
+    const natGatewayBIdParam = new aws.ssm.Parameter("lambda-api-nat-gateway-b-id", {
+        name: pulumi.interpolate`${paramPrefix}/gateway/b-id`,
         type: "String",
         value: natGatewayBId,
         description: "NAT Gateway B ID",
@@ -411,8 +411,8 @@ if (natGatewayBId) {
     });
 }
 if (natGatewayEipAAddress) {
-    const natGatewayEipAParam = new aws.ssm.Parameter(`${projectName}-nat-gateway-eip-a`, {
-        name: `${paramPrefix}/gateway/eip-a`,
+    const natGatewayEipAParam = new aws.ssm.Parameter("lambda-api-nat-gateway-eip-a", {
+        name: pulumi.interpolate`${paramPrefix}/gateway/eip-a`,
         type: "String",
         value: natGatewayEipAAddress,
         description: "NAT Gateway A Elastic IP",
@@ -420,8 +420,8 @@ if (natGatewayEipAAddress) {
     });
 }
 if (natGatewayEipBAddress) {
-    const natGatewayEipBParam = new aws.ssm.Parameter(`${projectName}-nat-gateway-eip-b`, {
-        name: `${paramPrefix}/gateway/eip-b`,
+    const natGatewayEipBParam = new aws.ssm.Parameter("lambda-api-nat-gateway-eip-b", {
+        name: pulumi.interpolate`${paramPrefix}/gateway/eip-b`,
         type: "String",
         value: natGatewayEipBAddress,
         description: "NAT Gateway B Elastic IP",
@@ -431,8 +431,8 @@ if (natGatewayEipBAddress) {
 
 // NAT Instance IDを保存（ノーマルモードの場合）
 if (natInstanceId) {
-    const natInstanceIdParam = new aws.ssm.Parameter(`${projectName}-nat-instance-id`, {
-        name: `${paramPrefix}/instance/id`,
+    const natInstanceIdParam = new aws.ssm.Parameter("lambda-api-nat-instance-id", {
+        name: pulumi.interpolate`${paramPrefix}/instance/id`,
         type: "String",
         value: natInstanceId,
         description: "NAT Instance ID",
@@ -440,8 +440,8 @@ if (natInstanceId) {
     });
 }
 if (natInstancePublicIp) {
-    const natInstancePublicIpParam = new aws.ssm.Parameter(`${projectName}-nat-instance-public-ip`, {
-        name: `${paramPrefix}/instance/public-ip`,
+    const natInstancePublicIpParam = new aws.ssm.Parameter("lambda-api-nat-instance-public-ip", {
+        name: pulumi.interpolate`${paramPrefix}/instance/public-ip`,
         type: "String",
         value: natInstancePublicIp,
         description: "NAT Instance Public IP",
@@ -449,8 +449,8 @@ if (natInstancePublicIp) {
     });
 }
 if (natInstancePrivateIp) {
-    const natInstancePrivateIpParam = new aws.ssm.Parameter(`${projectName}-nat-instance-private-ip`, {
-        name: `${paramPrefix}/instance/private-ip`,
+    const natInstancePrivateIpParam = new aws.ssm.Parameter("lambda-api-nat-instance-private-ip", {
+        name: pulumi.interpolate`${paramPrefix}/instance/private-ip`,
         type: "String",
         value: natInstancePrivateIp,
         description: "NAT Instance Private IP",
@@ -459,8 +459,8 @@ if (natInstancePrivateIp) {
 }
 
 // デプロイメント完了フラグ
-const deploymentCompleteParam = new aws.ssm.Parameter(`${projectName}-nat-deployed`, {
-    name: `${paramPrefix}/deployment/complete`,
+const deploymentCompleteParam = new aws.ssm.Parameter("lambda-api-nat-deployed", {
+    name: pulumi.interpolate`${paramPrefix}/deployment/complete`,
     type: "String",
     value: "true",
     description: "NAT stack deployment completion flag",
