@@ -24,7 +24,7 @@ const projectNameParam = aws.ssm.getParameter({
     name: `/lambda-api/${environment}/common/project-name`,
 });
 
-const vpcCidrParam = aws.ssm.getParameter({
+const vpcCidrParamResult = aws.ssm.getParameter({
     name: `/lambda-api/${environment}/network/vpc-cidr`,
 });
 
@@ -37,10 +37,10 @@ const createIsolatedSubnetsParam = aws.ssm.getParameter({
 });
 
 // SSMから取得した値を使用
-const projectName = projectNameParam.value;
-const vpcCidrBlock = vpcCidrParam.value;
-const enableFlowLogs = pulumi.output(enableFlowLogsParam.value).apply(v => v === "true");
-const createIsolatedSubnets = pulumi.output(createIsolatedSubnetsParam.value).apply(v => v === "true");
+const projectName = pulumi.output(projectNameParam).apply(p => p.value);
+const vpcCidrBlock = pulumi.output(vpcCidrParamResult).apply(p => p.value);
+const enableFlowLogs = pulumi.output(enableFlowLogsParam).apply(p => p.value === "true");
+const createIsolatedSubnets = pulumi.output(createIsolatedSubnetsParam).apply(p => p.value === "true");
 
 // VPC作成
 const vpc = new aws.ec2.Vpc(`${projectName}-vpc`, {
@@ -328,7 +328,7 @@ const vpcIdParam = new aws.ssm.Parameter(`${projectName}-vpc-id`, {
     tags: { Environment: environment, ManagedBy: "pulumi", Stack: "lambda-network" },
 });
 
-const vpcCidrParam = new aws.ssm.Parameter(`${projectName}-vpc-cidr`, {
+const vpcCidrSsmParam = new aws.ssm.Parameter(`${projectName}-vpc-cidr`, {
     name: `${paramPrefix}/vpc-cidr`,
     type: "String",
     value: vpc.cidrBlock,
