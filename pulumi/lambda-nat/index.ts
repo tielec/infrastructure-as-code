@@ -88,50 +88,50 @@ let natInstancePrivateIp: pulumi.Output<string> | undefined;
 // NAT Gateway用リソース（常に作成、HAモードでのみ使用）
 const natGatewayEipA = new aws.ec2.Eip("lambda-api-nat-eip-a", {
         tags: {
-            Name: `${projectName}-nat-eip-a-${environment}`,
+            Name: pulumi.interpolate`${projectName}-nat-eip-a-${environment}`,
             Environment: environment,
             Type: "nat-gateway",
         },
     });
 
     // NAT Gateway A
-    const natGatewayA = new aws.ec2.NatGateway(`${projectName}-nat-a`, {
+    const natGatewayA = new aws.ec2.NatGateway("lambda-api-nat-a", {
         allocationId: natGatewayEipA.id,
         subnetId: publicSubnetAId,
         tags: {
-            Name: `${projectName}-nat-a-${environment}`,
+            Name: pulumi.interpolate`${projectName}-nat-a-${environment}`,
             Environment: environment,
         },
     });
 
     // プライベートサブネットAからのルート
-    const privateRouteA = new aws.ec2.Route(`${projectName}-private-route-a`, {
+    const privateRouteA = new aws.ec2.Route("lambda-api-private-route-a", {
         routeTableId: privateRouteTableAId,
         destinationCidrBlock: "0.0.0.0/0",
         natGatewayId: natGatewayA.id,
     });
 
     // NAT Gateway B用のEIP
-    const natGatewayEipB = new aws.ec2.Eip(`${projectName}-nat-eip-b`, {
+    const natGatewayEipB = new aws.ec2.Eip("lambda-api-nat-eip-b", {
         tags: {
-            Name: `${projectName}-nat-eip-b-${environment}`,
+            Name: pulumi.interpolate`${projectName}-nat-eip-b-${environment}`,
             Environment: environment,
             Type: "nat-gateway",
         },
     });
 
     // NAT Gateway B
-    const natGatewayB = new aws.ec2.NatGateway(`${projectName}-nat-b`, {
+    const natGatewayB = new aws.ec2.NatGateway("lambda-api-nat-b", {
         allocationId: natGatewayEipB.id,
         subnetId: publicSubnetBId,
         tags: {
-            Name: `${projectName}-nat-b-${environment}`,
+            Name: pulumi.interpolate`${projectName}-nat-b-${environment}`,
             Environment: environment,
         },
     });
 
     // プライベートサブネットBからのルート
-    const privateRouteB = new aws.ec2.Route(`${projectName}-private-route-b`, {
+    const privateRouteB = new aws.ec2.Route("lambda-api-private-route-b", {
         routeTableId: privateRouteTableBId,
         destinationCidrBlock: "0.0.0.0/0",
         natGatewayId: natGatewayB.id,
@@ -145,29 +145,40 @@ const natGatewayEipA = new aws.ec2.Eip("lambda-api-nat-eip-a", {
     natGatewayEipAAddress = natGatewayEipA.publicIp;
     natGatewayEipBAddress = natGatewayEipB.publicIp;
 
-} else {
-    // ===== ノーマルモード: NAT Instance x1 (Amazon Linux 2023) =====
-    pulumi.log.info("Deploying NAT Instance in Normal mode (Amazon Linux 2023 with nftables)");
-    natType = "instance";
+// NAT Instance用リソース（常に作成、通常モードでのみ使用）
 
-    // Amazon Linux 2023 AMI (ARM64版とx86_64版を自動選択)
-    const isArmInstance = natInstanceType.startsWith("t4g") || 
-                         natInstanceType.startsWith("m6g") || 
-                         natInstanceType.startsWith("m7g") ||
-                         natInstanceType.startsWith("c6g") ||
-                         natInstanceType.startsWith("c7g");
+// Amazon Linux 2023 AMI (ARM64版とx86_64版を自動選択)
+const isArmInstance = natInstanceType.apply(type => 
+    type.startsWith("t4g") || 
+    type.startsWith("m6g") || 
+    type.startsWith("m7g") ||
+    type.startsWith("c6g") ||
+    type.startsWith("c7g")
+);
     
-    const natAmi = aws.ec2.getAmi({
-        mostRecent: true,
-        owners: ["amazon"],
-        filters: [{
-            name: "name",
-            values: ["al2023-ami-*-kernel-*-" + (isArmInstance ? "arm64" : "x86_64")],
-        }],
-    });
+// AMIは両方取得して後で選択
+const armAmi = aws.ec2.getAmi({
+    mostRecent: true,
+    owners: ["amazon"],
+    filters: [{
+        name: "name",
+        values: ["al2023-ami-*-kernel-*-arm64"],
+    }],
+});
 
-    // NAT Instance用のIAMロール
-    const natInstanceRole = new aws.iam.Role(`${projectName}-nat-instance-role`, {
+const x86Ami = aws.ec2.getAmi({
+    mostRecent: true,
+    owners: ["amazon"],
+    filters: [{
+        name: "name",
+        values: ["al2023-ami-*-kernel-*-x86_64"],
+    }],
+});
+
+const natAmiId = isArmInstance.apply(isArm => isArm ? armAmi.then(ami => ami.id) : x86Ami.then(ami => ami.id));
+
+// NAT Instance用のIAMロール
+const natInstanceRole = new aws.iam.Role("lambda-api-nat-instance-role", {
         assumeRolePolicy: JSON.stringify({
             Version: "2012-10-17",
             Statement: [{
@@ -179,24 +190,24 @@ const natGatewayEipA = new aws.ec2.Eip("lambda-api-nat-eip-a", {
             }],
         }),
         tags: {
-            Name: `${projectName}-nat-instance-role-${environment}`,
+            Name: pulumi.interpolate`${projectName}-nat-instance-role-${environment}`,
             Environment: environment,
         },
     });
 
     // 必要な権限を付与
-    new aws.iam.RolePolicyAttachment(`${projectName}-nat-instance-ssm-policy`, {
+    new aws.iam.RolePolicyAttachment("lambda-api-nat-instance-ssm-policy", {
         role: natInstanceRole.name,
         policyArn: "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore",
     });
 
-    new aws.iam.RolePolicyAttachment(`${projectName}-nat-instance-cloudwatch-policy`, {
+    new aws.iam.RolePolicyAttachment("lambda-api-nat-instance-cloudwatch-policy", {
         role: natInstanceRole.name,
         policyArn: "arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy",
     });
 
     // インスタンスプロファイル
-    const natInstanceProfile = new aws.iam.InstanceProfile(`${projectName}-nat-instance-profile`, {
+    const natInstanceProfile = new aws.iam.InstanceProfile("lambda-api-nat-instance-profile", {
         role: natInstanceRole.name,
         tags: {
             Environment: environment,
@@ -204,9 +215,9 @@ const natGatewayEipA = new aws.ec2.Eip("lambda-api-nat-eip-a", {
     });
 
     // NAT Instance用のElastic IP
-    const natInstanceEip = new aws.ec2.Eip(`${projectName}-nat-instance-eip`, {
+    const natInstanceEip = new aws.ec2.Eip("lambda-api-nat-instance-eip", {
         tags: {
-            Name: `${projectName}-nat-instance-eip-${environment}`,
+            Name: pulumi.interpolate`${projectName}-nat-instance-eip-${environment}`,
             Environment: environment,
             Type: "nat-instance",
         },
@@ -253,26 +264,26 @@ The script should be located in the 'scripts' directory relative to your project
     }
 
     // テンプレート変数を実際の値に置換
-    const userDataScript = pulumi.all([vpcCidr]).apply(([cidr]) => {
+    const userDataScript = pulumi.all([vpcCidr, projectName]).apply(([cidr, proj]) => {
         return userDataTemplate
             .replace(/\${VPC_CIDR}/g, cidr)
-            .replace(/\${PROJECT_NAME}/g, projectName)
+            .replace(/\${PROJECT_NAME}/g, proj)
             .replace(/\${ENVIRONMENT}/g, environment)
             .replace(/\${AWS_REGION}/g, aws.config.region || 'ap-northeast-1');
     });
 
     // NAT Instance
-    const natInstance = new aws.ec2.Instance(`${projectName}-nat-instance`, {
-        ami: natAmi.then((ami: any) => ami.id),
+    const natInstance = new aws.ec2.Instance("lambda-api-nat-instance", {
+        ami: natAmiId,
         instanceType: natInstanceType,
-        keyName: keyName,
+        // keyName: keyName, // keyNameが必要な場合は別途定義
         subnetId: publicSubnetAId,
         vpcSecurityGroupIds: [natInstanceSecurityGroupId],
         iamInstanceProfile: natInstanceProfile.name,
         sourceDestCheck: false, // NATとして機能するために必要
         userData: userDataScript,
         tags: {
-            Name: `${projectName}-nat-instance-${environment}`,
+            Name: pulumi.interpolate`${projectName}-nat-instance-${environment}`,
             Environment: environment,
             Role: "nat-instance",
             InstanceType: natInstanceType,
@@ -281,13 +292,13 @@ The script should be located in the 'scripts' directory relative to your project
     });
 
     // Elastic IPをNAT Instanceに関連付け
-    const natInstanceEipAssociation = new aws.ec2.EipAssociation(`${projectName}-nat-instance-eip-assoc`, {
+    const natInstanceEipAssociation = new aws.ec2.EipAssociation("lambda-api-nat-instance-eip-assoc", {
         instanceId: natInstance.id,
         allocationId: natInstanceEip.id,
     });
 
     // 両方のプライベートサブネットからのルート（単一NAT Instance経由）
-    const privateRouteA = new aws.ec2.Route(`${projectName}-private-route-a`, {
+    const privateRouteA = new aws.ec2.Route("lambda-api-private-route-a", {
         routeTableId: privateRouteTableAId,
         destinationCidrBlock: "0.0.0.0/0",
         instanceId: natInstance.id,
@@ -295,7 +306,7 @@ The script should be located in the 'scripts' directory relative to your project
         dependsOn: [natInstance],
     });
 
-    const privateRouteB = new aws.ec2.Route(`${projectName}-private-route-b`, {
+    const privateRouteB = new aws.ec2.Route("lambda-api-private-route-b", {
         routeTableId: privateRouteTableBId,
         destinationCidrBlock: "0.0.0.0/0",
         instanceId: natInstance.id,
@@ -477,21 +488,23 @@ const natConfigParameter = new aws.ssm.Parameter(`${projectName}-nat-config`, {
 });
 
 // コスト最適化情報のパラメータ
-const costOptimizationParameter = new aws.ssm.Parameter(`${projectName}-nat-cost-info`, {
+const costOptimizationParameter = new aws.ssm.Parameter("lambda-api-nat-cost-info", {
     name: `/lambda-api/${environment}/nat/cost-optimization`,
     type: "String",
-    value: JSON.stringify({
-        estimatedMonthlyCost: highAvailabilityMode 
-            ? "$90 (NAT Gateway x2)" 
-            : `$${natInstanceType === "t4g.nano" ? "3-5" : natInstanceType === "t4g.micro" ? "7-10" : "15-20"} (NAT Instance)`,
-        recommendations: [
-            "Monitor data transfer costs using CloudWatch",
-            "Consider VPC endpoints for AWS services to reduce NAT traffic",
-            "Use NAT Instance for dev/staging to reduce costs",
-            "Enable detailed billing reports for accurate cost tracking"
-        ],
-        dataTransferThreshold: highAvailabilityMode ? "> 100GB/month" : "< 50GB/month",
-    }),
+    value: pulumi.all([highAvailabilityMode, natInstanceType]).apply(([haMode, instanceType]) => 
+        JSON.stringify({
+            estimatedMonthlyCost: haMode 
+                ? "$90 (NAT Gateway x2)" 
+                : `$${instanceType === "t4g.nano" ? "3-5" : instanceType === "t4g.micro" ? "7-10" : "15-20"} (NAT Instance)`,
+            recommendations: [
+                "Monitor data transfer costs using CloudWatch",
+                "Consider VPC endpoints for AWS services to reduce NAT traffic",
+                "Use NAT Instance for dev/staging to reduce costs",
+                "Enable detailed billing reports for accurate cost tracking"
+            ],
+            dataTransferThreshold: haMode ? "> 100GB/month" : "< 50GB/month",
+        })
+    ),
     description: "Cost optimization information for NAT configuration",
     tags: {
         Environment: environment,
