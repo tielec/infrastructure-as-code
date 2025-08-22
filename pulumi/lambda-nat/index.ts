@@ -103,14 +103,7 @@ const natGatewayEipA = new aws.ec2.Eip("lambda-api-nat-eip-a", {
         },
     });
 
-    // プライベートサブネットAからのルート
-    // HAモードの場合はNAT Gateway A、通常モードの場合はNAT Instanceを使用
-    const privateRouteA = new aws.ec2.Route("lambda-api-private-route-a", {
-        routeTableId: privateRouteTableAId,
-        destinationCidrBlock: "0.0.0.0/0",
-        natGatewayId: pulumi.all([highAvailabilityMode, natGatewayA.id]).apply(([ha, gwId]) => ha ? gwId : undefined),
-        instanceId: pulumi.all([highAvailabilityMode, natInstance.id]).apply(([ha, instId]) => ha ? undefined : instId),
-    });
+    // プライベートサブネットAからのルート（後で定義）
 
     // NAT Gateway B用のEIP
     const natGatewayEipB = new aws.ec2.Eip("lambda-api-nat-eip-b", {
@@ -131,14 +124,7 @@ const natGatewayEipA = new aws.ec2.Eip("lambda-api-nat-eip-a", {
         },
     });
 
-    // プライベートサブネットBからのルート
-    // HAモードの場合はNAT Gateway B、通常モードの場合はNAT Instanceを使用
-    const privateRouteB = new aws.ec2.Route("lambda-api-private-route-b", {
-        routeTableId: privateRouteTableBId,
-        destinationCidrBlock: "0.0.0.0/0",
-        natGatewayId: pulumi.all([highAvailabilityMode, natGatewayB.id]).apply(([ha, gwId]) => ha ? gwId : undefined),
-        instanceId: pulumi.all([highAvailabilityMode, natInstance.id]).apply(([ha, instId]) => ha ? undefined : instId),
-    });
+    // プライベートサブネットBからのルート（後で定義）
 
     natResourceIds = [natGatewayA.id, natGatewayB.id];
     
@@ -300,7 +286,25 @@ The script should be located in the 'scripts' directory relative to your project
         allocationId: natInstanceEip.id,
     });
 
-    // NAT Instance用のルートは既に上で定義済み（privateRouteA, privateRouteB）
+    // ===== ルートの定義（NAT GatewayとNAT Instanceの両方が定義された後） =====
+    
+    // プライベートサブネットAからのルート
+    // HAモードの場合はNAT Gateway A、通常モードの場合はNAT Instanceを使用
+    const privateRouteA = new aws.ec2.Route("lambda-api-private-route-a", {
+        routeTableId: privateRouteTableAId,
+        destinationCidrBlock: "0.0.0.0/0",
+        natGatewayId: pulumi.all([highAvailabilityMode, natGatewayA.id]).apply(([ha, gwId]) => ha ? gwId : undefined),
+        instanceId: pulumi.all([highAvailabilityMode, natInstance.id]).apply(([ha, instId]) => ha ? undefined : instId),
+    });
+
+    // プライベートサブネットBからのルート
+    // HAモードの場合はNAT Gateway B、通常モードの場合はNAT Instanceを使用
+    const privateRouteB = new aws.ec2.Route("lambda-api-private-route-b", {
+        routeTableId: privateRouteTableBId,
+        destinationCidrBlock: "0.0.0.0/0",
+        natGatewayId: pulumi.all([highAvailabilityMode, natGatewayB.id]).apply(([ha, gwId]) => ha ? gwId : undefined),
+        instanceId: pulumi.all([highAvailabilityMode, natInstance.id]).apply(([ha, instId]) => ha ? undefined : instId),
+    });
 
     // NAT Instanceの自動復旧設定
     const natInstanceRecoveryAlarm = new aws.cloudwatch.MetricAlarm("lambda-api-nat-instance-recovery", {
