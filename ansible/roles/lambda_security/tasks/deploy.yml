@@ -92,21 +92,32 @@
       when: not preview_only | default(false) | bool
     
     # セキュリティグループ情報の取得
-    - name: Get security outputs
-      ansible.builtin.shell: |
-        cd {{ pulumi_path }}/lambda-security
-        export PULUMI_ACCESS_TOKEN="{{ lookup('env', 'PULUMI_ACCESS_TOKEN') }}"
-        pulumi stack output --json
-      register: security_outputs_raw
-      changed_when: false
+    # SSMからセキュリティグループIDを取得（Pulumiスタックのoutputは最小限のため）
+    - name: Get Lambda Security Group ID from SSM
+      ansible.builtin.include_role:
+        name: ssm_parameter_store
+        tasks_from: get_parameter
+      vars:
+        parameter_name: "/{{ project_name }}/{{ env_name }}/security/sg/lambda-id"
+        store_as: "lambda_sg_id"
       when: not preview_only | default(false) | bool
     
-    - name: Parse security outputs
+    - name: Get VPC Endpoint Security Group ID from SSM
+      ansible.builtin.include_role:
+        name: ssm_parameter_store
+        tasks_from: get_parameter
+      vars:
+        parameter_name: "/{{ project_name }}/{{ env_name }}/security/sg/vpce-id"
+        store_as: "vpce_sg_id"
+      when: not preview_only | default(false) | bool
+    
+    - name: Set security outputs from SSM
       ansible.builtin.set_fact:
-        security_outputs: "{{ security_outputs_raw.stdout | from_json }}"
-      when: 
-        - not preview_only | default(false) | bool
-        - security_outputs_raw.stdout is defined
+        security_outputs:
+          lambdaSecurityGroupId: "{{ ssm_parameter_store_lambda_sg_id | default('N/A') }}"
+          vpceSecurityGroupId: "{{ ssm_parameter_store_vpce_sg_id | default('N/A') }}"
+          deploymentComplete: true
+      when: not preview_only | default(false) | bool
     
     # デプロイ成功を示す変数設定
     - name: Set security deployment status
