@@ -79,17 +79,15 @@ const enableKMSEndpointParam = aws.ssm.getParameter({
     name: `/lambda-api/${environment}/vpce/enable-kms`,
 });
 
-const enableS3Endpoint = pulumi.output(enableS3EndpointParam.value).apply(v => v !== "false"); // デフォルトtrue
-const enableDynamoDBEndpoint = pulumi.output(enableDynamoDBEndpointParam.value).apply(v => v === "true");
-const enableSecretsManagerEndpoint = pulumi.output(enableSecretsManagerEndpointParam.value).apply(v => v === "true");
-const enableKMSEndpoint = pulumi.output(enableKMSEndpointParam.value).apply(v => v === "true");
+const enableS3Endpoint = pulumi.output(enableS3EndpointParam).apply(p => p.value !== "false"); // デフォルトtrue
+const enableDynamoDBEndpoint = pulumi.output(enableDynamoDBEndpointParam).apply(p => p.value === "true");
+const enableSecretsManagerEndpoint = pulumi.output(enableSecretsManagerEndpointParam).apply(p => p.value === "true");
+const enableKMSEndpoint = pulumi.output(enableKMSEndpointParam).apply(p => p.value === "true");
 
 // ===== Gateway型 VPC Endpoints =====
 
 // S3エンドポイント（Phase 1で必須）
-let s3Endpoint: aws.ec2.VpcEndpoint | undefined;
-if (enableS3Endpoint) {
-    s3Endpoint = new aws.ec2.VpcEndpoint(`${projectName}-vpce-s3`, {
+const s3Endpoint = new aws.ec2.VpcEndpoint("lambda-api-vpce-s3", {
         vpcId: vpcId,
         serviceName: pulumi.interpolate`com.amazonaws.${aws.config.region}.s3`,
         vpcEndpointType: "Gateway",
@@ -113,17 +111,14 @@ if (enableS3Endpoint) {
             }],
         }),
         tags: {
-            Name: `${projectName}-vpce-s3-${environment}`,
+            Name: pulumi.interpolate`${projectName}-vpce-s3-${environment}`,
             Environment: environment,
             Type: "gateway",
         },
     });
-}
 
 // DynamoDBエンドポイント（Phase 2）
-let dynamodbEndpoint: aws.ec2.VpcEndpoint | undefined;
-if (enableDynamoDBEndpoint) {
-    dynamodbEndpoint = new aws.ec2.VpcEndpoint(`${projectName}-vpce-dynamodb`, {
+const dynamodbEndpoint = new aws.ec2.VpcEndpoint("lambda-api-vpce-dynamodb", {
         vpcId: vpcId,
         serviceName: pulumi.interpolate`com.amazonaws.${aws.config.region}.dynamodb`,
         vpcEndpointType: "Gateway",
@@ -147,19 +142,16 @@ if (enableDynamoDBEndpoint) {
             }],
         }),
         tags: {
-            Name: `${projectName}-vpce-dynamodb-${environment}`,
+            Name: pulumi.interpolate`${projectName}-vpce-dynamodb-${environment}`,
             Environment: environment,
             Type: "gateway",
         },
     });
-}
 
 // ===== Interface型 VPC Endpoints =====
 
 // Secrets Managerエンドポイント（本番環境推奨）
-let secretsManagerEndpoint: aws.ec2.VpcEndpoint | undefined;
-if (enableSecretsManagerEndpoint) {
-    secretsManagerEndpoint = new aws.ec2.VpcEndpoint(`${projectName}-vpce-secretsmanager`, {
+const secretsManagerEndpoint = new aws.ec2.VpcEndpoint("lambda-api-vpce-secretsmanager", {
         vpcId: vpcId,
         serviceName: pulumi.interpolate`com.amazonaws.${aws.config.region}.secretsmanager`,
         vpcEndpointType: "Interface",
@@ -167,17 +159,14 @@ if (enableSecretsManagerEndpoint) {
         securityGroupIds: [vpceSecurityGroupId],
         privateDnsEnabled: true,
         tags: {
-            Name: `${projectName}-vpce-secretsmanager-${environment}`,
+            Name: pulumi.interpolate`${projectName}-vpce-secretsmanager-${environment}`,
             Environment: environment,
             Type: "interface",
         },
     });
-}
 
 // KMSエンドポイント（本番環境推奨）
-let kmsEndpoint: aws.ec2.VpcEndpoint | undefined;
-if (enableKMSEndpoint) {
-    kmsEndpoint = new aws.ec2.VpcEndpoint(`${projectName}-vpce-kms`, {
+const kmsEndpoint = new aws.ec2.VpcEndpoint("lambda-api-vpce-kms", {
         vpcId: vpcId,
         serviceName: pulumi.interpolate`com.amazonaws.${aws.config.region}.kms`,
         vpcEndpointType: "Interface",
@@ -185,12 +174,11 @@ if (enableKMSEndpoint) {
         securityGroupIds: [vpceSecurityGroupId],
         privateDnsEnabled: true,
         tags: {
-            Name: `${projectName}-vpce-kms-${environment}`,
+            Name: pulumi.interpolate`${projectName}-vpce-kms-${environment}`,
             Environment: environment,
             Type: "interface",
         },
     });
-}
 
 // ===== 将来の拡張用エンドポイント（Phase 2以降）=====
 // 必要に応じて以下のエンドポイントを追加可能：
