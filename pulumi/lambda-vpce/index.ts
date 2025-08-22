@@ -42,7 +42,7 @@ const isolatedRouteTableBIdParam = aws.ssm.getParameter({
 
 // SSMパラメータストアからセキュリティ情報を取得
 const vpceSecurityGroupIdParam = aws.ssm.getParameter({
-    name: `/lambda-api/${environment}/security/sg/vpce-id`,
+    name: `/lambda-api/${environment}/security/vpce-sg-id`,
 });
 
 // SSMパラメータストアからVPCエンドポイント設定を取得
