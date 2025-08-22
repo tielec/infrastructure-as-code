@@ -136,23 +136,22 @@
         pulumi_project_path: "{{ pulumi_path }}/lambda-network"
       when: not preview_only | default(false) | bool
     
-    # ネットワーク情報の取得
-    - name: Get network outputs
-      ansible.builtin.shell: |
-        cd {{ pulumi_path }}/lambda-network
-        export PULUMI_ACCESS_TOKEN="{{ lookup('env', 'PULUMI_ACCESS_TOKEN') }}"
-        pulumi stack output --json
-      register: network_outputs_raw
-      changed_when: false
+    # SSMからネットワーク情報を取得（Pulumiスタックのoutputは最小限のため）
+    - name: Get VPC ID from SSM
+      ansible.builtin.include_role:
+        name: ssm_parameter_store
+        tasks_from: get_parameter
+      vars:
+        parameter_name: "/{{ project_name }}/{{ env_name }}/network/vpc-id"
+        store_as: "vpc_id"
       when: not preview_only | default(false) | bool
     
-    - name: Parse network outputs
+    - name: Set network outputs from SSM
       ansible.builtin.set_fact:
-        network_outputs: "{{ network_outputs_raw.stdout | from_json }}"
-      when: 
-        - not preview_only | default(false) | bool
-        - network_outputs_raw.stdout is defined
-        - network_outputs_raw.stdout | length > 0
+        network_outputs:
+          vpcId: "{{ ssm_parameter_store_vpc_id | default('N/A') }}"
+          deploymentComplete: true
+      when: not preview_only | default(false) | bool
     
     # デプロイ成功を示す変数設定
     - name: Set network deployment status
