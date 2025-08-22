@@ -22,7 +22,7 @@ const environment = pulumi.getStack();
 const projectNameParam = aws.ssm.getParameter({
     name: `/lambda-api/${environment}/common/project-name`,
 });
-const projectName = projectNameParam.value;
+const projectName = pulumi.output(projectNameParam).apply(p => p.value);
 
 // SSMパラメータストアからNAT設定を取得
 const natHighAvailabilityParam = aws.ssm.getParameter({

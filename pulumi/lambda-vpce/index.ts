@@ -79,7 +79,7 @@ const enableKMSEndpointParam = aws.ssm.getParameter({
     name: `/lambda-api/${environment}/vpce/enable-kms`,
 });
 
-const enableS3Endpoint = pulumi.output(enableS3EndpointParam).apply(p => p.value !== "false"); // デフォルトtrue
+const enableS3Endpoint = pulumi.output(enableS3EndpointParam).apply(p => p.value !== "false");
 const enableDynamoDBEndpoint = pulumi.output(enableDynamoDBEndpointParam).apply(p => p.value === "true");
 const enableSecretsManagerEndpoint = pulumi.output(enableSecretsManagerEndpointParam).apply(p => p.value === "true");
 const enableKMSEndpoint = pulumi.output(enableKMSEndpointParam).apply(p => p.value === "true");

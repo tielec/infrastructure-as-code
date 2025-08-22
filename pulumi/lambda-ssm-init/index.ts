@@ -88,6 +88,16 @@ const commonParams = {
     
     // Phase設定（Phase 2の機能）
     [`${paramPrefix}/phase/isolated-subnets-enabled`]: String(envConfig.enableDatabase),
+    [`${paramPrefix}/phase/database-sg-enabled`]: String(envConfig.enableDatabase),
+    
+    // VPCエンドポイント個別設定
+    [`${paramPrefix}/vpce/enable-s3`]: String(envConfig.vpcEndpoints.includes("s3")),
+    [`${paramPrefix}/vpce/enable-dynamodb`]: String(envConfig.vpcEndpoints.includes("dynamodb")),
+    [`${paramPrefix}/vpce/enable-secrets-manager`]: String(envConfig.vpcEndpoints.includes("secretsmanager")),
+    [`${paramPrefix}/vpce/enable-kms`]: String(envConfig.vpcEndpoints.includes("kms")),
+    
+    // Lambda設定（追加）
+    [`${paramPrefix}/lambda/memory-size`]: String(envConfig.lambdaMemory),
     
     // デプロイメント情報
     [`${paramPrefix}/deployment/stack-name`]: `lambda-ssm-init-${environment}`,
