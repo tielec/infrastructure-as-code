@@ -73,7 +73,6 @@ const natInstanceSecurityGroupId = pulumi.output(natInstanceSecurityGroupIdParam
 
 // 出力用の変数（条件に応じて後で設定）
 let natResourceIds: pulumi.Output<string>[] = [];
-let natType: string;
 let natGatewayAId: pulumi.Output<string> | undefined;
 let natGatewayBId: pulumi.Output<string> | undefined;
 let natGatewayEipAAddress: pulumi.Output<string> | undefined;
@@ -104,8 +103,8 @@ const natGatewayEipA = new aws.ec2.Eip("lambda-api-nat-eip-a", {
         },
     });
 
-    // プライベートサブネットAからのルート
-    const privateRouteA = new aws.ec2.Route("lambda-api-private-route-a", {
+    // プライベートサブネットAからのルート（NAT Gateway用）
+    const privateRouteAGateway = new aws.ec2.Route("lambda-api-private-route-a-gw", {
         routeTableId: privateRouteTableAId,
         destinationCidrBlock: "0.0.0.0/0",
         natGatewayId: natGatewayA.id,
@@ -130,8 +129,8 @@ const natGatewayEipA = new aws.ec2.Eip("lambda-api-nat-eip-a", {
         },
     });
 
-    // プライベートサブネットBからのルート
-    const privateRouteB = new aws.ec2.Route("lambda-api-private-route-b", {
+    // プライベートサブネットBからのルート（NAT Gateway用）
+    const privateRouteBGateway = new aws.ec2.Route("lambda-api-private-route-b-gw", {
         routeTableId: privateRouteTableBId,
         destinationCidrBlock: "0.0.0.0/0",
         natGatewayId: natGatewayB.id,
@@ -298,7 +297,7 @@ The script should be located in the 'scripts' directory relative to your project
     });
 
     // 両方のプライベートサブネットからのルート（単一NAT Instance経由）
-    const privateRouteA = new aws.ec2.Route("lambda-api-private-route-a", {
+    const privateRouteAInstance = new aws.ec2.Route("lambda-api-private-route-a-inst", {
         routeTableId: privateRouteTableAId,
         destinationCidrBlock: "0.0.0.0/0",
         instanceId: natInstance.id,
@@ -306,7 +305,7 @@ The script should be located in the 'scripts' directory relative to your project
         dependsOn: [natInstance],
     });
 
-    const privateRouteB = new aws.ec2.Route("lambda-api-private-route-b", {
+    const privateRouteBInstance = new aws.ec2.Route("lambda-api-private-route-b-inst", {
         routeTableId: privateRouteTableBId,
         destinationCidrBlock: "0.0.0.0/0",
         instanceId: natInstance.id,
@@ -315,7 +314,7 @@ The script should be located in the 'scripts' directory relative to your project
     });
 
     // NAT Instanceの自動復旧設定
-    const natInstanceRecoveryAlarm = new aws.cloudwatch.MetricAlarm(`${projectName}-nat-instance-recovery`, {
+    const natInstanceRecoveryAlarm = new aws.cloudwatch.MetricAlarm("lambda-api-nat-instance-recovery", {
         alarmDescription: "Recover NAT instance when it fails",
         metricName: "StatusCheckFailed_System",
         namespace: "AWS/EC2",
@@ -379,16 +378,15 @@ The script should be located in the 'scripts' directory relative to your project
     natInstanceId = natInstance.id;
     natInstancePublicIp = natInstanceEip.publicIp;
     natInstancePrivateIp = natInstance.privateIp;
-}
 
 // ===== SSMパラメータストアに個別の出力を保存 =====
-const paramPrefix = `/${projectName}/${environment}/nat`;
+const paramPrefix = pulumi.interpolate`/${projectName}/${environment}/nat`;
 
 // NATタイプを保存
-const natTypeParam = new aws.ssm.Parameter(`${projectName}-nat-type`, {
-    name: `${paramPrefix}/type`,
+const natTypeParam = new aws.ssm.Parameter("lambda-api-nat-type", {
+    name: pulumi.interpolate`${paramPrefix}/type`,
     type: "String",
-    value: natType,
+    value: highAvailabilityMode.apply(ha => ha ? "gateway-ha" : "instance"),
     description: "NAT type (gateway-ha or instance)",
     tags: { Environment: environment, ManagedBy: "pulumi", Stack: "lambda-nat" },
 });
@@ -470,17 +468,19 @@ const deploymentCompleteParam = new aws.ssm.Parameter(`${projectName}-nat-deploy
 });
 
 // NAT設定情報を保存
-const natConfigParameter = new aws.ssm.Parameter(`${projectName}-nat-config`, {
-    name: `${paramPrefix}/config`,
+const natConfigParameter = new aws.ssm.Parameter("lambda-api-nat-config", {
+    name: pulumi.interpolate`${paramPrefix}/config`,
     type: "String",
-    value: JSON.stringify({
-        type: natType,
-        highAvailability: highAvailabilityMode,
-        instanceType: natInstanceType,
-        projectName: projectName,
-        environment: environment,
-        createdAt: new Date().toISOString(),
-    }),
+    value: pulumi.all([highAvailabilityMode, natInstanceType, projectName]).apply(
+        ([haMode, instanceType, proj]) => JSON.stringify({
+            type: haMode ? "gateway-ha" : "instance",
+            highAvailability: haMode,
+            instanceType: instanceType,
+            projectName: proj,
+            environment: environment,
+            createdAt: new Date().toISOString(),
+        })
+    ),
     description: "NAT configuration for Lambda API infrastructure",
     tags: {
         Environment: environment,
@@ -523,7 +523,6 @@ export const deploymentInfo = {
     environment: environment,
     timestamp: new Date().toISOString(),
     ssmParameterPrefix: paramPrefix,
-    natType: natType,
 };
 
 // デプロイ完了の確認用
