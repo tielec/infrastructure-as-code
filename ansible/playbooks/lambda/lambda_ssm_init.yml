@@ -10,6 +10,7 @@
   hosts: localhost
   connection: local
   gather_facts: yes
+  strategy: linear
   
   vars:
     env_name: "{{ env | default('dev') }}"
