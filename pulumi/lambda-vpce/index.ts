@@ -15,39 +15,39 @@ const environment = pulumi.getStack();
 const projectNameParam = aws.ssm.getParameter({
     name: `/lambda-api/${environment}/common/project-name`,
 });
-const projectName = projectNameParam.value;
+const projectName = pulumi.output(projectNameParam).apply(p => p.value);
 
 // SSMパラメータストアからネットワーク情報を取得
 const vpcIdParam = aws.ssm.getParameter({
-    name: `/${projectName}/${environment}/network/vpc-id`,
+    name: `/lambda-api/${environment}/network/vpc-id`,
 });
 const privateSubnetAIdParam = aws.ssm.getParameter({
-    name: `/${projectName}/${environment}/network/subnets/private-a-id`,
+    name: `/lambda-api/${environment}/network/subnets/private-a-id`,
 });
 const privateSubnetBIdParam = aws.ssm.getParameter({
-    name: `/${projectName}/${environment}/network/subnets/private-b-id`,
+    name: `/lambda-api/${environment}/network/subnets/private-b-id`,
 });
 const privateRouteTableAIdParam = aws.ssm.getParameter({
-    name: `/${projectName}/${environment}/network/route-tables/private-a-id`,
+    name: `/lambda-api/${environment}/network/route-tables/private-a-id`,
 });
 const privateRouteTableBIdParam = aws.ssm.getParameter({
-    name: `/${projectName}/${environment}/network/route-tables/private-b-id`,
+    name: `/lambda-api/${environment}/network/route-tables/private-b-id`,
 });
 const isolatedRouteTableAIdParam = aws.ssm.getParameter({
-    name: `/${projectName}/${environment}/network/route-tables/isolated-a-id`,
+    name: `/lambda-api/${environment}/network/route-tables/isolated-a-id`,
 });
 const isolatedRouteTableBIdParam = aws.ssm.getParameter({
-    name: `/${projectName}/${environment}/network/route-tables/isolated-b-id`,
+    name: `/lambda-api/${environment}/network/route-tables/isolated-b-id`,
 });
 
 // SSMパラメータストアからセキュリティ情報を取得
 const vpceSecurityGroupIdParam = aws.ssm.getParameter({
-    name: `/${projectName}/${environment}/security/sg/vpce-id`,
+    name: `/lambda-api/${environment}/security/sg/vpce-id`,
 });
 
 // SSMパラメータストアからVPCエンドポイント設定を取得
 const vpcEndpointsParam = aws.ssm.getParameter({
-    name: `/${projectName}/${environment}/network/vpc-endpoints`,
+    name: `/lambda-api/${environment}/network/vpc-endpoints`,
 });
 
 // 値の取得
@@ -358,7 +358,7 @@ const vpceConfig = new aws.ssm.Parameter(`${projectName}-vpce-config`, {
 
 // ===== エンドポイント使用ガイド =====
 const usageGuide = new aws.ssm.Parameter(`${projectName}-vpce-usage-guide`, {
-    name: `/${projectName}/${environment}/vpce/usage-guide`,
+    name: `/lambda-api/${environment}/vpce/usage-guide`,
     type: "String",
     value: JSON.stringify({
         s3: {

@@ -14,7 +14,7 @@ const environment = pulumi.getStack();
 const projectNameParam = aws.ssm.getParameter({
     name: `/lambda-api/${environment}/common/project-name`,
 });
-const projectName = projectNameParam.value;
+const projectName = pulumi.output(projectNameParam).apply(p => p.value);
 
 // Lambda関数の設定をSSMから取得
 const memorySizeParam = aws.ssm.getParameter({
@@ -27,9 +27,9 @@ const logRetentionDaysParam = aws.ssm.getParameter({
     name: `/lambda-api/${environment}/lambda/log-retention-days`,
 });
 
-const memorySize = pulumi.output(memorySizeParam.value).apply(v => parseInt(v) || 256);
-const timeout = pulumi.output(timeoutParam.value).apply(v => parseInt(v) || 30);
-const logRetentionDays = pulumi.output(logRetentionDaysParam.value).apply(v => parseInt(v) || (environment === "dev" ? 3 : environment === "staging" ? 7 : 14));
+const memorySize = pulumi.output(memorySizeParam).apply(p => parseInt(p.value) || 256);
+const timeout = pulumi.output(timeoutParam).apply(p => parseInt(p.value) || 30);
+const logRetentionDays = pulumi.output(logRetentionDaysParam).apply(p => parseInt(p.value) || (environment === "dev" ? 3 : environment === "staging" ? 7 : 14));
 
 // スタック参照名は固定（コンベンションとして）
 const networkStackName = "lambda-network";
@@ -43,18 +43,18 @@ const privateSubnetIds = networkStack.getOutput("privateSubnetIds");
 const lambdaSecurityGroupId = securityStack.getOutput("lambdaSecurityGroupId");
 
 // ===== Dead Letter Queue (DLQ) - エラー処理用 =====
-const dlq = new aws.sqs.Queue(`${projectName}-dlq`, {
-    name: `${projectName}-dlq-${environment}`,
+const dlq = new aws.sqs.Queue("lambda-api-dlq", {
+    name: pulumi.interpolate`${projectName}-dlq-${environment}`,
     messageRetentionSeconds: 14 * 24 * 60 * 60, // 14日間保持
     visibilityTimeoutSeconds: timeout * 6, // Lambdaタイムアウトの6倍
     tags: {
-        Name: `${projectName}-dlq-${environment}`,
+        Name: pulumi.interpolate`${projectName}-dlq-${environment}`,
         Environment: environment,
     },
 });
 
 // ===== IAMロール - Lambda実行権限 =====
-const lambdaRole = new aws.iam.Role(`${projectName}-lambda-role`, {
+const lambdaRole = new aws.iam.Role("lambda-api-lambda-role", {
     assumeRolePolicy: JSON.stringify({
         Version: "2012-10-17",
         Statement: [{
@@ -66,19 +66,19 @@ const lambdaRole = new aws.iam.Role(`${projectName}-lambda-role`, {
         }],
     }),
     tags: {
-        Name: `${projectName}-lambda-role-${environment}`,
+        Name: pulumi.interpolate`${projectName}-lambda-role-${environment}`,
         Environment: environment,
     },
 });
 
 // VPC内でLambdaを実行するための権限
-new aws.iam.RolePolicyAttachment(`${projectName}-vpc-access`, {
+new aws.iam.RolePolicyAttachment("lambda-api-vpc-access", {
     role: lambdaRole.name,
     policyArn: "arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole",
 });
 
 // 基本的な権限（CloudWatch Logs、DLQ、Secrets Manager）
-const lambdaPolicy = new aws.iam.RolePolicy(`${projectName}-lambda-policy`, {
+const lambdaPolicy = new aws.iam.RolePolicy("lambda-api-lambda-policy", {
     role: lambdaRole.id,
     policy: pulumi.all([dlq.arn]).apply(([dlqArn]) => JSON.stringify({
         Version: "2012-10-17",
@@ -103,15 +103,15 @@ const lambdaPolicy = new aws.iam.RolePolicy(`${projectName}-lambda-policy`, {
                 // Secrets Manager（APIキーなどの機密情報用）
                 Effect: "Allow",
                 Action: ["secretsmanager:GetSecretValue"],
-                Resource: `arn:aws:secretsmanager:*:*:secret:${projectName}/*`,
+                Resource: pulumi.interpolate`arn:aws:secretsmanager:*:*:secret:${projectName}/*`,
             },
         ],
     })),
 });
 
 // ===== メインのLambda関数 =====
-const mainFunction = new aws.lambda.Function(`${projectName}-main`, {
-    name: `${projectName}-main-${environment}`,
+const mainFunction = new aws.lambda.Function("lambda-api-main", {
+    name: pulumi.interpolate`${projectName}-main-${environment}`,
     description: "Main API handler for bubble.io integration",
     runtime: "nodejs18.x",
     architectures: ["arm64"], // AWS Graviton2でコスト削減

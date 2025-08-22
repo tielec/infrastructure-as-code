@@ -14,7 +14,7 @@ const environment = pulumi.getStack();
 const projectNameParam = aws.ssm.getParameter({
     name: `/lambda-api/${environment}/common/project-name`,
 });
-const projectName = projectNameParam.value;
+const projectName = pulumi.output(projectNameParam).apply(p => p.value);
 
 // スタック参照名は固定（コンベンションとして）
 const functionsStackName = "lambda-functions";
@@ -25,8 +25,8 @@ const lambdaFunctionName = functionsStack.getOutput("functionName");
 const lambdaFunctionArn = functionsStack.getOutput("functionArn");
 
 // ===== REST API =====
-const api = new aws.apigateway.RestApi(`${projectName}-api`, {
-    name: `${projectName}-api-${environment}`,
+const api = new aws.apigateway.RestApi("lambda-api-api", {
+    name: pulumi.interpolate`${projectName}-api-${environment}`,
     description: `Lambda API Gateway for ${environment} environment`,
     endpointConfiguration: {
         types: "REGIONAL", // リージョナルエンドポイント（低レイテンシー）
@@ -34,20 +34,20 @@ const api = new aws.apigateway.RestApi(`${projectName}-api`, {
     // バイナリメディアタイプのサポート（将来の拡張用）
     binaryMediaTypes: ["application/octet-stream", "image/*"],
     tags: {
-        Name: `${projectName}-api-${environment}`,
+        Name: pulumi.interpolate`${projectName}-api-${environment}`,
         Environment: environment,
     },
 });
 
 // ===== リソースとメソッドの作成 =====
 // ヘルスチェックエンドポイント（/health）- APIキー不要
-const healthResource = new aws.apigateway.Resource(`${projectName}-health-resource`, {
+const healthResource = new aws.apigateway.Resource("lambda-api-health-resource", {
     restApi: api.id,
     parentId: api.rootResourceId,
     pathPart: "health",
 });
 
-const healthMethod = new aws.apigateway.Method(`${projectName}-health-method`, {
+const healthMethod = new aws.apigateway.Method("lambda-api-health-method", {
     restApi: api.id,
     resourceId: healthResource.id,
     httpMethod: "GET",
@@ -55,7 +55,7 @@ const healthMethod = new aws.apigateway.Method(`${projectName}-health-method`, {
 });
 
 // ヘルスチェックのモックレスポンス（Lambdaを呼ばない）
-const healthIntegration = new aws.apigateway.Integration(`${projectName}-health-integration`, {
+const healthIntegration = new aws.apigateway.Integration("lambda-api-health-integration", {
     restApi: api.id,
     resourceId: healthResource.id,
     httpMethod: healthMethod.httpMethod,
@@ -65,7 +65,7 @@ const healthIntegration = new aws.apigateway.Integration(`${projectName}-health-
     },
 });
 
-const healthResponse = new aws.apigateway.IntegrationResponse(`${projectName}-health-response`, {
+const healthResponse = new aws.apigateway.IntegrationResponse("lambda-api-health-response", {
     restApi: api.id,
     resourceId: healthResource.id,
     httpMethod: healthMethod.httpMethod,
@@ -82,7 +82,7 @@ const healthResponse = new aws.apigateway.IntegrationResponse(`${projectName}-he
     dependsOn: [healthIntegration],
 });
 
-const healthMethodResponse = new aws.apigateway.MethodResponse(`${projectName}-health-method-response`, {
+const healthMethodResponse = new aws.apigateway.MethodResponse("lambda-api-health-method-response", {
     restApi: api.id,
     resourceId: healthResource.id,
     httpMethod: healthMethod.httpMethod,
@@ -95,14 +95,14 @@ const healthMethodResponse = new aws.apigateway.MethodResponse(`${projectName}-h
 });
 
 // ===== メインAPIエンドポイント（/api）=====
-const apiResource = new aws.apigateway.Resource(`${projectName}-api-resource`, {
+const apiResource = new aws.apigateway.Resource("lambda-api-api-resource", {
     restApi: api.id,
     parentId: api.rootResourceId,
     pathPart: "api",
 });
 
 // プロキシリソース（/api/{proxy+}）- すべてのサブパスをキャッチ
-const proxyResource = new aws.apigateway.Resource(`${projectName}-proxy-resource`, {
+const proxyResource = new aws.apigateway.Resource("lambda-api-proxy-resource", {
     restApi: api.id,
     parentId: apiResource.id,
     pathPart: "{proxy+}",
