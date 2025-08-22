@@ -54,22 +54,22 @@ const privateRouteTableBIdParam = aws.ssm.getParameter({
 
 // SSMパラメータストアからセキュリティ情報を取得
 const natInstanceSecurityGroupIdParam = aws.ssm.getParameter({
-    name: `/lambda-api/${environment}/security/sg/nat-instance-id`,
+    name: `/lambda-api/${environment}/security/nat-instance-sg-id`,
 });
 
 // 値の取得
-const highAvailabilityMode = natHighAvailabilityParam.then(p => p.value === "true");
-const natInstanceType = natInstanceTypeParam.then(p => p.value || "t4g.nano");
-const vpcId = vpcIdParam.then(p => p.value);
-const vpcCidr = vpcCidrParam.then(p => p.value);
-const publicSubnetAId = publicSubnetAIdParam.then(p => p.value);
-const publicSubnetBId = publicSubnetBIdParam.then(p => p.value);
-const privateRouteTableAId = privateRouteTableAIdParam.then(p => p.value);
-const privateRouteTableBId = privateRouteTableBIdParam.then(p => p.value);
-const natInstanceSecurityGroupId = natInstanceSecurityGroupIdParam.then(p => p.value);
+const highAvailabilityMode = pulumi.output(natHighAvailabilityParam).apply(p => p.value === "true");
+const natInstanceType = pulumi.output(natInstanceTypeParam).apply(p => p.value || "t4g.nano");
+const vpcId = pulumi.output(vpcIdParam).apply(p => p.value);
+const vpcCidr = pulumi.output(vpcCidrParam).apply(p => p.value);
+const publicSubnetAId = pulumi.output(publicSubnetAIdParam).apply(p => p.value);
+const publicSubnetBId = pulumi.output(publicSubnetBIdParam).apply(p => p.value);
+const privateRouteTableAId = pulumi.output(privateRouteTableAIdParam).apply(p => p.value);
+const privateRouteTableBId = pulumi.output(privateRouteTableBIdParam).apply(p => p.value);
+const natInstanceSecurityGroupId = pulumi.output(natInstanceSecurityGroupIdParam).apply(p => p.value);
 
-// キー名はコンフィグから取得（オプション）
-const keyName = config.get("keyName");
+// キー名はSSMから取得する場合はここで定義
+// const keyName = "my-key-name"; // 必要に応じて設定
 
 // 出力用の変数（条件に応じて後で設定）
 let natResourceIds: pulumi.Output<string>[] = [];
@@ -82,13 +82,11 @@ let natInstanceId: pulumi.Output<string> | undefined;
 let natInstancePublicIp: pulumi.Output<string> | undefined;
 let natInstancePrivateIp: pulumi.Output<string> | undefined;
 
-if (highAvailabilityMode) {
-    // ===== ハイアベイラビリティモード: NAT Gateway x2 =====
-    pulumi.log.info("Deploying NAT Gateways in High Availability mode");
-    natType = "gateway-ha";
+// ===== NATリソースの作成 =====
+// 条件に応じて適切なリソースを作成
 
-    // NAT Gateway A用のEIP
-    const natGatewayEipA = new aws.ec2.Eip(`${projectName}-nat-eip-a`, {
+// NAT Gateway用リソース（常に作成、HAモードでのみ使用）
+const natGatewayEipA = new aws.ec2.Eip("lambda-api-nat-eip-a", {
         tags: {
             Name: `${projectName}-nat-eip-a-${environment}`,
             Environment: environment,
