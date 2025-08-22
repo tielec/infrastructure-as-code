@@ -8,10 +8,14 @@
 import * as pulumi from "@pulumi/pulumi";
 import * as aws from "@pulumi/aws";
 
-// コンフィグから設定を取得
-const config = new pulumi.Config();
-const projectName = config.get("projectName") || "lambda-api";
+// 環境変数を取得
 const environment = pulumi.getStack();
+
+// SSMパラメータストアから設定を取得（Single Source of Truth）
+const projectNameParam = aws.ssm.getParameter({
+    name: `/lambda-api/${environment}/common/project-name`,
+});
+const projectName = projectNameParam.value;
 
 // SSMパラメータストアからネットワーク情報を取得
 const vpcIdParam = aws.ssm.getParameter({
@@ -61,11 +65,24 @@ const isolatedRouteTableBId = isolatedRouteTableBIdParam.then(p => p.value || ""
 const vpceSecurityGroupId = vpceSecurityGroupIdParam.then(p => p.value);
 const vpcEndpoints = vpcEndpointsParam.then(p => JSON.parse(p.value || "[]"));
 
-// VPCエンドポイント設定
-const enableS3Endpoint = config.getBoolean("enableS3Endpoint") !== false; // デフォルトtrue
-const enableDynamoDBEndpoint = config.getBoolean("enableDynamoDBEndpoint") || false;
-const enableSecretsManagerEndpoint = config.getBoolean("enableSecretsManagerEndpoint") || false;
-const enableKMSEndpoint = config.getBoolean("enableKMSEndpoint") || false;
+// VPCエンドポイント設定をSSMから取得
+const enableS3EndpointParam = aws.ssm.getParameter({
+    name: `/lambda-api/${environment}/vpce/enable-s3`,
+});
+const enableDynamoDBEndpointParam = aws.ssm.getParameter({
+    name: `/lambda-api/${environment}/vpce/enable-dynamodb`,
+});
+const enableSecretsManagerEndpointParam = aws.ssm.getParameter({
+    name: `/lambda-api/${environment}/vpce/enable-secrets-manager`,
+});
+const enableKMSEndpointParam = aws.ssm.getParameter({
+    name: `/lambda-api/${environment}/vpce/enable-kms`,
+});
+
+const enableS3Endpoint = pulumi.output(enableS3EndpointParam.value).apply(v => v !== "false"); // デフォルトtrue
+const enableDynamoDBEndpoint = pulumi.output(enableDynamoDBEndpointParam.value).apply(v => v === "true");
+const enableSecretsManagerEndpoint = pulumi.output(enableSecretsManagerEndpointParam.value).apply(v => v === "true");
+const enableKMSEndpoint = pulumi.output(enableKMSEndpointParam.value).apply(v => v === "true");
 
 // ===== Gateway型 VPC Endpoints =====
 

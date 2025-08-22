@@ -15,42 +15,46 @@ import * as path from "path";
 declare const __dirname: string;
 declare const process: NodeJS.Process;
 
-// コンフィグから設定を取得
-const config = new pulumi.Config();
-const projectName = config.get("projectName") || "lambda-api";
+// 環境変数を取得
 const environment = pulumi.getStack();
+
+// SSMパラメータストアから設定を取得（Single Source of Truth）
+const projectNameParam = aws.ssm.getParameter({
+    name: `/lambda-api/${environment}/common/project-name`,
+});
+const projectName = projectNameParam.value;
 
 // SSMパラメータストアからNAT設定を取得
 const natHighAvailabilityParam = aws.ssm.getParameter({
-    name: `/${projectName}/${environment}/nat/high-availability`,
+    name: `/lambda-api/${environment}/nat/high-availability`,
 });
 const natInstanceTypeParam = aws.ssm.getParameter({
-    name: `/${projectName}/${environment}/nat/instance-type`,
+    name: `/lambda-api/${environment}/nat/instance-type`,
 });
 
 // SSMパラメータストアからネットワーク情報を取得
 const vpcIdParam = aws.ssm.getParameter({
-    name: `/${projectName}/${environment}/network/vpc-id`,
+    name: `/lambda-api/${environment}/network/vpc-id`,
 });
 const vpcCidrParam = aws.ssm.getParameter({
-    name: `/${projectName}/${environment}/network/vpc-cidr`,
+    name: `/lambda-api/${environment}/network/vpc-cidr`,
 });
 const publicSubnetAIdParam = aws.ssm.getParameter({
-    name: `/${projectName}/${environment}/network/subnets/public-a-id`,
+    name: `/lambda-api/${environment}/network/subnets/public-a-id`,
 });
 const publicSubnetBIdParam = aws.ssm.getParameter({
-    name: `/${projectName}/${environment}/network/subnets/public-b-id`,
+    name: `/lambda-api/${environment}/network/subnets/public-b-id`,
 });
 const privateRouteTableAIdParam = aws.ssm.getParameter({
-    name: `/${projectName}/${environment}/network/route-tables/private-a-id`,
+    name: `/lambda-api/${environment}/network/route-tables/private-a-id`,
 });
 const privateRouteTableBIdParam = aws.ssm.getParameter({
-    name: `/${projectName}/${environment}/network/route-tables/private-b-id`,
+    name: `/lambda-api/${environment}/network/route-tables/private-b-id`,
 });
 
 // SSMパラメータストアからセキュリティ情報を取得
 const natInstanceSecurityGroupIdParam = aws.ssm.getParameter({
-    name: `/${projectName}/${environment}/security/sg/nat-instance-id`,
+    name: `/lambda-api/${environment}/security/sg/nat-instance-id`,
 });
 
 // 値の取得
@@ -476,7 +480,7 @@ const natConfigParameter = new aws.ssm.Parameter(`${projectName}-nat-config`, {
 
 // コスト最適化情報のパラメータ
 const costOptimizationParameter = new aws.ssm.Parameter(`${projectName}-nat-cost-info`, {
-    name: `/${projectName}/${environment}/nat/cost-optimization`,
+    name: `/lambda-api/${environment}/nat/cost-optimization`,
     type: "String",
     value: JSON.stringify({
         estimatedMonthlyCost: highAvailabilityMode 
