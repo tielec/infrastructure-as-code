@@ -76,7 +76,7 @@ const publicSubnetA = new aws.ec2.Subnet("lambda-api-public-subnet-a", {
     tags: {
         Name: pulumi.interpolate`${projectName}-public-subnet-a-${environment}`,
         Environment: environment,
-        Type: "public`,
+        Type: "public",
     },
 });
 
@@ -89,7 +89,7 @@ const publicSubnetB = new aws.ec2.Subnet("lambda-api-public-subnet-b", {
     tags: {
         Name: pulumi.interpolate`${projectName}-public-subnet-b-${environment}`,
         Environment: environment,
-        Type: "public`,
+        Type: "public",
     },
 });
 
@@ -102,7 +102,7 @@ const privateSubnetA = new aws.ec2.Subnet("lambda-api-private-subnet-a", {
     tags: {
         Name: pulumi.interpolate`${projectName}-private-subnet-a-${environment}`,
         Environment: environment,
-        Type: "private`,
+        Type: "private",
     },
 });
 
@@ -114,7 +114,7 @@ const privateSubnetB = new aws.ec2.Subnet("lambda-api-private-subnet-b", {
     tags: {
         Name: pulumi.interpolate`${projectName}-private-subnet-b-${environment}`,
         Environment: environment,
-        Type: "private`,
+        Type: "private",
     },
 });
 
@@ -133,7 +133,7 @@ if (createIsolatedSubnets) {
         tags: {
             Name: pulumi.interpolate`${projectName}-isolated-subnet-a-${environment}`,
             Environment: environment,
-            Type: "isolated`,
+            Type: "isolated",
         },
     });
 
@@ -145,7 +145,7 @@ if (createIsolatedSubnets) {
         tags: {
             Name: pulumi.interpolate`${projectName}-isolated-subnet-b-${environment}`,
             Environment: environment,
-            Type: "isolated`,
+            Type: "isolated",
         },
     });
 
@@ -275,11 +275,11 @@ if (enableFlowLogs) {
             Statement: [{
                 Effect: "Allow",
                 Action: [
-                    "logs:CreateLogGroup`,
-                    "logs:CreateLogStream`,
-                    "logs:PutLogEvents`,
-                    "logs:DescribeLogGroups`,
-                    "logs:DescribeLogStreams`,
+                    "logs:CreateLogGroup",
+                    "logs:CreateLogStream",
+                    "logs:PutLogEvents",
+                    "logs:DescribeLogGroups",
+                    "logs:DescribeLogStreams",
                 ],
                 Resource: "*",
             }],
