@@ -147,10 +147,12 @@ const dlqSecurityGroup = new aws.ec2.SecurityGroup("lambda-api-dlq-sg", {
 
 // ===== Phase 2: RDS/DynamoDB用セキュリティグループ（将来用） =====
 // Phase 2で有効化する場合のみ作成
-const createDatabaseSecurityGroupsParam = aws.ssm.getParameter({
-    name: `/lambda-api/${environment}/phase/database-sg-enabled`,
-});
-const createDatabaseSecurityGroups = pulumi.output(createDatabaseSecurityGroupsParam).apply(p => p.value === "true");
+// SSMパラメータが存在しない場合はfalseとして扱う
+const createDatabaseSecurityGroups = pulumi.output(
+    aws.ssm.getParameter({
+        name: `/lambda-api/${environment}/phase/database-sg-enabled`,
+    }).catch(() => ({ value: "false" }))
+).apply(p => p.value === "true");
 
 let rdsSecurityGroup: aws.ec2.SecurityGroup | undefined;
 let dynamodbVpceSecurityGroup: aws.ec2.SecurityGroup | undefined;
@@ -328,8 +330,8 @@ export const deploymentInfo = {
 };
 
 // セキュリティベストプラクティスのチェックリスト
-const securityChecklistParameter = new aws.ssm.Parameter(`${projectName}-security-checklist`, {
-    name: `/${projectName}/${environment}/security/checklist`,
+const securityChecklistParameter = new aws.ssm.Parameter("lambda-api-security-checklist", {
+    name: pulumi.interpolate`/${projectName}/${environment}/security/checklist`,
     type: "String",
     value: JSON.stringify({
         completed: [
