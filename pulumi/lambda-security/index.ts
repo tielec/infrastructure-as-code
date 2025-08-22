@@ -15,7 +15,7 @@ const environment = pulumi.getStack();
 const projectNameParam = aws.ssm.getParameter({
     name: `/lambda-api/${environment}/common/project-name`,
 });
-const projectName = projectNameParam.value;
+const projectName = pulumi.output(projectNameParam).apply(p => p.value);
 
 // SSMパラメータストアからVPC情報を取得
 const vpcIdParam = aws.ssm.getParameter({
