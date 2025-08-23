@@ -75,15 +75,18 @@ pipelineJob(jobPath) {
         // AWS設定
         choiceParam('AWS_REGION', ['ap-northeast-1', 'us-east-1', 'us-west-2'], 'AWSリージョン')
         
-        // AWS認証情報
-        stringParam('AWS_ACCESS_KEY_ID', '', 
-            "AWS Access Key ID - SSMパラメータへの読み取りアクセス権限が必要です")
+        // AWS認証情報（オプション - 空の場合はEC2インスタンスロールを使用）
+        stringParam('AWS_ACCESS_KEY_ID', '', '''AWS Access Key ID（オプション）
+            |空の場合はEC2インスタンスロールを自動的に使用します
+            |'''.stripMargin())
         
-        nonStoredPasswordParam('AWS_SECRET_ACCESS_KEY', 
-            'AWS Secret Access Key - セキュリティのため保存されません')
+        nonStoredPasswordParam('AWS_SECRET_ACCESS_KEY', '''AWS Secret Access Key（オプション）
+            |空の場合はEC2インスタンスロールを自動的に使用します
+            |'''.stripMargin())
         
-        nonStoredPasswordParam('AWS_SESSION_TOKEN', 
-            'AWS Session Token（オプション） - STS一時認証情報を使用する場合')
+        nonStoredPasswordParam('AWS_SESSION_TOKEN', '''AWS Session Token（オプション）
+            |STS一時認証情報を使用する場合のみ指定
+            |'''.stripMargin())
         
         // 出力形式
         choiceParam('OUTPUT_FORMAT', ['HTML', 'JSON', 'CSV'], '''出力形式

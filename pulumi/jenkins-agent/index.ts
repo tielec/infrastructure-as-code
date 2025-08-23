@@ -206,6 +206,33 @@ const buildResourcesPolicy = new aws.iam.Policy(`agent-build-policy`, {
     }),
 });
 
+// SSMパラメータストア追加権限（ダッシュボード用）
+// AmazonSSMManagedInstanceCoreには含まれていないDescribeParametersのみ追加
+const ssmParameterReadPolicy = new aws.iam.Policy(`agent-ssm-parameter-policy`, {
+    description: "Additional SSM permissions for parameter dashboard",
+    policy: JSON.stringify({
+        Version: "2012-10-17",
+        Statement: [
+            {
+                Sid: "SSMParameterList",
+                Effect: "Allow",
+                Action: [
+                    "ssm:DescribeParameters"  // パラメータ一覧取得（AmazonSSMManagedInstanceCoreに含まれていない）
+                ],
+                Resource: "*"
+            }
+        ]
+    }),
+});
+
+const ssmParameterReadPolicyAttachment = new aws.iam.RolePolicyAttachment(
+    `agent-ssm-parameter-policy-attachment`, 
+    {
+        role: jenkinsAgentRole.name,
+        policyArn: ssmParameterReadPolicy.arn,
+    }
+);
+
 const buildResourcesPolicyAttachment = new aws.iam.RolePolicyAttachment(
     `agent-build-policy-attachment`, 
     {
