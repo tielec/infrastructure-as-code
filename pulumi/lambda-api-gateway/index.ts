@@ -109,7 +109,7 @@ const proxyResource = new aws.apigateway.Resource("lambda-api-proxy-resource", {
 });
 
 // Lambda実行権限
-const lambdaPermission = new aws.lambda.Permission(`${projectName}-api-lambda-permission`, {
+const lambdaPermission = new aws.lambda.Permission("lambda-api-lambda-permission", {
     action: "lambda:InvokeFunction",
     function: lambdaFunctionName,
     principal: "apigateway.amazonaws.com",
@@ -117,7 +117,7 @@ const lambdaPermission = new aws.lambda.Permission(`${projectName}-api-lambda-pe
 });
 
 // ANY メソッド（すべてのHTTPメソッドを受け付ける）
-const proxyMethod = new aws.apigateway.Method(`${projectName}-proxy-method`, {
+const proxyMethod = new aws.apigateway.Method("lambda-api-proxy-method", {
     restApi: api.id,
     resourceId: proxyResource.id,
     httpMethod: "ANY",
@@ -129,7 +129,7 @@ const proxyMethod = new aws.apigateway.Method(`${projectName}-proxy-method`, {
 });
 
 // Lambda統合
-const lambdaIntegration = new aws.apigateway.Integration(`${projectName}-lambda-integration`, {
+const lambdaIntegration = new aws.apigateway.Integration("lambda-api-lambda-integration", {
     restApi: api.id,
     resourceId: proxyResource.id,
     httpMethod: proxyMethod.httpMethod,
@@ -141,7 +141,7 @@ const lambdaIntegration = new aws.apigateway.Integration(`${projectName}-lambda-
 });
 
 // /api 直下のメソッド（プロキシなし）
-const apiMethod = new aws.apigateway.Method(`${projectName}-api-method`, {
+const apiMethod = new aws.apigateway.Method("lambda-api-api-method", {
     restApi: api.id,
     resourceId: apiResource.id,
     httpMethod: "ANY",
@@ -152,7 +152,7 @@ const apiMethod = new aws.apigateway.Method(`${projectName}-api-method`, {
     },
 });
 
-const apiIntegration = new aws.apigateway.Integration(`${projectName}-api-integration`, {
+const apiIntegration = new aws.apigateway.Integration("lambda-api-api-integration", {
     restApi: api.id,
     resourceId: apiResource.id,
     httpMethod: apiMethod.httpMethod,
@@ -162,7 +162,7 @@ const apiIntegration = new aws.apigateway.Integration(`${projectName}-api-integr
 });
 
 // ===== API デプロイメント =====
-const deployment = new aws.apigateway.Deployment(`${projectName}-deployment`, {
+const deployment = new aws.apigateway.Deployment("lambda-api-deployment", {
     restApi: api.id,
 }, {
     // 依存関係を明示的に設定
@@ -179,7 +179,7 @@ const deployment = new aws.apigateway.Deployment(`${projectName}-deployment`, {
 });
 
 // ===== ステージ =====
-const stage = new aws.apigateway.Stage(`${projectName}-stage`, {
+const stage = new aws.apigateway.Stage("lambda-api-stage", {
     deployment: deployment.id,
     restApi: api.id,
     stageName: environment,
