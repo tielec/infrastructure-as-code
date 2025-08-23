@@ -20,12 +20,8 @@ setup_github_app() {
         # 秘密鍵の確認
         if aws ssm get-parameter --name "$APP_KEY_PARAM" --region "$REGION" &>/dev/null; then
             log_info "✓ GitHub App秘密鍵も設定されています"
-            
-            # 既存の設定を使用するか確認
-            if confirm_action "既存のGitHub App設定を使用しますか？"; then
-                log_info "既存の設定を使用します"
-                return 0
-            fi
+            log_info "既存の設定を使用します"
+            return 0
         fi
     fi
     
