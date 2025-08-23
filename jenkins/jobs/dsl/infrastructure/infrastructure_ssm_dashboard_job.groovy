@@ -103,6 +103,9 @@ pipelineJob(jobPath) {
             |Environment=Production
             |Project=Jenkins
             |'''.stripMargin())
+        
+        // Jenkinsfileブランチ
+        stringParam('JENKINSFILE_BRANCH', 'main', 'Jenkinsfileが格納されているブランチ')
     }
     
     // パイプライン定義
@@ -114,32 +117,34 @@ pipelineJob(jobPath) {
                         url(jenkinsPipelineRepo.url)
                         credentials(jenkinsPipelineRepo.credentials)
                     }
-                    branch(jenkinsPipelineRepo.branch)
+                    branch('${JENKINSFILE_BRANCH}')
                 }
             }
             scriptPath(jobConfig.jenkinsfile)
+            lightweight(true)
         }
     }
     
-    // ビルド履歴の保持設定
+    // ログローテーション設定
     logRotator {
         daysToKeep(7)
-        numToKeep(20)
+        numToKeep(30)
         artifactDaysToKeep(3)
         artifactNumToKeep(10)
     }
     
-    // 実行環境の設定
-    wrappers {
-        // タイムアウト設定（5分）
-        timeout {
-            absolute(5)
+    // プロパティ設定
+    properties {
+        // 同時実行を制限
+        disableConcurrentBuilds()
+        
+        // 再ビルド設定
+        rebuild {
+            autoRebuild(false)
+            rebuildDisabled(false)
         }
-        
-        // ANSI カラー出力を有効化
-        ansiColor('xterm')
-        
-        // タイムスタンプを有効化
-        timestamps()
     }
+    
+    // ジョブの無効化状態
+    disabled(false)
 }
