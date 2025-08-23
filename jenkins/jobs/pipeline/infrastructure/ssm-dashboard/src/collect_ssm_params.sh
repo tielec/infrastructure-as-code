@@ -18,16 +18,20 @@ echo "======================================"
 build_query_command() {
     local cmd="aws ssm describe-parameters"
     
-    # パスフィルタの適用
-    if [ "${PARAMETER_PATH}" != "/" ]; then
+    # パスフィルタの適用（/の場合は指定しない）
+    if [ "${PARAMETER_PATH}" != "/" ] && [ -n "${PARAMETER_PATH}" ]; then
         cmd="$cmd --path ${PARAMETER_PATH}"
         if [ "${RECURSIVE}" = "true" ]; then
             cmd="$cmd --recursive"
         fi
     fi
     
-    # 最大件数の設定
-    cmd="$cmd --max-results ${MAX_RESULTS}"
+    # 最大件数の設定（AWS CLIの制限は50）
+    local max_results="${MAX_RESULTS}"
+    if [ ${max_results} -gt 50 ]; then
+        max_results=50
+    fi
+    cmd="$cmd --max-items ${max_results}"
     
     echo "$cmd"
 }
@@ -41,19 +45,44 @@ fetch_parameters_list() {
     local next_token=""
     local all_params="[]"
     local page=1
+    local total_fetched=0
+    local max_total="${MAX_RESULTS}"
     
     while true; do
         echo "  ページ ${page} を取得中..."
         
+        # コマンド実行
         if [ -n "$next_token" ]; then
-            local result=$($query_cmd --next-token "$next_token" --output json)
+            local result=$($query_cmd --starting-token "$next_token" --output json 2>&1)
         else
-            local result=$($query_cmd --output json)
+            local result=$($query_cmd --output json 2>&1)
+        fi
+        
+        # エラーチェック
+        if echo "$result" | grep -q "error occurred"; then
+            echo "エラー: $result"
+            echo "[]" > "${DATA_DIR}/parameters_list.json"
+            return 1
         fi
         
         # パラメータを追加
-        local params=$(echo "$result" | jq -r '.Parameters')
+        local params=$(echo "$result" | jq -r '.Parameters // []')
+        local param_count=$(echo "$params" | jq 'length')
+        
+        if [ "$param_count" -eq 0 ]; then
+            break
+        fi
+        
         all_params=$(echo "$all_params" | jq ". + $params")
+        total_fetched=$((total_fetched + param_count))
+        
+        echo "    取得済み: ${total_fetched} 個"
+        
+        # 最大件数に達したらbreak
+        if [ ${total_fetched} -ge ${max_total} ]; then
+            echo "  最大件数（${max_total}）に達しました"
+            break
+        fi
         
         # 次のトークンを確認
         next_token=$(echo "$result" | jq -r '.NextToken // empty')
@@ -85,6 +114,11 @@ fetch_parameters_list() {
     local param_count=$(echo "$all_params" | jq 'length')
     echo "✅ ${param_count} 個のパラメータを取得しました"
     
+    # パラメータが0個の場合の処理
+    if [ "$param_count" -eq 0 ]; then
+        echo "⚠️  パラメータが見つかりませんでした。空のダッシュボードを生成します。"
+    fi
+    
     return 0
 }
 
@@ -93,13 +127,16 @@ fetch_parameter_details() {
     echo "パラメータの詳細を取得中..."
     
     # パラメータリストを読み込み
-    local params=$(jq -r '.Parameters[].Name' "${DATA_DIR}/parameters_list.json")
+    local params=$(jq -r '.Parameters[].Name' "${DATA_DIR}/parameters_list.json" 2>/dev/null)
+    
+    # パラメータが空の場合はスキップ
+    if [ -z "$params" ]; then
+        echo "  詳細を取得するパラメータがありません"
+        return 0
+    fi
+    
     local total=$(echo "$params" | wc -l)
     local count=0
-    
-    # バッチ処理用の配列
-    local batch_size=10
-    local batch=()
     
     echo "$params" | while IFS= read -r param_name; do
         count=$((count + 1))
@@ -145,7 +182,14 @@ fetch_parameter_details() {
 fetch_tags() {
     echo "タグ情報を取得中..."
     
-    local params=$(jq -r '.Parameters[].Name' "${DATA_DIR}/parameters_list.json")
+    local params=$(jq -r '.Parameters[].Name' "${DATA_DIR}/parameters_list.json" 2>/dev/null)
+    
+    # パラメータが空の場合はスキップ
+    if [ -z "$params" ]; then
+        echo "  タグを取得するパラメータがありません"
+        return 0
+    fi
+    
     local total=$(echo "$params" | wc -l)
     local count=0
     
