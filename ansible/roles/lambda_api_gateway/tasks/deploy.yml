@@ -65,7 +65,7 @@
     
     - name: Parse API Gateway configuration
       ansible.builtin.set_fact:
-        api_outputs: "{{ api_config_json | from_json }}"
+        api_outputs: "{{ api_config_json if api_config_json is mapping else (api_config_json | from_json if api_config_json else {}) }}"
       when: 
         - not preview_only | default(false) | bool
         - api_config_json is defined and api_config_json | length > 0
