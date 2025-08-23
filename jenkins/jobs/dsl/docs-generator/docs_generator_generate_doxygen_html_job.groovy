@@ -61,6 +61,7 @@ def createDoxygenHtmlJob(repoConfig) {
             stringParam('GIT_SOURCE_REPO_URL', repoConfig.url, 'ドキュメント生成対象のソースコードリポジトリURL')
             stringParam('GIT_SOURCE_REPO_BRANCH', repoConfig.docBranch, 'ドキュメント生成対象のブランチ名')
             stringParam('GIT_SOURCE_REPO_CREDENTIALS_ID', repoConfig.credentialsId, 'GitHub認証情報ID')
+            stringParam('JENKINSFILE_BRANCH', 'main', 'Jenkinsfileが格納されているブランチ')
         }
 
         // パイプライン定義
@@ -72,7 +73,7 @@ def createDoxygenHtmlJob(repoConfig) {
                             url(jenkinsPipelineRepo.url)
                             credentials(jenkinsPipelineRepo.credentials)
                         }
-                        branch(jenkinsPipelineRepo.branch)
+                        branch('${JENKINSFILE_BRANCH}')
                     }
                 }
                 scriptPath(jobConfig.jenkinsfile)

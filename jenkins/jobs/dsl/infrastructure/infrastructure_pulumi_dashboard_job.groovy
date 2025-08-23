@@ -72,6 +72,9 @@ environments.each { env, envConfig ->
                 |* すべて表示: *
                 |* 特定スタック: dev, prod
                 |'''.stripMargin())
+            
+            // Jenkinsfileブランチ
+            stringParam('JENKINSFILE_BRANCH', 'main', 'Jenkinsfileが格納されているブランチ')
         }
         
         // ログローテーション設定
@@ -101,7 +104,7 @@ environments.each { env, envConfig ->
                             url(jenkinsPipelineRepo.url)
                             credentials(jenkinsPipelineRepo.credentials)
                         }
-                        branch(jenkinsPipelineRepo.branch)
+                        branch('${JENKINSFILE_BRANCH}')
                     }
                 }
                 scriptPath(jobConfig.jenkinsfile)

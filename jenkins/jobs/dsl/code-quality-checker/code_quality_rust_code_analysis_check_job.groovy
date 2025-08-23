@@ -97,6 +97,9 @@ def createRustCodeAnalysisJob(repoConfig) {
             // Rustバージョン選択
             choiceParam('RUST_VERSION', ['1.76', '1.77', '1.78', 'latest'], 
                        'Rustのバージョン（最小要件: 1.76）')
+            
+            // Jenkinsfileブランチ
+            stringParam('JENKINSFILE_BRANCH', 'main', 'Jenkinsfileが格納されているブランチ')
         }
 
         // パイプライン定義
@@ -108,7 +111,7 @@ def createRustCodeAnalysisJob(repoConfig) {
                             url(jenkinsPipelineRepo.url)
                             credentials(jenkinsPipelineRepo.credentials)
                         }
-                        branch(jenkinsPipelineRepo.branch)
+                        branch('${JENKINSFILE_BRANCH}')
                     }
                 }
                 scriptPath(jobConfig.jenkinsfile)

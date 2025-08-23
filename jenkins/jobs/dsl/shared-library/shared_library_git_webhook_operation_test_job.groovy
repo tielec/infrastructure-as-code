@@ -29,6 +29,7 @@ pipelineJob(fullJobName) {
         stringParam('WEBHOOK_URL', 'https://webhook.site/fa61f672-940a-406f-9850-848c8bdf8315', 'テスト用WebhookURL (webhook.siteを推奨)')
         booleanParam('CLEANUP_AFTER_TEST', true, 'テスト後にリソースを削除する')
         booleanParam('DRY_RUN', false, 'ドライラン（読み取り操作のみ）')
+        stringParam('JENKINSFILE_BRANCH', 'main', 'Jenkinsfileが格納されているブランチ')
     }
 
     // プロパティ設定
@@ -54,7 +55,7 @@ pipelineJob(fullJobName) {
                         url(jenkinsPipelineRepo.url)
                         credentials(jenkinsPipelineRepo.credentials)
                     }
-                    branch(jenkinsPipelineRepo.branch)
+                    branch('${JENKINSFILE_BRANCH}')
                 }
             }
             scriptPath(jobConfig.jenkinsfile)

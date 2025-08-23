@@ -80,6 +80,9 @@ def createDocumentGeneratorJob(repoConfig) {
             
             // 選択パラメータ
             choiceParam('DOC_OPTIMIZE_STRATEGY', ['FINAL_ONLY', 'FIVE_STEP', 'NONE'], 'ドキュメント構造最適化の戦略（FINAL_ONLY=最後のPRの後に1回だけ、FIVE_STEP=5回に1回、NONE=最適化なし）')
+            
+            // Jenkinsfileブランチ
+            stringParam('JENKINSFILE_BRANCH', 'main', 'Jenkinsfileが格納されているブランチ')
         }
         
         // パイプライン定義
@@ -91,7 +94,7 @@ def createDocumentGeneratorJob(repoConfig) {
                             url(jenkinsPipelineRepo.url)
                             credentials(jenkinsPipelineRepo.credentials)
                         }
-                        branch(jenkinsPipelineRepo.branch)
+                        branch('${JENKINSFILE_BRANCH}')
                     }
                 }
                 scriptPath(jobConfig.jenkinsfile)

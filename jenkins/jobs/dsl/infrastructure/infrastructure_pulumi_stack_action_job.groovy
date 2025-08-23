@@ -150,6 +150,9 @@ pulumiProjects.each { repoKey, repoConfig ->
                     
                     choiceParam('PULUMI_BACKEND_URL', [envConfig.backendUrl], 'Pulumiバックエンド（自動設定） - Pulumiステートの保存先（環境により自動設定）')
                     
+                    // Jenkinsfileブランチ
+                    stringParam('JENKINSFILE_BRANCH', 'main', 'Jenkinsfileが格納されているブランチ')
+                    
                     choiceParam('PULUMI_CONFIG_PASSPHRASE_CREDENTIAL_ID', [envConfig.passphraseCredentialId], 'Pulumiパスフレーズ（自動設定） - Pulumiスタック暗号化用のパスフレーズ（環境により自動設定）')
                 }
                 
@@ -180,7 +183,7 @@ pulumiProjects.each { repoKey, repoConfig ->
                                     url(jenkinsPipelineRepo.url)
                                     credentials(jenkinsPipelineRepo.credentials)
                                 }
-                                branch(jenkinsPipelineRepo.branch)
+                                branch('${JENKINSFILE_BRANCH}')
                             }
                         }
                         scriptPath(jobConfig.jenkinsfile)
