@@ -16,7 +16,7 @@
       {%- if parameter_type is defined -%}
         {{ parameter_type }}
       {%- elif is_secure | default(false) or (ssm_parameter_store_auto_secure and 
-              parameter_name | lower | regex_search('(' + ssm_parameter_store_all_secure_keywords | join('|') + ')') is not none) -%}
+              parameter_name | lower | regex_search('(' + ssm_parameter_store_secure_keywords | join('|') + ')') is not none) -%}
         SecureString
       {%- else -%}
         String

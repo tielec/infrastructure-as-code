@@ -26,6 +26,7 @@ pipelineJob(fullJobName) {
     parameters {
         stringParam('TARGET_ROLE_NAME', 'jenkins-monitoring-check-role-prd', 'AssumeRoleで使用するIAMロール名')
         choiceParam('ENVIRONMENT', ['prd', 'stg', 'dev'], '環境の選択')
+        stringParam('JENKINSFILE_BRANCH', 'main', 'Jenkinsfileが格納されているブランチ')
     }
 
     // プロパティ設定
@@ -51,7 +52,7 @@ pipelineJob(fullJobName) {
                         url(jenkinsPipelineRepo.url)
                         credentials(jenkinsPipelineRepo.credentials)
                     }
-                    branch(jenkinsPipelineRepo.branch)
+                    branch('${JENKINSFILE_BRANCH}')
                 }
             }
             scriptPath(jobConfig.jenkinsfile)

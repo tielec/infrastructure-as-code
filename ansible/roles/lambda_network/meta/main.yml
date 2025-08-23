@@ -1,3 +1,8 @@
+---
+# lambda_network/meta/main.yml
+# ロールの依存関係定義
+
 dependencies:
   - role: aws_setup
   - role: pulumi_helper
+  - role: ssm_parameter_store  # SSMパラメータ取得に必要

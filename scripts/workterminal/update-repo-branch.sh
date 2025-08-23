@@ -214,7 +214,7 @@ if [ "$BRANCH_NAME" = "$CURRENT_BRANCH" ]; then
     # 同じブランチの場合は更新のみ
     if git show-ref --verify --quiet "refs/remotes/origin/$BRANCH_NAME"; then
         info_msg "リモートから最新の変更を取得中..."
-        git pull origin "$BRANCH_NAME" || error_exit "pullに失敗しました"
+        git pull --rebase=true origin "$BRANCH_NAME" || error_exit "pullに失敗しました"
         success_msg "ブランチを最新状態に更新しました"
     else
         warn_msg "リモートブランチ 'origin/$BRANCH_NAME' が存在しません（ローカルのみのブランチ）"
@@ -229,7 +229,7 @@ else
         # リモートブランチが存在する場合はpull
         if git show-ref --verify --quiet "refs/remotes/origin/$BRANCH_NAME"; then
             info_msg "リモートから最新の変更を取得中..."
-            git pull origin "$BRANCH_NAME" || error_exit "pullに失敗しました"
+            git pull --rebase=true origin "$BRANCH_NAME" || error_exit "pullに失敗しました"
             success_msg "ブランチを最新状態に更新しました"
         else
             warn_msg "リモートブランチ 'origin/$BRANCH_NAME' が存在しません"
@@ -249,36 +249,39 @@ echo ""
 info_msg "Jenkins設定ファイルを更新中..."
 
 if [ ! -f "$CONFIG_FILE" ]; then
-    error_exit "設定ファイルが見つかりません: $CONFIG_FILE"
-fi
-
-# 現在の設定値を確認
-CURRENT_CONFIG_BRANCH=$(grep -E "^\s*branch:" "$CONFIG_FILE" | sed 's/.*branch:[[:space:]]*"\(.*\)".*/\1/')
-
-if [ "$CURRENT_CONFIG_BRANCH" = "$BRANCH_NAME" ]; then
-    info_msg "Jenkins設定のブランチは既に '$BRANCH_NAME' です（変更不要）"
+    warn_msg "設定ファイルが見つかりません: $CONFIG_FILE"
+    warn_msg "Jenkins設定の更新をスキップします"
 else
-    # YAMLファイルのブランチ設定を更新
-    # sedコマンドでjenkins.git.branchの値を更新
-    if [[ "$OSTYPE" == "darwin"* ]]; then
-        # macOS
-        sed -i '' "s|^\([[:space:]]*\)branch:[[:space:]]*\".*\"|\\1branch: \"$BRANCH_NAME\"|" "$CONFIG_FILE"
-    else
-        # Linux
-        sed -i "s|^\([[:space:]]*\)branch:[[:space:]]*\".*\"|\\1branch: \"$BRANCH_NAME\"|" "$CONFIG_FILE"
-    fi
+    # 現在の設定値を確認
+    CURRENT_CONFIG_BRANCH=$(grep -E "^\s*branch:" "$CONFIG_FILE" 2>/dev/null | sed 's/.*branch:[[:space:]]*"\(.*\)".*/\1/')
 
-    # 変更が正しく適用されたか確認
-    if grep -q "branch: \"$BRANCH_NAME\"" "$CONFIG_FILE"; then
-        success_msg "Jenkins設定のブランチを '$CURRENT_CONFIG_BRANCH' → '$BRANCH_NAME' に更新しました"
-        CONFIG_UPDATED=true
-        
-        # 変更内容を表示
-        echo ""
-        info_msg "設定ファイルの変更内容:"
-        grep -A1 -B1 "branch:" "$CONFIG_FILE" | grep -E "(git:|branch:)" || true
+    if [ -z "$CURRENT_CONFIG_BRANCH" ]; then
+        warn_msg "設定ファイルにbranch設定が見つかりません"
+    elif [ "$CURRENT_CONFIG_BRANCH" = "$BRANCH_NAME" ]; then
+        info_msg "Jenkins設定のブランチは既に '$BRANCH_NAME' です（変更不要）"
     else
-        error_exit "設定ファイルの更新に失敗しました"
+        # YAMLファイルのブランチ設定を更新
+        # sedコマンドでjenkins.git.branchの値を更新
+        if [[ "$OSTYPE" == "darwin"* ]]; then
+            # macOS
+            sed -i '' "s|^\([[:space:]]*\)branch:[[:space:]]*\".*\"|\\1branch: \"$BRANCH_NAME\"|" "$CONFIG_FILE"
+        else
+            # Linux
+            sed -i "s|^\([[:space:]]*\)branch:[[:space:]]*\".*\"|\\1branch: \"$BRANCH_NAME\"|" "$CONFIG_FILE"
+        fi
+
+        # 変更が正しく適用されたか確認
+        if grep -q "branch: \"$BRANCH_NAME\"" "$CONFIG_FILE"; then
+            success_msg "Jenkins設定のブランチを '$CURRENT_CONFIG_BRANCH' → '$BRANCH_NAME' に更新しました"
+            CONFIG_UPDATED=true
+            
+            # 変更内容を表示
+            echo ""
+            info_msg "設定ファイルの変更内容:"
+            grep -A1 -B1 "branch:" "$CONFIG_FILE" | grep -E "(git:|branch:)" || true
+        else
+            warn_msg "設定ファイルの更新に失敗しました"
+        fi
     fi
 fi
 
@@ -299,6 +302,37 @@ if [ "$CONFIG_UPDATED" = true ]; then
             git commit -m "[config] Update Jenkins branch to $BRANCH_NAME" || warn_msg "コミットに失敗しました（変更がない可能性があります）"
             success_msg "変更をコミットしました"
         fi
+    fi
+fi
+
+# シェルスクリプトに実行権限を付与
+info_msg "シェルスクリプトに実行権限を付与中..."
+
+# scripts/workterminal/のスクリプトに実行権限付与
+if [ -d "$REPO_PATH/scripts/workterminal" ]; then
+    chmod +x "$REPO_PATH/scripts/workterminal"/*.sh 2>/dev/null && \
+        success_msg "scripts/workterminal/のスクリプトに実行権限を付与しました" || \
+        warn_msg "scripts/workterminal/の一部のスクリプトへの権限付与に失敗しました"
+fi
+
+# bootstrap/のスクリプトに実行権限付与
+if [ -d "$REPO_PATH/bootstrap" ]; then
+    chmod +x "$REPO_PATH/bootstrap"/*.sh 2>/dev/null && \
+        success_msg "bootstrap/のスクリプトに実行権限を付与しました" || \
+        warn_msg "bootstrap/の一部のスクリプトへの権限付与に失敗しました"
+    
+    # bootstrap/lib/のスクリプトにも実行権限付与
+    if [ -d "$REPO_PATH/bootstrap/lib" ]; then
+        chmod +x "$REPO_PATH/bootstrap/lib"/*.sh 2>/dev/null && \
+            success_msg "bootstrap/lib/のスクリプトに実行権限を付与しました" || \
+            warn_msg "bootstrap/lib/の一部のスクリプトへの権限付与に失敗しました"
+    fi
+    
+    # bootstrap/scripts/のスクリプトにも実行権限付与
+    if [ -d "$REPO_PATH/bootstrap/scripts" ]; then
+        chmod +x "$REPO_PATH/bootstrap/scripts"/*.sh 2>/dev/null && \
+            success_msg "bootstrap/scripts/のスクリプトに実行権限を付与しました" || \
+            warn_msg "bootstrap/scripts/の一部のスクリプトへの権限付与に失敗しました"
     fi
 fi
 

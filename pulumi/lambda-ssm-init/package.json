@@ -1,0 +1,20 @@
+{
+  "name": "lambda-ssm-init",
+  "version": "1.0.0",
+  "description": "Lambda APIインフラのSSMパラメータ初期化",
+  "main": "index.js",
+  "scripts": {
+    "build": "tsc",
+    "preview": "pulumi preview --stack dev",
+    "deploy": "pulumi up --stack dev --yes",
+    "destroy": "pulumi destroy --stack dev --yes"
+  },
+  "devDependencies": {
+    "@types/node": "^20",
+    "typescript": "^5.0.0"
+  },
+  "dependencies": {
+    "@pulumi/aws": "^6.0.0",
+    "@pulumi/pulumi": "^3.0.0"
+  }
+}

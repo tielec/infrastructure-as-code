@@ -1,21 +1,19 @@
 ---
-# Lambda関数のデプロイタスク
+# Lambda API関数のデプロイタスク
 
 - name: Display Lambda functions deployment information
   ansible.builtin.debug:
     msg: |
-      Deploying Lambda Functions:
+      Deploying Lambda API Functions:
       - Project: {{ project_name }}
       - Functions Pulumi Project: {{ functions_project_name }}
       - Environment: {{ env_name }}
-      - Runtime: {{ lambda_api.runtime }}
-      - Memory: {{ lambda_memory }}MB
-      - Timeout: {{ lambda_timeout }}s
-      - Log Level: {{ log_level }}
-      - Log Retention: {{ log_retention_days }} days
+      - Runtime: {{ lambda_runtime }}
+      - Memory: {{ memory_size }}MB
+      - Timeout: {{ timeout }}s
 
 # Pulumiデプロイ
-- name: Deploy Lambda Functions with Pulumi
+- name: Deploy Lambda functions with Pulumi
   block:
     # Pulumiヘルパータスクを呼び出す
     - name: Initialize functions stack
@@ -26,11 +24,12 @@
         pulumi_project_path: "{{ pulumi_path }}/lambda-functions"
         stack_name: "{{ env_name }}"
     
-    - name: Get stack reference names
+    # スタック参照名を設定
+    - name: Set network stack reference
       ansible.builtin.shell: |
         cd {{ pulumi_path }}/lambda-functions
-        export PULUMI_ACCESS_TOKEN="{{ lookup('env', 'PULUMI_ACCESS_TOKEN') }}"
-        # organizationを含む完全な名前を使用
+        # スタック参照名を返す（例: organization/project/stack）
+        # これはPulumiスタック内でStackReferenceを使用する際に必要
         echo "tielec/{{ network_project_name }}/{{ env_name }}"
       register: network_stack_ref
       changed_when: false
@@ -43,105 +42,8 @@
         pulumi_project_path: "{{ pulumi_path }}/lambda-functions"
         config_key: "aws:region"
         config_value: "{{ aws_region_name }}"
-
-    - name: Configure functions stack - project name
-      ansible.builtin.include_role:
-        name: pulumi_helper
-        tasks_from: set_config
-      vars:
-        pulumi_project_path: "{{ pulumi_path }}/lambda-functions"
-        config_key: "{{ functions_project_name }}:projectName"
-        config_value: "{{ project_name }}"
-
-    - name: Configure functions stack - network stack name
-      ansible.builtin.include_role:
-        name: pulumi_helper
-        tasks_from: set_config
-      vars:
-        pulumi_project_path: "{{ pulumi_path }}/lambda-functions"
-        config_key: "{{ functions_project_name }}:networkStackName"
-        config_value: "{{ network_project_name }}"
-
-    - name: Configure functions stack - security stack name
-      ansible.builtin.include_role:
-        name: pulumi_helper
-        tasks_from: set_config
-      vars:
-        pulumi_project_path: "{{ pulumi_path }}/lambda-functions"
-        config_key: "{{ functions_project_name }}:securityStackName"
-        config_value: "{{ security_project_name }}"
-
-    - name: Configure functions stack - runtime
-      ansible.builtin.include_role:
-        name: pulumi_helper
-        tasks_from: set_config
-      vars:
-        pulumi_project_path: "{{ pulumi_path }}/lambda-functions"
-        config_key: "{{ functions_project_name }}:runtime"
-        config_value: "{{ lambda_api.runtime }}"
-
-    - name: Configure functions stack - memory size
-      ansible.builtin.include_role:
-        name: pulumi_helper
-        tasks_from: set_config
-      vars:
-        pulumi_project_path: "{{ pulumi_path }}/lambda-functions"
-        config_key: "{{ functions_project_name }}:memorySize"
-        config_value: "{{ lambda_memory | string }}"
-
-    - name: Configure functions stack - timeout
-      ansible.builtin.include_role:
-        name: pulumi_helper
-        tasks_from: set_config
-      vars:
-        pulumi_project_path: "{{ pulumi_path }}/lambda-functions"
-        config_key: "{{ functions_project_name }}:timeout"
-        config_value: "{{ lambda_timeout | string }}"
-
-    - name: Configure functions stack - log level
-      ansible.builtin.include_role:
-        name: pulumi_helper
-        tasks_from: set_config
-      vars:
-        pulumi_project_path: "{{ pulumi_path }}/lambda-functions"
-        config_key: "{{ functions_project_name }}:logLevel"
-        config_value: "{{ log_level }}"
-
-    - name: Configure functions stack - log retention days
-      ansible.builtin.include_role:
-        name: pulumi_helper
-        tasks_from: set_config
-      vars:
-        pulumi_project_path: "{{ pulumi_path }}/lambda-functions"
-        config_key: "{{ functions_project_name }}:logRetentionDays"
-        config_value: "{{ log_retention_days | string }}"
-
-    - name: Configure functions stack - DLQ max retry count
-      ansible.builtin.include_role:
-        name: pulumi_helper
-        tasks_from: set_config
-      vars:
-        pulumi_project_path: "{{ pulumi_path }}/lambda-functions"
-        config_key: "{{ functions_project_name }}:dlqMaxRetryCount"
-        config_value: "{{ lambda_api.dlq.max_retry_count | string }}"
-
-    - name: Configure functions stack - DLQ visibility timeout multiplier
-      ansible.builtin.include_role:
-        name: pulumi_helper
-        tasks_from: set_config
-      vars:
-        pulumi_project_path: "{{ pulumi_path }}/lambda-functions"
-        config_key: "{{ functions_project_name }}:dlqVisibilityTimeoutMultiplier"
-        config_value: "{{ lambda_api.dlq.visibility_timeout_multiplier | string }}"
-
-    - name: Configure functions stack - DLQ retention days
-      ansible.builtin.include_role:
-        name: pulumi_helper
-        tasks_from: set_config
-      vars:
-        pulumi_project_path: "{{ pulumi_path }}/lambda-functions"
-        config_key: "{{ functions_project_name }}:dlqRetentionDays"
-        config_value: "{{ lambda_api.dlq.retention_days | string }}"
+    
+    # Pulumi Configは使用しない（SSMパラメータから取得するため）
     
     # Pulumiプレビュー
     - name: Preview functions deployment
@@ -153,7 +55,7 @@
       when: preview_only | default(false) | bool
     
     # Pulumiデプロイ
-    - name: Deploy functions stack
+    - name: Deploy Lambda functions
       ansible.builtin.include_role:
         name: pulumi_helper
         tasks_from: deploy
@@ -161,50 +63,42 @@
         pulumi_project_path: "{{ pulumi_path }}/lambda-functions"
       when: not preview_only | default(false) | bool
     
-    # Lambda関数情報の取得
-    - name: Get functions outputs
-      ansible.builtin.shell: |
-        cd {{ pulumi_path }}/lambda-functions
-        export PULUMI_ACCESS_TOKEN="{{ lookup('env', 'PULUMI_ACCESS_TOKEN') }}"
-        pulumi stack output --json
-      register: functions_outputs_raw
-      changed_when: false
-      when: not preview_only | default(false) | bool
-    
-    - name: Parse functions outputs
-      ansible.builtin.set_fact:
-        functions_outputs: "{{ functions_outputs_raw.stdout | from_json }}"
-      when: 
-        - not preview_only | default(false) | bool
-        - functions_outputs_raw.stdout is defined
-    
     # デプロイ成功を示す変数設定
     - name: Set functions deployment status
       ansible.builtin.set_fact:
         functions_deployed: true
       when: not preview_only | default(false) | bool
     
+    # SSMから作成されたLambda関数情報を取得（オプション）
+    - name: Get Lambda function ARN from SSM
+      ansible.builtin.include_role:
+        name: ssm_parameter_store
+        tasks_from: get_parameter
+      vars:
+        parameter_name: "/{{ project_name }}/{{ env_name }}/lambda/config"
+        store_as: "lambda_config"
+        default_value: "{}"
+        ssm_parameter_store_fail_on_missing: false
+      when: not preview_only | default(false) | bool
+    
     # Lambda関数情報の表示
-    - name: Display functions deployment summary
+    - name: Display Lambda functions deployment summary
       ansible.builtin.debug:
         msg: |
-          Lambda Functions deployment successful:
-          - Functions deployed: {{ functions_outputs.functionArns | default({}) | length }}
-          - DLQ ARN: {{ functions_outputs.dlqArn | default('N/A') }}
-          - DLQ Handler ARN: {{ functions_outputs.dlqHandlerArn | default('N/A') }}
-          
-          Functions:
-          {% for name, arn in (functions_outputs.functionArns | default({})).items() %}
-          - {{ name }}: {{ arn }}
-          {% endfor %}
+          Lambda functions deployment successful:
+          - Runtime: {{ lambda_runtime }}
+          - Memory: {{ memory_size }}MB
+          - Timeout: {{ timeout }}s
+          {% if lambda_config is defined and lambda_config | length > 0 %}
+          - Configuration stored in SSM
+          {% endif %}
       when: 
         - functions_deployed is defined and functions_deployed
-        - functions_outputs is defined
   
   rescue:
     - name: Display error on functions deployment
       ansible.builtin.debug:
-        msg: "Failed to deploy Lambda functions. See error details above."
+        msg: "Failed to deploy Lambda API functions. See error details above."
       
     - name: Set functions deployment failure
       ansible.builtin.set_fact:
@@ -212,4 +106,40 @@
       
     - name: Fail the playbook
       ansible.builtin.fail:
-        msg: "Lambda functions deployment failed."
+        msg: "Lambda API functions deployment failed."
+
+# デストロイ処理
+- name: Destroy Lambda functions
+  block:
+    - name: Initialize functions stack for destroy
+      ansible.builtin.include_role:
+        name: pulumi_helper
+        tasks_from: init_stack
+      vars:
+        pulumi_project_path: "{{ pulumi_path }}/lambda-functions"
+        stack_name: "{{ env_name }}"
+    
+    - name: Destroy Lambda functions stack
+      ansible.builtin.include_role:
+        name: pulumi_helper
+        tasks_from: destroy
+      vars:
+        pulumi_project_path: "{{ pulumi_path }}/lambda-functions"
+    
+    - name: Set functions destroy status
+      ansible.builtin.set_fact:
+        functions_destroyed: true
+        
+  rescue:
+    - name: Display error on functions destroy
+      ansible.builtin.debug:
+        msg: "Failed to destroy Lambda API functions. See error details above."
+      
+    - name: Set functions destroy failure
+      ansible.builtin.set_fact:
+        functions_destroyed: false
+      
+    - name: Fail the playbook
+      ansible.builtin.fail:
+        msg: "Lambda API functions destroy failed."
+  when: operation | default('deploy') == 'destroy'

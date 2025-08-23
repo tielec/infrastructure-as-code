@@ -1,0 +1,152 @@
+---
+# lambda_functions.yml
+# Lambda関数デプロイメントプレイブック
+# 
+# 使用方法:
+#   ansible-playbook playbooks/lambda/lambda_functions.yml -e "env=dev"
+#   ansible-playbook playbooks/lambda/lambda_functions.yml -e "env=dev operation=destroy"
+
+- name: Lambda Functions Deployment
+  hosts: localhost
+  connection: local
+  gather_facts: yes
+  
+  vars:
+    env_name: "{{ env | default('dev') }}"
+    preview_only: "{{ preview | default(false) }}"
+    
+  pre_tasks:
+    - name: Include group_vars/all.yml
+      ansible.builtin.include_vars:
+        file: "{{ inventory_dir }}/group_vars/all.yml"
+    
+    - name: Set required variables
+      ansible.builtin.set_fact:
+        project_name: "{{ lambda_api_infra.project_name }}"
+        aws_region_name: "{{ lambda_api_infra.aws.default_region }}"
+        functions_project_name: "{{ lambda_api_infra.pulumi.functions_project }}"
+        network_project_name: "{{ lambda_api_infra.pulumi.network_project }}"
+        security_project_name: "{{ lambda_api_infra.pulumi.security_project }}"
+        pulumi_path: "{{ inventory_dir }}/../../pulumi"
+        scripts_dir: "{{ inventory_dir }}/../../scripts"
+        environment_config: "{{ lambda_api_infra.environments[env_name] }}"
+        lambda_memory: "{{ environment_config.lambda_memory | default(lambda_api.default_memory) }}"
+        memory_size: "{{ environment_config.lambda_memory | default(lambda_api.default_memory) }}"
+        lambda_timeout: "{{ lambda_api.default_timeout }}"
+        timeout: "{{ lambda_api.default_timeout }}"
+        lambda_runtime: "{{ lambda_api.runtime | default('nodejs18.x') }}"
+        log_level: "{{ environment_config.log_level | default('INFO') }}"
+        log_retention_days: "{{ lambda_api.log_retention_days[env_name] | default(7) }}"
+        
+    - name: Display operation info
+      ansible.builtin.debug:
+        msg: |
+          ==========================================
+          Lambda Functions Deployment
+          ==========================================
+          Operation: {{ operation | default('deploy') }}
+          Environment: {{ env_name }}
+          Project: {{ functions_project_name }}
+          Region: {{ aws_region_name }}
+          Memory: {{ lambda_memory }}MB
+          Timeout: {{ lambda_timeout }}s
+          Log Level: {{ log_level }}
+          Log Retention: {{ log_retention_days }} days
+          Preview Only: {{ preview_only }}
+          ==========================================
+          
+    - name: Check dependencies
+      block:
+        - name: Check network deployment
+          ansible.builtin.include_role:
+            name: ssm_parameter_store
+            tasks_from: get_parameter
+          vars:
+            parameter_name: "/{{ project_name }}/{{ env_name }}/network/vpc-id"
+            store_as: "vpc_check"
+            default_value: ""
+            ssm_parameter_store_fail_on_missing: false
+            
+        - name: Check security groups deployment
+          ansible.builtin.include_role:
+            name: ssm_parameter_store
+            tasks_from: get_parameter
+          vars:
+            parameter_name: "/{{ project_name }}/{{ env_name }}/security/lambda-sg-id"
+            store_as: "sg_check"
+            default_value: ""
+            ssm_parameter_store_fail_on_missing: false
+            
+        - name: Check VPC endpoints deployment
+          ansible.builtin.include_role:
+            name: ssm_parameter_store
+            tasks_from: get_parameter
+          vars:
+            parameter_name: "/{{ project_name }}/{{ env_name }}/vpce/endpoints/s3-id"
+            store_as: "vpce_check"
+            default_value: ""
+            ssm_parameter_store_fail_on_missing: false
+            
+        - name: Check NAT deployment
+          ansible.builtin.include_role:
+            name: ssm_parameter_store
+            tasks_from: get_parameter
+          vars:
+            parameter_name: "/{{ project_name }}/{{ env_name }}/nat/type"
+            store_as: "nat_check"
+            default_value: ""
+            ssm_parameter_store_fail_on_missing: false
+            
+    - name: Verify dependencies
+      ansible.builtin.fail:
+        msg: |
+          Dependencies not met!
+          {% if vpc_check | default('') | length == 0 %}
+          - Network infrastructure is not deployed
+          {% endif %}
+          {% if sg_check | default('') | length == 0 %}
+          - Security groups are not deployed
+          {% endif %}
+          {% if vpce_check | default('') | length == 0 %}
+          - VPC endpoints are not deployed
+          {% endif %}
+          {% if nat_check | default('') | length == 0 %}
+          - NAT infrastructure is not deployed
+          {% endif %}
+          
+          Please deploy missing components first.
+      when:
+        - operation | default('deploy') == 'deploy'
+        - (vpc_check | default('') | length == 0 or sg_check | default('') | length == 0 or vpce_check | default('') | length == 0 or nat_check | default('') | length == 0)
+  
+  roles:
+    - aws_setup
+    - pulumi_helper
+    
+  tasks:
+
+    - name: Set operation variable
+      ansible.builtin.set_fact:
+        role_operation: "{{ operation | default('deploy') }}"
+        
+    - name: Execute Lambda functions deployment
+      ansible.builtin.include_role:
+        name: lambda_functions
+      vars:
+        operation: "{{ role_operation }}"
+        
+    - name: Display results
+      ansible.builtin.debug:
+        msg: |
+          ==========================================
+          Lambda Functions {{ 'Preview' if preview_only else role_operation | title }} Complete
+          ==========================================
+          {% if role_operation == 'deploy' and not preview_only %}
+          Status: {{ 'Success' if functions_deployed | default(false) else 'Failed' }}
+          Functions Deployed: {{ lambda_function_count | default(0) }}
+          
+          Next step:
+          ansible-playbook playbooks/lambda/lambda_api_gateway.yml -e "env={{ env_name }}"
+          {% elif role_operation == 'destroy' %}
+          Lambda functions have been removed.
+          {% endif %}

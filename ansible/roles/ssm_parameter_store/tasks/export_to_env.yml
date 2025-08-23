@@ -59,7 +59,7 @@
   no_log: >-
     {{
       ssm_parameter_store_auto_secure and
-      item.key | lower | regex_search('(' + ssm_parameter_store_all_secure_keywords | join('|') + ')') is not none
+      item.key | lower | regex_search('(' + ssm_parameter_store_secure_keywords | join('|') + ')') is not none
     }}
 
 # エクスポートスクリプトの生成（オプション）
@@ -74,7 +74,7 @@
           # Generated at: {{ ansible_date_time.iso8601 }}
           
           {% for env_name, env_value in env_exports.items() %}
-          {% set is_secure = ssm_parameter_store_auto_secure and env_name | lower | regex_search('(' + ssm_parameter_store_all_secure_keywords | join('|') + ')') is not none %}
+          {% set is_secure = ssm_parameter_store_auto_secure and env_name | lower | regex_search('(' + ssm_parameter_store_secure_keywords | join('|') + ')') is not none %}
           {% if not is_secure %}
           export {{ env_name }}="{{ env_value }}"
           {% else %}

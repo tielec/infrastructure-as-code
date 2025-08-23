@@ -34,70 +34,7 @@
         config_key: "aws:region"
         config_value: "{{ aws_region_name }}"
 
-    - name: Configure NAT stack - project name
-      ansible.builtin.include_role:
-        name: pulumi_helper
-        tasks_from: set_config
-      vars:
-        pulumi_project_path: "{{ pulumi_path }}/lambda-nat"
-        config_key: "{{ nat_project_name }}:projectName"
-        config_value: "{{ project_name }}"
-
-    - name: Configure NAT stack - network stack name
-      ansible.builtin.include_role:
-        name: pulumi_helper
-        tasks_from: set_config
-      vars:
-        pulumi_project_path: "{{ pulumi_path }}/lambda-nat"
-        config_key: "{{ nat_project_name }}:networkStackName"
-        config_value: "{{ network_project_name }}"
-
-    - name: Configure NAT stack - security stack name
-      ansible.builtin.include_role:
-        name: pulumi_helper
-        tasks_from: set_config
-      vars:
-        pulumi_project_path: "{{ pulumi_path }}/lambda-nat"
-        config_key: "{{ nat_project_name }}:securityStackName"
-        config_value: "{{ security_project_name }}"
-
-    - name: Configure NAT stack - high availability mode
-      ansible.builtin.include_role:
-        name: pulumi_helper
-        tasks_from: set_config
-      vars:
-        pulumi_project_path: "{{ pulumi_path }}/lambda-nat"
-        config_key: "{{ nat_project_name }}:highAvailabilityMode"
-        config_value: "{{ high_availability_mode | string | lower }}"
-
-    - name: Configure NAT stack - instance type
-      ansible.builtin.include_role:
-        name: pulumi_helper
-        tasks_from: set_config
-      vars:
-        pulumi_project_path: "{{ pulumi_path }}/lambda-nat"
-        config_key: "{{ nat_project_name }}:natInstanceType"
-        config_value: "{{ nat_instance_type }}"
-      when: not high_availability_mode
-
-    - name: Configure NAT stack - key name
-      ansible.builtin.include_role:
-        name: pulumi_helper
-        tasks_from: set_config
-      vars:
-        pulumi_project_path: "{{ pulumi_path }}/lambda-nat"
-        config_key: "{{ nat_project_name }}:keyName"
-        config_value: "{{ key_name }}"
-      when: key_name is defined and key_name
-
-    - name: Configure NAT stack - user data script
-      ansible.builtin.include_role:
-        name: pulumi_helper
-        tasks_from: set_config
-      vars:
-        pulumi_project_path: "{{ pulumi_path }}/lambda-nat"
-        config_key: "{{ nat_project_name }}:userDataScript"
-        config_value: "scripts/aws-nat-instance-setup.sh"
+    # Pulumi Configは使用しない（SSMパラメータから取得するため）
     
     # Pulumiプレビュー
     - name: Preview NAT deployment
@@ -117,29 +54,39 @@
         pulumi_project_path: "{{ pulumi_path }}/lambda-nat"
       when: not preview_only | default(false) | bool
     
-    # NAT情報の取得
-    - name: Get NAT outputs
-      ansible.builtin.shell: |
-        cd {{ pulumi_path }}/lambda-nat
-        export PULUMI_ACCESS_TOKEN="{{ lookup('env', 'PULUMI_ACCESS_TOKEN') }}"
-        pulumi stack output --json
-      register: nat_outputs_raw
-      changed_when: false
-      when: not preview_only | default(false) | bool
-    
-    - name: Parse NAT outputs
-      ansible.builtin.set_fact:
-        nat_outputs: "{{ nat_outputs_raw.stdout | from_json }}"
-      when: 
-        - not preview_only | default(false) | bool
-        - nat_outputs_raw.stdout is defined
-    
     # デプロイ成功を示す変数設定
     - name: Set NAT deployment status
       ansible.builtin.set_fact:
         nat_deployed: true
         nat_type: "{{ 'NAT Gateway' if high_availability_mode else 'NAT Instance' }}"
       when: not preview_only | default(false) | bool
+    
+    # SSMからNAT情報を取得（オプション）
+    - name: Get NAT Instance ID from SSM
+      ansible.builtin.include_role:
+        name: ssm_parameter_store
+        tasks_from: get_parameter
+      vars:
+        parameter_name: "/{{ project_name }}/{{ env_name }}/nat/instance-id"
+        store_as: "nat_instance_id"
+        default_value: ""
+        ssm_parameter_store_fail_on_missing: false
+      when: 
+        - not preview_only | default(false) | bool
+        - not high_availability_mode
+    
+    - name: Get NAT Gateway IDs from SSM
+      ansible.builtin.include_role:
+        name: ssm_parameter_store
+        tasks_from: get_parameter
+      vars:
+        parameter_name: "/{{ project_name }}/{{ env_name }}/nat/gateway-ids"
+        store_as: "nat_gateway_ids"
+        default_value: "[]"
+        ssm_parameter_store_fail_on_missing: false
+      when: 
+        - not preview_only | default(false) | bool
+        - high_availability_mode
     
     # NAT情報の表示
     - name: Display NAT deployment summary
@@ -148,14 +95,16 @@
           NAT deployment successful:
           - Type: {{ nat_type }}
           {% if high_availability_mode %}
-          - NAT Gateway IDs: {{ nat_outputs.natGatewayIds | default([]) | join(', ') }}
+          {% if nat_gateway_ids is defined and nat_gateway_ids | length > 0 %}
+          - NAT Gateway IDs: {{ nat_gateway_ids }}
+          {% endif %}
           {% else %}
-          - NAT Instance ID: {{ nat_outputs.natInstanceId | default('N/A') }}
-          - NAT Instance IP: {{ nat_outputs.natInstancePrivateIp | default('N/A') }}
+          {% if nat_instance_id is defined and nat_instance_id | length > 0 %}
+          - NAT Instance ID: {{ nat_instance_id }}
+          {% endif %}
           {% endif %}
       when: 
         - nat_deployed is defined and nat_deployed
-        - nat_outputs is defined
   
   rescue:
     - name: Display error on NAT deployment

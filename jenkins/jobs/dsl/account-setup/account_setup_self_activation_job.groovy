@@ -38,6 +38,11 @@ pipelineJob(fullJobName) {
         throttleDisabled(false)
     }
 
+    // パラメータ定義
+    parameters {
+        stringParam('JENKINSFILE_BRANCH', 'main', 'Jenkinsfileが格納されているブランチ')
+    }
+    
     // パイプライン定義
     definition {
         cpsScm {
@@ -47,7 +52,7 @@ pipelineJob(fullJobName) {
                         url(jenkinsPipelineRepo.url)
                         credentials(jenkinsPipelineRepo.credentials)
                     }
-                    branch(jenkinsPipelineRepo.branch)
+                    branch('${JENKINSFILE_BRANCH}')
                 }
             }
             scriptPath(jobConfig.jenkinsfile)

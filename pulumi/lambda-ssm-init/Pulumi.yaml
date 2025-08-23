@@ -1,0 +1,3 @@
+name: lambda-ssm-init
+runtime: nodejs
+description: Lambda APIインフラのSSMパラメータ初期化

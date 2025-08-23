@@ -84,63 +84,104 @@
 ```typescript
 /**
  * pulumi/{stack-name}/index.ts
- * 
- * 目的: {stack}のインフラストラクチャ定義
- * 依存: {dependencies}
- * 作成日: YYYY-MM-DD
+ * {stack}のインフラストラクチャ定義
  */
 import * as pulumi from "@pulumi/pulumi";
 import * as aws from "@pulumi/aws";
 
 // ========================================
-// 設定取得
+// 環境変数取得
 // ========================================
 const environment = pulumi.getStack();
-const config = new pulumi.Config();
-const projectName = config.get("projectName") || "jenkins-infra";
 
 // ========================================
-// SSMパラメータ参照
+// SSMパラメータ参照（Single Source of Truth）
 // ========================================
-const ssmPrefix = `/${projectName}/${environment}`;
-const projectNameParam = await aws.ssm.getParameter({
-    name: `${ssmPrefix}/config/project-name`,
-    withDecryption: true,
+// 重要: Pulumi ConfigやStackReferenceは使用せず、
+// SSMパラメータストアから全ての設定を取得する
+
+// プロジェクト名を取得
+const projectNameParam = aws.ssm.getParameter({
+    name: `/{system-name}/${environment}/common/project-name`,
 });
+const projectName = pulumi.output(projectNameParam).apply(p => p.value);
 
-// ========================================
-// スタック参照（依存関係）
-// ========================================
-const networkStackName = config.get("networkStackName") || `jenkins-network`;
-const networkStack = new pulumi.StackReference(
-    `${pulumi.getOrganization()}/${networkStackName}/${environment}`
-);
+// 他の設定値も同様にSSMから取得
+const vpcIdParam = aws.ssm.getParameter({
+    name: `/${projectName}/${environment}/network/vpc-id`,
+});
+const vpcId = pulumi.output(vpcIdParam).apply(p => p.value);
 
 // ========================================
 // リソース定義
 // ========================================
-// メインリソースの定義
+// リソース名は固定文字列を使用（Output<T>エラー回避）
+const resource = new aws.ec2.Instance("fixed-resource-name", {
+    // プロパティにはpulumi.interpolateを使用
+    tags: {
+        Name: pulumi.interpolate`${projectName}-instance-${environment}`,
+        Environment: environment,
+    },
+});
 
 // ========================================
-// タグ定義
+// SSMパラメータへの保存
 // ========================================
-const commonTags = {
-    Environment: environment,
-    ManagedBy: "pulumi",
-    Project: projectName,
-    Stack: pulumi.getProject(),
-    CreatedAt: new Date().toISOString(),
-};
+// 他のスタックが参照する値はSSMに保存
+const outputParam = new aws.ssm.Parameter("output-param", {
+    name: pulumi.interpolate`/${projectName}/${environment}/component/output-value`,
+    type: "String",
+    value: resource.id,
+    description: "Component output value",
+    tags: {
+        Environment: environment,
+    },
+});
 
 // ========================================
-// エクスポート
+// エクスポート（表示用のみ）
 // ========================================
+// エクスポートは表示・確認用のみ
+// 他のスタックはSSMパラメータから値を取得すること
 export const outputs = {
-    // 構造化された出力
+    resourceId: resource.id,
+    ssmParameterName: outputParam.name,
 };
 ```
 
 ## コーディング規約
+
+### Output<T>エラーの回避
+
+```typescript
+// ❌ 間違い: リソース名にOutput<T>を使用
+const bucket = new aws.s3.Bucket(`${projectName}-bucket`, {});
+
+// ✅ 正しい: リソース名は固定文字列
+const bucket = new aws.s3.Bucket("my-bucket", {
+    bucket: pulumi.interpolate`${projectName}-bucket-${environment}`,
+});
+
+// ❌ 間違い: JSON.stringify内でOutput<T>を使用
+const config = JSON.stringify({
+    name: projectName,  // projectNameがOutput<T>の場合エラー
+    environment: environment,
+});
+
+// ✅ 正しい: pulumi.allで解決してからJSON.stringify
+const config = pulumi.all([projectName]).apply(([name]) => 
+    JSON.stringify({
+        name: name,
+        environment: environment,
+    })
+);
+
+// ❌ 間違い: テンプレートリテラルでOutput<T>を使用
+const name = `${projectName}-${environment}`;
+
+// ✅ 正しい: pulumi.interpolateを使用
+const name = pulumi.interpolate`${projectName}-${environment}`;
+```
 
 ### TypeScript規約
 
@@ -332,101 +373,168 @@ const optionalTags = {
 
 ## 設定管理
 
-### Pulumi Config使用パターン
+### ⚠️ 重要: SSMパラメータストアが唯一の設定源
+
+**Pulumi ConfigやStackReferenceは使用禁止です。** すべての設定値はSSMパラメータストアから取得してください。
+
+### SSMパラメータ取得パターン
 
 ```typescript
+// ❌ 間違い: Pulumi Configの使用
 const config = new pulumi.Config();
+const projectName = config.get("projectName");
 
-// 文字列設定
-const region = config.get("region") || "ap-northeast-1";
-const projectName = config.require("projectName"); // 必須
+// ❌ 間違い: StackReferenceの使用
+const networkStack = new pulumi.StackReference("org/stack/env");
+const vpcId = networkStack.getOutput("vpcId");
 
-// 数値設定
-const instanceCount = config.getNumber("instanceCount") || 2;
-const volumeSize = config.requireNumber("volumeSize"); // 必須
+// ✅ 正しい: SSMパラメータストアから取得
+const projectNameParam = aws.ssm.getParameter({
+    name: `/lambda-api/${environment}/common/project-name`,
+});
+const projectName = pulumi.output(projectNameParam).apply(p => p.value);
 
-// ブール設定
-const enableMonitoring = config.getBoolean("enableMonitoring") ?? false;
-const enableBackup = config.requireBoolean("enableBackup"); // 必須
+// 数値の取得
+const memorySizeParam = aws.ssm.getParameter({
+    name: `/lambda-api/${environment}/lambda/memory-size`,
+});
+const memorySize = pulumi.output(memorySizeParam).apply(p => parseInt(p.value) || 256);
 
-// オブジェクト設定
-const dbConfig = config.getObject<DatabaseConfig>("database") || {
-    engine: "mysql",
-    version: "8.0",
-    instanceClass: "db.t3.micro",
-};
+// ブール値の取得
+const enableMonitoringParam = aws.ssm.getParameter({
+    name: `/lambda-api/${environment}/monitoring/enabled`,
+});
+const enableMonitoring = pulumi.output(enableMonitoringParam).apply(p => p.value === "true");
 
-// シークレット設定
-const dbPassword = config.requireSecret("dbPassword");
-const apiKey = config.getSecret("apiKey");
+// JSON設定の取得
+const configParam = aws.ssm.getParameter({
+    name: `/lambda-api/${environment}/config`,
+});
+const config = pulumi.output(configParam).apply(p => JSON.parse(p.value));
+
+// SecureStringの取得（機密情報）
+const dbPasswordParam = aws.ssm.getParameter({
+    name: `/lambda-api/${environment}/database/password`,
+    withDecryption: true,  // SecureStringの復号化
+});
+const dbPassword = pulumi.output(dbPasswordParam).apply(p => p.value);
 ```
 
-### 環境別設定
+### SSMパラメータの命名規則
 
-```yaml
-# Pulumi.dev.yaml
-config:
-  aws:region: ap-northeast-1
-  jenkins-network:instanceType: t3.micro
-  jenkins-network:enableMonitoring: false
+```
+/{system-name}/{environment}/{component}/{parameter-name}
 
-# Pulumi.staging.yaml
-config:
-  aws:region: ap-northeast-1
-  jenkins-network:instanceType: t3.small
-  jenkins-network:enableMonitoring: true
+例：
+/lambda-api/dev/common/project-name
+/lambda-api/dev/network/vpc-id
+/lambda-api/dev/database/connection-string
+/jenkins-infra/production/controller/instance-type
+```
 
-# Pulumi.production.yaml
-config:
-  aws:region: ap-northeast-1
-  jenkins-network:instanceType: t3.medium
-  jenkins-network:enableMonitoring: true
-  jenkins-network:enableBackup: true
+### 初期パラメータの設定（ssm-initスタック）
+
+各システムには`ssm-init`スタックを用意し、初期パラメータを設定します：
+
+```typescript
+// lambda-ssm-init/index.ts
+const parameters = {
+    [`${paramPrefix}/common/project-name`]: projectName,
+    [`${paramPrefix}/common/aws-region`]: awsRegion,
+    [`${paramPrefix}/lambda/memory-size`]: "512",
+    [`${paramPrefix}/lambda/timeout`]: "30",
+    [`${paramPrefix}/monitoring/enabled`]: "true",
+};
+
+Object.entries(parameters).forEach(([name, value]) => {
+    new aws.ssm.Parameter(name.replace(/\//g, "-"), {
+        name: name,
+        type: "String",
+        value: value,
+        description: `Initial parameter for ${name}`,
+        tags: {
+            Environment: environment,
+            ManagedBy: "pulumi",
+        },
+    });
+});
 ```
 
 ## スタック間の依存関係
 
-### スタック参照パターン
+### ⚠️ StackReferenceは使用禁止
+
+**スタック間の値の受け渡しはSSMパラメータストアを使用してください。**
+
+### SSMを使用した依存関係管理
 
 ```typescript
-// 基本的な参照
+// ❌ 間違い: StackReferenceの使用
 const networkStack = new pulumi.StackReference(
     `${pulumi.getOrganization()}/jenkins-network/${environment}`
 );
-
-// 設定可能な参照
-const networkStackName = config.get("networkStackName") || "jenkins-network";
-const networkStack = new pulumi.StackReference(
-    `${pulumi.getOrganization()}/${networkStackName}/${environment}`
-);
-
-// 出力値の取得
 const vpcId = networkStack.requireOutput("vpcId");
-const subnetIds = networkStack.requireOutput("privateSubnetIds") as pulumi.Output<string[]>;
 
-// オプショナルな出力
-const natGatewayId = networkStack.getOutput("natGatewayId");
-if (natGatewayId) {
-    // NATゲートウェイが存在する場合の処理
-}
+// ✅ 正しい: SSMパラメータから取得
+const vpcIdParam = aws.ssm.getParameter({
+    name: `/${projectName}/${environment}/network/vpc-id`,
+});
+const vpcId = pulumi.output(vpcIdParam).apply(p => p.value);
+
+// 複数の値を取得
+const privateSubnetAIdParam = aws.ssm.getParameter({
+    name: `/${projectName}/${environment}/network/subnets/private-a-id`,
+});
+const privateSubnetBIdParam = aws.ssm.getParameter({
+    name: `/${projectName}/${environment}/network/subnets/private-b-id`,
+});
+
+const privateSubnetIds = pulumi.all([
+    pulumi.output(privateSubnetAIdParam).apply(p => p.value),
+    pulumi.output(privateSubnetBIdParam).apply(p => p.value),
+]);
+
+// JSON形式で複数の値を取得
+const networkConfigParam = aws.ssm.getParameter({
+    name: `/${projectName}/${environment}/network/config`,
+});
+const networkConfig = pulumi.output(networkConfigParam).apply(p => JSON.parse(p.value));
+const vpcId = networkConfig.apply(c => c.vpcId);
+const subnetIds = networkConfig.apply(c => c.subnetIds);
 ```
 
-### 依存関係の管理
+### 値の保存パターン
 
 ```typescript
-// 複数スタックの参照
-const stacks = {
-    network: new pulumi.StackReference(`org/jenkins-network/${environment}`),
-    security: new pulumi.StackReference(`org/jenkins-security/${environment}`),
-    storage: new pulumi.StackReference(`org/jenkins-storage/${environment}`),
-};
+// 単一の値を保存
+const vpcIdParam = new aws.ssm.Parameter("vpc-id", {
+    name: pulumi.interpolate`/${projectName}/${environment}/network/vpc-id`,
+    type: "String",
+    value: vpc.id,
+    description: "VPC ID",
+    tags: {
+        Environment: environment,
+    },
+});
 
-// 出力値の結合
-const [vpcId, securityGroupId, efsId] = pulumi.all([
-    stacks.network.requireOutput("vpcId"),
-    stacks.security.requireOutput("appSecurityGroupId"),
-    stacks.storage.requireOutput("efsId"),
-]);
+// 複数の値をJSON形式で保存
+const networkConfigParam = new aws.ssm.Parameter("network-config", {
+    name: pulumi.interpolate`/${projectName}/${environment}/network/config`,
+    type: "String",
+    value: pulumi.all([vpc.id, privateSubnetIds, publicSubnetIds]).apply(
+        ([vpcId, privateIds, publicIds]) => JSON.stringify({
+            vpcId: vpcId,
+            privateSubnetIds: privateIds,
+            publicSubnetIds: publicIds,
+            region: aws.config.region,
+            lastUpdated: new Date().toISOString(),
+        })
+    ),
+    description: "Network configuration",
+    tags: {
+        Environment: environment,
+    },
+});
 ```
 
 ## エラーハンドリング

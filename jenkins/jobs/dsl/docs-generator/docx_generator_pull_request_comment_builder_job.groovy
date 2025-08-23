@@ -64,6 +64,7 @@ repositories.each { repo ->
             stringParam('PR_NUMBER', 'Latest', 'プルリクエスト番号（"Latest"の場合は最新のPRを対象）')
             booleanParam('UPDATE_TITLE', false, 'PRのタイトルを更新するかどうか')
             booleanParam('FORCE_ANALYSIS', false, '既存のコメントが存在しても強制的に分析とコメント更新を実行するかどうか')
+            stringParam('JENKINSFILE_BRANCH', 'main', 'Jenkinsfileが格納されているブランチ')
         }
         
         // パイプライン定義
@@ -75,7 +76,7 @@ repositories.each { repo ->
                             url(jenkinsPipelineRepo.url)
                             credentials(jenkinsPipelineRepo.credentials)
                         }
-                        branch(jenkinsPipelineRepo.branch)
+                        branch('${JENKINSFILE_BRANCH}')
                     }
                 }
                 scriptPath(jobConfig.jenkinsfile)

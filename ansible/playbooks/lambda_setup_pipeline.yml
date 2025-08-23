@@ -1,264 +1,134 @@
 ---
 # lambda_setup_pipeline.yml
 # Lambda API環境構築の全体フローを管理するプレイブック
+# 各lambda_*.ymlプレイブックを順番に実行
+#
+# 使用方法 (ansibleディレクトリから実行):
+#   ansible-playbook playbooks/lambda_setup_pipeline.yml -e "env=dev"
+#   ansible-playbook playbooks/lambda_setup_pipeline.yml -e "env=dev run_network=true run_security=false"
 
-- name: Lambda API Infrastructure Setup Pipeline
+- name: Lambda API Infrastructure Setup Pipeline - Start
   hosts: localhost
   connection: local
-  gather_facts: yes
+  gather_facts: no
   
   vars:
     # 環境名はコマンドラインから指定可能
     env_name: "{{ env | default('dev') }}"
-    # パスを明示的に定義
-    scripts_dir: "{{ inventory_dir }}/../../scripts"
-    pulumi_path: "{{ inventory_dir }}/../../pulumi"
-    # Phase 1/2の切り替え
-    enable_database: "{{ create_database | default(false) }}"
-    enable_isolated_subnets: "{{ create_isolated_subnets | default(false) }}"
   
-  pre_tasks:
-    # all.yml から変数を読み込む
-    - name: Include group_vars/all.yml
-      ansible.builtin.include_vars:
-        file: "{{ inventory_dir }}/group_vars/all.yml"
-        
-    # 必要な変数を設定
-    - name: Set required variables from all.yml
-      ansible.builtin.set_fact:
-        project_name: "{{ lambda_api_infra.project_name }}"
-        aws_region_name: "{{ lambda_api_infra.aws.default_region }}"
-        network_project_name: "{{ lambda_api_infra.pulumi.network_project }}"
-        security_project_name: "{{ lambda_api_infra.pulumi.security_project }}"
-        vpce_project_name: "{{ lambda_api_infra.pulumi.vpce_project }}"
-        nat_project_name: "{{ lambda_api_infra.pulumi.nat_project }}"
-        functions_project_name: "{{ lambda_api_infra.pulumi.functions_project }}"
-        api_gateway_project_name: "{{ lambda_api_infra.pulumi.api_gateway_project }}"
-        waf_project_name: "{{ lambda_api_infra.pulumi.waf_project }}"
-        websocket_project_name: "{{ lambda_api_infra.pulumi.websocket_project }}"
-        database_project_name: "{{ lambda_api_infra.pulumi.database_project }}"
-        # 環境別設定
-        environment_config: "{{ lambda_api_infra.environments[env_name] }}"
-        # NAT設定
-        high_availability_mode: "{{ environment_config.nat_high_availability | default(lambda_api_infra.nat.high_availability_mode) }}"
-        nat_instance_type: "{{ environment_config.nat_instance_type | default(lambda_api_infra.nat.instance_type) }}"
-        key_name: "{{ lambda_api_infra.aws.key_name | default('') }}"
-        # Lambda設定
-        lambda_memory: "{{ environment_config.lambda_memory | default(lambda_api.default_memory) }}"
-        lambda_timeout: "{{ lambda_api.default_timeout }}"
-        log_level: "{{ environment_config.log_level | default('INFO') }}"
-        log_retention_days: "{{ lambda_api.log_retention_days[env_name] | default(7) }}"
-        # API Gateway設定
-        api_rate_limit: "{{ environment_config.api_rate_limit | default(1000) }}"
-        # VPCエンドポイント設定
-        vpc_endpoints: "{{ environment_config.enable_vpc_endpoints | default(['s3']) }}"
-
-  roles:
-    - aws_setup
-    - pulumi_helper
-    
   tasks:
-    - name: Check for check mode
-      ansible.builtin.debug:
-        msg: |
-          ⚠️  WARNING: Check mode is not supported for Pulumi deployments.
-          Pulumi has its own preview functionality. Use one of these instead:
-          
-          1. For Ansible dry-run equivalent:
-             ansible-playbook playbooks/lambda_setup_pipeline.yml -e "env=dev preview_only=true"
-          
-          2. For Pulumi preview directly:
-             cd pulumi/lambda-network && pulumi preview
-      when: ansible_check_mode
-
-    - name: Fail if check mode
-      ansible.builtin.fail:
-        msg: "Check mode is not supported. Use 'preview_only=true' instead."
-      when: ansible_check_mode
-
-    - name: Check scripts directory exists
-      ansible.builtin.stat:
-        path: "{{ scripts_dir }}"
-      register: scripts_dir_stat
-      no_log: true
-      
-    - name: Fail if scripts directory doesn't exist
-      ansible.builtin.fail:
-        msg: "Scripts directory doesn't exist: {{ scripts_dir }}"
-      when: not scripts_dir_stat.stat.exists
-      
-    - name: Ensure all shell scripts have proper execute permissions
-      ansible.builtin.find:
-        paths: "{{ scripts_dir }}"
-        patterns: "*.sh"
-        recurse: yes
-      register: script_files
-      no_log: true
-      
-    - name: Set execute permissions on shell scripts
-      ansible.builtin.file:
-        path: "{{ item.path }}"
-        mode: "0755"
-      loop: "{{ script_files.files }}"
-      register: script_perm_updates
-      no_log: true
-      
-    - name: Display scripts that needed permission updates
-      ansible.builtin.debug:
-        msg: "実行権限を付与: {{ item.path | basename }}"
-      loop: "{{ script_perm_updates.results }}"
-      when: item.changed | default(false)
-      loop_control:
-        label: "{{ item.path | basename }}"
-        
-    - name: Display pipeline information
+    - name: Display setup information
       ansible.builtin.debug:
         msg: |
           Lambda API Infrastructure Setup Pipeline
-          ======================================
-          Project: {{ project_name }}
+          ==================================
           Environment: {{ env_name }}
-          AWS Region: {{ aws_region_name }}
-          Phase: {{ 'Phase 2 (with Database)' if enable_database else 'Phase 1 (API Only)' }}
-          
-          Pulumi Projects:
-          - Network: {{ network_project_name }}
-          - Security: {{ security_project_name }}
-          - VPC Endpoints: {{ vpce_project_name }}
-          - NAT: {{ nat_project_name }}
-          - Functions: {{ functions_project_name }}
-          - API Gateway: {{ api_gateway_project_name }}
-          - WAF: {{ waf_project_name }}
-          - WebSocket: {{ websocket_project_name }}
-          {% if enable_database %}
-          - Database: {{ database_project_name }}
-          {% endif %}
-          
-          Configuration:
-          - Lambda Memory: {{ lambda_memory }}MB
-          - Log Level: {{ log_level }}
-          - Log Retention: {{ log_retention_days }} days
-          - API Rate Limit: {{ api_rate_limit }} req/s
-          - VPC Endpoints: {{ vpc_endpoints | join(', ') }}
-          
-          NAT Configuration:
-          - Mode: {{ 'High Availability (NAT Gateway)' if high_availability_mode else 'Normal (NAT Instance)' }}
-          {% if not high_availability_mode %}
-          - Instance Type: {{ nat_instance_type }}
-          {% endif %}
+          Starting infrastructure deployment...
 
-    # アカウントレベル設定（最初に実行）
-    - name: Setup Account-level Configuration
-      ansible.builtin.include_role:
-        name: lambda_account_setup
-      when: run_account_setup | default(true) | bool
+# SSMパラメータストアの初期化（最初に実行）
+- import_playbook: lambda/lambda_ssm_init.yml
+  vars:
+    env: "{{ env | default('dev') }}"
+  when: run_ssm_init | default(true) | bool
+  tags:
+    - ssm-init
+    - always
 
-    # ネットワークインフラのデプロイ
-    - name: Deploy Network Infrastructure
-      ansible.builtin.include_role:
-        name: lambda_network
-      when: run_network | default(true) | bool
-      
-    # セキュリティグループのデプロイ
-    - name: Deploy Security Groups
-      ansible.builtin.include_role:
-        name: lambda_security
-      when: 
-        - network_deployed is defined and (network_deployed or ansible_check_mode)
-        - run_security | default(true) | bool
-    
-    # VPCエンドポイントのデプロイ
-    - name: Deploy VPC Endpoints
-      ansible.builtin.include_role:
-        name: lambda_vpce
-      when: 
-        - network_deployed is defined and (network_deployed or ansible_check_mode)
-        - security_deployed is defined and (security_deployed or ansible_check_mode)
-        - run_vpce | default(true) | bool
-    
-    # NATのデプロイ
-    - name: Deploy NAT Infrastructure
-      ansible.builtin.include_role:
-        name: lambda_nat
-      when: 
-        - network_deployed is defined and network_deployed
-        - security_deployed is defined and security_deployed
-        - run_nat | default(true) | bool
-    
-    # Lambda関数のデプロイ
-    - name: Deploy Lambda Functions
-      ansible.builtin.include_role:
-        name: lambda_functions
-      when: 
-        - network_deployed is defined and network_deployed
-        - security_deployed is defined and security_deployed
-        - vpce_deployed is defined and vpce_deployed
-        - nat_deployed is defined and nat_deployed
-        - run_functions | default(true) | bool
-    
-    # API Gatewayのデプロイ
-    - name: Deploy API Gateway
-      ansible.builtin.include_role:
-        name: lambda_api_gateway
-      when: 
-        - functions_deployed is defined and functions_deployed
-        - run_api_gateway | default(true) | bool
-    
-    # WAFのデプロイ
-    - name: Deploy WAF
-      ansible.builtin.include_role:
-        name: lambda_waf
-      when: 
-        - api_gateway_deployed is defined and api_gateway_deployed
-        - run_waf | default(true) | bool
-    
-    # WebSocket APIのデプロイ（オプション）
-    - name: Deploy WebSocket API
-      ansible.builtin.include_role:
-        name: lambda_websocket
-      when: 
-        - functions_deployed is defined and functions_deployed
-        - run_websocket | default(true) | bool
-        - enable_websocket | default(false) | bool
-    
-    # データベースのデプロイ（Phase 2）
-    - name: Deploy Database Infrastructure
-      ansible.builtin.include_role:
-        name: lambda_database
-      when: 
-        - network_deployed is defined and network_deployed
-        - security_deployed is defined and security_deployed
-        - enable_database | bool
-        - run_database | default(true) | bool
+# ネットワークインフラのデプロイ
+- import_playbook: lambda/lambda_network.yml
+  vars:
+    env: "{{ env | default('dev') }}"
+  when: run_network | default(true) | bool
+  tags:
+    - network
 
-    # IP Whitelist初期化（WAFデプロイ前に実行）
-    - name: Initialize IP Whitelist
-      ansible.builtin.include_role:
-        name: lambda_ip_whitelist
-      vars:
-        operation: "init"
-      when: 
-        - api_gateway_deployed is defined and api_gateway_deployed
-        - init_ip_whitelist | default(true) | bool
-        - not waf_deployed | default(false)
+# セキュリティグループのデプロイ
+- import_playbook: lambda/lambda_security.yml
+  vars:
+    env: "{{ env | default('dev') }}"
+  when: run_security | default(true) | bool
+  tags:
+    - security
 
-    # デプロイメント結果サマリー
-    - name: Deployment Summary
+# VPCエンドポイントのデプロイ
+- import_playbook: lambda/lambda_vpce.yml
+  vars:
+    env: "{{ env | default('dev') }}"
+  when: run_vpce | default(true) | bool
+  tags:
+    - vpce
+
+# NATインフラのデプロイ
+- import_playbook: lambda/lambda_nat.yml
+  vars:
+    env: "{{ env | default('dev') }}"
+  when: run_nat | default(true) | bool
+  tags:
+    - nat
+
+# Lambda関数のデプロイ
+- import_playbook: lambda/lambda_functions.yml
+  vars:
+    env: "{{ env | default('dev') }}"
+  when: run_functions | default(true) | bool
+  tags:
+    - functions
+
+# API Gatewayのデプロイ
+- import_playbook: lambda/lambda_api_gateway.yml
+  vars:
+    env: "{{ env | default('dev') }}"
+  when: run_api_gateway | default(true) | bool
+  tags:
+    - api-gateway
+
+# WAFのデプロイ（オプション）
+- import_playbook: lambda/lambda_waf.yml
+  vars:
+    env: "{{ env | default('dev') }}"
+  when: run_waf | default(true) | bool
+  tags:
+    - waf
+
+# WebSocket APIのデプロイ（オプション）
+- import_playbook: lambda/lambda_websocket.yml
+  vars:
+    env: "{{ env | default('dev') }}"
+  when: run_websocket | default(true) | bool
+  tags:
+    - websocket
+
+# データベースのデプロイ（Phase 2）
+- import_playbook: lambda/lambda_database.yml
+  vars:
+    env: "{{ env | default('dev') }}"
+  when: run_database | default(true) | bool
+  tags:
+    - database
+
+- name: Setup Complete
+  hosts: localhost
+  connection: local
+  gather_facts: no
+  
+  vars:
+    env_name: "{{ env | default('dev') }}"
+  
+  tasks:
+    - name: Display deployment summary
       ansible.builtin.debug:
         msg: |
-          Lambda API Infrastructure Deployment Summary
+          Lambda API Infrastructure Deployment Complete
           ==========================================
-          Network: {{ network_deployed | default(false) }}
-          Security: {{ security_deployed | default(false) }}
-          VPC Endpoints: {{ vpce_deployed | default(false) }}
-          NAT: {{ nat_deployed | default(false) }} ({{ nat_type | default('N/A') }})
-          Lambda Functions: {{ functions_deployed | default(false) }}
-          API Gateway: {{ api_gateway_deployed | default(false) }}
-          WAF: {{ waf_deployed | default(false) }}
-          WebSocket API: {{ websocket_deployed | default(false) }}
-          Database: {{ database_deployed | default(false) }}
           
-          {% if api_gateway_deployed | default(false) %}
-          API Endpoint: {{ api_endpoint | default('Not available') }}
-          API Key: Use 'pulumi stack output apiKeyInfo -C {{ pulumi_path }}/{{ api_gateway_project_name }}'
-          {% endif %}
+          Environment: {{ env_name }}
+          
+          All specified components have been processed for deployment.
+          
+          Next steps:
+          1. Access your API through the API Gateway endpoint
+          2. Use the API key for authentication
+          3. Monitor Lambda functions through CloudWatch
+          
+          To destroy this infrastructure:
+          ansible-playbook playbooks/lambda_teardown_pipeline.yml -e "env={{ env_name }}"
