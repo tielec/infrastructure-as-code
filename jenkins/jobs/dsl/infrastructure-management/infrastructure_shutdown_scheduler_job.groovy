@@ -16,7 +16,7 @@ freeStyleJob(fullJobName) {
         |
         |実行タイミング:
         |- 日本時間（JST）午前0時
-        |- 平日のみ実行（月曜日〜金曜日）
+        |- 毎日実行（土日祝日含む）
         |
         |実行内容:
         |- Infrastructure_Management/Shutdown_Jenkins_Environment ジョブをトリガー
@@ -25,15 +25,15 @@ freeStyleJob(fullJobName) {
         |
         |注意事項:
         |- 本番環境は対象外（dev環境のみ）
-        |- 週末は自動停止しません
+        |- 土日祝日も含めて毎日自動停止します
     '''.stripMargin())
 
     // トリガー設定
     triggers {
         // 日本時間午前0時に実行（UTC 15:00）
         // H: Hash（負荷分散のため0-59分の間でランダムに実行）
-        // 平日のみ: 1-5（月-金）
-        cron('H 15 * * 1-5')  // UTC 15:00 = JST 00:00、月-金のみ
+        // 毎日実行: *（全曜日）
+        cron('H 15 * * *')  // UTC 15:00 = JST 00:00、毎日
     }
 
     // 並行実行を無効化
