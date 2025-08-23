@@ -8,86 +8,101 @@
 import * as pulumi from "@pulumi/pulumi";
 import * as aws from "@pulumi/aws";
 
-// 環境変数を取得
+// ========================================
+// 環境変数取得
+// ========================================
 const environment = pulumi.getStack();
 
-// SSMパラメータストアから設定を取得（Single Source of Truth）
+// ========================================
+// SSMパラメータ参照（Single Source of Truth）
+// ========================================
+// プロジェクト名を取得
 const projectNameParam = aws.ssm.getParameter({
     name: `/lambda-api/${environment}/common/project-name`,
 });
 const projectName = pulumi.output(projectNameParam).apply(p => p.value);
 
-// SSMパラメータストアからネットワーク情報を取得
+// ネットワーク情報を取得
 const vpcIdParam = aws.ssm.getParameter({
     name: `/lambda-api/${environment}/network/vpc-id`,
 });
+const vpcId = pulumi.output(vpcIdParam).apply(p => p.value);
+
 const privateSubnetAIdParam = aws.ssm.getParameter({
     name: `/lambda-api/${environment}/network/subnets/private-a-id`,
 });
 const privateSubnetBIdParam = aws.ssm.getParameter({
     name: `/lambda-api/${environment}/network/subnets/private-b-id`,
 });
+const privateSubnetIds = pulumi.all([
+    pulumi.output(privateSubnetAIdParam).apply(p => p.value),
+    pulumi.output(privateSubnetBIdParam).apply(p => p.value),
+]);
+
 const privateRouteTableAIdParam = aws.ssm.getParameter({
     name: `/lambda-api/${environment}/network/route-tables/private-a-id`,
 });
 const privateRouteTableBIdParam = aws.ssm.getParameter({
     name: `/lambda-api/${environment}/network/route-tables/private-b-id`,
 });
+const privateRouteTableIds = pulumi.all([
+    pulumi.output(privateRouteTableAIdParam).apply(p => p.value),
+    pulumi.output(privateRouteTableBIdParam).apply(p => p.value),
+]);
+
 const isolatedRouteTableAIdParam = aws.ssm.getParameter({
     name: `/lambda-api/${environment}/network/route-tables/isolated-a-id`,
 });
+const isolatedRouteTableAId = pulumi.output(isolatedRouteTableAIdParam).apply(p => p.value || "");
+
 const isolatedRouteTableBIdParam = aws.ssm.getParameter({
     name: `/lambda-api/${environment}/network/route-tables/isolated-b-id`,
 });
+const isolatedRouteTableBId = pulumi.output(isolatedRouteTableBIdParam).apply(p => p.value || "");
 
-// SSMパラメータストアからセキュリティ情報を取得
+// セキュリティ情報を取得
 const vpceSecurityGroupIdParam = aws.ssm.getParameter({
     name: `/lambda-api/${environment}/security/vpce-sg-id`,
 });
+const vpceSecurityGroupId = pulumi.output(vpceSecurityGroupIdParam).apply(p => p.value);
 
-// SSMパラメータストアからVPCエンドポイント設定を取得
-const vpcEndpointsParam = aws.ssm.getParameter({
-    name: `/lambda-api/${environment}/network/vpc-endpoints`,
-});
-
-// 値の取得
-const vpcId = vpcIdParam.then(p => p.value);
-const privateSubnetIds = Promise.all([
-    privateSubnetAIdParam.then(p => p.value),
-    privateSubnetBIdParam.then(p => p.value),
-]);
-const privateRouteTableIds = Promise.all([
-    privateRouteTableAIdParam.then(p => p.value),
-    privateRouteTableBIdParam.then(p => p.value),
-]);
-const isolatedRouteTableAId = isolatedRouteTableAIdParam.then(p => p.value || "");
-const isolatedRouteTableBId = isolatedRouteTableBIdParam.then(p => p.value || "");
-const vpceSecurityGroupId = vpceSecurityGroupIdParam.then(p => p.value);
-const vpcEndpoints = vpcEndpointsParam.then(p => JSON.parse(p.value || "[]"));
-
-// VPCエンドポイント設定をSSMから取得
+// VPCエンドポイント設定を取得
 const enableS3EndpointParam = aws.ssm.getParameter({
     name: `/lambda-api/${environment}/vpce/enable-s3`,
 });
+const enableS3Endpoint = pulumi.output(enableS3EndpointParam).apply(p => p.value !== "false");
+
 const enableDynamoDBEndpointParam = aws.ssm.getParameter({
     name: `/lambda-api/${environment}/vpce/enable-dynamodb`,
 });
+const enableDynamoDBEndpoint = pulumi.output(enableDynamoDBEndpointParam).apply(p => p.value === "true");
+
 const enableSecretsManagerEndpointParam = aws.ssm.getParameter({
     name: `/lambda-api/${environment}/vpce/enable-secrets-manager`,
 });
+const enableSecretsManagerEndpoint = pulumi.output(enableSecretsManagerEndpointParam).apply(p => p.value === "true");
+
 const enableKMSEndpointParam = aws.ssm.getParameter({
     name: `/lambda-api/${environment}/vpce/enable-kms`,
 });
-
-const enableS3Endpoint = pulumi.output(enableS3EndpointParam).apply(p => p.value !== "false");
-const enableDynamoDBEndpoint = pulumi.output(enableDynamoDBEndpointParam).apply(p => p.value === "true");
-const enableSecretsManagerEndpoint = pulumi.output(enableSecretsManagerEndpointParam).apply(p => p.value === "true");
 const enableKMSEndpoint = pulumi.output(enableKMSEndpointParam).apply(p => p.value === "true");
 
-// ===== Gateway型 VPC Endpoints =====
+// ========================================
+// 共通タグ定義
+// ========================================
+const commonTags = {
+    Environment: environment,
+    ManagedBy: "pulumi",
+    Project: "lambda-api",
+    Stack: pulumi.getProject(),
+};
 
+// ========================================
+// VPCエンドポイント定義
+// ========================================
+// Gateway型 VPC Endpoints
 // S3エンドポイント（Phase 1で必須）
-const s3Endpoint = new aws.ec2.VpcEndpoint("lambda-api-vpce-s3", {
+const s3Endpoint = new aws.ec2.VpcEndpoint("vpce-s3", {
         vpcId: vpcId,
         serviceName: pulumi.interpolate`com.amazonaws.${aws.config.region}.s3`,
         vpcEndpointType: "Gateway",
@@ -111,14 +126,14 @@ const s3Endpoint = new aws.ec2.VpcEndpoint("lambda-api-vpce-s3", {
             }],
         }),
         tags: {
+            ...commonTags,
             Name: pulumi.interpolate`${projectName}-vpce-s3-${environment}`,
-            Environment: environment,
             Type: "gateway",
         },
     });
 
 // DynamoDBエンドポイント（Phase 2）
-const dynamodbEndpoint = new aws.ec2.VpcEndpoint("lambda-api-vpce-dynamodb", {
+const dynamodbEndpoint = new aws.ec2.VpcEndpoint("vpce-dynamodb", {
         vpcId: vpcId,
         serviceName: pulumi.interpolate`com.amazonaws.${aws.config.region}.dynamodb`,
         vpcEndpointType: "Gateway",
@@ -142,16 +157,15 @@ const dynamodbEndpoint = new aws.ec2.VpcEndpoint("lambda-api-vpce-dynamodb", {
             }],
         }),
         tags: {
+            ...commonTags,
             Name: pulumi.interpolate`${projectName}-vpce-dynamodb-${environment}`,
-            Environment: environment,
             Type: "gateway",
         },
     });
 
-// ===== Interface型 VPC Endpoints =====
-
+// Interface型 VPC Endpoints
 // Secrets Managerエンドポイント（本番環境推奨）
-const secretsManagerEndpoint = new aws.ec2.VpcEndpoint("lambda-api-vpce-secretsmanager", {
+const secretsManagerEndpoint = new aws.ec2.VpcEndpoint("vpce-secretsmanager", {
         vpcId: vpcId,
         serviceName: pulumi.interpolate`com.amazonaws.${aws.config.region}.secretsmanager`,
         vpcEndpointType: "Interface",
@@ -159,14 +173,14 @@ const secretsManagerEndpoint = new aws.ec2.VpcEndpoint("lambda-api-vpce-secretsm
         securityGroupIds: [vpceSecurityGroupId],
         privateDnsEnabled: true,
         tags: {
+            ...commonTags,
             Name: pulumi.interpolate`${projectName}-vpce-secretsmanager-${environment}`,
-            Environment: environment,
             Type: "interface",
         },
     });
 
 // KMSエンドポイント（本番環境推奨）
-const kmsEndpoint = new aws.ec2.VpcEndpoint("lambda-api-vpce-kms", {
+const kmsEndpoint = new aws.ec2.VpcEndpoint("vpce-kms", {
         vpcId: vpcId,
         serviceName: pulumi.interpolate`com.amazonaws.${aws.config.region}.kms`,
         vpcEndpointType: "Interface",
@@ -174,13 +188,15 @@ const kmsEndpoint = new aws.ec2.VpcEndpoint("lambda-api-vpce-kms", {
         securityGroupIds: [vpceSecurityGroupId],
         privateDnsEnabled: true,
         tags: {
+            ...commonTags,
             Name: pulumi.interpolate`${projectName}-vpce-kms-${environment}`,
-            Environment: environment,
             Type: "interface",
         },
     });
 
-// ===== 将来の拡張用エンドポイント（Phase 2以降）=====
+// ========================================
+// 将来の拡張用エンドポイント（Phase 2以降）
+// ========================================
 // 必要に応じて以下のエンドポイントを追加可能：
 // - SQS（DLQ用）
 // - SNS（通知用）
@@ -188,63 +204,59 @@ const kmsEndpoint = new aws.ec2.VpcEndpoint("lambda-api-vpce-kms", {
 // - Lambda（VPC内からのLambda呼び出し用）
 // - CloudWatch Logs（ログ送信用）
 
-// ===== コスト情報の計算 =====
-// Interface型エンドポイントのコスト（$0.01/時間 × AZ数）
-const interfaceEndpointCostPerHour = 0.01;
-const azCount = 2; // マルチAZ
-const hoursPerMonth = 730; // 約30日
-const interfaceCostPerMonth = interfaceEndpointCostPerHour * azCount * hoursPerMonth;
-
-// ===== SSMパラメータストアに個別の出力を保存 =====
+// ========================================
+// SSMパラメータへの保存
+// ========================================
+// 他のスタックが参照する値をSSMに保存
 const paramPrefix = pulumi.interpolate`/${projectName}/${environment}/vpce`;
 
 // S3エンドポイントID
-const s3EndpointIdParam = new aws.ssm.Parameter("lambda-api-vpce-s3-id", {
-        name: pulumi.interpolate`${paramPrefix}/endpoints/s3-id`,
-        type: "String",
-        value: s3Endpoint.id,
-        description: "S3 VPC Endpoint ID",
-        tags: { Environment: environment, ManagedBy: "pulumi", Stack: "lambda-vpce" },
-    });
+const s3EndpointIdParam = new aws.ssm.Parameter("vpce-s3-id", {
+    name: pulumi.interpolate`${paramPrefix}/endpoints/s3-id`,
+    type: "String",
+    value: s3Endpoint.id,
+    description: "S3 VPC Endpoint ID",
+    tags: commonTags,
+});
 
 // DynamoDBエンドポイントID
-const dynamodbEndpointIdParam = new aws.ssm.Parameter("lambda-api-vpce-dynamodb-id", {
-        name: pulumi.interpolate`${paramPrefix}/endpoints/dynamodb-id`,
-        type: "String",
-        value: dynamodbEndpoint.id,
-        description: "DynamoDB VPC Endpoint ID",
-        tags: { Environment: environment, ManagedBy: "pulumi", Stack: "lambda-vpce" },
-    });
+const dynamodbEndpointIdParam = new aws.ssm.Parameter("vpce-dynamodb-id", {
+    name: pulumi.interpolate`${paramPrefix}/endpoints/dynamodb-id`,
+    type: "String",
+    value: dynamodbEndpoint.id,
+    description: "DynamoDB VPC Endpoint ID",
+    tags: commonTags,
+});
 
 // Secrets ManagerエンドポイントID
-const smEndpointIdParam = new aws.ssm.Parameter("lambda-api-vpce-sm-id", {
-        name: pulumi.interpolate`${paramPrefix}/endpoints/secretsmanager-id`,
-        type: "String",
-        value: secretsManagerEndpoint.id,
-        description: "Secrets Manager VPC Endpoint ID",
-        tags: { Environment: environment, ManagedBy: "pulumi", Stack: "lambda-vpce" },
-    });
+const smEndpointIdParam = new aws.ssm.Parameter("vpce-sm-id", {
+    name: pulumi.interpolate`${paramPrefix}/endpoints/secretsmanager-id`,
+    type: "String",
+    value: secretsManagerEndpoint.id,
+    description: "Secrets Manager VPC Endpoint ID",
+    tags: commonTags,
+});
 
 // KMSエンドポイントID
-const kmsEndpointIdParam = new aws.ssm.Parameter("lambda-api-vpce-kms-id", {
-        name: pulumi.interpolate`${paramPrefix}/endpoints/kms-id`,
-        type: "String",
-        value: kmsEndpoint.id,
-        description: "KMS VPC Endpoint ID",
-        tags: { Environment: environment, ManagedBy: "pulumi", Stack: "lambda-vpce" },
-    });
+const kmsEndpointIdParam = new aws.ssm.Parameter("vpce-kms-id", {
+    name: pulumi.interpolate`${paramPrefix}/endpoints/kms-id`,
+    type: "String",
+    value: kmsEndpoint.id,
+    description: "KMS VPC Endpoint ID",
+    tags: commonTags,
+});
 
 // デプロイメント完了フラグ
-const deploymentCompleteParam = new aws.ssm.Parameter("lambda-api-vpce-deployed", {
+const deploymentCompleteParam = new aws.ssm.Parameter("vpce-deployed", {
     name: pulumi.interpolate`${paramPrefix}/deployment/complete`,
     type: "String",
     value: "true",
     description: "VPC Endpoints stack deployment completion flag",
-    tags: { Environment: environment, ManagedBy: "pulumi", Stack: "lambda-vpce" },
+    tags: commonTags,
 });
 
 // 設定情報をSSMパラメータに保存
-const vpceConfig = new aws.ssm.Parameter("lambda-api-vpce-config", {
+const vpceConfig = new aws.ssm.Parameter("vpce-config", {
     name: pulumi.interpolate`${paramPrefix}/config`,
     type: "String",
     value: pulumi.all([
@@ -285,13 +297,11 @@ const vpceConfig = new aws.ssm.Parameter("lambda-api-vpce-config", {
         },
     })),
     description: "VPC Endpoints configuration",
-    tags: {
-        Environment: environment,
-    },
+    tags: commonTags,
 });
 
-// ===== エンドポイント使用ガイド =====
-const usageGuide = new aws.ssm.Parameter("lambda-api-vpce-usage-guide", {
+// エンドポイント使用ガイド
+const usageGuide = new aws.ssm.Parameter("vpce-usage-guide", {
     name: pulumi.interpolate`/${projectName}/${environment}/vpce/usage-guide`,
     type: "String",
     value: JSON.stringify({
@@ -319,30 +329,21 @@ const usageGuide = new aws.ssm.Parameter("lambda-api-vpce-usage-guide", {
         ],
     }),
     description: "VPC Endpoints usage guide",
-    tags: {
-        Environment: environment,
-    },
+    tags: commonTags,
 });
 
 // ========================================
-// エクスポート（最小限に限定）
+// エクスポート（表示用のみ）
 // ========================================
-// すべての値はSSMパラメータストアに保存されているため、
-// stack outputは必要最小限のみエクスポート
-
-// デプロイメント確認用の基本情報のみ
-export const deploymentInfo = {
+// エクスポートは表示・確認用のみ
+// 他のスタックはSSMパラメータから値を取得すること
+export const outputs = {
     stack: "lambda-vpce",
     environment: environment,
-    timestamp: new Date().toISOString(),
+    s3EndpointId: s3Endpoint.id,
+    dynamodbEndpointId: dynamodbEndpoint.id,
+    secretsManagerEndpointId: secretsManagerEndpoint.id,
+    kmsEndpointId: kmsEndpoint.id,
     ssmParameterPrefix: paramPrefix,
-    endpointsCreated: [
-        enableS3Endpoint,
-        enableDynamoDBEndpoint,
-        enableSecretsManagerEndpoint,
-        enableKMSEndpoint,
-    ].filter(Boolean).length,
+    deploymentComplete: deploymentCompleteParam.name,
 };
-
-// デプロイ完了の確認用
-export const deploymentComplete = true;

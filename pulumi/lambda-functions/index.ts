@@ -7,60 +7,86 @@
 import * as pulumi from "@pulumi/pulumi";
 import * as aws from "@pulumi/aws";
 
-// 環境変数を取得
+// ========================================
+// 環境変数取得
+// ========================================
 const environment = pulumi.getStack();
 
-// SSMパラメータストアから設定を取得（Single Source of Truth）
+// ========================================
+// SSMパラメータ参照（Single Source of Truth）
+// ========================================
+// プロジェクト名を取得
 const projectNameParam = aws.ssm.getParameter({
     name: `/lambda-api/${environment}/common/project-name`,
 });
 const projectName = pulumi.output(projectNameParam).apply(p => p.value);
 
-// Lambda関数の設定をSSMから取得
+// Lambda関数の設定を取得
 const memorySizeParam = aws.ssm.getParameter({
     name: `/lambda-api/${environment}/lambda/memory-size`,
 });
+const memorySize = pulumi.output(memorySizeParam).apply(p => parseInt(p.value) || 256);
+
 const timeoutParam = aws.ssm.getParameter({
     name: `/lambda-api/${environment}/lambda/timeout`,
 });
+const timeout = pulumi.output(timeoutParam).apply(p => parseInt(p.value) || 30);
+
 const logRetentionDaysParam = aws.ssm.getParameter({
     name: `/lambda-api/${environment}/lambda/log-retention-days`,
 });
+const logRetentionDays = pulumi.output(logRetentionDaysParam).apply(p => {
+    const days = parseInt(p.value);
+    if (!isNaN(days)) return days;
+    // デフォルト値：dev=3日、staging=7日、prod=14日
+    return environment === "dev" ? 3 : environment === "staging" ? 7 : 14;
+});
 
-const memorySize = pulumi.output(memorySizeParam).apply(p => parseInt(p.value) || 256);
-const timeout = pulumi.output(timeoutParam).apply(p => parseInt(p.value) || 30);
-const logRetentionDays = pulumi.output(logRetentionDaysParam).apply(p => parseInt(p.value) || (environment === "dev" ? 3 : environment === "staging" ? 7 : 14));
-
-// SSMパラメータストアからネットワーク情報を取得
+// ネットワーク情報を取得
 const privateSubnetAIdParam = aws.ssm.getParameter({
     name: `/lambda-api/${environment}/network/subnets/private-a-id`,
 });
+const privateSubnetAId = pulumi.output(privateSubnetAIdParam).apply(p => p.value);
+
 const privateSubnetBIdParam = aws.ssm.getParameter({
     name: `/lambda-api/${environment}/network/subnets/private-b-id`,
 });
+const privateSubnetBId = pulumi.output(privateSubnetBIdParam).apply(p => p.value);
+
 const lambdaSecurityGroupIdParam = aws.ssm.getParameter({
     name: `/lambda-api/${environment}/security/lambda-sg-id`,
 });
-
-const privateSubnetIds = pulumi.all([
-    pulumi.output(privateSubnetAIdParam).apply(p => p.value),
-    pulumi.output(privateSubnetBIdParam).apply(p => p.value),
-]);
 const lambdaSecurityGroupId = pulumi.output(lambdaSecurityGroupIdParam).apply(p => p.value);
 
-// ===== Dead Letter Queue (DLQ) - エラー処理用 =====
-const dlq = new aws.sqs.Queue("lambda-api-dlq", {
+// サブネットIDの配列
+const privateSubnetIds = pulumi.all([privateSubnetAId, privateSubnetBId]);
+
+// ========================================
+// 共通タグ定義
+// ========================================
+const commonTags = {
+    Environment: environment,
+    ManagedBy: "pulumi",
+    Project: "lambda-api",
+    Stack: pulumi.getProject(),
+};
+
+// ========================================
+// リソース定義
+// ========================================
+// Dead Letter Queue (DLQ) - エラー処理用
+const dlq = new aws.sqs.Queue("dlq", {
     name: pulumi.interpolate`${projectName}-dlq-${environment}`,
     messageRetentionSeconds: 14 * 24 * 60 * 60, // 14日間保持
     visibilityTimeoutSeconds: timeout.apply(t => t * 6), // Lambdaタイムアウトの6倍
     tags: {
+        ...commonTags,
         Name: pulumi.interpolate`${projectName}-dlq-${environment}`,
-        Environment: environment,
     },
 });
 
-// ===== IAMロール - Lambda実行権限 =====
-const lambdaRole = new aws.iam.Role("lambda-api-lambda-role", {
+// IAMロール - Lambda実行権限
+const lambdaRole = new aws.iam.Role("lambda-role", {
     assumeRolePolicy: JSON.stringify({
         Version: "2012-10-17",
         Statement: [{
@@ -72,19 +98,19 @@ const lambdaRole = new aws.iam.Role("lambda-api-lambda-role", {
         }],
     }),
     tags: {
+        ...commonTags,
         Name: pulumi.interpolate`${projectName}-lambda-role-${environment}`,
-        Environment: environment,
     },
 });
 
 // VPC内でLambdaを実行するための権限
-new aws.iam.RolePolicyAttachment("lambda-api-vpc-access", {
+new aws.iam.RolePolicyAttachment("vpc-access-policy", {
     role: lambdaRole.name,
     policyArn: "arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole",
 });
 
 // 基本的な権限（CloudWatch Logs、DLQ、Secrets Manager）
-const lambdaPolicy = new aws.iam.RolePolicy("lambda-api-lambda-policy", {
+const lambdaPolicy = new aws.iam.RolePolicy("lambda-policy", {
     role: lambdaRole.id,
     policy: pulumi.all([dlq.arn, projectName]).apply(([dlqArn, proj]) => JSON.stringify({
         Version: "2012-10-17",
@@ -115,8 +141,11 @@ const lambdaPolicy = new aws.iam.RolePolicy("lambda-api-lambda-policy", {
     })),
 });
 
-// ===== メインのLambda関数 =====
-const mainFunction = new aws.lambda.Function("lambda-api-main", {
+// ========================================
+// Lambda関数定義
+// ========================================
+// メインのLambda関数
+const mainFunction = new aws.lambda.Function("main-function", {
     name: pulumi.interpolate`${projectName}-main-${environment}`,
     description: "Main API handler for bubble.io integration",
     runtime: "nodejs18.x",
@@ -179,22 +208,25 @@ exports.handler = async (event, context) => {
     }),
     
     tags: {
+        ...commonTags,
         Name: pulumi.interpolate`${projectName}-main-${environment}`,
-        Environment: environment,
     },
 });
 
-// ===== CloudWatch Logs グループ =====
-const logGroup = new aws.cloudwatch.LogGroup("lambda-api-logs", {
+// ========================================
+// CloudWatch Logs設定
+// ========================================
+const logGroup = new aws.cloudwatch.LogGroup("log-group", {
     name: pulumi.interpolate`/aws/lambda/${mainFunction.name}`,
     retentionInDays: logRetentionDays,
-    tags: {
-        Environment: environment,
-    },
+    tags: commonTags,
 });
 
-// ===== 設定情報をSSMパラメータに保存 =====
-const functionConfig = new aws.ssm.Parameter("lambda-api-function-config", {
+// ========================================
+// SSMパラメータへの保存
+// ========================================
+// 他のスタックが参照する値をSSMに保存
+const functionConfig = new aws.ssm.Parameter("function-config", {
     name: pulumi.interpolate`/${projectName}/${environment}/lambda/config`,
     type: "String",
     value: pulumi.all([mainFunction.name, mainFunction.arn, dlq.url, memorySize, timeout]).apply(
@@ -223,27 +255,32 @@ const functionConfig = new aws.ssm.Parameter("lambda-api-function-config", {
         })
     ),
     description: "Lambda function configuration",
-    tags: {
-        Environment: environment,
-    },
+    tags: commonTags,
 });
 
-// エクスポート
-export const functionName = mainFunction.name;
-export const functionArn = mainFunction.arn;
-export const functionUrl = mainFunction.invokeArn;
-export const dlqUrl = dlq.url;
-export const dlqArn = dlq.arn;
-export const lambdaRoleArn = lambdaRole.arn;
-export const logGroupName = logGroup.name;
+// ========================================
+// エクスポート（表示用のみ）
+// ========================================
+// エクスポートは表示・確認用のみ
+// 他のスタックはSSMパラメータから値を取得すること
+export const outputs = {
+    functionName: mainFunction.name,
+    functionArn: mainFunction.arn,
+    functionUrl: mainFunction.invokeArn,
+    dlqUrl: dlq.url,
+    dlqArn: dlq.arn,
+    lambdaRoleArn: lambdaRole.arn,
+    logGroupName: logGroup.name,
+    ssmParameterName: functionConfig.name,
+};
 
 // 簡潔な情報サマリー
-export const summary = {
+export const summary = pulumi.all([memorySize, timeout]).apply(([mem, time]) => ({
     runtime: "nodejs18.x",
     architecture: "arm64",
-    memorySize: memorySize,
-    timeout: timeout,
+    memorySize: mem,
+    timeout: time,
     environment: environment,
     vpcEnabled: true,
     dlqEnabled: true,
-};
+}));
