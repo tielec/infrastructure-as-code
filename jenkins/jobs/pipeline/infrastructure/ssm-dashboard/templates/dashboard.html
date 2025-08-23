@@ -33,216 +33,62 @@
         </div>
         
         <div class="content">
-            <div class="filters">
-                <div class="search-box">
-                    <input type="text" id="searchInput" placeholder="パラメータ名で検索..." onkeyup="filterTable()">
-                </div>
-                <div class="filter-controls">
-                    <select id="typeFilter" onchange="filterTable()">
-                        <option value="">すべてのタイプ</option>
-                        <option value="String">String</option>
-                        <option value="SecureString">SecureString</option>
-                        <option value="StringList">StringList</option>
-                    </select>
-                    <select id="pathFilter" onchange="filterTable()">
-                        <option value="">すべてのパス</option>
-                        {% for path in unique_paths %}
-                        <option value="{{ path }}">{{ path }}</option>
-                        {% endfor %}
-                    </select>
-                </div>
+            <div class="info-box">
+                <h3>フィルタ条件</h3>
+                <p><strong>パス:</strong> {{ filter_path }}</p>
+                <p><strong>名前フィルタ:</strong> {{ filter_name }}</p>
+                <p><strong>タイプ:</strong> {{ filter_type }}</p>
+                <p><strong>ソート順:</strong> {{ sort_by }}</p>
             </div>
             
-            {% if hierarchical_view %}
-            <div class="tree-view">
-                <h2>階層ビュー</h2>
-                <div id="parameterTree">
-                    {{ hierarchy_html | safe }}
-                </div>
-            </div>
-            {% endif %}
-            
-            <div class="table-view">
-                <h2>パラメータ一覧</h2>
-                <table id="paramTable">
-                    <thead>
-                        <tr>
-                            <th onclick="sortTable(0)">パラメータ名 ↕</th>
-                            <th>値</th>
-                            <th onclick="sortTable(2)">タイプ ↕</th>
-                            <th>説明</th>
-                            <th onclick="sortTable(4)">最終更新日 ↕</th>
-                            <th>バージョン</th>
-                            <th>ティア</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {% for param in parameters %}
-                        <tr data-type="{{ param.Type }}" data-path="{{ param.Hierarchy.Path }}">
-                            <td>
-                                <span class="param-name" title="{{ param.Name }}">{{ param.Name }}</span>
-                                {% if param.Hierarchy.Path != '/' %}
-                                <br><span class="hierarchy-path">{{ param.Hierarchy.Path }}</span>
-                                {% endif %}
-                            </td>
-                            <td>
-                                <span class="param-value" title="{{ param.Value }}">
-                                    {% if param.Type == 'SecureString' and not show_secure_values %}
-                                        {% if param.Value == '[SECURE]' %}
-                                            <span class="secure-hidden">[保護されています]</span>
-                                        {% else %}
-                                            <span class="secure-partial">***{{ param.Value[-4:] if param.Value|length > 4 else '****' }}</span>
-                                        {% endif %}
+            <table>
+                <thead>
+                    <tr>
+                        <th>パラメータ名</th>
+                        <th>値</th>
+                        <th>タイプ</th>
+                        <th>説明</th>
+                        <th>最終更新日</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for param in parameters %}
+                    <tr>
+                        <td>
+                            <span class="param-name">{{ param.Name }}</span>
+                            {% if param.Hierarchy.Path != '/' %}
+                            <span class="hierarchy-path">{{ param.Hierarchy.Path }}</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <span class="param-value">
+                                {% if param.Type == 'SecureString' and not show_secure_values %}
+                                    {% if param.Value == '[SECURE]' %}
+                                        <span class="secure-value">[保護されています]</span>
                                     {% else %}
-                                        {{ param.Value | truncate(100) }}
+                                        <span class="secure-value">****</span>
                                     {% endif %}
-                                </span>
-                                {% if param.Value|length > 100 %}
-                                <button class="expand-btn" onclick="expandValue(this)">展開</button>
+                                {% else %}
+                                    {% if param.Value|length > 200 %}
+                                        {{ param.Value[:200] }}...
+                                    {% else %}
+                                        {{ param.Value }}
+                                    {% endif %}
                                 {% endif %}
-                            </td>
-                            <td><span class="param-type type-{{ param.Type }}">{{ param.Type }}</span></td>
-                            <td><span class="description">{{ param.Description }}</span></td>
-                            <td><span class="last-modified" data-timestamp="{{ param.LastModified }}">{{ param.LastModifiedFormatted }}</span></td>
-                            <td><span class="version">{{ param.Version }}</span></td>
-                            <td><span class="tier tier-{{ param.Tier }}">{{ param.Tier }}</span></td>
-                        </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
-            </div>
-            
-            <div class="export-section">
-                <h3>エクスポート</h3>
-                <button onclick="exportToJSON()">📥 JSON形式でダウンロード</button>
-                <button onclick="exportToCSV()">📊 CSV形式でダウンロード</button>
-                <button onclick="copyToClipboard()">📋 クリップボードにコピー</button>
-            </div>
+                            </span>
+                        </td>
+                        <td><span class="param-type type-{{ param.Type }}">{{ param.Type }}</span></td>
+                        <td><span class="description">{{ param.Description }}</span></td>
+                        <td><span class="last-modified">{{ param.LastModifiedFormatted }}</span></td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
         </div>
         
         <div class="footer">
             <p>Generated by Jenkins SSM Dashboard Job | Build #{{ build_number }}</p>
         </div>
     </div>
-    
-    <script>
-        // 元データを保持
-        const parametersData = {{ parameters_json | safe }};
-        
-        function filterTable() {
-            const searchInput = document.getElementById('searchInput').value.toLowerCase();
-            const typeFilter = document.getElementById('typeFilter').value;
-            const pathFilter = document.getElementById('pathFilter').value;
-            const table = document.getElementById('paramTable');
-            const tr = table.getElementsByTagName('tr');
-            
-            for (let i = 1; i < tr.length; i++) {
-                const row = tr[i];
-                const paramName = row.getElementsByClassName('param-name')[0].textContent.toLowerCase();
-                const paramType = row.getAttribute('data-type');
-                const paramPath = row.getAttribute('data-path');
-                
-                let showRow = true;
-                
-                // 検索フィルタ
-                if (searchInput && !paramName.includes(searchInput)) {
-                    showRow = false;
-                }
-                
-                // タイプフィルタ
-                if (typeFilter && paramType !== typeFilter) {
-                    showRow = false;
-                }
-                
-                // パスフィルタ
-                if (pathFilter && paramPath !== pathFilter) {
-                    showRow = false;
-                }
-                
-                row.style.display = showRow ? '' : 'none';
-            }
-        }
-        
-        function sortTable(columnIndex) {
-            const table = document.getElementById('paramTable');
-            const tbody = table.getElementsByTagName('tbody')[0];
-            const rows = Array.from(tbody.getElementsByTagName('tr'));
-            
-            rows.sort((a, b) => {
-                const aValue = a.getElementsByTagName('td')[columnIndex].textContent;
-                const bValue = b.getElementsByTagName('td')[columnIndex].textContent;
-                
-                // 日付カラムの場合は特別な処理
-                if (columnIndex === 4) {
-                    const aTimestamp = a.getElementsByClassName('last-modified')[0].getAttribute('data-timestamp');
-                    const bTimestamp = b.getElementsByClassName('last-modified')[0].getAttribute('data-timestamp');
-                    return aTimestamp > bTimestamp ? 1 : -1;
-                }
-                
-                return aValue.localeCompare(bValue);
-            });
-            
-            // ソート結果を反映
-            rows.forEach(row => tbody.appendChild(row));
-        }
-        
-        function expandValue(button) {
-            const valueSpan = button.previousElementSibling;
-            const fullValue = valueSpan.getAttribute('title');
-            
-            if (button.textContent === '展開') {
-                valueSpan.textContent = fullValue;
-                button.textContent = '折りたたむ';
-            } else {
-                valueSpan.textContent = fullValue.substring(0, 100) + '...';
-                button.textContent = '展開';
-            }
-        }
-        
-        function exportToJSON() {
-            const dataStr = JSON.stringify(parametersData, null, 2);
-            const dataUri = 'data:application/json;charset=utf-8,'+ encodeURIComponent(dataStr);
-            
-            const exportFileDefaultName = `ssm_parameters_${new Date().toISOString().split('T')[0]}.json`;
-            
-            const linkElement = document.createElement('a');
-            linkElement.setAttribute('href', dataUri);
-            linkElement.setAttribute('download', exportFileDefaultName);
-            linkElement.click();
-        }
-        
-        function exportToCSV() {
-            let csv = 'Name,Value,Type,Description,LastModified,Version,Tier\n';
-            
-            parametersData.forEach(param => {
-                const row = [
-                    param.Name,
-                    param.Value,
-                    param.Type,
-                    param.Description || '',
-                    param.LastModified || '',
-                    param.Version || '',
-                    param.Tier || ''
-                ].map(field => `"${String(field).replace(/"/g, '""')}"`).join(',');
-                
-                csv += row + '\n';
-            });
-            
-            const dataUri = 'data:text/csv;charset=utf-8,' + encodeURIComponent(csv);
-            const exportFileDefaultName = `ssm_parameters_${new Date().toISOString().split('T')[0]}.csv`;
-            
-            const linkElement = document.createElement('a');
-            linkElement.setAttribute('href', dataUri);
-            linkElement.setAttribute('download', exportFileDefaultName);
-            linkElement.click();
-        }
-        
-        function copyToClipboard() {
-            const text = parametersData.map(p => `${p.Name}: ${p.Value}`).join('\n');
-            navigator.clipboard.writeText(text).then(() => {
-                alert('クリップボードにコピーしました');
-            });
-        }
-    </script>
 </body>
 </html>

@@ -190,7 +190,7 @@ def collectSSMParameters() {
         export DATA_DIR="${DATA_DIR}"
         export ENVIRONMENT="${params.ENVIRONMENT}"
         export RECURSIVE="true"
-        export FETCH_TAGS="true"
+        export FETCH_TAGS="false"
         export TAG_FILTERS="${params.TAG_FILTERS}"
         
         ./collect_ssm_params.sh

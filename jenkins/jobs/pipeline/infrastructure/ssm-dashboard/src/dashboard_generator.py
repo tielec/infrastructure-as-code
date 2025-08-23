@@ -76,6 +76,9 @@ def generate_dashboard(data: dict, template_dir: str, output_dir: str, build_num
     # 統計情報の準備
     stats = data['statistics']
     
+    # フィルタ情報
+    filters = data.get('filters', {})
+    
     # コンテキストデータの準備
     context = {
         'environment': data['environment'],
@@ -88,19 +91,17 @@ def generate_dashboard(data: dict, template_dir: str, output_dir: str, build_num
         'secure_count': stats['by_type'].get('SecureString', 0),
         'list_count': stats['by_type'].get('StringList', 0),
         
-        # パラメータデータ
+        # フィルタ条件の表示
+        'filter_path': filters.get('PARAMETER_PATH', '/'),
+        'filter_name': filters.get('NAME_FILTER', '*'),
+        'filter_type': filters.get('TYPE_FILTER', 'All'),
+        'sort_by': filters.get('SORT_BY', 'Name'),
+        
+        # パラメータデータ（バージョンとティアを除外）
         'parameters': data['parameters'],
-        'parameters_json': json.dumps(data['parameters'], ensure_ascii=False),
-        
-        # 階層情報
-        'hierarchical_view': data.get('filters', {}).get('HIERARCHICAL_VIEW', True),
-        'hierarchy_html': generate_hierarchy_html(data.get('hierarchy_tree', {})),
-        
-        # フィルタ用データ
-        'unique_paths': data.get('unique_paths', []),
         
         # 設定
-        'show_secure_values': data.get('filters', {}).get('SHOW_SECURE_VALUES', False),
+        'show_secure_values': filters.get('SHOW_SECURE_VALUES', False),
     }
     
     # HTML生成
@@ -165,10 +166,10 @@ def export_csv(data: dict, output_dir: str, timestamp: str):
     with open(output_file, 'w', newline='', encoding='utf-8-sig') as f:
         writer = csv.writer(f)
         
-        # ヘッダー
+        # ヘッダー（バージョンとティアを除外）
         writer.writerow([
             'Name', 'Value', 'Type', 'Description', 
-            'LastModified', 'Version', 'Tier', 'Path', 'Level'
+            'LastModified', 'Path'
         ])
         
         # データ行
@@ -179,10 +180,7 @@ def export_csv(data: dict, output_dir: str, timestamp: str):
                 param['Type'],
                 param.get('Description', ''),
                 param.get('LastModifiedFormatted', ''),
-                param.get('Version', ''),
-                param.get('Tier', ''),
-                param['Hierarchy']['Path'],
-                param['Hierarchy']['Level']
+                param['Hierarchy']['Path']
             ])
     
     print(f"✅ CSVエクスポート: {output_file}")

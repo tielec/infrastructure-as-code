@@ -122,7 +122,7 @@ fetch_parameters_list() {
     return 0
 }
 
-# 各パラメータの詳細を取得
+# 各パラメータの詳細を取得（バッチ処理で高速化）
 fetch_parameter_details() {
     echo "パラメータの詳細を取得中..."
     
@@ -137,40 +137,64 @@ fetch_parameter_details() {
     
     local total=$(echo "$params" | wc -l)
     local count=0
+    local batch_size=10
+    local batch_params=""
+    local batch_count=0
     
+    # バッチ処理でパラメータ値を取得
     echo "$params" | while IFS= read -r param_name; do
         count=$((count + 1))
-        echo "  [${count}/${total}] 取得中: ${param_name}"
+        batch_count=$((batch_count + 1))
         
-        # パラメータのハッシュ値を生成（ファイル名用）
-        local param_hash=$(echo -n "$param_name" | md5sum | cut -d' ' -f1)
-        
-        # パラメータ値の取得
-        if [ "${SHOW_SECURE_VALUES}" = "true" ]; then
-            # SecureStringも復号化して取得
-            aws ssm get-parameter \
-                --name "$param_name" \
-                --with-decryption \
-                --output json > "${DATA_DIR}/param_${param_hash}.json" 2>/dev/null || \
-            echo "{\"Parameter\": {\"Name\": \"$param_name\", \"Value\": \"[ERROR]\", \"Type\": \"Unknown\"}}" > "${DATA_DIR}/param_${param_hash}.json"
+        # バッチに追加
+        if [ -z "$batch_params" ]; then
+            batch_params="$param_name"
         else
-            # SecureStringは復号化しない
-            aws ssm get-parameter \
-                --name "$param_name" \
-                --output json > "${DATA_DIR}/param_${param_hash}.json" 2>/dev/null || \
-            {
-                # SecureStringの場合は値を隠蔽
-                local param_type=$(jq -r ".Parameters[] | select(.Name == \"$param_name\") | .Type" "${DATA_DIR}/parameters_list.json")
-                if [ "$param_type" = "SecureString" ]; then
-                    echo "{\"Parameter\": {\"Name\": \"$param_name\", \"Value\": \"[SECURE]\", \"Type\": \"SecureString\"}}" > "${DATA_DIR}/param_${param_hash}.json"
-                else
-                    echo "{\"Parameter\": {\"Name\": \"$param_name\", \"Value\": \"[ERROR]\", \"Type\": \"$param_type\"}}" > "${DATA_DIR}/param_${param_hash}.json"
-                fi
-            }
+            batch_params="$batch_params $param_name"
         fi
         
-        # 進捗表示（10件ごと）
-        if [ $((count % 10)) -eq 0 ] || [ $count -eq $total ]; then
+        # バッチサイズに達したか、最後のパラメータの場合
+        if [ $batch_count -ge $batch_size ] || [ $count -eq $total ]; then
+            echo "  [${count}/${total}] バッチ取得中..."
+            
+            # get-parametersコマンドでバッチ取得（最大10個まで）
+            if [ "${SHOW_SECURE_VALUES}" = "true" ]; then
+                aws ssm get-parameters \
+                    --names $batch_params \
+                    --with-decryption \
+                    --output json > "${DATA_DIR}/batch_${count}.json" 2>/dev/null
+            else
+                aws ssm get-parameters \
+                    --names $batch_params \
+                    --output json > "${DATA_DIR}/batch_${count}.json" 2>/dev/null
+            fi
+            
+            # バッチ結果を個別ファイルに分割
+            if [ -f "${DATA_DIR}/batch_${count}.json" ]; then
+                jq -c '.Parameters[]' "${DATA_DIR}/batch_${count}.json" | while IFS= read -r param_data; do
+                    local pname=$(echo "$param_data" | jq -r '.Name')
+                    local phash=$(echo -n "$pname" | md5sum | cut -d' ' -f1)
+                    echo "{\"Parameter\": $param_data}" > "${DATA_DIR}/param_${phash}.json"
+                done
+                
+                # 無効なパラメータの処理
+                jq -c '.InvalidParameters[]' "${DATA_DIR}/batch_${count}.json" 2>/dev/null | while IFS= read -r invalid_param; do
+                    local phash=$(echo -n "$invalid_param" | md5sum | cut -d' ' -f1)
+                    local param_type=$(jq -r ".Parameters[] | select(.Name == \"$invalid_param\") | .Type" "${DATA_DIR}/parameters_list.json")
+                    if [ "$param_type" = "SecureString" ]; then
+                        echo "{\"Parameter\": {\"Name\": \"$invalid_param\", \"Value\": \"[SECURE]\", \"Type\": \"SecureString\"}}" > "${DATA_DIR}/param_${phash}.json"
+                    else
+                        echo "{\"Parameter\": {\"Name\": \"$invalid_param\", \"Value\": \"[ERROR]\", \"Type\": \"$param_type\"}}" > "${DATA_DIR}/param_${phash}.json"
+                    fi
+                done
+                
+                rm -f "${DATA_DIR}/batch_${count}.json"
+            fi
+            
+            # バッチをリセット
+            batch_params=""
+            batch_count=0
+            
             echo "    進捗: ${count}/${total} ($(( count * 100 / total ))%)"
         fi
     done
