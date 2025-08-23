@@ -33,59 +33,7 @@
         config_key: "aws:region"
         config_value: "{{ aws_region_name }}"
 
-    - name: Configure WAF stack - project name
-      ansible.builtin.include_role:
-        name: pulumi_helper
-        tasks_from: set_config
-      vars:
-        pulumi_project_path: "{{ pulumi_path }}/lambda-waf"
-        config_key: "{{ waf_project_name }}:projectName"
-        config_value: "{{ project_name }}"
-
-    - name: Configure WAF stack - API Gateway stack name
-      ansible.builtin.include_role:
-        name: pulumi_helper
-        tasks_from: set_config
-      vars:
-        pulumi_project_path: "{{ pulumi_path }}/lambda-waf"
-        config_key: "{{ waf_project_name }}:apiGatewayStackName"
-        config_value: "{{ api_gateway_project_name }}"
-
-    - name: Configure WAF stack - IP whitelist source
-      ansible.builtin.include_role:
-        name: pulumi_helper
-        tasks_from: set_config
-      vars:
-        pulumi_project_path: "{{ pulumi_path }}/lambda-waf"
-        config_key: "{{ waf_project_name }}:ipWhitelistSource"
-        config_value: "secretsManager"
-
-    - name: Configure WAF stack - secret name
-      ansible.builtin.include_role:
-        name: pulumi_helper
-        tasks_from: set_config
-      vars:
-        pulumi_project_path: "{{ pulumi_path }}/lambda-waf"
-        config_key: "{{ waf_project_name }}:secretName"
-        config_value: "{{ lambda_api.ip_whitelist.secret_name_pattern | replace('{environment}', env_name) }}"
-
-    - name: Configure WAF stack - rate limit
-      ansible.builtin.include_role:
-        name: pulumi_helper
-        tasks_from: set_config
-      vars:
-        pulumi_project_path: "{{ pulumi_path }}/lambda-waf"
-        config_key: "{{ waf_project_name }}:rateLimit"
-        config_value: "{{ lambda_api.ip_whitelist.rate_limit_per_5min | string }}"
-
-    - name: Configure WAF stack - block period
-      ansible.builtin.include_role:
-        name: pulumi_helper
-        tasks_from: set_config
-      vars:
-        pulumi_project_path: "{{ pulumi_path }}/lambda-waf"
-        config_key: "{{ waf_project_name }}:blockPeriod"
-        config_value: "{{ lambda_api.ip_whitelist.block_duration_seconds | string }}"
+    # Pulumi Configは使用しない（SSMパラメータから取得するため）
     
     # Pulumiプレビュー
     - name: Preview WAF deployment
@@ -105,22 +53,24 @@
         pulumi_project_path: "{{ pulumi_path }}/lambda-waf"
       when: not preview_only | default(false) | bool
     
-    # WAF情報の取得
-    - name: Get WAF outputs
-      ansible.builtin.shell: |
-        cd {{ pulumi_path }}/lambda-waf
-        export PULUMI_ACCESS_TOKEN="{{ lookup('env', 'PULUMI_ACCESS_TOKEN') }}"
-        pulumi stack output --json
-      register: waf_outputs_raw
-      changed_when: false
+    # SSMからWAF情報を取得
+    - name: Get WAF configuration from SSM
+      ansible.builtin.include_role:
+        name: ssm_parameter_store
+        tasks_from: get_parameter
+      vars:
+        parameter_name: "/{{ project_name }}/{{ env_name }}/waf/config"
+        store_as: "waf_config_json"
+        default_value: "{}"
+        ssm_parameter_store_fail_on_missing: false
       when: not preview_only | default(false) | bool
     
-    - name: Parse WAF outputs
+    - name: Parse WAF configuration
       ansible.builtin.set_fact:
-        waf_outputs: "{{ waf_outputs_raw.stdout | from_json }}"
+        waf_outputs: "{{ waf_config_json | from_json }}"
       when: 
         - not preview_only | default(false) | bool
-        - waf_outputs_raw.stdout is defined
+        - waf_config_json is defined and waf_config_json | length > 0
     
     # デプロイ成功を示す変数設定
     - name: Set WAF deployment status

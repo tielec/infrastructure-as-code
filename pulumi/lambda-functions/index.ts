@@ -86,7 +86,7 @@ new aws.iam.RolePolicyAttachment("lambda-api-vpc-access", {
 // 基本的な権限（CloudWatch Logs、DLQ、Secrets Manager）
 const lambdaPolicy = new aws.iam.RolePolicy("lambda-api-lambda-policy", {
     role: lambdaRole.id,
-    policy: pulumi.all([dlq.arn]).apply(([dlqArn]) => JSON.stringify({
+    policy: pulumi.all([dlq.arn, projectName]).apply(([dlqArn, proj]) => JSON.stringify({
         Version: "2012-10-17",
         Statement: [
             {
@@ -109,7 +109,7 @@ const lambdaPolicy = new aws.iam.RolePolicy("lambda-api-lambda-policy", {
                 // Secrets Manager（APIキーなどの機密情報用）
                 Effect: "Allow",
                 Action: ["secretsmanager:GetSecretValue"],
-                Resource: pulumi.interpolate`arn:aws:secretsmanager:*:*:secret:${projectName}/*`,
+                Resource: `arn:aws:secretsmanager:*:*:secret:${proj}/*`,
             },
         ],
     })),
@@ -179,13 +179,13 @@ exports.handler = async (event, context) => {
     }),
     
     tags: {
-        Name: `${projectName}-main-${environment}`,
+        Name: pulumi.interpolate`${projectName}-main-${environment}`,
         Environment: environment,
     },
 });
 
 // ===== CloudWatch Logs グループ =====
-const logGroup = new aws.cloudwatch.LogGroup(`${projectName}-logs`, {
+const logGroup = new aws.cloudwatch.LogGroup("lambda-api-logs", {
     name: pulumi.interpolate`/aws/lambda/${mainFunction.name}`,
     retentionInDays: logRetentionDays,
     tags: {
@@ -194,18 +194,18 @@ const logGroup = new aws.cloudwatch.LogGroup(`${projectName}-logs`, {
 });
 
 // ===== 設定情報をSSMパラメータに保存 =====
-const functionConfig = new aws.ssm.Parameter(`${projectName}-function-config`, {
-    name: `/${projectName}/${environment}/lambda/config`,
+const functionConfig = new aws.ssm.Parameter("lambda-api-function-config", {
+    name: pulumi.interpolate`/${projectName}/${environment}/lambda/config`,
     type: "String",
-    value: pulumi.all([mainFunction.name, mainFunction.arn, dlq.url]).apply(
-        ([name, arn, dlqUrl]) => JSON.stringify({
+    value: pulumi.all([mainFunction.name, mainFunction.arn, dlq.url, memorySize, timeout]).apply(
+        ([name, arn, dlqUrl, memory, time]) => JSON.stringify({
             function: {
                 name: name,
                 arn: arn,
                 runtime: "nodejs18.x",
                 architecture: "arm64",
-                memorySize: memorySize,
-                timeout: timeout,
+                memorySize: memory,
+                timeout: time,
             },
             dlq: {
                 url: dlqUrl,
