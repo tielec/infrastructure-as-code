@@ -152,7 +152,6 @@
         
   when: 
     - not preview_only | default(false)
-    - (stack_exists | default(false) or force_manual_cleanup | default(false))
 
 - name: Verify deletion
   ansible.builtin.include_role:
