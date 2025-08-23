@@ -71,12 +71,7 @@ const healthResponse = new aws.apigateway.IntegrationResponse("lambda-api-health
     httpMethod: healthMethod.httpMethod,
     statusCode: "200",
     responseTemplates: {
-        "application/json": JSON.stringify({
-            status: "healthy",
-            environment: environment,
-            service: projectName,
-            timestamp: "$context.requestTime",
-        }),
+        "application/json": pulumi.interpolate`{"status":"healthy","environment":"${environment}","service":"${projectName}","timestamp":"$context.requestTime"}`,
     },
 }, {
     dependsOn: [healthIntegration],
@@ -286,38 +281,6 @@ const corsSettings = {
     maxAge: 86400, // 24時間
 };
 
-// ===== 設定情報をSSMパラメータに保存 =====
-const apiConfig = new aws.ssm.Parameter(`${projectName}-api-config`, {
-    name: `/${projectName}/${environment}/api-gateway/config`,
-    type: "String",
-    value: pulumi.all([api.id, stage.invokeUrl, bubbleApiKey.id]).apply(
-        ([apiId, invokeUrl, keyId]) => JSON.stringify({
-            api: {
-                id: apiId,
-                url: invokeUrl,
-                stage: environment,
-            },
-            endpoints: {
-                health: `${invokeUrl}health`,
-                api: `${invokeUrl}api`,
-            },
-            rateLimit: {
-                rateLimit: environment === "prod" ? 1000 : 100,
-                burstLimit: environment === "prod" ? 2000 : 200,
-                dailyQuota: environment === "prod" ? 1000000 : 10000,
-            },
-            cors: corsSettings,
-            deployment: {
-                environment: environment,
-                lastUpdated: new Date().toISOString(),
-            },
-        })
-    ),
-    description: "API Gateway configuration",
-    tags: {
-        Environment: environment,
-    },
-});
 
 // APIキー情報を別のパラメータに保存（セキュリティのため）
 const apiKeyInfoParam = new aws.ssm.Parameter("lambda-api-api-keys", {
