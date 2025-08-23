@@ -48,6 +48,7 @@ pipelineJob(fullJobName) {
     // パラメータ設定
     parameters {
         stringParam('TARGET_BRANCH', 'main', '対象ブランチ')
+        stringParam('JENKINSFILE_BRANCH', 'main', 'Jenkinsfileが格納されているブランチ')
     }
 
     // パイプライン定義
@@ -59,7 +60,7 @@ pipelineJob(fullJobName) {
                         url(jenkinsPipelineRepo.url)
                         credentials(jenkinsPipelineRepo.credentials)
                     }
-                    branch(jenkinsPipelineRepo.branch)
+                    branch('${JENKINSFILE_BRANCH}')
                 }
             }
             scriptPath(jobConfig.jenkinsfile)
