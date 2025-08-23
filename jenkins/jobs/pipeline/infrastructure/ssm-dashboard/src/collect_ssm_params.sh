@@ -260,8 +260,15 @@ main() {
     fi
     
     # AWS認証情報の確認
-    if [ -z "${AWS_ACCESS_KEY_ID}" ] && [ -z "${AWS_DEFAULT_REGION}" ]; then
-        echo "⚠️  AWS認証情報が設定されていません。IAMロールを使用します。"
+    if [ -z "${AWS_ACCESS_KEY_ID}" ] || [ "${AWS_ACCESS_KEY_ID}" = "" ]; then
+        echo "ℹ️  EC2インスタンスロールを使用してAWSに接続します"
+        # インスタンスメタデータからリージョンを取得（未設定の場合）
+        if [ -z "${AWS_DEFAULT_REGION}" ]; then
+            export AWS_DEFAULT_REGION=$(curl -s http://169.254.169.254/latest/meta-data/placement/region 2>/dev/null || echo "ap-northeast-1")
+            echo "   リージョン: ${AWS_DEFAULT_REGION}"
+        fi
+    else
+        echo "ℹ️  指定されたAWS認証情報を使用します"
     fi
     
     # パラメータ一覧の取得
