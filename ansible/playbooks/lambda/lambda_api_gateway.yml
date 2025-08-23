@@ -49,9 +49,9 @@
         name: ssm_parameter_store
         tasks_from: get_parameter
       vars:
-        parameter_name: "/{{ project_name }}/{{ env_name }}/lambda/functions-deployed"
+        parameter_name: "/{{ project_name }}/{{ env_name }}/lambda/config"
         store_as: "functions_check"
-        default_value: "false"
+        default_value: ""
         ssm_parameter_store_fail_on_missing: false
         
     - name: Verify Lambda functions deployment
@@ -61,7 +61,7 @@
           Please run: ansible-playbook playbooks/lambda/lambda_functions.yml -e "env={{ env_name }}"
       when:
         - operation | default('deploy') == 'deploy'
-        - functions_check | default('false') != 'true'
+        - functions_check | default('') | length == 0
   
   roles:
     - aws_setup
