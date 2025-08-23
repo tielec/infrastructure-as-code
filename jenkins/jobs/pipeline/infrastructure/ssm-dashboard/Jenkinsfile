@@ -1,0 +1,381 @@
+@Library('jenkins-shared-lib') _
+
+/**
+ * SSM Parameter Store Dashboard Pipeline
+ * AWS Systems Manager Parameter Storeのパラメータを収集し、ダッシュボードを生成
+ */
+pipeline {
+    agent {
+        label 'ec2-fleet'
+    }
+    
+    environment {
+        // ディレクトリ構造
+        JENKINS_REPO_DIR = 'jenkins-repo'
+        DASHBOARD_DIR = 'ssm-dashboard'
+        DATA_DIR = "${DASHBOARD_DIR}/data"
+        HTML_DIR = "${DASHBOARD_DIR}/html"
+        EXPORT_DIR = "${DASHBOARD_DIR}/export"
+        
+        // スクリプトとテンプレートのパス
+        SCRIPT_PATH = 'jenkins/jobs/pipeline/infrastructure/ssm-dashboard/src'
+        TEMPLATE_PATH = 'jenkins/jobs/pipeline/infrastructure/ssm-dashboard/templates'
+        
+        // タイムスタンプ
+        TIME_STAMP = sh(script: 'TZ="Asia/Tokyo" date "+%Y/%m/%d %H:%M:%S"', returnStdout: true).trim()
+        BUILD_TIME_STAMP = sh(script: 'TZ="Asia/Tokyo" date "+%Y%m%d-%H%M%S"', returnStdout: true).trim()
+    }
+    
+    stages {
+        stage('Initialize') {
+            steps {
+                script {
+                    // ビルド表示名を設定
+                    currentBuild.displayName = "#${env.BUILD_NUMBER} - ${params.ENVIRONMENT} SSM Dashboard"
+                    
+                    validateParameters()
+                    prepareWorkspace()
+                    checkoutJenkinsRepository()
+                }
+            }
+        }
+        
+        stage('Collect SSM Parameters') {
+            agent {
+                docker {
+                    label 'ec2-fleet'
+                    image 'amazon/aws-cli:latest'
+                    args "--entrypoint='' -v ${WORKSPACE}:/workspace -w /workspace -u root"
+                    reuseNode true
+                }
+            }
+            environment {
+                AWS_ACCESS_KEY_ID     = "${params.AWS_ACCESS_KEY_ID}"
+                AWS_SECRET_ACCESS_KEY = "${params.AWS_SECRET_ACCESS_KEY}"
+                AWS_SESSION_TOKEN     = "${params.AWS_SESSION_TOKEN}"
+                AWS_DEFAULT_REGION    = "${params.AWS_REGION}"
+            }
+            steps {
+                script {
+                    collectSSMParameters()
+                }
+            }
+        }
+        
+        stage('Process Parameter Data') {
+            steps {
+                script {
+                    processParameterData()
+                }
+            }
+        }
+        
+        stage('Generate Dashboard') {
+            steps {
+                script {
+                    generateSSMDashboard()
+                }
+            }
+        }
+        
+        stage('Export Data') {
+            when {
+                expression { params.OUTPUT_FORMAT in ['JSON', 'CSV'] }
+            }
+            steps {
+                script {
+                    exportData()
+                }
+            }
+        }
+    }
+    
+    post {
+        always {
+            script {
+                publishDashboard()
+                printSummary()
+            }
+        }
+        
+        success {
+            echo "✅ SSMパラメータダッシュボードが正常に生成されました"
+        }
+        
+        failure {
+            echo "❌ ダッシュボード生成が失敗しました。ログを確認してください"
+        }
+        
+        cleanup {
+            cleanWs()
+        }
+    }
+}
+
+// ================================================================================
+// Helper Functions
+// ================================================================================
+
+/**
+ * パラメータの検証
+ */
+def validateParameters() {
+    echo "パラメータの検証中..."
+    
+    if (!params.AWS_ACCESS_KEY_ID || !params.AWS_SECRET_ACCESS_KEY) {
+        // 環境変数またはIAMロールから取得を試みる
+        echo "⚠️ AWS認証情報が明示的に指定されていません。IAMロールまたは環境変数を使用します"
+    }
+    
+    // パラメータパスの正規化
+    if (!params.PARAMETER_PATH.startsWith('/')) {
+        env.PARAMETER_PATH = '/' + params.PARAMETER_PATH
+    } else {
+        env.PARAMETER_PATH = params.PARAMETER_PATH
+    }
+    
+    echo "✅ パラメータ検証完了"
+}
+
+/**
+ * ワークスペースの準備
+ */
+def prepareWorkspace() {
+    sh """
+        mkdir -p ${JENKINS_REPO_DIR} ${DATA_DIR} ${HTML_DIR} ${EXPORT_DIR}
+        chmod -R 777 ${DASHBOARD_DIR}
+    """
+}
+
+/**
+ * Jenkinsリポジトリのチェックアウト
+ */
+def checkoutJenkinsRepository() {
+    dir(env.JENKINS_REPO_DIR) {
+        gitUtils.checkoutRepository(
+            env.GIT_INFRASTRUCTURE_REPO_URL,
+            env.GIT_INFRASTRUCTURE_REPO_BRANCH,
+            env.GITHUB_APP_CREDENTIALS_ID
+        )
+    }
+}
+
+/**
+ * SSMパラメータの収集
+ */
+def collectSSMParameters() {
+    echo """
+        =============================================
+        SSMパラメータの収集
+        =============================================
+        環境: ${params.ENVIRONMENT}
+        パス: ${env.PARAMETER_PATH}
+        フィルタ: ${params.NAME_FILTER}
+        タイプ: ${params.TYPE_FILTER}
+        最大件数: ${params.MAX_RESULTS}
+        =============================================
+    """.stripIndent()
+    
+    // スクリプトファイルをコピーして実行
+    sh """
+        cp ${JENKINS_REPO_DIR}/${SCRIPT_PATH}/collect_ssm_params.sh .
+        chmod +x collect_ssm_params.sh
+        
+        # 環境変数を設定して実行
+        export PARAMETER_PATH="${env.PARAMETER_PATH}"
+        export NAME_FILTER="${params.NAME_FILTER}"
+        export TYPE_FILTER="${params.TYPE_FILTER}"
+        export MAX_RESULTS="${params.MAX_RESULTS}"
+        export SHOW_SECURE_VALUES="${params.SHOW_SECURE_VALUES}"
+        export DATA_DIR="${DATA_DIR}"
+        export ENVIRONMENT="${params.ENVIRONMENT}"
+        export RECURSIVE="true"
+        export FETCH_TAGS="false"
+        export TAG_FILTERS="${params.TAG_FILTERS}"
+        
+        ./collect_ssm_params.sh
+    """
+    
+    sh """
+        chmod +x collect_ssm_params.sh
+        
+        # 環境変数を設定して実行
+        export PARAMETER_PATH="${env.PARAMETER_PATH}"
+        export NAME_FILTER="${params.NAME_FILTER}"
+        export TYPE_FILTER="${params.TYPE_FILTER}"
+        export MAX_RESULTS="${params.MAX_RESULTS}"
+        export SHOW_SECURE_VALUES="${params.SHOW_SECURE_VALUES}"
+        export DATA_DIR="${DATA_DIR}"
+        
+        ./collect_ssm_params.sh
+    """
+}
+
+/**
+ * パラメータデータの処理
+ */
+def processParameterData() {
+    echo "パラメータデータを処理中..."
+    
+    // スクリプトファイルをコピーして実行
+    sh """
+        # Python仮想環境のセットアップ
+        python3 -m venv ${WORKSPACE}/venv
+        . ${WORKSPACE}/venv/bin/activate
+        pip install --upgrade pip
+        
+        # スクリプトをコピー
+        cp ${JENKINS_REPO_DIR}/${SCRIPT_PATH}/process_params.py .
+        chmod +x process_params.py
+        
+        # 環境変数を設定して実行
+        export DATA_DIR="${DATA_DIR}"
+        export ENVIRONMENT="${params.ENVIRONMENT}"
+        export NAME_FILTER="${params.NAME_FILTER}"
+        export TYPE_FILTER="${params.TYPE_FILTER}"
+        export PARAMETER_PATH="${env.PARAMETER_PATH}"
+        export SORT_BY="${params.SORT_BY}"
+        export SHOW_SECURE_VALUES="${params.SHOW_SECURE_VALUES}"
+        
+        python3 process_params.py
+        
+        deactivate || true
+    """
+}
+
+/**
+ * SSMダッシュボードの生成
+ */
+def generateSSMDashboard() {
+    echo "ダッシュボードを生成中..."
+    
+    // スクリプトとテンプレートファイルをコピー
+    sh """
+        # Python仮想環境のセットアップ
+        echo "Python仮想環境のセットアップ..."
+        python3 -m venv ${WORKSPACE}/venv
+        . ${WORKSPACE}/venv/bin/activate
+        
+        # 必要なパッケージのインストール
+        pip install --upgrade pip
+        pip install jinja2
+        
+        # スクリプトとテンプレートファイルのコピー
+        echo "必要なファイルをコピー中..."
+        cp ${JENKINS_REPO_DIR}/${SCRIPT_PATH}/dashboard_generator.py .
+        cp -r ${JENKINS_REPO_DIR}/${TEMPLATE_PATH}/* ${HTML_DIR}/
+        
+        # ダッシュボードの生成
+        echo "HTMLダッシュボードの生成..."
+        python3 dashboard_generator.py \\
+            --data-dir "${DATA_DIR}" \\
+            --output-dir "${HTML_DIR}" \\
+            --template-dir "${HTML_DIR}" \\
+            --environment "${params.ENVIRONMENT}" \\
+            --timestamp "${env.TIME_STAMP}" \\
+            --build-number "${env.BUILD_NUMBER}"
+        
+        # クリーンアップ
+        deactivate || true
+    """
+    
+    echo "ダッシュボード生成完了: ${HTML_DIR}/index.html"
+}
+
+/**
+ * データのエクスポート
+ */
+def exportData() {
+    echo "データをエクスポート中..."
+    
+    sh """
+        # Python仮想環境のセットアップ
+        python3 -m venv ${WORKSPACE}/venv
+        . ${WORKSPACE}/venv/bin/activate
+        pip install --upgrade pip
+        
+        # ダッシュボード生成スクリプトを使用してエクスポート
+        cp ${JENKINS_REPO_DIR}/${SCRIPT_PATH}/dashboard_generator.py .
+        
+        if [ "${params.OUTPUT_FORMAT}" = "JSON" ]; then
+            python3 dashboard_generator.py \\
+                --data-dir "${DATA_DIR}" \\
+                --output-dir "${EXPORT_DIR}" \\
+                --export-json \\
+                --timestamp "${BUILD_TIME_STAMP}"
+        elif [ "${params.OUTPUT_FORMAT}" = "CSV" ]; then
+            python3 dashboard_generator.py \\
+                --data-dir "${DATA_DIR}" \\
+                --output-dir "${EXPORT_DIR}" \\
+                --export-csv \\
+                --timestamp "${BUILD_TIME_STAMP}"
+        fi
+        
+        deactivate || true
+    """
+}
+
+/**
+ * ダッシュボードの公開
+ */
+def publishDashboard() {
+    // HTMLダッシュボードの公開
+    if (params.OUTPUT_FORMAT == 'HTML' && fileExists("${HTML_DIR}/index.html")) {
+        publishHTML([
+            allowMissing: false,
+            alwaysLinkToLastBuild: true,
+            keepAll: true,
+            reportDir: "${HTML_DIR}",
+            reportFiles: 'index.html',
+            reportName: "SSM Dashboard - ${params.ENVIRONMENT}",
+            reportTitles: "SSM Parameter Store Dashboard"
+        ])
+    }
+    
+    // エクスポートファイルのアーカイブ
+    if (params.OUTPUT_FORMAT in ['JSON', 'CSV']) {
+        archiveArtifacts artifacts: "${EXPORT_DIR}/*", allowEmptyArchive: true
+    }
+    
+    // 処理済みデータのアーカイブ（デバッグ用）
+    archiveArtifacts artifacts: "${DATA_DIR}/processed_parameters.json", allowEmptyArchive: true
+}
+
+/**
+ * 実行結果のサマリー表示
+ */
+def printSummary() {
+    def summaryFile = "${DATA_DIR}/processed_parameters.json"
+    def summary = [:]
+    
+    if (fileExists(summaryFile)) {
+        summary = readJSON file: summaryFile
+    }
+    
+    def stats = summary.statistics ?: [:]
+    
+    echo """
+        =============================================
+        SSM Parameter Store Dashboard 生成結果
+        =============================================
+        実行時刻: ${env.TIME_STAMP}
+        環境: ${params.ENVIRONMENT}
+        リージョン: ${params.AWS_REGION}
+        
+        --- 統計情報 ---
+        総パラメータ数: ${stats.total ?: 0}
+        
+        タイプ別:
+        - String: ${stats.by_type?.String ?: 0}
+        - SecureString: ${stats.by_type?.SecureString ?: 0}
+        - StringList: ${stats.by_type?.StringList ?: 0}
+        
+        フィルタ条件:
+        - パス: ${params.PARAMETER_PATH}
+        - 名前: ${params.NAME_FILTER}
+        - タイプ: ${params.TYPE_FILTER}
+        
+        出力形式: ${params.OUTPUT_FORMAT}
+        =============================================
+    """.stripIndent()
+}

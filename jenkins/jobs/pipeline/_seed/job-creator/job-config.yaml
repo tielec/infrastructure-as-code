@@ -172,6 +172,13 @@ jenkins-jobs:
     dslfile: jenkins/jobs/dsl/infrastructure/infrastructure_pulumi_dashboard_job.groovy
     jenkinsfile: jenkins/jobs/pipeline/infrastructure/pulumi-dashboard/Jenkinsfile
 
+  # SSM Parameter Store Dashboard Job
+  infrastructure_ssm_dashboard_job:
+    name: "ssm_parameter_store_dashboard"
+    displayName: "SSM Parameter Store Dashboard"
+    dslfile: jenkins/jobs/dsl/infrastructure/infrastructure_ssm_dashboard_job.groovy
+    jenkinsfile: jenkins/jobs/pipeline/infrastructure/ssm-dashboard/Jenkinsfile
+
   # Ansible Playbook Executor Job
   infrastructure_ansible_playbook_executor_job:
     name: "ansible_playbook_executor"
