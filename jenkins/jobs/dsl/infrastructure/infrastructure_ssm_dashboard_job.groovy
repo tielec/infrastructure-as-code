@@ -122,20 +122,15 @@ pipelineJob(jobPath) {
     }
     
     // ジョブプロパティ
-    properties {
-        // 同時実行を制限
-        disableConcurrentBuilds()
-        
-        // ビルド履歴の保持設定
-        buildDiscarder {
-            logRotator {
-                daysToKeep(7)
-                numToKeep(20)
-                artifactDaysToKeep(3)
-                artifactNumToKeep(10)
-            }
-        }
+    logRotator {
+        daysToKeep(7)
+        numToKeep(20)
+        artifactDaysToKeep(3)
+        artifactNumToKeep(10)
     }
+    
+    // 同時実行を制限
+    concurrentBuild(false)
     
     // 実行環境の設定
     wrappers {
