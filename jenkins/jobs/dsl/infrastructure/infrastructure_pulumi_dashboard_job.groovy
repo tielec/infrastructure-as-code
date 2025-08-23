@@ -7,8 +7,8 @@ def jenkinsPipelineRepo = commonSettings['jenkins-pipeline-repo']
 def jobKey = 'infrastructure_pulumi_dashboard_job'
 def jobConfig = jenkinsJobsConfig[jobKey]
 
-// commonカテゴリに1つのジョブとして配置
-def jobPath = "common/pulumi-dashboard"
+// delivery-management-jobs/commonカテゴリに配置
+def jobPath = "delivery-management-jobs/common/pulumi-dashboard"
 
 pipelineJob(jobPath) {
     displayName("Pulumi Projects Dashboard")
