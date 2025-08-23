@@ -16,13 +16,13 @@ const projectNameParam = aws.ssm.getParameter({
 });
 const projectName = pulumi.output(projectNameParam).apply(p => p.value);
 
-// スタック参照名は固定（コンベンションとして）
-const functionsStackName = "lambda-functions";
-
-// 既存のスタックから値を取得
-const functionsStack = new pulumi.StackReference(`${pulumi.getOrganization()}/${functionsStackName}/${environment}`);
-const lambdaFunctionName = functionsStack.getOutput("functionName");
-const lambdaFunctionArn = functionsStack.getOutput("functionArn");
+// SSMからLambda関数の設定を取得
+const lambdaConfigParam = aws.ssm.getParameter({
+    name: `/lambda-api/${environment}/lambda/config`,
+});
+const lambdaConfig = pulumi.output(lambdaConfigParam).apply(p => JSON.parse(p.value));
+const lambdaFunctionName = lambdaConfig.apply(c => c.function.name);
+const lambdaFunctionArn = lambdaConfig.apply(c => c.function.arn);
 
 // ===== REST API =====
 const api = new aws.apigateway.RestApi("lambda-api-api", {
@@ -211,8 +211,8 @@ const stage = new aws.apigateway.Stage(`${projectName}-stage`, {
 });
 
 // API Gateway用のCloudWatch Logsグループ
-const apiLogGroup = new aws.cloudwatch.LogGroup(`${projectName}-api-logs`, {
-    name: `/aws/apigateway/${projectName}-${environment}`,
+const apiLogGroup = new aws.cloudwatch.LogGroup("lambda-api-api-logs", {
+    name: pulumi.interpolate`/aws/apigateway/${projectName}-${environment}`,
     retentionInDays: environment === "dev" ? 3 : environment === "staging" ? 7 : 14,
     tags: {
         Environment: environment,
@@ -220,8 +220,8 @@ const apiLogGroup = new aws.cloudwatch.LogGroup(`${projectName}-api-logs`, {
 });
 
 // ===== 使用プラン =====
-const usagePlan = new aws.apigateway.UsagePlan(`${projectName}-usage-plan`, {
-    name: `${projectName}-usage-plan-${environment}`,
+const usagePlan = new aws.apigateway.UsagePlan("lambda-api-usage-plan", {
+    name: pulumi.interpolate`${projectName}-usage-plan-${environment}`,
     description: `Usage plan for ${environment} environment`,
     apiStages: [{
         apiId: api.id,
@@ -241,8 +241,8 @@ const usagePlan = new aws.apigateway.UsagePlan(`${projectName}-usage-plan`, {
 
 // ===== APIキー =====
 // bubble.io用APIキー
-const bubbleApiKey = new aws.apigateway.ApiKey(`${projectName}-bubble-key`, {
-    name: `${projectName}-bubble-key-${environment}`,
+const bubbleApiKey = new aws.apigateway.ApiKey("lambda-api-bubble-key", {
+    name: pulumi.interpolate`${projectName}-bubble-key-${environment}`,
     description: "API key for bubble.io integration",
     enabled: true,
     tags: {
@@ -252,8 +252,8 @@ const bubbleApiKey = new aws.apigateway.ApiKey(`${projectName}-bubble-key`, {
 });
 
 // 外部システム用APIキー（将来の拡張用）
-const externalApiKey = new aws.apigateway.ApiKey(`${projectName}-external-key`, {
-    name: `${projectName}-external-key-${environment}`,
+const externalApiKey = new aws.apigateway.ApiKey("lambda-api-external-key", {
+    name: pulumi.interpolate`${projectName}-external-key-${environment}`,
     description: "API key for external system integration",
     enabled: true,
     tags: {
@@ -263,13 +263,13 @@ const externalApiKey = new aws.apigateway.ApiKey(`${projectName}-external-key`, 
 });
 
 // APIキーと使用プランの関連付け
-const bubbleUsagePlanKey = new aws.apigateway.UsagePlanKey(`${projectName}-bubble-usage-key`, {
+const bubbleUsagePlanKey = new aws.apigateway.UsagePlanKey("lambda-api-bubble-usage-key", {
     keyId: bubbleApiKey.id,
     keyType: "API_KEY",
     usagePlanId: usagePlan.id,
 });
 
-const externalUsagePlanKey = new aws.apigateway.UsagePlanKey(`${projectName}-external-usage-key`, {
+const externalUsagePlanKey = new aws.apigateway.UsagePlanKey("lambda-api-external-usage-key", {
     keyId: externalApiKey.id,
     keyType: "API_KEY",
     usagePlanId: usagePlan.id,
@@ -320,8 +320,8 @@ const apiConfig = new aws.ssm.Parameter(`${projectName}-api-config`, {
 });
 
 // APIキー情報を別のパラメータに保存（セキュリティのため）
-const apiKeyInfoParam = new aws.ssm.Parameter(`${projectName}-api-keys`, {
-    name: `/${projectName}/${environment}/api-gateway/keys`,
+const apiKeyInfoParam = new aws.ssm.Parameter("lambda-api-api-keys", {
+    name: pulumi.interpolate`/${projectName}/${environment}/api-gateway/keys`,
     type: "SecureString", // 暗号化
     value: pulumi.all([bubbleApiKey.value, externalApiKey.value]).apply(
         ([bubbleKey, externalKey]) => JSON.stringify({
@@ -340,6 +340,25 @@ const apiKeyInfoParam = new aws.ssm.Parameter(`${projectName}-api-keys`, {
     tags: {
         Environment: environment,
         Sensitive: "true",
+    },
+});
+
+// API Gateway設定情報をSSMパラメータに保存
+const apiConfigParam = new aws.ssm.Parameter("lambda-api-api-config", {
+    name: pulumi.interpolate`/${projectName}/${environment}/api-gateway/config`,
+    type: "String",
+    value: pulumi.all([api.id, stage.invokeUrl, stage.stageName]).apply(
+        ([apiId, invokeUrl, stageName]) => JSON.stringify({
+            apiId: apiId,
+            apiEndpoint: invokeUrl,
+            stageName: stageName,
+            environment: environment,
+            lastUpdated: new Date().toISOString(),
+        })
+    ),
+    description: "API Gateway configuration",
+    tags: {
+        Environment: environment,
     },
 });
 
