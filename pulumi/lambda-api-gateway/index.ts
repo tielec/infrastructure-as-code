@@ -7,16 +7,21 @@
 import * as pulumi from "@pulumi/pulumi";
 import * as aws from "@pulumi/aws";
 
-// 環境変数を取得
+// ========================================
+// 環境変数取得
+// ========================================
 const environment = pulumi.getStack();
 
-// SSMパラメータストアから設定を取得（Single Source of Truth）
+// ========================================
+// SSMパラメータ参照（Single Source of Truth）
+// ========================================
+// プロジェクト名を取得
 const projectNameParam = aws.ssm.getParameter({
     name: `/lambda-api/${environment}/common/project-name`,
 });
 const projectName = pulumi.output(projectNameParam).apply(p => p.value);
 
-// SSMからLambda関数の設定を取得
+// Lambda関数の設定を取得
 const lambdaConfigParam = aws.ssm.getParameter({
     name: `/lambda-api/${environment}/lambda/config`,
 });
@@ -24,8 +29,21 @@ const lambdaConfig = pulumi.output(lambdaConfigParam).apply(p => JSON.parse(p.va
 const lambdaFunctionName = lambdaConfig.apply(c => c.function.name);
 const lambdaFunctionArn = lambdaConfig.apply(c => c.function.arn);
 
-// ===== REST API =====
-const api = new aws.apigateway.RestApi("lambda-api-api", {
+// ========================================
+// 共通タグ定義
+// ========================================
+const commonTags = {
+    Environment: environment,
+    ManagedBy: "pulumi",
+    Project: "lambda-api",
+    Stack: pulumi.getProject(),
+};
+
+// ========================================
+// API Gateway定義
+// ========================================
+// REST API
+const api = new aws.apigateway.RestApi("api", {
     name: pulumi.interpolate`${projectName}-api-${environment}`,
     description: `Lambda API Gateway for ${environment} environment`,
     endpointConfiguration: {
@@ -34,20 +52,22 @@ const api = new aws.apigateway.RestApi("lambda-api-api", {
     // バイナリメディアタイプのサポート（将来の拡張用）
     binaryMediaTypes: ["application/octet-stream", "image/*"],
     tags: {
+        ...commonTags,
         Name: pulumi.interpolate`${projectName}-api-${environment}`,
-        Environment: environment,
     },
 });
 
-// ===== リソースとメソッドの作成 =====
+// ========================================
+// リソースとメソッドの作成
+// ========================================
 // ヘルスチェックエンドポイント（/health）- APIキー不要
-const healthResource = new aws.apigateway.Resource("lambda-api-health-resource", {
+const healthResource = new aws.apigateway.Resource("health-resource", {
     restApi: api.id,
     parentId: api.rootResourceId,
     pathPart: "health",
 });
 
-const healthMethod = new aws.apigateway.Method("lambda-api-health-method", {
+const healthMethod = new aws.apigateway.Method("health-method", {
     restApi: api.id,
     resourceId: healthResource.id,
     httpMethod: "GET",
@@ -55,7 +75,7 @@ const healthMethod = new aws.apigateway.Method("lambda-api-health-method", {
 });
 
 // ヘルスチェックのモックレスポンス（Lambdaを呼ばない）
-const healthIntegration = new aws.apigateway.Integration("lambda-api-health-integration", {
+const healthIntegration = new aws.apigateway.Integration("health-integration", {
     restApi: api.id,
     resourceId: healthResource.id,
     httpMethod: healthMethod.httpMethod,
@@ -65,7 +85,7 @@ const healthIntegration = new aws.apigateway.Integration("lambda-api-health-inte
     },
 });
 
-const healthResponse = new aws.apigateway.IntegrationResponse("lambda-api-health-response", {
+const healthResponse = new aws.apigateway.IntegrationResponse("health-response", {
     restApi: api.id,
     resourceId: healthResource.id,
     httpMethod: healthMethod.httpMethod,
@@ -77,7 +97,7 @@ const healthResponse = new aws.apigateway.IntegrationResponse("lambda-api-health
     dependsOn: [healthIntegration],
 });
 
-const healthMethodResponse = new aws.apigateway.MethodResponse("lambda-api-health-method-response", {
+const healthMethodResponse = new aws.apigateway.MethodResponse("health-method-response", {
     restApi: api.id,
     resourceId: healthResource.id,
     httpMethod: healthMethod.httpMethod,
@@ -89,22 +109,22 @@ const healthMethodResponse = new aws.apigateway.MethodResponse("lambda-api-healt
     dependsOn: [healthMethod],
 });
 
-// ===== メインAPIエンドポイント（/api）=====
-const apiResource = new aws.apigateway.Resource("lambda-api-api-resource", {
+// メインAPIエンドポイント（/api）
+const apiResource = new aws.apigateway.Resource("api-resource", {
     restApi: api.id,
     parentId: api.rootResourceId,
     pathPart: "api",
 });
 
 // プロキシリソース（/api/{proxy+}）- すべてのサブパスをキャッチ
-const proxyResource = new aws.apigateway.Resource("lambda-api-proxy-resource", {
+const proxyResource = new aws.apigateway.Resource("proxy-resource", {
     restApi: api.id,
     parentId: apiResource.id,
     pathPart: "{proxy+}",
 });
 
 // Lambda実行権限
-const lambdaPermission = new aws.lambda.Permission("lambda-api-lambda-permission", {
+const lambdaPermission = new aws.lambda.Permission("lambda-permission", {
     action: "lambda:InvokeFunction",
     function: lambdaFunctionName,
     principal: "apigateway.amazonaws.com",
@@ -112,7 +132,7 @@ const lambdaPermission = new aws.lambda.Permission("lambda-api-lambda-permission
 });
 
 // ANY メソッド（すべてのHTTPメソッドを受け付ける）
-const proxyMethod = new aws.apigateway.Method("lambda-api-proxy-method", {
+const proxyMethod = new aws.apigateway.Method("proxy-method", {
     restApi: api.id,
     resourceId: proxyResource.id,
     httpMethod: "ANY",
@@ -124,7 +144,7 @@ const proxyMethod = new aws.apigateway.Method("lambda-api-proxy-method", {
 });
 
 // Lambda統合
-const lambdaIntegration = new aws.apigateway.Integration("lambda-api-lambda-integration", {
+const lambdaIntegration = new aws.apigateway.Integration("lambda-integration", {
     restApi: api.id,
     resourceId: proxyResource.id,
     httpMethod: proxyMethod.httpMethod,
@@ -136,7 +156,7 @@ const lambdaIntegration = new aws.apigateway.Integration("lambda-api-lambda-inte
 });
 
 // /api 直下のメソッド（プロキシなし）
-const apiMethod = new aws.apigateway.Method("lambda-api-api-method", {
+const apiMethod = new aws.apigateway.Method("api-method", {
     restApi: api.id,
     resourceId: apiResource.id,
     httpMethod: "ANY",
@@ -147,7 +167,7 @@ const apiMethod = new aws.apigateway.Method("lambda-api-api-method", {
     },
 });
 
-const apiIntegration = new aws.apigateway.Integration("lambda-api-api-integration", {
+const apiIntegration = new aws.apigateway.Integration("api-integration", {
     restApi: api.id,
     resourceId: apiResource.id,
     httpMethod: apiMethod.httpMethod,
@@ -156,8 +176,10 @@ const apiIntegration = new aws.apigateway.Integration("lambda-api-api-integratio
     uri: pulumi.interpolate`arn:aws:apigateway:${aws.config.region}:lambda:path/2015-03-31/functions/${lambdaFunctionArn}/invocations`,
 });
 
-// ===== API デプロイメント =====
-const deployment = new aws.apigateway.Deployment("lambda-api-deployment", {
+// ========================================
+// API デプロイメント
+// ========================================
+const deployment = new aws.apigateway.Deployment("deployment", {
     restApi: api.id,
 }, {
     // 依存関係を明示的に設定
@@ -200,9 +222,7 @@ const stage = new aws.apigateway.Stage("lambda-api-stage", {
     },
     // メトリクス有効化
     xrayTracingEnabled: environment === "prod", // 本番環境のみX-Ray有効
-    tags: {
-        Environment: environment,
-    },
+    tags: commonTags,
 });
 
 // API Gateway用のCloudWatch Logsグループ
@@ -258,19 +278,21 @@ const externalApiKey = new aws.apigateway.ApiKey("lambda-api-external-key", {
 });
 
 // APIキーと使用プランの関連付け
-const bubbleUsagePlanKey = new aws.apigateway.UsagePlanKey("lambda-api-bubble-usage-key", {
+const bubbleUsagePlanKey = new aws.apigateway.UsagePlanKey("bubble-usage-key", {
     keyId: bubbleApiKey.id,
     keyType: "API_KEY",
     usagePlanId: usagePlan.id,
 });
 
-const externalUsagePlanKey = new aws.apigateway.UsagePlanKey("lambda-api-external-usage-key", {
+const externalUsagePlanKey = new aws.apigateway.UsagePlanKey("external-usage-key", {
     keyId: externalApiKey.id,
     keyType: "API_KEY",
     usagePlanId: usagePlan.id,
 });
 
-// ===== CORS設定（必要に応じて）=====
+// ========================================
+// CORS設定
+// ========================================
 // bubble.ioからのアクセスを許可
 const corsSettings = {
     allowOrigins: environment === "prod" 
@@ -281,9 +303,11 @@ const corsSettings = {
     maxAge: 86400, // 24時間
 };
 
-
+// ========================================
+// SSMパラメータへの保存
+// ========================================
 // APIキー情報を別のパラメータに保存（セキュリティのため）
-const apiKeyInfoParam = new aws.ssm.Parameter("lambda-api-api-keys", {
+const apiKeyInfoParam = new aws.ssm.Parameter("api-keys", {
     name: pulumi.interpolate`/${projectName}/${environment}/api-gateway/keys`,
     type: "SecureString", // 暗号化
     value: pulumi.all([bubbleApiKey.value, externalApiKey.value]).apply(
@@ -301,13 +325,13 @@ const apiKeyInfoParam = new aws.ssm.Parameter("lambda-api-api-keys", {
     ),
     description: "API keys for authentication",
     tags: {
-        Environment: environment,
+        ...commonTags,
         Sensitive: "true",
     },
 });
 
 // API Gateway設定情報をSSMパラメータに保存
-const apiConfigParam = new aws.ssm.Parameter("lambda-api-api-config", {
+const apiConfigParam = new aws.ssm.Parameter("api-config", {
     name: pulumi.interpolate`/${projectName}/${environment}/api-gateway/config`,
     type: "String",
     value: pulumi.all([api.id, stage.invokeUrl, stage.stageName]).apply(
@@ -320,25 +344,27 @@ const apiConfigParam = new aws.ssm.Parameter("lambda-api-api-config", {
         })
     ),
     description: "API Gateway configuration",
-    tags: {
-        Environment: environment,
-    },
+    tags: commonTags,
 });
 
-// エクスポート
-export const apiId = api.id;
-export const apiUrl = stage.invokeUrl;
-export const apiStage = stage.stageName;
-export const apiEndpoints = {
-    health: pulumi.interpolate`${stage.invokeUrl}health`,
-    api: pulumi.interpolate`${stage.invokeUrl}api`,
-};
-
-// APIキー情報（値は出力しない）- 名前を変更
-export const apiKeyInfo = {
-    bubbleKeyId: bubbleApiKey.id,
-    externalKeyId: externalApiKey.id,
-    retrieveCommand: pulumi.interpolate`aws ssm get-parameter --name /${projectName}/${environment}/api-gateway/keys --with-decryption --query 'Parameter.Value' --output text | jq .`,
+// ========================================
+// エクスポート（表示用のみ）
+// ========================================
+// エクスポートは表示・確認用のみ
+// 他のスタックはSSMパラメータから値を取得すること
+export const outputs = {
+    apiId: api.id,
+    apiUrl: stage.invokeUrl,
+    apiStage: stage.stageName,
+    apiEndpoints: {
+        health: pulumi.interpolate`${stage.invokeUrl}health`,
+        api: pulumi.interpolate`${stage.invokeUrl}api`,
+    },
+    apiKeyIds: {
+        bubbleKeyId: bubbleApiKey.id,
+        externalKeyId: externalApiKey.id,
+    },
+    retrieveKeysCommand: pulumi.interpolate`aws ssm get-parameter --name /${projectName}/${environment}/api-gateway/keys --with-decryption --query 'Parameter.Value' --output text | jq .`,
 };
 
 // 使用例

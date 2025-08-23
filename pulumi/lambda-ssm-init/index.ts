@@ -8,10 +8,17 @@
 import * as pulumi from "@pulumi/pulumi";
 import * as aws from "@pulumi/aws";
 
-// コンフィグから設定を取得
-const config = new pulumi.Config();
-const projectName = config.get("projectName") || "lambda-api";
+// ========================================
+// 環境変数取得
+// ========================================
 const environment = pulumi.getStack();
+
+// ========================================
+// 初期設定
+// ========================================
+// 注: これは初期化スタックのため、他のSSMパラメータはまだ存在しない
+// プロジェクト名は固定値として定義
+const projectName = "lambda-api";
 
 // 環境別設定
 const environmentConfig = {
@@ -52,7 +59,19 @@ const environmentConfig = {
 // 現在の環境の設定を取得
 const envConfig = environmentConfig[environment as keyof typeof environmentConfig] || environmentConfig.dev;
 
-// パラメータのプレフィックス
+// ========================================
+// 共通タグ定義
+// ========================================
+const commonTags = {
+    Environment: environment,
+    ManagedBy: "pulumi",
+    Project: projectName,
+    Stack: pulumi.getProject(),
+};
+
+// ========================================
+// パラメータ定義
+// ========================================
 const paramPrefix = `/${projectName}/${environment}`;
 
 // 共通設定パラメータ
@@ -104,52 +123,55 @@ const commonParams = {
     [`${paramPrefix}/deployment/last-updated`]: new Date().toISOString(),
 };
 
-// SSMパラメータを作成
+// ========================================
+// SSMパラメータ作成
+// ========================================
 const parameters: aws.ssm.Parameter[] = [];
 
 for (const [name, value] of Object.entries(commonParams)) {
+    // リソース名は固定文字列を使用（Output<T>エラー回避）
+    const resourceName = name.replace(/\//g, "-").replace(/^-/, "");
     const param = new aws.ssm.Parameter(
-        `param-${name.replace(/\//g, "-").replace(/^-/, "")}`,
+        resourceName,
         {
             name: name,
             type: "String",
             value: value,
             description: `Lambda API ${name.split("/").pop()} configuration`,
-            tags: {
-                Environment: environment,
-                ManagedBy: "pulumi",
-                Stack: "lambda-ssm-init",
-            },
+            tags: commonTags,
         }
     );
     parameters.push(param);
 }
 
+// ========================================
+// セキュアパラメータ作成
+// ========================================
 // セキュリティ関連の暗号化パラメータ（SecureString）
+// 注: 実際の値は環境変数またはCI/CDパイプラインから設定すること
 const secureParams = {
-    [`${paramPrefix}/security/api-key`]: config.getSecret("apiKey") || pulumi.secret("CHANGE-ME-IN-PRODUCTION"),
-    [`${paramPrefix}/security/jwt-secret`]: config.getSecret("jwtSecret") || pulumi.secret("CHANGE-ME-IN-PRODUCTION"),
+    [`${paramPrefix}/security/api-key`]: pulumi.secret("CHANGE-ME-IN-PRODUCTION"),
+    [`${paramPrefix}/security/jwt-secret`]: pulumi.secret("CHANGE-ME-IN-PRODUCTION"),
 };
 
 for (const [name, value] of Object.entries(secureParams)) {
+    const resourceName = `secure-${name.replace(/\//g, "-").replace(/^-/, "")}`;
     const param = new aws.ssm.Parameter(
-        `secure-param-${name.replace(/\//g, "-").replace(/^-/, "")}`,
+        resourceName,
         {
             name: name,
             type: "SecureString",
             value: value,
             description: `Lambda API secure ${name.split("/").pop()} configuration`,
-            tags: {
-                Environment: environment,
-                ManagedBy: "pulumi",
-                Stack: "lambda-ssm-init",
-            },
+            tags: commonTags,
         }
     );
     parameters.push(param);
 }
 
-// スタック間の依存関係を定義
+// ========================================
+// スタック依存関係定義
+// ========================================
 const stackDependencies = new aws.ssm.Parameter("stack-dependencies", {
     name: `${paramPrefix}/common/stack-dependencies`,
     type: "String",
@@ -172,11 +194,7 @@ const stackDependencies = new aws.ssm.Parameter("stack-dependencies", {
         },
     }),
     description: "Stack deployment dependencies and order",
-    tags: {
-        Environment: environment,
-        ManagedBy: "pulumi",
-        Stack: "lambda-ssm-init",
-    },
+    tags: commonTags,
 });
 
 // 初期化完了フラグ
@@ -185,26 +203,20 @@ const initComplete = new aws.ssm.Parameter("init-complete", {
     type: "String",
     value: "true",
     description: "SSM parameter initialization complete flag",
-    tags: {
-        Environment: environment,
-        ManagedBy: "pulumi",
-        Stack: "lambda-ssm-init",
-    },
+    tags: commonTags,
 });
 
 // ========================================
-// エクスポート（最小限に限定）
+// エクスポート（表示用のみ）
 // ========================================
-// すべての値はSSMパラメータストアに保存されているため、
-// stack outputは必要最小限のみエクスポート
-
-// デプロイメント確認用の基本情報のみ
-export const deploymentInfo = {
+// エクスポートは表示・確認用のみ
+// 他のスタックはSSMパラメータから値を取得すること
+export const outputs = {
     stack: "lambda-ssm-init",
     environment: environment,
-    timestamp: new Date().toISOString(),
     ssmParameterPrefix: paramPrefix,
     parametersCreated: parameters.length,
+    initCompleteFlag: initComplete.name,
 };
 
 // デプロイ完了の確認用

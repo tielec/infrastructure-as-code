@@ -8,28 +8,46 @@
 import * as pulumi from "@pulumi/pulumi";
 import * as aws from "@pulumi/aws";
 
-// 環境変数を取得
+// ========================================
+// 環境変数取得
+// ========================================
 const environment = pulumi.getStack();
 
-// SSMパラメータストアから設定を取得（Single Source of Truth）
+// ========================================
+// SSMパラメータ参照（Single Source of Truth）
+// ========================================
+// プロジェクト名を取得
 const projectNameParam = aws.ssm.getParameter({
     name: `/lambda-api/${environment}/common/project-name`,
 });
 const projectName = pulumi.output(projectNameParam).apply(p => p.value);
 
-// SSMパラメータストアからVPC情報を取得
+// VPC情報を取得
 const vpcIdParam = aws.ssm.getParameter({
     name: `/lambda-api/${environment}/network/vpc-id`,
 });
+const vpcId = pulumi.output(vpcIdParam).apply(p => p.value);
+
 const vpcCidrParam = aws.ssm.getParameter({
     name: `/lambda-api/${environment}/network/vpc-cidr`,
 });
-
-const vpcId = pulumi.output(vpcIdParam).apply(p => p.value);
 const vpcCidr = pulumi.output(vpcCidrParam).apply(p => p.value);
 
-// ===== Lambda関数用セキュリティグループ =====
-const lambdaSecurityGroup = new aws.ec2.SecurityGroup("lambda-api-lambda-sg", {
+// ========================================
+// 共通タグ定義
+// ========================================
+const commonTags = {
+    Environment: environment,
+    ManagedBy: "pulumi",
+    Project: "lambda-api",
+    Stack: pulumi.getProject(),
+};
+
+// ========================================
+// セキュリティグループ定義
+// ========================================
+// Lambda関数用セキュリティグループ
+const lambdaSecurityGroup = new aws.ec2.SecurityGroup("lambda-sg", {
     vpcId: vpcId,
     description: "Security group for Lambda functions in VPC",
     // Lambda関数はアウトバウンドのみ必要（インバウンドは不要）
@@ -42,14 +60,14 @@ const lambdaSecurityGroup = new aws.ec2.SecurityGroup("lambda-api-lambda-sg", {
         description: "Allow all outbound traffic for Lambda functions",
     }],
     tags: {
+        ...commonTags,
         Name: pulumi.interpolate`${projectName}-lambda-sg-${environment}`,
-        Environment: environment,
         Purpose: "lambda-functions",
     },
 });
 
-// ===== VPCエンドポイント用セキュリティグループ =====
-const vpceSecurityGroup = new aws.ec2.SecurityGroup("lambda-api-vpce-sg", {
+// VPCエンドポイント用セキュリティグループ
+const vpceSecurityGroup = new aws.ec2.SecurityGroup("vpce-sg", {
     vpcId: vpcId,
     description: "Security group for VPC Endpoints",
     ingress: [
@@ -76,14 +94,14 @@ const vpceSecurityGroup = new aws.ec2.SecurityGroup("lambda-api-vpce-sg", {
         description: "Allow all outbound traffic",
     }],
     tags: {
+        ...commonTags,
         Name: pulumi.interpolate`${projectName}-vpce-sg-${environment}`,
-        Environment: environment,
         Purpose: "vpc-endpoints",
     },
 });
 
-// ===== NAT Instance用セキュリティグループ =====
-const natInstanceSecurityGroup = new aws.ec2.SecurityGroup("lambda-api-nat-instance-sg", {
+// NAT Instance用セキュリティグループ
+const natInstanceSecurityGroup = new aws.ec2.SecurityGroup("nat-instance-sg", {
     vpcId: vpcId,
     description: "Security group for NAT instance",
     ingress: [
@@ -112,14 +130,14 @@ const natInstanceSecurityGroup = new aws.ec2.SecurityGroup("lambda-api-nat-insta
         description: "Allow all outbound traffic for NAT functionality",
     }],
     tags: {
+        ...commonTags,
         Name: pulumi.interpolate`${projectName}-nat-instance-sg-${environment}`,
-        Environment: environment,
         Purpose: "nat-instance",
     },
 });
 
-// ===== Dead Letter Queue (SQS)用セキュリティグループ =====
-const dlqSecurityGroup = new aws.ec2.SecurityGroup("lambda-api-dlq-sg", {
+// Dead Letter Queue (SQS)用セキュリティグループ
+const dlqSecurityGroup = new aws.ec2.SecurityGroup("dlq-sg", {
     vpcId: vpcId,
     description: "Security group for Dead Letter Queue (SQS VPC Endpoint)",
     ingress: [
@@ -139,13 +157,15 @@ const dlqSecurityGroup = new aws.ec2.SecurityGroup("lambda-api-dlq-sg", {
         description: "Allow all outbound traffic",
     }],
     tags: {
+        ...commonTags,
         Name: pulumi.interpolate`${projectName}-dlq-sg-${environment}`,
-        Environment: environment,
         Purpose: "dead-letter-queue",
     },
 });
 
-// ===== Phase 2: RDS/DynamoDB用セキュリティグループ（将来用） =====
+// ========================================
+// Phase 2: RDS/DynamoDB用セキュリティグループ（将来用）
+// ========================================
 // Phase 2で有効化する場合のみ作成
 // SSMパラメータが存在しない場合はfalseとして扱う
 const createDatabaseSecurityGroups = pulumi.output(
@@ -159,7 +179,7 @@ let dynamodbVpceSecurityGroup: aws.ec2.SecurityGroup | undefined;
 
 if (createDatabaseSecurityGroups) {
     // RDS用セキュリティグループ
-    rdsSecurityGroup = new aws.ec2.SecurityGroup("lambda-api-rds-sg", {
+    rdsSecurityGroup = new aws.ec2.SecurityGroup("rds-sg", {
         vpcId: vpcId,
         description: "Security group for RDS instances (Phase 2)",
         ingress: [
@@ -186,15 +206,15 @@ if (createDatabaseSecurityGroups) {
             description: "Allow all outbound traffic",
         }],
         tags: {
+            ...commonTags,
             Name: pulumi.interpolate`${projectName}-rds-sg-${environment}`,
-            Environment: environment,
             Purpose: "rds-database",
             Phase: "2",
         },
     });
 
     // DynamoDB VPCエンドポイント用セキュリティグループ
-    dynamodbVpceSecurityGroup = new aws.ec2.SecurityGroup("lambda-api-dynamodb-vpce-sg", {
+    dynamodbVpceSecurityGroup = new aws.ec2.SecurityGroup("dynamodb-vpce-sg", {
         vpcId: vpcId,
         description: "Security group for DynamoDB VPC Endpoint (Phase 2)",
         ingress: [
@@ -214,15 +234,17 @@ if (createDatabaseSecurityGroups) {
             description: "Allow all outbound traffic",
         }],
         tags: {
+            ...commonTags,
             Name: pulumi.interpolate`${projectName}-dynamodb-vpce-sg-${environment}`,
-            Environment: environment,
             Purpose: "dynamodb-endpoint",
             Phase: "2",
         },
     });
 }
 
-// ===== API Gateway用のセキュリティルール（参考情報） =====
+// ========================================
+// API Gateway用のセキュリティルール（参考情報）
+// ========================================
 // API Gatewayは管理型サービスのためセキュリティグループは不要
 // WAFで以下を制御:
 // - IPホワイトリスト（bubble.io環境のIP）
@@ -230,107 +252,98 @@ if (createDatabaseSecurityGroups) {
 // - SQLインジェクション/XSS防御
 // - ペイロードサイズ制限（10MB以下）
 
-// SSMパラメータストアに個別のセキュリティグループIDを保存
+// ========================================
+// SSMパラメータへの保存
+// ========================================
+// 他のスタックが参照する値をSSMに保存
 const paramPrefix = pulumi.interpolate`/${projectName}/${environment}/security`;
 
 // Lambda Security Group ID
-const lambdaSgIdParam = new aws.ssm.Parameter("lambda-api-lambda-sg-id", {
+const lambdaSgIdParam = new aws.ssm.Parameter("lambda-sg-id", {
     name: pulumi.interpolate`${paramPrefix}/lambda-sg-id`,
     type: "String",
     value: lambdaSecurityGroup.id,
     description: "Lambda functions security group ID",
-    tags: { Environment: environment, ManagedBy: "pulumi", Stack: "lambda-security" },
+    tags: commonTags,
 });
 
 // VPC Endpoint Security Group ID
-const vpceSgIdParam = new aws.ssm.Parameter("lambda-api-vpce-sg-id", {
+const vpceSgIdParam = new aws.ssm.Parameter("vpce-sg-id", {
     name: pulumi.interpolate`${paramPrefix}/vpce-sg-id`,
     type: "String",
     value: vpceSecurityGroup.id,
     description: "VPC Endpoints security group ID",
-    tags: { Environment: environment, ManagedBy: "pulumi", Stack: "lambda-security" },
+    tags: commonTags,
 });
 
 // NAT Instance Security Group ID
-const natSgIdParam = new aws.ssm.Parameter("lambda-api-nat-sg-id", {
+const natSgIdParam = new aws.ssm.Parameter("nat-sg-id", {
     name: pulumi.interpolate`${paramPrefix}/nat-instance-sg-id`,
     type: "String",
     value: natInstanceSecurityGroup.id,
     description: "NAT Instance security group ID",
-    tags: { Environment: environment, ManagedBy: "pulumi", Stack: "lambda-security" },
+    tags: commonTags,
 });
 
 // DLQ Security Group ID
-const dlqSgIdParam = new aws.ssm.Parameter("lambda-api-dlq-sg-id", {
+const dlqSgIdParam = new aws.ssm.Parameter("dlq-sg-id", {
     name: pulumi.interpolate`${paramPrefix}/dlq-sg-id`,
     type: "String",
     value: dlqSecurityGroup.id,
     description: "Dead Letter Queue security group ID",
-    tags: { Environment: environment, ManagedBy: "pulumi", Stack: "lambda-security" },
+    tags: commonTags,
 });
 
 // Phase 2: RDS/DynamoDB Security Groups (if enabled)
 if (createDatabaseSecurityGroups && rdsSecurityGroup && dynamodbVpceSecurityGroup) {
-    const rdsSgIdParam = new aws.ssm.Parameter("lambda-api-rds-sg-id", {
+    const rdsSgIdParam = new aws.ssm.Parameter("rds-sg-id", {
         name: pulumi.interpolate`${paramPrefix}/rds-sg-id`,
         type: "String",
         value: rdsSecurityGroup.id,
         description: "RDS security group ID",
-        tags: { Environment: environment, ManagedBy: "pulumi", Stack: "lambda-security" },
+        tags: commonTags,
     });
 
-    const dynamodbSgIdParam = new aws.ssm.Parameter("lambda-api-dynamodb-sg-id", {
+    const dynamodbSgIdParam = new aws.ssm.Parameter("dynamodb-sg-id", {
         name: pulumi.interpolate`${paramPrefix}/dynamodb-vpce-sg-id`,
         type: "String",
         value: dynamodbVpceSecurityGroup.id,
         description: "DynamoDB VPC Endpoint security group ID",
-        tags: { Environment: environment, ManagedBy: "pulumi", Stack: "lambda-security" },
+        tags: commonTags,
     });
 } else {
     // Phase 1の場合は空文字列を設定
-    new aws.ssm.Parameter("lambda-api-rds-sg-id-empty", {
+    new aws.ssm.Parameter("rds-sg-id-empty", {
         name: pulumi.interpolate`${paramPrefix}/rds-sg-id`,
         type: "String",
         value: "",
         description: "RDS security group ID (not created in Phase 1)",
-        tags: { Environment: environment, ManagedBy: "pulumi", Stack: "lambda-security" },
+        tags: commonTags,
     });
 
-    new aws.ssm.Parameter("lambda-api-dynamodb-sg-id-empty", {
+    new aws.ssm.Parameter("dynamodb-sg-id-empty", {
         name: pulumi.interpolate`${paramPrefix}/dynamodb-vpce-sg-id`,
         type: "String",
         value: "",
         description: "DynamoDB VPC Endpoint security group ID (not created in Phase 1)",
-        tags: { Environment: environment, ManagedBy: "pulumi", Stack: "lambda-security" },
+        tags: commonTags,
     });
 }
 
 // デプロイメント完了フラグ
-const deploymentCompleteParam = new aws.ssm.Parameter("lambda-api-security-deployed", {
+const deploymentCompleteParam = new aws.ssm.Parameter("security-deployed", {
     name: pulumi.interpolate`${paramPrefix}/deployment/complete`,
     type: "String",
     value: "true",
     description: "Security stack deployment completion flag",
-    tags: { Environment: environment, ManagedBy: "pulumi", Stack: "lambda-security" },
+    tags: commonTags,
 });
 
 // ========================================
-// エクスポート（最小限に限定）
+// セキュリティチェックリスト
 // ========================================
-// すべての値はSSMパラメータストアに保存されているため、
-// stack outputは必要最小限のみエクスポート
 
-// デプロイメント確認用の基本情報のみ
-export const deploymentInfo = {
-    stack: "lambda-security",
-    environment: environment,
-    timestamp: new Date().toISOString(),
-    ssmParameterPrefix: pulumi.interpolate`/${projectName}/${environment}/security`,
-    phase2Enabled: createDatabaseSecurityGroups,
-};
-
-// セキュリティベストプラクティスのチェックリスト
-const securityChecklistParameter = new aws.ssm.Parameter("lambda-api-security-checklist", {
+const securityChecklistParameter = new aws.ssm.Parameter("security-checklist", {
     name: pulumi.interpolate`/${projectName}/${environment}/security/checklist`,
     type: "String",
     value: JSON.stringify({
@@ -357,10 +370,22 @@ const securityChecklistParameter = new aws.ssm.Parameter("lambda-api-security-ch
         ],
     }),
     description: "Security best practices checklist for Lambda API",
-    tags: {
-        Environment: environment,
-    },
+    tags: commonTags,
 });
 
-// デプロイ完了の確認用（最小限のエクスポート）
-export const deploymentComplete = true;
+// ========================================
+// エクスポート（表示用のみ）
+// ========================================
+// エクスポートは表示・確認用のみ
+// 他のスタックはSSMパラメータから値を取得すること
+export const outputs = {
+    stack: "lambda-security",
+    environment: environment,
+    lambdaSecurityGroupId: lambdaSecurityGroup.id,
+    vpceSecurityGroupId: vpceSecurityGroup.id,
+    natSecurityGroupId: natInstanceSecurityGroup.id,
+    dlqSecurityGroupId: dlqSecurityGroup.id,
+    ssmParameterPrefix: paramPrefix,
+    phase2Enabled: createDatabaseSecurityGroups,
+    deploymentComplete: deploymentCompleteParam.name,
+};
