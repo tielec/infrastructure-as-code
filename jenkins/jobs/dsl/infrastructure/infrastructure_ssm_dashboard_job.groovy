@@ -105,22 +105,6 @@ pipelineJob(jobPath) {
             |'''.stripMargin())
     }
     
-    // 実行権限の設定
-    authorization {
-        permissions('jenkins-operators', [
-            'Job/Build',
-            'Job/Cancel', 
-            'Job/Read'
-        ])
-        permissions('jenkins-admins', [
-            'Job/Build',
-            'Job/Cancel',
-            'Job/Configure',
-            'Job/Delete',
-            'Job/Read'
-        ])
-    }
-    
     // パイプライン定義
     definition {
         cpsScm {
