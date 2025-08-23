@@ -72,6 +72,7 @@ repositories.each { repo ->
             stringParam('CYCLOMATIC_THRESHOLD', '15', 'Cyclomatic complexity threshold')
             stringParam('COGNITIVE_THRESHOLD', '20', 'Cognitive complexity threshold')
             booleanParam('FORCE_ANALYSIS', true, 'Force re-analysis even if comment exists')
+            stringParam('JENKINSFILE_BRANCH', 'main', 'Jenkinsfileが格納されているブランチ')
         }
         
         // パイプライン定義
@@ -83,7 +84,7 @@ repositories.each { repo ->
                             url(jenkinsPipelineRepo.url)
                             credentials(jenkinsPipelineRepo.credentials)
                         }
-                        branch(jenkinsPipelineRepo.branch)
+                        branch('${JENKINSFILE_BRANCH}')
                     }
                 }
                 scriptPath(jobConfig.jenkinsfile)

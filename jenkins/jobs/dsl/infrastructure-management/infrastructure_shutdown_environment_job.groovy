@@ -89,6 +89,9 @@ gracefulモードで、エージェントジョブの完了を待つ最大時間
 
 実際の停止を行わず、停止対象のリソースの確認のみを行います。
 ''')
+        
+        // Jenkinsfileブランチ
+        stringParam('JENKINSFILE_BRANCH', 'main', 'Jenkinsfileが格納されているブランチ')
     }
 
     // Pipeline定義
@@ -100,7 +103,7 @@ gracefulモードで、エージェントジョブの完了を待つ最大時間
                         url(jenkinsPipelineRepo.url)
                         credentials(jenkinsPipelineRepo.credentials)
                     }
-                    branch(jenkinsPipelineRepo.branch)
+                    branch('${JENKINSFILE_BRANCH}')
                     extensions {
                         cleanBeforeCheckout()
                         cloneOptions {

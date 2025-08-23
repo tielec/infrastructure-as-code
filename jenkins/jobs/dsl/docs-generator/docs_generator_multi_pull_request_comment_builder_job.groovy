@@ -78,6 +78,9 @@ repositories.each { repo ->
 
             // 強制更新設定
             booleanParam('FORCE_ANALYSIS', false, '既存のコメントが存在しても強制的に分析とコメント更新を実行するかどうか')
+            
+            // Jenkinsfileブランチ
+            stringParam('JENKINSFILE_BRANCH', 'main', 'Jenkinsfileが格納されているブランチ')
         }
         
         // パイプライン定義
@@ -89,7 +92,7 @@ repositories.each { repo ->
                             url(jenkinsPipelineRepo.url)
                             credentials(jenkinsPipelineRepo.credentials)
                         }
-                        branch(jenkinsPipelineRepo.branch)
+                        branch('${JENKINSFILE_BRANCH}')
                     }
                 }
                 scriptPath(jobConfig.jenkinsfile)

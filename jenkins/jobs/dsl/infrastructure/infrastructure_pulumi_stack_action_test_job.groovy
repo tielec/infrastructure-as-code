@@ -64,6 +64,9 @@ pipelineJob(fullJobName) {
             |* dev環境: Pulumi.dev.yaml
             |
             |アップロードされたファイルが最優先で使用されます。""".stripMargin())
+        
+        // Jenkinsfile ブランチ
+        stringParam('JENKINSFILE_BRANCH', 'main', 'Jenkinsfileが格納されているブランチ')
     }
 
     // 依存関係の保持設定
@@ -98,7 +101,7 @@ pipelineJob(fullJobName) {
                         url(jenkinsPipelineRepo.url)
                         credentials(jenkinsPipelineRepo.credentials)
                     }
-                    branch(jenkinsPipelineRepo.branch)
+                    branch('${JENKINSFILE_BRANCH}')
                 }
             }
             scriptPath(jobConfig.jenkinsfile)

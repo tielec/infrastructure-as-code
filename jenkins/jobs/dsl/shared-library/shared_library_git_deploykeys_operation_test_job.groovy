@@ -29,6 +29,7 @@ pipelineJob(fullJobName) {
         booleanParam('CLEANUP_AFTER_TEST', true, 'テスト後にリソースを削除する')
         booleanParam('DRY_RUN', false, 'ドライラン（読み取り操作のみ）')
         stringParam('REPO_URL', 'https://github.com/tielec/infrastructure-as-code', 'リポジトリのURL')
+        stringParam('JENKINSFILE_BRANCH', 'main', 'Jenkinsfileが格納されているブランチ')
     }
 
     // プロパティ設定
@@ -54,7 +55,7 @@ pipelineJob(fullJobName) {
                         url(jenkinsPipelineRepo.url)
                         credentials(jenkinsPipelineRepo.credentials)
                     }
-                    branch(jenkinsPipelineRepo.branch)
+                    branch('${JENKINSFILE_BRANCH}')
                 }
             }
             scriptPath(jobConfig.jenkinsfile)

@@ -84,10 +84,7 @@
 ```typescript
 /**
  * pulumi/{stack-name}/index.ts
- * 
- * 目的: {stack}のインフラストラクチャ定義
- * 依存: {dependencies}
- * 作成日: YYYY-MM-DD
+ * {stack}のインフラストラクチャ定義
  */
 import * as pulumi from "@pulumi/pulumi";
 import * as aws from "@pulumi/aws";

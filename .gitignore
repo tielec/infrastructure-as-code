@@ -1,0 +1,76 @@
+# Node.js
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+lerna-debug.log*
+.npm
+*.tgz
+package-lock.json
+yarn.lock
+
+# TypeScript
+*.tsbuildinfo
+dist/
+build/
+bin/
+out/
+
+# Pulumi
+.pulumi/
+*.pulumi.yaml.bak
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# AWS
+.aws/
+*.pem
+
+# Logs
+logs/
+*.log
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.Python
+venv/
+ENV/
+
+# Terraform (if any)
+*.tfstate
+*.tfstate.*
+.terraform/
+
+# Ansible
+*.retry
+ansible/*.retry
+
+# Jenkins
+jenkins/workspace/
+jenkins/jobs/*/builds/
+jenkins/jobs/*/lastStable
+jenkins/jobs/*/lastSuccessful
+jenkins/jobs/*/nextBuildNumber
+jenkins/secrets/
+
+# OS files
+Thumbs.db
+Desktop.ini

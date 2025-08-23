@@ -92,6 +92,9 @@ ${playbookListText}
                 // ブランチ選択
                 stringParam('BRANCH', 'main', 'リポジトリブランチ（デフォルト: main）')
                 
+                // Jenkinsfileブランチ
+                stringParam('JENKINSFILE_BRANCH', 'main', 'Jenkinsfileが格納されているブランチ')
+                
                 // プレイブックパス（デフォルト値を設定）
                 stringParam('PLAYBOOKS', playbooksDefaultValue, 
                     playbookPaths.size() > 1 ? 
@@ -153,7 +156,7 @@ ${playbookListText}
                                 url(jenkinsPipelineRepo.url)
                                 credentials(jenkinsPipelineRepo.credentials)
                             }
-                            branch(jenkinsPipelineRepo.branch)
+                            branch('${JENKINSFILE_BRANCH}')
                         }
                     }
                     scriptPath(jobConfig.jenkinsfile)

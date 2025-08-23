@@ -1,0 +1,155 @@
+---
+# lambda_ssm_init/tasks/destroy.yml
+# Lambda APIインフラのSSMパラメータ削除タスク
+
+- name: Set project variables for destroy
+  ansible.builtin.set_fact:
+    lambda_ssm_init_project: "lambda-ssm-init"
+    lambda_ssm_init_path: "{{ pulumi_path }}/lambda-ssm-init"
+    param_prefix: "/{{ project_name }}/{{ env_name }}"
+
+- name: Display SSM parameter destruction info
+  ansible.builtin.debug:
+    msg: |
+      Lambda SSM Parameter Destruction
+      ================================
+      Project: {{ lambda_ssm_init_project }}
+      Environment: {{ env_name }}
+      Region: {{ aws_region_name }}
+      Parameter Prefix: {{ param_prefix }}
+      
+      ⚠️  WARNING: This will delete all SSM parameters for this environment!
+
+- name: Confirm destruction
+  ansible.builtin.pause:
+    prompt: "Press ENTER to confirm deletion of SSM parameters, or Ctrl+C to cancel"
+  when: 
+    - force_destroy is not defined or not force_destroy
+    - not preview_only | default(false)
+
+- name: Check if Pulumi stack exists
+  ansible.builtin.command:
+    cmd: pulumi stack ls --json
+    chdir: "{{ lambda_ssm_init_path }}"
+  register: stack_list
+  changed_when: false
+  failed_when: false
+
+- name: Parse stack list
+  ansible.builtin.set_fact:
+    existing_stacks: "{{ stack_list.stdout | from_json | map(attribute='name') | list }}"
+  when: stack_list.rc == 0
+
+- name: Check if target stack exists
+  ansible.builtin.set_fact:
+    stack_exists: "{{ env_name in existing_stacks }}"
+  when: existing_stacks is defined
+
+# Pulumiスタックを使用した削除
+- name: Destroy SSM parameters using Pulumi
+  block:
+    - name: Select the stack
+      ansible.builtin.command:
+        cmd: pulumi stack select {{ env_name }}
+        chdir: "{{ lambda_ssm_init_path }}"
+      when: stack_exists | default(false)
+
+    - name: Preview destruction
+      ansible.builtin.include_role:
+        name: pulumi_helper
+      vars:
+        pulumi_action: "preview"
+        pulumi_stack_name: "{{ env_name }}"
+        pulumi_project_path: "{{ lambda_ssm_init_path }}"
+        pulumi_destroy: true
+      when: 
+        - preview_only | default(false)
+        - stack_exists | default(false)
+
+    - name: Destroy SSM parameters
+      ansible.builtin.include_role:
+        name: pulumi_helper
+      vars:
+        pulumi_action: "destroy"
+        pulumi_stack_name: "{{ env_name }}"
+        pulumi_project_path: "{{ lambda_ssm_init_path }}"
+        pulumi_skip_preview: true
+      when: 
+        - not preview_only | default(false)
+        - stack_exists | default(false)
+
+    - name: Remove the stack
+      ansible.builtin.command:
+        cmd: pulumi stack rm {{ env_name }} --yes
+        chdir: "{{ lambda_ssm_init_path }}"
+      when: 
+        - not preview_only | default(false)
+        - stack_exists | default(false)
+        - remove_stack | default(true)
+      register: stack_removal
+
+  rescue:
+    - name: Display error message
+      ansible.builtin.debug:
+        msg: "Failed to destroy using Pulumi. Will attempt manual cleanup if forced."
+
+# 強制削除オプション（Pulumiスタックが壊れている場合）
+- name: Force delete SSM parameters manually
+  block:
+    - name: List all parameters with prefix
+      ansible.builtin.include_role:
+        name: aws_cli_helper
+        tasks_from: execute
+      vars:
+        aws_command: |
+          ssm describe-parameters \
+            --parameter-filters "Key=Name,Values={{ param_prefix }}" \
+            --query "Parameters[].Name" \
+            --output json
+        operation_name: "List SSM parameters"
+        parse_output: true
+      register: param_list
+
+    - name: Delete each parameter
+      ansible.builtin.include_role:
+        name: ssm_parameter_store
+        tasks_from: delete_parameter
+      vars:
+        parameter_name: "{{ item }}"
+      loop: "{{ aws_cli_result | default([]) }}"
+      when: aws_cli_result is defined and aws_cli_result | length > 0
+
+    - name: Display manual cleanup result
+      ansible.builtin.debug:
+        msg: "Manually deleted {{ aws_cli_result | length | default(0) }} parameters"
+
+  when: 
+    - force_manual_cleanup | default(false)
+    - not preview_only | default(false)
+
+- name: Verify deletion
+  ansible.builtin.include_role:
+    name: ssm_parameter_store
+    tasks_from: get_parameter
+  vars:
+    parameter_name: "{{ param_prefix }}/common/init-complete"
+    store_as: "deletion_check"
+    ignore_errors: true
+  register: deletion_verification
+  when: not preview_only | default(false)
+
+- name: Display destruction result
+  ansible.builtin.debug:
+    msg: |
+      SSM Parameter Destruction Result
+      ================================
+      Status: {{ 'Success - Parameters deleted' if deletion_verification.failed | default(false) else 'Failed - Some parameters may still exist' }}
+      Stack Removed: {{ 'Yes' if stack_removal.changed | default(false) else 'No' }}
+  when: not preview_only | default(false)
+
+- name: Set destruction fact
+  ansible.builtin.set_fact:
+    ssm_init_destroyed: true
+  when: 
+    - not preview_only | default(false)
+    - deletion_verification.failed | default(false)

@@ -223,6 +223,30 @@
         PATH: "/home/ec2-user/.local/bin:/usr/local/bin:/usr/bin:/bin"
       when: ansible_core_check.rc == 0  # ansible-coreが既にインストールされている場合のみ
     
+    # Mitogen for Ansibleのインストール（Ansible高速化）
+    - name: Install Mitogen for Ansible
+      block:
+        - name: Check if Mitogen is already installed
+          ansible.builtin.command: python3 -c "import ansible_mitogen"
+          register: mitogen_check
+          changed_when: false
+          failed_when: false
+          become: no
+          
+        - name: Install Mitogen for Ansible
+          ansible.builtin.pip:
+            name: mitogen
+            state: latest
+            extra_args: --user
+          become: no
+          environment:
+            PATH: "/home/ec2-user/.local/bin:/usr/local/bin:/usr/bin:/bin"
+          when: mitogen_check.rc != 0
+          
+        - name: Display Mitogen installation status
+          ansible.builtin.debug:
+            msg: "Mitogen for Ansible: {{ 'Already installed' if mitogen_check.rc == 0 else 'Newly installed' }}"
+    
     # Ansible Collectionsのインストール
     - name: Install Ansible Collections
       block:
@@ -376,6 +400,7 @@
           - Java {{ java_version }} (Amazon Corretto)
           - Python 3.9+ (system default)
           - Ansible with latest AWS collections
+          - Mitogen for Ansible (高速化)
           - Pulumi (latest)
           - Docker
           - Git
@@ -491,6 +516,7 @@
           - Node.js {{ nodejs_version }} LTS
           - Java {{ java_version }}
           - Latest Ansible Collections (7.0+)
+          - Mitogen for Ansible (高速化)
           - Latest Python packages
           
           Run './verify-installation.sh' to check the installation.

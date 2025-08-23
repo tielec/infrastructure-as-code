@@ -31,6 +31,7 @@ pipelineJob(fullJobName) {
         stringParam('REPO_OWNER', 'tielec', 'リポジトリオーナー名')
         stringParam('REPO_NAME', 'infrastructure-as-code', 'リポジトリ名')
         stringParam('BASE_BRANCH', 'main', 'PRのベースブランチ（マージ先のブランチ）')
+        stringParam('JENKINSFILE_BRANCH', 'main', 'Jenkinsfileが格納されているブランチ')
     }
 
     // プロパティ設定
@@ -56,7 +57,7 @@ pipelineJob(fullJobName) {
                         url(jenkinsPipelineRepo.url)
                         credentials(jenkinsPipelineRepo.credentials)
                     }
-                    branch(jenkinsPipelineRepo.branch)
+                    branch('${JENKINSFILE_BRANCH}')
                 }
             }
             scriptPath(jobConfig.jenkinsfile)

@@ -59,6 +59,7 @@ pipelineJob(fullJobName) {
         stringParam('TARGET_BRANCH', 'main', 'リストア対象のブランチ')
         stringParam('CONFIG_FILE', 'jenkins/config/casc/jenkins.yaml', 'リストア対象の設定ファイルパス')
         booleanParam('RESTART_JENKINS', false, 'リストア後にJenkinsを再起動するか')
+        stringParam('JENKINSFILE_BRANCH', 'main', 'Jenkinsfileが格納されているブランチ')
     }
     
     // パイプライン定義
@@ -70,7 +71,7 @@ pipelineJob(fullJobName) {
                         url(jenkinsPipelineRepo.url)
                         credentials(jenkinsPipelineRepo.credentials)
                     }
-                    branch(jenkinsPipelineRepo.branch)
+                    branch('${JENKINSFILE_BRANCH}')
                 }
             }
             scriptPath(jobConfig.jenkinsfile)

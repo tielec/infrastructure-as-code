@@ -66,6 +66,7 @@ def createDocumentGeneratorJob(repoConfig) {
             stringParam('MAX_RETRIES', '3', '1ファイルあたりの最大リトライ回数')
             choiceParam('FILE_SELECTION_MODE', ['LATEST_PR', 'SPECIFIC_PR', 'ALL_FILES'], 'ファイル選択モード: 最新PR/指定PR/全ファイル')
             stringParam('PR_NUMBER', '', '処理対象とするPRの番号（FILE_SELECTION_MODEがSPECIFIC_PRの場合に使用）')
+            stringParam('JENKINSFILE_BRANCH', 'main', 'Jenkinsfileが格納されているブランチ')
         }
 
         // パイプライン定義
@@ -77,7 +78,7 @@ def createDocumentGeneratorJob(repoConfig) {
                             url(jenkinsPipelineRepo.url)
                             credentials(jenkinsPipelineRepo.credentials)
                         }
-                        branch(jenkinsPipelineRepo.branch)
+                        branch('${JENKINSFILE_BRANCH}')
                     }
                 }
                 scriptPath(jobConfig.jenkinsfile)

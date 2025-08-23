@@ -1,0 +1,102 @@
+---
+# lambda_network.yml
+# Lambda API用ネットワークインフラデプロイメントプレイブック
+# 
+# 使用方法:
+#   ansible-playbook playbooks/lambda/lambda_network.yml -e "env=dev"
+#   ansible-playbook playbooks/lambda/lambda_network.yml -e "env=dev operation=destroy"
+
+- name: Lambda API Network Infrastructure Deployment
+  hosts: localhost
+  connection: local
+  gather_facts: yes
+  
+  vars:
+    env_name: "{{ env | default('dev') }}"
+    preview_only: "{{ preview | default(false) }}"
+    
+  pre_tasks:
+    - name: Include group_vars/all.yml
+      ansible.builtin.include_vars:
+        file: "{{ inventory_dir }}/group_vars/all.yml"
+    
+    - name: Set required variables
+      ansible.builtin.set_fact:
+        project_name: "{{ lambda_api_infra.project_name }}"
+        aws_region_name: "{{ lambda_api_infra.aws.default_region }}"
+        network_project_name: "{{ lambda_api_infra.pulumi.network_project }}"
+        pulumi_path: "{{ inventory_dir }}/../../pulumi"
+        scripts_dir: "{{ inventory_dir }}/../../scripts"
+        # 環境別設定
+        environment_config: "{{ lambda_api_infra.environments[env_name] }}"
+        
+    - name: Display operation info
+      ansible.builtin.debug:
+        msg: |
+          ==========================================
+          Lambda API Network Infrastructure
+          ==========================================
+          Operation: {{ operation | default('deploy') }}
+          Environment: {{ env_name }}
+          Project: {{ network_project_name }}
+          Region: {{ aws_region_name }}
+          VPC CIDR: {{ environment_config.vpc_cidr | default('10.1.0.0/16') }}
+          Preview Only: {{ preview_only }}
+          ==========================================
+          
+    - name: Check SSM initialization
+      ansible.builtin.include_role:
+        name: ssm_parameter_store
+        tasks_from: get_parameter
+      vars:
+        parameter_name: "/{{ project_name }}/{{ env_name }}/common/init-complete"
+        store_as: "ssm_init_check"
+        default_value: "false"
+        ssm_parameter_store_fail_on_missing: false
+        
+    - name: Debug SSM parameter value
+      ansible.builtin.debug:
+        msg: |
+          ssm_init_check value: {{ ssm_init_check | default('not set') }}
+          ssm_parameter_value: {{ ssm_parameter_value | default('not set') }}
+          
+    - name: Verify SSM initialization
+      ansible.builtin.fail:
+        msg: |
+          SSM parameters are not initialized!
+          Please run: ansible-playbook playbooks/lambda/lambda_ssm_init.yml -e "env={{ env_name }}"
+      when:
+        - operation | default('deploy') == 'deploy'
+        - ssm_init_check | default('false') | string | lower != 'true'
+  
+  roles:
+    - aws_setup
+    - pulumi_helper
+    
+  tasks:
+
+    - name: Set operation variable
+      ansible.builtin.set_fact:
+        role_operation: "{{ operation | default('deploy') }}"
+        
+    - name: Execute network deployment
+      ansible.builtin.include_role:
+        name: lambda_network
+      vars:
+        operation: "{{ role_operation }}"
+        
+    - name: Display results
+      ansible.builtin.debug:
+        msg: |
+          ==========================================
+          Network Infrastructure {{ 'Preview' if preview_only else role_operation | title }} Complete
+          ==========================================
+          {% if role_operation == 'deploy' and not preview_only %}
+          Status: {{ 'Success' if network_deployed | default(false) else 'Failed' }}
+          VPC ID: {{ vpc_id | default('N/A') }}
+          
+          Next step:
+          ansible-playbook playbooks/lambda/lambda_security.yml -e "env={{ env_name }}"
+          {% elif role_operation == 'destroy' %}
+          Network infrastructure has been removed.
+          {% endif %}
