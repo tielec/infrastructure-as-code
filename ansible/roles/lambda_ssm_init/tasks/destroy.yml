@@ -93,39 +93,66 @@
       ansible.builtin.debug:
         msg: "Failed to destroy using Pulumi. Will attempt manual cleanup if forced."
 
-# 強制削除オプション（Pulumiスタックが壊れている場合）
-- name: Force delete SSM parameters manually
+# Pulumiで管理されていない残存パラメータのクリーンアップ
+- name: Clean up remaining SSM parameters not managed by Pulumi
   block:
-    - name: List all parameters with prefix
+    - name: List all SSM parameters for the Lambda project
       ansible.builtin.include_role:
         name: aws_cli_helper
         tasks_from: execute
       vars:
         aws_command: |
-          ssm describe-parameters \
-            --parameter-filters "Key=Name,Values={{ param_prefix }}" \
-            --query "Parameters[].Name" \
+          aws ssm describe-parameters \
+            --parameter-filters "Key=Name,Option=BeginsWith,Values=/lambda-api/{{ env_name }}/" \
+            --max-results 50 \
             --output json
-        operation_name: "List SSM parameters"
+        operation_name: "List remaining SSM parameters"
         parse_output: true
-      register: param_list
-
-    - name: Delete each parameter
-      ansible.builtin.include_role:
-        name: ssm_parameter_store
-        tasks_from: delete_parameter
-      vars:
-        parameter_name: "{{ item }}"
-      loop: "{{ aws_cli_result | default([]) }}"
-      when: aws_cli_result is defined and aws_cli_result | length > 0
-
-    - name: Display manual cleanup result
+    
+    - name: Save parameter list
+      ansible.builtin.set_fact:
+        remaining_params: "{{ aws_cli_data.Parameters | default([]) }}"
+      when: aws_cli_success | default(false)
+    
+    - name: Display remaining parameters
       ansible.builtin.debug:
-        msg: "Manually deleted {{ aws_cli_result | length | default(0) }} parameters"
-
+        msg: "Found {{ remaining_params | default([]) | length }} remaining SSM parameter(s) to delete"
+      when: 
+        - remaining_params is defined
+        - remaining_params | length > 0
+    
+    - name: Delete each remaining parameter
+      ansible.builtin.include_role:
+        name: aws_cli_helper
+        tasks_from: execute
+      vars:
+        aws_command: "aws ssm delete-parameter --name \"{{ item.Name }}\""
+        operation_name: "Delete parameter {{ item.Name }}"
+        parse_output: false
+      loop: "{{ remaining_params | default([]) }}"
+      loop_control:
+        label: "{{ item.Name }}"
+      when: 
+        - remaining_params is defined
+        - remaining_params | length > 0
+        - not preview_only | default(false)
+    
+    - name: Set complete cleanup flag
+      ansible.builtin.set_fact:
+        ssm_fully_cleaned: true
+        
+  rescue:
+    - name: Cleanup failed
+      ansible.builtin.debug:
+        msg: "Some SSM parameters may not have been deleted"
+    
+    - name: Set cleanup failure flag
+      ansible.builtin.set_fact:
+        ssm_fully_cleaned: false
+        
   when: 
-    - force_manual_cleanup | default(false)
     - not preview_only | default(false)
+    - (stack_exists | default(false) or force_manual_cleanup | default(false))
 
 - name: Verify deletion
   ansible.builtin.include_role:
@@ -138,18 +165,29 @@
   register: deletion_verification
   when: not preview_only | default(false)
 
-- name: Display destruction result
+- name: Display SSM destruction summary
   ansible.builtin.debug:
     msg: |
-      SSM Parameter Destruction Result
-      ================================
-      Status: {{ 'Success - Parameters deleted' if deletion_verification.failed | default(false) else 'Failed - Some parameters may still exist' }}
-      Stack Removed: {{ 'Yes' if stack_removal.changed | default(false) else 'No' }}
+      ========================================
+      Lambda SSM Parameter Store Deletion Complete
+      ========================================
+      Project: lambda-api
+      Environment: {{ env_name }}
+      
+      Pulumi Stack Status:
+        - Stack Exists: {{ 'Yes' if stack_exists | default(false) else 'No' }}
+        - Stack Destroyed: {{ 'Yes' if stack_removal.changed | default(false) else 'N/A' }}
+      
+      SSM Cleanup Status:
+        - Pulumi-managed params: {{ 'DESTROYED' if stack_exists | default(false) else 'N/A' }}
+        - Remaining params cleanup: {{ 'SUCCESS' if ssm_fully_cleaned | default(false) else 'PARTIAL' }}
+        - Total params deleted: {{ remaining_params | default([]) | length }}
+      
+      Final Status: {{ 'SUCCESS' if (deletion_verification.failed | default(false) or ssm_fully_cleaned | default(false)) else 'FAILED' }}
+      ========================================
   when: not preview_only | default(false)
 
 - name: Set destruction fact
   ansible.builtin.set_fact:
-    ssm_init_destroyed: true
-  when: 
-    - not preview_only | default(false)
-    - deletion_verification.failed | default(false)
+    ssm_init_destroyed: "{{ deletion_verification.failed | default(false) or ssm_fully_cleaned | default(false) }}"
+  when: not preview_only | default(false)

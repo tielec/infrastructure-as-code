@@ -178,6 +178,21 @@
     env_name: "{{ env | default('dev') }}"
   
   tasks:
+    # 残存SSMパラメータのチェック
+    - name: Check for remaining SSM parameters
+      ansible.builtin.shell: |
+        aws ssm describe-parameters \
+          --parameter-filters "Key=Name,Option=BeginsWith,Values=/lambda-api/{{ env_name }}/" \
+          --query "Parameters[].Name" \
+          --output json 2>/dev/null || echo "[]"
+      register: remaining_ssm_check
+      changed_when: false
+      failed_when: false
+    
+    - name: Parse remaining parameters
+      ansible.builtin.set_fact:
+        remaining_ssm_params: "{{ remaining_ssm_check.stdout | from_json | default([]) }}"
+    
     - name: Display teardown summary
       ansible.builtin.debug:
         msg: |
@@ -187,6 +202,19 @@
           Environment: {{ env_name }}
           
           All specified components have been removed.
+          
+          SSM Parameter Status:
+          {% if remaining_ssm_params | length > 0 %}
+          ⚠️  WARNING: {{ remaining_ssm_params | length }} SSM parameters still exist:
+          {% for param in remaining_ssm_params %}
+            - {{ param }}
+          {% endfor %}
+          
+          To completely remove all SSM parameters, run:
+            ansible-playbook playbooks/lambda_teardown_pipeline.yml -e "env={{ env_name }} destroy_ssm=true"
+          {% else %}
+          ✅ All SSM parameters have been cleaned up
+          {% endif %}
           
           {% if not destroy_ssm | default(false) %}
           Note: SSM parameters were preserved.
