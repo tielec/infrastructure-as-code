@@ -1,0 +1,115 @@
+---
+# VPC Endpoints削除タスク
+
+- name: Display VPC endpoints destroy information
+  ansible.builtin.debug:
+    msg: |
+      Destroying VPC Endpoints:
+      - Project: {{ project_name }}
+      - VPC Endpoints Pulumi Project: {{ vpc_endpoints_project_name }}
+      - Environment: {{ env_name }}
+      - Force destroy: {{ force_destroy }}
+
+# 削除前の確認
+- name: Confirm VPC endpoints destruction
+  ansible.builtin.pause:
+    prompt: |
+      WARNING: You are about to destroy VPC endpoints!
+      This will remove private connectivity to AWS services.
+      
+      Press ENTER to confirm deletion, or Ctrl+C to cancel
+  when: 
+    - not force_destroy | bool
+    - not preview_only | bool
+
+# リソースの存在確認
+- name: Check if VPC endpoints stack exists
+  ansible.builtin.include_role:
+    name: pulumi_helper
+    tasks_from: stack_info
+  vars:
+    pulumi_project_path: "{{ pulumi_project_path }}"
+    stack_name: "{{ env_name }}"
+  register: stack_info_result
+  ignore_errors: true
+
+- name: Display stack status
+  ansible.builtin.debug:
+    msg: "Stack exists: {{ not stack_info_result.failed }}"
+  when: vpc_endpoints_debug | bool
+
+# Pulumi削除
+- name: Destroy VPC Endpoints with Pulumi
+  block:
+    # プレビュー（オプション）
+    - name: Preview VPC endpoints destruction
+      ansible.builtin.include_role:
+        name: pulumi_helper
+        tasks_from: preview
+      vars:
+        pulumi_project_path: "{{ pulumi_project_path }}"
+        destroy_preview: true
+      when: preview_only | bool
+    
+    # 削除実行
+    - name: Destroy VPC endpoints stack
+      ansible.builtin.include_role:
+        name: pulumi_helper
+        tasks_from: destroy
+      vars:
+        pulumi_project_path: "{{ pulumi_project_path }}"
+        force_destroy: "{{ force_destroy }}"
+      when: 
+        - not preview_only | bool
+        - not stack_info_result.failed
+    
+    # 関連するSSMパラメータを削除
+    - name: Delete deployment timestamp from SSM
+      ansible.builtin.include_role:
+        name: ssm_parameter_store
+        tasks_from: delete_parameter
+      vars:
+        parameter_name: "/jenkins-infra/{{ env_name }}/vpc-endpoints/deployed-at"
+      ignore_errors: true
+      when: not preview_only | bool
+    
+    # VPCエンドポイント関連のSSMパラメータを削除
+    - name: Delete VPC endpoint SSM parameters
+      ansible.builtin.include_role:
+        name: ssm_parameter_store
+        tasks_from: delete_parameter
+      vars:
+        parameter_name: "{{ item }}"
+      loop:
+        - "/jenkins-infra/{{ env_name }}/vpc-endpoints/security-group-id"
+        - "/jenkins-infra/{{ env_name }}/vpc-endpoints/ssm-endpoint-id"
+        - "/jenkins-infra/{{ env_name }}/vpc-endpoints/ssm-messages-endpoint-id"
+        - "/jenkins-infra/{{ env_name }}/vpc-endpoints/ec2-messages-endpoint-id"
+        - "/jenkins-infra/{{ env_name }}/vpc-endpoints/ec2-endpoint-id"
+        - "/jenkins-infra/{{ env_name }}/vpc-endpoints/s3-endpoint-id"
+      ignore_errors: true
+      when: not preview_only | bool
+    
+    - name: Set destruction status
+      ansible.builtin.set_fact:
+        vpc_endpoints_destroyed: true
+    
+    - name: Summary of VPC endpoints destruction
+      ansible.builtin.debug:
+        msg: |
+          VPC Endpoints destroyed successfully.
+          EC2 instances will now need NAT or direct internet access
+          to communicate with AWS services.
+
+  rescue:
+    - name: Set destruction status on failure
+      ansible.builtin.set_fact:
+        vpc_endpoints_destroyed: false
+    
+    - name: Display error
+      ansible.builtin.debug:
+        msg: "Failed to destroy VPC endpoints. See error details above."
+    
+    - name: Fail the task
+      ansible.builtin.fail:
+        msg: "VPC endpoints destruction failed."

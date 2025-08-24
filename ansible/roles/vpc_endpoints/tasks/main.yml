@@ -1,0 +1,11 @@
+---
+# tasks/main.yml - 必須：エントリーポイント
+# operation変数に基づいてdeploy/destroyを振り分ける
+
+- name: Include deploy tasks
+  ansible.builtin.include_tasks: deploy.yml
+  when: operation | default('deploy') == 'deploy'
+
+- name: Include destroy tasks
+  ansible.builtin.include_tasks: destroy.yml
+  when: operation | default('deploy') == 'destroy'

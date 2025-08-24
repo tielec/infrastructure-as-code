@@ -107,12 +107,22 @@
   tags:
     - storage
 
-# NATインフラの削除
+# VPCエンドポイントの削除
+# セキュリティグループが存在する間に削除する必要がある
+- import_playbook: remove/remove_jenkins_vpc_endpoints.yml
+  vars:
+    env: "{{ env | default('dev') }}"
+    confirm: true
+  when: (confirm | default(false) | bool) and (destroy_vpc_endpoints | default(true) | bool)
+  tags:
+    - vpc-endpoints
+
+# NATインフラの削除（互換性のために残すが、デフォルトではfalse）
 - import_playbook: remove/remove_jenkins_nat.yml
   vars:
     env: "{{ env | default('dev') }}"
     confirm: true
-  when: (confirm | default(false) | bool) and (destroy_nat | default(true) | bool)
+  when: (confirm | default(false) | bool) and (destroy_nat | default(false) | bool)
   tags:
     - nat
 

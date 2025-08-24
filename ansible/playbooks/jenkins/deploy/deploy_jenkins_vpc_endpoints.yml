@@ -1,0 +1,18 @@
+---
+# Jenkins VPCエンドポイントデプロイメント用プレイブック
+# プライベートサブネットからAWSサービスへの接続を提供
+
+- name: Deploy VPC Endpoints for Jenkins Infrastructure
+  hosts: localhost
+  gather_facts: yes
+  vars:
+    env_name: "{{ env | default('dev') }}"
+    deploy_env: "{{ env_name }}"
+    
+  tasks:
+    - name: Deploy VPC endpoints using role
+      ansible.builtin.include_role:
+        name: vpc_endpoints
+      vars:
+        operation: deploy
+        env_name: "{{ env_name }}"

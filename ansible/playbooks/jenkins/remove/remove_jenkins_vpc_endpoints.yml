@@ -1,0 +1,28 @@
+---
+# Jenkins VPCエンドポイント削除用プレイブック
+
+- name: Remove VPC Endpoints for Jenkins Infrastructure
+  hosts: localhost
+  gather_facts: yes
+  vars:
+    env_name: "{{ env | default('dev') }}"
+    deploy_env: "{{ env_name }}"
+    confirm: "{{ confirm | default(false) }}"
+    
+  tasks:
+    - name: Confirmation check
+      ansible.builtin.fail:
+        msg: |
+          This will remove VPC endpoints for Jenkins infrastructure.
+          EC2 instances will lose private connectivity to AWS services.
+          Run with --extra-vars "confirm=true" to proceed.
+      when: not confirm | bool
+    
+    - name: Remove VPC endpoints using role
+      ansible.builtin.include_role:
+        name: vpc_endpoints
+      vars:
+        operation: destroy
+        env_name: "{{ env_name }}"
+        force_destroy: "{{ confirm | bool }}"
+      when: confirm | bool
