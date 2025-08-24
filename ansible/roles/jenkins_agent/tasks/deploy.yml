@@ -94,7 +94,7 @@
         tasks_from: get_parameter
       vars:
         parameter_name: "/jenkins-infra/{{ env_name }}/config/agent-instance-type"
-        store_as: "ssm_instance_type"
+        store_as: "ssm_agent_instance_type"
     
     - name: Get agent max capacity from SSM Parameter Store
       ansible.builtin.include_role:
@@ -102,7 +102,7 @@
         tasks_from: get_parameter
       vars:
         parameter_name: "/jenkins-infra/{{ env_name }}/config/agent-max-capacity"
-        store_as: "ssm_max_capacity"
+        store_as: "ssm_agent_max_capacity"
     
     - name: Get agent min capacity from SSM Parameter Store
       ansible.builtin.include_role:
@@ -110,7 +110,7 @@
         tasks_from: get_parameter
       vars:
         parameter_name: "/jenkins-infra/{{ env_name }}/config/agent-min-capacity"
-        store_as: "ssm_min_capacity"
+        store_as: "ssm_agent_min_capacity"
     
     - name: Get agent spot price from SSM Parameter Store
       ansible.builtin.include_role:
@@ -118,7 +118,7 @@
         tasks_from: get_parameter
       vars:
         parameter_name: "/jenkins-infra/{{ env_name }}/config/agent-spot-price"
-        store_as: "ssm_spot_price"
+        store_as: "ssm_agent_spot_price"
     
     - name: Display configuration from SSM
       ansible.builtin.debug:
@@ -127,10 +127,10 @@
           - Project Name: {{ ssm_project_name }}
           - VPC ID: {{ ssm_vpc_id }}
           - Agent Security Group ID: {{ ssm_agent_sg_id }}
-          - Instance Type: {{ ssm_instance_type }}
-          - Max Capacity: {{ ssm_max_capacity }}
-          - Min Capacity: {{ ssm_min_capacity }}
-          - Spot Price: {{ ssm_spot_price }}
+          - Instance Type: {{ ssm_agent_instance_type }}
+          - Max Capacity: {{ ssm_agent_max_capacity }}
+          - Min Capacity: {{ ssm_agent_min_capacity }}
+          - Spot Price: {{ ssm_agent_spot_price }}
     
     # 依存関係の確認: 必要なスタックが全てデプロイ済みであることを確認
     - name: Check network stack outputs
