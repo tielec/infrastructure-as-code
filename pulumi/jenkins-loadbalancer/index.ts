@@ -72,7 +72,7 @@ const blueTargetGroup = new aws.lb.TargetGroup(`blue-tg`, {
     protocol: "HTTP",
     vpcId: vpcId,
     targetType: "instance",
-    ipAddressType: "ipv6",  // IPv6サポート
+    // ipAddressType は targetType: "ip" の場合のみ有効なため削除
     healthCheck: {
         enabled: true,
         path: "/login",
@@ -98,7 +98,7 @@ const greenTargetGroup = new aws.lb.TargetGroup(`green-tg`, {
     protocol: "HTTP",
     vpcId: vpcId,
     targetType: "instance",
-    ipAddressType: "ipv6",  // IPv6サポート
+    // ipAddressType は targetType: "ip" の場合のみ有効なため削除
     healthCheck: {
         enabled: true,
         path: "/login",

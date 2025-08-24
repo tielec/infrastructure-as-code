@@ -280,7 +280,7 @@ const agentLaunchTemplate = new aws.ec2.LaunchTemplate(`agent-lt`, {
     imageId: amiX86Id,
     instanceType: "t3.small", // デフォルトをt3.smallに変更
     keyName: agentKeyPair.keyName,  // 作成したキーペアを使用
-    vpcSecurityGroupIds: [jenkinsAgentSecurityGroupId],
+    // vpcSecurityGroupIds は networkInterfaces と競合するため削除
     iamInstanceProfile: {
         name: jenkinsAgentProfile.name,
     },
@@ -429,7 +429,7 @@ const agentLaunchTemplateArm = new aws.ec2.LaunchTemplate(`agent-lt-arm`, {
     imageId: amiArmId,
     instanceType: "t4g.small",
     keyName: agentKeyPair.keyName,
-    vpcSecurityGroupIds: [jenkinsAgentSecurityGroupId],
+    // vpcSecurityGroupIds は networkInterfaces と競合するため削除
     iamInstanceProfile: {
         name: jenkinsAgentProfile.name,
     },
