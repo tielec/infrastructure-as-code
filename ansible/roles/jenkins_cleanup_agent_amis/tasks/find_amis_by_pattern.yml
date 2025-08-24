@@ -1,0 +1,29 @@
+---
+# 特定のパターンでAMIを検索
+
+- name: Find AMIs by pattern {{ pattern }}
+  block:
+    - name: List AMIs matching pattern
+      ansible.builtin.include_role:
+        name: aws_cli_helper
+        tasks_from: execute
+      vars:
+        aws_command: |
+          aws ec2 describe-images 
+          --owners self 
+          --filters 
+            "Name=name,Values={{ pattern }}" 
+            "Name=state,Values=available" 
+          --query 'Images | sort_by(@, &CreationDate) | reverse(@)' 
+          --output json
+        operation_name: "List AMIs for pattern {{ pattern }}"
+        parse_output: true
+
+    - name: Store AMIs for pattern
+      ansible.builtin.set_fact:
+        ami_pattern_results: "{{ ami_pattern_results | default([]) + [{'pattern': pattern, 'amis': aws_cli_data | default([])}] }}"
+
+    - name: Display found AMIs for pattern
+      ansible.builtin.debug:
+        msg: "Found {{ aws_cli_data | default([]) | length }} AMI(s) for pattern: {{ pattern }}"
+      when: verbose_logging

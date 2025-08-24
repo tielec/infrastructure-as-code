@@ -153,6 +153,13 @@ ansible-playbook playbooks/lambda_ip_whitelist.yml -e "action=add ip_address=1.2
 | `deploy_jenkins_config.yml` | Jenkins初期設定 | controller |
 | `deploy_jenkins_application.yml` | Jenkinsアプリケーション設定 | config, agent |
 
+#### メンテナンスプレイブック
+
+| プレイブック | 説明 | パラメータ |
+|------------|------|----------|
+| `cleanup_image_builder_amis.yml` | Image BuilderのAMIを世代管理 | `retention_count`: 保持世代数<br>`dry_run`: 実行モード |
+| `update_jenkins_ami_ssm.yml` | Jenkins AMI SSMパラメータ更新 | なし |
+
 ### Lambdaシステム
 
 | プレイブック | 説明 | 実行例 |
@@ -186,6 +193,7 @@ ansible-playbook playbooks/lambda_ip_whitelist.yml -e "action=add ip_address=1.2
 | `jenkins_loadbalancer` | ALB管理 | deploy, destroy |
 | `jenkins_controller` | Jenkinsコントローラー管理 | deploy, destroy |
 | `jenkins_agent_ami` | エージェントAMI管理 | deploy, destroy, cleanup_amis |
+| `jenkins_cleanup_agent_amis` | Jenkins Agent AMIクリーンアップ | 世代管理によるAMI/スナップショット削除 |
 | `jenkins_agent` | Jenkinsエージェント管理 | deploy, destroy |
 | `jenkins_config` | Jenkins設定管理 | setup, destroy |
 | `jenkins_application` | Jenkinsアプリケーション管理 | deploy, destroy |
@@ -255,6 +263,15 @@ ansible-playbook playbooks/jenkins/jenkins_setup_pipeline.yml -e "env=prod"
 ```bash
 # AMIパラメータ更新
 ansible-playbook playbooks/jenkins/misc/update_jenkins_ami_ssm.yml -e "env=dev"
+
+# Image Builder AMIのクリーンアップ（ドライラン）
+ansible-playbook playbooks/jenkins/maintenance/cleanup_image_builder_amis.yml -e "env=dev"
+
+# Image Builder AMIのクリーンアップ（実行）
+ansible-playbook playbooks/jenkins/maintenance/cleanup_image_builder_amis.yml -e "env=dev dry_run=false"
+
+# 保持世代数を指定してクリーンアップ
+ansible-playbook playbooks/jenkins/maintenance/cleanup_image_builder_amis.yml -e "env=dev retention_count=3 dry_run=false"
 ```
 
 #### Lambda固有操作
@@ -449,6 +466,26 @@ pip install boto3 botocore
 
 ```bash
 # エラー: error: no stack named 'dev' found
+# 解決方法:
+cd pulumi/jenkins-network
+pulumi stack init dev
+```
+
+#### 5. Image Builder AMIクリーンアップエラー
+
+```bash
+# エラー: AMI is currently in use
+# 解決方法: 使用中のAMIはスキップされます。EC2インスタンスを停止してから再実行
+
+# エラー: retention_count is too low
+# 解決方法: 最小保持数（デフォルト1）以上を指定
+ansible-playbook playbooks/jenkins/maintenance/cleanup_image_builder_amis.yml -e "env=dev retention_count=2"
+```
+
+#### 6. SSMパラメータエラー
+
+```bash
+# エラー: SSM parameter not found
 # 解決方法: SSM初期化から実行
 ansible-playbook playbooks/jenkins/deploy/deploy_jenkins_ssm_init.yml -e "env=dev"
 ```

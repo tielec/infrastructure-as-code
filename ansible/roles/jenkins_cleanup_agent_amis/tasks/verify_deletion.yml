@@ -1,0 +1,174 @@
+---
+# 削除後の検証タスク
+
+- name: Verify resource deletion
+  block:
+    # 削除処理が完全に反映されるまで少し待機
+    - name: Wait for deletion to propagate
+      ansible.builtin.pause:
+        seconds: 10
+        prompt: "Waiting for AWS to process deletions..."
+    # AMI削除の検証
+    - name: Verify AMI deletion
+      when: 
+        - amis_to_verify is defined
+        - amis_to_verify | length > 0
+      block:
+        - name: Check if AMIs still exist
+          ansible.builtin.include_role:
+            name: aws_cli_helper
+            tasks_from: execute
+          vars:
+            aws_command: |
+              aws ec2 describe-images 
+              --image-ids {{ item.ImageId }} 
+              --owners self 
+              --output json 2>/dev/null || echo '{"Images":[]}'
+            operation_name: "Verify deletion of AMI {{ item.Name }}"
+            parse_output: true
+          loop: "{{ amis_to_verify }}"
+          loop_control:
+            label: "{{ item.Name }} ({{ item.ImageId }})"
+          register: ami_verification_results
+
+        - name: Check AMI deletion results
+          ansible.builtin.set_fact:
+            ami_deletion_failures: >-
+              {%- set failures = [] -%}
+              {%- for result in ami_verification_results.results | default([]) -%}
+                {%- if result.aws_cli_data is defined and result.aws_cli_data.Images | default([]) | length > 0 -%}
+                  {%- set _ = failures.append(result.item) -%}
+                {%- endif -%}
+              {%- endfor -%}
+              {{ failures }}
+
+        - name: Report AMI deletion failures
+          ansible.builtin.debug:
+            msg:
+              - "⚠️  WARNING: Following AMIs were NOT deleted successfully:"
+              - "{{ item.Name }} ({{ item.ImageId }})"
+          loop: "{{ ami_deletion_failures }}"
+          when: ami_deletion_failures | length > 0
+
+    # スナップショット削除の検証
+    - name: Verify snapshot deletion
+      when: 
+        - snapshots_to_verify is defined
+        - snapshots_to_verify | length > 0
+      block:
+        - name: Check if snapshots still exist
+          ansible.builtin.include_role:
+            name: aws_cli_helper
+            tasks_from: execute
+          vars:
+            aws_command: |
+              aws ec2 describe-snapshots 
+              --snapshot-ids {{ item.snapshot_id }} 
+              --owner-ids self 
+              --output json 2>/dev/null || echo '{"Snapshots":[]}'
+            operation_name: "Verify deletion of snapshot {{ item.snapshot_id }}"
+            parse_output: true
+          loop: "{{ snapshots_to_verify[:5] }}"  # 最初の5個のみチェック（パフォーマンスのため）
+          loop_control:
+            label: "{{ item.snapshot_id }}"
+          register: snapshot_verification_results
+
+        - name: Check snapshot deletion results
+          ansible.builtin.set_fact:
+            snapshot_deletion_failures: >-
+              {%- set failures = [] -%}
+              {%- for result in snapshot_verification_results.results | default([]) -%}
+                {%- if result.aws_cli_data is defined and result.aws_cli_data.Snapshots | default([]) | length > 0 -%}
+                  {%- set _ = failures.append(result.item) -%}
+                {%- endif -%}
+              {%- endfor -%}
+              {{ failures }}
+
+        - name: Report snapshot deletion failures
+          ansible.builtin.debug:
+            msg:
+              - "⚠️  WARNING: Following snapshots were NOT deleted successfully:"
+              - "{{ item.snapshot_id }} from AMI {{ item.ami_name }}"
+          loop: "{{ snapshot_deletion_failures }}"
+          when: snapshot_deletion_failures | length > 0
+
+    # Image Builderバージョン削除の検証
+    - name: Verify Image Builder version deletion
+      when: 
+        - image_versions_to_verify is defined
+        - image_versions_to_verify | length > 0
+      block:
+        - name: Re-list image build versions to verify deletion
+          ansible.builtin.include_role:
+            name: aws_cli_helper
+            tasks_from: execute
+          vars:
+            aws_command: |
+              aws imagebuilder list-image-build-versions 
+              --image-version-arn "{{ item.image_arn }}" 
+              --output json
+            operation_name: "Re-check versions for {{ item.image_name }}"
+            parse_output: true
+          loop: "{{ image_versions_to_verify }}"
+          loop_control:
+            label: "{{ item.image_name }}"
+          register: version_verification_results
+
+        - name: Check if deleted versions still exist
+          ansible.builtin.set_fact:
+            version_deletion_failures: >-
+              {%- set failures = [] -%}
+              {%- for idx in range(image_versions_to_verify | length) -%}
+                {%- set verify_item = image_versions_to_verify[idx] -%}
+                {%- set result = version_verification_results.results[idx] -%}
+                {%- if result.aws_cli_data is defined -%}
+                  {%- set current_versions = result.aws_cli_data.imageSummaryList | default([]) -%}
+                  {%- for deleted_version in verify_item.deleted_versions | default([]) -%}
+                    {%- for current in current_versions -%}
+                      {%- if current.arn == deleted_version.arn -%}
+                        {%- set _ = failures.append({'image': verify_item.image_name, 'version': deleted_version}) -%}
+                      {%- endif -%}
+                    {%- endfor -%}
+                  {%- endfor -%}
+                {%- endif -%}
+              {%- endfor -%}
+              {{ failures }}
+
+        - name: Report Image Builder version deletion failures
+          ansible.builtin.debug:
+            msg:
+              - "⚠️  WARNING: Following Image Builder versions were NOT deleted:"
+              - "Image: {{ item.image }} - Version: {{ item.version.version | default(item.version.arn.split('/')[-1]) }}"
+          loop: "{{ version_deletion_failures }}"
+          when: version_deletion_failures | length > 0
+
+    # 削除検証サマリー
+    - name: Set verification summary
+      ansible.builtin.set_fact:
+        deletion_verification_summary:
+          ami_failures: "{{ ami_deletion_failures | default([]) | length }}"
+          snapshot_failures: "{{ snapshot_deletion_failures | default([]) | length }}"
+          version_failures: "{{ version_deletion_failures | default([]) | length }}"
+          all_successful: "{{ (ami_deletion_failures | default([]) | length == 0) and 
+                             (snapshot_deletion_failures | default([]) | length == 0) and 
+                             (version_deletion_failures | default([]) | length == 0) }}"
+
+    - name: Display verification summary
+      ansible.builtin.debug:
+        msg:
+          - "=========================================="
+          - "Deletion Verification Summary"
+          - "=========================================="
+          - "AMI deletion failures: {{ deletion_verification_summary.ami_failures }}"
+          - "Snapshot deletion failures: {{ deletion_verification_summary.snapshot_failures }}"
+          - "Image Builder version failures: {{ deletion_verification_summary.version_failures }}"
+          - "{% if deletion_verification_summary.all_successful %}✅ All deletions verified successfully{% else %}⚠️  Some deletions could not be verified{% endif %}"
+          - "=========================================="
+
+  rescue:
+    - name: Handle verification errors
+      ansible.builtin.debug:
+        msg:
+          - "WARNING: Deletion verification encountered errors"
+          - "Some resources may or may not have been deleted"
+          - "Please check AWS Console for confirmation"

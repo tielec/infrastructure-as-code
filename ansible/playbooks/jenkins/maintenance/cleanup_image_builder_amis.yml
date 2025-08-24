@@ -1,0 +1,146 @@
+---
+# Image Builder AMIクリーンアッププレイブック
+# EC2 Image Builderで作成されたAMIとその関連リソースを世代管理に基づいて削除します
+#
+# 使用方法 (ansibleディレクトリから実行):
+#   # デフォルト設定（2世代保持、ドライラン）
+#   ansible-playbook playbooks/jenkins/maintenance/cleanup_image_builder_amis.yml -e "env=dev"
+#   
+#   # 実際に削除を実行
+#   ansible-playbook playbooks/jenkins/maintenance/cleanup_image_builder_amis.yml -e "env=dev dry_run=false"
+#   
+#   # 保持世代数を変更
+#   ansible-playbook playbooks/jenkins/maintenance/cleanup_image_builder_amis.yml -e "env=dev retention_count=3"
+#   
+#   # 特定のリソースのみクリーンアップ
+#   ansible-playbook playbooks/jenkins/maintenance/cleanup_image_builder_amis.yml \
+#     -e "env=dev cleanup_targets={'amis': true, 'snapshots': true, 'image_builder_versions': false, 'image_builder_pipelines': false}"
+#
+# パラメータ:
+#   env: 環境名 (dev/staging/prod) - 必須
+#   retention_count: 保持する世代数 (デフォルト: 2)
+#   dry_run: ドライランモード (デフォルト: true)
+#   cleanup_targets: クリーンアップ対象 (デフォルト: すべて有効)
+#   generate_report: レポート生成 (デフォルト: true)
+#   verbose_logging: 詳細ログ出力 (デフォルト: true)
+
+- name: Cleanup Image Builder AMIs and Related Resources
+  hosts: localhost
+  connection: local
+  gather_facts: yes
+  vars:
+    # コマンドラインから環境名を受け取る
+    env_name: "{{ env | default('dev') }}"
+    # デフォルトでドライランモード（安全のため）
+    dry_run: "{{ dry_run | default(true) }}"
+    # 保持世代数のオーバーライド
+    retention_count: "{{ retention_count | default(2) }}"
+  
+  pre_tasks:
+    # all.yml から変数を読み込む
+    - name: Include group_vars/all.yml
+      ansible.builtin.include_vars:
+        file: "{{ inventory_dir }}/group_vars/all.yml"
+    
+    # 必要な変数を設定
+    - name: Set required variables from all.yml
+      ansible.builtin.set_fact:
+        project_name: "{{ infra.project_name }}"
+        aws_region_name: "{{ infra.aws.default_region }}"
+    
+    # 実行確認の表示
+    - name: Display cleanup configuration
+      ansible.builtin.debug:
+        msg:
+          - "=========================================="
+          - "Image Builder AMI Cleanup"
+          - "=========================================="
+          - "Environment: {{ env_name }}"
+          - "Project: {{ project_name }}"
+          - "Region: {{ aws_region_name }}"
+          - "Retention Count: {{ retention_count }}"
+          - "Dry Run Mode: {{ dry_run }}"
+          - "=========================================="
+          - "⚠️  WARNING: {{ 'This is a DRY RUN - no resources will be deleted' if dry_run else 'ACTUAL DELETION will be performed!' }}"
+          - "=========================================="
+    
+    # 非ドライランモードの確認
+    - name: Confirm deletion in non-dry-run mode
+      ansible.builtin.pause:
+        prompt: |
+          
+          ⚠️  WARNING: You are about to DELETE resources in {{ env_name }} environment!
+          
+          The following will be deleted (older than {{ retention_count }} generations):
+          - EC2 AMIs
+          - EBS Snapshots
+          - Image Builder Versions
+          - Pipeline Outputs
+          
+          Press Enter to continue or Ctrl+C to abort...
+        seconds: 10
+      when: not dry_run | bool
+  
+  roles:
+    # AWS認証設定
+    - aws_setup
+    
+    # クリーンアップ実行
+    - role: jenkins_cleanup_agent_amis
+      vars:
+        # パラメータのオーバーライド
+        dry_run: "{{ dry_run }}"
+        retention_count: "{{ retention_count }}"
+        # 必要に応じて他のパラメータもオーバーライド可能
+        verbose_logging: "{{ verbose_logging | default(true) }}"
+        generate_report: "{{ generate_report | default(true) }}"
+  
+  post_tasks:
+    # 実行結果のサマリー表示
+    - name: Display final summary
+      ansible.builtin.debug:
+        msg:
+          - "=========================================="
+          - "Cleanup Execution Complete"
+          - "=========================================="
+          - "Environment: {{ env_name }}"
+          - "Mode: {{ 'DRY RUN' if dry_run else 'ACTUAL DELETION' }}"
+          - ""
+          - "Results Summary:"
+          - "  AMIs: {{ ami_cleanup_results.total_deleted | default(0) if not dry_run else ami_cleanup_results.total_found | default(0) }} {{ 'would be deleted' if dry_run else 'deleted' }}"
+          - "  Snapshots: {{ snapshot_cleanup_results.total_deleted | default(0) if not dry_run else 'would be deleted' }}"
+          - "  Image Versions: {{ image_builder_cleanup_results.total_versions_deleted | default(0) if not dry_run else 'would be deleted' }}"
+          - ""
+          - "Report Location: {{ report_path | default('Not generated') }}"
+          - "=========================================="
+      when: ami_cleanup_results is defined or image_builder_cleanup_results is defined
+    
+    # エラーがあった場合の通知
+    - name: Display error summary if any
+      ansible.builtin.debug:
+        msg:
+          - "⚠️  ATTENTION: Some operations encountered issues"
+          - "Please review the detailed logs above for more information"
+          - "Report: {{ report_path | default('Not available') }}"
+      when: >
+        ami_cleanup_failed | default(false) or
+        image_builder_cleanup_failed | default(false) or
+        snapshot_cleanup_warning | default(false) or
+        pipeline_cleanup_warning | default(false)
+    
+    # 次のステップの案内
+    - name: Display next steps
+      ansible.builtin.debug:
+        msg:
+          - "=========================================="
+          - "Next Steps:"
+          - "=========================================="
+          - "{% if dry_run %}"
+          - "1. Review the dry run results above"
+          - "2. If satisfied, run with: -e 'dry_run=false' to perform actual deletion"
+          - "{% else %}"
+          - "1. Cleanup completed successfully"
+          - "2. Review the report at: {{ report_path | default('/tmp/') }}"
+          - "3. Consider scheduling this as a regular maintenance task"
+          - "{% endif %}"
+          - "=========================================="

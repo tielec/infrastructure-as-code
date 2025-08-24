@@ -1,0 +1,5 @@
+---
+# meta file for cleanup_image_builder_amis
+dependencies:
+  - role: aws_setup
+  - role: aws_cli_helper

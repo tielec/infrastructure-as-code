@@ -1,0 +1,69 @@
+---
+# Image Builderパイプラインの出力イメージをクリーンアップ
+
+- name: Cleanup Image Builder Pipeline Outputs
+  block:
+    # パイプライン一覧を取得
+    - name: List all Image Builder pipelines
+      ansible.builtin.include_role:
+        name: aws_cli_helper
+        tasks_from: execute
+      vars:
+        aws_command: "aws imagebuilder list-image-pipelines --output json"
+        operation_name: "List Image Builder pipelines"
+        parse_output: true
+
+    - name: Parse pipelines
+      ansible.builtin.set_fact:
+        all_pipelines: "{{ aws_cli_data.imagePipelineList | default([]) }}"
+      when: aws_cli_success | default(false)
+
+    # プロジェクトに関連するパイプラインをフィルタリング
+    - name: Filter pipelines by project
+      ansible.builtin.set_fact:
+        project_pipelines: >-
+          {%- set pipelines = [] -%}
+          {%- for pipeline in all_pipelines | default([]) -%}
+            {%- if project_name in pipeline.name -%}
+              {%- set _ = pipelines.append(pipeline) -%}
+            {%- endif -%}
+          {%- endfor -%}
+          {{ pipelines }}
+
+    - name: Display found pipelines
+      ansible.builtin.debug:
+        msg:
+          - "Found {{ project_pipelines | length }} pipeline(s) for project {{ project_name }}"
+          - "Pipelines: {{ project_pipelines | map(attribute='name') | list }}"
+      when: verbose_logging
+
+    # 各パイプラインの出力イメージを処理
+    - name: Process each pipeline's output images
+      ansible.builtin.include_tasks: process_pipeline_outputs.yml
+      vars:
+        pipeline_arn: "{{ item.arn }}"
+        pipeline_name: "{{ item.name }}"
+      loop: "{{ project_pipelines }}"
+      loop_control:
+        label: "{{ item.name }}"
+      when: project_pipelines | length > 0
+
+    # 結果の記録
+    - name: Record pipeline cleanup results
+      ansible.builtin.set_fact:
+        pipeline_cleanup_results:
+          total_pipelines: "{{ project_pipelines | length }}"
+          processed_pipelines: "{{ pipeline_output_results | default([]) | length }}"
+          dry_run: "{{ dry_run }}"
+          timestamp: "{{ ansible_date_time.iso8601 }}"
+
+  rescue:
+    - name: Handle pipeline cleanup errors
+      ansible.builtin.debug:
+        msg:
+          - "WARNING: Pipeline cleanup encountered errors"
+          - "Error: {{ ansible_failed_result.msg | default('Unknown error') }}"
+      
+    - name: Set warning flag
+      ansible.builtin.set_fact:
+        pipeline_cleanup_warning: true

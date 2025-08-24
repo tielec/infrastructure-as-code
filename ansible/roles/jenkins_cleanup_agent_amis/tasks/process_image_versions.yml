@@ -1,0 +1,63 @@
+---
+# 特定のImage Builderイメージのバージョンを処理
+
+- name: Process versions for image {{ image_name }}
+  block:
+    # イメージのビルドバージョンを取得
+    - name: List image build versions
+      ansible.builtin.include_role:
+        name: aws_cli_helper
+        tasks_from: execute
+      vars:
+        aws_command: |
+          aws imagebuilder list-image-build-versions 
+          --image-version-arn "{{ image_arn }}" 
+          --output json
+        operation_name: "List versions for {{ image_name }}"
+        parse_output: true
+
+    - name: Parse image versions
+      ansible.builtin.set_fact:
+        image_versions: "{{ aws_cli_data.imageSummaryList | default([]) }}"
+      when: aws_cli_success | default(false)
+
+    # バージョンを作成日でソート（新しい順）
+    - name: Sort versions by date
+      ansible.builtin.set_fact:
+        sorted_versions: "{{ image_versions | sort(attribute='dateCreated', reverse=True) }}"
+      when: image_versions | length > 0
+
+    # 世代管理の適用
+    - name: Apply retention policy
+      ansible.builtin.set_fact:
+        versions_to_keep: "{{ sorted_versions[:retention_count | int] | default([]) }}"
+        versions_to_delete: "{{ sorted_versions[retention_count | int:] | default([]) }}"
+      when: sorted_versions is defined
+
+    # 安全チェック：最小保持数の確認
+    - name: Ensure minimum retention
+      ansible.builtin.set_fact:
+        versions_to_delete: "{{ versions_to_delete if (sorted_versions | length - versions_to_delete | length) >= safety_checks.minimum_retention | int else [] }}"
+      when: versions_to_delete is defined
+
+    # 結果を記録
+    - name: Record version processing results
+      ansible.builtin.set_fact:
+        image_version_results: >-
+          {{ image_version_results | default([]) + [{
+            'image_name': image_name,
+            'image_arn': image_arn,
+            'total_versions': image_versions | length,
+            'to_keep': versions_to_keep | default([]),
+            'to_delete': versions_to_delete | default([])
+          }] }}
+
+    # サマリー表示
+    - name: Display version summary for image
+      ansible.builtin.debug:
+        msg:
+          - "Image: {{ image_name }}"
+          - "  Total versions: {{ image_versions | length }}"
+          - "  Versions to keep: {{ versions_to_keep | default([]) | length }}"
+          - "  Versions to delete: {{ versions_to_delete | default([]) | length }}"
+      when: verbose_logging

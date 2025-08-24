@@ -1,0 +1,143 @@
+---
+# Image Builderのイメージバージョンをクリーンアップ
+
+- name: Cleanup Image Builder Versions
+  block:
+    # Image Builderのイメージ一覧を取得
+    - name: List all Image Builder images
+      ansible.builtin.include_role:
+        name: aws_cli_helper
+        tasks_from: execute
+      vars:
+        aws_command: "aws imagebuilder list-images --owner Self --output json"
+        operation_name: "List Image Builder images"
+        parse_output: true
+
+    - name: Parse Image Builder images
+      ansible.builtin.set_fact:
+        all_builder_images: "{{ aws_cli_data.imageVersionList | default(aws_cli_data.imageList | default([])) }}"
+      when: aws_cli_success | default(false)
+
+    # パターンマッチングでフィルタリング
+    - name: Filter images by patterns
+      ansible.builtin.set_fact:
+        filtered_builder_images: >-
+          {%- set images = [] -%}
+          {%- for image in all_builder_images | default([]) -%}
+            {%- for pattern in image_builder_name_patterns -%}
+              {%- if image.name is match(pattern | regex_replace('\\*', '.*')) -%}
+                {%- set _ = images.append(image) -%}
+              {%- endif -%}
+            {%- endfor -%}
+          {%- endfor -%}
+          {{ images | unique(attribute='arn') }}
+
+    - name: Display found Image Builder images
+      ansible.builtin.debug:
+        msg:
+          - "Found {{ filtered_builder_images | length }} Image Builder image(s)"
+          - "Images: {{ filtered_builder_images | map(attribute='name') | list }}"
+      when: verbose_logging
+
+    # 各イメージのビルドバージョンを取得して世代管理
+    - name: Process each Image Builder image
+      ansible.builtin.include_tasks: process_image_versions.yml
+      vars:
+        image_arn: "{{ item.arn }}"
+        image_name: "{{ item.name }}"
+      loop: "{{ filtered_builder_images }}"
+      loop_control:
+        label: "{{ item.name }}"
+      when: filtered_builder_images | length > 0
+
+    # 削除対象バージョンの集約
+    - name: Aggregate versions to delete
+      ansible.builtin.set_fact:
+        all_versions_to_delete: >-
+          {%- set versions = [] -%}
+          {%- for image_result in image_version_results | default([]) -%}
+            {%- for version in image_result.to_delete | default([]) -%}
+              {%- set _ = versions.append(version) -%}
+            {%- endfor -%}
+          {%- endfor -%}
+          {{ versions }}
+
+    - name: Display version deletion summary
+      ansible.builtin.debug:
+        msg:
+          - "=========================================="
+          - "Image Builder Version Deletion Summary"
+          - "=========================================="
+          - "Total versions to delete: {{ all_versions_to_delete | length }}"
+          - "=========================================="
+
+    # ドライランモードの確認
+    - name: Dry run mode - skip version deletion
+      ansible.builtin.debug:
+        msg: "DRY RUN MODE - No Image Builder versions will be deleted"
+      when: dry_run | bool
+
+    # イメージバージョンの削除
+    - name: Delete Image Builder versions
+      ansible.builtin.include_role:
+        name: aws_cli_helper
+        tasks_from: execute
+      vars:
+        aws_command: "aws imagebuilder delete-image --image-build-version-arn \"{{ item.arn }}\""
+        operation_name: "Delete image version {{ item.version }}"
+        parse_output: false
+      loop: "{{ all_versions_to_delete }}"
+      loop_control:
+        label: "{{ item.name }} - {{ item.version }}"
+      when: 
+        - not dry_run | bool
+        - all_versions_to_delete | length > 0
+      register: version_deletion_results
+
+    # 削除検証の準備
+    - name: Prepare Image Builder versions for verification
+      ansible.builtin.set_fact:
+        image_versions_to_verify: >-
+          {%- set verify_items = [] -%}
+          {%- for image_result in image_version_results | default([]) -%}
+            {%- if image_result.to_delete | default([]) | length > 0 -%}
+              {%- set _ = verify_items.append({
+                'image_name': image_result.image_name,
+                'image_arn': image_result.image_arn,
+                'deleted_versions': image_result.to_delete
+              }) -%}
+            {%- endif -%}
+          {%- endfor -%}
+          {{ verify_items }}
+      when: 
+        - not dry_run | bool
+        - all_versions_to_delete | length > 0
+
+    # 削除後の検証（Image Builderバージョン）
+    - name: Verify Image Builder version deletion
+      ansible.builtin.include_tasks: verify_deletion.yml
+      when: 
+        - not dry_run | bool
+        - image_versions_to_verify | default([]) | length > 0
+
+    # 結果の記録
+    - name: Record Image Builder cleanup results
+      ansible.builtin.set_fact:
+        image_builder_cleanup_results:
+          total_images: "{{ filtered_builder_images | length }}"
+          total_versions_deleted: "{{ all_versions_to_delete | length if not dry_run else 0 }}"
+          deleted_versions: "{{ all_versions_to_delete if not dry_run else [] }}"
+          dry_run: "{{ dry_run }}"
+          timestamp: "{{ ansible_date_time.iso8601 }}"
+          verification: "{{ deletion_verification_summary | default({}) }}"
+
+  rescue:
+    - name: Handle Image Builder cleanup errors
+      ansible.builtin.debug:
+        msg:
+          - "ERROR: Image Builder cleanup failed"
+          - "Error: {{ ansible_failed_result.msg | default('Unknown error') }}"
+      
+    - name: Set error flag
+      ansible.builtin.set_fact:
+        image_builder_cleanup_failed: true
