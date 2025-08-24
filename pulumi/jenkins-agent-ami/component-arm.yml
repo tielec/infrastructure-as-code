@@ -48,9 +48,8 @@ phases:
         action: ExecuteBash
         inputs:
           commands:
-            - curl -sL https://rpm.nodesource.com/setup_18.x | bash -
+            - curl -sL https://rpm.nodesource.com/setup_20.x | bash -
             - dnf install -y nodejs
-            - npm install -g npm@latest
             - node --version
             - npm --version
 
@@ -59,10 +58,10 @@ phases:
         inputs:
           commands:
             - echo "Installing Pulumi..."
-            - curl -fsSL https://get.pulumi.com | sh -s -- --version latest
-            - cp /root/.pulumi/bin/pulumi /usr/local/bin/
+            - export PULUMI_INSTALL_DIR=/usr/local
+            - curl -fsSL https://get.pulumi.com | sh -s -- --install-dir /usr/local/bin
             - chmod 755 /usr/local/bin/pulumi
-            - pulumi version
+            - /usr/local/bin/pulumi version
 
       - name: InstallAnsible
         action: ExecuteBash
