@@ -34,7 +34,33 @@
 - name: Destroy Pulumi stack
   when: not pulumi_destroy_skipped | default(false) | bool
   block:
-    # スタックが選択されているか確認
+    # スタックを選択
+    - name: Select stack for destroy
+      ansible.builtin.shell: |
+        cd {{ pulumi_project_path }}
+        {{ pulumi_env_prefix }} && {{ pulumi_sudo_cmd }} stack select {{ pulumi_stack_name }} --non-interactive
+      register: stack_select_result
+      changed_when: false
+      failed_when: false
+      when: not ansible_check_mode
+    
+    # スタック選択に失敗した場合（スタックが存在しない）
+    - name: Handle stack selection failure
+      when: 
+        - not ansible_check_mode
+        - stack_select_result.rc != 0
+      block:
+        - name: Report stack not found
+          ansible.builtin.debug:
+            msg: |
+              Stack '{{ pulumi_stack_name }}' not found in project '{{ pulumi_project_path | basename }}'.
+              Skipping destroy operation.
+        
+        - name: Set skip flag for missing stack
+          ansible.builtin.set_fact:
+            pulumi_destroy_skipped: true
+    
+    # スタックが選択されているか確認（選択成功時のみ）
     - name: Ensure stack is selected
       ansible.builtin.shell: |
         cd {{ pulumi_project_path }}
@@ -42,15 +68,19 @@
       register: current_stack
       changed_when: false
       failed_when: current_stack.rc != 0
-      when: not ansible_check_mode
+      when: 
+        - not ansible_check_mode
+        - not pulumi_destroy_skipped | default(false) | bool
     
     - name: Start destroy operation
       ansible.builtin.debug:
         msg: |
           Destroying Pulumi stack:
           Project: {{ pulumi_project_path | basename }}
-          Stack: {{ current_stack.stdout }}
-      when: not ansible_check_mode
+          Stack: {{ current_stack.stdout | default(pulumi_stack_name) }}
+      when: 
+        - not ansible_check_mode
+        - not pulumi_destroy_skipped | default(false) | bool
     
     # リソースを削除
     - name: Destroy resources
@@ -59,7 +89,9 @@
         {{ pulumi_commands.destroy }}
       register: pulumi_destroy_result
       changed_when: "'No resources' not in pulumi_destroy_result.stdout"
-      when: not ansible_check_mode
+      when: 
+        - not ansible_check_mode
+        - not pulumi_destroy_skipped | default(false) | bool
       async: "{{ pulumi_operation_timeout | default(600) }}"
       poll: "{{ pulumi_operation_poll | default(10) }}"
     
@@ -70,6 +102,7 @@
       when: 
         - not ansible_check_mode
         - pulumi_destroy_result is defined
+        - not pulumi_destroy_skipped | default(false) | bool
         
   rescue:
     # 競合エラーの場合は再試行
@@ -138,6 +171,14 @@
     - name: Fail the playbook
       ansible.builtin.fail:
         msg: "Pulumi destroy operation failed. See error details above."
+
+# スタックがスキップされた場合の報告
+- name: Report destroy was skipped
+  ansible.builtin.debug:
+    msg: |
+      Pulumi destroy operation was skipped.
+      Stack '{{ pulumi_stack_name }}' does not exist or was already deleted.
+  when: pulumi_destroy_skipped | default(false) | bool
 
 # チェックモード
 - name: Mock destroy (check mode)
