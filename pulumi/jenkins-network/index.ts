@@ -60,11 +60,21 @@ const eigw = new aws.ec2.EgressOnlyInternetGateway(`eigw`, {
 // アベイラビリティゾーン情報の取得
 const azs = pulumi.output(aws.getAvailabilityZones({}));
 
-// VPCのIPv6 CIDRから各サブネット用のCIDRを計算
-// cidrsubnet関数: (prefix, newbits, netnum)
-// VPCは/56、サブネットは/64なので、newbits=8 (64-56=8)
+// IPv6サブネットCIDRを計算する関数
+// VPCは/56、サブネットは/64 (8ビット分のサブネット番号を追加)
+const calculateIpv6SubnetCidr = (vpcCidr: string, subnetNum: number): string => {
+    if (!vpcCidr) return "";
+    // 例: "2406:da14:2fa:d900::/56" から "2406:da14:2fa:d9" を抽出
+    const baseParts = vpcCidr.split(":");
+    const prefix = baseParts.slice(0, 3).join(":"); // "2406:da14:2fa"
+    const fourthSegment = baseParts[3].substring(0, 2); // "d9"
+    const subnetHex = subnetNum.toString(16).padStart(2, "0"); // "00", "01", "02", "03"
+    return `${prefix}:${fourthSegment}${subnetHex}::/64`;
+};
+
+// パブリックサブネットA用のIPv6 CIDR
 const publicSubnetAIpv6Cidr = vpc.ipv6CidrBlock.apply(cidr => 
-    cidr ? pulumi.interpolate`${cidr.split("::")[0]}00::/64` : undefined
+    cidr ? calculateIpv6SubnetCidr(cidr, 0) : undefined
 );
 
 // パブリックサブネットA（IPv6対応）
@@ -85,7 +95,7 @@ const publicSubnetA = new aws.ec2.Subnet(`public-subnet-a`, {
 
 // パブリックサブネットB用のIPv6 CIDR
 const publicSubnetBIpv6Cidr = vpc.ipv6CidrBlock.apply(cidr => 
-    cidr ? pulumi.interpolate`${cidr.split("::")[0]}02::/64` : undefined
+    cidr ? calculateIpv6SubnetCidr(cidr, 2) : undefined
 );
 
 // パブリックサブネットB（IPv6対応）
@@ -106,7 +116,7 @@ const publicSubnetB = new aws.ec2.Subnet(`public-subnet-b`, {
 
 // プライベートサブネットA用のIPv6 CIDR
 const privateSubnetAIpv6Cidr = vpc.ipv6CidrBlock.apply(cidr => 
-    cidr ? pulumi.interpolate`${cidr.split("::")[0]}01::/64` : undefined
+    cidr ? calculateIpv6SubnetCidr(cidr, 1) : undefined
 );
 
 // プライベートサブネットA（IPv6対応）
@@ -126,7 +136,7 @@ const privateSubnetA = new aws.ec2.Subnet(`private-subnet-a`, {
 
 // プライベートサブネットB用のIPv6 CIDR
 const privateSubnetBIpv6Cidr = vpc.ipv6CidrBlock.apply(cidr => 
-    cidr ? pulumi.interpolate`${cidr.split("::")[0]}03::/64` : undefined
+    cidr ? calculateIpv6SubnetCidr(cidr, 3) : undefined
 );
 
 // プライベートサブネットB（IPv6対応）
