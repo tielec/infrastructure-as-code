@@ -10,59 +10,9 @@
   ansible.builtin.include_tasks: s3_backend_login.yml
   when: pulumi_backend_type == 's3'
 
-# スタック存在確認（skip_stack_checkがfalseの場合のみ）
-- name: Check if stack exists before destroy
-  ansible.builtin.include_tasks: check_stack_exists.yml
-  vars:
-    resolved_stack_name: "{{ stack_name | default(env_name) | default('dev') }}"
-  when: not skip_stack_check | default(false) | bool
-
-# スタックが存在しない場合の処理
-- name: Skip destroy if stack does not exist
-  block:
-    - name: Report stack does not exist
-      ansible.builtin.debug:
-        msg: |
-          Stack '{{ stack_name | default(env_name) | default("dev") }}' does not exist in project '{{ pulumi_project_path | basename }}'.
-          Skipping destroy operation.
-    
-    - name: Set skip flag
-      ansible.builtin.set_fact:
-        pulumi_destroy_skipped: true
-  when: 
-    - not skip_stack_check | default(false) | bool
-    - not stack_exists | default(true) | bool
-
 - name: Destroy Pulumi stack
-  when: not pulumi_destroy_skipped | default(false) | bool
   block:
-    # スタックを選択
-    - name: Select stack for destroy
-      ansible.builtin.shell: |
-        cd {{ pulumi_project_path }}
-        {{ pulumi_env_prefix }} && {{ pulumi_sudo_cmd }} stack select {{ stack_name | default(env_name) | default('dev') }} --non-interactive
-      register: stack_select_result
-      changed_when: false
-      failed_when: false
-      when: not ansible_check_mode
-    
-    # スタック選択に失敗した場合（スタックが存在しない）
-    - name: Handle stack selection failure
-      when: 
-        - not ansible_check_mode
-        - stack_select_result.rc != 0
-      block:
-        - name: Report stack not found
-          ansible.builtin.debug:
-            msg: |
-              Stack '{{ stack_name | default(env_name) | default('dev') }}' not found in project '{{ pulumi_project_path | basename }}'.
-              Skipping destroy operation.
-        
-        - name: Set skip flag for missing stack
-          ansible.builtin.set_fact:
-            pulumi_destroy_skipped: true
-    
-    # スタックが選択されているか確認（選択成功時のみ）
+    # スタックが選択されているか確認
     - name: Ensure stack is selected
       ansible.builtin.shell: |
         cd {{ pulumi_project_path }}
@@ -70,19 +20,15 @@
       register: current_stack
       changed_when: false
       failed_when: current_stack.rc != 0
-      when: 
-        - not ansible_check_mode
-        - not pulumi_destroy_skipped | default(false) | bool
+      when: not ansible_check_mode
     
     - name: Start destroy operation
       ansible.builtin.debug:
         msg: |
           Destroying Pulumi stack:
           Project: {{ pulumi_project_path | basename }}
-          Stack: {{ current_stack.stdout | default(stack_name | default(env_name) | default('dev')) }}
-      when: 
-        - not ansible_check_mode
-        - not pulumi_destroy_skipped | default(false) | bool
+          Stack: {{ current_stack.stdout }}
+      when: not ansible_check_mode
     
     # リソースを削除
     - name: Destroy resources
@@ -91,9 +37,7 @@
         {{ pulumi_commands.destroy }}
       register: pulumi_destroy_result
       changed_when: "'No resources' not in pulumi_destroy_result.stdout"
-      when: 
-        - not ansible_check_mode
-        - not pulumi_destroy_skipped | default(false) | bool
+      when: not ansible_check_mode
       async: "{{ pulumi_operation_timeout | default(600) }}"
       poll: "{{ pulumi_operation_poll | default(10) }}"
     
@@ -104,7 +48,6 @@
       when: 
         - not ansible_check_mode
         - pulumi_destroy_result is defined
-        - not pulumi_destroy_skipped | default(false) | bool
         
   rescue:
     # 競合エラーの場合は再試行
@@ -173,14 +116,6 @@
     - name: Fail the playbook
       ansible.builtin.fail:
         msg: "Pulumi destroy operation failed. See error details above."
-
-# スタックがスキップされた場合の報告
-- name: Report destroy was skipped
-  ansible.builtin.debug:
-    msg: |
-      Pulumi destroy operation was skipped.
-      Stack '{{ pulumi_stack_name }}' does not exist or was already deleted.
-  when: pulumi_destroy_skipped | default(false) | bool
 
 # チェックモード
 - name: Mock destroy (check mode)
