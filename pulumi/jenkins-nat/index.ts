@@ -285,12 +285,12 @@ sudo nft flush ruleset
 # 基本的なnftablesルールの設定
 echo "Setting up nftables rules..."
 sudo nft add table ip nat
-sudo nft add chain ip nat prerouting { type nat hook prerouting priority -100 \\; }
-sudo nft add chain ip nat postrouting { type nat hook postrouting priority 100 \\; }
+sudo nft add chain ip nat prerouting '{ type nat hook prerouting priority -100; }'
+sudo nft add chain ip nat postrouting '{ type nat hook postrouting priority 100; }'
 
 # フィルターテーブルの追加（セキュリティ用）
 sudo nft add table ip filter
-sudo nft add chain ip filter forward { type filter hook forward priority 0 \\; }
+sudo nft add chain ip filter forward '{ type filter hook forward priority 0; }'
 
 # VPC CIDRの取得
 VPC_CIDR="${vpcCidr}"
@@ -342,12 +342,12 @@ if sudo nft list ruleset | grep -q "reject with icmp type host-prohibited"; then
     # rejectルールを含まないルールセットを再作成
     sudo nft flush ruleset
     sudo nft add table ip nat
-    sudo nft add chain ip nat prerouting { type nat hook prerouting priority -100 \; }
-    sudo nft add chain ip nat postrouting { type nat hook postrouting priority 100 \; }
+    sudo nft add chain ip nat prerouting '{ type nat hook prerouting priority -100; }'
+    sudo nft add chain ip nat postrouting '{ type nat hook postrouting priority 100; }'
     sudo nft add rule ip nat postrouting ip saddr $VPC_CIDR oifname "$MAIN_ENI" masquerade
     
     sudo nft add table ip filter
-    sudo nft add chain ip filter forward { type filter hook forward priority 0 \; }
+    sudo nft add chain ip filter forward '{ type filter hook forward priority 0; }'
     sudo nft add rule ip filter forward ip saddr $VPC_CIDR accept
     sudo nft add rule ip filter forward ip daddr $VPC_CIDR ct state related,established accept
     
@@ -368,7 +368,7 @@ if sudo nft list chain ip filter FORWARD 2>/dev/null | grep -q "reject"; then
     sudo nft delete chain ip filter forward 2>/dev/null || true
     
     # クリーンなforwardチェーンを作成
-    sudo nft add chain ip filter forward { type filter hook forward priority 0 \; }
+    sudo nft add chain ip filter forward '{ type filter hook forward priority 0; }'
     sudo nft add rule ip filter forward ip saddr $VPC_CIDR accept
     sudo nft add rule ip filter forward ip daddr $VPC_CIDR ct state related,established accept
 fi
