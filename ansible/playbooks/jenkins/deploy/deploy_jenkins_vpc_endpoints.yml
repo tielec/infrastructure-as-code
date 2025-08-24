@@ -6,8 +6,7 @@
   hosts: localhost
   gather_facts: yes
   vars:
-    env_name: "{{ env | default('dev') }}"
-    deploy_env: "{{ env_name }}"
+    deploy_env: "{{ env | default('dev') }}"
     
   tasks:
     - name: Deploy VPC endpoints using role
@@ -15,4 +14,4 @@
         name: jenkins_vpc_endpoints
       vars:
         operation: deploy
-        env_name: "{{ env_name }}"
+        deploy_env: "{{ deploy_env }}"

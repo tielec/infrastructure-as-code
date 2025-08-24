@@ -5,8 +5,7 @@
   hosts: localhost
   gather_facts: yes
   vars:
-    env_name: "{{ env | default('dev') }}"
-    deploy_env: "{{ env_name }}"
+    deploy_env: "{{ env | default('dev') }}"
     confirm: "{{ confirm | default(false) }}"
     
   tasks:
@@ -23,6 +22,6 @@
         name: jenkins_vpc_endpoints
       vars:
         operation: destroy
-        env_name: "{{ env_name }}"
+        deploy_env: "{{ deploy_env }}"
         force_destroy: "{{ confirm | bool }}"
       when: confirm | bool
