@@ -20,7 +20,7 @@
     
     - name: Remove VPC endpoints using role
       ansible.builtin.include_role:
-        name: vpc_endpoints
+        name: jenkins_vpc_endpoints
       vars:
         operation: destroy
         env_name: "{{ env_name }}"
