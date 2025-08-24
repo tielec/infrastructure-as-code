@@ -1,3 +1,0 @@
-name: jenkins-vpc-endpoints
-runtime: nodejs
-description: VPC endpoints for Jenkins infrastructure to enable private connectivity to AWS services

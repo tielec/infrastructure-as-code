@@ -50,17 +50,14 @@
   tags:
     - security
 
-# VPCエンドポイントのデプロイ
-# プライベートサブネットからAWSサービス（SSM、EC2、S3）への接続を提供
-- import_playbook: deploy/deploy_jenkins_vpc_endpoints.yml
+# NATインスタンスのデプロイ
+# IPv4アウトバウンド通信用（IPv6とのハイブリッド構成）
+- import_playbook: deploy/deploy_jenkins_nat.yml
   vars:
     env: "{{ env | default('dev') }}"
-  when: run_vpc_endpoints | default(true) | bool
+  when: run_nat | default(true) | bool
   tags:
-    - vpc-endpoints
-
-# NATインフラは削除済み
-# IPv6デュアルスタック環境ではEgress-only Internet Gatewayを使用するため、NATは不要
+    - nat
 
 # ストレージ（EFS）のデプロイ
 - import_playbook: deploy/deploy_jenkins_storage.yml
