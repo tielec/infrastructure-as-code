@@ -10,7 +10,29 @@
   ansible.builtin.include_tasks: s3_backend_login.yml
   when: pulumi_backend_type == 's3'
 
+# スタック存在確認（skip_stack_checkがfalseの場合のみ）
+- name: Check if stack exists before destroy
+  ansible.builtin.include_tasks: check_stack.yml
+  when: not skip_stack_check | default(false) | bool
+
+# スタックが存在しない場合の処理
+- name: Skip destroy if stack does not exist
+  block:
+    - name: Report stack does not exist
+      ansible.builtin.debug:
+        msg: |
+          Stack '{{ pulumi_stack_name }}' does not exist in project '{{ pulumi_project_path | basename }}'.
+          Skipping destroy operation.
+    
+    - name: Set skip flag
+      ansible.builtin.set_fact:
+        pulumi_destroy_skipped: true
+  when: 
+    - not skip_stack_check | default(false) | bool
+    - not pulumi_stack_exists | default(true) | bool
+
 - name: Destroy Pulumi stack
+  when: not pulumi_destroy_skipped | default(false) | bool
   block:
     # スタックが選択されているか確認
     - name: Ensure stack is selected
