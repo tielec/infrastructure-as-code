@@ -237,8 +237,8 @@
           - Launch Template ID: {{ launch_template_id }}
           - Agent Role ARN: {{ agent_role_arn }}
           - Agent Keypair Name: {{ agent_keypair_name }}
-          - Min Capacity: {{ ssm_min_capacity }}
-          - Max Capacity: {{ ssm_max_capacity }}
+          - Min Capacity: {{ ssm_agent_min_capacity }}
+          - Max Capacity: {{ ssm_agent_max_capacity }}
   
   rescue:
     - name: Set agent deployment status on failure
