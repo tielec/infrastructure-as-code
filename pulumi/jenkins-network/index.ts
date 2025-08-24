@@ -60,10 +60,18 @@ const eigw = new aws.ec2.EgressOnlyInternetGateway(`eigw`, {
 // アベイラビリティゾーン情報の取得
 const azs = pulumi.output(aws.getAvailabilityZones({}));
 
+// VPCのIPv6 CIDRから各サブネット用のCIDRを計算
+// cidrsubnet関数: (prefix, newbits, netnum)
+// VPCは/56、サブネットは/64なので、newbits=8 (64-56=8)
+const publicSubnetAIpv6Cidr = vpc.ipv6CidrBlock.apply(cidr => 
+    cidr ? pulumi.interpolate`${cidr.split("::")[0]}00::/64` : undefined
+);
+
 // パブリックサブネットA（IPv6対応）
 const publicSubnetA = new aws.ec2.Subnet(`public-subnet-a`, {
     vpcId: vpc.id,
     cidrBlock: "10.0.0.0/24",
+    ipv6CidrBlock: publicSubnetAIpv6Cidr,
     availabilityZone: azs.names[0],
     mapPublicIpOnLaunch: true,
     assignIpv6AddressOnCreation: true,  // IPv6アドレスを自動割り当て
@@ -75,10 +83,16 @@ const publicSubnetA = new aws.ec2.Subnet(`public-subnet-a`, {
     },
 });
 
+// パブリックサブネットB用のIPv6 CIDR
+const publicSubnetBIpv6Cidr = vpc.ipv6CidrBlock.apply(cidr => 
+    cidr ? pulumi.interpolate`${cidr.split("::")[0]}02::/64` : undefined
+);
+
 // パブリックサブネットB（IPv6対応）
 const publicSubnetB = new aws.ec2.Subnet(`public-subnet-b`, {
     vpcId: vpc.id,
     cidrBlock: "10.0.2.0/24",
+    ipv6CidrBlock: publicSubnetBIpv6Cidr,
     availabilityZone: azs.names[1],
     mapPublicIpOnLaunch: true,
     assignIpv6AddressOnCreation: true,
@@ -90,10 +104,16 @@ const publicSubnetB = new aws.ec2.Subnet(`public-subnet-b`, {
     },
 });
 
+// プライベートサブネットA用のIPv6 CIDR
+const privateSubnetAIpv6Cidr = vpc.ipv6CidrBlock.apply(cidr => 
+    cidr ? pulumi.interpolate`${cidr.split("::")[0]}01::/64` : undefined
+);
+
 // プライベートサブネットA（IPv6対応）
 const privateSubnetA = new aws.ec2.Subnet(`private-subnet-a`, {
     vpcId: vpc.id,
     cidrBlock: "10.0.1.0/24",
+    ipv6CidrBlock: privateSubnetAIpv6Cidr,
     availabilityZone: azs.names[0],
     assignIpv6AddressOnCreation: true,  // プライベートサブネットでもIPv6を有効化
     tags: {
@@ -104,10 +124,16 @@ const privateSubnetA = new aws.ec2.Subnet(`private-subnet-a`, {
     },
 });
 
+// プライベートサブネットB用のIPv6 CIDR
+const privateSubnetBIpv6Cidr = vpc.ipv6CidrBlock.apply(cidr => 
+    cidr ? pulumi.interpolate`${cidr.split("::")[0]}03::/64` : undefined
+);
+
 // プライベートサブネットB（IPv6対応）
 const privateSubnetB = new aws.ec2.Subnet(`private-subnet-b`, {
     vpcId: vpc.id,
     cidrBlock: "10.0.3.0/24",
+    ipv6CidrBlock: privateSubnetBIpv6Cidr,
     availabilityZone: azs.names[1],
     assignIpv6AddressOnCreation: true,
     tags: {
