@@ -56,13 +56,13 @@ const vpcCidrParam = new aws.ssm.Parameter("vpc-cidr", {
     },
 });
 
-// NAT設定
-const natHighAvailabilityParam = new aws.ssm.Parameter("nat-high-availability", {
-    name: `${ssmPrefix}/config/nat-high-availability`,
+// IPv6設定
+const ipv6EnabledParam = new aws.ssm.Parameter("ipv6-enabled", {
+    name: `${ssmPrefix}/config/ipv6-enabled`,
     type: "String",
-    value: "false",  // dev環境ではfalse、prodではtrueに設定
+    value: "true",
     overwrite: true,
-    description: "Use NAT Gateway (true) or NAT Instance (false)",
+    description: "Enable IPv6 dual-stack configuration",
     tags: {
         Environment: environment,
         ManagedBy: "pulumi",
@@ -70,16 +70,45 @@ const natHighAvailabilityParam = new aws.ssm.Parameter("nat-high-availability", 
     },
 });
 
-const natInstanceTypeParam = new aws.ssm.Parameter("nat-instance-type", {
-    name: `${ssmPrefix}/config/nat-instance-type`,
+const useEgressOnlyGatewayParam = new aws.ssm.Parameter("use-egress-only-gateway", {
+    name: `${ssmPrefix}/config/use-egress-only-gateway`,
     type: "String",
-    value: "t4g.nano",
+    value: "true",
     overwrite: true,
-    description: "NAT instance type (when not using NAT Gateway)",
+    description: "Use Egress-only Internet Gateway for IPv6 outbound traffic",
     tags: {
         Environment: environment,
         ManagedBy: "pulumi",
         Component: "config",
+    },
+});
+
+// NAT設定（IPv6環境では使用しないが、互換性のため保持）
+const natHighAvailabilityParam = new aws.ssm.Parameter("nat-high-availability", {
+    name: `${ssmPrefix}/config/nat-high-availability`,
+    type: "String",
+    value: "disabled",  // IPv6環境ではNATを無効化
+    overwrite: true,
+    description: "NAT is disabled in IPv6 environment",
+    tags: {
+        Environment: environment,
+        ManagedBy: "pulumi",
+        Component: "config",
+        IPv6Environment: "true",
+    },
+});
+
+const natInstanceTypeParam = new aws.ssm.Parameter("nat-instance-type", {
+    name: `${ssmPrefix}/config/nat-instance-type`,
+    type: "String",
+    value: "none",  // IPv6環境では不要
+    overwrite: true,
+    description: "NAT instance type (disabled in IPv6 environment)",
+    tags: {
+        Environment: environment,
+        ManagedBy: "pulumi",
+        Component: "config",
+        IPv6Environment: "true",
     },
 });
 

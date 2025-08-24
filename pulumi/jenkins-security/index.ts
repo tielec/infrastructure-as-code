@@ -1,8 +1,8 @@
 /**
  * pulumi/security/index.ts
  * 
- * Jenkinsインフラのセキュリティグループを構築するPulumiスクリプト
- * ALB、Jenkinsコントローラー、エージェント、EFSのセキュリティグループを作成
+ * JenkinsインフラのセキュリティグループとNACLを構築するPulumiスクリプト
+ * IPv6デュアルスタック対応のセキュリティルールを含む
  */
 import * as pulumi from "@pulumi/pulumi";
 import * as aws from "@pulumi/aws";
@@ -18,10 +18,26 @@ const projectNameParam = aws.ssm.getParameter({
 const vpcIdParam = aws.ssm.getParameter({
     name: `${ssmPrefix}/network/vpc-id`,
 });
+const vpcCidrParam = aws.ssm.getParameter({
+    name: `${ssmPrefix}/network/vpc-cidr`,
+});
+const vpcIpv6CidrParam = aws.ssm.getParameter({
+    name: `${ssmPrefix}/network/vpc-ipv6-cidr`,
+});
+const privateSubnetAIdParam = aws.ssm.getParameter({
+    name: `${ssmPrefix}/network/private-subnet-a-id`,
+});
+const privateSubnetBIdParam = aws.ssm.getParameter({
+    name: `${ssmPrefix}/network/private-subnet-b-id`,
+});
 
 // 設定値を変数に設定
 const projectName = pulumi.output(projectNameParam).apply(p => p.value);
 const vpcId = pulumi.output(vpcIdParam).apply(p => p.value);
+const vpcCidr = pulumi.output(vpcCidrParam).apply(p => p.value);
+const vpcIpv6Cidr = pulumi.output(vpcIpv6CidrParam).apply(p => p.value);
+const privateSubnetAId = pulumi.output(privateSubnetAIdParam).apply(p => p.value);
+const privateSubnetBId = pulumi.output(privateSubnetBIdParam).apply(p => p.value);
 
 // ALB用セキュリティグループ
 const albSecurityGroup = new aws.ec2.SecurityGroup(`alb-sg`, {
@@ -44,6 +60,14 @@ const albSecurityGroup = new aws.ec2.SecurityGroup(`alb-sg`, {
             cidrBlocks: ["0.0.0.0/0"],
             description: "HTTPS access",
         },
+        // HTTPS (IPv6)
+        {
+            protocol: "tcp",
+            fromPort: 443,
+            toPort: 443,
+            ipv6CidrBlocks: ["::/0"],
+            description: "HTTPS access (IPv6)",
+        },
         // Jenkins HTTP
         {
             protocol: "tcp",
@@ -53,13 +77,22 @@ const albSecurityGroup = new aws.ec2.SecurityGroup(`alb-sg`, {
             description: "Jenkins HTTP access",
         },
     ],
-    egress: [{
-        protocol: "-1",
-        fromPort: 0,
-        toPort: 0,
-        cidrBlocks: ["0.0.0.0/0"],
-        description: "Allow all outbound traffic",
-    }],
+    egress: [
+        {
+            protocol: "-1",
+            fromPort: 0,
+            toPort: 0,
+            cidrBlocks: ["0.0.0.0/0"],
+            description: "Allow all outbound traffic (IPv4)",
+        },
+        {
+            protocol: "-1",
+            fromPort: 0,
+            toPort: 0,
+            ipv6CidrBlocks: ["::/0"],
+            description: "Allow all outbound traffic (IPv6)",
+        },
+    ],
     tags: {
         Name: pulumi.interpolate`${projectName}-alb-sg-${environment}`,
         Environment: environment,
@@ -98,13 +131,22 @@ const jenkinsSecurityGroup = new aws.ec2.SecurityGroup(`jenkins-sg`, {
         },
     ],
     // すべてのアウトバウンドトラフィックを許可
-    egress: [{
-        protocol: "-1",
-        fromPort: 0,
-        toPort: 0,
-        cidrBlocks: ["0.0.0.0/0"],
-        description: "Allow all outbound traffic",
-    }],
+    egress: [
+        {
+            protocol: "-1",
+            fromPort: 0,
+            toPort: 0,
+            cidrBlocks: ["0.0.0.0/0"],
+            description: "Allow all outbound traffic (IPv4)",
+        },
+        {
+            protocol: "-1",
+            fromPort: 0,
+            toPort: 0,
+            ipv6CidrBlocks: ["::/0"],
+            description: "Allow all outbound traffic (IPv6)",
+        },
+    ],
     tags: {
         Name: pulumi.interpolate`${projectName}-jenkins-master-sg-${environment}`,
         Environment: environment,
@@ -135,13 +177,22 @@ const jenkinsAgentSecurityGroup = new aws.ec2.SecurityGroup(`jenkins-agent-sg`, 
         },
     ],
     // すべてのアウトバウンドトラフィックを許可
-    egress: [{
-        protocol: "-1",
-        fromPort: 0,
-        toPort: 0,
-        cidrBlocks: ["0.0.0.0/0"],
-        description: "Allow all outbound traffic",
-    }],
+    egress: [
+        {
+            protocol: "-1",
+            fromPort: 0,
+            toPort: 0,
+            cidrBlocks: ["0.0.0.0/0"],
+            description: "Allow all outbound traffic (IPv4)",
+        },
+        {
+            protocol: "-1",
+            fromPort: 0,
+            toPort: 0,
+            ipv6CidrBlocks: ["::/0"],
+            description: "Allow all outbound traffic (IPv6)",
+        },
+    ],
     tags: {
         Name: pulumi.interpolate`${projectName}-jenkins-agent-sg-${environment}`,
         Environment: environment,
@@ -163,13 +214,22 @@ const efsSecurityGroup = new aws.ec2.SecurityGroup(`efs-sg`, {
             description: "NFS access from Jenkins instances and agents",
         },
     ],
-    egress: [{
-        protocol: "-1",
-        fromPort: 0,
-        toPort: 0,
-        cidrBlocks: ["0.0.0.0/0"],
-        description: "Allow all outbound traffic",
-    }],
+    egress: [
+        {
+            protocol: "-1",
+            fromPort: 0,
+            toPort: 0,
+            cidrBlocks: ["0.0.0.0/0"],
+            description: "Allow all outbound traffic (IPv4)",
+        },
+        {
+            protocol: "-1",
+            fromPort: 0,
+            toPort: 0,
+            ipv6CidrBlocks: ["::/0"],
+            description: "Allow all outbound traffic (IPv6)",
+        },
+    ],
     tags: {
         Name: pulumi.interpolate`${projectName}-efs-sg-${environment}`,
         Environment: environment,
@@ -177,10 +237,10 @@ const efsSecurityGroup = new aws.ec2.SecurityGroup(`efs-sg`, {
     },
 });
 
-// NAT Instance用セキュリティグループ
+// NAT Instance用セキュリティグループ（IPv6環境では不要だが互換性のため残す）
 const natInstanceSecurityGroup = new aws.ec2.SecurityGroup(`nat-instance-sg`, {
     vpcId: vpcId,
-    description: "Security group for NAT instance",
+    description: "Security group for NAT instance (deprecated in IPv6 environment)",
     ingress: [
         // VPC内からの全トラフィックを許可
         {
@@ -199,18 +259,161 @@ const natInstanceSecurityGroup = new aws.ec2.SecurityGroup(`nat-instance-sg`, {
             description: "SSH access for management",
         },
     ],
-    egress: [{
-        protocol: "-1",
-        fromPort: 0,
-        toPort: 0,
-        cidrBlocks: ["0.0.0.0/0"],
-        description: "Allow all outbound traffic",
-    }],
+    egress: [
+        {
+            protocol: "-1",
+            fromPort: 0,
+            toPort: 0,
+            cidrBlocks: ["0.0.0.0/0"],
+            description: "Allow all outbound traffic (IPv4)",
+        },
+        {
+            protocol: "-1",
+            fromPort: 0,
+            toPort: 0,
+            ipv6CidrBlocks: ["::/0"],
+            description: "Allow all outbound traffic (IPv6)",
+        },
+    ],
     tags: {
         Name: pulumi.interpolate`${projectName}-nat-instance-sg-${environment}`,
         Environment: environment,
         ManagedBy: "pulumi",
     },
+});
+
+// プライベートサブネット用NACL（制限的なアクセス制御）
+const privateNacl = new aws.ec2.NetworkAcl(`private-nacl`, {
+    vpcId: vpcId,
+    tags: {
+        Name: pulumi.interpolate`${projectName}-private-nacl-${environment}`,
+        Environment: environment,
+        ManagedBy: "pulumi",
+    },
+});
+
+// プライベートNACLインバウンドルール
+// HTTPSレスポンス（エフェメラルポート）
+new aws.ec2.NetworkAclRule(`private-nacl-inbound-https-response`, {
+    networkAclId: privateNacl.id,
+    ruleNumber: 100,
+    protocol: "tcp",
+    ruleAction: "allow",
+    fromPort: 1024,
+    toPort: 65535,
+    cidrBlock: "0.0.0.0/0",
+});
+
+new aws.ec2.NetworkAclRule(`private-nacl-inbound-https-response-ipv6`, {
+    networkAclId: privateNacl.id,
+    ruleNumber: 101,
+    protocol: "tcp",
+    ruleAction: "allow",
+    fromPort: 1024,
+    toPort: 65535,
+    ipv6CidrBlock: "::/0",
+});
+
+// VPC内からの通信を許可
+new aws.ec2.NetworkAclRule(`private-nacl-inbound-vpc`, {
+    networkAclId: privateNacl.id,
+    ruleNumber: 200,
+    protocol: "-1",
+    ruleAction: "allow",
+    fromPort: 0,
+    toPort: 0,
+    cidrBlock: vpcCidr,
+});
+
+new aws.ec2.NetworkAclRule(`private-nacl-inbound-vpc-ipv6`, {
+    networkAclId: privateNacl.id,
+    ruleNumber: 201,
+    protocol: "-1",
+    ruleAction: "allow",
+    fromPort: 0,
+    toPort: 0,
+    ipv6CidrBlock: vpcIpv6Cidr,
+});
+
+// プライベートNACLアウトバウンドルール
+// HTTPS（必要なアウトバウンド通信）
+new aws.ec2.NetworkAclRule(`private-nacl-outbound-https`, {
+    networkAclId: privateNacl.id,
+    ruleNumber: 100,
+    protocol: "tcp",
+    ruleAction: "allow",
+    fromPort: 443,
+    toPort: 443,
+    cidrBlock: "0.0.0.0/0",
+    egress: true,
+});
+
+new aws.ec2.NetworkAclRule(`private-nacl-outbound-https-ipv6`, {
+    networkAclId: privateNacl.id,
+    ruleNumber: 101,
+    protocol: "tcp",
+    ruleAction: "allow",
+    fromPort: 443,
+    toPort: 443,
+    ipv6CidrBlock: "::/0",
+    egress: true,
+});
+
+// HTTP（パッケージリポジトリ等のため）
+new aws.ec2.NetworkAclRule(`private-nacl-outbound-http`, {
+    networkAclId: privateNacl.id,
+    ruleNumber: 110,
+    protocol: "tcp",
+    ruleAction: "allow",
+    fromPort: 80,
+    toPort: 80,
+    cidrBlock: "0.0.0.0/0",
+    egress: true,
+});
+
+new aws.ec2.NetworkAclRule(`private-nacl-outbound-http-ipv6`, {
+    networkAclId: privateNacl.id,
+    ruleNumber: 111,
+    protocol: "tcp",
+    ruleAction: "allow",
+    fromPort: 80,
+    toPort: 80,
+    ipv6CidrBlock: "::/0",
+    egress: true,
+});
+
+// VPC内への通信を許可
+new aws.ec2.NetworkAclRule(`private-nacl-outbound-vpc`, {
+    networkAclId: privateNacl.id,
+    ruleNumber: 200,
+    protocol: "-1",
+    ruleAction: "allow",
+    fromPort: 0,
+    toPort: 0,
+    cidrBlock: vpcCidr,
+    egress: true,
+});
+
+new aws.ec2.NetworkAclRule(`private-nacl-outbound-vpc-ipv6`, {
+    networkAclId: privateNacl.id,
+    ruleNumber: 201,
+    protocol: "-1",
+    ruleAction: "allow",
+    fromPort: 0,
+    toPort: 0,
+    ipv6CidrBlock: vpcIpv6Cidr,
+    egress: true,
+});
+
+// NACLをプライベートサブネットに関連付け
+new aws.ec2.NetworkAclAssociation(`private-nacl-assoc-a`, {
+    networkAclId: privateNacl.id,
+    subnetId: privateSubnetAId,
+});
+
+new aws.ec2.NetworkAclAssociation(`private-nacl-assoc-b`, {
+    networkAclId: privateNacl.id,
+    subnetId: privateSubnetBId,
 });
 
 // SSMパラメータストアへの保存
@@ -279,9 +482,23 @@ const natInstanceSecurityGroupIdParam = new aws.ssm.Parameter(`nat-instance-sg-i
     },
 });
 
+// プライベートNACL ID
+const privateNaclIdParam = new aws.ssm.Parameter(`private-nacl-id`, {
+    name: `${ssmPrefix}/security/private-nacl-id`,
+    type: "String",
+    value: privateNacl.id,
+    overwrite: true,
+    tags: {
+        Environment: environment,
+        ManagedBy: "pulumi",
+        Component: "security",
+    },
+});
+
 // エクスポート（既存のスタック参照用に残す）
 export const albSecurityGroupId = albSecurityGroup.id;
 export const jenkinsSecurityGroupId = jenkinsSecurityGroup.id;
 export const jenkinsAgentSecurityGroupId = jenkinsAgentSecurityGroup.id;
 export const efsSecurityGroupId = efsSecurityGroup.id;
 export const natInstanceSecurityGroupId = natInstanceSecurityGroup.id;
+export const privateNaclId = privateNacl.id;
