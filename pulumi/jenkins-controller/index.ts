@@ -397,17 +397,34 @@ const jenkinsInstanceProfile = new aws.iam.InstanceProfile(
     }
 );
 
-// ユーザーデータスクリプト（SSMエージェント起動のみ）
+// ユーザーデータスクリプト（SSMエージェント起動とIPv6設定）
 // ARM64アーキテクチャ対応の注意点を追加
 const userDataScript = pulumi.interpolate`#!/bin/bash
-# Jenkins Controller User Data Script - SSM Setup Only
-# ARM64 (t4g) instance compatible
+# Jenkins Controller User Data Script - SSM Setup and IPv6 Configuration
+# ARM64 (t4g) instance compatible with IPv6 dual-stack
 set -e
 exec > >(tee /var/log/user-data.log|logger -t user-data -s 2>/dev/console) 2>&1
 
 # システムの更新とSSMエージェントのインストール
 dnf update -y
 dnf install -y amazon-ssm-agent aws-cli jq git
+
+# IPv6設定の有効化
+echo "Configuring IPv6..."
+# DHCPv6クライアントの設定
+cat >> /etc/sysconfig/network << EOF
+NETWORKING_IPV6=yes
+IPV6_DEFAULTDEV=eth0
+EOF
+
+# IPv6 の確認と記録
+IPV6_ADDR=$(ip -6 addr show eth0 | grep "inet6" | grep -v "fe80" | awk '{print $2}' | cut -d'/' -f1 | head -n1)
+if [ -n "$IPV6_ADDR" ]; then
+    echo "IPv6 Address: $IPV6_ADDR"
+    echo "$IPV6_ADDR" > /var/lib/jenkins/ipv6_address
+else
+    echo "No IPv6 address assigned yet"
+fi
 
 # SSMエージェントの起動
 systemctl enable amazon-ssm-agent
@@ -447,7 +464,7 @@ git checkout ${gitBranch}
 echo "Note: When installing Jenkins, ensure to use ARM64-compatible Java runtime" >> /var/log/user-data.log
 `;
 
-// Jenkinsコントローラーインスタンス
+// Jenkinsコントローラーインスタンス（IPv6対応）
 const jenkinsInstance = new aws.ec2.Instance(`jenkins-controller`, {
     ami: ami.then(ami => ami.id),
     instanceType: instanceType,
@@ -458,6 +475,7 @@ const jenkinsInstance = new aws.ec2.Instance(`jenkins-controller`, {
     keyName: keyName.apply(k => k === "none" ? "" : k),
     iamInstanceProfile: jenkinsInstanceProfile.name,
     userData: userDataScript.apply(script => Buffer.from(script).toString("base64")),
+    ipv6AddressCount: 1,  // IPv6アドレスを1つ割り当て
     rootBlockDevice: {
         volumeSize: 50,
         volumeType: "gp3",
@@ -470,6 +488,7 @@ const jenkinsInstance = new aws.ec2.Instance(`jenkins-controller`, {
         Color: pulumi.interpolate`${jenkinsColor}`,
         Role: "jenkins-master",
         Architecture: "arm64",  // アーキテクチャタグを追加
+        IPv6Enabled: "true",  // IPv6有効化タグを追加
     },
 });
 
@@ -508,6 +527,20 @@ const privateIpParameter = new aws.ssm.Parameter(`jenkins-private-ip`, {
         Environment: environment,
         ManagedBy: "pulumi",
         Component: "controller",
+    },
+});
+
+// IPv6アドレスをSSMパラメータに保存
+const ipv6AddressParameter = new aws.ssm.Parameter(`jenkins-ipv6-address`, {
+    name: `${ssmPrefix}/controller/ipv6-address`,
+    type: "String",
+    value: jenkinsInstance.ipv6Addresses.apply(addrs => addrs && addrs.length > 0 ? addrs[0] : "none"),
+    overwrite: true,
+    tags: {
+        Environment: environment,
+        ManagedBy: "pulumi",
+        Component: "controller",
+        IPv6Enabled: "true",
     },
 });
 
@@ -553,6 +586,7 @@ const deployedColorParameter = new aws.ssm.Parameter(`jenkins-deployed-color`, {
 // エクスポート
 export const jenkinsInstanceId = jenkinsInstance.id;
 export const jenkinsPrivateIp = jenkinsInstance.privateIp;
+export const jenkinsIpv6Address = jenkinsInstance.ipv6Addresses.apply(addrs => addrs && addrs.length > 0 ? addrs[0] : "none");
 export const instanceProfileName = jenkinsInstanceProfile.name;
 export const jenkinsRoleArn = jenkinsRole.arn;
 export const deployedJenkinsColor = jenkinsColor;
@@ -560,3 +594,4 @@ export const recoveryModeEnabled = recoveryMode;
 export const deployedGitRepo = gitRepo;
 export const deployedGitBranch = gitBranch;
 export const instanceArchitecture = "arm64";  // アーキテクチャ情報をエクスポート
+export const ipv6Enabled = true;  // IPv6有効化状態をエクスポート

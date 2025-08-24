@@ -50,7 +50,8 @@
   tags:
     - security
 
-# NATインフラのデプロイ
+# NATインスタンスのデプロイ
+# IPv4アウトバウンド通信用（IPv6とのハイブリッド構成）
 - import_playbook: deploy/deploy_jenkins_nat.yml
   vars:
     env: "{{ env | default('dev') }}"

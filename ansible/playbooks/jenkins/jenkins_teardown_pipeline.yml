@@ -107,7 +107,7 @@
   tags:
     - storage
 
-# NATインフラの削除
+# NATインスタンスの削除
 - import_playbook: remove/remove_jenkins_nat.yml
   vars:
     env: "{{ env | default('dev') }}"

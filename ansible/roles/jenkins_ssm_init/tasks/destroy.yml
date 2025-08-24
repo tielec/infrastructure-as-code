@@ -19,7 +19,7 @@
 # Pulumiヘルパータスクを使用してSSMパラメータを削除
 - name: Destroy SSM parameters with Pulumi
   block:
-    # Pulumiデストロイ
+    # Pulumiデストロイ（スタック存在チェック含む）
     - name: Destroy SSM parameters
       ansible.builtin.include_role:
         name: pulumi_helper
@@ -27,8 +27,9 @@
       vars:
         pulumi_project_path: "{{ pulumi_path }}/jenkins-ssm-init"
         pulumi_stack_name: "{{ env_name }}"
+        skip_stack_check: false  # スタック存在チェックを有効化
     
-    # 削除成功を記録
+    # 削除成功を記録（スタック不存在でスキップされた場合も成功とする）
     - name: Set SSM destruction success fact
       ansible.builtin.set_fact:
         ssm_destroyed: true

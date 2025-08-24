@@ -1,0 +1,46 @@
+---
+# SSMステータスチェックのループ処理
+# wait_for_ssm.yml から呼び出される内部タスク
+
+- name: "Check SSM agent status (attempt {{ _ssm_current_attempt + 1 }}/{{ _ssm_max_attempts }})"
+  ansible.builtin.include_tasks: execute.yml
+  vars:
+    aws_command: "aws ssm describe-instance-information --instance-information-filter-list key=InstanceIds,valueSet={{ instance_id }} --query 'InstanceInformationList[0].PingStatus' --output text"
+    operation_name: "Check SSM status for {{ instance_id }}"
+    parse_output: false
+
+- name: Evaluate SSM status
+  ansible.builtin.set_fact:
+    ssm_agent_status: "{{ aws_cli_stdout | default('') | trim }}"
+    ssm_agent_ready: "{{ (aws_cli_stdout | default('') | trim) == _ssm_target_status }}"
+
+- name: Debug SSM status
+  ansible.builtin.debug:
+    msg: "Attempt {{ _ssm_current_attempt + 1 }}/{{ _ssm_max_attempts }}: SSM status is '{{ ssm_agent_status }}'"
+  when: aws_cli_helper_debug
+
+# 成功した場合は終了
+- name: Complete if SSM is ready
+  ansible.builtin.debug:
+    msg: "SSM agent is ready with status '{{ ssm_agent_status }}'"
+  when: ssm_agent_ready
+
+# 成功していない場合は次のループへ
+- name: Continue checking if not ready
+  when: not ssm_agent_ready
+  block:
+    - name: Increment attempt counter
+      ansible.builtin.set_fact:
+        _ssm_current_attempt: "{{ _ssm_current_attempt | int + 1 }}"
+
+    - name: Check if max attempts reached
+      ansible.builtin.fail:
+        msg: "Max attempts ({{ _ssm_max_attempts }}) reached"
+      when: _ssm_current_attempt | int >= _ssm_max_attempts | int
+
+    - name: Wait before next check
+      ansible.builtin.pause:
+        seconds: "{{ _ssm_interval }}"
+
+    - name: Continue loop
+      ansible.builtin.include_tasks: _ssm_check_loop.yml

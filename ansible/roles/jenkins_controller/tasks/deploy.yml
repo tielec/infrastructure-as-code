@@ -158,6 +158,18 @@
         parameter_name: "/jenkins-infra/{{ env_name }}/controller/deployed-color"
         store_as: "deployed_jenkins_color"
     
+    # SSMエージェントが準備完了になるまで待機
+    - name: Wait for SSM agent to be ready on Jenkins instance
+      ansible.builtin.include_role:
+        name: aws_cli_helper
+        tasks_from: wait_for_ssm
+      vars:
+        instance_id: "{{ jenkins_instance_id }}"
+        max_wait_time: 300  # 5分間待機
+        check_interval: 10  # 10秒ごとにチェック
+        aws_region: "{{ aws_region_name }}"
+      when: jenkins_instance_id is defined
+
     - name: Set controller facts for use in other playbooks
       ansible.builtin.set_fact:
         controller_deployed: true
@@ -172,6 +184,7 @@
           - Private IP: {{ jenkins_private_ip }}
           - Deployed Jenkins Color: {{ deployed_jenkins_color }}
           - Recovery Mode: {{ recovery_mode }}
+          - SSM Agent Status: Ready
   
   rescue:
     - name: Set controller deployment status on failure

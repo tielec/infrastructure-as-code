@@ -56,13 +56,40 @@ const vpcCidrParam = new aws.ssm.Parameter("vpc-cidr", {
     },
 });
 
-// NAT設定
+// IPv6設定
+const ipv6EnabledParam = new aws.ssm.Parameter("ipv6-enabled", {
+    name: `${ssmPrefix}/config/ipv6-enabled`,
+    type: "String",
+    value: "true",
+    overwrite: true,
+    description: "Enable IPv6 dual-stack configuration",
+    tags: {
+        Environment: environment,
+        ManagedBy: "pulumi",
+        Component: "config",
+    },
+});
+
+const useEgressOnlyGatewayParam = new aws.ssm.Parameter("use-egress-only-gateway", {
+    name: `${ssmPrefix}/config/use-egress-only-gateway`,
+    type: "String",
+    value: "true",
+    overwrite: true,
+    description: "Use Egress-only Internet Gateway for IPv6 outbound traffic",
+    tags: {
+        Environment: environment,
+        ManagedBy: "pulumi",
+        Component: "config",
+    },
+});
+
+// NAT設定（IPv6とのハイブリッド構成）
 const natHighAvailabilityParam = new aws.ssm.Parameter("nat-high-availability", {
     name: `${ssmPrefix}/config/nat-high-availability`,
     type: "String",
-    value: "false",  // dev環境ではfalse、prodではtrueに設定
+    value: "false",  // 通常モード（NATインスタンス1台）
     overwrite: true,
-    description: "Use NAT Gateway (true) or NAT Instance (false)",
+    description: "NAT high availability mode (false = single NAT instance)",
     tags: {
         Environment: environment,
         ManagedBy: "pulumi",
@@ -73,9 +100,9 @@ const natHighAvailabilityParam = new aws.ssm.Parameter("nat-high-availability", 
 const natInstanceTypeParam = new aws.ssm.Parameter("nat-instance-type", {
     name: `${ssmPrefix}/config/nat-instance-type`,
     type: "String",
-    value: "t4g.nano",
+    value: "t4g.nano",  // ARM64ベースの最小インスタンス（コスト最適化）
     overwrite: true,
-    description: "NAT instance type (when not using NAT Gateway)",
+    description: "NAT instance type for IPv4 outbound traffic",
     tags: {
         Environment: environment,
         ManagedBy: "pulumi",

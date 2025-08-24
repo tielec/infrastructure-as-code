@@ -50,26 +50,29 @@ const albSecurityGroupId = pulumi.output(albSecurityGroupIdParam).apply(p => p.v
 // より短い名前の生成（ALBの名前制限に対応）
 const shortEnvName = environment.length > 3 ? environment.substring(0, 3) : environment;
 
-// Application Load Balancerの作成
+// Application Load Balancerの作成（IPv6対応）
 const alb = new aws.lb.LoadBalancer(`alb`, {
     internal: false,
     loadBalancerType: "application",
     securityGroups: [albSecurityGroupId],
     subnets: publicSubnetIds,
     enableDeletionProtection: environment === "prod",
+    ipAddressType: "dualstack",  // IPv4/IPv6デュアルスタック対応
     tags: {
         Name: pulumi.interpolate`${projectName}-jenkins-alb-${environment}`,
         Environment: environment,
         ManagedBy: "pulumi",
+        IPv6Enabled: "true",
     },
 });
 
-// Blue環境のターゲットグループ
+// Blue環境のターゲットグループ（IPv6対応）
 const blueTargetGroup = new aws.lb.TargetGroup(`blue-tg`, {
     port: 8080,
     protocol: "HTTP",
     vpcId: vpcId,
     targetType: "instance",
+    // ipAddressType は targetType: "ip" の場合のみ有効なため削除
     healthCheck: {
         enabled: true,
         path: "/login",
@@ -85,15 +88,17 @@ const blueTargetGroup = new aws.lb.TargetGroup(`blue-tg`, {
         Name: pulumi.interpolate`${projectName}-jenkins-blue-tg-${environment}`,
         Environment: environment,
         Color: "blue",
+        IPv6Enabled: "true",
     },
 });
 
-// Green環境のターゲットグループ
+// Green環境のターゲットグループ（IPv6対応）
 const greenTargetGroup = new aws.lb.TargetGroup(`green-tg`, {
     port: 8080,
     protocol: "HTTP",
     vpcId: vpcId,
     targetType: "instance",
+    // ipAddressType は targetType: "ip" の場合のみ有効なため削除
     healthCheck: {
         enabled: true,
         path: "/login",
@@ -109,6 +114,7 @@ const greenTargetGroup = new aws.lb.TargetGroup(`green-tg`, {
         Name: pulumi.interpolate`${projectName}-jenkins-green-tg-${environment}`,
         Environment: environment,
         Color: "green",
+        IPv6Enabled: "true",
     },
 });
 

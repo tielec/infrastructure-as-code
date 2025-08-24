@@ -274,13 +274,13 @@ const spotFleetRole = new aws.iam.Role(`spotfleet-role`, {
     },
 });
 
-// エージェント起動テンプレート（x86_64用）
+// エージェント起動テンプレート（x86_64用、IPv6対応）
 const agentLaunchTemplate = new aws.ec2.LaunchTemplate(`agent-lt`, {
     namePrefix: `jenkins-infra-agent-lt-`,
     imageId: amiX86Id,
     instanceType: "t3.small", // デフォルトをt3.smallに変更
     keyName: agentKeyPair.keyName,  // 作成したキーペアを使用
-    vpcSecurityGroupIds: [jenkinsAgentSecurityGroupId],
+    // vpcSecurityGroupIds は networkInterfaces と競合するため削除
     iamInstanceProfile: {
         name: jenkinsAgentProfile.name,
     },
@@ -298,12 +298,20 @@ const agentLaunchTemplate = new aws.ec2.LaunchTemplate(`agent-lt`, {
         httpTokens: "required",
         httpPutResponseHopLimit: 2,
     },
+    networkInterfaces: [{
+        associatePublicIpAddress: "false",
+        deleteOnTermination: "true",
+        deviceIndex: 0,
+        ipv6AddressCount: 1,  // IPv6アドレスを1つ割り当て
+        securityGroups: [jenkinsAgentSecurityGroupId],
+    }],
     tagSpecifications: [{
         resourceType: "instance",
         tags: {
             Name: `jenkins-infra-agent-${environment}`,
             Environment: environment,
             Role: "jenkins-agent",
+            IPv6Enabled: "true",  // IPv6有効化タグを追加
         },
     }],
     // ユーザーデータをBase64エンコード（カスタムAMI使用時は最小限の設定）
@@ -314,6 +322,20 @@ const agentLaunchTemplate = new aws.ec2.LaunchTemplate(`agent-lt`, {
             `#!/bin/bash
 exec > >(tee /var/log/user-data.log|logger -t user-data -s 2>/dev/console) 2>&1
 set -x
+
+# IPv6設定の有効化
+echo "Configuring IPv6..."
+cat >> /etc/sysconfig/network << EOF
+NETWORKING_IPV6=yes
+IPV6_DEFAULTDEV=eth0
+EOF
+
+# IPv6 の確認と記録
+IPV6_ADDR=$(ip -6 addr show eth0 | grep "inet6" | grep -v "fe80" | awk '{print $2}' | cut -d'/' -f1 | head -n1)
+if [ -n "$IPV6_ADDR" ]; then
+    echo "IPv6 Address: $IPV6_ADDR"
+    echo "$IPV6_ADDR" > /home/jenkins/ipv6_address
+fi
 
 # スワップの有効化（既に作成済み）
 swapon /swapfile || true
@@ -327,6 +349,7 @@ usermod -aG docker jenkins || true
 echo "PROJECT_NAME=jenkins-infra" > /etc/jenkins-agent-env
 echo "ENVIRONMENT=${environment}" >> /etc/jenkins-agent-env
 echo "AGENT_ROOT=/home/jenkins/agent" >> /etc/jenkins-agent-env
+echo "IPV6_ENABLED=true" >> /etc/jenkins-agent-env
 chmod 644 /etc/jenkins-agent-env
 
 # SSMエージェントの起動
@@ -400,13 +423,13 @@ chown jenkins:jenkins /home/jenkins/agent/bootstrap-complete
     },
 });
 
-// ARM64用の起動テンプレート
+// ARM64用の起動テンプレート（IPv6対応）
 const agentLaunchTemplateArm = new aws.ec2.LaunchTemplate(`agent-lt-arm`, {
     namePrefix: `jenkins-infra-agent-lt-arm-`,
     imageId: amiArmId,
     instanceType: "t4g.small",
     keyName: agentKeyPair.keyName,
-    vpcSecurityGroupIds: [jenkinsAgentSecurityGroupId],
+    // vpcSecurityGroupIds は networkInterfaces と競合するため削除
     iamInstanceProfile: {
         name: jenkinsAgentProfile.name,
     },
@@ -424,6 +447,13 @@ const agentLaunchTemplateArm = new aws.ec2.LaunchTemplate(`agent-lt-arm`, {
         httpTokens: "required",
         httpPutResponseHopLimit: 2,
     },
+    networkInterfaces: [{
+        associatePublicIpAddress: "false",
+        deleteOnTermination: "true",
+        deviceIndex: 0,
+        ipv6AddressCount: 1,  // IPv6アドレスを1つ割り当て
+        securityGroups: [jenkinsAgentSecurityGroupId],
+    }],
     tagSpecifications: [{
         resourceType: "instance",
         tags: {
@@ -431,6 +461,7 @@ const agentLaunchTemplateArm = new aws.ec2.LaunchTemplate(`agent-lt-arm`, {
             Environment: environment,
             Role: "jenkins-agent",
             Architecture: "arm64",
+            IPv6Enabled: "true",  // IPv6有効化タグを追加
         },
     }],
     // ユーザーデータをBase64エンコード（カスタムAMI使用時は最小限の設定）
