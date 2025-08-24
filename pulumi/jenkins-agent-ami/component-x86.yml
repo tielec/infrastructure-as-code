@@ -131,4 +131,4 @@ phases:
             - aws --version
             - pulumi version
             - ansible --version
-            - python3 -c "import ansible_mitogen; print('Mitogen: OK')"
+            - python3 -c 'import ansible_mitogen; print("Mitogen: OK")'
