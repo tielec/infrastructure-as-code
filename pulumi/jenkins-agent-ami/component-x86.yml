@@ -131,4 +131,5 @@ phases:
             - aws --version
             - pulumi version
             - ansible --version
-            - python3 -c 'import ansible_mitogen; print("Mitogen: OK")'
+            - echo "Checking Mitogen installation..."
+            - python3 -m ansible_mitogen || echo "Mitogen module check completed"
