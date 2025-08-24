@@ -83,32 +83,30 @@ const useEgressOnlyGatewayParam = new aws.ssm.Parameter("use-egress-only-gateway
     },
 });
 
-// NAT設定（IPv6環境では使用しないが、互換性のため保持）
+// NAT設定（IPv6とのハイブリッド構成）
 const natHighAvailabilityParam = new aws.ssm.Parameter("nat-high-availability", {
     name: `${ssmPrefix}/config/nat-high-availability`,
     type: "String",
-    value: "disabled",  // IPv6環境ではNATを無効化
+    value: "false",  // 通常モード（NATインスタンス1台）
     overwrite: true,
-    description: "NAT is disabled in IPv6 environment",
+    description: "NAT high availability mode (false = single NAT instance)",
     tags: {
         Environment: environment,
         ManagedBy: "pulumi",
         Component: "config",
-        IPv6Environment: "true",
     },
 });
 
 const natInstanceTypeParam = new aws.ssm.Parameter("nat-instance-type", {
     name: `${ssmPrefix}/config/nat-instance-type`,
     type: "String",
-    value: "none",  // IPv6環境では不要
+    value: "t4g.nano",  // ARM64ベースの最小インスタンス（コスト最適化）
     overwrite: true,
-    description: "NAT instance type (disabled in IPv6 environment)",
+    description: "NAT instance type for IPv4 outbound traffic",
     tags: {
         Environment: environment,
         ManagedBy: "pulumi",
         Component: "config",
-        IPv6Environment: "true",
     },
 });
 
