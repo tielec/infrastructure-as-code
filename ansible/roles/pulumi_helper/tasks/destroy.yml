@@ -13,6 +13,8 @@
 # スタック存在確認（skip_stack_checkがfalseの場合のみ）
 - name: Check if stack exists before destroy
   ansible.builtin.include_tasks: check_stack.yml
+  vars:
+    pulumi_stack_name: "{{ stack_name | default(env_name) | default('dev') }}"
   when: not skip_stack_check | default(false) | bool
 
 # スタックが存在しない場合の処理
