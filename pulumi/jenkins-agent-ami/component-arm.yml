@@ -58,8 +58,10 @@ phases:
         inputs:
           commands:
             - echo "Installing Pulumi..."
-            - export PULUMI_INSTALL_DIR=/usr/local
-            - curl -fsSL https://get.pulumi.com | sh -s -- --install-dir /usr/local/bin
+            - curl -fsSL https://get.pulumi.com | sh
+            - ls -la ~/.pulumi/bin/ || true
+            - ls -la /root/.pulumi/bin/ || true
+            - cp ~/.pulumi/bin/pulumi /usr/local/bin/pulumi 2>/dev/null || cp /root/.pulumi/bin/pulumi /usr/local/bin/pulumi
             - chmod 755 /usr/local/bin/pulumi
             - /usr/local/bin/pulumi version
 
