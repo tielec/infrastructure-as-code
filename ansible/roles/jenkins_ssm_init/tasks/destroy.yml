@@ -34,18 +34,39 @@
         ssm_destroyed: true
     
   rescue:
+    # スタック不存在エラーを特別扱い
+    - name: Check if error is due to missing stack
+      ansible.builtin.set_fact:
+        is_stack_missing: "{{ 'no stack selected' in ansible_failed_result.stderr | default('') or 'Stack not found' in ansible_failed_result.msg | default('') }}"
+    
+    - name: Handle missing stack
+      ansible.builtin.debug:
+        msg: "Pulumi stack does not exist. Proceeding to clean up SSM parameters directly."
+      when: is_stack_missing | bool
+    
+    # スタック不存在の場合も成功とみなす
+    - name: Set SSM destruction success for missing stack
+      ansible.builtin.set_fact:
+        ssm_destroyed: true
+      when: is_stack_missing | bool
+    
+    # その他のエラーの場合
     - name: SSM parameter deletion failed
       ansible.builtin.debug:
         msg: "SSM parameter deletion failed: {{ ansible_failed_result.msg | default('Unknown error') }}"
+      when: not is_stack_missing | bool
       
     - name: Set SSM destruction failure fact
       ansible.builtin.set_fact:
         ssm_destroyed: false
+      when: not is_stack_missing | bool
     
     - name: Fail the playbook if not forced
       ansible.builtin.fail:
         msg: "SSM parameter deletion failed"
-      when: not force_destroy | default(false) | bool
+      when: 
+        - not is_stack_missing | bool
+        - not force_destroy | default(false) | bool
 
 - name: Clean up remaining SSM parameters not managed by Pulumi
   block:
