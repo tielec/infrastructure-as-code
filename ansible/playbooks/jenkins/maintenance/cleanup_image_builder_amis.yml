@@ -32,9 +32,9 @@
     # コマンドラインから環境名を受け取る
     env_name: "{{ env | default('dev') }}"
     # デフォルトでドライランモード（安全のため）
-    dry_run: "{{ dry_run | default(true) }}"
+    cleanup_dry_run: "{{ dry_run | default(true) }}"
     # 保持世代数のオーバーライド
-    retention_count: "{{ retention_count | default(2) }}"
+    cleanup_retention_count: "{{ retention_count | default(2) }}"
   
   pre_tasks:
     # all.yml から変数を読み込む
@@ -58,10 +58,10 @@
           - "Environment: {{ env_name }}"
           - "Project: {{ project_name }}"
           - "Region: {{ aws_region_name }}"
-          - "Retention Count: {{ retention_count }}"
-          - "Dry Run Mode: {{ dry_run }}"
+          - "Retention Count: {{ cleanup_retention_count }}"
+          - "Dry Run Mode: {{ cleanup_dry_run }}"
           - "=========================================="
-          - "⚠️  WARNING: {{ 'This is a DRY RUN - no resources will be deleted' if dry_run else 'ACTUAL DELETION will be performed!' }}"
+          - "⚠️  WARNING: {{ 'This is a DRY RUN - no resources will be deleted' if cleanup_dry_run else 'ACTUAL DELETION will be performed!' }}"
           - "=========================================="
     
     # 非ドライランモードの確認
@@ -71,7 +71,7 @@
           
           ⚠️  WARNING: You are about to DELETE resources in {{ env_name }} environment!
           
-          The following will be deleted (older than {{ retention_count }} generations):
+          The following will be deleted (older than {{ cleanup_retention_count }} generations):
           - EC2 AMIs
           - EBS Snapshots
           - Image Builder Versions
@@ -79,7 +79,7 @@
           
           Press Enter to continue or Ctrl+C to abort...
         seconds: 10
-      when: not dry_run | bool
+      when: not cleanup_dry_run | bool
   
   roles:
     # AWS認証設定
@@ -89,8 +89,8 @@
     - role: jenkins_cleanup_agent_amis
       vars:
         # パラメータのオーバーライド
-        dry_run: "{{ dry_run }}"
-        retention_count: "{{ retention_count }}"
+        dry_run: "{{ cleanup_dry_run }}"
+        retention_count: "{{ cleanup_retention_count }}"
         # 必要に応じて他のパラメータもオーバーライド可能
         verbose_logging: "{{ verbose_logging | default(true) }}"
         generate_report: "{{ generate_report | default(true) }}"
@@ -104,12 +104,12 @@
           - "Cleanup Execution Complete"
           - "=========================================="
           - "Environment: {{ env_name }}"
-          - "Mode: {{ 'DRY RUN' if dry_run else 'ACTUAL DELETION' }}"
+          - "Mode: {{ 'DRY RUN' if cleanup_dry_run else 'ACTUAL DELETION' }}"
           - ""
           - "Results Summary:"
-          - "  AMIs: {{ ami_cleanup_results.total_deleted | default(0) if not dry_run else ami_cleanup_results.total_found | default(0) }} {{ 'would be deleted' if dry_run else 'deleted' }}"
-          - "  Snapshots: {{ snapshot_cleanup_results.total_deleted | default(0) if not dry_run else 'would be deleted' }}"
-          - "  Image Versions: {{ image_builder_cleanup_results.total_versions_deleted | default(0) if not dry_run else 'would be deleted' }}"
+          - "  AMIs: {{ ami_cleanup_results.total_deleted | default(0) if not cleanup_dry_run else ami_cleanup_results.total_found | default(0) }} {{ 'would be deleted' if cleanup_dry_run else 'deleted' }}"
+          - "  Snapshots: {{ snapshot_cleanup_results.total_deleted | default(0) if not cleanup_dry_run else 'would be deleted' }}"
+          - "  Image Versions: {{ image_builder_cleanup_results.total_versions_deleted | default(0) if not cleanup_dry_run else 'would be deleted' }}"
           - ""
           - "Report Location: {{ report_path | default('Not generated') }}"
           - "=========================================="
@@ -135,7 +135,7 @@
           - "=========================================="
           - "Next Steps:"
           - "=========================================="
-          - "{% if dry_run %}"
+          - "{% if cleanup_dry_run %}"
           - "1. Review the dry run results above"
           - "2. If satisfied, run with: -e 'dry_run=false' to perform actual deletion"
           - "{% else %}"
