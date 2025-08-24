@@ -59,9 +59,9 @@ phases:
           commands:
             - echo "Installing Pulumi..."
             - curl -fsSL https://get.pulumi.com | sh
-            - ls -la ~/.pulumi/bin/ || true
-            - ls -la /root/.pulumi/bin/ || true
-            - cp ~/.pulumi/bin/pulumi /usr/local/bin/pulumi 2>/dev/null || cp /root/.pulumi/bin/pulumi /usr/local/bin/pulumi
+            - echo "Finding pulumi binary..."
+            - find / -name pulumi -type f 2>/dev/null | head -1 || true
+            - cp /.pulumi/bin/pulumi /usr/local/bin/pulumi || echo "Failed to copy from /.pulumi/bin"
             - chmod 755 /usr/local/bin/pulumi
             - /usr/local/bin/pulumi version
 
