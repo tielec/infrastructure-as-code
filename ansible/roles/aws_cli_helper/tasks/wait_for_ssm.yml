@@ -1,0 +1,77 @@
+---
+# SSMエージェントが準備完了になるまで待機
+#
+# 必須変数:
+#   - instance_id: 対象のEC2インスタンスID
+#
+# オプション変数:
+#   - max_wait_time: 最大待機時間（秒） (default: 300)
+#   - check_interval: チェック間隔（秒） (default: 10)
+#   - target_status: 期待するステータス (default: "Online")
+#   - aws_region: AWSリージョン (default: aws_cli_helper_region)
+
+- name: Set SSM wait parameters
+  ansible.builtin.set_fact:
+    _ssm_max_wait: "{{ max_wait_time | default(300) }}"
+    _ssm_interval: "{{ check_interval | default(10) }}"
+    _ssm_target_status: "{{ target_status | default('Online') }}"
+    _ssm_region: "{{ aws_region | default(aws_cli_helper_region) }}"
+    _ssm_start_time: "{{ ansible_date_time.epoch }}"
+
+- name: Wait for SSM agent to be ready
+  block:
+    - name: Check SSM agent status
+      ansible.builtin.include_tasks: execute.yml
+      vars:
+        command_type: "ssm"
+        subcommand: "describe-instance-information"
+        parameters:
+          - "--instance-information-filter-list"
+          - "key=InstanceIds,valueSet={{ instance_id }}"
+          - "--query"
+          - "InstanceInformationList[0].PingStatus"
+          - "--output"
+          - "text"
+        aws_region: "{{ _ssm_region }}"
+        store_result_as: "ssm_status_result"
+      register: ssm_check
+      until: >
+        (ssm_status_result is defined and 
+         ssm_status_result == _ssm_target_status) or
+        ((ansible_date_time.epoch | int) - (_ssm_start_time | int) > (_ssm_max_wait | int))
+      retries: "{{ ((_ssm_max_wait | int) / (_ssm_interval | int)) | int }}"
+      delay: "{{ _ssm_interval }}"
+
+    - name: Verify SSM agent is ready
+      ansible.builtin.assert:
+        that:
+          - ssm_status_result is defined
+          - ssm_status_result == _ssm_target_status
+        fail_msg: "SSM agent did not become ready within {{ _ssm_max_wait }} seconds"
+        success_msg: "SSM agent is ready on instance {{ instance_id }}"
+
+  rescue:
+    - name: Get current SSM status for debugging
+      ansible.builtin.include_tasks: execute.yml
+      vars:
+        command_type: "ssm"
+        subcommand: "describe-instance-information"
+        parameters:
+          - "--instance-information-filter-list"
+          - "key=InstanceIds,valueSet={{ instance_id }}"
+          - "--output"
+          - "json"
+        aws_region: "{{ _ssm_region }}"
+        store_result_as: "ssm_debug_info"
+      ignore_errors: true
+
+    - name: Display SSM agent status
+      ansible.builtin.debug:
+        msg: |
+          SSM agent is not ready on instance {{ instance_id }}
+          Current status: {{ ssm_status_result | default('Unknown') }}
+          Debug info: {{ ssm_debug_info | default('No debug info available') }}
+          
+    - name: Fail with detailed error
+      ansible.builtin.fail:
+        msg: "SSM agent did not become ready within {{ _ssm_max_wait }} seconds for instance {{ instance_id }}"
