@@ -60,22 +60,10 @@ const eigw = new aws.ec2.EgressOnlyInternetGateway(`eigw`, {
 // アベイラビリティゾーン情報の取得
 const azs = pulumi.output(aws.getAvailabilityZones({}));
 
-// IPv6 CIDRブロックの計算
-// VPCには /56 が割り当てられ、サブネットには /64 を使用
-const calculateSubnetIpv6Cidr = (vpcCidr: string, subnetNumber: string): string => {
-    if (!vpcCidr) return "";
-    // 例: "2406:da14:2fa:d900::/56" -> "2406:da14:2fa:d9"
-    const parts = vpcCidr.split(":");
-    const prefix = parts.slice(0, 4).join(":");
-    // サブネット番号を16進数として追加
-    return `${prefix}${subnetNumber}::/64`;
-};
-
 // パブリックサブネットA（IPv6対応）
 const publicSubnetA = new aws.ec2.Subnet(`public-subnet-a`, {
     vpcId: vpc.id,
     cidrBlock: "10.0.0.0/24",
-    ipv6CidrBlock: vpc.ipv6CidrBlock.apply(cidr => calculateSubnetIpv6Cidr(cidr || "", "00")),
     availabilityZone: azs.names[0],
     mapPublicIpOnLaunch: true,
     assignIpv6AddressOnCreation: true,  // IPv6アドレスを自動割り当て
@@ -91,7 +79,6 @@ const publicSubnetA = new aws.ec2.Subnet(`public-subnet-a`, {
 const publicSubnetB = new aws.ec2.Subnet(`public-subnet-b`, {
     vpcId: vpc.id,
     cidrBlock: "10.0.2.0/24",
-    ipv6CidrBlock: vpc.ipv6CidrBlock.apply(cidr => calculateSubnetIpv6Cidr(cidr || "", "02")),
     availabilityZone: azs.names[1],
     mapPublicIpOnLaunch: true,
     assignIpv6AddressOnCreation: true,
@@ -107,7 +94,6 @@ const publicSubnetB = new aws.ec2.Subnet(`public-subnet-b`, {
 const privateSubnetA = new aws.ec2.Subnet(`private-subnet-a`, {
     vpcId: vpc.id,
     cidrBlock: "10.0.1.0/24",
-    ipv6CidrBlock: vpc.ipv6CidrBlock.apply(cidr => calculateSubnetIpv6Cidr(cidr || "", "01")),
     availabilityZone: azs.names[0],
     assignIpv6AddressOnCreation: true,  // プライベートサブネットでもIPv6を有効化
     tags: {
@@ -122,7 +108,6 @@ const privateSubnetA = new aws.ec2.Subnet(`private-subnet-a`, {
 const privateSubnetB = new aws.ec2.Subnet(`private-subnet-b`, {
     vpcId: vpc.id,
     cidrBlock: "10.0.3.0/24",
-    ipv6CidrBlock: vpc.ipv6CidrBlock.apply(cidr => calculateSubnetIpv6Cidr(cidr || "", "03")),
     availabilityZone: azs.names[1],
     assignIpv6AddressOnCreation: true,
     tags: {
