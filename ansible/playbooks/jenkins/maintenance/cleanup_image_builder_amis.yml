@@ -31,10 +31,6 @@
   vars:
     # コマンドラインから環境名を受け取る
     env_name: "{{ env | default('dev') }}"
-    # デフォルトでドライランモード（安全のため）
-    cleanup_dry_run: "{{ dry_run | default(true) }}"
-    # 保持世代数のオーバーライド
-    cleanup_retention_count: "{{ retention_count | default(2) }}"
   
   pre_tasks:
     # all.yml から変数を読み込む
@@ -47,6 +43,8 @@
       ansible.builtin.set_fact:
         project_name: "{{ infra.project_name }}"
         aws_region_name: "{{ infra.aws.default_region }}"
+        cleanup_dry_run: "{{ dry_run | default(true) }}"
+        cleanup_retention_count: "{{ retention_count | default(2) }}"
     
     # 実行確認の表示
     - name: Display cleanup configuration
