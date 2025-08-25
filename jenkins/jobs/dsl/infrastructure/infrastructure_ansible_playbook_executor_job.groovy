@@ -133,6 +133,13 @@ ${playbookListText}
                 disableConcurrentBuilds()
             }
             
+            // スケジュール設定（設定がある場合のみ）
+            if (playbookConfig.schedule) {
+                triggers {
+                    cron(playbookConfig.schedule)
+                }
+            }
+            
             // パイプライン定義
             definition {
                 cpsScm {
