@@ -62,6 +62,9 @@ ansiblePlaybooks.each { repoKey, repoConfig ->
         // PLAYBOOKSパラメータのデフォルト値を設定
         def playbooksDefaultValue = playbookPaths.join(',')
         
+        // ANSIBLE_EXTRA_VARSのデフォルト値を取得（存在しない場合は空文字列）
+        def ansibleExtraVarsDefault = playbookConfig.ansible_extra_vars ?: ''
+        
         pipelineJob(jobPath) {
             displayName(playbookConfig.display_name ?: playbookKey)
             
@@ -102,7 +105,7 @@ ${playbookListText}
                     'プレイブックパス（自動設定）')
                 
                 // Ansibleオプション
-                stringParam('ANSIBLE_EXTRA_VARS', '', '追加のAnsible変数（例: key1=value1 key2=value2）')
+                stringParam('ANSIBLE_EXTRA_VARS', ansibleExtraVarsDefault, '追加のAnsible変数（例: key1=value1 key2=value2）')
                 
                 booleanParam('ANSIBLE_VERBOSE', false, 'Ansibleの詳細出力を有効化（-vvv）')
                 
