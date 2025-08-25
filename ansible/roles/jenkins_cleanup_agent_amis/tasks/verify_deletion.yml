@@ -19,20 +19,21 @@
             name: aws_cli_helper
             tasks_from: execute
           vars:
-            aws_command: "aws ec2 describe-images --image-ids {{ item.ImageId }} --owners self --output json 2>/dev/null || echo '{\"Images\":[]}'"
+            aws_command: "aws ec2 describe-images --image-ids {{ item.ImageId }} --owners self --output json"
             operation_name: "Verify deletion of AMI {{ item.Name }}"
             parse_output: true
           loop: "{{ amis_to_verify }}"
           loop_control:
             label: "{{ item.Name }} ({{ item.ImageId }})"
           register: ami_verification_results
+          failed_when: false  # エラーを無視（削除済みの場合エラーになるため）
 
         - name: Check AMI deletion results
           ansible.builtin.set_fact:
             ami_deletion_failures: >-
               {%- set failures = [] -%}
               {%- for result in ami_verification_results.results | default([]) -%}
-                {%- if result.aws_cli_data is defined and result.aws_cli_data.Images | default([]) | length > 0 -%}
+                {%- if result.aws_cli_success | default(false) and result.aws_cli_data is defined and result.aws_cli_data.Images | default([]) | length > 0 -%}
                   {%- set _ = failures.append(result.item) -%}
                 {%- endif -%}
               {%- endfor -%}
@@ -57,20 +58,21 @@
             name: aws_cli_helper
             tasks_from: execute
           vars:
-            aws_command: "aws ec2 describe-snapshots --snapshot-ids {{ item.snapshot_id }} --owner-ids self --output json 2>/dev/null || echo '{\"Snapshots\":[]}'"
+            aws_command: "aws ec2 describe-snapshots --snapshot-ids {{ item.snapshot_id }} --owner-ids self --output json"
             operation_name: "Verify deletion of snapshot {{ item.snapshot_id }}"
             parse_output: true
           loop: "{{ snapshots_to_verify[:5] }}"  # 最初の5個のみチェック（パフォーマンスのため）
           loop_control:
             label: "{{ item.snapshot_id }}"
           register: snapshot_verification_results
+          failed_when: false  # エラーを無視（削除済みの場合エラーになるため）
 
         - name: Check snapshot deletion results
           ansible.builtin.set_fact:
             snapshot_deletion_failures: >-
               {%- set failures = [] -%}
               {%- for result in snapshot_verification_results.results | default([]) -%}
-                {%- if result.aws_cli_data is defined and result.aws_cli_data.Snapshots | default([]) | length > 0 -%}
+                {%- if result.aws_cli_success | default(false) and result.aws_cli_data is defined and result.aws_cli_data.Snapshots | default([]) | length > 0 -%}
                   {%- set _ = failures.append(result.item) -%}
                 {%- endif -%}
               {%- endfor -%}
