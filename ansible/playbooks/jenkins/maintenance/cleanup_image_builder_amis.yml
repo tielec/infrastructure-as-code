@@ -89,9 +89,6 @@
         # パラメータのオーバーライド
         dry_run: "{{ cleanup_dry_run }}"
         retention_count: "{{ cleanup_retention_count }}"
-        # 必要に応じて他のパラメータもオーバーライド可能
-        verbose_logging: "{{ verbose_logging | default(true) }}"
-        generate_report: "{{ generate_report | default(true) }}"
   
   post_tasks:
     # 実行結果のサマリー表示
