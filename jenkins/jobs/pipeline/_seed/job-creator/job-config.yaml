@@ -474,9 +474,6 @@ ansible-playbooks:
         display_name: "Jenkins Controller & Config"
         description: "Jenkinsコントローラーと設定のデプロイ"
         category: "jenkins-deploy"
-        enable_tmux: true  # EC2インスタンスの起動と設定に時間がかかる
-        tmux_timeout_minutes: 45
-        continue_on_timeout: false  # コントローラーは確実にデプロイする必要がある
         environments: ['common']  # 共通環境
       
       jenkins_deploy_agents:
@@ -486,9 +483,6 @@ ansible-playbooks:
         display_name: "Jenkins Agents (AMI & Fleet)"
         description: "JenkinsエージェントAMIとFleetのデプロイ"
         category: "jenkins-deploy"
-        enable_tmux: true  # AMI作成に時間がかかる
-        tmux_timeout_minutes: 60
-        continue_on_timeout: false  # エージェントは完全にデプロイする必要がある
         environments: ['common']  # 共通環境
         ansible_extra_vars: "trigger_ami_build=true"
       
@@ -497,9 +491,6 @@ ansible-playbooks:
         display_name: "Jenkins Application"
         description: "Jenkinsアプリケーションのデプロイ（Jenkins自体の更新）"
         category: "jenkins-deploy"
-        enable_tmux: true  # Jenkins自体の更新がかかるためWorkterminalに処理を任せる
-        tmux_timeout_minutes: 1  # Jenkinsの再起動でタイムアウトするため短時間に設定
-        continue_on_timeout: true  # Jenkins再起動後も処理は継続される
         environments: ['common']  # 共通環境
       
       # Jenkins Pipeline (グループ化されたプレイブックを使用)
@@ -519,9 +510,6 @@ ansible-playbooks:
         display_name: "Jenkins Setup Pipeline (Full)"
         description: "Jenkins完全セットアップパイプライン（全コンポーネントを順番にデプロイ）"
         category: "jenkins-pipeline"
-        enable_tmux: true  # 長時間実行のためtmuxを有効化
-        tmux_timeout_minutes: 180  # タイムアウト時間（分）
-        continue_on_timeout: false  # セットアップは完全に実行する必要がある
         environments: ['common']  # 共通環境
       
       jenkins_teardown_pipeline:
@@ -529,9 +517,6 @@ ansible-playbooks:
         display_name: "Jenkins Teardown Pipeline"
         description: "Jenkins完全削除パイプライン（全コンポーネントを削除）"
         category: "jenkins-pipeline"
-        enable_tmux: true  # Jenkinsがすぐに使えなくなるためtmuxが必要
-        tmux_timeout_minutes: 1  # Jenkinsがすぐに停止するため短時間でOK
-        continue_on_timeout: true  # タイムアウト後も削除処理は続行される
         environments: ['common']  # 共通環境
         ansible_extra_vars: "confirm=true" # 削除確認フラグ（trueにしないと削除されない）
       
@@ -592,9 +577,6 @@ ansible-playbooks:
         display_name: "Lambda Functions"
         description: "Lambda関数のデプロイ"
         category: "lambda-deploy"
-        enable_tmux: true  # Lambda関数のデプロイは時間がかかる
-        tmux_timeout_minutes: 30
-        continue_on_timeout: false
         environments: ['dev', 'prod']
       
       lambda_api_gateway:
@@ -631,9 +613,6 @@ ansible-playbooks:
         display_name: "Lambda Setup Pipeline"
         description: "Lambda完全セットアップパイプライン"
         category: "lambda-pipeline"
-        enable_tmux: true  # Lambda関数のデプロイも時間がかかる可能性
-        tmux_timeout_minutes: 60
-        continue_on_timeout: false  # Lambda関数は完全にデプロイされる必要がある
         environments: ['dev', 'prod']  # 両環境に配置
       
       lambda_teardown_pipeline:
@@ -641,9 +620,6 @@ ansible-playbooks:
         display_name: "Lambda Teardown Pipeline"
         description: "Lambda完全削除パイプライン"
         category: "lambda-pipeline"
-        enable_nohup: true
-        nohup_timeout_minutes: 30
-        continue_on_timeout: true  # 削除処理なので続行可能
         environments: ['dev', 'prod']  # 両環境に配置
       
       # Test
