@@ -9,10 +9,7 @@
         name: aws_cli_helper
         tasks_from: execute
       vars:
-        aws_command: |
-          aws imagebuilder list-image-build-versions 
-          --image-version-arn "{{ image_arn }}" 
-          --output json
+        aws_command: "aws imagebuilder list-image-build-versions --image-version-arn '{{ image_arn }}' --output json"
         operation_name: "List versions for {{ image_name }}"
         parse_output: true
 

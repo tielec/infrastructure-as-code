@@ -19,11 +19,7 @@
             name: aws_cli_helper
             tasks_from: execute
           vars:
-            aws_command: |
-              aws ec2 describe-images 
-              --image-ids {{ item.ImageId }} 
-              --owners self 
-              --output json 2>/dev/null || echo '{"Images":[]}'
+            aws_command: "aws ec2 describe-images --image-ids {{ item.ImageId }} --owners self --output json 2>/dev/null || echo '{\"Images\":[]}'"
             operation_name: "Verify deletion of AMI {{ item.Name }}"
             parse_output: true
           loop: "{{ amis_to_verify }}"
@@ -61,11 +57,7 @@
             name: aws_cli_helper
             tasks_from: execute
           vars:
-            aws_command: |
-              aws ec2 describe-snapshots 
-              --snapshot-ids {{ item.snapshot_id }} 
-              --owner-ids self 
-              --output json 2>/dev/null || echo '{"Snapshots":[]}'
+            aws_command: "aws ec2 describe-snapshots --snapshot-ids {{ item.snapshot_id }} --owner-ids self --output json 2>/dev/null || echo '{\"Snapshots\":[]}'"
             operation_name: "Verify deletion of snapshot {{ item.snapshot_id }}"
             parse_output: true
           loop: "{{ snapshots_to_verify[:5] }}"  # 最初の5個のみチェック（パフォーマンスのため）
@@ -103,10 +95,7 @@
             name: aws_cli_helper
             tasks_from: execute
           vars:
-            aws_command: |
-              aws imagebuilder list-image-build-versions 
-              --image-version-arn "{{ item.image_arn }}" 
-              --output json
+            aws_command: "aws imagebuilder list-image-build-versions --image-version-arn '{{ item.image_arn }}' --output json"
             operation_name: "Re-check versions for {{ item.image_name }}"
             parse_output: true
           loop: "{{ image_versions_to_verify }}"

@@ -9,10 +9,7 @@
         name: aws_cli_helper
         tasks_from: execute
       vars:
-        aws_command: |
-          aws imagebuilder get-image-pipeline 
-          --image-pipeline-arn "{{ pipeline_arn }}" 
-          --output json
+        aws_command: "aws imagebuilder get-image-pipeline --image-pipeline-arn '{{ pipeline_arn }}' --output json"
         operation_name: "Get details for pipeline {{ pipeline_name }}"
         parse_output: true
 
@@ -27,10 +24,7 @@
         name: aws_cli_helper
         tasks_from: execute
       vars:
-        aws_command: |
-          aws imagebuilder list-image-pipeline-images 
-          --image-pipeline-arn "{{ pipeline_arn }}" 
-          --output json
+        aws_command: "aws imagebuilder list-image-pipeline-images --image-pipeline-arn '{{ pipeline_arn }}' --output json"
         operation_name: "List executions for pipeline {{ pipeline_name }}"
         parse_output: true
 
