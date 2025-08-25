@@ -11,6 +11,11 @@
       loop: "{{ ami_name_patterns }}"
       register: ami_search_results
 
+    # デバッグ: ami_pattern_resultsの内容確認
+    - name: Debug - Check ami_pattern_results content
+      ansible.builtin.debug:
+        msg: "ami_pattern_results = {{ ami_pattern_results | default([]) | to_json }}"
+
     # 結果を集約
     - name: Aggregate all found AMIs
       ansible.builtin.set_fact:
@@ -22,7 +27,6 @@
             {%- endfor -%}
           {%- endfor -%}
           {{ amis | unique(attribute='ImageId') }}
-        ami_pattern_results: []
 
     # 各パターンごとに世代管理
     - name: Process retention for each AMI pattern
