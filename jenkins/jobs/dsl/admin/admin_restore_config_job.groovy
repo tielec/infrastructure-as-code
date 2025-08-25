@@ -60,6 +60,8 @@ pipelineJob(fullJobName) {
         stringParam('CONFIG_FILE', 'jenkins/config/casc/jenkins.yaml', 'リストア対象の設定ファイルパス')
         booleanParam('RESTART_JENKINS', false, 'リストア後にJenkinsを再起動するか')
         stringParam('JENKINSFILE_BRANCH', 'main', 'Jenkinsfileが格納されているブランチ')
+        // Jenkins Libraryブランチ
+        stringParam('LIBRARY_BRANCH', 'main', 'Jenkins Shared Libraryのブランチ')
     }
     
     // パイプライン定義

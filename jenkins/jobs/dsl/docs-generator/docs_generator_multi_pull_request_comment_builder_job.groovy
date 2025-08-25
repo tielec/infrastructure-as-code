@@ -81,6 +81,8 @@ repositories.each { repo ->
             
             // Jenkinsfileブランチ
             stringParam('JENKINSFILE_BRANCH', 'main', 'Jenkinsfileが格納されているブランチ')
+            // Jenkins Libraryブランチ
+            stringParam('LIBRARY_BRANCH', 'main', 'Jenkins Shared Libraryのブランチ')
         }
         
         // パイプライン定義

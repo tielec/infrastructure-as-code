@@ -73,6 +73,8 @@ repositories.each { repo ->
             stringParam('COGNITIVE_THRESHOLD', '20', 'Cognitive complexity threshold')
             booleanParam('FORCE_ANALYSIS', true, 'Force re-analysis even if comment exists')
             stringParam('JENKINSFILE_BRANCH', 'main', 'Jenkinsfileが格納されているブランチ')
+            // Jenkins Libraryブランチ
+            stringParam('LIBRARY_BRANCH', 'main', 'Jenkins Shared Libraryのブランチ')
         }
         
         // パイプライン定義

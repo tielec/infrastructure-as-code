@@ -39,6 +39,8 @@ pipelineJob(fullJobName) {
     // パラメータ定義
     parameters {
         stringParam('JENKINSFILE_BRANCH', 'main', 'Jenkinsfileが格納されているブランチ')
+        // Jenkins Libraryブランチ
+        stringParam('LIBRARY_BRANCH', 'main', 'Jenkins Shared Libraryのブランチ')
     }
 
     // パイプライン定義

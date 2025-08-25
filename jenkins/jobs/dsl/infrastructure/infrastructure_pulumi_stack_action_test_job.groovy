@@ -67,6 +67,8 @@ pipelineJob(fullJobName) {
         
         // Jenkinsfile ブランチ
         stringParam('JENKINSFILE_BRANCH', 'main', 'Jenkinsfileが格納されているブランチ')
+        // Jenkins Libraryブランチ
+        stringParam('LIBRARY_BRANCH', 'main', 'Jenkins Shared Libraryのブランチ')
     }
 
     // 依存関係の保持設定
