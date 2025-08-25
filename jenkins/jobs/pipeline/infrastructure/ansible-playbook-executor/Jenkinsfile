@@ -39,11 +39,6 @@ def buildAnsibleCommand(playbook, params) {
     // 環境変数
     cmd += " -e env=${params.ENVIRONMENT}"
     
-    // teardown_pipelineの場合、confirm=trueを自動追加
-    if (playbook.contains('teardown_pipeline.yml')) {
-        cmd += " -e confirm=true"
-    }
-    
     // 追加変数
     if (params.ANSIBLE_EXTRA_VARS?.trim()) {
         params.ANSIBLE_EXTRA_VARS.split(' ').each { var ->

@@ -490,6 +490,7 @@ ansible-playbooks:
         tmux_timeout_minutes: 60
         continue_on_timeout: false  # エージェントは完全にデプロイする必要がある
         environments: ['common']  # 共通環境
+        ansible_extra_vars: "trigger_ami_build=true"
       
       jenkins_deploy_application:
         playbook_path: "jenkins/deploy/deploy_jenkins_application.yml"
@@ -532,6 +533,7 @@ ansible-playbooks:
         tmux_timeout_minutes: 1  # Jenkinsがすぐに停止するため短時間でOK
         continue_on_timeout: true  # タイムアウト後も削除処理は続行される
         environments: ['common']  # 共通環境
+        ansible_extra_vars: "confirm=true" # 削除確認フラグ（trueにしないと削除されない）
       
       # Jenkins Misc
       update_jenkins_ami_ssm:
