@@ -303,7 +303,7 @@ tmux new-session -d -s jenkins-deploy
 
 # コマンドを送信
 tmux send-keys -t jenkins-deploy "cd ~/infrastructure-as-code/ansible" C-m
-tmux send-keys -t jenkins-deploy "ansible-playbook playbooks/jenkins/jenkins_setup_pipeline.yml -e 'env=dev' | tee ~/jenkins-deploy-$(date +%Y%m%d-%H%M%S).log" C-m
+tmux send-keys -t jenkins-deploy "ansible-playbook playbooks/jenkins/jenkins_setup_pipeline.yml -e 'env=dev'" C-m
 
 # 進捗を確認
 tmux attach -t jenkins-deploy

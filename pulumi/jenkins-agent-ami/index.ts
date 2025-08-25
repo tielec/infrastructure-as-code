@@ -6,6 +6,8 @@
  */
 import * as pulumi from "@pulumi/pulumi";
 import * as aws from "@pulumi/aws";
+import * as fs from "fs";
+import * as path from "path";
 
 // 環境名をスタック名から取得
 const environment = pulumi.getStack();
@@ -107,118 +109,18 @@ const imageBuilderInstanceProfile = new aws.iam.InstanceProfile(`imagebuilder-pr
     },
 });
 
+// コンポーネント定義YAMLファイルを読み込み
+// __dirnameはコンパイル後のbinディレクトリを指すため、親ディレクトリから読み込む
+const componentX86Yaml = fs.readFileSync(path.join(__dirname, "..", "component-x86.yml"), "utf8");
+const componentArmYaml = fs.readFileSync(path.join(__dirname, "..", "component-arm.yml"), "utf8");
+
 // Jenkins Agent用コンポーネント（x86_64）
 const jenkinsAgentComponentX86 = new aws.imagebuilder.Component(`agent-component-x86`, {
     name: pulumi.interpolate`${projectName}-agent-component-x86-${environment}`,
     platform: "Linux",
     version: componentVersion,
     description: "Jenkins Agent setup component for x86_64",
-    data: `name: JenkinsAgentSetup-x86
-description: Install and configure Jenkins Agent dependencies
-schemaVersion: 1.0
-
-phases:
-  - name: build
-    steps:
-      - name: UpdateSystem
-        action: ExecuteBash
-        inputs:
-          commands:
-            - echo "Starting Jenkins Agent setup"
-            - dnf update -y
-
-      - name: InstallBasicPackages
-        action: ExecuteBash
-        inputs:
-          commands:
-            - dnf install -y git jq wget tar gzip unzip which
-            - dnf install -y amazon-ssm-agent
-
-      - name: InstallDocker
-        action: ExecuteBash
-        inputs:
-          commands:
-            - dnf install -y docker
-            - systemctl enable docker
-            - groupadd -f docker
-            - chmod 666 /var/run/docker.sock || true
-
-      - name: InstallJava
-        action: ExecuteBash
-        inputs:
-          commands:
-            - dnf install -y java-21-amazon-corretto
-            - java -version
-
-      - name: InstallBuildTools
-        action: ExecuteBash
-        inputs:
-          commands:
-            - dnf install -y gcc gcc-c++ make
-            - dnf install -y python3 python3-pip
-            - pip3 install --upgrade pip
-            - pip3 install awscli
-
-      - name: InstallNodeJS
-        action: ExecuteBash
-        inputs:
-          commands:
-            - curl -sL https://rpm.nodesource.com/setup_18.x | bash -
-            - dnf install -y nodejs
-            - npm install -g npm@latest
-            - node --version
-            - npm --version
-
-      - name: CreateJenkinsUser
-        action: ExecuteBash
-        inputs:
-          commands:
-            - useradd -m -d /home/jenkins -s /bin/bash jenkins || true
-            - usermod -aG docker jenkins
-            - newgrp docker || true
-            - mkdir -p /home/jenkins/agent
-            - mkdir -p /home/jenkins/.docker
-            - chown -R jenkins:jenkins /home/jenkins
-            - echo '{"group":"docker"}' > /etc/docker/daemon.json || true
-            - chmod 666 /var/run/docker.sock || true
-
-      - name: SetupSwap
-        action: ExecuteBash
-        inputs:
-          commands:
-            - dd if=/dev/zero of=/swapfile bs=1M count=2048
-            - chmod 600 /swapfile
-            - mkswap /swapfile
-            - echo '/swapfile none swap sw 0 0' >> /etc/fstab
-
-      - name: ConfigureTmp
-        action: ExecuteBash
-        inputs:
-          commands:
-            - echo 'tmpfs /tmp tmpfs defaults,noatime,size=2G 0 0' >> /etc/fstab
-
-      - name: CleanupCache
-        action: ExecuteBash
-        inputs:
-          commands:
-            - dnf clean all
-            - rm -rf /var/cache/dnf
-            - rm -rf /tmp/*
-
-  - name: validate
-    steps:
-      - name: ValidateInstallation
-        action: ExecuteBash
-        inputs:
-          commands:
-            - java -version
-            - docker --version
-            - git --version
-            - node --version
-            - npm --version
-            - python3 --version
-            - aws --version
-`,
+    data: componentX86Yaml,
     tags: {
         Name: pulumi.interpolate`${projectName}-agent-component-x86-${environment}`,
         Environment: environment,
@@ -232,112 +134,7 @@ const jenkinsAgentComponentArm = new aws.imagebuilder.Component(`agent-component
     platform: "Linux",
     version: componentVersion,
     description: "Jenkins Agent setup component for ARM64",
-    data: `name: JenkinsAgentSetup-arm64
-description: Install and configure Jenkins Agent dependencies for ARM64
-schemaVersion: 1.0
-
-phases:
-  - name: build
-    steps:
-      - name: UpdateSystem
-        action: ExecuteBash
-        inputs:
-          commands:
-            - echo "Starting Jenkins Agent setup for ARM64"
-            - dnf update -y
-
-      - name: InstallBasicPackages
-        action: ExecuteBash
-        inputs:
-          commands:
-            - dnf install -y git jq wget tar gzip unzip which
-            - dnf install -y amazon-ssm-agent
-
-      - name: InstallDocker
-        action: ExecuteBash
-        inputs:
-          commands:
-            - dnf install -y docker
-            - systemctl enable docker
-            - groupadd -f docker
-            - chmod 666 /var/run/docker.sock || true
-
-      - name: InstallJava
-        action: ExecuteBash
-        inputs:
-          commands:
-            - dnf install -y java-21-amazon-corretto
-            - java -version
-
-      - name: InstallBuildTools
-        action: ExecuteBash
-        inputs:
-          commands:
-            - dnf install -y gcc gcc-c++ make
-            - dnf install -y python3 python3-pip
-            - pip3 install --upgrade pip
-            - pip3 install awscli
-
-      - name: InstallNodeJS
-        action: ExecuteBash
-        inputs:
-          commands:
-            - curl -sL https://rpm.nodesource.com/setup_18.x | bash -
-            - dnf install -y nodejs
-            - npm install -g npm@latest
-            - node --version
-            - npm --version
-
-      - name: CreateJenkinsUser
-        action: ExecuteBash
-        inputs:
-          commands:
-            - useradd -m -d /home/jenkins -s /bin/bash jenkins || true
-            - usermod -aG docker jenkins
-            - newgrp docker || true
-            - mkdir -p /home/jenkins/agent
-            - mkdir -p /home/jenkins/.docker
-            - chown -R jenkins:jenkins /home/jenkins
-            - echo '{"group":"docker"}' > /etc/docker/daemon.json || true
-            - chmod 666 /var/run/docker.sock || true
-
-      - name: SetupSwap
-        action: ExecuteBash
-        inputs:
-          commands:
-            - dd if=/dev/zero of=/swapfile bs=1M count=2048
-            - chmod 600 /swapfile
-            - mkswap /swapfile
-            - echo '/swapfile none swap sw 0 0' >> /etc/fstab
-
-      - name: ConfigureTmp
-        action: ExecuteBash
-        inputs:
-          commands:
-            - echo 'tmpfs /tmp tmpfs defaults,noatime,size=2G 0 0' >> /etc/fstab
-
-      - name: CleanupCache
-        action: ExecuteBash
-        inputs:
-          commands:
-            - dnf clean all
-            - rm -rf /var/cache/dnf
-            - rm -rf /tmp/*
-
-  - name: validate
-    steps:
-      - name: ValidateInstallation
-        action: ExecuteBash
-        inputs:
-          commands:
-            - java -version
-            - docker --version
-            - git --version
-            - node --version
-            - npm --version
-            - python3 --version
-            - aws --version
-`,
+    data: componentArmYaml,
     tags: {
         Name: pulumi.interpolate`${projectName}-agent-component-arm-${environment}`,
         Environment: environment,

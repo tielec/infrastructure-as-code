@@ -1,0 +1,101 @@
+---
+# クリーンアップレポートを生成
+
+- name: Generate cleanup report
+  block:
+    # レポートデータを集約
+    - name: Compile report data
+      ansible.builtin.set_fact:
+        cleanup_report:
+          execution:
+            timestamp: "{{ ansible_date_time.iso8601 }}"
+            environment: "{{ env_name }}"
+            region: "{{ aws_region_name }}"
+            dry_run: "{{ dry_run }}"
+            retention_count: "{{ retention_count }}"
+          configuration:
+            ami_patterns: "{{ ami_name_patterns }}"
+            image_builder_patterns: "{{ image_builder_name_patterns }}"
+            cleanup_targets: "{{ cleanup_targets }}"
+            safety_checks: "{{ safety_checks }}"
+          results:
+            amis:
+              success: "{{ not (ami_cleanup_failed | default(false)) }}"
+              summary: "{{ ami_cleanup_results | default({}) }}"
+            snapshots:
+              success: "{{ not (snapshot_cleanup_warning | default(false)) }}"
+              summary: "{{ snapshot_cleanup_results | default({}) }}"
+            image_builder_versions:
+              success: "{{ not (image_builder_cleanup_failed | default(false)) }}"
+              summary: "{{ image_builder_cleanup_results | default({}) }}"
+            pipeline_outputs:
+              success: "{{ not (pipeline_cleanup_warning | default(false)) }}"
+              summary: "{{ pipeline_cleanup_results | default({}) }}"
+          statistics:
+            total_amis_deleted: "{{ ami_cleanup_results.total_deleted | default(0) }}"
+            total_snapshots_deleted: "{{ snapshot_cleanup_results.total_deleted | default(0) }}"
+            total_image_versions_deleted: "{{ image_builder_cleanup_results.total_versions_deleted | default(0) }}"
+            total_pipeline_outputs_processed: "{{ pipeline_cleanup_results.processed_pipelines | default(0) }}"
+          verification:
+            performed: "{{ not dry_run }}"
+            summary: "{{ deletion_verification_summary | default({}) }}"
+            ami_failures: "{{ deletion_verification_summary.ami_failures | default(0) }}"
+            snapshot_failures: "{{ deletion_verification_summary.snapshot_failures | default(0) }}"
+            version_failures: "{{ deletion_verification_summary.version_failures | default(0) }}"
+            all_successful: "{{ deletion_verification_summary.all_successful | default(false) }}"
+
+    # JSONレポートの生成
+    - name: Write JSON report
+      ansible.builtin.copy:
+        content: "{{ cleanup_report | to_nice_json }}"
+        dest: "{{ report_path }}"
+      when: report_format == 'json'
+
+    # YAMLレポートの生成
+    - name: Write YAML report
+      ansible.builtin.copy:
+        content: "{{ cleanup_report | to_nice_yaml }}"
+        dest: "{{ report_path | regex_replace('\\.json$', '.yaml') }}"
+      when: report_format == 'yaml'
+
+    # コンソールサマリーの表示
+    - name: Display cleanup summary
+      ansible.builtin.debug:
+        msg:
+          - "=========================================="
+          - "Image Builder AMI Cleanup Complete"
+          - "=========================================="
+          - "Environment: {{ env_name }}"
+          - "Dry Run: {{ dry_run }}"
+          - ""
+          - "Results:"
+          - "  AMIs deleted: {{ ami_cleanup_results.total_deleted | default(0) }}"
+          - "  Snapshots deleted: {{ snapshot_cleanup_results.total_deleted | default(0) }}"
+          - "  Image versions deleted: {{ image_builder_cleanup_results.total_versions_deleted | default(0) }}"
+          - "  Pipeline outputs processed: {{ pipeline_cleanup_results.processed_pipelines | default(0) }}"
+          - ""
+          - "Verification Status:"
+          - "  {% if not dry_run %}✅ Deletion verification performed{% else %}⏭️  Verification skipped (dry run){% endif %}"
+          - "  {% if deletion_verification_summary.all_successful | default(false) %}✅ All deletions verified{% elif not dry_run %}⚠️  Some deletions could not be verified{% endif %}"
+          - ""
+          - "Report saved to: {{ report_path }}"
+          - "=========================================="
+
+    # エラーがあった場合の警告
+    - name: Display warnings if any
+      ansible.builtin.debug:
+        msg:
+          - "⚠️  WARNING: Some operations encountered errors"
+          - "Please check the detailed report for more information"
+      when: >
+        ami_cleanup_failed | default(false) or
+        snapshot_cleanup_warning | default(false) or
+        image_builder_cleanup_failed | default(false) or
+        pipeline_cleanup_warning | default(false)
+
+  rescue:
+    - name: Handle report generation error
+      ansible.builtin.debug:
+        msg:
+          - "ERROR: Failed to generate cleanup report"
+          - "Error: {{ ansible_failed_result.msg | default('Unknown error') }}"

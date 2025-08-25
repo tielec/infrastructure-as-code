@@ -52,9 +52,10 @@ pipeline {
                 }
             }
             environment {
-                AWS_ACCESS_KEY_ID     = "${params.AWS_ACCESS_KEY_ID}"
-                AWS_SECRET_ACCESS_KEY = "${params.AWS_SECRET_ACCESS_KEY}"
-                AWS_SESSION_TOKEN     = "${params.AWS_SESSION_TOKEN}"
+                // AWS認証情報が提供された場合のみ設定（空の場合はIAMロールを使用）
+                AWS_ACCESS_KEY_ID     = "${params.AWS_ACCESS_KEY_ID ?: ''}"
+                AWS_SECRET_ACCESS_KEY = "${params.AWS_SECRET_ACCESS_KEY ?: ''}"
+                AWS_SESSION_TOKEN     = "${params.AWS_SESSION_TOKEN ?: ''}"
                 AWS_DEFAULT_REGION    = "${params.AWS_REGION}"
             }
             steps {
@@ -121,8 +122,12 @@ pipeline {
 def validateParameters() {
     echo "パラメータの検証中..."
     
+    // AWS認証方法の確認
     if (!params.AWS_ACCESS_KEY_ID || !params.AWS_SECRET_ACCESS_KEY) {
-        error "AWS認証情報が設定されていません"
+        echo "ℹ️ AWS認証情報が指定されていません。EC2インスタンスロールを使用します"
+        echo "   実行環境: ${env.NODE_NAME}"
+    } else {
+        echo "ℹ️ 明示的に指定されたAWS認証情報を使用します"
     }
     
     // S3_BUCKETが指定されていない場合、クレデンシャルから取得

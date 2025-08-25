@@ -1,0 +1,97 @@
+---
+# 特定のパイプラインの出力イメージを処理
+
+- name: Process outputs for pipeline {{ pipeline_name }}
+  block:
+    # パイプラインの詳細情報を取得
+    - name: Get pipeline details
+      ansible.builtin.include_role:
+        name: aws_cli_helper
+        tasks_from: execute
+      vars:
+        aws_command: "aws imagebuilder get-image-pipeline --image-pipeline-arn '{{ pipeline_arn }}' --output json"
+        operation_name: "Get details for pipeline {{ pipeline_name }}"
+        parse_output: true
+
+    - name: Parse pipeline configuration
+      ansible.builtin.set_fact:
+        pipeline_config: "{{ aws_cli_data.imagePipeline | default({}) }}"
+      when: aws_cli_success | default(false)
+
+    # パイプラインの実行履歴を取得
+    - name: List pipeline executions
+      ansible.builtin.include_role:
+        name: aws_cli_helper
+        tasks_from: execute
+      vars:
+        aws_command: "aws imagebuilder list-image-pipeline-images --image-pipeline-arn '{{ pipeline_arn }}' --output json"
+        operation_name: "List executions for pipeline {{ pipeline_name }}"
+        parse_output: true
+
+    - name: Parse pipeline executions
+      ansible.builtin.set_fact:
+        pipeline_executions: "{{ aws_cli_data.imageSummaryList | default([]) }}"
+      when: aws_cli_success | default(false)
+
+    # 実行結果を作成日でソート（新しい順）
+    - name: Sort executions by date
+      ansible.builtin.set_fact:
+        sorted_executions: "{{ pipeline_executions | sort(attribute='dateCreated', reverse=True) }}"
+      when: pipeline_executions | length > 0
+
+    # 世代管理の適用
+    - name: Apply retention policy to pipeline outputs
+      ansible.builtin.set_fact:
+        outputs_to_keep: "{{ sorted_executions[:retention_count | int] | default([]) }}"
+        outputs_to_delete: "{{ sorted_executions[retention_count | int:] | default([]) }}"
+      when: sorted_executions is defined
+
+    # 削除対象の出力イメージARNを収集
+    - name: Collect output image ARNs to delete
+      ansible.builtin.set_fact:
+        output_arns_to_delete: "{{ outputs_to_delete | map(attribute='arn') | list }}"
+      when: outputs_to_delete is defined and outputs_to_delete | length > 0
+
+    # ドライランモードでない場合、出力イメージを削除
+    - name: Delete pipeline output images
+      ansible.builtin.include_role:
+        name: aws_cli_helper
+        tasks_from: execute
+      vars:
+        aws_command: "aws imagebuilder delete-image --image-build-version-arn \"{{ item }}\""
+        operation_name: "Delete pipeline output {{ item.split('/')[-1] }}"
+        parse_output: false
+      loop: "{{ output_arns_to_delete | default([]) }}"
+      loop_control:
+        label: "{{ item.split('/')[-1] }}"
+      when: 
+        - not dry_run | bool
+        - output_arns_to_delete is defined
+        - output_arns_to_delete | length > 0
+
+    # 結果を記録
+    - name: Record pipeline output processing results
+      ansible.builtin.set_fact:
+        pipeline_output_results: >-
+          {{ pipeline_output_results | default([]) + [{
+            'pipeline_name': pipeline_name,
+            'pipeline_arn': pipeline_arn,
+            'total_outputs': pipeline_executions | length,
+            'outputs_kept': outputs_to_keep | default([]) | length,
+            'outputs_deleted': outputs_to_delete | default([]) | length if not dry_run else 0
+          }] }}
+
+    # サマリー表示
+    - name: Display pipeline output summary
+      ansible.builtin.debug:
+        msg:
+          - "Pipeline: {{ pipeline_name }}"
+          - "  Total outputs: {{ pipeline_executions | length }}"
+          - "  Outputs to keep: {{ outputs_to_keep | default([]) | length }}"
+          - "  Outputs to delete: {{ outputs_to_delete | default([]) | length }}"
+      when: verbose_logging
+
+  rescue:
+    - name: Handle pipeline processing error
+      ansible.builtin.debug:
+        msg: "WARNING: Failed to process outputs for pipeline {{ pipeline_name }}"

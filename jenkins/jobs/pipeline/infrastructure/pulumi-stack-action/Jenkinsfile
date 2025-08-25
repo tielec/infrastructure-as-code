@@ -73,10 +73,10 @@ pipeline {
                 }
             }
             environment {
-                // AWS認証情報
-                AWS_ACCESS_KEY_ID     = "${params.AWS_ACCESS_KEY_ID}"
-                AWS_SECRET_ACCESS_KEY = "${params.AWS_SECRET_ACCESS_KEY}"
-                AWS_SESSION_TOKEN     = "${params.AWS_SESSION_TOKEN}"
+                // AWS認証情報が提供された場合のみ設定（空の場合はIAMロールを使用）
+                AWS_ACCESS_KEY_ID     = "${params.AWS_ACCESS_KEY_ID ?: ''}"
+                AWS_SECRET_ACCESS_KEY = "${params.AWS_SECRET_ACCESS_KEY ?: ''}"
+                AWS_SESSION_TOKEN     = "${params.AWS_SESSION_TOKEN ?: ''}"
                 AWS_DEFAULT_REGION    = "${params.AWS_REGION}"
                 
                 // Pulumi設定
@@ -246,9 +246,12 @@ pipeline {
 def validateParameters() {
     echo "パラメータの検証中..."
     
-    // 必須パラメータのチェック
+    // AWS認証方法の確認
     if (!params.AWS_ACCESS_KEY_ID || !params.AWS_SECRET_ACCESS_KEY) {
-        error "AWS認証情報が設定されていません"
+        echo "ℹ️ AWS認証情報が指定されていません。EC2インスタンスロールを使用します"
+        echo "   実行環境: ${env.NODE_NAME}"
+    } else {
+        echo "ℹ️ 明示的に指定されたAWS認証情報を使用します"
     }
     
     if (!params.PULUMI_PROJECT_PATH) {
@@ -276,41 +279,49 @@ def verifyAwsCredentials() {
         =============================================
     """.stripIndent()
     
-    // AWS認証チェック用のユーティリティを初期化
-    def awsUtils = awsUtils()
-    
-    try {
-        def authResult
-        if (params.ENVIRONMENT == 'prod') {
-            // 本番環境の認証チェック
-            authResult = awsUtils.general.verifyProdAwsCredentials(
-                params.AWS_ACCESS_KEY_ID,
-                params.AWS_SECRET_ACCESS_KEY,
-                params.AWS_SESSION_TOKEN,
-                params.AWS_REGION
-            )
-        } else {
-            // 開発環境の認証チェック
-            authResult = awsUtils.general.verifyDevAwsCredentials(
-                params.AWS_ACCESS_KEY_ID,
-                params.AWS_SECRET_ACCESS_KEY,
-                params.AWS_SESSION_TOKEN,
-                params.AWS_REGION
-            )
+    // AWS認証情報が提供されている場合のみ検証
+    if (params.AWS_ACCESS_KEY_ID && params.AWS_SECRET_ACCESS_KEY) {
+        // AWS認証チェック用のユーティリティを初期化
+        def awsUtils = awsUtils()
+        
+        try {
+            def authResult
+            if (params.ENVIRONMENT == 'prod') {
+                // 本番環境の認証チェック
+                authResult = awsUtils.general.verifyProdAwsCredentials(
+                    params.AWS_ACCESS_KEY_ID,
+                    params.AWS_SECRET_ACCESS_KEY,
+                    params.AWS_SESSION_TOKEN,
+                    params.AWS_REGION
+                )
+            } else {
+                // 開発環境の認証チェック
+                authResult = awsUtils.general.verifyDevAwsCredentials(
+                    params.AWS_ACCESS_KEY_ID,
+                    params.AWS_SECRET_ACCESS_KEY,
+                    params.AWS_SESSION_TOKEN,
+                    params.AWS_REGION
+                )
+            }
+            
+            // 認証結果を環境変数に保存（後続ステージで使用）
+            env.AWS_ACCOUNT_ID = authResult.accountId
+            env.AWS_PRINCIPAL_ARN = authResult.arn
+            
+            echo """
+                ✅ AWS認証検証完了
+                アカウントID: ${authResult.accountId}
+                プリンシパル: ${authResult.arn}
+            """.stripIndent()
+            
+        } catch (Exception e) {
+            error "AWS認証検証に失敗しました: ${e.message}"
         }
-        
-        // 認証結果を環境変数に保存（後続ステージで使用）
-        env.AWS_ACCOUNT_ID = authResult.accountId
-        env.AWS_PRINCIPAL_ARN = authResult.arn
-        
+    } else {
         echo """
-            ✅ AWS認証検証完了
-            アカウントID: ${authResult.accountId}
-            プリンシパル: ${authResult.arn}
+            ℹ️ IAMロールベースの認証を使用
+            認証検証はDockerコンテナ内で実行されます
         """.stripIndent()
-        
-    } catch (Exception e) {
-        error "AWS認証検証に失敗しました: ${e.message}"
     }
 }
 

@@ -1,0 +1,68 @@
+---
+# defaults file for cleanup_image_builder_amis
+
+# 保持する世代数
+retention_count: 2
+
+# ドライランモード（実際の削除を行わない）
+dry_run: false
+
+# Image Builder名のパターン
+image_builder_name_patterns:
+  - "{{ project_name | default('jenkins-infra') }}-agent-x86-*"
+  - "{{ project_name | default('jenkins-infra') }}-agent-arm-*"
+
+# AMI名のパターン
+ami_name_patterns:
+  - "{{ project_name | default('jenkins-infra') }}-agent-x86-{{ env_name }}-*"
+  - "{{ project_name | default('jenkins-infra') }}-agent-arm-{{ env_name }}-*"
+
+# 削除対象のリソースタイプ（必要に応じて無効化可能）
+cleanup_targets:
+  amis: true
+  snapshots: true
+  image_builder_versions: true
+  image_builder_pipelines: true
+
+# 並列削除の設定
+parallel_deletion: true
+max_parallel_deletions: 5
+
+# リトライ設定
+retry_count: 3
+retry_delay: 5
+
+# レポート設定
+generate_report: true
+report_format: json
+report_path: "/tmp/image_builder_cleanup_report_{{ ansible_date_time.epoch }}.json"
+
+# 通知設定（将来の拡張用）
+notify_on_completion: false
+notify_on_error: true
+
+# タグフィルタ（追加のフィルタリング条件）
+tag_filters:
+  - key: "CreatedBy"
+    value: "EC2 Image Builder"
+  - key: "Environment"
+    value: "{{ env_name }}"
+
+# タイムアウト設定
+operation_timeout: 600  # 各削除操作のタイムアウト（秒）
+total_timeout: 3600     # 全体のタイムアウト（秒）
+
+# ログ設定
+verbose_logging: true
+log_deleted_resources: true
+
+# 安全機能
+safety_checks:
+  # 最小保持数（この数以下にはしない）
+  minimum_retention: 1
+  # 作成から保護期間（日数）
+  grace_period_days: 1
+  # 使用中のAMIは削除しない
+  skip_in_use: true
+  # 削除前の確認プロンプト（対話モード時のみ）
+  confirm_before_delete: false

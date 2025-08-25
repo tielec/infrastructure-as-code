@@ -159,57 +159,17 @@ const jenkinsAgentRole = new aws.iam.Role(`agent-role`, {
     },
 });
 
-// マネージドポリシーのアタッチ
-const ssmPolicy = new aws.iam.RolePolicyAttachment(`agent-ssm-policy`, {
+// Pulumiを使用したインフラストラクチャ管理のため、AdministratorAccessポリシーをアタッチ
+// 注意: Pulumiで様々なAWSリソースを管理するため、広範な権限が必要
+const adminPolicy = new aws.iam.RolePolicyAttachment(`agent-admin-policy`, {
     role: jenkinsAgentRole.name,
-    policyArn: "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore",
-});
-
-const efsPolicy = new aws.iam.RolePolicyAttachment(`agent-efs-policy`, {
-    role: jenkinsAgentRole.name,
-    policyArn: "arn:aws:iam::aws:policy/AmazonElasticFileSystemClientReadWriteAccess",
-});
-
-// ECRとS3アクセス権限（ビルドアーティファクト用）
-const buildResourcesPolicy = new aws.iam.Policy(`agent-build-policy`, {
-    description: "Policy for Jenkins agent to access build resources",
-    policy: JSON.stringify({
-        Version: "2012-10-17",
-        Statement: [
-            {
-                Effect: "Allow",
-                Action: [
-                    "ecr:GetAuthorizationToken",
-                    "ecr:BatchCheckLayerAvailability",
-                    "ecr:GetDownloadUrlForLayer",
-                    "ecr:BatchGetImage",
-                    "ecr:InitiateLayerUpload",
-                    "ecr:UploadLayerPart",
-                    "ecr:CompleteLayerUpload",
-                    "ecr:PutImage"
-                ],
-                Resource: "*"
-            },
-            {
-                Effect: "Allow",
-                Action: [
-                    "s3:GetObject",
-                    "s3:PutObject",
-                    "s3:ListBucket"
-                ],
-                Resource: [
-                    `arn:aws:s3:::jenkins-infra-artifacts-${environment}*`,
-                    `arn:aws:s3:::jenkins-infra-artifacts-${environment}*/*`
-                ]
-            }
-        ]
-    }),
+    policyArn: "arn:aws:iam::aws:policy/AdministratorAccess",
 });
 
 // SSMパラメータストア追加権限（ダッシュボード用）
-// AmazonSSMManagedInstanceCoreには含まれていないDescribeParametersのみ追加
+// AdministratorAccessに含まれているが、明示的に記載
 const ssmParameterReadPolicy = new aws.iam.Policy(`agent-ssm-parameter-policy`, {
-    description: "Additional SSM permissions for parameter dashboard",
+    description: "Additional SSM permissions for parameter dashboard (redundant with AdministratorAccess)",
     policy: JSON.stringify({
         Version: "2012-10-17",
         Statement: [
@@ -217,7 +177,7 @@ const ssmParameterReadPolicy = new aws.iam.Policy(`agent-ssm-parameter-policy`, 
                 Sid: "SSMParameterList",
                 Effect: "Allow",
                 Action: [
-                    "ssm:DescribeParameters"  // パラメータ一覧取得（AmazonSSMManagedInstanceCoreに含まれていない）
+                    "ssm:DescribeParameters"  // パラメータ一覧取得
                 ],
                 Resource: "*"
             }
@@ -230,14 +190,6 @@ const ssmParameterReadPolicyAttachment = new aws.iam.RolePolicyAttachment(
     {
         role: jenkinsAgentRole.name,
         policyArn: ssmParameterReadPolicy.arn,
-    }
-);
-
-const buildResourcesPolicyAttachment = new aws.iam.RolePolicyAttachment(
-    `agent-build-policy-attachment`, 
-    {
-        role: jenkinsAgentRole.name,
-        policyArn: buildResourcesPolicy.arn,
     }
 );
 

@@ -1,0 +1,70 @@
+---
+# AMIに関連するスナップショットを削除
+
+- name: Delete snapshots associated with AMIs
+  block:
+    # 削除対象AMIのスナップショットIDを収集
+    - name: Collect snapshot IDs from AMIs
+      ansible.builtin.set_fact:
+        all_snapshot_ids: >-
+          {%- set snapshots = [] -%}
+          {%- for ami in all_amis_to_delete | default([]) -%}
+            {%- for bdm in ami.BlockDeviceMappings | default([]) -%}
+              {%- if bdm.Ebs is defined and bdm.Ebs.SnapshotId is defined -%}
+                {%- set _ = snapshots.append({'ami_id': ami.ImageId, 'ami_name': ami.Name, 'snapshot_id': bdm.Ebs.SnapshotId}) -%}
+              {%- endif -%}
+            {%- endfor -%}
+          {%- endfor -%}
+          {{ snapshots }}
+
+    - name: Display snapshots to delete
+      ansible.builtin.debug:
+        msg: "Found {{ all_snapshot_ids | length }} snapshot(s) to delete"
+
+    # スナップショットの削除（並列処理対応）
+    - name: Delete snapshots in parallel
+      ansible.builtin.include_role:
+        name: aws_cli_helper
+        tasks_from: execute
+      vars:
+        aws_command: "aws ec2 delete-snapshot --snapshot-id {{ item.snapshot_id }}"
+        operation_name: "Delete snapshot {{ item.snapshot_id }} from AMI {{ item.ami_name }}"
+        parse_output: false
+      loop: "{{ all_snapshot_ids[:max_parallel_deletions | int] if parallel_deletion else all_snapshot_ids }}"
+      loop_control:
+        label: "{{ item.snapshot_id }}"
+      when: all_snapshot_ids | length > 0
+      register: snapshot_deletion_batch1
+
+    # 残りのスナップショットを削除（並列処理の場合）
+    - name: Delete remaining snapshots
+      ansible.builtin.include_role:
+        name: aws_cli_helper
+        tasks_from: execute
+      vars:
+        aws_command: "aws ec2 delete-snapshot --snapshot-id {{ item.snapshot_id }}"
+        operation_name: "Delete snapshot {{ item.snapshot_id }}"
+        parse_output: false
+      loop: "{{ all_snapshot_ids[max_parallel_deletions | int:] }}"
+      loop_control:
+        label: "{{ item.snapshot_id }}"
+      when: 
+        - parallel_deletion
+        - all_snapshot_ids | length > max_parallel_deletions | int
+
+    - name: Record snapshot deletion results
+      ansible.builtin.set_fact:
+        snapshot_cleanup_results:
+          total_deleted: "{{ all_snapshot_ids | length }}"
+          deleted_snapshots: "{{ all_snapshot_ids }}"
+
+  rescue:
+    - name: Handle snapshot deletion errors
+      ansible.builtin.debug:
+        msg:
+          - "WARNING: Some snapshots may not have been deleted"
+          - "Error: {{ ansible_failed_result.msg | default('Unknown error') }}"
+      
+    - name: Continue despite errors
+      ansible.builtin.set_fact:
+        snapshot_cleanup_warning: true

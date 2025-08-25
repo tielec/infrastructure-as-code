@@ -1,0 +1,74 @@
+---
+# 特定パターンのAMIに対して世代管理を実施
+
+- name: Process retention for pattern {{ pattern }}
+  block:
+    # デバッグ: 処理中のパターンを表示
+    - name: Debug - Processing pattern
+      ansible.builtin.debug:
+        msg: "Processing pattern: {{ pattern }}"
+      when: verbose_logging
+
+    # このパターンのAMIを取得
+    - name: Get AMIs for current pattern
+      ansible.builtin.set_fact:
+        pattern_amis: >-
+          {%- set result = [] -%}
+          {%- for pr in ami_pattern_results | default([]) -%}
+            {%- if pr.pattern == pattern -%}
+              {%- for ami in pr.amis | default([]) -%}
+                {%- set _ = result.append(ami) -%}
+              {%- endfor -%}
+            {%- endif -%}
+          {%- endfor -%}
+          {{ result }}
+
+    # デバッグ: 抽出されたAMI数を表示
+    - name: Debug - Show extracted AMIs count
+      ansible.builtin.debug:
+        msg: "Found {{ pattern_amis | length }} AMIs for pattern {{ pattern }}"
+
+    # 作成日でソート（新しい順）
+    - name: Sort AMIs by creation date
+      ansible.builtin.set_fact:
+        sorted_amis: "{{ pattern_amis | sort(attribute='CreationDate', reverse=True) }}"
+      when: pattern_amis | length > 0
+
+    # 保持するAMIと削除するAMIを分離
+    - name: Identify AMIs to keep and delete
+      ansible.builtin.set_fact:
+        amis_to_keep: "{{ sorted_amis[:retention_count | int] | default([]) }}"
+        amis_to_delete: "{{ sorted_amis[retention_count | int:] | default([]) }}"
+      when: sorted_amis is defined
+
+    # 安全チェック：猶予期間内のAMIを除外
+    - name: Apply grace period filter
+      ansible.builtin.set_fact:
+        filtered_amis_to_delete: >-
+          {%- set result = [] -%}
+          {%- set grace_date = (ansible_date_time.epoch | int - (safety_checks.grace_period_days | int * 86400)) -%}
+          {%- for ami in amis_to_delete | default([]) -%}
+            {%- set ami_epoch = ami.CreationDate | to_datetime('%Y-%m-%dT%H:%M:%S.%fZ') | int -%}
+            {%- if ami_epoch < grace_date -%}
+              {%- set _ = result.append(ami) -%}
+            {%- endif -%}
+          {%- endfor -%}
+          {{ result }}
+      when: 
+        - amis_to_delete is defined
+        - amis_to_delete | length > 0
+
+    # 削除リストに追加
+    - name: Add to deletion list
+      ansible.builtin.set_fact:
+        ami_deletion_lists: "{{ ami_deletion_lists | default([]) + [{'pattern': pattern, 'to_keep': amis_to_keep | default([]), 'to_delete': filtered_amis_to_delete | default([])}] }}"
+
+    # パターンごとのサマリー表示
+    - name: Display retention summary for pattern
+      ansible.builtin.debug:
+        msg:
+          - "Pattern: {{ pattern }}"
+          - "  Found: {{ pattern_amis | length }}"
+          - "  Keep: {{ amis_to_keep | default([]) | length }}"
+          - "  Delete: {{ filtered_amis_to_delete | default([]) | length }}"
+      when: verbose_logging
