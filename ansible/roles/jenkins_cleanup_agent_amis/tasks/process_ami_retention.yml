@@ -3,6 +3,12 @@
 
 - name: Process retention for pattern {{ pattern }}
   block:
+    # デバッグ: 処理中のパターンを表示
+    - name: Debug - Processing pattern
+      ansible.builtin.debug:
+        msg: "Processing pattern: {{ pattern }}"
+      when: verbose_logging
+
     # このパターンのAMIを取得
     - name: Get AMIs for current pattern
       ansible.builtin.set_fact:
@@ -10,10 +16,17 @@
           {%- set result = [] -%}
           {%- for pr in ami_pattern_results | default([]) -%}
             {%- if pr.pattern == pattern -%}
-              {%- set result = pr.amis | default([]) -%}
+              {%- for ami in pr.amis | default([]) -%}
+                {%- set _ = result.append(ami) -%}
+              {%- endfor -%}
             {%- endif -%}
           {%- endfor -%}
           {{ result }}
+
+    # デバッグ: 抽出されたAMI数を表示
+    - name: Debug - Show extracted AMIs count
+      ansible.builtin.debug:
+        msg: "Found {{ pattern_amis | length }} AMIs for pattern {{ pattern }}"
 
     # 作成日でソート（新しい順）
     - name: Sort AMIs by creation date
