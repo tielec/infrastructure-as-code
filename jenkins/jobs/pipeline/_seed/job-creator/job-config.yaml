@@ -246,84 +246,6 @@ jenkins-managed-repositories:
 pulumi-projects:
   infrastructure-as-code:
     projects:
-      # Jenkins関連プロジェクト
-      jenkins_ssm_init:
-        project_path: "jenkins-ssm-init"
-        display_name: "Jenkins SSM Init"
-        project_type: "nodejs"
-        description: "Jenkins SSMパラメータの初期化"
-        environments: ['common']  # 共通環境
-      
-      jenkins_network:
-        project_path: "jenkins-network"
-        display_name: "Jenkins Network"
-        project_type: "nodejs"
-        description: "Jenkinsネットワーク構成"
-        environments: ['common']  # 共通環境
-      
-      jenkins_security:
-        project_path: "jenkins-security"
-        display_name: "Jenkins Security"
-        project_type: "nodejs"
-        description: "Jenkinsセキュリティグループとロール"
-        environments: ['common']  # 共通環境
-      
-      jenkins_storage:
-        project_path: "jenkins-storage"
-        display_name: "Jenkins Storage"
-        project_type: "nodejs"
-        description: "JenkinsストレージEFS"
-        environments: ['common']  # 共通環境
-      
-      jenkins_loadbalancer:
-        project_path: "jenkins-loadbalancer"
-        display_name: "Jenkins Load Balancer"
-        project_type: "nodejs"
-        description: "Jenkinsロードバランサー"
-        environments: ['common']  # 共通環境
-      
-      jenkins_nat:
-        project_path: "jenkins-nat"
-        display_name: "Jenkins NAT"
-        project_type: "nodejs"
-        description: "Jenkins NATインスタンス"
-        environments: ['common']  # 共通環境
-      
-      jenkins_controller:
-        project_path: "jenkins-controller"
-        display_name: "Jenkins Controller"
-        project_type: "nodejs"
-        description: "Jenkinsコントローラーインスタンス"
-        environments: ['common']  # 共通環境
-      
-      jenkins_config:
-        project_path: "jenkins-config"
-        display_name: "Jenkins Config"
-        project_type: "nodejs"
-        description: "Jenkins設定管理"
-        environments: ['common']  # 共通環境
-      
-      jenkins_agent_ami:
-        project_path: "jenkins-agent-ami"
-        display_name: "Jenkins Agent AMI"
-        project_type: "nodejs"
-        description: "JenkinsエージェントAMI作成"
-        environments: ['common']  # 共通環境
-      
-      jenkins_agent:
-        project_path: "jenkins-agent"
-        display_name: "Jenkins Agent Fleet"
-        project_type: "nodejs"
-        description: "JenkinsエージェントFleet管理"
-        environments: ['common']  # 共通環境
-      
-      jenkins_application:
-        project_path: "jenkins-application"
-        display_name: "Jenkins Application"
-        project_type: "nodejs"
-        description: "Jenkinsアプリケーション設定"
-        environments: ['common']  # 共通環境
-      
       # Lambda関連プロジェクト
       lambda_ssm_init:
         project_path: "lambda-ssm-init"
@@ -421,112 +343,23 @@ pulumi-projects:
 ansible-playbooks:
   infrastructure-as-code:
     playbooks:
-      # Bootstrap
-      bootstrap_setup:
-        playbook_path: "bootstrap-setup.yml"
-        display_name: "Bootstrap Setup"
-        description: "ブートストラップ環境のセットアップ"
-        category: "bootstrap"
-        environments: ['common']  # 共通環境
-      
-      # Jenkins Deploy
-      jenkins_deploy_ssm_init:
-        playbook_path: "jenkins/deploy/deploy_jenkins_ssm_init.yml"
-        display_name: "Jenkins SSM Init"
-        description: "Jenkins SSMパラメータの初期化"
-        category: "jenkins-deploy"
-        environments: ['common']  # 共通環境
-      
-      jenkins_deploy_network_security:
-        playbook_path:
-          - "jenkins/deploy/deploy_jenkins_network.yml"
-          - "jenkins/deploy/deploy_jenkins_security.yml"
-        display_name: "Jenkins Network & Security"
-        description: "Jenkinsネットワークとセキュリティ設定のデプロイ"
-        category: "jenkins-deploy"
-        environments: ['common']  # 共通環境
-      
-      jenkins_deploy_storage:
-        playbook_path: "jenkins/deploy/deploy_jenkins_storage.yml"
-        display_name: "Jenkins Storage"
-        description: "Jenkinsストレージのデプロイ"
-        category: "jenkins-deploy"
-        environments: ['common']  # 共通環境
-      
-      jenkins_deploy_loadbalancer:
-        playbook_path: "jenkins/deploy/deploy_jenkins_loadbalancer.yml"
-        display_name: "Jenkins Load Balancer"
-        description: "Jenkinsロードバランサーのデプロイ"
-        category: "jenkins-deploy"
-        environments: ['common']  # 共通環境
-      
-      jenkins_deploy_nat:
-        playbook_path: "jenkins/deploy/deploy_jenkins_nat.yml"
-        display_name: "Jenkins NAT"
-        description: "Jenkins NATのデプロイ"
-        category: "jenkins-deploy"
-        environments: ['common']  # 共通環境
-      
-      jenkins_deploy_controller_config:
-        playbook_path:
-          - "jenkins/deploy/deploy_jenkins_controller.yml"
-          - "jenkins/deploy/deploy_jenkins_config.yml"
-        display_name: "Jenkins Controller & Config"
-        description: "Jenkinsコントローラーと設定のデプロイ"
-        category: "jenkins-deploy"
-        environments: ['common']  # 共通環境
-      
-      jenkins_deploy_agents:
-        playbook_path:
-          - "jenkins/deploy/deploy_jenkins_agent_ami.yml"
-          - "jenkins/deploy/deploy_jenkins_agent.yml"
-        display_name: "Jenkins Agents (AMI & Fleet)"
-        description: "JenkinsエージェントAMIとFleetのデプロイ"
-        category: "jenkins-deploy"
-        environments: ['common']  # 共通環境
-        ansible_extra_vars: "trigger_ami_build=true"
-      
-      jenkins_deploy_application:
-        playbook_path: "jenkins/deploy/deploy_jenkins_application.yml"
-        display_name: "Jenkins Application"
-        description: "Jenkinsアプリケーションのデプロイ（Jenkins自体の更新）"
-        category: "jenkins-deploy"
-        environments: ['common']  # 共通環境
-      
-      # Jenkins Pipeline (グループ化されたプレイブックを使用)
-      jenkins_setup_pipeline:
-        playbook_path:
-          - "jenkins/deploy/deploy_jenkins_ssm_init.yml"
-          - "jenkins/deploy/deploy_jenkins_network.yml"
-          - "jenkins/deploy/deploy_jenkins_security.yml"
-          - "jenkins/deploy/deploy_jenkins_storage.yml"
-          - "jenkins/deploy/deploy_jenkins_loadbalancer.yml"
-          - "jenkins/deploy/deploy_jenkins_nat.yml"
-          - "jenkins/deploy/deploy_jenkins_controller.yml"
-          - "jenkins/deploy/deploy_jenkins_config.yml"
-          - "jenkins/deploy/deploy_jenkins_agent_ami.yml"
-          - "jenkins/deploy/deploy_jenkins_agent.yml"
-          - "jenkins/deploy/deploy_jenkins_application.yml"
-        display_name: "Jenkins Setup Pipeline (Full)"
-        description: "Jenkins完全セットアップパイプライン（全コンポーネントを順番にデプロイ）"
-        category: "jenkins-pipeline"
-        environments: ['common']  # 共通環境
-      
-      jenkins_teardown_pipeline:
-        playbook_path: "jenkins/jenkins_teardown_pipeline.yml"
-        display_name: "Jenkins Teardown Pipeline"
-        description: "Jenkins完全削除パイプライン（全コンポーネントを削除）"
-        category: "jenkins-pipeline"
-        environments: ['common']  # 共通環境
-        ansible_extra_vars: "confirm=true" # 削除確認フラグ（trueにしないと削除されない）
-      
       # Jenkins Misc
       update_jenkins_ami_ssm:
         playbook_path: "jenkins/misc/update_jenkins_ami_ssm.yml"
         display_name: "Update Jenkins AMI SSM"
         description: "Jenkins AMI SSMパラメータの更新"
         category: "jenkins-misc"
-        environments: ['common']  # 共通環境
+        environments: ['dev']  # 共通環境
+      
+      # Jenkins Maintenance
+      cleanup_image_builder_amis:
+        playbook_path: "jenkins/maintenance/cleanup_image_builder_amis.yml"
+        display_name: "Cleanup Image Builder AMIs"
+        description: "古いEC2 Image Builder AMIを定期的にクリーンアップ（保持数を超えた古いAMIを削除）"
+        category: "jenkins-maintenance"
+        environments: ['dev']  # 共通環境
+        ansible_extra_vars: "retention_count=2 dry_run=false generate_report=true"
+        schedule: "H 2 * * *"  # 毎日 UTC 2時に実行 （日本時間 11時）
       
       # Lambda
       lambda_ip_whitelist:

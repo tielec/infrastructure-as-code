@@ -97,6 +97,9 @@ ${playbookListText}
                 
                 // Jenkinsfileブランチ
                 stringParam('JENKINSFILE_BRANCH', 'main', 'Jenkinsfileが格納されているブランチ')
+
+                // Jenkins Libraryブランチ
+                stringParam('LIBRARY_BRANCH', 'main', 'Jenkins Shared Libraryのブランチ')
                 
                 // プレイブックパス（デフォルト値を設定）
                 stringParam('PLAYBOOKS', playbooksDefaultValue, 
@@ -131,6 +134,13 @@ ${playbookListText}
             properties {
                 // 同時実行の制限
                 disableConcurrentBuilds()
+            }
+            
+            // スケジュール設定（設定がある場合のみ）
+            if (playbookConfig.schedule) {
+                triggers {
+                    cron(playbookConfig.schedule)
+                }
             }
             
             // パイプライン定義

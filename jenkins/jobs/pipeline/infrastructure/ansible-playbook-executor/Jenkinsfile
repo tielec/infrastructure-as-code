@@ -1,6 +1,6 @@
 #!/usr/bin/env groovy
 
-@Library('jenkins-shared-lib') _
+@Library("jenkins-shared-lib@${LIBRARY_BRANCH}") _
 
 // Ansibleプレイブック設定の読み込み
 def loadPlaybookConfig() {
