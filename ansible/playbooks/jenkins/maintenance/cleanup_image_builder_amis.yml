@@ -62,21 +62,17 @@
           - "⚠️  WARNING: {{ 'This is a DRY RUN - no resources will be deleted' if cleanup_dry_run else 'ACTUAL DELETION will be performed!' }}"
           - "=========================================="
     
-    # 非ドライランモードの確認
-    - name: Confirm deletion in non-dry-run mode
-      ansible.builtin.pause:
-        prompt: |
-          
-          ⚠️  WARNING: You are about to DELETE resources in {{ env_name }} environment!
-          
-          The following will be deleted (older than {{ cleanup_retention_count }} generations):
-          - EC2 AMIs
-          - EBS Snapshots
-          - Image Builder Versions
-          - Pipeline Outputs
-          
-          Press Enter to continue or Ctrl+C to abort...
-        seconds: 10
+    # 非ドライランモードの警告表示（対話なし）
+    - name: Display deletion warning in non-dry-run mode
+      ansible.builtin.debug:
+        msg:
+          - "⚠️  WARNING: ACTUAL DELETION will be performed!"
+          - "Environment: {{ env_name }}"
+          - "The following will be deleted (older than {{ cleanup_retention_count }} generations):"
+          - "  - EC2 AMIs"
+          - "  - EBS Snapshots"
+          - "  - Image Builder Versions"
+          - "  - Pipeline Outputs"
       when: not cleanup_dry_run | bool
   
   roles:
