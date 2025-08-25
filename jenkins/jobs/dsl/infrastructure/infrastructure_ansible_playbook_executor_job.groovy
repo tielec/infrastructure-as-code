@@ -116,23 +116,6 @@ ${playbookListText}
                 
                 // 実行制御
                 booleanParam('DRY_RUN', false, '実行コマンドの確認のみ（実際には実行しない）')
-                
-                // tmux実行オプション（設定で有効な場合のみ表示）
-                if (playbookConfig.enable_tmux ?: playbookConfig.enable_nohup) {
-                    booleanParam('USE_TMUX', playbookConfig.enable_tmux ?: playbookConfig.enable_nohup, 
-                        'tmuxセッションでバックグラウンド実行\n長時間実行のプレイブックで推奨、リアルタイムログ確認可能')
-                    
-                    def timeoutMinutes = playbookConfig.tmux_timeout_minutes ?: playbookConfig.nohup_timeout_minutes ?: 60
-                    stringParam('TMUX_TIMEOUT_MINUTES', timeoutMinutes.toString(), 
-                        'tmux実行時のタイムアウト時間（分）')
-                    
-                    // 複数プレイブックの場合、タイムアウト時の動作を追加
-                    if (playbookPaths.size() > 1) {
-                        def continueOnTimeout = playbookConfig.continue_on_timeout ?: false
-                        booleanParam('CONTINUE_ON_TIMEOUT', continueOnTimeout, 
-                            'タイムアウト時も次のプレイブックを続行\n⚠️ 注意: タイムアウトしたプレイブックの処理は不完全な可能性があります')
-                    }
-                }
             }
             
             // ログローテーション設定
