@@ -92,6 +92,8 @@ gracefulモードで、エージェントジョブの完了を待つ最大時間
         
         // Jenkinsfileブランチ
         stringParam('JENKINSFILE_BRANCH', 'main', 'Jenkinsfileが格納されているブランチ')
+        // Jenkins Libraryブランチ
+        stringParam('LIBRARY_BRANCH', 'main', 'Jenkins Shared Libraryのブランチ')
     }
 
     // Pipeline定義

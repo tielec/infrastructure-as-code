@@ -67,6 +67,8 @@ def createDocumentGeneratorJob(repoConfig) {
             choiceParam('FILE_SELECTION_MODE', ['LATEST_PR', 'SPECIFIC_PR', 'ALL_FILES'], 'ファイル選択モード: 最新PR/指定PR/全ファイル')
             stringParam('PR_NUMBER', '', '処理対象とするPRの番号（FILE_SELECTION_MODEがSPECIFIC_PRの場合に使用）')
             stringParam('JENKINSFILE_BRANCH', 'main', 'Jenkinsfileが格納されているブランチ')
+            // Jenkins Libraryブランチ
+            stringParam('LIBRARY_BRANCH', 'main', 'Jenkins Shared Libraryのブランチ')
         }
 
         // パイプライン定義
