@@ -69,8 +69,6 @@ pipelineJob(fullJobName) {
         // 操作オプション
         booleanParam('DRY_RUN', false, 'ドライラン（実際の変更を行わない）')
         stringParam('JENKINSFILE_BRANCH', 'main', 'Jenkinsfileが格納されているブランチ')
-        // Jenkins Libraryブランチ
-        stringParam('LIBRARY_BRANCH', 'main', 'Jenkins Shared Libraryのブランチ')
     }
 
     // パイプライン定義

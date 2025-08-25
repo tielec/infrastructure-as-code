@@ -27,8 +27,6 @@ pipelineJob(fullJobName) {
         stringParam('TARGET_ROLE_NAME', 'jenkins-monitoring-check-role-prd', 'AssumeRoleで使用するIAMロール名')
         choiceParam('ENVIRONMENT', ['prd', 'stg', 'dev'], '環境の選択')
         stringParam('JENKINSFILE_BRANCH', 'main', 'Jenkinsfileが格納されているブランチ')
-        // Jenkins Libraryブランチ
-        stringParam('LIBRARY_BRANCH', 'main', 'Jenkins Shared Libraryのブランチ')
     }
 
     // プロパティ設定

@@ -30,8 +30,6 @@ pipelineJob(fullJobName) {
         booleanParam('DRY_RUN', false, 'ドライラン（読み取り操作のみ）')
         stringParam('REPO_URL', 'https://github.com/tielec/infrastructure-as-code', 'リポジトリのURL')
         stringParam('JENKINSFILE_BRANCH', 'main', 'Jenkinsfileが格納されているブランチ')
-        // Jenkins Libraryブランチ
-        stringParam('LIBRARY_BRANCH', 'main', 'Jenkins Shared Libraryのブランチ')
     }
 
     // プロパティ設定
