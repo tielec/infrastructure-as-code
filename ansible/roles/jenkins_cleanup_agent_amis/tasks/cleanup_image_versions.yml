@@ -12,6 +12,7 @@
         aws_command: "aws imagebuilder list-images --owner Self --output json"
         operation_name: "List Image Builder images"
         parse_output: true
+        aws_cli_helper_timeout: 60  # Image Builder検索も時間がかかる可能性があるため延長
 
     - name: Parse Image Builder images
       ansible.builtin.set_fact:

@@ -12,6 +12,7 @@
         aws_command: "aws imagebuilder list-image-pipelines --output json"
         operation_name: "List Image Builder pipelines"
         parse_output: true
+        aws_cli_helper_timeout: 60  # パイプライン検索も時間がかかる可能性があるため延長
 
     - name: Parse pipelines
       ansible.builtin.set_fact:

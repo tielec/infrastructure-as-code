@@ -18,6 +18,7 @@
           --output json
         operation_name: "List AMIs for pattern {{ pattern }}"
         parse_output: true
+        aws_cli_helper_timeout: 60  # AMI検索は時間がかかるため60秒に延長
 
     - name: Store AMIs for pattern
       ansible.builtin.set_fact:
