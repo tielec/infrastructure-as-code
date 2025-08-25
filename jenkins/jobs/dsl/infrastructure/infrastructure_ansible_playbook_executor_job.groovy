@@ -97,9 +97,6 @@ ${playbookListText}
                 
                 // Jenkinsfileブランチ
                 stringParam('JENKINSFILE_BRANCH', 'main', 'Jenkinsfileが格納されているブランチ')
-
-                // Jenkins Libraryブランチ
-                stringParam('LIBRARY_BRANCH', 'main', 'Jenkins Shared Libraryのブランチ')
                 
                 // プレイブックパス（デフォルト値を設定）
                 stringParam('PLAYBOOKS', playbooksDefaultValue, 
