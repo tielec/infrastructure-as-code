@@ -4,7 +4,7 @@
 
 // Ansibleプレイブック設定の読み込み
 def loadPlaybookConfig() {
-    def configFile = readYaml file: 'jenkins/jobs/pipeline/_seed/job-creator/job-config.yaml'
+    def configFile = readYaml file: "${env.INFRA_REPO_DIR}/jenkins/jobs/pipeline/_seed/job-creator/job-config.yaml"
     return configFile['ansible-playbooks']['infrastructure-as-code']['playbooks']
 }
 
@@ -25,11 +25,6 @@ def resolvePlaybookPath(String playbookName, def playbooksConfig) {
     error("プレイブック '${playbookName}' が設定に見つかりません")
 }
 
-// tmuxセッション名を生成
-def generateTmuxSessionName() {
-    def jobNameShort = env.JOB_NAME.split('/')[-1].replaceAll('[^a-zA-Z0-9_-]', '_').take(20)
-    return "ansible_${jobNameShort}_${env.BUILD_NUMBER}"
-}
 
 // Ansibleコマンドを構築
 def buildAnsibleCommand(playbook, params) {
@@ -86,7 +81,7 @@ def buildAnsibleCommand(playbook, params) {
 
 pipeline {
     agent {
-        label 'bootstrap-workterminal'
+        label 'ec2-fleet'
     }
     
     options {
@@ -97,7 +92,11 @@ pipeline {
     }
     
     environment {
-        ANSIBLE_BASE_DIR = "${WORKSPACE}/ansible"
+        // リポジトリディレクトリ
+        INFRA_REPO_DIR = "${WORKSPACE}/infrastructure-as-code"
+        
+        // Ansible設定
+        ANSIBLE_BASE_DIR = "${INFRA_REPO_DIR}/ansible"
         ANSIBLE_INVENTORY = "${ANSIBLE_BASE_DIR}/inventory"
         ANSIBLE_PLAYBOOKS_DIR = "${ANSIBLE_BASE_DIR}/playbooks"
         ANSIBLE_FORCE_COLOR = 'true'
@@ -124,7 +123,6 @@ pipeline {
                     タグ: ${params.ANSIBLE_TAGS}
                     スキップタグ: ${params.ANSIBLE_SKIP_TAGS}
                     ドライラン: ${params.DRY_RUN}
-                    tmuxモード: ${params.USE_TMUX}
                     ========================================
                     """
                     
@@ -136,17 +134,21 @@ pipeline {
             }
         }
         
-        stage('リポジトリ更新') {
+        stage('リポジトリチェックアウト') {
             steps {
                 script {
-                    echo "Workterminalのリポジトリを更新中..."
+                    echo "リポジトリをチェックアウト中..."
                     
-                    // リポジトリの更新（CIモードで実行）
-                    sh """
-                        cd ~/infrastructure-as-code
-                        chmod +x scripts/workterminal/update-repo-branch.sh
-                        ./scripts/workterminal/update-repo-branch.sh ${params.BRANCH} --ci
-                    """
+                    // infrastructure-as-codeリポジトリのチェックアウト
+                    dir(env.INFRA_REPO_DIR) {
+                        gitUtils.checkoutRepository(
+                            env.GIT_INFRASTRUCTURE_REPO_URL,
+                            params.BRANCH,
+                            env.GITHUB_APP_CREDENTIALS_ID
+                        )
+                    }
+                    
+                    echo "チェックアウト完了: ブランチ ${params.BRANCH}"
                 }
             }
         }
@@ -154,7 +156,7 @@ pipeline {
         stage('プレイブック解析') {
             steps {
                 script {
-                    // プレイブック設定の読み込み
+                    // プレイブック設定の読み込み（リポジトリチェックアウト後）
                     def playbooksConfig = loadPlaybookConfig()
                     
                     // プレイブックリストの解析
@@ -175,26 +177,6 @@ pipeline {
             steps {
                 script {
                     def playbookList = env.RESOLVED_PLAYBOOKS.split(',')
-                    def useTmux = params.USE_TMUX ?: false
-                    def tmuxTimeoutMinutes = params.TMUX_TIMEOUT_MINUTES ?: '60'
-                    def continueOnTimeout = params.CONTINUE_ON_TIMEOUT ?: false
-                    def timedOutPlaybooks = []
-                    
-                    // tmuxセッション名を生成（全プレイブックで共有）
-                    def tmuxSessionName = generateTmuxSessionName()
-                    env.tmuxSessionName = tmuxSessionName // post処理で使用
-                    env.useTmux = useTmux.toString()
-                    
-                    if (useTmux) {
-                        echo """
-                        ========================================
-                         tmuxモードで実行
-                        ========================================
-                        セッション名: ${tmuxSessionName}
-                        タイムアウト: ${tmuxTimeoutMinutes}分
-                        タイムアウト時の続行: ${continueOnTimeout ? '有効' : '無効'}
-                        """
-                    }
                     
                     playbookList.eachWithIndex { playbook, index ->
                         def stageName = "プレイブック ${index + 1}/${playbookList.size()}: ${playbook}"
@@ -218,84 +200,18 @@ pipeline {
                         if (params.DRY_RUN) {
                             echo "ドライランモード: 実際の実行はスキップされました"
                         } else {
-                            if (useTmux) {
-                                // tmuxで実行
-                                def windowName = "playbook_${index}"
-                                echo "tmuxセッション内で実行を開始します..."
-                                echo "セッション: ${tmuxSessionName}, ウィンドウ: ${windowName}"
                                 
-                                // 外部スクリプトを使用してtmux実行
-                                def exitCode = sh(
-                                    script: """
-                                        cd ~/infrastructure-as-code
-                                        chmod +x scripts/workterminal/run-ansible-in-tmux.sh
-                                        ./scripts/workterminal/run-ansible-in-tmux.sh \
-                                            "${tmuxSessionName}" \
-                                            "${windowName}" \
-                                            "${tmuxTimeoutMinutes}" \
-                                            "${ansibleCmd}"
-                                    """,
-                                    returnStatus: true
-                                )
                                 
-                                if (exitCode == 2) {
-                                    // タイムアウト
-                                    timedOutPlaybooks.add(playbook)
-                                    echo "⚠️ 警告: このプレイブックはタイムアウトしました"
-                                    
-                                    if (!continueOnTimeout && index < playbookList.size() - 1) {
-                                        error("タイムアウトのため実行を中止します")
-                                    }
-                                } else if (exitCode != 0) {
-                                    // その他のエラー
-                                    error("Ansibleの実行が失敗しました（終了コード: ${exitCode}）")
-                                }
-                                
-                                echo """
-                                ========================================
-                                 実行情報
-                                ========================================
-                                tmuxセッション: ${tmuxSessionName}
-                                ウィンドウ: ${windowName}
-                                
-                                ログ確認方法:
-                                1. リアルタイムログ表示:
-                                   tmux attach -t ${tmuxSessionName}
-                                   (終了: Ctrl+b, d でデタッチ)
-                                
-                                2. ログファイル:
-                                   /tmp/${tmuxSessionName}_${windowName}.log
-                                ========================================
-                                """
-                            } else {
-                                // 通常実行
-                                sh """
-                                    cd ~/infrastructure-as-code/ansible
-                                    ${ansibleCmd}
-                                """
-                            }
+                            // Ansible実行
+                            sh """
+                                cd ${ANSIBLE_BASE_DIR}
+                                ${ansibleCmd}
+                            """
                         }
                         
                         if (index < playbookList.size() - 1) {
                             echo "次のプレイブックに進みます..."
                         }
-                    }
-                    
-                    // タイムアウトサマリーの表示
-                    if (timedOutPlaybooks.size() > 0) {
-                        echo """
-                        ========================================
-                         ⚠️ タイムアウト警告
-                        ========================================
-                        以下のプレイブックがタイムアウトしました:
-                        ${timedOutPlaybooks.collect { "  - ${it}" }.join('\n')}
-                        
-                        これらのプレイブックは完全に実行されていない可能性があります。
-                        ログファイルを確認して、必要に応じて再実行してください。
-                        ========================================
-                        """
-                        
-                        currentBuild.result = 'UNSTABLE'
                     }
                 }
             }
@@ -304,24 +220,12 @@ pipeline {
     
     post {
         success {
-            script {
-                if (currentBuild.result == 'UNSTABLE') {
-                    echo """
-                    ========================================
-                     Ansible実行完了（警告あり）
-                    ========================================
-                    実行は完了しましたが、一部のプレイブックが
-                    タイムアウトしました。詳細は上記の警告を確認してください。
-                    """
-                } else {
-                    echo """
-                    ========================================
-                     Ansible実行成功
-                    ========================================
-                    すべてのプレイブックが正常に実行されました。
-                    """
-                }
-            }
+            echo """
+            ========================================
+             Ansible実行成功
+            ========================================
+            すべてのプレイブックが正常に実行されました。
+            """
         }
         
         failure {
@@ -335,23 +239,6 @@ pipeline {
         }
         
         always {
-            script {
-                // tmuxセッションのクリーンアップ
-                if (env.useTmux == 'true' && env.tmuxSessionName) {
-                    sh """
-                        # tmuxセッションが存在する場合は削除
-                        if tmux has-session -t ${env.tmuxSessionName} 2>/dev/null; then
-                            echo "tmuxセッション '${env.tmuxSessionName}' をクリーンアップしています..."
-                            tmux kill-session -t ${env.tmuxSessionName}
-                            echo "tmuxセッションをクリーンアップしました"
-                        fi
-                        
-                        # 一時ファイルのクリーンアップ
-                        rm -f /tmp/${env.tmuxSessionName}_*.log
-                        rm -f /tmp/${env.tmuxSessionName}_*.log.timeout
-                    """ 
-                }
-            }
             cleanWs()
         }
     }
