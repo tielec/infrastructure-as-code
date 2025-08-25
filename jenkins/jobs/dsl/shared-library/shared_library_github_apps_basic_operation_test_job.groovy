@@ -32,8 +32,6 @@ pipelineJob(fullJobName) {
         stringParam('REPO_NAME', 'infrastructure-as-code', 'リポジトリ名')
         stringParam('BASE_BRANCH', 'main', 'PRのベースブランチ（マージ先のブランチ）')
         stringParam('JENKINSFILE_BRANCH', 'main', 'Jenkinsfileが格納されているブランチ')
-        // Jenkins Libraryブランチ
-        stringParam('LIBRARY_BRANCH', 'main', 'Jenkins Shared Libraryのブランチ')
     }
 
     // プロパティ設定

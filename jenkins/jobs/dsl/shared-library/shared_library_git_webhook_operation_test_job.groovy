@@ -30,8 +30,6 @@ pipelineJob(fullJobName) {
         booleanParam('CLEANUP_AFTER_TEST', true, 'テスト後にリソースを削除する')
         booleanParam('DRY_RUN', false, 'ドライラン（読み取り操作のみ）')
         stringParam('JENKINSFILE_BRANCH', 'main', 'Jenkinsfileが格納されているブランチ')
-        // Jenkins Libraryブランチ
-        stringParam('LIBRARY_BRANCH', 'main', 'Jenkins Shared Libraryのブランチ')
     }
 
     // プロパティ設定

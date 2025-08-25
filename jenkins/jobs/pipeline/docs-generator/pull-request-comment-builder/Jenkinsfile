@@ -1,4 +1,4 @@
-@Library("jenkins-shared-lib@${LIBRARY_BRANCH}") _
+@Library('jenkins-shared-lib') _
 
 /**
  * GitHub PRコメント自動生成パイプライン

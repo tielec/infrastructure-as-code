@@ -65,8 +65,6 @@ repositories.each { repo ->
             booleanParam('UPDATE_TITLE', false, 'PRのタイトルを更新するかどうか')
             booleanParam('FORCE_ANALYSIS', false, '既存のコメントが存在しても強制的に分析とコメント更新を実行するかどうか')
             stringParam('JENKINSFILE_BRANCH', 'main', 'Jenkinsfileが格納されているブランチ')
-            // Jenkins Libraryブランチ
-            stringParam('LIBRARY_BRANCH', 'main', 'Jenkins Shared Libraryのブランチ')
         }
         
         // パイプライン定義

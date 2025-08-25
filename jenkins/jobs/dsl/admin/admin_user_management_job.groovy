@@ -53,8 +53,6 @@ pipelineJob(fullJobName) {
         textParam('USERS_TO_DELETE', '', 'Comma-separated list of usernames to delete (e.g., user1,user2,user3). Only works when CLEANUP_USERS is true.')
         booleanParam('DELETE_NON_DOMAIN_USERS', false, 'Delete all non @tielec.net users except admin and SYSTEM. Only works when CLEANUP_USERS is true.')
         stringParam('JENKINSFILE_BRANCH', 'main', 'Jenkinsfileが格納されているブランチ')
-        // Jenkins Libraryブランチ
-        stringParam('LIBRARY_BRANCH', 'main', 'Jenkins Shared Libraryのブランチ')
     }
 
     // パイプライン定義

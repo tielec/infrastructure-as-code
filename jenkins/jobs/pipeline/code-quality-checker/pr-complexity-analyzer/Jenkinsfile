@@ -1,4 +1,4 @@
-@Library("jenkins-shared-lib@${LIBRARY_BRANCH}") _
+@Library('jenkins-shared-lib') _
 
 /**
  * PR複雑度解析・コメント自動生成パイプライン

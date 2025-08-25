@@ -152,8 +152,6 @@ pulumiProjects.each { repoKey, repoConfig ->
                     
                     // Jenkinsfileブランチ
                     stringParam('JENKINSFILE_BRANCH', 'main', 'Jenkinsfileが格納されているブランチ')
-                    // Jenkins Libraryブランチ
-                    stringParam('LIBRARY_BRANCH', 'main', 'Jenkins Shared Libraryのブランチ')
                     
                     choiceParam('PULUMI_CONFIG_PASSPHRASE_CREDENTIAL_ID', [envConfig.passphraseCredentialId], 'Pulumiパスフレーズ（自動設定） - Pulumiスタック暗号化用のパスフレーズ（環境により自動設定）')
                 }
