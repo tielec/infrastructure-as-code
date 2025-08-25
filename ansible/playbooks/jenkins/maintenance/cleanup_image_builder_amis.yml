@@ -123,19 +123,27 @@
         snapshot_cleanup_warning | default(false) or
         pipeline_cleanup_warning | default(false)
     
-    # 次のステップの案内
-    - name: Display next steps
+    # 次のステップの案内（ドライランモード）
+    - name: Display next steps for dry run
       ansible.builtin.debug:
         msg:
           - "=========================================="
           - "Next Steps:"
           - "=========================================="
-          - "{% if cleanup_dry_run %}"
           - "1. Review the dry run results above"
           - "2. If satisfied, run with: -e 'dry_run=false' to perform actual deletion"
-          - "{% else %}"
+          - "=========================================="
+      when: cleanup_dry_run | bool
+    
+    # 次のステップの案内（実行モード）
+    - name: Display next steps for actual run
+      ansible.builtin.debug:
+        msg:
+          - "=========================================="
+          - "Next Steps:"
+          - "=========================================="
           - "1. Cleanup completed successfully"
           - "2. Review the report at: {{ report_path | default('/tmp/') }}"
           - "3. Consider scheduling this as a regular maintenance task"
-          - "{% endif %}"
           - "=========================================="
+      when: not cleanup_dry_run | bool
