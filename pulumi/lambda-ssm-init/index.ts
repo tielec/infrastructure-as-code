@@ -36,7 +36,7 @@ const environmentConfig = {
         enableDatabase: false,
         natHighAvailability: false,
         natInstanceType: "t3.nano",
-        vpcEndpoints: ["s3", "ssm", "secretsmanager"],
+        vpcEndpoints: ["s3"],
     },
     prod: {
         vpcCidr: "10.3.0.0/16",
@@ -52,7 +52,7 @@ const environmentConfig = {
         enableDatabase: true,
         natHighAvailability: true,
         natInstanceType: "t3.medium",
-        vpcEndpoints: ["s3", "ssm", "secretsmanager", "dynamodb", "rds"],
+        vpcEndpoints: ["s3", "dynamodb"],
     },
 };
 
@@ -105,15 +105,13 @@ const commonParams = {
     // データベース設定
     [`${paramPrefix}/database/enabled`]: String(envConfig.enableDatabase),
     
-    // Phase設定（Phase 2の機能）
+    // 将来的な機能拡張用設定
     [`${paramPrefix}/phase/isolated-subnets-enabled`]: String(envConfig.enableDatabase),
     [`${paramPrefix}/phase/database-sg-enabled`]: String(envConfig.enableDatabase),
     
-    // VPCエンドポイント個別設定
+    // VPCエンドポイント個別設定（Gateway型のみ）
     [`${paramPrefix}/vpce/enable-s3`]: String(envConfig.vpcEndpoints.includes("s3")),
     [`${paramPrefix}/vpce/enable-dynamodb`]: String(envConfig.vpcEndpoints.includes("dynamodb")),
-    [`${paramPrefix}/vpce/enable-secrets-manager`]: String(envConfig.vpcEndpoints.includes("secretsmanager")),
-    [`${paramPrefix}/vpce/enable-kms`]: String(envConfig.vpcEndpoints.includes("kms")),
     
     // Lambda設定（追加）
     [`${paramPrefix}/lambda/memory-size`]: String(envConfig.lambdaMemory),

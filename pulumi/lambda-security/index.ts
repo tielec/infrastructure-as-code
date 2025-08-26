@@ -164,9 +164,9 @@ const dlqSecurityGroup = new aws.ec2.SecurityGroup("dlq-sg", {
 });
 
 // ========================================
-// Phase 2: RDS/DynamoDB用セキュリティグループ（将来用）
+// RDS/DynamoDB用セキュリティグループ（将来用）
 // ========================================
-// Phase 2で有効化する場合のみ作成
+// 必要に応じて有効化
 // SSMパラメータが存在しない場合はfalseとして扱う
 const createDatabaseSecurityGroups = pulumi.output(
     aws.ssm.getParameter({
@@ -181,7 +181,7 @@ if (createDatabaseSecurityGroups) {
     // RDS用セキュリティグループ
     rdsSecurityGroup = new aws.ec2.SecurityGroup("rds-sg", {
         vpcId: vpcId,
-        description: "Security group for RDS instances (Phase 2)",
+        description: "Security group for RDS instances",
         ingress: [
             {
                 protocol: "tcp",
@@ -209,14 +209,13 @@ if (createDatabaseSecurityGroups) {
             ...commonTags,
             Name: pulumi.interpolate`${projectName}-rds-sg-${environment}`,
             Purpose: "rds-database",
-            Phase: "2",
         },
     });
 
     // DynamoDB VPCエンドポイント用セキュリティグループ
     dynamodbVpceSecurityGroup = new aws.ec2.SecurityGroup("dynamodb-vpce-sg", {
         vpcId: vpcId,
-        description: "Security group for DynamoDB VPC Endpoint (Phase 2)",
+        description: "Security group for DynamoDB VPC Endpoint",
         ingress: [
             {
                 protocol: "tcp",
@@ -237,7 +236,6 @@ if (createDatabaseSecurityGroups) {
             ...commonTags,
             Name: pulumi.interpolate`${projectName}-dynamodb-vpce-sg-${environment}`,
             Purpose: "dynamodb-endpoint",
-            Phase: "2",
         },
     });
 }

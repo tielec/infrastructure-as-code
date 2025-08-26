@@ -2,7 +2,7 @@
  * pulumi/lambda-functions/index.ts
  * 
  * Lambda APIのLambda関数を構築するPulumiスクリプト
- * Phase 1: 最小構成 - 1つのメインLambda関数のみ
+ * 最小構成 - 1つのメインLambda関数のみ
  */
 import * as pulumi from "@pulumi/pulumi";
 import * as aws from "@pulumi/aws";
@@ -249,7 +249,7 @@ const functionConfig = new aws.ssm.Parameter("function-config", {
             // 将来の拡張ポイント
             future: {
                 additionalFunctions: "Add more functions as needed",
-                database: "Add RDS/DynamoDB configuration in Phase 2",
+                database: "Add RDS/DynamoDB configuration when needed",
                 layers: "Add shared libraries as Lambda Layers",
             },
         })

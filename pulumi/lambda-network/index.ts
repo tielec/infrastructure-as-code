@@ -34,7 +34,7 @@ const enableFlowLogsParam = aws.ssm.getParameter({
 });
 const enableFlowLogs = pulumi.output(enableFlowLogsParam).apply(p => p.value === "true");
 
-// Isolated Subnets設定を取得（Phase 2）
+// Isolated Subnets設定を取得（将来用）
 const createIsolatedSubnetsParam = aws.ssm.getParameter({
     name: `/lambda-api/${environment}/phase/isolated-subnets-enabled`,
 });
@@ -130,7 +130,7 @@ const privateSubnetB = new aws.ec2.Subnet("private-subnet-b", {
 });
 
 // ========================================
-// Isolated Subnets (Phase 2)
+// Isolated Subnets (将来用)
 // ========================================
 let isolatedSubnetA: aws.ec2.Subnet | undefined;
 let isolatedSubnetB: aws.ec2.Subnet | undefined;
@@ -441,7 +441,7 @@ const privateRouteTableIdsParam = new aws.ssm.Parameter("private-rt-ids", {
     overwrite: true,
 });
 
-// Isolated Subnets (Phase 2) - 空文字列をデフォルトとして保存
+// Isolated Subnets (将来用) - 空文字列をデフォルトとして保存
 if (createIsolatedSubnets && isolatedSubnetA && isolatedSubnetB && isolatedRouteTableA && isolatedRouteTableB) {
     const isolatedSubnetAIdParam = new aws.ssm.Parameter("isolated-subnet-a-id", {
         name: pulumi.interpolate`${paramPrefix}/subnets/isolated-a-id`,
@@ -488,12 +488,12 @@ if (createIsolatedSubnets && isolatedSubnetA && isolatedSubnetB && isolatedRoute
     overwrite: true,
 });
 } else {
-    // Phase 1の場合は空文字列を設定
+    // 現在は空文字列を設定
     new aws.ssm.Parameter("isolated-subnet-a-id-empty", {
         name: pulumi.interpolate`${paramPrefix}/subnets/isolated-a-id`,
         type: "String",
         value: "",
-        description: "Isolated Subnet A ID (not created in Phase 1)",
+        description: "Isolated Subnet A ID (not created yet)",
         tags: commonTags,
     overwrite: true,
 });
@@ -502,7 +502,7 @@ if (createIsolatedSubnets && isolatedSubnetA && isolatedSubnetB && isolatedRoute
         name: pulumi.interpolate`${paramPrefix}/subnets/isolated-b-id`,
         type: "String",
         value: "",
-        description: "Isolated Subnet B ID (not created in Phase 1)",
+        description: "Isolated Subnet B ID (not created yet)",
         tags: commonTags,
     overwrite: true,
 });
@@ -511,7 +511,7 @@ if (createIsolatedSubnets && isolatedSubnetA && isolatedSubnetB && isolatedRoute
         name: pulumi.interpolate`${paramPrefix}/subnets/isolated-ids`,
         type: "String",
         value: "",
-        description: "Isolated Subnet IDs (not created in Phase 1)",
+        description: "Isolated Subnet IDs (not created yet)",
         tags: commonTags,
     overwrite: true,
 });
@@ -520,7 +520,7 @@ if (createIsolatedSubnets && isolatedSubnetA && isolatedSubnetB && isolatedRoute
         name: pulumi.interpolate`${paramPrefix}/route-tables/isolated-a-id`,
         type: "String",
         value: "",
-        description: "Isolated Route Table A ID (not created in Phase 1)",
+        description: "Isolated Route Table A ID (not created yet)",
         tags: commonTags,
     overwrite: true,
 });
@@ -529,7 +529,7 @@ if (createIsolatedSubnets && isolatedSubnetA && isolatedSubnetB && isolatedRoute
         name: pulumi.interpolate`${paramPrefix}/route-tables/isolated-b-id`,
         type: "String",
         value: "",
-        description: "Isolated Route Table B ID (not created in Phase 1)",
+        description: "Isolated Route Table B ID (not created yet)",
         tags: commonTags,
     overwrite: true,
 });

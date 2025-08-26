@@ -2,8 +2,11 @@
  * pulumi/lambda-websocket/index.ts
  * 
  * Lambda API WebSocket APIを構築するPulumiスクリプト
- * Phase 1: 基本的なWebSocket接続管理
+ * 基本的なWebSocket接続管理
  */
+
+// TODO: config はSSMパラメータから取得するように変更予定
+
 import * as pulumi from "@pulumi/pulumi";
 import * as aws from "@pulumi/aws";
 
@@ -46,7 +49,7 @@ const websocketApi = new aws.apigatewayv2.Api(`${projectName}-websocket-api`, {
 });
 
 // ===== WebSocket用Lambda関数 =====
-// Phase 1では既存のLambda関数を使用し、将来的に専用関数に分離可能
+// 既存のLambda関数を使用し、将来的に専用関数に分離可能
 
 // Lambda実行権限（WebSocket用）
 const websocketLambdaPermission = new aws.lambda.Permission(`${projectName}-websocket-lambda-permission`, {
@@ -72,7 +75,7 @@ const connectRoute = new aws.apigatewayv2.Route(`${projectName}-connect-route`, 
     routeKey: "$connect",
     target: pulumi.interpolate`integrations/${lambdaIntegration.id}`,
     // 接続時の認証（オプション）
-    authorizationType: "NONE", // Phase 1では認証なし、将来的にカスタムオーソライザー追加可能
+    authorizationType: "NONE", // 現在は認証なし、将来的にカスタムオーソライザー追加可能
 });
 
 // $disconnect ルート（切断時）
@@ -158,8 +161,8 @@ const websocketLogGroup = new aws.cloudwatch.LogGroup(`${projectName}-websocket-
 });
 
 // ===== 接続管理用のリソース（簡易版）=====
-// Phase 1では接続情報をLambda関数内のメモリで管理
-// Phase 2でDynamoDBに移行予定
+// 接続情報をLambda関数内のメモリで管理
+// 将来的にDynamoDBに移行可能
 
 // WebSocket Management API用のIAMポリシー
 // Lambda関数がWebSocket接続にメッセージを送信するために必要
@@ -342,7 +345,7 @@ export const connectionInfo = {
 // サマリー
 export const summary = {
     protocol: "WebSocket",
-    authentication: "None (Phase 1)",
+    authentication: "None",
     routes: 5,
     maxConnections: wsConfig.maxConnections,
     idleTimeout: wsConfig.idleTimeout,
