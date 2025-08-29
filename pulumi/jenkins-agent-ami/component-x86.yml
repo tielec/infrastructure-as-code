@@ -64,9 +64,22 @@ phases:
             - curl -fsSL https://get.pulumi.com | sh
             - echo "Finding pulumi binary..."
             - find / -name pulumi -type f 2>/dev/null | head -1 || true
-            - cp /.pulumi/bin/pulumi /usr/local/bin/pulumi || echo "Failed to copy from /.pulumi/bin"
-            - chmod 755 /usr/local/bin/pulumi
+            - |
+              # Pulumiバイナリと言語プラグインをシステム全体で利用可能にする
+              if [ -d "/.pulumi/bin" ]; then
+                cp -r /.pulumi/bin/* /usr/local/bin/ || echo "Failed to copy from /.pulumi/bin"
+              elif [ -d "/root/.pulumi/bin" ]; then
+                cp -r /root/.pulumi/bin/* /usr/local/bin/ || echo "Failed to copy from /root/.pulumi/bin"
+              elif [ -d "/home/ec2-user/.pulumi/bin" ]; then
+                cp -r /home/ec2-user/.pulumi/bin/* /usr/local/bin/ || echo "Failed to copy from /home/ec2-user/.pulumi/bin"
+              fi
+            - chmod 755 /usr/local/bin/pulumi* || true
             - /usr/local/bin/pulumi version
+            - |
+              # Node.js言語プラグインを明示的にインストール
+              /usr/local/bin/pulumi plugin install language nodejs || true
+              # プラグインの確認
+              /usr/local/bin/pulumi plugin ls
 
       - name: InstallAnsible
         action: ExecuteBash
@@ -93,9 +106,22 @@ phases:
             - newgrp docker || true
             - mkdir -p /home/jenkins/agent
             - mkdir -p /home/jenkins/.docker
+            - mkdir -p /home/jenkins/.pulumi/plugins
+            - |
+              # Pulumiプラグインをjenkinsユーザーにもコピー
+              if [ -d "/usr/local/bin" ]; then
+                cp /usr/local/bin/pulumi* /home/jenkins/.pulumi/plugins/ 2>/dev/null || true
+              fi
+              # Pulumiバイナリへのシンボリックリンク作成
+              ln -sf /usr/local/bin/pulumi /home/jenkins/.pulumi/bin/pulumi 2>/dev/null || true
+              mkdir -p /home/jenkins/.pulumi/bin
             - chown -R jenkins:jenkins /home/jenkins
             - echo '{"group":"docker"}' > /etc/docker/daemon.json || true
             - chmod 666 /var/run/docker.sock || true
+            - |
+              # jenkinsユーザーの環境変数設定
+              echo 'export PATH="/usr/local/bin:$PATH"' >> /home/jenkins/.bashrc
+              echo 'export PULUMI_SKIP_UPDATE_CHECK=true' >> /home/jenkins/.bashrc
 
       - name: SetupSwap
         action: ExecuteBash
