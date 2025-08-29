@@ -4,7 +4,7 @@ pipeline {
     agent { label 'built-in' }
 
     environment {
-        JENKINS_PAT = credentials('cli-user-token')
+        JENKINS_PAT = credentials('cli-user-credentials')
         REPO_URL = "https://github.com/tielec/config-management.git"
         CASC_JENKINS_CONFIG = "${JENKINS_HOME}/jenkins.yaml"
     }
@@ -33,7 +33,7 @@ pipeline {
                     if (!fileExists(params.CONFIG_FILE)) {
                         error "設定ファイル ${params.CONFIG_FILE} が見つかりません。"
                     }
-                    jenkinsCliUtils.checkConfiguration(params.CONFIG_FILE)
+                    jenkinsCliUtils.checkConfiguration(params.CONFIG_FILE, [credentialsId: 'cli-user-credentials'])
                 }
             }
         }
@@ -43,7 +43,7 @@ pipeline {
                 script {
                     def timestamp = sh(script: 'date "+%Y%m%d-%H%M%S"', returnStdout: true).trim()
                     def backupFile = "jenkins_backup_${timestamp}.yaml"
-                    jenkinsCliUtils.exportConfiguration(backupFile)
+                    jenkinsCliUtils.exportConfiguration(backupFile, [credentialsId: 'cli-user-credentials'])
                     archiveArtifacts artifacts: backupFile
                 }
             }
@@ -53,7 +53,7 @@ pipeline {
             steps {
                 script {
                     sh "cp '${params.CONFIG_FILE}' '${CASC_JENKINS_CONFIG}'"
-                    jenkinsCliUtils.reloadJCasCConfiguration()
+                    jenkinsCliUtils.reloadJCasCConfiguration([credentialsId: 'cli-user-credentials'])
                 }
             }
         }
@@ -62,7 +62,7 @@ pipeline {
             when { expression { params.RESTART_JENKINS } }
             steps {
                 script {
-                    jenkinsCliUtils.safeRestart([timeout: 10])
+                    jenkinsCliUtils.safeRestart([timeout: 10, credentialsId: 'cli-user-credentials'])
                 }
             }
         }
