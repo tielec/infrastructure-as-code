@@ -7,7 +7,7 @@ pipeline {
     }
 
     environment {
-        JENKINS_PAT = credentials('cli-user-token')
+        JENKINS_PAT = credentials('cli-user-credentials')
         REPO_URL = "https://github.com/tielec/config-management.git"
         TIMESTAMP = sh(script: 'date "+%Y%m%d-%H%M%S"', returnStdout: true).trim()
         BRANCH_NAME = "config_backup/${TIMESTAMP}"
@@ -40,8 +40,8 @@ pipeline {
             steps {
                 script {
                     // 最新の設定をエクスポート
-                    def exportCommand = """
-                        |java -jar jenkins-cli.jar -s ${env.JENKINS_URL} -auth ${JENKINS_PAT_USR}:${JENKINS_PAT_PSW} export-configuration > jenkins_new_temp.yaml
+                    def exportCommand = '''
+                        |java -jar jenkins-cli.jar -s ${JENKINS_URL} -auth ${JENKINS_PAT_USR}:${JENKINS_PAT_PSW} export-configuration > jenkins_new_temp.yaml
                         |
                         |# 1. credentialsセクションの削除
                         |sed '/^credentials:/,/^[a-z]/{/^[a-z]/!d;/^credentials:/d;}' jenkins_new_temp.yaml > jenkins_new_temp_1.yaml
@@ -57,10 +57,10 @@ pipeline {
                         |
                         |# 一時ファイルの削除
                         |rm jenkins_new_temp*.yaml
-                        |""".stripMargin()
+                        |'''.stripMargin()
 
                     // GITの設定をエクスポート
-                    def processCommand = """
+                    def processCommand = '''
                         |# 1. credentialsセクションの削除
                         |sed '/^credentials:/,/^[a-z]/{/^[a-z]/!d;/^credentials:/d;}' "${CONFIG_FILE}" > jenkins_old_temp_1.yaml
                         |
@@ -75,7 +75,7 @@ pipeline {
                         |
                         |# 一時ファイルの削除
                         |rm jenkins_old_temp*.yaml
-                        |""".stripMargin()
+                        |'''.stripMargin()
 
                     // jenkins_new.yaml の作成
                     sh exportCommand
