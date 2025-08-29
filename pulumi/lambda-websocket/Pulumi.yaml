@@ -1,3 +1,0 @@
-name: lambda-websocket
-runtime: nodejs
-description: Lambda API WebSocket Infrastructure - WebSocket API for real-time communication
