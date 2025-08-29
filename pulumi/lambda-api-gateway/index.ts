@@ -2,7 +2,7 @@
  * pulumi/lambda-api-gateway/index.ts
  * 
  * Lambda API Gateway REST APIを構築するPulumiスクリプト
- * Phase 1: 基本的なREST API with APIキー認証
+ * 基本的なREST API with APIキー認証
  */
 import * as pulumi from "@pulumi/pulumi";
 import * as aws from "@pulumi/aws";

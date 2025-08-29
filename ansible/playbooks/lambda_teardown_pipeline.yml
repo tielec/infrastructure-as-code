@@ -32,9 +32,6 @@
           Environment: {{ env_name }}
           
           This will destroy (in reverse order):
-          - Database (Phase 2)
-          - WebSocket API
-          - WAF
           - API Gateway
           - Lambda Functions
           - NAT Infrastructure
@@ -78,33 +75,6 @@
           Proceeding with infrastructure destruction...
 
 # 削除は作成の逆順で実行
-
-# データベースの削除（Phase 2）
-- import_playbook: lambda/lambda_database.yml
-  vars:
-    env: "{{ env | default('dev') }}"
-    operation: "destroy"
-  when: destroy_database | default(true) | bool
-  tags:
-    - database
-
-# WebSocket APIの削除
-- import_playbook: lambda/lambda_websocket.yml
-  vars:
-    env: "{{ env | default('dev') }}"
-    operation: "destroy"
-  when: destroy_websocket | default(true) | bool
-  tags:
-    - websocket
-
-# WAFの削除
-- import_playbook: lambda/lambda_waf.yml
-  vars:
-    env: "{{ env | default('dev') }}"
-    operation: "destroy"
-  when: destroy_waf | default(true) | bool
-  tags:
-    - waf
 
 # API Gatewayの削除
 - import_playbook: lambda/lambda_api_gateway.yml

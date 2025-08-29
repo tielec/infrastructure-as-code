@@ -77,16 +77,6 @@ const enableDynamoDBEndpointParam = aws.ssm.getParameter({
 });
 const enableDynamoDBEndpoint = pulumi.output(enableDynamoDBEndpointParam).apply(p => p.value === "true");
 
-const enableSecretsManagerEndpointParam = aws.ssm.getParameter({
-    name: `/lambda-api/${environment}/vpce/enable-secrets-manager`,
-});
-const enableSecretsManagerEndpoint = pulumi.output(enableSecretsManagerEndpointParam).apply(p => p.value === "true");
-
-const enableKMSEndpointParam = aws.ssm.getParameter({
-    name: `/lambda-api/${environment}/vpce/enable-kms`,
-});
-const enableKMSEndpoint = pulumi.output(enableKMSEndpointParam).apply(p => p.value === "true");
-
 // ========================================
 // 共通タグ定義
 // ========================================
@@ -101,7 +91,7 @@ const commonTags = {
 // VPCエンドポイント定義
 // ========================================
 // Gateway型 VPC Endpoints
-// S3エンドポイント（Phase 1で必須）
+// S3エンドポイント
 const s3Endpoint = new aws.ec2.VpcEndpoint("vpce-s3", {
         vpcId: vpcId,
         serviceName: pulumi.interpolate`com.amazonaws.${aws.config.region}.s3`,
@@ -132,7 +122,7 @@ const s3Endpoint = new aws.ec2.VpcEndpoint("vpce-s3", {
         },
     });
 
-// DynamoDBエンドポイント（Phase 2）
+// DynamoDBエンドポイント
 const dynamodbEndpoint = new aws.ec2.VpcEndpoint("vpce-dynamodb", {
         vpcId: vpcId,
         serviceName: pulumi.interpolate`com.amazonaws.${aws.config.region}.dynamodb`,
@@ -163,47 +153,6 @@ const dynamodbEndpoint = new aws.ec2.VpcEndpoint("vpce-dynamodb", {
         },
     });
 
-// Interface型 VPC Endpoints
-// Secrets Managerエンドポイント（本番環境推奨）
-const secretsManagerEndpoint = new aws.ec2.VpcEndpoint("vpce-secretsmanager", {
-        vpcId: vpcId,
-        serviceName: pulumi.interpolate`com.amazonaws.${aws.config.region}.secretsmanager`,
-        vpcEndpointType: "Interface",
-        subnetIds: privateSubnetIds,
-        securityGroupIds: [vpceSecurityGroupId],
-        privateDnsEnabled: true,
-        tags: {
-            ...commonTags,
-            Name: pulumi.interpolate`${projectName}-vpce-secretsmanager-${environment}`,
-            Type: "interface",
-        },
-    });
-
-// KMSエンドポイント（本番環境推奨）
-const kmsEndpoint = new aws.ec2.VpcEndpoint("vpce-kms", {
-        vpcId: vpcId,
-        serviceName: pulumi.interpolate`com.amazonaws.${aws.config.region}.kms`,
-        vpcEndpointType: "Interface",
-        subnetIds: privateSubnetIds,
-        securityGroupIds: [vpceSecurityGroupId],
-        privateDnsEnabled: true,
-        tags: {
-            ...commonTags,
-            Name: pulumi.interpolate`${projectName}-vpce-kms-${environment}`,
-            Type: "interface",
-        },
-    });
-
-// ========================================
-// 将来の拡張用エンドポイント（Phase 2以降）
-// ========================================
-// 必要に応じて以下のエンドポイントを追加可能：
-// - SQS（DLQ用）
-// - SNS（通知用）
-// - SSM（パラメータストア用）
-// - Lambda（VPC内からのLambda呼び出し用）
-// - CloudWatch Logs（ログ送信用）
-
 // ========================================
 // SSMパラメータへの保存
 // ========================================
@@ -228,23 +177,8 @@ const dynamodbEndpointIdParam = new aws.ssm.Parameter("vpce-dynamodb-id", {
     tags: commonTags,
 });
 
-// Secrets ManagerエンドポイントID
-const smEndpointIdParam = new aws.ssm.Parameter("vpce-sm-id", {
-    name: pulumi.interpolate`${paramPrefix}/endpoints/secretsmanager-id`,
-    type: "String",
-    value: secretsManagerEndpoint.id,
-    description: "Secrets Manager VPC Endpoint ID",
-    tags: commonTags,
-});
-
-// KMSエンドポイントID
-const kmsEndpointIdParam = new aws.ssm.Parameter("vpce-kms-id", {
-    name: pulumi.interpolate`${paramPrefix}/endpoints/kms-id`,
-    type: "String",
-    value: kmsEndpoint.id,
-    description: "KMS VPC Endpoint ID",
-    tags: commonTags,
-});
+// Interface型エンドポイントは作成しないため、SSMパラメータも作成しない
+// Secrets ManagerとKMSへのアクセスはNAT経由で行う
 
 // デプロイメント完了フラグ
 const deploymentCompleteParam = new aws.ssm.Parameter("vpce-deployed", {
@@ -255,82 +189,6 @@ const deploymentCompleteParam = new aws.ssm.Parameter("vpce-deployed", {
     tags: commonTags,
 });
 
-// 設定情報をSSMパラメータに保存
-const vpceConfig = new aws.ssm.Parameter("vpce-config", {
-    name: pulumi.interpolate`${paramPrefix}/config`,
-    type: "String",
-    value: pulumi.all([
-        s3Endpoint?.id,
-        dynamodbEndpoint?.id,
-        secretsManagerEndpoint?.id,
-        kmsEndpoint?.id,
-    ]).apply(([s3Id, dynamodbId, smId, kmsId]: [string | undefined, string | undefined, string | undefined, string | undefined]) => JSON.stringify({
-        endpoints: {
-            gateway: {
-                s3: s3Id ? { id: s3Id, enabled: true } : { enabled: false },
-                dynamodb: dynamodbId ? { id: dynamodbId, enabled: true } : { enabled: false },
-            },
-            interface: {
-                secretsManager: smId ? { id: smId, enabled: true } : { enabled: false },
-                kms: kmsId ? { id: kmsId, enabled: true } : { enabled: false },
-            },
-        },
-        cost: {
-            monthlyEstimate: "See breakdown below",
-            breakdown: {
-                gateway: "$0 (Free)",
-                interface: {
-                    perEndpoint: "$14.60/month",
-                    note: "Cost applies if Interface endpoints are enabled",
-                },
-            },
-        },
-        benefits: [
-            "Reduced data transfer costs",
-            "Lower latency for AWS service calls",
-            "Enhanced security (traffic stays within AWS network)",
-            "No NAT Gateway charges for AWS service access",
-        ],
-        deployment: {
-            environment: environment,
-            lastUpdated: new Date().toISOString(),
-        },
-    })),
-    description: "VPC Endpoints configuration",
-    tags: commonTags,
-});
-
-// エンドポイント使用ガイド
-const usageGuide = new aws.ssm.Parameter("vpce-usage-guide", {
-    name: pulumi.interpolate`/${projectName}/${environment}/vpce/usage-guide`,
-    type: "String",
-    value: JSON.stringify({
-        s3: {
-            usage: "Automatic - S3 API calls from Lambda will use VPC endpoint",
-            example: "aws s3 cp file.txt s3://bucket/key",
-        },
-        dynamodb: {
-            usage: "Automatic - DynamoDB API calls will use VPC endpoint",
-            example: "dynamodb.getItem({ TableName: 'table', Key: {...} })",
-        },
-        secretsManager: {
-            usage: "Automatic with private DNS - Uses VPC endpoint",
-            example: "secretsmanager.getSecretValue({ SecretId: 'secret-name' })",
-        },
-        kms: {
-            usage: "Automatic with private DNS - Uses VPC endpoint",
-            example: "kms.decrypt({ CiphertextBlob: encrypted })",
-        },
-        troubleshooting: [
-            "Check security group allows HTTPS (443) from Lambda",
-            "Verify private DNS is enabled for interface endpoints",
-            "Test with AWS CLI: aws s3 ls --debug",
-            "Check VPC endpoint policy allows required actions",
-        ],
-    }),
-    description: "VPC Endpoints usage guide",
-    tags: commonTags,
-});
 
 // ========================================
 // エクスポート（表示用のみ）
@@ -342,8 +200,6 @@ export const outputs = {
     environment: environment,
     s3EndpointId: s3Endpoint.id,
     dynamodbEndpointId: dynamodbEndpoint.id,
-    secretsManagerEndpointId: secretsManagerEndpoint.id,
-    kmsEndpointId: kmsEndpoint.id,
     ssmParameterPrefix: paramPrefix,
     deploymentComplete: deploymentCompleteParam.name,
 };

@@ -1,9 +1,0 @@
-# lambda_waf ロールのメインタスク
-
-- name: Include deploy tasks
-  ansible.builtin.include_tasks: deploy.yml
-  when: operation | default('deploy') == 'deploy'
-
-- name: Include destroy tasks
-  ansible.builtin.include_tasks: destroy.yml
-  when: operation | default('deploy') == 'destroy'

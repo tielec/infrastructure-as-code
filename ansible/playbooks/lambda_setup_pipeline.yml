@@ -82,30 +82,6 @@
   tags:
     - api-gateway
 
-# WAFのデプロイ（オプション）
-- import_playbook: lambda/lambda_waf.yml
-  vars:
-    env: "{{ env | default('dev') }}"
-  when: run_waf | default(true) | bool
-  tags:
-    - waf
-
-# WebSocket APIのデプロイ（オプション）
-- import_playbook: lambda/lambda_websocket.yml
-  vars:
-    env: "{{ env | default('dev') }}"
-  when: run_websocket | default(true) | bool
-  tags:
-    - websocket
-
-# データベースのデプロイ（Phase 2）
-- import_playbook: lambda/lambda_database.yml
-  vars:
-    env: "{{ env | default('dev') }}"
-  when: run_database | default(true) | bool
-  tags:
-    - database
-
 - name: Setup Complete
   hosts: localhost
   connection: local
