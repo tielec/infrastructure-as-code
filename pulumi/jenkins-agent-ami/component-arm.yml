@@ -52,6 +52,9 @@ phases:
             - dnf install -y nodejs
             - node --version
             - npm --version
+            - npm install -g npm@latest
+            - npm install -g typescript
+            - npm install -g ts-node
 
       - name: InstallPulumi
         action: ExecuteBash
