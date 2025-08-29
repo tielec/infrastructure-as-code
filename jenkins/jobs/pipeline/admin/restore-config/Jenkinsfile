@@ -4,7 +4,7 @@ pipeline {
     agent { label 'built-in' }
 
     environment {
-        JENKINS_PAT = credentials('cli-user-token')
+        JENKINS_PAT = credentials('cli-user-credentials')
         REPO_URL = "https://github.com/tielec/config-management.git"
         CASC_JENKINS_CONFIG = "${JENKINS_HOME}/jenkins.yaml"
     }
