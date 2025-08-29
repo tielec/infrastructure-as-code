@@ -28,8 +28,9 @@ AWS上にインフラストラクチャを自動構築・管理するためのAn
 
 #### Lambda Functions
 - **サーバーレス環境**: Lambda関数の自動デプロイ
-- **API Gateway連携**: REST API、WebSocket APIの構築
-- **IPホワイトリスト管理**: WAFとの連携によるアクセス制御
+- **API Gateway連携**: REST APIの構築
+- **VPCネットワーク**: プライベートサブネットでのLambda実行
+- **NATインスタンス**: 外部通信用のNATゲートウェイ
 
 ### 共通機能
 - **Infrastructure as Code**: Pulumiによる宣言的なインフラ管理
@@ -120,10 +121,7 @@ cd ansible
 ansible-playbook playbooks/lambda_setup_pipeline.yml -e "env=dev"
 
 # 完全削除
-ansible-playbook playbooks/lambda_teardown_pipeline.yml -e "env=dev confirm=true"
-
-# IPホワイトリスト管理
-ansible-playbook playbooks/lambda_ip_whitelist.yml -e "action=add ip_address=1.2.3.4"
+ansible-playbook playbooks/lambda_teardown_pipeline.yml -e "env=dev force_destroy=true"
 ```
 
 ## システム別プレイブック
@@ -162,11 +160,25 @@ ansible-playbook playbooks/lambda_ip_whitelist.yml -e "action=add ip_address=1.2
 
 ### Lambdaシステム
 
+#### パイプラインプレイブック
+
 | プレイブック | 説明 | 実行例 |
 |------------|------|--------|
 | `lambda_setup_pipeline.yml` | Lambda環境の完全セットアップ | `ansible-playbook playbooks/lambda_setup_pipeline.yml -e "env=dev"` |
-| `lambda_teardown_pipeline.yml` | Lambda環境の削除 | `ansible-playbook playbooks/lambda_teardown_pipeline.yml -e "env=dev confirm=true"` |
-| `lambda_ip_whitelist.yml` | IPホワイトリスト管理 | `ansible-playbook playbooks/lambda_ip_whitelist.yml -e "action=add ip_address=1.2.3.4"` |
+| `lambda_teardown_pipeline.yml` | Lambda環境の削除 | `ansible-playbook playbooks/lambda_teardown_pipeline.yml -e "env=dev force_destroy=true"` |
+
+#### 個別コンポーネント
+
+| プレイブック | 説明 | 依存関係 |
+|------------|------|----------|
+| `lambda/lambda_ssm_init.yml` | SSMパラメータ初期化 | なし |
+| `lambda/lambda_network.yml` | VPC、サブネット構築 | ssm_init |
+| `lambda/lambda_security.yml` | セキュリティグループ設定 | network |
+| `lambda/lambda_vpce.yml` | VPCエンドポイント構築 | security |
+| `lambda/lambda_nat.yml` | NATインスタンス構築 | security |
+| `lambda/lambda_functions.yml` | Lambda関数デプロイ | nat, vpce |
+| `lambda/lambda_api_gateway.yml` | API Gateway構築 | functions |
+
 
 ### テストプレイブック
 
@@ -209,9 +221,7 @@ ansible-playbook playbooks/lambda_ip_whitelist.yml -e "action=add ip_address=1.2
 | `lambda_functions` | Lambda関数デプロイ | deploy, destroy |
 | `lambda_api_gateway` | API Gateway設定 | deploy, destroy |
 | `lambda_vpce` | VPCエンドポイント管理 | deploy, destroy |
-| `lambda_waf` | WAF設定 | deploy, destroy |
-| `lambda_websocket` | WebSocket API管理 | deploy |
-| `lambda_ip_whitelist` | IPホワイトリスト操作 | add, list, init |
+| `lambda_ssm_init` | SSMパラメータ初期化 | deploy, destroy |
 
 ### 共通ヘルパーロール
 
@@ -277,15 +287,10 @@ ansible-playbook playbooks/jenkins/maintenance/cleanup_image_builder_amis.yml -e
 #### Lambda固有操作
 
 ```bash
-# IPアドレスを追加
-ansible-playbook playbooks/lambda_ip_whitelist.yml \
-  -e "action=add ip_address=203.0.113.0 description='Office IP'"
-
-# ホワイトリストを表示
-ansible-playbook playbooks/lambda_ip_whitelist.yml -e "action=list"
-
-# IPセットを初期化
-ansible-playbook playbooks/lambda_ip_whitelist.yml -e "action=init"
+# 個別コンポーネントのデプロイ
+ansible-playbook playbooks/lambda/lambda_network.yml -e "env=dev"
+ansible-playbook playbooks/lambda/lambda_functions.yml -e "env=dev"
+ansible-playbook playbooks/lambda/lambda_api_gateway.yml -e "env=dev"
 ```
 
 ## 環境変数
@@ -383,6 +388,19 @@ graph TD
     A --> APP
 ```
 
+#### Lambda API依存関係図
+
+```mermaid
+graph TD
+    SSM[lambda-ssm-init] --> N[lambda-network]
+    N --> S[lambda-security]
+    S --> VPCE[lambda-vpce]
+    S --> NAT[lambda-nat]
+    VPCE --> F[lambda-functions]
+    NAT --> F
+    F --> API[lambda-api-gateway]
+```
+
 #### デプロイ順序（Jenkins）
 
 1. **初期化**: jenkins-ssm-init（パラメータ準備）
@@ -392,6 +410,14 @@ graph TD
 5. **ロードバランサー**: jenkins-loadbalancer
 6. **コンピュート**: jenkins-controller → jenkins-agent-ami → jenkins-agent
 7. **アプリケーション**: jenkins-config → jenkins-application
+
+#### デプロイ順序（Lambda）
+
+1. **初期化**: lambda-ssm-init（パラメータ準備）
+2. **基盤**: lambda-network → lambda-security
+3. **ネットワーク**: lambda-vpce、lambda-nat
+4. **コンピュート**: lambda-functions
+5. **API**: lambda-api-gateway
 
 #### 削除順序（Jenkins）
 
@@ -408,6 +434,18 @@ graph TD
 9. jenkins-security
 10. jenkins-network
 11. jenkins-ssm-init
+
+#### 削除順序（Lambda）
+
+削除はデプロイの逆順で実行します：
+
+1. lambda-api-gateway
+2. lambda-functions
+3. lambda-nat
+4. lambda-vpce
+5. lambda-security
+6. lambda-network
+7. lambda-ssm-init（オプション）
 
 ## クイックスタート
 
