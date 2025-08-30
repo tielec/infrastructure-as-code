@@ -581,28 +581,6 @@ const spotFleetNotificationTopic = new aws.sns.Topic(`agent-fleet-notifications`
     },
 });
 
-// 基本的なSSMパラメータ（エージェント設定情報保存用）
-const agentInfoParameter = new aws.ssm.Parameter(`agent-fleet-info`, {
-    name: `${ssmPrefix}/agent/fleet-info`,
-    type: "String",
-    value: pulumi.all([projectName, instanceType, minTargetCapacity, maxTargetCapacity, spotPrice, agentKeyPair.keyName]).apply(
-        ([proj, inst, min, max, price, keyName]) => JSON.stringify({
-            projectName: proj,
-            environment: environment,
-            instanceType: inst,
-            minCapacity: min,
-            maxCapacity: max,
-            spotPrice: price,
-            keyPairName: keyName,
-            createdAt: new Date().toISOString(),
-        })
-    ),
-    description: "Jenkins agent fleet configuration information",
-    tags: {
-        Environment: environment,
-    },
-});
-
 // SSMパラメータにスポットフリートIDを保存
 const spotFleetIdParameter = new aws.ssm.Parameter(`agent-spotfleet-id`, {
     name: `${ssmPrefix}/agent/spotFleetRequestId`,

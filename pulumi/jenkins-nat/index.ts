@@ -33,7 +33,7 @@ const vpcIdParam = aws.ssm.getParameter({
     name: `${ssmPrefix}/network/vpc-id`,
 });
 const vpcCidrParam = aws.ssm.getParameter({
-    name: `${ssmPrefix}/network/vpc-cidr`,
+    name: `${ssmPrefix}/config/vpc-cidr`,
 });
 const publicSubnetAIdParam = aws.ssm.getParameter({
     name: `${ssmPrefix}/network/public-subnet-a-id`,
