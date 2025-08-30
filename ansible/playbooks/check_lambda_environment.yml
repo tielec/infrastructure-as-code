@@ -58,8 +58,6 @@
         name: lambda_checker
       vars:
         operation: check
-        env: "{{ env }}"
-        env_name: "{{ env_name }}"
         environment: "{{ env_name }}"
         detailed_mode: "{{ detailed_check }}"
         enable_api_test: "{{ test_api_enabled }}"

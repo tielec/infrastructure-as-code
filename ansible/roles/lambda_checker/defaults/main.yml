@@ -2,7 +2,7 @@
 # lambda_checker ロールのデフォルト変数
 
 # 基本設定
-environment: "{{ env | default(env_name | default('dev')) }}"
+# environment変数はプレイブックから渡される
 
 # チェックモード設定
 detailed_mode: false
@@ -10,7 +10,7 @@ enable_api_test: false
 api_endpoint_path: "/health"
 
 # SSMパラメータのプレフィックス
-ssm_param_prefix: "/lambda-api/{{ environment }}"
+ssm_param_prefix: "/lambda-api/{{ environment | default('dev') }}"
 
 # チェック項目の有効/無効
 check_vpc: true
