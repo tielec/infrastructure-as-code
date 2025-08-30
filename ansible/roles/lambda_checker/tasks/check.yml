@@ -23,6 +23,12 @@
         parameter_name: "{{ ssm_param_prefix }}/vpc/id"
         store_as: "vpc_id"
         required: false
+        aws_region: "{{ lookup('env', 'AWS_REGION') | default('ap-northeast-1') }}"
+
+    - name: VPC IDを保存
+      ansible.builtin.set_fact:
+        vpc_id: "{{ ssm_parameter_value }}"
+      when: ssm_parameter_value is defined and ssm_parameter_value
 
     - name: VPCチェック結果を記録
       ansible.builtin.set_fact:
@@ -50,6 +56,7 @@
         parameter_name: "{{ ssm_param_prefix }}/subnets/private/ids"
         store_as: "private_subnets"
         required: false
+        aws_region: "{{ lookup('env', 'AWS_REGION') | default('ap-northeast-1') }}"
       when: ssm_parameter_value is defined and ssm_parameter_value
 
     - name: サブネット情報を表示
@@ -71,6 +78,7 @@
         parameter_name: "{{ ssm_param_prefix }}/security-group/lambda/id"
         store_as: "lambda_sg"
         required: false
+        aws_region: "{{ lookup('env', 'AWS_REGION') | default('ap-northeast-1') }}"
 
     - name: Lambdaセキュリティグループチェック結果を記録
       ansible.builtin.set_fact:
@@ -93,6 +101,7 @@
         parameter_name: "{{ ssm_param_prefix }}/security-group/vpce/id"
         store_as: "vpce_sg"
         required: false
+        aws_region: "{{ lookup('env', 'AWS_REGION') | default('ap-northeast-1') }}"
 
     - name: VPCEセキュリティグループ情報を表示
       ansible.builtin.debug:
@@ -113,6 +122,7 @@
         aws_command: "ec2 describe-vpc-endpoints --filters Name=vpc-id,Values={{ vpc_id }} --query 'VpcEndpoints[].ServiceName' --output json"
         operation_name: "List VPC Endpoints"
         parse_output: true
+        aws_region: "{{ lookup('env', 'AWS_REGION') | default('ap-northeast-1') }}"
 
     - name: VPCエンドポイント数を表示
       ansible.builtin.debug:
@@ -137,6 +147,7 @@
         aws_command: "lambda list-functions --query \"Functions[?starts_with(FunctionName, 'lambda-api-{{ environment }}')].[FunctionName,Runtime,State]\" --output json"
         operation_name: "List Lambda functions"
         parse_output: true
+        aws_region: "{{ lookup('env', 'AWS_REGION') | default('ap-northeast-1') }}"
 
     - name: Lambda関数チェック結果を記録
       ansible.builtin.set_fact:
@@ -184,6 +195,7 @@
         parameter_name: "{{ ssm_param_prefix }}/api-gateway/id"
         store_as: "api_id"
         required: false
+        aws_region: "{{ lookup('env', 'AWS_REGION') | default('ap-northeast-1') }}"
 
     - name: API IDを保存
       ansible.builtin.set_fact:
@@ -211,6 +223,7 @@
         parameter_name: "{{ ssm_param_prefix }}/api-gateway/endpoint"
         store_as: "api_endpoint"
         required: false
+        aws_region: "{{ lookup('env', 'AWS_REGION') | default('ap-northeast-1') }}"
       when: api_gateway_id is defined
 
     - name: APIエンドポイントを保存
@@ -232,6 +245,7 @@
         decrypt: true
         store_as: "api_key"
         required: false
+        aws_region: "{{ lookup('env', 'AWS_REGION') | default('ap-northeast-1') }}"
       when: api_gateway_id is defined
 
     - name: APIキーを保存
@@ -254,6 +268,7 @@
         aws_command: "apigateway get-stages --rest-api-id {{ api_gateway_id }} --query 'item[].stageName' --output json"
         operation_name: "Get API stages"
         parse_output: true
+        aws_region: "{{ lookup('env', 'AWS_REGION') | default('ap-northeast-1') }}"
       when: api_gateway_id is defined
 
     - name: デプロイステージ情報を表示
@@ -275,6 +290,7 @@
         aws_command: "logs describe-log-groups --log-group-name-prefix /aws/lambda/lambda-api-{{ environment }} --query 'logGroups[].logGroupName' --output json"
         operation_name: "List CloudWatch Log Groups"
         parse_output: true
+        aws_region: "{{ lookup('env', 'AWS_REGION') | default('ap-northeast-1') }}"
 
     - name: ロググループチェック結果を記録
       ansible.builtin.set_fact:
