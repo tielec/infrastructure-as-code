@@ -17,6 +17,7 @@ source "$LIB_DIR/pulumi-config.sh"
 source "$LIB_DIR/systemd-service.sh"
 source "$LIB_DIR/openai-config.sh"
 source "$LIB_DIR/github-app-config.sh"
+source "$LIB_DIR/aws-account-config.sh"
 
 # Ansibleプレイブックの格納場所
 readonly ANSIBLE_DIR="$REPO_ROOT/ansible"
@@ -189,6 +190,9 @@ main() {
     # === AWS関連の設定（ネットワーク処理を含む） ===
     # AWS認証情報の確認（早期に実行して後続処理でAWSリソースにアクセスできることを確認）
     check_aws_credentials
+    
+    # AWSアカウントIDの設定（SSMパラメータストア）
+    setup_aws_account_ids
     
     # SSH鍵の設定（SSMアクセスを含むが対話的処理が含まれる可能性）
     setup_ssh_keys
