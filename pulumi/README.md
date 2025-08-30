@@ -88,16 +88,13 @@ pulumi/
 │   ├── jenkins-config/     # Jenkins設定
 │   └── jenkins-application/ # Jenkinsアプリケーション
 ├── lambda-*/               # Lambda関連スタック
-│   ├── lambda-account-setup/ # アカウント初期設定
+│   ├── lambda-ssm-init/    # SSMパラメータ初期化
 │   ├── lambda-network/     # Lambda用VPC
 │   ├── lambda-security/    # セキュリティ設定
+│   ├── lambda-vpce/        # VPCエンドポイント
 │   ├── lambda-nat/         # NAT設定
 │   ├── lambda-functions/   # Lambda関数
-│   ├── lambda-api-gateway/ # API Gateway
-│   ├── lambda-database/    # データベース
-│   ├── lambda-vpce/        # VPCエンドポイント
-│   ├── lambda-waf/         # WAF設定
-│   └── lambda-websocket/   # WebSocket API
+│   └── lambda-api-gateway/ # API Gateway
 └── test-*/                 # テスト用スタック
     └── test-s3/            # S3バケットテスト
 ```
@@ -135,16 +132,13 @@ pulumi/
 
 | スタック名 | 説明 | 依存関係 | 主要リソース |
 |-----------|------|----------|--------------|
-| `lambda-account-setup` | アカウント初期設定 | なし | IAMロール、ポリシー |
-| `lambda-network` | Lambda用VPC | account-setup | VPC、サブネット |
-| `lambda-security` | セキュリティ設定 | network | セキュリティグループ |
-| `lambda-nat` | NAT設定 | security | NAT Gateway |
-| `lambda-functions` | Lambda関数 | nat | Lambda関数、レイヤー |
-| `lambda-api-gateway` | API Gateway | functions | REST API、リソース |
-| `lambda-database` | データベース | security | RDS、DynamoDB |
-| `lambda-vpce` | VPCエンドポイント | network | VPCエンドポイント |
-| `lambda-waf` | WAF設定 | api-gateway | WAF ACL、ルール |
-| `lambda-websocket` | WebSocket API | functions | WebSocket API |
+| `lambda-ssm-init` | SSMパラメータ初期化 | なし | SSMパラメータ |
+| `lambda-network` | Lambda用VPC | ssm-init | VPC、サブネット |
+| `lambda-security` | セキュリティ設定 | network | セキュリティグループ、IAMロール |
+| `lambda-vpce` | VPCエンドポイント | security | VPCエンドポイント（S3、SSM等） |
+| `lambda-nat` | NAT設定 | vpce | NAT Gateway、Elastic IP |
+| `lambda-functions` | Lambda関数 | security, nat | Lambda関数、DLQ、環境変数 |
+| `lambda-api-gateway` | API Gateway | functions | REST API、ステージ、APIキー |
 
 ### テストスタック
 
@@ -294,6 +288,23 @@ pulumi stack import --file stack-backup.json
 ### 完全なJenkins環境のデプロイ
 
 [Ansible README](../ansible/README.md#jenkins-setup-pipeline)のジェンキンスセットアップパイプラインを参照してください。
+
+### Lambda API環境のデプロイ
+
+```bash
+# Lambda環境の完全なデプロイはAnsibleプレイブックで自動化されています
+cd ansible
+ansible-playbook playbooks/lambda_setup_pipeline.yml -e "env=dev"
+
+# 個別スタックのデプロイ例
+cd pulumi/lambda-network
+pulumi up
+
+# デプロイ後の動作確認
+../scripts/lambda/verify-deployment.sh dev
+```
+
+詳細は[Ansible Lambda Pipeline](../ansible/README.md#lambda-api-setup-pipeline)を参照してください。
 
 ## トラブルシューティング
 
