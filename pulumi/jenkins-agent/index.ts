@@ -230,7 +230,7 @@ const spotFleetRole = new aws.iam.Role(`spotfleet-role`, {
 const agentLaunchTemplate = new aws.ec2.LaunchTemplate(`agent-lt`, {
     namePrefix: `jenkins-infra-agent-lt-`,
     imageId: amiX86Id,
-    instanceType: "t3.small", // デフォルトをt3.smallに変更
+    instanceType: "t3a.medium", // デフォルトをt3a.mediumに変更（AMDプロセッサで10%安価）
     keyName: agentKeyPair.keyName,  // 作成したキーペアを使用
     // vpcSecurityGroupIds は networkInterfaces と競合するため削除
     iamInstanceProfile: {
@@ -379,7 +379,7 @@ chown jenkins:jenkins /home/jenkins/agent/bootstrap-complete
 const agentLaunchTemplateArm = new aws.ec2.LaunchTemplate(`agent-lt-arm`, {
     namePrefix: `jenkins-infra-agent-lt-arm-`,
     imageId: amiArmId,
-    instanceType: "t4g.small",
+    instanceType: "t4g.medium",
     keyName: agentKeyPair.keyName,
     // vpcSecurityGroupIds は networkInterfaces と競合するため削除
     iamInstanceProfile: {
@@ -533,7 +533,7 @@ const spotFleetRequest = new aws.ec2.SpotFleetRequest(`agent-spot-fleet`, {
                 },
                 overrides: [{
                     subnetId: subnetId,
-                    instanceType: "t4g.small",
+                    instanceType: "t4g.medium",
                     spotPrice: spotPrice,
                     priority: 1, // 最優先
                 }],
@@ -550,13 +550,13 @@ const spotFleetRequest = new aws.ec2.SpotFleetRequest(`agent-spot-fleet`, {
                 overrides: [
                     {
                         subnetId: subnetId,
-                        instanceType: "t3.small",
+                        instanceType: "t3a.medium",
                         spotPrice: spotPrice,
                         priority: 2,
                     },
                     {
                         subnetId: subnetId,
-                        instanceType: "t2.small",
+                        instanceType: "t3.medium",
                         spotPrice: spotPrice,
                         priority: 3,
                     }

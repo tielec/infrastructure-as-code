@@ -8,7 +8,9 @@ pulumi_path: "{{ inventory_dir }}/../../pulumi"
 env_name: "dev"
 
 # エージェント設定のデフォルト値
-instance_type: "t3.medium"
+instance_type: "t3a.medium"
 min_capacity: 0
 max_capacity: 10
-spot_price: "0.10"
+# Spot価格上限をオンデマンド価格に設定（ap-northeast-1リージョン）
+# t3a.medium: ~$0.047/h, t3.medium: ~$0.052/h, t4g.medium: ~$0.042/h
+spot_price: "0.052"
