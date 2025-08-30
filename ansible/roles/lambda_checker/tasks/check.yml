@@ -131,17 +131,24 @@
         operation_name: "List VPC Endpoints"
         parse_output: true
         aws_region: "{{ lookup('env', 'AWS_REGION') | default('ap-northeast-1') }}"
+    
+    - name: VPCエンドポイントの結果を保存
+      ansible.builtin.set_fact:
+        vpce_services: "{{ aws_cli_result | default([]) }}"
+      when: aws_cli_result is defined
 
     - name: VPCエンドポイント数を表示
       ansible.builtin.debug:
-        msg: "✅ Found {{ aws_cli_result | length }} VPC Endpoints"
-      when: aws_cli_result is defined
+        msg: "✅ Found {{ vpce_services | length }} VPC Endpoints"
+      when: vpce_services is defined
 
     - name: VPCエンドポイントのリスト表示
       ansible.builtin.debug:
         msg: "  - {{ item }}"
-      loop: "{{ aws_cli_result | default([]) }}"
-      when: detailed_mode | bool
+      loop: "{{ vpce_services }}"
+      when: 
+        - detailed_mode | bool
+        - vpce_services is defined
 
 # 4. Lambda関数のチェック
 - name: Lambda関数のチェック
