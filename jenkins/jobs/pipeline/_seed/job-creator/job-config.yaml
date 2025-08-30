@@ -419,27 +419,6 @@ ansible-playbooks:
         category: "lambda-deploy"
         environments: ['dev', 'prod']
       
-      lambda_waf:
-        playbook_path: "lambda/lambda_waf.yml"
-        display_name: "Lambda WAF"
-        description: "WAFのデプロイ（オプション）"
-        category: "lambda-deploy"
-        environments: ['prod']  # 本番環境のみ
-      
-      lambda_websocket:
-        playbook_path: "lambda/lambda_websocket.yml"
-        display_name: "Lambda WebSocket API"
-        description: "WebSocket APIのデプロイ（オプション）"
-        category: "lambda-deploy"
-        environments: ['dev', 'prod']
-      
-      lambda_database:
-        playbook_path: "lambda/lambda_database.yml"
-        display_name: "Lambda Database"
-        description: "データベースインフラのデプロイ（Phase 2）"
-        category: "lambda-deploy"
-        environments: ['dev', 'prod']
-      
       # Lambda Pipeline Playbooks
       lambda_setup_pipeline:
         playbook_path: "lambda_setup_pipeline.yml"
