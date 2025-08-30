@@ -35,7 +35,7 @@ const environmentConfig = {
         enableWebSocket: false,
         enableDatabase: false,
         natHighAvailability: false,
-        natInstanceType: "t3.nano",
+        natInstanceType: "t4g.nano",
         vpcEndpoints: ["s3"],
     },
     prod: {
@@ -51,7 +51,7 @@ const environmentConfig = {
         enableWebSocket: true,
         enableDatabase: true,
         natHighAvailability: true,
-        natInstanceType: "t3.medium",
+        natInstanceType: "t4g.medium",
         vpcEndpoints: ["s3", "dynamodb"],
     },
 };
