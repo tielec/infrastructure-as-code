@@ -68,6 +68,21 @@
       when: 
         - not ansible_check_mode
         - pulumi_destroy_result is defined
+    
+    # 削除成功後のクリーンアップ（積極的にクリーンアップ）
+    - name: Clean up after successful destroy
+      ansible.builtin.include_tasks: cleanup.yml
+      vars:
+        pulumi_project_dir: "{{ pulumi_project_path }}"
+        cleanup_node_modules: true
+        cleanup_npm_cache: true
+        cleanup_package_lock: true
+        cleanup_build_artifacts: true
+        cleanup_global_npm_cache: false
+        cleanup_temp_files: false
+      when:
+        - cleanup_after_destroy | default(true)
+        - not ansible_check_mode
         
   rescue:
     # ロックエラーの場合、再度キャンセルを試みる

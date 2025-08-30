@@ -1,0 +1,149 @@
+# Pulumiプロジェクトのクリーンアップタスク
+# 
+# このタスクは以下の処理を行います：
+# - node_modulesディレクトリの削除
+# - npmキャッシュのクリア
+# - 一時ファイルの削除
+# - ディスク容量の確保
+
+- name: Check if project directory exists
+  ansible.builtin.stat:
+    path: "{{ pulumi_project_dir }}"
+  register: project_dir_check
+
+- name: Display cleanup target directory
+  ansible.builtin.debug:
+    msg: "クリーンアップ対象ディレクトリ: {{ pulumi_project_dir }}"
+  when: project_dir_check.stat.exists
+
+# node_modulesの削除（ディスク容量確保）
+- name: Remove node_modules directory
+  ansible.builtin.file:
+    path: "{{ pulumi_project_dir }}/node_modules"
+    state: absent
+  when: 
+    - project_dir_check.stat.exists
+    - cleanup_node_modules | default(true)
+  register: node_modules_cleanup
+
+- name: Report node_modules cleanup
+  ansible.builtin.debug:
+    msg: "node_modulesディレクトリを削除しました"
+  when: node_modules_cleanup.changed | default(false)
+
+# package-lock.jsonの削除（オプション）
+- name: Remove package-lock.json
+  ansible.builtin.file:
+    path: "{{ pulumi_project_dir }}/package-lock.json"
+    state: absent
+  when:
+    - project_dir_check.stat.exists
+    - cleanup_package_lock | default(false)
+  register: package_lock_cleanup
+
+- name: Report package-lock.json cleanup
+  ansible.builtin.debug:
+    msg: "package-lock.jsonを削除しました"
+  when: package_lock_cleanup.changed | default(false)
+
+# npmキャッシュのクリア
+- name: Clear npm cache
+  ansible.builtin.shell: |
+    cd {{ pulumi_project_dir }}
+    npm cache clean --force
+  args:
+    executable: /bin/bash
+  when:
+    - project_dir_check.stat.exists
+    - cleanup_npm_cache | default(true)
+  register: npm_cache_cleanup
+  failed_when: false
+  changed_when: npm_cache_cleanup.rc == 0
+
+- name: Report npm cache cleanup
+  ansible.builtin.debug:
+    msg: "npmキャッシュをクリアしました"
+  when: npm_cache_cleanup.changed | default(false)
+
+# Pulumiビルド成果物のクリーンアップ
+- name: Remove TypeScript build artifacts
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: absent
+  loop:
+    - "{{ pulumi_project_dir }}/bin"
+    - "{{ pulumi_project_dir }}/dist"
+    - "{{ pulumi_project_dir }}/.pulumi"
+  when:
+    - project_dir_check.stat.exists
+    - cleanup_build_artifacts | default(false)
+  register: build_artifacts_cleanup
+  loop_control:
+    label: "{{ item | basename }}"
+
+- name: Report build artifacts cleanup
+  ansible.builtin.debug:
+    msg: "ビルド成果物を削除しました"
+  when: build_artifacts_cleanup.changed | default(false)
+
+# ディスク容量の確認（クリーンアップ後）
+- name: Check disk space after cleanup
+  ansible.builtin.shell: |
+    df -h {{ pulumi_project_dir }} | tail -1 | awk '{print "使用率: " $5 " (利用可能: " $4 ")"}'
+  register: disk_space_after
+  changed_when: false
+  when: project_dir_check.stat.exists
+
+- name: Display disk space after cleanup
+  ansible.builtin.debug:
+    msg: "クリーンアップ後のディスク容量: {{ disk_space_after.stdout }}"
+  when: 
+    - project_dir_check.stat.exists
+    - disk_space_after.stdout is defined
+
+# グローバルnpmキャッシュのクリア（オプション）
+- name: Clear global npm cache
+  ansible.builtin.shell: |
+    npm cache clean --force --global
+  args:
+    executable: /bin/bash
+  when: cleanup_global_npm_cache | default(false)
+  register: global_npm_cache_cleanup
+  failed_when: false
+  changed_when: global_npm_cache_cleanup.rc == 0
+  become: true
+
+- name: Report global npm cache cleanup
+  ansible.builtin.debug:
+    msg: "グローバルnpmキャッシュをクリアしました"
+  when: global_npm_cache_cleanup.changed | default(false)
+
+# 一時ディレクトリのクリーンアップ
+- name: Clean temporary npm directories
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: absent
+  loop:
+    - "/tmp/npm-*"
+    - "/tmp/v8-compile-cache-*"
+  when: cleanup_temp_files | default(false)
+  register: temp_cleanup
+  failed_when: false
+  become: true
+
+- name: Report temporary files cleanup
+  ansible.builtin.debug:
+    msg: "一時ファイルを削除しました"
+  when: temp_cleanup.changed | default(false)
+
+# クリーンアップ結果のサマリー
+- name: Set cleanup result
+  ansible.builtin.set_fact:
+    pulumi_cleanup_completed: true
+    pulumi_cleanup_actions:
+      node_modules_removed: "{{ node_modules_cleanup.changed | default(false) }}"
+      package_lock_removed: "{{ package_lock_cleanup.changed | default(false) }}"
+      npm_cache_cleared: "{{ npm_cache_cleanup.changed | default(false) }}"
+      build_artifacts_removed: "{{ build_artifacts_cleanup.changed | default(false) }}"
+      global_cache_cleared: "{{ global_npm_cache_cleanup.changed | default(false) }}"
+      temp_files_removed: "{{ temp_cleanup.changed | default(false) }}"
