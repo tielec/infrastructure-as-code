@@ -159,24 +159,29 @@
         name: aws_cli_helper
         tasks_from: execute
       vars:
-        aws_command: "lambda list-functions --query \"Functions[?starts_with(FunctionName, 'lambda-api-{{ environment }}')].[FunctionName,Runtime,State]\" --output json"
+        aws_command: "lambda list-functions --query \"Functions[?starts_with(FunctionName, 'lambda-api-{{ environment | default('dev') }}')].[FunctionName,Runtime,State]\" --output json"
         operation_name: "List Lambda functions"
         parse_output: true
         aws_region: "{{ lookup('env', 'AWS_REGION') | default('ap-northeast-1') }}"
+    
+    - name: Lambda関数リストを保存
+      ansible.builtin.set_fact:
+        lambda_functions: "{{ aws_cli_result.data | default([]) }}"
+      when: aws_cli_result.data is defined
 
     - name: Lambda関数チェック結果を記録
       ansible.builtin.set_fact:
         check_results: "{{ check_results | combine({
           'total': check_results.total + 1,
-          'passed': check_results.passed + (1 if aws_cli_result | length > 0 else 0),
-          'failed': check_results.failed + (0 if aws_cli_result | length > 0 else 1)
+          'passed': check_results.passed + (1 if lambda_functions | default([]) | length > 0 else 0),
+          'failed': check_results.failed + (0 if lambda_functions | default([]) | length > 0 else 1)
         }) }}"
 
     - name: Lambda関数情報を表示
       ansible.builtin.debug:
         msg: |
-          Lambda Functions Found: {{ aws_cli_result | length }}
-          {% for func in aws_cli_result %}
+          Lambda Functions Found: {{ lambda_functions | default([]) | length }}
+          {% for func in lambda_functions | default([]) %}
           {% if func is sequence and func is not string %}
           - Name: {{ func[0] | default('Unknown') }}
             Runtime: {{ func[1] | default('Unknown') }}
@@ -185,22 +190,22 @@
           - Function: {{ func }}
           {% endif %}
           {% endfor %}
-      when: aws_cli_result | length > 0
+      when: lambda_functions | default([]) | length > 0
 
     - name: Lambda関数未検出の警告
       ansible.builtin.debug:
-        msg: "❌ No Lambda functions found for environment: {{ environment }}"
-      when: aws_cli_result | length == 0
+        msg: "❌ No Lambda functions found for environment: {{ environment | default('dev') }}"
+      when: lambda_functions | default([]) | length == 0
 
     # 詳細モードで各Lambda関数の設定をチェック
     - name: Lambda関数の詳細チェック
       when: 
         - detailed_mode | bool
-        - aws_cli_result | length > 0
+        - lambda_functions | default([]) | length > 0
       ansible.builtin.include_tasks: check_lambda_details.yml
       vars:
         function_name: "{{ item[0] }}"
-      loop: "{{ aws_cli_result }}"
+      loop: "{{ lambda_functions | default([]) }}"
 
 # 5. API Gatewayのチェック
 - name: API Gatewayのチェック
