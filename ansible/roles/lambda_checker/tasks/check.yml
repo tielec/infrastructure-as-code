@@ -224,8 +224,8 @@
 
     - name: API IDを保存
       ansible.builtin.set_fact:
-        api_gateway_id: "{{ api_config_data.id }}"
-        api_gateway_endpoint: "{{ api_config_data.endpoint | default(api_config_data.invokeUrl) }}"
+        api_gateway_id: "{{ api_config_data.apiId }}"
+        api_gateway_endpoint: "{{ api_config_data.apiEndpoint }}"
       when: api_config_data is defined
 
     - name: API Gatewayチェック結果を記録
@@ -267,7 +267,7 @@
     
     - name: 最初のAPIキーを保存
       ansible.builtin.set_fact:
-        api_gateway_key: "{{ api_keys_data.bubble | default(api_keys_data.external) }}"
+        api_gateway_key: "{{ api_keys_data.bubble.key | default(api_keys_data.external.key) }}"
       when: api_keys_data is defined
       no_log: true
 
