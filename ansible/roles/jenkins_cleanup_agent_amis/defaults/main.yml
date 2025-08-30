@@ -2,7 +2,7 @@
 # defaults file for cleanup_image_builder_amis
 
 # 保持する世代数
-retention_count: 2
+retention_count: 1
 
 # ドライランモード（実際の削除を行わない）
 dry_run: false
