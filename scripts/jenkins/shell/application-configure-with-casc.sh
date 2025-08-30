@@ -63,16 +63,16 @@ retrieve_ssm_parameter() {
     
     if [ -z "$value" ] || [ "$value" = "None" ]; then
         if [ "$required" = "true" ]; then
-            log "✗ ERROR: $description not found at $param_name"
+            log "✗ ERROR: $description not found at $param_name" >&2
             return 1
         else
-            log "✗ WARNING: $description not found at $param_name"
+            log "✗ WARNING: $description not found at $param_name" >&2
         fi
+        echo ""  # 空の値を返す
     else
-        log "✓ Found $description: $value"
+        log "✓ Found $description: $value" >&2
+        echo "$value"  # 値のみを返す
     fi
-    
-    echo "$value"
 }
 
 # 必要なパラメータをSSMから取得
