@@ -1,6 +1,14 @@
 ---
 # Lambda環境のチェックタスク
 
+- name: 環境変数のデバッグ表示
+  ansible.builtin.debug:
+    msg: |
+      environment: {{ environment }}
+      env: {{ env | default('undefined') }}
+      env_name: {{ env_name | default('undefined') }}
+      ssm_param_prefix: {{ ssm_param_prefix }}
+
 - name: チェック結果の初期化
   ansible.builtin.set_fact:
     check_results:
