@@ -74,8 +74,45 @@ class JenkinsCliClient {
 
         // authMethod が 'auto' の場合、Credentialの型を自動判定
         if (config.authMethod == 'auto') {
-            try {
-                // まずUsernamePasswordとして試す
+            // cli-user-tokenで最初に試す
+            if (config.credentialsId == 'cli-user-token') {
+                try {
+                    // まずAPIトークンとして試す
+                    return steps.withCredentials([steps.string(
+                        credentialsId: config.credentialsId,
+                        variable: 'JENKINS_API_TOKEN'
+                    )]) {
+                        config.authMethod = 'token'
+                        def username = config.username ?: 'cli-user'
+                        steps.withEnv(["JENKINS_USER=${username}"]) {
+                            steps.timeout(time: config.timeout, unit: 'MINUTES') {
+                                executeCliCommand(command, config)
+                            }
+                        }
+                    }
+                } catch (Exception e) {
+                    // cli-user-tokenで失敗したら、cli-user-credentialsを試す
+                    steps.echo "cli-user-token failed, trying cli-user-credentials as fallback"
+                    config.credentialsId = 'cli-user-credentials'
+                    return steps.withCredentials([steps.usernamePassword(
+                        credentialsId: config.credentialsId,
+                        usernameVariable: 'USER',
+                        passwordVariable: 'PASS'
+                    )]) {
+                        config.authMethod = 'password'
+                        steps.timeout(time: config.timeout, unit: 'MINUTES') {
+                            executeCliCommand(command, config)
+                        }
+                    }
+                }
+            }
+            
+            // credentialsIdの名前でヒントを得る
+            def isUsernamePassword = config.credentialsId.contains('credentials') || config.credentialsId.contains('password')
+            def isToken = config.credentialsId.contains('token') || config.credentialsId.contains('api')
+            
+            if (isUsernamePassword) {
+                // UsernamePassword形式として処理
                 return steps.withCredentials([steps.usernamePassword(
                     credentialsId: config.credentialsId,
                     usernameVariable: 'USER',
@@ -86,8 +123,8 @@ class JenkinsCliClient {
                         executeCliCommand(command, config)
                     }
                 }
-            } catch (Exception e) {
-                // UsernamePasswordで失敗したら、Secret textとして試す
+            } else {
+                // デフォルトはSecret text（APIトークン）として処理
                 return steps.withCredentials([steps.string(
                     credentialsId: config.credentialsId,
                     variable: 'JENKINS_API_TOKEN'
@@ -551,10 +588,10 @@ class JenkinsCliClient {
         // 認証方式に応じて認証パラメータを設定
         if (config.authMethod == 'token') {
             // APIトークン認証の場合
-            cliCommand += " -auth \"\$JENKINS_USER:\$JENKINS_API_TOKEN\""
+            cliCommand += " -auth \"\${JENKINS_USER}:\${JENKINS_API_TOKEN}\""
         } else {
             // ユーザー名/パスワード認証の場合
-            cliCommand += " -auth \"\$USER:\$PASS\""
+            cliCommand += " -auth \"\${USER}:\${PASS}\""
         }
         
         // URLを追加
