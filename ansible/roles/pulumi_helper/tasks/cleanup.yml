@@ -16,6 +16,21 @@
     msg: "クリーンアップ対象ディレクトリ: {{ pulumi_project_dir }}"
   when: project_dir_check.stat.exists
 
+# ディスク容量の確認（クリーンアップ前）
+- name: Check disk space before cleanup
+  ansible.builtin.shell: |
+    df -h {{ pulumi_project_dir }} | tail -1 | awk '{print "使用率: " $5 " (利用可能: " $4 ")"}'
+  register: disk_space_before
+  changed_when: false
+  when: project_dir_check.stat.exists
+
+- name: Display disk space before cleanup
+  ansible.builtin.debug:
+    msg: "クリーンアップ前のディスク容量: {{ disk_space_before.stdout }}"
+  when: 
+    - project_dir_check.stat.exists
+    - disk_space_before.stdout is defined
+
 # node_modulesの削除（ディスク容量確保）
 - name: Remove node_modules directory
   ansible.builtin.file:
