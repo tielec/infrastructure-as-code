@@ -29,15 +29,21 @@ scripts/
 │   ├── aws-stop-instances.sh  # EC2インスタンス停止
 │   ├── get-pulumi-bucket.sh    # Pulumiバケット情報取得
 │   ├── setup-aws-credentials.sh # AWS認証設定
-│   └── test-s3-access.sh      # S3アクセステスト
+│   ├── test-s3-access.sh      # S3アクセステスト
+│   └── userdata/          # EC2 UserDataスクリプト
+│       └── nat-instance-setup.sh # NATインスタンス設定
 ├── jenkins/               # Jenkins関連スクリプト
 │   ├── casc/             # Configuration as Code
 │   ├── groovy/           # Groovyスクリプト
 │   ├── jobs/             # ジョブ定義
 │   └── shell/            # シェルスクリプト
-├── workterminal/         # 作業端末用スクリプト
-│   └── update-repo-branch.sh  # リポジトリブランチ更新
-└── init-ip-whitelist.sh      # IPホワイトリスト初期化
+├── lambda/               # Lambda関連スクリプト
+│   ├── cleanup-ssm-params.sh  # SSMパラメータクリーンアップ
+│   └── verify-deployment.sh   # Lambda環境動作確認
+└── workterminal/         # 作業端末用スクリプト
+    ├── check-ansible-tmux.sh  # Ansible tmuxセッション確認
+    ├── run-ansible-in-tmux.sh # tmux内でAnsible実行
+    └── update-repo-branch.sh  # リポジトリブランチ更新
 ```
 
 ## スクリプト一覧
@@ -117,8 +123,8 @@ export TAG_VALUE="dev"
 | `controller-mount-efs.sh` | EFSマウント設定 | コントローラー起動時 |
 | `controller-startup.sh` | Jenkinsサービス起動 | systemd |
 | `controller-update.sh` | Jenkinsバージョン更新 | メンテナンス |
-| `agent-setup.sh` | エージェント設定 | エージェントEC2 |
-| `agent-template.sh` | エージェントテンプレート | AMI作成 |
+| `controller-user-data.sh` | UserDataスクリプト | EC2起動時 |
+| `jenkins-restart.sh` | Jenkinsサービス再起動 | メンテナンス |
 
 #### アプリケーション設定スクリプト
 
@@ -130,6 +136,10 @@ export TAG_VALUE="dev"
 | `application-configure-with-casc.sh` | JCasC適用 | 設定変更時 |
 | `application-create-seed-job.sh` | Seedジョブ作成 | ジョブ設定 |
 | `application-verify-all.sh` | 全設定検証 | デプロイ後 |
+| `application-verify-plugins.sh` | プラグイン検証 | プラグイン更新後 |
+| `application-verify-security.sh` | セキュリティ検証 | セキュリティ設定後 |
+| `application-update-version.sh` | Jenkinsバージョン更新 | アップグレード時 |
+| `application-cleanup-groovy.sh` | Groovyスクリプトクリーンアップ | メンテナンス |
 
 #### Jenkins Configuration as Code (jenkins/casc/)
 
@@ -154,22 +164,86 @@ jenkins:
 | `create-seed-job.groovy` | Seedジョブ作成 | Script Console |
 | `recovery-mode.groovy` | リカバリーモード | 緊急時 |
 
-### ユーティリティスクリプト
+### Lambda関連スクリプト
 
-#### init-ip-whitelist.sh
-Lambda IPホワイトリスト機能を初期化します。
+#### lambda/verify-deployment.sh
+Lambda API環境の包括的な動作確認を実行します。
 
 ```bash
 # 使用方法
-./scripts/init-ip-whitelist.sh
+./scripts/lambda/verify-deployment.sh [env]
+
+# デフォルト（dev環境）
+./scripts/lambda/verify-deployment.sh
+
+# 詳細出力モード
+VERBOSE=1 ./scripts/lambda/verify-deployment.sh dev
+
+# 確認項目：
+# - SSMパラメータ（API Gateway設定、APIキー）
+# - Lambda関数の状態と実行テスト
+# - API Gatewayのリソースとエンドポイント
+# - CloudWatchログ
+# - VPC/ネットワーク設定
+# - Dead Letter Queue設定
+```
+
+#### lambda/cleanup-ssm-params.sh
+Lambda環境のSSMパラメータをクリーンアップします。
+
+```bash
+# 使用方法
+./scripts/lambda/cleanup-ssm-params.sh [env]
+
+# dev環境のパラメータ削除
+./scripts/lambda/cleanup-ssm-params.sh dev
 
 # 実行内容：
-# 1. DynamoDBテーブル作成
-# 2. 初期IPアドレス登録
-# 3. WAF IPセット更新
+# 1. /lambda-api/{env}/ 以下のパラメータをリスト
+# 2. 削除確認プロンプト
+# 3. パラメータ削除
+# 4. 削除結果の検証
+```
+
+### AWS UserDataスクリプト
+
+#### aws/userdata/nat-instance-setup.sh
+NATインスタンスの初期設定を行います。
+
+```bash
+# EC2 UserDataで自動実行
+# 実行内容：
+# 1. IPフォワーディング有効化
+# 2. iptables設定
+# 3. ソース/デスティネーションチェック無効化
 ```
 
 ### 作業端末用スクリプト
+
+#### workterminal/check-ansible-tmux.sh
+Ansible実行用のtmuxセッションを確認します。
+
+```bash
+# 使用方法
+./scripts/workterminal/check-ansible-tmux.sh
+
+# 実行内容：
+# 1. tmuxセッションの存在確認
+# 2. Ansibleプロセスの状態確認
+# 3. セッション情報の表示
+```
+
+#### workterminal/run-ansible-in-tmux.sh
+tmuxセッション内でAnsibleプレイブックを実行します。
+
+```bash
+# 使用方法
+./scripts/workterminal/run-ansible-in-tmux.sh playbook.yml
+
+# バックグラウンド実行
+# tmuxセッションへのアタッチ
+tmux attach-session -t ansible
+```
 
 #### workterminal/update-repo-branch.sh
 Gitリポジトリのブランチを更新します。
@@ -215,6 +289,10 @@ source scripts/aws/aws-env.sh
 # 4. Jenkinsデプロイ（Ansible経由）
 cd ansible
 ansible-playbook playbooks/jenkins/jenkins_setup_pipeline.yml -e "env=dev"
+
+# Lambda環境のデプロイと確認
+ansible-playbook playbooks/lambda_setup_pipeline.yml -e "env=dev"
+./scripts/lambda/verify-deployment.sh dev
 ```
 
 ## 環境変数
@@ -235,6 +313,14 @@ ansible-playbook playbooks/jenkins/jenkins_setup_pipeline.yml -e "env=dev"
 | `JENKINS_VERSION` | Jenkinsバージョン | 2.426.1 |
 | `JENKINS_PORT` | Jenkinsポート | 8080 |
 | `JENKINS_ADMIN_USER` | 管理者ユーザー | admin |
+
+### Lambda関連環境変数
+
+| 変数名 | 説明 | デフォルト値 |
+|--------|------|-------------|
+| `ENV_NAME` | 環境名 | dev |
+| `VERBOSE` | 詳細出力モード | 0 |
+| `LOG_LEVEL` | ログレベル | INFO |
 
 ### スクリプト固有環境変数
 
