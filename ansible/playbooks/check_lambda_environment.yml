@@ -1,0 +1,100 @@
+---
+# check_lambda_environment.yml
+# Lambda API環境の動作確認とヘルスチェックを行うプレイブック
+#
+# 実行例
+# ======
+#
+# 基本実行:
+#   ansible-playbook playbooks/check_lambda_environment.yml -e "env=dev"
+#
+# 詳細チェックモード:
+#   ansible-playbook playbooks/check_lambda_environment.yml -e "env=dev detailed=true"
+#
+# API テスト実行:
+#   ansible-playbook playbooks/check_lambda_environment.yml -e "env=dev test_api=true api_test_endpoint=/health"
+#
+# デバッグモード:
+#   ansible-playbook playbooks/check_lambda_environment.yml -e "env=dev" -vvv
+#
+
+- name: Lambda Environment Health Check - Start
+  hosts: localhost
+  connection: local
+  gather_facts: no
+  
+  vars:
+    # 環境名はコマンドラインから指定
+    env_name: "{{ env | default('dev') }}"
+    # 詳細チェックモード
+    detailed_check: "{{ detailed | default(false) | bool }}"
+    # APIテスト実行フラグ
+    test_api_enabled: "{{ test_api | default(false) | bool }}"
+    # チェック対象のプレフィックス
+    ssm_prefix: "/lambda-api/{{ env_name }}"
+    
+  pre_tasks:
+    - name: 必須パラメータの確認
+      ansible.builtin.assert:
+        that:
+          - env is defined
+        fail_msg: "env パラメータが必要です (dev/staging/prod)"
+        
+    - name: チェック環境の表示
+      ansible.builtin.debug:
+        msg: |
+          ========================================
+          Lambda Environment Health Check
+          ========================================
+          Environment: {{ env_name }}
+          Detailed Check: {{ detailed_check }}
+          API Test: {{ test_api_enabled }}
+          Date: {{ ansible_date_time.iso8601 | default(lookup('pipe', 'date -Iseconds')) }}
+          ========================================
+          
+  tasks:
+    - name: Lambda環境チェックを実行
+      ansible.builtin.include_role:
+        name: lambda_checker
+      vars:
+        operation: check
+        environment: "{{ env_name }}"
+        detailed_mode: "{{ detailed_check }}"
+        enable_api_test: "{{ test_api_enabled }}"
+        api_endpoint_path: "{{ api_test_endpoint | default('/health') }}"
+        
+  post_tasks:
+    - name: チェック結果のサマリー表示
+      ansible.builtin.debug:
+        msg: |
+          ========================================
+          Check Summary
+          ========================================
+          {% if check_results is defined %}
+          Total Checks: {{ check_results.total | default(0) }}
+          Passed: {{ check_results.passed | default(0) }}
+          Warnings: {{ check_results.warnings | default(0) }}
+          Failed: {{ check_results.failed | default(0) }}
+          
+          {% if check_results.failed | default(0) > 0 %}
+          ⚠️ Some checks failed. Please review the output above.
+          {% elif check_results.warnings | default(0) > 0 %}
+          ⚠️ Some warnings detected. Please review the output above.
+          {% else %}
+          ✅ All checks passed successfully!
+          {% endif %}
+          {% else %}
+          No check results available
+          {% endif %}
+          ========================================
+          
+    - name: 失敗時の詳細情報表示
+      ansible.builtin.debug:
+        msg: |
+          Failed Checks:
+          {% for failure in check_results.failures | default([]) %}
+          - {{ failure.name }}: {{ failure.reason }}
+          {% endfor %}
+      when: 
+        - check_results is defined
+        - check_results.failed | default(0) > 0

@@ -1,0 +1,343 @@
+---
+# Lambda環境のチェックタスク
+
+- name: チェック結果の初期化
+  ansible.builtin.set_fact:
+    check_results:
+      total: 0
+      passed: 0
+      warnings: 0
+      failed: 0
+      failures: []
+      details: {}
+
+# 1. VPCとネットワークのチェック
+- name: VPC設定のチェック
+  when: check_vpc | bool
+  block:
+    - name: VPC IDを取得
+      ansible.builtin.include_role:
+        name: ssm_parameter_store
+        tasks_from: get_parameter
+      vars:
+        parameter_name: "{{ ssm_param_prefix }}/vpc/id"
+        store_as: "vpc_id"
+        required: false
+
+    - name: VPCチェック結果を記録
+      ansible.builtin.set_fact:
+        check_results: "{{ check_results | combine({
+          'total': check_results.total + 1,
+          'passed': check_results.passed + (1 if ssm_parameter_value is defined and ssm_parameter_value else 0),
+          'failed': check_results.failed + (0 if ssm_parameter_value is defined and ssm_parameter_value else 1)
+        }) }}"
+
+    - name: VPC情報を表示
+      ansible.builtin.debug:
+        msg: "✅ VPC ID: {{ ssm_parameter_value }}"
+      when: ssm_parameter_value is defined and ssm_parameter_value
+
+    - name: VPC未設定の警告
+      ansible.builtin.debug:
+        msg: "❌ VPC not found in SSM Parameter Store"
+      when: ssm_parameter_value is not defined or not ssm_parameter_value
+
+    - name: プライベートサブネットを取得
+      ansible.builtin.include_role:
+        name: ssm_parameter_store
+        tasks_from: get_parameter
+      vars:
+        parameter_name: "{{ ssm_param_prefix }}/subnets/private/ids"
+        store_as: "private_subnets"
+        required: false
+      when: ssm_parameter_value is defined and ssm_parameter_value
+
+    - name: サブネット情報を表示
+      ansible.builtin.debug:
+        msg: "✅ Private Subnets: {{ ssm_parameter_value }}"
+      when: 
+        - ssm_parameter_value is defined
+        - ssm_parameter_value
+
+# 2. セキュリティグループのチェック
+- name: セキュリティグループのチェック
+  when: check_security_groups | bool
+  block:
+    - name: Lambda用セキュリティグループを取得
+      ansible.builtin.include_role:
+        name: ssm_parameter_store
+        tasks_from: get_parameter
+      vars:
+        parameter_name: "{{ ssm_param_prefix }}/security-group/lambda/id"
+        store_as: "lambda_sg"
+        required: false
+
+    - name: Lambdaセキュリティグループチェック結果を記録
+      ansible.builtin.set_fact:
+        check_results: "{{ check_results | combine({
+          'total': check_results.total + 1,
+          'passed': check_results.passed + (1 if ssm_parameter_value is defined and ssm_parameter_value else 0),
+          'warnings': check_results.warnings + (0 if ssm_parameter_value is defined and ssm_parameter_value else 1)
+        }) }}"
+
+    - name: Lambdaセキュリティグループ情報を表示
+      ansible.builtin.debug:
+        msg: "✅ Lambda Security Group: {{ ssm_parameter_value }}"
+      when: ssm_parameter_value is defined and ssm_parameter_value
+
+    - name: VPCエンドポイント用セキュリティグループを取得
+      ansible.builtin.include_role:
+        name: ssm_parameter_store
+        tasks_from: get_parameter
+      vars:
+        parameter_name: "{{ ssm_param_prefix }}/security-group/vpce/id"
+        store_as: "vpce_sg"
+        required: false
+
+    - name: VPCEセキュリティグループ情報を表示
+      ansible.builtin.debug:
+        msg: "✅ VPC Endpoint Security Group: {{ ssm_parameter_value }}"
+      when: ssm_parameter_value is defined and ssm_parameter_value
+
+# 3. VPCエンドポイントのチェック
+- name: VPCエンドポイントのチェック
+  when: 
+    - check_vpce | bool
+    - vpc_id is defined
+  block:
+    - name: VPCエンドポイントを確認
+      ansible.builtin.include_role:
+        name: aws_cli_helper
+        tasks_from: execute
+      vars:
+        aws_command: "ec2 describe-vpc-endpoints --filters Name=vpc-id,Values={{ vpc_id }} --query 'VpcEndpoints[].ServiceName' --output json"
+        operation_name: "List VPC Endpoints"
+        parse_output: true
+
+    - name: VPCエンドポイント数を表示
+      ansible.builtin.debug:
+        msg: "✅ Found {{ aws_cli_result | length }} VPC Endpoints"
+      when: aws_cli_result is defined
+
+    - name: VPCエンドポイントのリスト表示
+      ansible.builtin.debug:
+        msg: "  - {{ item }}"
+      loop: "{{ aws_cli_result | default([]) }}"
+      when: detailed_mode | bool
+
+# 4. Lambda関数のチェック
+- name: Lambda関数のチェック
+  when: check_lambda_functions | bool
+  block:
+    - name: Lambda関数をリスト
+      ansible.builtin.include_role:
+        name: aws_cli_helper
+        tasks_from: execute
+      vars:
+        aws_command: "lambda list-functions --query \"Functions[?starts_with(FunctionName, 'lambda-api-{{ environment }}')].[FunctionName,Runtime,State]\" --output json"
+        operation_name: "List Lambda functions"
+        parse_output: true
+
+    - name: Lambda関数チェック結果を記録
+      ansible.builtin.set_fact:
+        check_results: "{{ check_results | combine({
+          'total': check_results.total + 1,
+          'passed': check_results.passed + (1 if aws_cli_result | length > 0 else 0),
+          'failed': check_results.failed + (0 if aws_cli_result | length > 0 else 1)
+        }) }}"
+
+    - name: Lambda関数情報を表示
+      ansible.builtin.debug:
+        msg: |
+          Lambda Functions Found: {{ aws_cli_result | length }}
+          {% for func in aws_cli_result %}
+          - Name: {{ func[0] }}
+            Runtime: {{ func[1] }}
+            State: {{ func[2] }}
+          {% endfor %}
+      when: aws_cli_result | length > 0
+
+    - name: Lambda関数未検出の警告
+      ansible.builtin.debug:
+        msg: "❌ No Lambda functions found for environment: {{ environment }}"
+      when: aws_cli_result | length == 0
+
+    # 詳細モードで各Lambda関数の設定をチェック
+    - name: Lambda関数の詳細チェック
+      when: 
+        - detailed_mode | bool
+        - aws_cli_result | length > 0
+      ansible.builtin.include_tasks: check_lambda_details.yml
+      vars:
+        function_name: "{{ item[0] }}"
+      loop: "{{ aws_cli_result }}"
+
+# 5. API Gatewayのチェック
+- name: API Gatewayのチェック
+  when: check_api_gateway | bool
+  block:
+    - name: API Gateway IDを取得
+      ansible.builtin.include_role:
+        name: ssm_parameter_store
+        tasks_from: get_parameter
+      vars:
+        parameter_name: "{{ ssm_param_prefix }}/api-gateway/id"
+        store_as: "api_id"
+        required: false
+
+    - name: API IDを保存
+      ansible.builtin.set_fact:
+        api_gateway_id: "{{ ssm_parameter_value }}"
+      when: ssm_parameter_value is defined
+
+    - name: API Gatewayチェック結果を記録
+      ansible.builtin.set_fact:
+        check_results: "{{ check_results | combine({
+          'total': check_results.total + 1,
+          'passed': check_results.passed + (1 if api_gateway_id is defined and api_gateway_id else 0),
+          'warnings': check_results.warnings + (0 if api_gateway_id is defined and api_gateway_id else 1)
+        }) }}"
+
+    - name: API Gateway情報を表示
+      ansible.builtin.debug:
+        msg: "✅ API Gateway ID: {{ api_gateway_id }}"
+      when: api_gateway_id is defined and api_gateway_id
+
+    - name: API エンドポイントを取得
+      ansible.builtin.include_role:
+        name: ssm_parameter_store
+        tasks_from: get_parameter
+      vars:
+        parameter_name: "{{ ssm_param_prefix }}/api-gateway/endpoint"
+        store_as: "api_endpoint"
+        required: false
+      when: api_gateway_id is defined
+
+    - name: APIエンドポイントを保存
+      ansible.builtin.set_fact:
+        api_gateway_endpoint: "{{ ssm_parameter_value }}"
+      when: ssm_parameter_value is defined
+
+    - name: APIエンドポイント情報を表示
+      ansible.builtin.debug:
+        msg: "✅ API Endpoint: {{ api_gateway_endpoint }}"
+      when: api_gateway_endpoint is defined
+
+    - name: APIキーを取得（暗号化）
+      ansible.builtin.include_role:
+        name: ssm_parameter_store
+        tasks_from: get_parameter
+      vars:
+        parameter_name: "{{ ssm_param_prefix }}/api-gateway/key"
+        decrypt: true
+        store_as: "api_key"
+        required: false
+      when: api_gateway_id is defined
+
+    - name: APIキーを保存
+      ansible.builtin.set_fact:
+        api_gateway_key: "{{ ssm_parameter_value }}"
+      when: ssm_parameter_value is defined
+      no_log: true
+
+    - name: APIキー取得状態を表示
+      ansible.builtin.debug:
+        msg: "✅ API Key: Found (hidden for security)"
+      when: api_gateway_key is defined
+
+    # デプロイステージの確認
+    - name: デプロイステージを確認
+      ansible.builtin.include_role:
+        name: aws_cli_helper
+        tasks_from: execute
+      vars:
+        aws_command: "apigateway get-stages --rest-api-id {{ api_gateway_id }} --query 'item[].stageName' --output json"
+        operation_name: "Get API stages"
+        parse_output: true
+      when: api_gateway_id is defined
+
+    - name: デプロイステージ情報を表示
+      ansible.builtin.debug:
+        msg: "✅ Deployment Stages: {{ aws_cli_result | join(', ') }}"
+      when: 
+        - aws_cli_result is defined
+        - aws_cli_result | length > 0
+
+# 6. CloudWatch Logsのチェック
+- name: CloudWatch Logsのチェック
+  when: check_cloudwatch_logs | bool
+  block:
+    - name: CloudWatchロググループを確認
+      ansible.builtin.include_role:
+        name: aws_cli_helper
+        tasks_from: execute
+      vars:
+        aws_command: "logs describe-log-groups --log-group-name-prefix /aws/lambda/lambda-api-{{ environment }} --query 'logGroups[].logGroupName' --output json"
+        operation_name: "List CloudWatch Log Groups"
+        parse_output: true
+
+    - name: ロググループチェック結果を記録
+      ansible.builtin.set_fact:
+        check_results: "{{ check_results | combine({
+          'total': check_results.total + 1,
+          'passed': check_results.passed + (1 if aws_cli_result | length > 0 else 0),
+          'warnings': check_results.warnings + (0 if aws_cli_result | length > 0 else 1)
+        }) }}"
+
+    - name: ロググループ情報を表示
+      ansible.builtin.debug:
+        msg: |
+          ✅ CloudWatch Log Groups Found: {{ aws_cli_result | length }}
+          {% for log_group in aws_cli_result %}
+          - {{ log_group }}
+          {% endfor %}
+      when: aws_cli_result | length > 0
+
+# 7. APIテスト実行（オプション）
+- name: APIエンドポイントのテスト
+  when: 
+    - enable_api_test | bool
+    - api_gateway_endpoint is defined
+    - api_gateway_key is defined
+  block:
+    - name: APIヘルスチェックエンドポイントをテスト
+      ansible.builtin.uri:
+        url: "{{ api_gateway_endpoint }}{{ api_endpoint_path }}"
+        method: GET
+        headers:
+          x-api-key: "{{ api_gateway_key }}"
+        timeout: "{{ api_test_timeout }}"
+        validate_certs: true
+      register: api_test_result
+      ignore_errors: true
+      no_log: true
+
+    - name: APIテスト結果を記録
+      ansible.builtin.set_fact:
+        check_results: "{{ check_results | combine({
+          'total': check_results.total + 1,
+          'passed': check_results.passed + (1 if api_test_result.status | default(0) == 200 else 0),
+          'failed': check_results.failed + (0 if api_test_result.status | default(0) == 200 else 1)
+        }) }}"
+
+    - name: APIテスト成功を表示
+      ansible.builtin.debug:
+        msg: "✅ API Test Successful: HTTP {{ api_test_result.status }}"
+      when: api_test_result.status | default(0) == 200
+
+    - name: APIテスト失敗を表示
+      ansible.builtin.debug:
+        msg: "❌ API Test Failed: {{ api_test_result.msg | default('Unknown error') }}"
+      when: api_test_result.status | default(0) != 200
+
+    - name: APIレスポンスを表示（詳細モード）
+      ansible.builtin.debug:
+        var: api_test_result.json
+      when: 
+        - detailed_mode | bool
+        - api_test_result.json is defined
+
+# 最終的なチェック結果をプレイブックレベルに設定
+- name: チェック結果を親スコープに設定
+  ansible.builtin.set_fact:
+    check_results: "{{ check_results }}"

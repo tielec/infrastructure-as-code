@@ -1,0 +1,67 @@
+---
+# Lambda関数の詳細チェック（詳細モード用）
+
+- name: "Lambda関数 {{ function_name }} の設定を取得"
+  ansible.builtin.include_role:
+    name: aws_cli_helper
+    tasks_from: execute
+  vars:
+    aws_command: "lambda get-function-configuration --function-name {{ function_name }} --query '{VpcConfig: VpcConfig, Environment: Environment.Variables, Timeout: Timeout, MemorySize: MemorySize, Handler: Handler}' --output json"
+    operation_name: "Get Lambda configuration for {{ function_name }}"
+    parse_output: true
+
+- name: "{{ function_name }} のVPC設定を確認"
+  ansible.builtin.debug:
+    msg: |
+      Function: {{ function_name }}
+      {% if aws_cli_result.VpcConfig and aws_cli_result.VpcConfig.SubnetIds | default([]) | length > 0 %}
+      ✅ VPC Configuration: Configured
+        - Subnets: {{ aws_cli_result.VpcConfig.SubnetIds | join(', ') }}
+        - Security Groups: {{ aws_cli_result.VpcConfig.SecurityGroupIds | join(', ') }}
+      {% else %}
+      ⚠️ VPC Configuration: Not configured
+      {% endif %}
+
+- name: "{{ function_name }} の環境変数を確認"
+  ansible.builtin.debug:
+    msg: |
+      {% if aws_cli_result.Environment %}
+      ✅ Environment Variables: Configured ({{ aws_cli_result.Environment | length }} variables)
+      {% else %}
+      ⚠️ Environment Variables: Not configured
+      {% endif %}
+
+- name: "{{ function_name }} のリソース設定を表示"
+  ansible.builtin.debug:
+    msg: |
+      Resource Configuration:
+      - Timeout: {{ aws_cli_result.Timeout }} seconds
+      - Memory: {{ aws_cli_result.MemorySize }} MB
+      - Handler: {{ aws_cli_result.Handler }}
+
+# 最近のエラーログをチェック
+- name: "{{ function_name }} の最近のエラーを確認"
+  ansible.builtin.include_role:
+    name: aws_cli_helper
+    tasks_from: execute
+  vars:
+    aws_command: |
+      logs filter-log-events \
+        --log-group-name /aws/lambda/{{ function_name }} \
+        --start-time $(date -d '1 hour ago' +%s000) \
+        --filter-pattern "ERROR" \
+        --max-items 5 \
+        --query 'events[].message' \
+        --output json
+    operation_name: "Check recent errors for {{ function_name }}"
+    parse_output: true
+  ignore_errors: true
+
+- name: "{{ function_name }} のエラー状態を表示"
+  ansible.builtin.debug:
+    msg: |
+      {% if aws_cli_result | default([]) | length > 0 %}
+      ⚠️ Recent errors found: {{ aws_cli_result | length }} error(s) in the last hour
+      {% else %}
+      ✅ No recent errors found
+      {% endif %}

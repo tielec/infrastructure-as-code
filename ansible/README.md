@@ -179,6 +179,11 @@ ansible-playbook playbooks/lambda_teardown_pipeline.yml -e "env=dev force_destro
 | `lambda/lambda_functions.yml` | Lambda関数デプロイ | nat, vpce |
 | `lambda/lambda_api_gateway.yml` | API Gateway構築 | functions |
 
+#### 管理・監視プレイブック
+
+| プレイブック | 説明 | 実行例 |
+|------------|------|--------|
+| `check_lambda_environment.yml` | Lambda環境ヘルスチェック | `ansible-playbook playbooks/check_lambda_environment.yml -e "env=dev"` |
 
 ### テストプレイブック
 
@@ -222,6 +227,7 @@ ansible-playbook playbooks/lambda_teardown_pipeline.yml -e "env=dev force_destro
 | `lambda_api_gateway` | API Gateway設定 | deploy, destroy |
 | `lambda_vpce` | VPCエンドポイント管理 | deploy, destroy |
 | `lambda_ssm_init` | SSMパラメータ初期化 | deploy, destroy |
+| `lambda_checker` | Lambda環境ヘルスチェック | check, validate |
 
 ### 共通ヘルパーロール
 
@@ -291,6 +297,15 @@ ansible-playbook playbooks/jenkins/maintenance/cleanup_image_builder_amis.yml -e
 ansible-playbook playbooks/lambda/lambda_network.yml -e "env=dev"
 ansible-playbook playbooks/lambda/lambda_functions.yml -e "env=dev"
 ansible-playbook playbooks/lambda/lambda_api_gateway.yml -e "env=dev"
+
+# Lambda環境のヘルスチェック
+ansible-playbook playbooks/check_lambda_environment.yml -e "env=dev"
+
+# 詳細チェックモード
+ansible-playbook playbooks/check_lambda_environment.yml -e "env=dev detailed=true"
+
+# APIテスト付きチェック
+ansible-playbook playbooks/check_lambda_environment.yml -e "env=dev test_api=true"
 ```
 
 ## 環境変数

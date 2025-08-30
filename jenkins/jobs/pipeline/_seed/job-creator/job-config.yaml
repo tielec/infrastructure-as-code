@@ -419,27 +419,6 @@ ansible-playbooks:
         category: "lambda-deploy"
         environments: ['dev', 'prod']
       
-      lambda_waf:
-        playbook_path: "lambda/lambda_waf.yml"
-        display_name: "Lambda WAF"
-        description: "WAFのデプロイ（オプション）"
-        category: "lambda-deploy"
-        environments: ['prod']  # 本番環境のみ
-      
-      lambda_websocket:
-        playbook_path: "lambda/lambda_websocket.yml"
-        display_name: "Lambda WebSocket API"
-        description: "WebSocket APIのデプロイ（オプション）"
-        category: "lambda-deploy"
-        environments: ['dev', 'prod']
-      
-      lambda_database:
-        playbook_path: "lambda/lambda_database.yml"
-        display_name: "Lambda Database"
-        description: "データベースインフラのデプロイ（Phase 2）"
-        category: "lambda-deploy"
-        environments: ['dev', 'prod']
-      
       # Lambda Pipeline Playbooks
       lambda_setup_pipeline:
         playbook_path: "lambda_setup_pipeline.yml"
@@ -454,6 +433,15 @@ ansible-playbooks:
         description: "Lambda完全削除パイプライン"
         category: "lambda-pipeline"
         environments: ['dev', 'prod']  # 両環境に配置
+      
+      # Lambda Check Playbooks
+      check_lambda_environment:
+        playbook_path: "check_lambda_environment.yml"
+        display_name: "Check Lambda Environment"
+        description: "Lambda環境のヘルスチェックと動作確認"
+        category: "lambda-check"
+        environments: ['dev', 'prod']  # 両環境に配置
+        ansible_extra_vars: "detailed=true test_api=true"
       
       # Test
       test_aws_cli_helper:

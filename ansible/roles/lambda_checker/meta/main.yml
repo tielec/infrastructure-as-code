@@ -1,0 +1,17 @@
+---
+# lambda_checker ロールのメタデータと依存関係
+
+galaxy_info:
+  author: DevOps Team
+  description: Lambda API環境の動作確認とヘルスチェックを実行するロール
+  min_ansible_version: 2.9
+  platforms:
+    - name: Ubuntu
+      versions:
+        - focal
+        - jammy
+
+# ヘルパーロールへの依存関係を定義
+dependencies:
+  - ssm_parameter_store  # SSMパラメータ取得に必須
+  - aws_cli_helper      # AWS CLIコマンド実行に必須

@@ -1,0 +1,43 @@
+---
+# Lambda環境の検証タスク（簡易チェック版）
+
+- name: 必須SSMパラメータの存在確認
+  ansible.builtin.include_role:
+    name: ssm_parameter_store
+    tasks_from: get_parameter
+  vars:
+    parameter_name: "{{ item }}"
+    required: true
+  loop:
+    - "{{ ssm_param_prefix }}/vpc/id"
+    - "{{ ssm_param_prefix }}/subnets/private/ids"
+    - "{{ ssm_param_prefix }}/security-group/lambda/id"
+  register: required_params_check
+
+- name: Lambda関数の存在確認
+  ansible.builtin.include_role:
+    name: aws_cli_helper
+    tasks_from: execute
+  vars:
+    aws_command: "lambda list-functions --query \"Functions[?starts_with(FunctionName, 'lambda-api-{{ environment }}')].FunctionName\" --output json"
+    operation_name: "Validate Lambda functions exist"
+    parse_output: true
+
+- name: 検証結果の判定
+  ansible.builtin.assert:
+    that:
+      - aws_cli_result | length > 0
+    fail_msg: "Lambda functions not found for environment: {{ environment }}"
+    success_msg: "✅ Found {{ aws_cli_result | length }} Lambda functions"
+
+- name: API Gateway の存在確認
+  ansible.builtin.include_role:
+    name: ssm_parameter_store
+    tasks_from: get_parameter
+  vars:
+    parameter_name: "{{ ssm_param_prefix }}/api-gateway/id"
+    required: true
+
+- name: 検証完了メッセージ
+  ansible.builtin.debug:
+    msg: "✅ Lambda environment validation completed successfully for {{ environment }}"

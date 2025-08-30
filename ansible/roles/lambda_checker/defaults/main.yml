@@ -1,0 +1,35 @@
+---
+# lambda_checker ロールのデフォルト変数
+
+# 基本設定
+aws_region: "{{ lookup('env', 'AWS_REGION') | default('ap-northeast-1') }}"
+environment: "{{ env_name | default('dev') }}"
+
+# チェックモード設定
+detailed_mode: false
+enable_api_test: false
+api_endpoint_path: "/health"
+
+# SSMパラメータのプレフィックス
+ssm_param_prefix: "/lambda-api/{{ environment }}"
+
+# チェック項目の有効/無効
+check_vpc: true
+check_security_groups: true
+check_vpce: true
+check_nat: true
+check_lambda_functions: true
+check_api_gateway: true
+check_cloudwatch_logs: true
+
+# タイムアウト設定
+api_test_timeout: 10
+
+# チェック結果の初期化
+check_results:
+  total: 0
+  passed: 0
+  warnings: 0
+  failed: 0
+  failures: []
+  details: {}

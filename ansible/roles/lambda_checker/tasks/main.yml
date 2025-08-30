@@ -1,0 +1,11 @@
+---
+# lambda_checker ロールのエントリーポイント
+# CONTRIBUTION.mdに従い、operationに基づいて適切なタスクファイルを呼び出す
+
+- name: Include check tasks
+  ansible.builtin.include_tasks: check.yml
+  when: operation | default('check') == 'check'
+
+- name: Include validate tasks
+  ansible.builtin.include_tasks: validate.yml
+  when: operation | default('check') == 'validate'
