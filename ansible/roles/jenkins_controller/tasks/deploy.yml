@@ -142,22 +142,6 @@
         parameter_name: "/jenkins-infra/{{ env_name }}/controller/instance-id"
         store_as: "jenkins_instance_id"
     
-    - name: Get Jenkins private IP from SSM Parameter Store
-      ansible.builtin.include_role:
-        name: ssm_parameter_store
-        tasks_from: get_parameter
-      vars:
-        parameter_name: "/jenkins-infra/{{ env_name }}/controller/private-ip"
-        store_as: "jenkins_private_ip"
-    
-    - name: Get deployed Jenkins color from SSM Parameter Store
-      ansible.builtin.include_role:
-        name: ssm_parameter_store
-        tasks_from: get_parameter
-      vars:
-        parameter_name: "/jenkins-infra/{{ env_name }}/controller/deployed-color"
-        store_as: "deployed_jenkins_color"
-    
     # SSMエージェントが準備完了になるまで待機
     - name: Wait for SSM agent to be ready on Jenkins instance
       ansible.builtin.include_role:
@@ -181,8 +165,6 @@
         msg: |
           Jenkins Controller Infrastructure Deployed Successfully:
           - Instance ID: {{ jenkins_instance_id }}
-          - Private IP: {{ jenkins_private_ip }}
-          - Deployed Jenkins Color: {{ deployed_jenkins_color }}
           - Recovery Mode: {{ recovery_mode }}
           - SSM Agent Status: Ready
   
