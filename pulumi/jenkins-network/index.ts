@@ -246,18 +246,6 @@ const vpcIdParam = new aws.ssm.Parameter(`vpc-id`, {
     },
 });
 
-const vpcCidrOutputParam = new aws.ssm.Parameter(`vpc-cidr-output`, {
-    name: `${ssmPrefix}/network/vpc-cidr`,
-    type: "String",
-    value: vpc.cidrBlock,
-    overwrite: true,
-    tags: {
-        Environment: environment,
-        ManagedBy: "pulumi",
-        Component: "network",
-    },
-});
-
 // IPv6 CIDRをSSMに保存
 const vpcIpv6CidrParam = new aws.ssm.Parameter(`vpc-ipv6-cidr`, {
     name: `${ssmPrefix}/network/vpc-ipv6-cidr`,

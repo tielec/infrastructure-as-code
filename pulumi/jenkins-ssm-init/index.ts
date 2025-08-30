@@ -29,19 +29,6 @@ const projectNameParam = new aws.ssm.Parameter("project-name", {
     },
 });
 
-const environmentParam = new aws.ssm.Parameter("environment", {
-    name: `${ssmPrefix}/config/environment`,
-    type: "String",
-    value: environment,
-    overwrite: true,
-    description: "Environment name",
-    tags: {
-        Environment: environment,
-        ManagedBy: "pulumi",
-        Component: "config",
-    },
-});
-
 // ネットワーク設定
 const vpcCidrParam = new aws.ssm.Parameter("vpc-cidr", {
     name: `${ssmPrefix}/config/vpc-cidr`,

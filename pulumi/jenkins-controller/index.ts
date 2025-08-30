@@ -517,33 +517,6 @@ const instanceIdParameter = new aws.ssm.Parameter(`jenkins-instance-id`, {
     overwrite: true,  // 既存のパラメータを上書き可能にする
 });
 
-// プライベートIPをSSMパラメータに保存
-const privateIpParameter = new aws.ssm.Parameter(`jenkins-private-ip`, {
-    name: `${ssmPrefix}/controller/private-ip`,
-    type: "String",
-    value: jenkinsInstance.privateIp,
-    overwrite: true,
-    tags: {
-        Environment: environment,
-        ManagedBy: "pulumi",
-        Component: "controller",
-    },
-});
-
-// IPv6アドレスをSSMパラメータに保存
-const ipv6AddressParameter = new aws.ssm.Parameter(`jenkins-ipv6-address`, {
-    name: `${ssmPrefix}/controller/ipv6-address`,
-    type: "String",
-    value: jenkinsInstance.ipv6Addresses.apply(addrs => addrs && addrs.length > 0 ? addrs[0] : "none"),
-    overwrite: true,
-    tags: {
-        Environment: environment,
-        ManagedBy: "pulumi",
-        Component: "controller",
-        IPv6Enabled: "true",
-    },
-});
-
 // インスタンスプロファイル名をSSMパラメータに保存
 const instanceProfileParameter = new aws.ssm.Parameter(`jenkins-instance-profile`, {
     name: `${ssmPrefix}/controller/instance-profile-name`,
@@ -562,19 +535,6 @@ const roleArnParameter = new aws.ssm.Parameter(`jenkins-role-arn`, {
     name: `${ssmPrefix}/controller/role-arn`,
     type: "String",
     value: jenkinsRole.arn,
-    overwrite: true,
-    tags: {
-        Environment: environment,
-        ManagedBy: "pulumi",
-        Component: "controller",
-    },
-});
-
-// デプロイされたJenkinsカラーをSSMパラメータに保存
-const deployedColorParameter = new aws.ssm.Parameter(`jenkins-deployed-color`, {
-    name: `${ssmPrefix}/controller/deployed-color`,
-    type: "String",
-    value: jenkinsColor,
     overwrite: true,
     tags: {
         Environment: environment,
