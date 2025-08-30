@@ -104,6 +104,7 @@ AWS_DEV_ACCOUNT_IDS=$(retrieve_ssm_parameter \
 # 環境変数の設定（まだexportしない）
 SHARED_LIBRARY_REPO="${SHARED_LIBRARY_REPO:-https://github.com/tielec/infrastructure-as-code}"
 SHARED_LIBRARY_BRANCH="${SHARED_LIBRARY_BRANCH:-main}"
+SHARED_LIBRARY_PATH="${SHARED_LIBRARY_PATH:-jenkins/jobs/shared/}"
 EC2_IDLE_MINUTES="${EC2_IDLE_MINUTES:-15}"
 EC2_MIN_SIZE="${EC2_MIN_SIZE:-0}"
 EC2_MAX_SIZE="${EC2_MAX_SIZE:-1}"

@@ -35,11 +35,11 @@ jenkins:
     - eC2Fleet:
         name: "ec2-fleet"
         fleet: "${EC2_FLEET_ID}"
-        region: "${AWS_REGION:-ap-northeast-1}"
-        idleMinutes: ${EC2_IDLE_MINUTES:-15}
-        minSize: ${EC2_MIN_SIZE:-0}
-        maxSize: ${EC2_MAX_SIZE:-1}
-        numExecutors: ${EC2_NUM_EXECUTORS:-3}
+        region: "${AWS_REGION}"
+        idleMinutes: ${EC2_IDLE_MINUTES}
+        minSize: ${EC2_MIN_SIZE}
+        maxSize: ${EC2_MAX_SIZE}
+        numExecutors: ${EC2_NUM_EXECUTORS}
         computerConnector:
           sSHConnector:
             credentialsId: "ec2-agent-keypair"
@@ -103,14 +103,14 @@ unclassified:
   globalLibraries:
     libraries:
       - name: "jenkins-shared-lib"
-        defaultVersion: "${SHARED_LIBRARY_BRANCH:-main}"
+        defaultVersion: "${SHARED_LIBRARY_BRANCH}"
         retriever:
           modernSCM:
             clone: true
-            libraryPath: "${SHARED_LIBRARY_PATH:-jenkins/jobs/shared/}"
+            libraryPath: "${SHARED_LIBRARY_PATH}"
             scm:
               git:
-                remote: "${SHARED_LIBRARY_REPO:-https://github.com/tielec/infrastructure-as-code/}"
+                remote: "${SHARED_LIBRARY_REPO}"
                 traits:
                   - "gitBranchDiscovery"
   scmGit:
