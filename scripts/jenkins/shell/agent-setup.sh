@@ -2,6 +2,42 @@
 # Enable logging
 exec > >(tee /var/log/user-data.log|logger -t user-data -s 2>/dev/console) 2>&1
 set -x
+
+#---------------------------------------
+# EBS Volume Expansion (最初に実行)
+#---------------------------------------
+echo "Expanding EBS volume to use full capacity..."
+
+# ルートデバイスの情報を取得
+ROOT_DEVICE=$(df / | tail -1 | awk '{print $1}')
+echo "Root device: $ROOT_DEVICE"
+
+# デバイス名からパーティション番号を取得
+if [[ "$ROOT_DEVICE" =~ nvme ]]; then
+    DEVICE_NAME=$(echo "$ROOT_DEVICE" | sed 's/p[0-9]*$//')
+    PARTITION_NUM=$(echo "$ROOT_DEVICE" | grep -o '[0-9]*$')
+else
+    DEVICE_NAME=$(echo "$ROOT_DEVICE" | sed 's/[0-9]*$//')
+    PARTITION_NUM=$(echo "$ROOT_DEVICE" | grep -o '[0-9]*$')
+fi
+
+# cloud-utils-growpartのインストール
+dnf install -y cloud-utils-growpart || yum install -y cloud-utils-growpart
+
+# パーティションの拡張
+growpart "$DEVICE_NAME" "$PARTITION_NUM" || echo "Partition might already be expanded"
+
+# ファイルシステムの拡張
+FS_TYPE=$(blkid -o value -s TYPE "$ROOT_DEVICE")
+if [[ "$FS_TYPE" =~ ext[234] ]]; then
+    resize2fs "$ROOT_DEVICE"
+elif [[ "$FS_TYPE" == "xfs" ]]; then
+    xfs_growfs -d /
+fi
+
+echo "Disk usage after expansion:"
+df -h /
+
 #---------------------------------------
 # Configure /tmp size
 #---------------------------------------
