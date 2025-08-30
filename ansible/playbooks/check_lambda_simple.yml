@@ -1,0 +1,75 @@
+---
+# check_lambda_simple.yml
+# シェルスクリプトを使用したLambda環境チェック
+#
+# 実行例:
+#   ansible-playbook playbooks/check_lambda_simple.yml -e "env=dev"
+#
+
+- name: Lambda Environment Check (Simple Version)
+  hosts: localhost
+  connection: local
+  gather_facts: no
+  
+  vars:
+    # 環境名の処理（配列の場合は最初の要素、それ以外はそのまま使用）
+    env_name: >-
+      {%- if env is defined -%}
+        {%- if env is sequence and env is not string -%}
+          {{- env[0] if env|length > 0 else 'dev' -}}
+        {%- else -%}
+          {{- env -}}
+        {%- endif -%}
+      {%- else -%}
+        {{- 'dev' -}}
+      {%- endif -%}
+    script_path: "{{ playbook_dir }}/../../scripts/lambda/check-lambda-env.sh"
+    
+  tasks:
+    - name: チェックスクリプトの存在確認
+      ansible.builtin.stat:
+        path: "{{ script_path }}"
+      register: script_stat
+      
+    - name: スクリプトが存在しない場合は失敗
+      ansible.builtin.fail:
+        msg: "Script not found: {{ script_path }}"
+      when: not script_stat.stat.exists
+      
+    - name: スクリプトに実行権限を付与
+      ansible.builtin.file:
+        path: "{{ script_path }}"
+        mode: '0755'
+      
+    - name: Lambda環境チェックスクリプトを実行
+      ansible.builtin.shell: |
+        cd {{ playbook_dir }}/../..
+        bash {{ script_path }} {{ env_name }}
+      environment:
+        AWS_REGION: "{{ aws_region | default(lookup('env', 'AWS_REGION') | default('ap-northeast-1')) }}"
+        AWS_DEFAULT_REGION: "{{ aws_region | default(lookup('env', 'AWS_REGION') | default('ap-northeast-1')) }}"
+      register: check_result
+      ignore_errors: yes
+      
+    - name: チェック結果を表示
+      ansible.builtin.debug:
+        msg: "{{ check_result.stdout }}"
+      when: check_result.stdout is defined
+      
+    - name: エラーがある場合は表示
+      ansible.builtin.debug:
+        msg: |
+          エラーが発生しました:
+          {{ check_result.stderr }}
+      when: 
+        - check_result.failed | default(false)
+        - check_result.stderr is defined
+        - check_result.stderr != ""
+        
+    - name: 結果サマリー
+      ansible.builtin.debug:
+        msg: |
+          ========================================
+          実行ステータス: {{ 'SUCCESS' if not check_result.failed else 'FAILED' }}
+          終了コード: {{ check_result.rc }}
+          ========================================

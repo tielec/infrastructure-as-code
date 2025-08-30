@@ -436,12 +436,11 @@ ansible-playbooks:
       
       # Lambda Check Playbooks
       check_lambda_environment:
-        playbook_path: "check_lambda_environment.yml"
+        playbook_path: "check_lambda_simple.yml"
         display_name: "Check Lambda Environment"
-        description: "Lambda環境のヘルスチェックと動作確認"
+        description: "Lambda環境のヘルスチェック（シンプル版）"
         category: "lambda-check"
         environments: ['dev', 'prod']  # 両環境に配置
-        ansible_extra_vars: "detailed=true test_api=true"
       
       # Test
       test_aws_cli_helper:
