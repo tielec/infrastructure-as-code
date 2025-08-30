@@ -26,7 +26,6 @@
           loop_control:
             label: "{{ item.Name }} ({{ item.ImageId }})"
           register: ami_verification_results
-          failed_when: false  # エラーを無視（削除済みの場合エラーになるため）
 
         - name: Check AMI deletion results
           ansible.builtin.set_fact:
@@ -65,7 +64,6 @@
           loop_control:
             label: "{{ item.snapshot_id }}"
           register: snapshot_verification_results
-          failed_when: false  # エラーを無視（削除済みの場合エラーになるため）
 
         - name: Check snapshot deletion results
           ansible.builtin.set_fact:
