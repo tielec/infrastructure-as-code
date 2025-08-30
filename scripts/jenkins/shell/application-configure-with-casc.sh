@@ -49,73 +49,96 @@ else
     error_exit "Please install the configuration-as-code plugin first"
 fi
 
-# Fleet IDの取得
-log "Retrieving Fleet ID..."
-EC2_FLEET_ID=$(aws ssm get-parameter \
-    --name "/jenkins-infra/${ENVIRONMENT}/agent/spotFleetRequestId" \
-    --region "$AWS_REGION" \
-    --query "Parameter.Value" \
-    --output text 2>/dev/null || echo "")
-
-if [ -z "$EC2_FLEET_ID" ]; then
-    log "✗ WARNING: Fleet ID not found in Parameter Store"
-else
-    log "✓ Found Fleet ID: $EC2_FLEET_ID"
-fi
-
-# WorkterminalのホストIPをParameter Storeから取得
-log "Retrieving Workterminal Public IP from Parameter Store..."
-WORKTERMINAL_HOST=$(aws ssm get-parameter \
-    --name "/bootstrap/workterminal/public-ip" \
-    --region "$AWS_REGION" \
-    --query "Parameter.Value" \
-    --output text 2>/dev/null || echo "")
-
-if [ -z "$WORKTERMINAL_HOST" ] || [ "$WORKTERMINAL_HOST" = "None" ]; then
-    log "✗ WARNING: Workterminal IP not found in Parameter Store at /bootstrap/workterminal/public-ip"
-    log "  Please ensure the bootstrap instance is running and the parameter is set"
-else
-    log "✓ Found Workterminal IP from Parameter Store: $WORKTERMINAL_HOST"
-fi
-
-# 環境変数の設定
-export EC2_FLEET_ID
-export WORKTERMINAL_HOST
-export AWS_REGION
-export SHARED_LIBRARY_REPO="${SHARED_LIBRARY_REPO:-https://github.com/tielec/infrastructure-as-code}"
-export SHARED_LIBRARY_BRANCH="${SHARED_LIBRARY_BRANCH:-main}"
-export EC2_IDLE_MINUTES="${EC2_IDLE_MINUTES:-15}"
-export EC2_MIN_SIZE="${EC2_MIN_SIZE:-0}"
-export EC2_MAX_SIZE="${EC2_MAX_SIZE:-1}"
-export EC2_NUM_EXECUTORS="${EC2_NUM_EXECUTORS:-3}"
-
-# Jenkins URLの設定（ALB経由の場合）
-ALB_DNS=$(aws ssm get-parameter \
-    --name "/jenkins-infra/${ENVIRONMENT}/loadbalancer/jenkins-url" \
-    --region "$AWS_REGION" \
-    --query "Parameter.Value" \
-    --output text 2>/dev/null || echo "")
-
-# ALB DNSをJenkins URLに変換
-if [ -n "$ALB_DNS" ] && [ "$ALB_DNS" != "None" ]; then
-    # ALB DNSにプロトコルが含まれていない場合はhttp://を追加
-    if [[ "$ALB_DNS" =~ ^https?:// ]]; then
-        JENKINS_URL="${ALB_DNS}"
+# SSMパラメータから各種設定を取得する関数
+retrieve_ssm_parameter() {
+    local param_name=$1
+    local description=$2
+    local required=${3:-false}
+    
+    local value=$(aws ssm get-parameter \
+        --name "$param_name" \
+        --region "$AWS_REGION" \
+        --query "Parameter.Value" \
+        --output text 2>/dev/null || echo "")
+    
+    if [ -z "$value" ] || [ "$value" = "None" ]; then
+        if [ "$required" = "true" ]; then
+            log "✗ ERROR: $description not found at $param_name"
+            return 1
+        else
+            log "✗ WARNING: $description not found at $param_name"
+        fi
     else
-        JENKINS_URL="http://${ALB_DNS}/"
+        log "✓ Found $description: $value"
     fi
-else
-    JENKINS_URL="http://localhost:8080/"
-fi
+    
+    echo "$value"
+}
 
-# URLが正しく取得できたかログ出力
-log "✓ Found Jenkins URL: $JENKINS_URL"
+# 必要なパラメータをSSMから取得
+log "Retrieving configuration from SSM Parameter Store..."
 
-# すべての環境変数をエクスポート（envsubstで使用するため）
+# Fleet IDの取得
+EC2_FLEET_ID=$(retrieve_ssm_parameter \
+    "/jenkins-infra/${ENVIRONMENT}/agent/spotFleetRequestId" \
+    "Fleet ID" \
+    "false")
+
+# Workterminal IPの取得
+WORKTERMINAL_HOST=$(retrieve_ssm_parameter \
+    "/bootstrap/workterminal/public-ip" \
+    "Workterminal IP" \
+    "false")
+
+# AWSアカウントIDの取得
+AWS_PROD_ACCOUNT_IDS=$(retrieve_ssm_parameter \
+    "/bootstrap/aws/prod-account-ids" \
+    "Production Account IDs" \
+    "false")
+
+AWS_DEV_ACCOUNT_IDS=$(retrieve_ssm_parameter \
+    "/bootstrap/aws/dev-account-ids" \
+    "Development Account IDs" \
+    "false")
+
+# 環境変数の設定（まだexportしない）
+SHARED_LIBRARY_REPO="${SHARED_LIBRARY_REPO:-https://github.com/tielec/infrastructure-as-code}"
+SHARED_LIBRARY_BRANCH="${SHARED_LIBRARY_BRANCH:-main}"
+EC2_IDLE_MINUTES="${EC2_IDLE_MINUTES:-15}"
+EC2_MIN_SIZE="${EC2_MIN_SIZE:-0}"
+EC2_MAX_SIZE="${EC2_MAX_SIZE:-1}"
+EC2_NUM_EXECUTORS="${EC2_NUM_EXECUTORS:-3}"
+
+# Jenkins URLの取得
+ALB_DNS=$(retrieve_ssm_parameter \
+    "/jenkins-infra/${ENVIRONMENT}/loadbalancer/jenkins-url" \
+    "ALB DNS" \
+    "false")
+
+# Jenkins URLの設定
+setup_jenkins_url() {
+    if [ -n "$ALB_DNS" ] && [ "$ALB_DNS" != "None" ]; then
+        # ALB DNSにプロトコルが含まれていない場合はhttp://を追加
+        if [[ "$ALB_DNS" =~ ^https?:// ]]; then
+            echo "${ALB_DNS}"
+        else
+            echo "http://${ALB_DNS}/"
+        fi
+    else
+        echo "http://localhost:8080/"
+    fi
+}
+
+JENKINS_URL=$(setup_jenkins_url)
+log "✓ Jenkins URL: $JENKINS_URL"
+
+# すべての環境変数を一度にエクスポート（envsubstで使用するため）
 export JENKINS_URL
 export EC2_FLEET_ID
 export WORKTERMINAL_HOST
 export AWS_REGION
+export AWS_PROD_ACCOUNT_IDS
+export AWS_DEV_ACCOUNT_IDS
 export SHARED_LIBRARY_REPO
 export SHARED_LIBRARY_BRANCH
 export SHARED_LIBRARY_PATH
@@ -133,18 +156,26 @@ if [ ! -f "$TEMPLATE_FILE" ]; then
     error_exit "JCasC template not found: $TEMPLATE_FILE"
 fi
 
-# デバッグ: 環境変数の確認
-log "Environment variables for template substitution:"
-log "  JENKINS_URL: $JENKINS_URL"
-log "  EC2_FLEET_ID: $EC2_FLEET_ID"
-log "  WORKTERMINAL_HOST: $WORKTERMINAL_HOST"
-log "  SHARED_LIBRARY_REPO: $SHARED_LIBRARY_REPO"
-log "  SHARED_LIBRARY_PATH: $SHARED_LIBRARY_PATH"
+# デバッグ情報を出力する関数
+log_debug_info() {
+    if [ "${DEBUG_CASC:-false}" = "true" ]; then
+        log "Environment variables for template substitution:"
+        log "  JENKINS_URL: $JENKINS_URL"
+        log "  EC2_FLEET_ID: $EC2_FLEET_ID"
+        log "  WORKTERMINAL_HOST: $WORKTERMINAL_HOST"
+        log "  AWS_PROD_ACCOUNT_IDS: ${AWS_PROD_ACCOUNT_IDS:-not set}"
+        log "  AWS_DEV_ACCOUNT_IDS: ${AWS_DEV_ACCOUNT_IDS:-not set}"
+        log "  SHARED_LIBRARY_REPO: $SHARED_LIBRARY_REPO"
+        log "  SHARED_LIBRARY_PATH: $SHARED_LIBRARY_PATH"
+    fi
+}
+
+log_debug_info
 
 # テンプレートから設定ファイルを生成
 # shellcheckを無効化して変数リストを明示的に指定
 # shellcheck disable=SC2016
-envsubst '$JENKINS_URL $EC2_FLEET_ID $WORKTERMINAL_HOST $AWS_REGION $SHARED_LIBRARY_REPO $SHARED_LIBRARY_BRANCH $SHARED_LIBRARY_PATH $EC2_IDLE_MINUTES $EC2_MIN_SIZE $EC2_MAX_SIZE $EC2_NUM_EXECUTORS' < "$TEMPLATE_FILE" > "$CASC_CONFIG_FILE"
+envsubst '$JENKINS_URL $EC2_FLEET_ID $WORKTERMINAL_HOST $AWS_REGION $AWS_PROD_ACCOUNT_IDS $AWS_DEV_ACCOUNT_IDS $SHARED_LIBRARY_REPO $SHARED_LIBRARY_BRANCH $SHARED_LIBRARY_PATH $EC2_IDLE_MINUTES $EC2_MIN_SIZE $EC2_MAX_SIZE $EC2_NUM_EXECUTORS' < "$TEMPLATE_FILE" > "$CASC_CONFIG_FILE"
 
 # 権限設定
 chown jenkins:jenkins "$CASC_CONFIG_FILE"
@@ -158,23 +189,45 @@ if [ "${DEBUG_CASC:-false}" = "true" ]; then
     done
 fi
 
-log "JCasC configuration file generated."
-log "Configuration will be applied on the next Jenkins restart."
-log "Note: The configuration can also be reloaded from Jenkins UI:"
-log "  Manage Jenkins > Configuration as Code > Reload existing configuration"
+# 最終サマリーを出力する関数
+print_configuration_summary() {
+    log "JCasC configuration file generated."
+    log "Configuration will be applied on the next Jenkins restart."
+    log "Note: The configuration can also be reloaded from Jenkins UI:"
+    log "  Manage Jenkins > Configuration as Code > Reload existing configuration"
+    
+    log ""
+    log "===== Configuration Summary ====="
+    
+    if [ "$RESTART_JENKINS" = "true" ]; then
+        log "Status: Configuration applied"
+    else
+        log "Status: Configuration prepared (restart required)"
+    fi
+    
+    log ""
+    log "Components configured:"
+    log "  - EC2 Fleet Cloud: ${EC2_FLEET_ID:-Not configured}"
+    log "  - Workterminal node: ${WORKTERMINAL_HOST:-Not configured}"
+    log "  - Shared Library: ${SHARED_LIBRARY_REPO##*/}"
+    log "  - Security: Markdown formatter enabled"
+    
+    if [ -n "$AWS_PROD_ACCOUNT_IDS" ] || [ -n "$AWS_DEV_ACCOUNT_IDS" ]; then
+        log "  - AWS Account validation: Enabled"
+        [ -n "$AWS_PROD_ACCOUNT_IDS" ] && log "    - Production: $(echo $AWS_PROD_ACCOUNT_IDS | tr ',' ' ')"
+        [ -n "$AWS_DEV_ACCOUNT_IDS" ] && log "    - Development: $(echo $AWS_DEV_ACCOUNT_IDS | tr ',' ' ')"
+    else
+        log "  - AWS Account validation: Not configured"
+    fi
+    
+    log ""
+    if [ "$RESTART_JENKINS" != "true" ]; then
+        log "Next steps:"
+        log "  1. Restart Jenkins service: sudo systemctl restart jenkins"
+        log "  2. Or reload from UI: Manage Jenkins > Configuration as Code > Reload"
+    fi
+    
+    log "================================="
+}
 
-log "JCasC configuration completed"
-log ""
-if [ "$RESTART_JENKINS" = "true" ]; then
-    log "Configuration applied:"
-else
-    log "Configuration prepared:"
-fi
-log "  - EC2 Fleet Cloud configured (Fleet ID: ${EC2_FLEET_ID:-Not set})"
-log "  - Shared Library configured"
-log "  - Security settings applied (Markdown formatter)"
-log "  - Workterminal node added (Host: ${WORKTERMINAL_HOST:-Not set})"
-log ""
-if [ "$RESTART_JENKINS" != "true" ]; then
-    log "Note: Configuration will be applied on next Jenkins restart or manual reload"
-fi
+print_configuration_summary

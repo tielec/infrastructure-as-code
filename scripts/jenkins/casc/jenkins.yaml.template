@@ -19,6 +19,10 @@ jenkins:
   globalNodeProperties:
   - envVars:
       env:
+      - key: "AWS_PROD_ACCOUNT_IDS"
+        value: "${AWS_PROD_ACCOUNT_IDS}"
+      - key: "AWS_DEV_ACCOUNT_IDS"
+        value: "${AWS_DEV_ACCOUNT_IDS}"
       - key: "GITHUB_APP_CREDENTIALS_ID"
         value: "github-app-credentials"
       - key: "GITHUB_PAT_CREDENTIALS_ID"
