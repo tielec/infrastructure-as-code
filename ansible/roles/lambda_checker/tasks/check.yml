@@ -265,9 +265,9 @@
 
     - name: APIキー情報を解析
       ansible.builtin.set_fact:
-        api_keys_data: "{{ ssm_parameter_value | from_json }}"
+        api_keys_data: "{{ ssm_parameter_value | from_json | default({}) }}"
       when: ssm_parameter_value is defined
-      no_log: true
+      # no_log: true  # デバッグのため一時的にコメントアウト
       ignore_errors: true
     
     - name: 最初のAPIキーを保存
