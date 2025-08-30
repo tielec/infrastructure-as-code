@@ -6,6 +6,8 @@
     msg: |
       environment: {{ environment | default('undefined') }}
       ssm_param_prefix: {{ ssm_param_prefix }}
+  tags:
+    - always
 
 - name: チェック結果の初期化
   ansible.builtin.set_fact:
@@ -175,9 +177,13 @@
         msg: |
           Lambda Functions Found: {{ aws_cli_result | length }}
           {% for func in aws_cli_result %}
-          - Name: {{ func[0] }}
-            Runtime: {{ func[1] }}
-            State: {{ func[2] }}
+          {% if func is sequence and func is not string %}
+          - Name: {{ func[0] | default('Unknown') }}
+            Runtime: {{ func[1] | default('Unknown') }}
+            State: {{ func[2] | default('Unknown') }}
+          {% else %}
+          - Function: {{ func }}
+          {% endif %}
           {% endfor %}
       when: aws_cli_result | length > 0
 
