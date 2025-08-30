@@ -358,7 +358,7 @@ ansible-playbooks:
         description: "古いEC2 Image Builder AMIを定期的にクリーンアップ（保持数を超えた古いAMIを削除）"
         category: "jenkins-maintenance"
         environments: ['dev']  # 共通環境
-        ansible_extra_vars: "retention_count=2 dry_run=false generate_report=true"
+        ansible_extra_vars: "retention_count=1 dry_run=false generate_report=true"
         schedule: "H 2 * * *"  # 毎日 UTC 2時に実行 （日本時間 11時）
       
       # Lambda
