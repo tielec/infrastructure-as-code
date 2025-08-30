@@ -54,7 +54,7 @@
         name: aws_cli_helper
         tasks_from: execute
       vars:
-        aws_command: "aws imagebuilder list-image-pipeline-images --image-pipeline-arn {{ agent_ami_outputs.imagePipelineX86Arn }} --query 'imageSummaryList[?state.status==`AVAILABLE`] | [0].outputResources.amis[0].image' --output text"
+        aws_command: "aws imagebuilder list-image-pipeline-images --image-pipeline-arn {{ agent_ami_outputs.imagePipelineX86Arn }} --query 'sort_by(imageSummaryList[?state.status==`AVAILABLE`], &dateCreated)[-1].outputResources.amis[0].image' --output text"
         operation_name: "Get latest x86_64 AMI"
         parse_output: false
     
@@ -69,7 +69,7 @@
         name: aws_cli_helper
         tasks_from: execute
       vars:
-        aws_command: "aws imagebuilder list-image-pipeline-images --image-pipeline-arn {{ agent_ami_outputs.imagePipelineArmArn }} --query 'imageSummaryList[?state.status==`AVAILABLE`] | [0].outputResources.amis[0].image' --output text"
+        aws_command: "aws imagebuilder list-image-pipeline-images --image-pipeline-arn {{ agent_ami_outputs.imagePipelineArmArn }} --query 'sort_by(imageSummaryList[?state.status==`AVAILABLE`], &dateCreated)[-1].outputResources.amis[0].image' --output text"
         operation_name: "Get latest ARM64 AMI"
         parse_output: false
     

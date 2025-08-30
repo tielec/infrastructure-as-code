@@ -12,6 +12,23 @@
 
 - name: Destroy Pulumi stack
   block:
+    # ロック状態をチェック
+    - name: Check for existing locks
+      ansible.builtin.shell: |
+        cd {{ pulumi_project_path }}
+        {{ pulumi_env_prefix }} && {{ pulumi_sudo_cmd }} cancel --yes 2>&1 || true
+      register: lock_check
+      changed_when: false
+      failed_when: false
+      when: not ansible_check_mode
+    
+    - name: Report lock cancellation
+      ansible.builtin.debug:
+        msg: "Previous lock has been cancelled if it existed"
+      when: 
+        - not ansible_check_mode
+        - "'the stack is currently locked' in lock_check.stderr | default('')"
+    
     # スタックが選択されているか確認
     - name: Ensure stack is selected
       ansible.builtin.shell: |
@@ -40,6 +57,9 @@
       when: not ansible_check_mode
       async: "{{ pulumi_operation_timeout | default(600) }}"
       poll: "{{ pulumi_operation_poll | default(10) }}"
+      retries: 2
+      delay: 5
+      until: "'the stack is currently locked' not in pulumi_destroy_result.stderr | default('')"
     
     # 削除結果は重要なので表示
     - name: Display destroy results
@@ -50,18 +70,30 @@
         - pulumi_destroy_result is defined
         
   rescue:
+    # ロックエラーの場合、再度キャンセルを試みる
+    - name: Force cancel lock on failure
+      ansible.builtin.shell: |
+        cd {{ pulumi_project_path }}
+        {{ pulumi_env_prefix }} && {{ pulumi_sudo_cmd }} cancel --yes
+      register: force_cancel
+      failed_when: false
+      changed_when: false
+      when: 
+        - not ansible_check_mode
+        - "'the stack is currently locked' in pulumi_destroy_result.stderr | default('')"
+    
     # 競合エラーの場合は再試行
     - name: Handle concurrent update error
-      when: "'Another update is currently in progress' in pulumi_destroy_result.stderr | default('')"
+      when: "'Another update is currently in progress' in pulumi_destroy_result.stderr | default('') or 'the stack is currently locked' in pulumi_destroy_result.stderr | default('')"
       block:
         - name: Report concurrent update
           ansible.builtin.debug:
-            msg: "Another Pulumi operation is in progress. Attempting to cancel and retry..."
+            msg: "Another Pulumi operation is in progress or stack is locked. Attempting to cancel and retry..."
         
         - name: Cancel current operation
           ansible.builtin.shell: |
             cd {{ pulumi_project_path }}
-            {{ pulumi_env_prefix }} && {{ pulumi_sudo_cmd }} cancel
+            {{ pulumi_env_prefix }} && {{ pulumi_sudo_cmd }} cancel --yes
           ignore_errors: true
         
         - name: Wait before retry
@@ -84,7 +116,9 @@
       ansible.builtin.debug:
         msg: |
           ✗ Pulumi destroy operation failed
-          {% if 'Another update is currently in progress' in pulumi_destroy_result.stderr | default('') %}
+          {% if 'the stack is currently locked' in pulumi_destroy_result.stderr | default('') %}
+          Reason: Stack was locked. Attempted to cancel the lock.
+          {% elif 'Another update is currently in progress' in pulumi_destroy_result.stderr | default('') %}
           Reason: Concurrent operation conflict (retry also failed)
           {% else %}
           Error code: {{ pulumi_destroy_result.rc | default('unknown') }}

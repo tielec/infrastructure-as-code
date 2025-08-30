@@ -75,6 +75,7 @@
       stack_ls:     "{{ pulumi_env_prefix }} && {{ pulumi_sudo_cmd }} stack ls"
       stack_rm:     "{{ pulumi_env_prefix }} && {{ pulumi_sudo_cmd }} stack rm --yes"
       config_set:   "{{ pulumi_env_prefix }} && {{ pulumi_sudo_cmd }} config set"
+      cancel:       "{{ pulumi_env_prefix }} && {{ pulumi_sudo_cmd }} cancel --yes"
       build:        "npm run build"
       tsc:          "npx tsc"
 

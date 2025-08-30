@@ -3,7 +3,7 @@
 # EC2 Image Builderで作成されたAMIとその関連リソースを世代管理に基づいて削除します
 #
 # 使用方法 (ansibleディレクトリから実行):
-#   # デフォルト設定（2世代保持、ドライラン）
+#   # デフォルト設定（1世代保持、ドライラン）
 #   ansible-playbook playbooks/jenkins/maintenance/cleanup_image_builder_amis.yml -e "env=dev"
 #   
 #   # 実際に削除を実行
@@ -18,7 +18,7 @@
 #
 # パラメータ:
 #   env: 環境名 (dev/staging/prod) - 必須
-#   retention_count: 保持する世代数 (デフォルト: 2)
+#   retention_count: 保持する世代数 (デフォルト: 1)
 #   dry_run: ドライランモード (デフォルト: true)
 #   cleanup_targets: クリーンアップ対象 (デフォルト: すべて有効)
 #   generate_report: レポート生成 (デフォルト: true)
@@ -44,7 +44,7 @@
         project_name: "{{ infra.project_name }}"
         aws_region_name: "{{ infra.aws.default_region }}"
         cleanup_dry_run: "{{ dry_run | default(true) }}"
-        cleanup_retention_count: "{{ retention_count | default(2) }}"
+        cleanup_retention_count: "{{ retention_count | default(1) }}"
     
     # 実行確認の表示
     - name: Display cleanup configuration
