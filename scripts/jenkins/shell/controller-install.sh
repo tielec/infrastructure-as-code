@@ -24,6 +24,41 @@ JENKINS_HOME_DIR="/mnt/efs/jenkins" # EFSマウント済みであることを前
 
 log "Starting Jenkins installation script for ${JENKINS_COLOR} environment"
 
+#---------------------------------------
+# EBS Volume Expansion (最初に実行)
+#---------------------------------------
+log "Expanding EBS volume to use full capacity..."
+
+# ルートデバイスの情報を取得
+ROOT_DEVICE=$(df / | tail -1 | awk '{print $1}')
+log "Root device: $ROOT_DEVICE"
+
+# デバイス名からパーティション番号を取得
+if [[ "$ROOT_DEVICE" =~ nvme ]]; then
+    DEVICE_NAME=$(echo "$ROOT_DEVICE" | sed 's/p[0-9]*$//')
+    PARTITION_NUM=$(echo "$ROOT_DEVICE" | grep -o '[0-9]*$')
+else
+    DEVICE_NAME=$(echo "$ROOT_DEVICE" | sed 's/[0-9]*$//')
+    PARTITION_NUM=$(echo "$ROOT_DEVICE" | grep -o '[0-9]*$')
+fi
+
+# cloud-utils-growpartのインストール
+dnf install -y cloud-utils-growpart || yum install -y cloud-utils-growpart
+
+# パーティションの拡張
+growpart "$DEVICE_NAME" "$PARTITION_NUM" || log "Partition might already be expanded"
+
+# ファイルシステムの拡張
+FS_TYPE=$(blkid -o value -s TYPE "$ROOT_DEVICE")
+if [[ "$FS_TYPE" =~ ext[234] ]]; then
+    resize2fs "$ROOT_DEVICE"
+elif [[ "$FS_TYPE" == "xfs" ]]; then
+    xfs_growfs -d /
+fi
+
+log "Disk usage after expansion:"
+df -h / | tee -a /var/log/jenkins-install.log
+
 # EFSマウント確認
 if ! df -h | grep -q "/mnt/efs"; then
   error_exit "EFSがマウントされていません。先にEFSマウントスクリプトを実行してください。"

@@ -1,5 +1,27 @@
 # Pulumiのデプロイ実行ヘルパータスク
 
+# ディスク容量チェック（デプロイ前）
+- name: Check disk space before deployment
+  ansible.builtin.shell: |
+    df -h {{ pulumi_project_path }} | tail -1 | awk '{print $5}' | sed 's/%//'
+  register: disk_usage_before
+  changed_when: false
+  failed_when: false
+
+- name: Clean up if disk usage is high
+  ansible.builtin.include_tasks: cleanup.yml
+  vars:
+    pulumi_project_dir: "{{ pulumi_project_path }}"
+    cleanup_node_modules: true
+    cleanup_npm_cache: true
+    cleanup_package_lock: false
+    cleanup_build_artifacts: false
+    cleanup_global_npm_cache: false
+    cleanup_temp_files: false
+  when:
+    - disk_usage_before.stdout | int > 80
+    - auto_cleanup_on_high_disk_usage | default(true)
+
 # 認証処理を実行（既に認証済みの場合はスキップ）
 - name: Ensure Pulumi authentication
   ansible.builtin.include_tasks: login.yml
@@ -85,6 +107,21 @@
     - name: Set success status
       ansible.builtin.set_fact:
         pulumi_deployment_succeeded: true
+    
+    # デプロイ成功後のクリーンアップ（オプション）
+    - name: Clean up after successful deployment
+      ansible.builtin.include_tasks: cleanup.yml
+      vars:
+        pulumi_project_dir: "{{ pulumi_project_path }}"
+        cleanup_node_modules: true
+        cleanup_npm_cache: true
+        cleanup_package_lock: false
+        cleanup_build_artifacts: false
+        cleanup_global_npm_cache: false
+        cleanup_temp_files: false
+      when:
+        - cleanup_after_deploy | default(true)
+        - not ansible_check_mode
         
   rescue:
     # ロックエラーの場合、再度キャンセルを試みる
