@@ -224,14 +224,14 @@ const natInstanceEip = new aws.ec2.Eip("nat-instance-eip", {
 
     // NAT Instance用のユーザーデータスクリプトを外部ファイルから読み込み
     // パスを確実に解決
-    const scriptPath = path.resolve(__dirname, '..', '..', 'scripts', 'aws-nat-instance-setup.sh');
+    const scriptPath = path.resolve(__dirname, '..', '..', 'scripts', 'aws', 'userdata', 'nat-instance-setup.sh');
     let userDataTemplate: string;
     
     try {
         // ファイルの存在確認
         if (!fs.existsSync(scriptPath)) {
             // 別の可能なパスを試す
-            const alternativePath = path.resolve(process.cwd(), 'scripts', 'aws-nat-instance-setup.sh');
+            const alternativePath = path.resolve(process.cwd(), 'scripts', 'aws', 'userdata', 'nat-instance-setup.sh');
             if (fs.existsSync(alternativePath)) {
                 userDataTemplate = fs.readFileSync(alternativePath, 'utf8');
                 pulumi.log.info(`Successfully loaded NAT instance setup script from alternative path: ${alternativePath}`);
@@ -254,7 +254,7 @@ const natInstanceEip = new aws.ec2.Eip("nat-instance-eip", {
         pulumi.log.error(`
 Please ensure the NAT instance setup script exists at one of these locations:
 1. ${scriptPath}
-2. ${path.resolve(process.cwd(), 'scripts', 'aws-nat-instance-setup.sh')}
+2. ${path.resolve(process.cwd(), 'scripts', 'aws', 'userdata', 'nat-instance-setup.sh')}
 
 The script should be located in the 'scripts' directory relative to your project root.
         `);

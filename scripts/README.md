@@ -37,7 +37,6 @@ scripts/
 │   └── shell/            # シェルスクリプト
 ├── workterminal/         # 作業端末用スクリプト
 │   └── update-repo-branch.sh  # リポジトリブランチ更新
-├── aws-nat-instance-setup.sh  # NATインスタンス設定
 └── init-ip-whitelist.sh      # IPホワイトリスト初期化
 ```
 
@@ -168,19 +167,6 @@ Lambda IPホワイトリスト機能を初期化します。
 # 1. DynamoDBテーブル作成
 # 2. 初期IPアドレス登録
 # 3. WAF IPセット更新
-```
-
-#### aws-nat-instance-setup.sh
-EC2インスタンスをNATインスタンスとして設定します。
-
-```bash
-# 使用方法（EC2インスタンス上で実行）
-sudo ./scripts/aws-nat-instance-setup.sh
-
-# 設定内容：
-# - IPフォワーディング有効化
-# - iptables設定
-# - Source/Destination Check無効化
 ```
 
 ### 作業端末用スクリプト
