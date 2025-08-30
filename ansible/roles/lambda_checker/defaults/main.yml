@@ -3,6 +3,8 @@
 
 # 基本設定
 # environment変数はプレイブックから渡される
+# Jenkinsから配列で渡される場合があるため、最初の要素を取得
+actual_environment: "{{ environment[0] if environment is sequence and environment is not string else environment | default('dev') }}"
 
 # チェックモード設定
 detailed_mode: false
@@ -10,7 +12,7 @@ enable_api_test: false
 api_endpoint_path: "/health"
 
 # SSMパラメータのプレフィックス
-ssm_param_prefix: "/lambda-api/{{ environment | default('dev') }}"
+ssm_param_prefix: "/lambda-api/{{ actual_environment }}"
 
 # チェック項目の有効/無効
 check_vpc: true

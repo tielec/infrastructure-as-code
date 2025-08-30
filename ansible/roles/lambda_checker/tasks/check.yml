@@ -4,7 +4,8 @@
 - name: 環境変数のデバッグ表示
   ansible.builtin.debug:
     msg: |
-      environment: {{ environment | default('undefined') }}
+      environment (raw): {{ environment | default('undefined') }}
+      actual_environment: {{ actual_environment }}
       ssm_param_prefix: {{ ssm_param_prefix }}
   tags:
     - always
@@ -159,7 +160,7 @@
         name: aws_cli_helper
         tasks_from: execute
       vars:
-        aws_command: "lambda list-functions --query \"Functions[?starts_with(FunctionName, 'lambda-api-{{ environment | default('dev') }}')].[FunctionName,Runtime,State]\" --output json"
+        aws_command: "lambda list-functions --query \"Functions[?starts_with(FunctionName, 'lambda-api-{{ actual_environment }}')].[FunctionName,Runtime,State]\" --output json"
         operation_name: "List Lambda functions"
         parse_output: true
         aws_region: "{{ lookup('env', 'AWS_REGION') | default('ap-northeast-1') }}"
@@ -194,7 +195,7 @@
 
     - name: Lambda関数未検出の警告
       ansible.builtin.debug:
-        msg: "❌ No Lambda functions found for environment: {{ environment | default('dev') }}"
+        msg: "❌ No Lambda functions found for environment: {{ actual_environment }}"
       when: lambda_functions | default([]) | length == 0
 
     # 詳細モードで各Lambda関数の設定をチェック
@@ -309,7 +310,7 @@
         name: aws_cli_helper
         tasks_from: execute
       vars:
-        aws_command: "logs describe-log-groups --log-group-name-prefix /aws/lambda/lambda-api-{{ environment }} --query 'logGroups[].logGroupName' --output json"
+        aws_command: "logs describe-log-groups --log-group-name-prefix /aws/lambda/lambda-api-{{ actual_environment }} --query 'logGroups[].logGroupName' --output json"
         operation_name: "List CloudWatch Log Groups"
         parse_output: true
         aws_region: "{{ lookup('env', 'AWS_REGION') | default('ap-northeast-1') }}"
