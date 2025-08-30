@@ -12,6 +12,23 @@
 
 - name: Deploy with Pulumi
   block:
+    # ロック状態をチェック
+    - name: Check for existing locks
+      ansible.builtin.shell: |
+        cd {{ pulumi_project_path }}
+        {{ pulumi_env_prefix }} && {{ pulumi_sudo_cmd }} cancel --yes 2>&1 || true
+      register: lock_check
+      changed_when: false
+      failed_when: false
+      when: not ansible_check_mode
+    
+    - name: Report lock cancellation
+      ansible.builtin.debug:
+        msg: "Previous lock has been cancelled if it existed"
+      when: 
+        - not ansible_check_mode
+        - "'the stack is currently locked' in lock_check.stderr | default('')"
+    
     # スタックが選択されているか確認
     - name: Ensure stack is selected
       ansible.builtin.shell: |
@@ -36,6 +53,9 @@
       changed_when: false
       when: not ansible_check_mode
       ignore_errors: true
+      retries: 2
+      delay: 5
+      until: "'the stack is currently locked' not in pulumi_refresh_result.stderr | default('')"
     
     - name: Display refresh result
       ansible.builtin.debug:
@@ -50,6 +70,9 @@
       register: pulumi_up_result
       changed_when: "'No changes' not in pulumi_up_result.stdout"
       when: not ansible_check_mode
+      retries: 2
+      delay: 5
+      until: "'the stack is currently locked' not in pulumi_up_result.stderr | default('')"
     
     # デプロイ結果は重要なので常に表示
     - name: Display deployment results
@@ -64,11 +87,25 @@
         pulumi_deployment_succeeded: true
         
   rescue:
+    # ロックエラーの場合、再度キャンセルを試みる
+    - name: Force cancel lock on failure
+      ansible.builtin.shell: |
+        cd {{ pulumi_project_path }}
+        {{ pulumi_env_prefix }} && {{ pulumi_sudo_cmd }} cancel --yes
+      register: force_cancel
+      failed_when: false
+      changed_when: false
+      when: 
+        - not ansible_check_mode
+        - "'the stack is currently locked' in pulumi_up_result.stderr | default('')"
+    
     - name: Report deployment failure
       ansible.builtin.debug:
         msg: |
           ========== Pulumi Deployment Failed ==========
-          {% if 'TypeScript' in pulumi_up_result.stdout | default('') %}
+          {% if 'the stack is currently locked' in pulumi_up_result.stderr | default('') %}
+          Stack was locked. Attempted to cancel the lock.
+          {% elif 'TypeScript' in pulumi_up_result.stdout | default('') %}
           TypeScript compilation errors detected.
           {% elif 'unhandled exception' in pulumi_up_result.stdout | default('') %}
           An unhandled exception occurred during deployment.
