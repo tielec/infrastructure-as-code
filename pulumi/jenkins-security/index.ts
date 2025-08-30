@@ -19,7 +19,7 @@ const vpcIdParam = aws.ssm.getParameter({
     name: `${ssmPrefix}/network/vpc-id`,
 });
 const vpcCidrParam = aws.ssm.getParameter({
-    name: `${ssmPrefix}/network/vpc-cidr`,
+    name: `${ssmPrefix}/config/vpc-cidr`,
 });
 const vpcIpv6CidrParam = aws.ssm.getParameter({
     name: `${ssmPrefix}/network/vpc-ipv6-cidr`,
