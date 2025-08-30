@@ -28,7 +28,7 @@
         name: ssm_parameter_store
         tasks_from: get_parameter
       vars:
-        parameter_name: "{{ ssm_param_prefix }}/vpc/id"
+        parameter_name: "{{ ssm_param_prefix }}/network/vpc-id"
         store_as: "vpc_id"
         required: false
         aws_region: "{{ lookup('env', 'AWS_REGION') | default('ap-northeast-1') }}"
@@ -61,7 +61,7 @@
         name: ssm_parameter_store
         tasks_from: get_parameter
       vars:
-        parameter_name: "{{ ssm_param_prefix }}/subnets/private/ids"
+        parameter_name: "{{ ssm_param_prefix }}/network/subnets/private-ids"
         store_as: "private_subnets"
         required: false
         aws_region: "{{ lookup('env', 'AWS_REGION') | default('ap-northeast-1') }}"
@@ -83,7 +83,7 @@
         name: ssm_parameter_store
         tasks_from: get_parameter
       vars:
-        parameter_name: "{{ ssm_param_prefix }}/security-group/lambda/id"
+        parameter_name: "{{ ssm_param_prefix }}/security/lambda-sg-id"
         store_as: "lambda_sg"
         required: false
         aws_region: "{{ lookup('env', 'AWS_REGION') | default('ap-northeast-1') }}"
@@ -106,7 +106,7 @@
         name: ssm_parameter_store
         tasks_from: get_parameter
       vars:
-        parameter_name: "{{ ssm_param_prefix }}/security-group/vpce/id"
+        parameter_name: "{{ ssm_param_prefix }}/security/vpce-sg-id"
         store_as: "vpce_sg"
         required: false
         aws_region: "{{ lookup('env', 'AWS_REGION') | default('ap-northeast-1') }}"
@@ -206,20 +206,27 @@
 - name: API Gatewayのチェック
   when: check_api_gateway | bool
   block:
-    - name: API Gateway IDを取得
+    - name: API Gateway設定を取得
       ansible.builtin.include_role:
         name: ssm_parameter_store
         tasks_from: get_parameter
       vars:
-        parameter_name: "{{ ssm_param_prefix }}/api-gateway/id"
-        store_as: "api_id"
+        parameter_name: "{{ ssm_param_prefix }}/api-gateway/config"
+        store_as: "api_config"
         required: false
         aws_region: "{{ lookup('env', 'AWS_REGION') | default('ap-northeast-1') }}"
 
+    - name: API設定を解析
+      ansible.builtin.set_fact:
+        api_config_data: "{{ ssm_parameter_value | from_json }}"
+      when: ssm_parameter_value is defined
+      ignore_errors: true
+
     - name: API IDを保存
       ansible.builtin.set_fact:
-        api_gateway_id: "{{ ssm_parameter_value }}"
-      when: ssm_parameter_value is defined
+        api_gateway_id: "{{ api_config_data.id }}"
+        api_gateway_endpoint: "{{ api_config_data.endpoint | default(api_config_data.invokeUrl) }}"
+      when: api_config_data is defined
 
     - name: API Gatewayチェック結果を記録
       ansible.builtin.set_fact:
@@ -234,22 +241,6 @@
         msg: "✅ API Gateway ID: {{ api_gateway_id }}"
       when: api_gateway_id is defined and api_gateway_id
 
-    - name: API エンドポイントを取得
-      ansible.builtin.include_role:
-        name: ssm_parameter_store
-        tasks_from: get_parameter
-      vars:
-        parameter_name: "{{ ssm_param_prefix }}/api-gateway/endpoint"
-        store_as: "api_endpoint"
-        required: false
-        aws_region: "{{ lookup('env', 'AWS_REGION') | default('ap-northeast-1') }}"
-      when: api_gateway_id is defined
-
-    - name: APIエンドポイントを保存
-      ansible.builtin.set_fact:
-        api_gateway_endpoint: "{{ ssm_parameter_value }}"
-      when: ssm_parameter_value is defined
-
     - name: APIエンドポイント情報を表示
       ansible.builtin.debug:
         msg: "✅ API Endpoint: {{ api_gateway_endpoint }}"
@@ -260,17 +251,24 @@
         name: ssm_parameter_store
         tasks_from: get_parameter
       vars:
-        parameter_name: "{{ ssm_param_prefix }}/api-gateway/key"
+        parameter_name: "{{ ssm_param_prefix }}/api-gateway/keys"
         decrypt: true
         store_as: "api_key"
         required: false
         aws_region: "{{ lookup('env', 'AWS_REGION') | default('ap-northeast-1') }}"
       when: api_gateway_id is defined
 
-    - name: APIキーを保存
+    - name: APIキー情報を解析
       ansible.builtin.set_fact:
-        api_gateway_key: "{{ ssm_parameter_value }}"
+        api_keys_data: "{{ ssm_parameter_value | from_json }}"
       when: ssm_parameter_value is defined
+      no_log: true
+      ignore_errors: true
+    
+    - name: 最初のAPIキーを保存
+      ansible.builtin.set_fact:
+        api_gateway_key: "{{ api_keys_data.bubble | default(api_keys_data.external) }}"
+      when: api_keys_data is defined
       no_log: true
 
     - name: APIキー取得状態を表示
