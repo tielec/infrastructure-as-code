@@ -494,6 +494,8 @@ def loginToPulumi() {
     sh '''
         echo "S3バックエンドへのログイン..."
         echo "PULUMI_BACKEND_URL: ${PULUMI_BACKEND_URL}"
+        echo "AWS_REGION: ${AWS_REGION}"
+        echo "AWS_DEFAULT_REGION: ${AWS_DEFAULT_REGION}"
         
         if [ -z "${PULUMI_BACKEND_URL}" ]; then
             echo "エラー: PULUMI_BACKEND_URLが設定されていません"
@@ -503,7 +505,8 @@ def loginToPulumi() {
         pulumi login "${PULUMI_BACKEND_URL}" || {
             echo "Pulumiログインに失敗しました。"
             echo "試行したバックエンドURL: ${PULUMI_BACKEND_URL}"
-            echo "AWS認証情報を確認してください"
+            echo "現在のリージョン設定: AWS_REGION=${AWS_REGION}, AWS_DEFAULT_REGION=${AWS_DEFAULT_REGION}"
+            echo "AWS認証情報とリージョン設定を確認してください"
             exit 1
         }
         
