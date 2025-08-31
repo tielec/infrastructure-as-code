@@ -133,6 +133,13 @@ pipeline {
                 stage('Execute Pulumi Action') {
                     steps {
                         script {
+                            // スクリプトを事前にプロジェクトディレクトリにコピー
+                            sh """
+                                echo "スクリプトをコピー中..."
+                                cp ${JENKINS_REPO_DIR}/jenkins/jobs/pipeline/infrastructure/pulumi-stack-action/scripts/*.sh ${SOURCE_CODE_DIR}/${params.PULUMI_PROJECT_PATH}/
+                                chmod +x ${SOURCE_CODE_DIR}/${params.PULUMI_PROJECT_PATH}/*.sh
+                            """
+                            
                             dir("${SOURCE_CODE_DIR}/${params.PULUMI_PROJECT_PATH}") {
                                 // AWS認証情報を条件付きで設定
                                 if (params.AWS_ACCESS_KEY_ID && params.AWS_SECRET_ACCESS_KEY) {
@@ -702,12 +709,8 @@ def executePulumiAction(action) {
  * プレビューの実行
  */
 def executePreview() {
-    // スクリプトをコピーして実行
+    // スクリプトを実行
     sh """
-        # スクリプトをJenkinsリポジトリからコピー
-        cp ${JENKINS_REPO_DIR}/jenkins/jobs/pipeline/infrastructure/pulumi-stack-action/scripts/*.sh .
-        chmod +x *.sh
-        
         # Pulumi実行スクリプトを呼び出し
         ./execute-pulumi.sh preview "${WORKSPACE}" "${ARTIFACTS_DIR}"
     """
@@ -717,12 +720,8 @@ def executePreview() {
  * デプロイの実行（常に--yesを使用）
  */
 def executeDeploy() {
-    // スクリプトをコピーして実行
+    // スクリプトを実行
     sh """
-        # スクリプトをJenkinsリポジトリからコピー
-        cp ${JENKINS_REPO_DIR}/jenkins/jobs/pipeline/infrastructure/pulumi-stack-action/scripts/*.sh .
-        chmod +x *.sh
-        
         # Pulumi実行スクリプトを呼び出し
         ./execute-pulumi.sh deploy "${WORKSPACE}" "${ARTIFACTS_DIR}"
     """
@@ -732,12 +731,8 @@ def executeDeploy() {
  * 削除の実行（常に--yesを使用）
  */
 def executeDestroy() {
-    // スクリプトをコピーして実行
+    // スクリプトを実行
     sh """
-        # スクリプトをJenkinsリポジトリからコピー
-        cp ${JENKINS_REPO_DIR}/jenkins/jobs/pipeline/infrastructure/pulumi-stack-action/scripts/*.sh .
-        chmod +x *.sh
-        
         # Pulumi実行スクリプトを呼び出し
         ./execute-pulumi.sh destroy "${WORKSPACE}" "${ARTIFACTS_DIR}"
     """
