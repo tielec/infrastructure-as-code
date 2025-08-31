@@ -123,11 +123,6 @@ pip install awscli --upgrade
 #   ./script-name.sh --verbose argument1
 #   VAR_NAME=value ./script-name.sh argument1 argument2
 #
-# 作成者: 名前
-# 作成日: YYYY-MM-DD
-# 更新履歴:
-#   YYYY-MM-DD - 更新内容
-#
 ```
 
 ### 基本設定

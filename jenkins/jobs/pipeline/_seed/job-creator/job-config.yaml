@@ -281,14 +281,7 @@ pulumi-projects:
         project_type: "nodejs"
         description: "Lambda用VPCエンドポイント"
         environments: ['dev', 'prod']  # 両環境に配置
-      
-      lambda_database:
-        project_path: "pulumi/lambda-database"
-        display_name: "Lambda Database"
-        project_type: "nodejs"
-        description: "Lambda用データベース"
-        environments: ['dev', 'prod']  # 両環境に配置
-      
+            
       lambda_functions:
         project_path: "pulumi/lambda-functions"
         display_name: "Lambda Functions"
