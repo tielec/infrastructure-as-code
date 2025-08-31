@@ -30,7 +30,6 @@ pipeline {
         
         // 環境別の設定（ENVIRONMENTパラメータに基づく）
         PULUMI_STACK_NAME = "${params.ENVIRONMENT}"
-        PULUMI_BACKEND_URL = ""
         PULUMI_CONFIG_PASSPHRASE_ID = "${params.PULUMI_CONFIG_PASSPHRASE_CREDENTIAL_ID ?: 'pulumi-config-passphrase'}"
         
     }
