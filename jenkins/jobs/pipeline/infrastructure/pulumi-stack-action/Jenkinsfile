@@ -58,14 +58,6 @@ pipeline {
         }
                 
         stage('Execute Pulumi Operations') {
-            agent {
-                docker {
-                    label 'ec2-fleet'
-                    image 'pulumi/pulumi:latest'
-                    args "--entrypoint='' -v ${WORKSPACE}:/workspace -w /workspace -u root --network=host"
-                    reuseNode true
-                }
-            }
             environment {
                 // AWSリージョン設定
                 AWS_REGION            = "${params.AWS_REGION}"
@@ -490,9 +482,6 @@ def printHeader() {
 def setupEnvironment(projectType) {
     def setupCommands = getEnvironmentSetupCommands(projectType)
     sh """
-        # 基本ツールのインストール
-        apt-get update -qq && apt-get install -qq -y git curl jq graphviz
-        
         # プロジェクトタイプ別のセットアップ
         ${setupCommands}
         
@@ -840,10 +829,8 @@ def processStackOutputs() {
  */
 def getEnvironmentSetupCommands(projectType) {
     def commands = [
-        'nodejs': 'apt-get install -qq -y nodejs npm && npm install -g typescript',
-        'python': 'apt-get install -qq -y python3 python3-pip python3-venv && pip3 install --upgrade pip',
-        'go': 'apt-get install -qq -y golang',
-        'dotnet': 'apt-get install -qq -y dotnet-sdk-6.0'
+        'nodejs': 'echo "Node.js環境の確認..."',
+        'python': 'echo "Python環境の確認..."'
     ]
     return commands[projectType] ?: "echo 'No specific setup required'"
 }
@@ -875,18 +862,6 @@ def getProjectSetupScript(projectType) {
                 pip3 install pipenv
                 pipenv install
             fi
-        ''',
-        'go': '''
-            if [ -f go.mod ]; then
-                echo "Go依存関係のインストール..."
-                go mod download
-            fi
-        ''',
-        'dotnet': '''
-            if [ -f *.csproj ]; then
-                echo ".NET依存関係の復元..."
-                dotnet restore
-            fi
         '''
     ]
     return scripts[projectType] ?: "echo 'No specific project setup required'"
@@ -897,10 +872,10 @@ def getProjectSetupScript(projectType) {
  */
 def generatePythonHtmlReport() {
     sh """
-        # Graphvizの確認とインストール
+        # Graphvizの確認とインストール（AMIに含まれていない場合のため）
         if ! command -v dot &> /dev/null; then
             echo "Graphvizをインストール..."
-            apt-get update -qq && apt-get install -qq -y graphviz
+            sudo yum install -y graphviz || sudo apt-get install -y graphviz
         fi
         
         # Python仮想環境のセットアップ
