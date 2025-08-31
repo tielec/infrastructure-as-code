@@ -18,7 +18,6 @@ def environments = [
         awsAccountHint: '共通AWSアカウント',
         defaultSkipConfirmation: false,
         defaultRefresh: false,
-        backendUrl: '', // S3バケット名は実行時にクレデンシャルから動的に取得
         passphraseCredentialId: 'pulumi-config-passphrase'
     ],
     'dev': [
@@ -27,7 +26,6 @@ def environments = [
         awsAccountHint: '開発用AWSアカウント',
         defaultSkipConfirmation: true,
         defaultRefresh: false,
-        backendUrl: '', // S3バケット名は実行時にクレデンシャルから動的に取得
         passphraseCredentialId: 'pulumi-config-passphrase'
     ],
     'prod': [
@@ -36,7 +34,6 @@ def environments = [
         awsAccountHint: '本番用AWSアカウント',
         defaultSkipConfirmation: false,
         defaultRefresh: true,
-        backendUrl: '', // S3バケット名は実行時にクレデンシャルから動的に取得
         passphraseCredentialId: 'pulumi-config-passphrase'
     ]
 ]
@@ -148,7 +145,8 @@ pulumiProjects.each { repoKey, repoConfig ->
                     
                     // === 詳細設定（通常は変更不要） ===
                     
-                    choiceParam('PULUMI_BACKEND_URL', [envConfig.backendUrl], 'Pulumiバックエンド（自動設定） - Pulumiステートの保存先（環境により自動設定）')
+                    // PULUMI_BACKEND_URLはJenkinsfile内でクレデンシャルから動的に設定されるため、パラメータとしては定義しない
+                    // （実行時にpulumi-s3bucket-nameクレデンシャルから自動構築）
                     
                     // Jenkinsfileブランチ
                     stringParam('JENKINSFILE_BRANCH', 'main', 'Jenkinsfileが格納されているブランチ')
