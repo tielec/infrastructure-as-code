@@ -248,84 +248,84 @@ pulumi-projects:
     projects:
       # Lambda関連プロジェクト
       lambda_ssm_init:
-        project_path: "lambda-ssm-init"
+        project_path: "pulumi/lambda-ssm-init"
         display_name: "Lambda SSM Init"
         project_type: "nodejs"
         description: "Lambda SSMパラメータの初期化"
         environments: ['dev', 'prod']  # 両環境に配置
       
       lambda_network:
-        project_path: "lambda-network"
+        project_path: "pulumi/lambda-network"
         display_name: "Lambda Network"
         project_type: "nodejs"
         description: "Lambda用ネットワーク構成"
         environments: ['dev', 'prod']  # 両環境に配置
       
       lambda_security:
-        project_path: "lambda-security"
+        project_path: "pulumi/lambda-security"
         display_name: "Lambda Security"
         project_type: "nodejs"
         description: "Lambdaセキュリティグループとロール"
         environments: ['dev', 'prod']  # 両環境に配置
       
       lambda_nat:
-        project_path: "lambda-nat"
+        project_path: "pulumi/lambda-nat"
         display_name: "Lambda NAT"
         project_type: "nodejs"
         description: "Lambda用NATインスタンス"
         environments: ['dev', 'prod']  # 両環境に配置
       
       lambda_vpce:
-        project_path: "lambda-vpce"
+        project_path: "pulumi/lambda-vpce"
         display_name: "Lambda VPC Endpoint"
         project_type: "nodejs"
         description: "Lambda用VPCエンドポイント"
         environments: ['dev', 'prod']  # 両環境に配置
       
       lambda_database:
-        project_path: "lambda-database"
+        project_path: "pulumi/lambda-database"
         display_name: "Lambda Database"
         project_type: "nodejs"
         description: "Lambda用データベース"
         environments: ['dev', 'prod']  # 両環境に配置
       
       lambda_functions:
-        project_path: "lambda-functions"
+        project_path: "pulumi/lambda-functions"
         display_name: "Lambda Functions"
         project_type: "nodejs"
         description: "Lambda関数定義"
         environments: ['dev', 'prod']  # 両環境に配置
       
       lambda_api_gateway:
-        project_path: "lambda-api-gateway"
+        project_path: "pulumi/lambda-api-gateway"
         display_name: "Lambda API Gateway"
         project_type: "nodejs"
         description: "Lambda用API Gateway"
         environments: ['dev', 'prod']  # 両環境に配置
       
       lambda_waf:
-        project_path: "lambda-waf"
+        project_path: "pulumi/lambda-waf"
         display_name: "Lambda WAF"
         project_type: "nodejs"
         description: "Lambda用WAF設定"
         environments: ['prod']  # 本番環境のみ
       
       lambda_websocket:
-        project_path: "lambda-websocket"
+        project_path: "pulumi/lambda-websocket"
         display_name: "Lambda WebSocket"
         project_type: "nodejs"
         description: "Lambda WebSocket API"
         environments: ['dev', 'prod']  # 両環境に配置
       
       lambda_account_setup:
-        project_path: "lambda-account-setup"
+        project_path: "pulumi/lambda-account-setup"
         display_name: "Lambda Account Setup"
         project_type: "nodejs"
         description: "Lambdaアカウント設定"
         environments: ['dev', 'prod']  # 両環境に配置
       
       lambda_ip_whitelist:
-        project_path: "lambda-ip-whitelist"
+        project_path: "pulumi/lambda-ip-whitelist"
         display_name: "Lambda IP Whitelist"
         project_type: "nodejs"
         description: "Lambda IPホワイトリスト管理"
@@ -333,7 +333,7 @@ pulumi-projects:
       
       # テスト用プロジェクト
       test_s3:
-        project_path: "test-s3"
+        project_path: "pulumi/test-s3"
         display_name: "Test S3"
         project_type: "nodejs"
         description: "S3テスト用リソース"

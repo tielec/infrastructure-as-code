@@ -18,7 +18,6 @@ def environments = [
         awsAccountHint: '共通AWSアカウント',
         defaultSkipConfirmation: false,
         defaultRefresh: false,
-        backendUrl: '', // S3バケット名は実行時にクレデンシャルから動的に取得
         passphraseCredentialId: 'pulumi-config-passphrase'
     ],
     'dev': [
@@ -27,7 +26,6 @@ def environments = [
         awsAccountHint: '開発用AWSアカウント',
         defaultSkipConfirmation: true,
         defaultRefresh: false,
-        backendUrl: '', // S3バケット名は実行時にクレデンシャルから動的に取得
         passphraseCredentialId: 'pulumi-config-passphrase'
     ],
     'prod': [
@@ -36,7 +34,6 @@ def environments = [
         awsAccountHint: '本番用AWSアカウント',
         defaultSkipConfirmation: false,
         defaultRefresh: true,
-        backendUrl: '', // S3バケット名は実行時にクレデンシャルから動的に取得
         passphraseCredentialId: 'pulumi-config-passphrase'
     ]
 ]
@@ -94,7 +91,7 @@ pulumiProjects.each { repoKey, repoConfig ->
                     
                     nonStoredPasswordParam('AWS_SESSION_TOKEN', 'AWS Session Token（オプション） - STS一時認証情報を使用する場合に入力してください')
                     
-                    choiceParam('AWS_REGION', [projectConfig.aws_region ?: 'us-west-2'], 'AWSリージョン - プロジェクトで使用するAWSリージョン（固定）')
+                    choiceParam('AWS_REGION', [projectConfig.aws_region ?: 'ap-northeast-1'], 'AWSリージョン - プロジェクトで使用するAWSリージョン（固定）')
                     
                     // === Pulumiプロジェクト設定（固定値） ===
                     
@@ -147,8 +144,6 @@ pulumiProjects.each { repoKey, repoConfig ->
                         |アップロードされたファイルが最優先で使用されます。""".stripMargin())
                     
                     // === 詳細設定（通常は変更不要） ===
-                    
-                    choiceParam('PULUMI_BACKEND_URL', [envConfig.backendUrl], 'Pulumiバックエンド（自動設定） - Pulumiステートの保存先（環境により自動設定）')
                     
                     // Jenkinsfileブランチ
                     stringParam('JENKINSFILE_BRANCH', 'main', 'Jenkinsfileが格納されているブランチ')
