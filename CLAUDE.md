@@ -130,6 +130,35 @@ pipeline {
 
 これらのドキュメントには、実装方法、コーディング規約、ベストプラクティスが記載されています。
 
+### 0. Issue作成とブランチ作成（新規タスクの場合）
+
+```bash
+# 1. Issueテンプレートを確認
+ls .github/ISSUE_TEMPLATE/
+# - bug_report.md: バグ報告用
+# - feature_request.md: 機能要望用  
+# - task.md: タスク用
+
+# 2. GitHub CLIでIssue作成（タスクの例）
+gh issue create --title "[TASK] タスクタイトル" --body "## 概要
+タスクの説明
+
+## TODO
+- [ ] タスク項目1
+- [ ] タスク項目2"
+
+# 3. 作成されたIssue番号を確認（例: #163）
+
+# 4. 対応するブランチを作成
+# ブランチ命名規則: {type}/issue-{番号}-{説明}
+# - bug/issue-XXX-{説明}: バグ修正
+# - feature/issue-XXX-{説明}: 機能追加
+# - task/issue-XXX-{説明}: タスク作業
+git checkout -b task/issue-163-extract-userdata-script
+
+# 5. 作業を開始
+```
+
 ### 1. 新機能追加時（Pulumiスタック）
 ```bash
 # 0. 開発前にCONTRIBUTION.mdを確認 ⚠️ 必須
