@@ -55,14 +55,30 @@ job(fullJobName) {
             |echo "カーネル: $(uname -r)"
             |echo "CPU: $(lscpu | grep 'Model name' | cut -d':' -f2 | xargs)"
             |echo "メモリ: $(free -h | awk '/^Mem:/ {print $2}')"
-            |# ディスク情報（サイズと使用量を表示）
+            |# ディスク情報（詳細表示）
             |echo "ディスク情報:"
-            |df -h / | awk 'NR==2 {
-            |    printf "  総容量: %s\\n", $2
-            |    printf "  使用量: %s\\n", $3
-            |    printf "  空き容量: %s\\n", $4
-            |    printf "  使用率: %s\\n", $5
-            |}'
+            |echo ""
+            |echo "■ マウントポイント別使用状況:"
+            |df -h | awk 'NR==1 {print "  " $0} NR>1 {print "  " $0}'
+            |echo ""
+            |echo "■ ディレクトリ別使用量 (上位10):"
+            |du -h / 2>/dev/null | sort -rh | head -10 | awk '{print "  " $0}'
+            |echo ""
+            |echo "■ /var ディレクトリの詳細:"
+            |du -h /var 2>/dev/null | sort -rh | head -10 | awk '{print "  " $0}'
+            |echo ""
+            |echo "■ /tmp ディレクトリの詳細:"
+            |du -h /tmp 2>/dev/null | sort -rh | head -10 | awk '{print "  " $0}'
+            |echo ""
+            |echo "■ Jenkinsワークスペースの使用量:"
+            |if [ -d "${WORKSPACE}" ]; then
+            |    du -sh "${WORKSPACE}" 2>/dev/null | awk '{print "  " $0}'
+            |else
+            |    echo "  ワークスペースが存在しません"
+            |fi
+            |echo ""
+            |echo "■ iノード使用状況:"
+            |df -i | awk 'NR==1 {print "  " $0} /\\/$/ {print "  " $0}'
             |
             |# ネットワーク情報
             |echo "IPアドレス: $(hostname -I | awk '{print $1}')"
