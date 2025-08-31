@@ -67,10 +67,7 @@ pipeline {
                 }
             }
             environment {
-                // AWS認証情報 - 空文字列の場合は環境変数を設定しない
-                AWS_ACCESS_KEY_ID     = "${params.AWS_ACCESS_KEY_ID ?: null}"
-                AWS_SECRET_ACCESS_KEY = "${params.AWS_SECRET_ACCESS_KEY ?: null}"
-                AWS_SESSION_TOKEN     = "${params.AWS_SESSION_TOKEN ?: null}"
+                // AWSリージョン設定
                 AWS_REGION            = "${params.AWS_REGION}"
                 AWS_DEFAULT_REGION    = "${params.AWS_REGION}"
                 
@@ -93,8 +90,21 @@ pipeline {
                 stage('Verify Authentication') {
                     steps {
                         script {
-                            verifyAWSAuthentication()
-                            loginToPulumi()
+                            // AWS認証情報を条件付きで設定
+                            if (params.AWS_ACCESS_KEY_ID && params.AWS_SECRET_ACCESS_KEY) {
+                                withEnv([
+                                    "AWS_ACCESS_KEY_ID=${params.AWS_ACCESS_KEY_ID}",
+                                    "AWS_SECRET_ACCESS_KEY=${params.AWS_SECRET_ACCESS_KEY}",
+                                    "AWS_SESSION_TOKEN=${params.AWS_SESSION_TOKEN ?: ''}"
+                                ]) {
+                                    verifyAWSAuthentication()
+                                    loginToPulumi()
+                                }
+                            } else {
+                                // 認証情報なしで実行（IAMロール使用）
+                                verifyAWSAuthentication()
+                                loginToPulumi()
+                            }
                         }
                     }
                 }
@@ -145,13 +155,28 @@ pipeline {
                     steps {
                         script {
                             dir("${SOURCE_CODE_DIR}/${params.PULUMI_PROJECT_PATH}") {
-                                // Pulumiアクションを実行し、エラーをキャッチ
-                                try {
-                                    executePulumiAction(params.ACTION)
-                                } catch (Exception e) {
-                                    echo "警告: Pulumiアクション実行中にエラーが発生しました: ${e.message}"
-                                    env.PULUMI_ACTION_ERROR = 'true'
-                                    // エラーをキャッチして処理を継続
+                                // AWS認証情報を条件付きで設定してPulumiアクションを実行
+                                if (params.AWS_ACCESS_KEY_ID && params.AWS_SECRET_ACCESS_KEY) {
+                                    withEnv([
+                                        "AWS_ACCESS_KEY_ID=${params.AWS_ACCESS_KEY_ID}",
+                                        "AWS_SECRET_ACCESS_KEY=${params.AWS_SECRET_ACCESS_KEY}",
+                                        "AWS_SESSION_TOKEN=${params.AWS_SESSION_TOKEN ?: ''}"
+                                    ]) {
+                                        try {
+                                            executePulumiAction(params.ACTION)
+                                        } catch (Exception e) {
+                                            echo "警告: Pulumiアクション実行中にエラーが発生しました: ${e.message}"
+                                            env.PULUMI_ACTION_ERROR = 'true'
+                                        }
+                                    }
+                                } else {
+                                    // 認証情報なしで実行（IAMロール使用）
+                                    try {
+                                        executePulumiAction(params.ACTION)
+                                    } catch (Exception e) {
+                                        echo "警告: Pulumiアクション実行中にエラーが発生しました: ${e.message}"
+                                        env.PULUMI_ACTION_ERROR = 'true'
+                                    }
                                 }
                             }
                         }
