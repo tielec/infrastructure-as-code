@@ -405,7 +405,6 @@ The script should be located in the 'scripts' directory relative to your project
         value: "instance",
         description: "NAT type (instance)",
         tags: commonTags,
-        overwrite: true,
     });
 
     // NAT設定情報はPulumiの出力で確認可能なためSSMに保存しない

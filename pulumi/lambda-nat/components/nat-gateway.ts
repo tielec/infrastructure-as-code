@@ -246,7 +246,6 @@ export function createNatGateway(args: NatGatewayArgs): NatGatewayOutputs {
         value: "gateway-ha",
         description: "NAT type (gateway-ha)",
         tags: commonTags,
-        overwrite: true,
     });
 
     // NAT設定情報はPulumiの出力で確認可能なためSSMに保存しない

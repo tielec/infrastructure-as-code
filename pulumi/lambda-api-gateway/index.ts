@@ -340,7 +340,6 @@ const apiEndpointParam = new aws.ssm.Parameter("api-endpoint", {
     value: stage.invokeUrl,
     description: "API Gateway endpoint URL",
     tags: commonTags,
-    overwrite: true,
 });
 
 const apiIdParam = new aws.ssm.Parameter("api-id", {
@@ -349,7 +348,6 @@ const apiIdParam = new aws.ssm.Parameter("api-id", {
     value: api.id,
     description: "API Gateway REST API ID",
     tags: commonTags,
-    overwrite: true,
 });
 
 // ========================================

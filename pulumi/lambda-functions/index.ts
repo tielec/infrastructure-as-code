@@ -232,7 +232,6 @@ const functionArnParam = new aws.ssm.Parameter("function-arn", {
     value: mainFunction.arn,
     description: "Main Lambda function ARN",
     tags: commonTags,
-    overwrite: true,
 });
 
 const functionNameParam = new aws.ssm.Parameter("function-name", {
@@ -241,7 +240,6 @@ const functionNameParam = new aws.ssm.Parameter("function-name", {
     value: mainFunction.name,
     description: "Main Lambda function name",
     tags: commonTags,
-    overwrite: true,
 });
 
 const dlqArnParam = new aws.ssm.Parameter("dlq-arn", {
@@ -250,7 +248,6 @@ const dlqArnParam = new aws.ssm.Parameter("dlq-arn", {
     value: dlq.arn,
     description: "Dead Letter Queue ARN",
     tags: commonTags,
-    overwrite: true,
 });
 
 // ========================================
