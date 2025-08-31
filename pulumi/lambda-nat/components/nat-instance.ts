@@ -396,14 +396,7 @@ The script should be located in the 'scripts' directory relative to your project
         tags: commonTags,
     });
 
-    // NAT Instance Private IPを保存
-    new aws.ssm.Parameter("nat-instance-private-ip", {
-        name: pulumi.interpolate`${paramPrefix}/instance/private-ip`,
-        type: "String",
-        value: natInstance.privateIp,
-        description: "NAT Instance Private IP",
-        tags: commonTags,
-    });
+    // NAT Instance Private IPは動的に変化する可能性があるためSSMに保存しない
 
     // NATタイプを保存
     new aws.ssm.Parameter("nat-type", {
@@ -415,52 +408,10 @@ The script should be located in the 'scripts' directory relative to your project
         overwrite: true,
     });
 
-    // NAT設定情報を保存
-    new aws.ssm.Parameter("nat-config", {
-        name: pulumi.interpolate`${paramPrefix}/config`,
-        type: "String",
-        value: pulumi.all([natInstanceType, projectName]).apply(([instanceType, proj]) => JSON.stringify({
-            type: "instance",
-            highAvailability: false,
-            instanceType: instanceType,
-            projectName: proj,
-            environment: environment,
-            createdAt: new Date().toISOString(),
-        })),
-        description: "NAT Instance configuration for Lambda API infrastructure",
-        tags: commonTags,
-        overwrite: true,
-    });
+    // NAT設定情報はPulumiの出力で確認可能なためSSMに保存しない
 
-    // コスト最適化情報のパラメータ
-    new aws.ssm.Parameter("nat-cost-info", {
-        name: `/lambda-api/${environment}/nat/cost-optimization`,
-        type: "String",
-        value: natInstanceType.apply(instanceType => JSON.stringify({
-            estimatedMonthlyCost: `$${instanceType === "t4g.nano" ? "3-5" : instanceType === "t4g.micro" ? "7-10" : "15-20"} (NAT Instance)`,
-            recommendations: [
-                "Monitor data transfer costs using CloudWatch",
-                "Consider VPC endpoints for AWS services to reduce NAT traffic",
-                "Consider NAT Gateway for production for high availability",
-                "Enable detailed billing reports for accurate cost tracking",
-                "Use Reserved Instances or Savings Plans for cost reduction"
-            ],
-            dataTransferThreshold: "< 50GB/month",
-        })),
-        description: "Cost optimization information for NAT Instance configuration",
-        tags: commonTags,
-        overwrite: true,
-    });
+    // コスト最適化情報はドキュメントで管理するためSSMに保存しない
 
-    // デプロイメント完了フラグ
-    new aws.ssm.Parameter("nat-deployed", {
-        name: pulumi.interpolate`${paramPrefix}/deployment/complete`,
-        type: "String",
-        value: "true",
-        description: "NAT Instance stack deployment completion flag",
-        tags: commonTags,
-        overwrite: true,
-    });
 
     return {
         natInstanceId: natInstance.id,

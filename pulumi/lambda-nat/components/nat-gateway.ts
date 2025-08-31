@@ -249,51 +249,10 @@ export function createNatGateway(args: NatGatewayArgs): NatGatewayOutputs {
         overwrite: true,
     });
 
-    // NAT設定情報を保存
-    new aws.ssm.Parameter("nat-config", {
-        name: pulumi.interpolate`${paramPrefix}/config`,
-        type: "String",
-        value: pulumi.output(projectName).apply(proj => JSON.stringify({
-            type: "gateway-ha",
-            highAvailability: true,
-            instanceType: "N/A",
-            projectName: proj,
-            environment: environment,
-            createdAt: new Date().toISOString(),
-        })),
-        description: "NAT Gateway configuration for Lambda API infrastructure",
-        tags: commonTags,
-        overwrite: true,
-    });
+    // NAT設定情報はPulumiの出力で確認可能なためSSMに保存しない
 
-    // コスト最適化情報のパラメータ
-    new aws.ssm.Parameter("nat-cost-info", {
-        name: `/lambda-api/${environment}/nat/cost-optimization`,
-        type: "String",
-        value: JSON.stringify({
-            estimatedMonthlyCost: "$90 (NAT Gateway x2)",
-            recommendations: [
-                "Monitor data transfer costs using CloudWatch",
-                "Consider VPC endpoints for AWS services to reduce NAT traffic",
-                "Consider NAT Instance for dev/staging to reduce costs",
-                "Enable detailed billing reports for accurate cost tracking"
-            ],
-            dataTransferThreshold: "> 100GB/month",
-        }),
-        description: "Cost optimization information for NAT Gateway configuration",
-        tags: commonTags,
-        overwrite: true,
-    });
+    // コスト最適化情報はドキュメントで管理するためSSMに保存しない
 
-    // デプロイメント完了フラグ
-    new aws.ssm.Parameter("nat-deployed", {
-        name: pulumi.interpolate`${paramPrefix}/deployment/complete`,
-        type: "String",
-        value: "true",
-        description: "NAT Gateway stack deployment completion flag",
-        tags: commonTags,
-        overwrite: true,
-    });
 
     return {
         natGatewayAId: natGatewayA.id,

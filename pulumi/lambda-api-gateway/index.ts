@@ -22,12 +22,15 @@ const projectNameParam = aws.ssm.getParameter({
 const projectName = pulumi.output(projectNameParam).apply(p => p.value);
 
 // Lambda関数の設定を取得
-const lambdaConfigParam = aws.ssm.getParameter({
-    name: `/lambda-api/${environment}/lambda/config`,
+const lambdaFunctionNameParam = aws.ssm.getParameter({
+    name: `/lambda-api/${environment}/lambda/main-function-name`,
 });
-const lambdaConfig = pulumi.output(lambdaConfigParam).apply(p => JSON.parse(p.value));
-const lambdaFunctionName = lambdaConfig.apply(c => c.function.name);
-const lambdaFunctionArn = lambdaConfig.apply(c => c.function.arn);
+const lambdaFunctionName = pulumi.output(lambdaFunctionNameParam).apply(p => p.value);
+
+const lambdaFunctionArnParam = aws.ssm.getParameter({
+    name: `/lambda-api/${environment}/lambda/main-function-arn`,
+});
+const lambdaFunctionArn = pulumi.output(lambdaFunctionArnParam).apply(p => p.value);
 
 // ========================================
 // 共通タグ定義
@@ -330,21 +333,23 @@ const apiKeyInfoParam = new aws.ssm.Parameter("api-keys", {
     },
 });
 
-// API Gateway設定情報をSSMパラメータに保存
-const apiConfigParam = new aws.ssm.Parameter("api-config", {
-    name: pulumi.interpolate`/${projectName}/${environment}/api-gateway/config`,
+// API GatewayエンドポイントをSSMパラメータに保存
+const apiEndpointParam = new aws.ssm.Parameter("api-endpoint", {
+    name: pulumi.interpolate`/${projectName}/${environment}/api-gateway/endpoint`,
     type: "String",
-    value: pulumi.all([api.id, stage.invokeUrl, stage.stageName]).apply(
-        ([apiId, invokeUrl, stageName]) => JSON.stringify({
-            apiId: apiId,
-            apiEndpoint: invokeUrl,
-            stageName: stageName,
-            environment: environment,
-            lastUpdated: new Date().toISOString(),
-        })
-    ),
-    description: "API Gateway configuration",
+    value: stage.invokeUrl,
+    description: "API Gateway endpoint URL",
     tags: commonTags,
+    overwrite: true,
+});
+
+const apiIdParam = new aws.ssm.Parameter("api-id", {
+    name: pulumi.interpolate`/${projectName}/${environment}/api-gateway/api-id`,
+    type: "String",
+    value: api.id,
+    description: "API Gateway REST API ID",
+    tags: commonTags,
+    overwrite: true,
 });
 
 // ========================================

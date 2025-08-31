@@ -309,67 +309,10 @@ if (createDatabaseSecurityGroups && rdsSecurityGroup && dynamodbVpceSecurityGrou
         description: "DynamoDB VPC Endpoint security group ID",
         tags: commonTags,
     });
-} else {
-    // Phase 1の場合は空文字列を設定
-    new aws.ssm.Parameter("rds-sg-id-empty", {
-        name: pulumi.interpolate`${paramPrefix}/rds-sg-id`,
-        type: "String",
-        value: "",
-        description: "RDS security group ID (not created in Phase 1)",
-        tags: commonTags,
-    });
-
-    new aws.ssm.Parameter("dynamodb-sg-id-empty", {
-        name: pulumi.interpolate`${paramPrefix}/dynamodb-vpce-sg-id`,
-        type: "String",
-        value: "",
-        description: "DynamoDB VPC Endpoint security group ID (not created in Phase 1)",
-        tags: commonTags,
-    });
 }
+// Phase 1の場合、空のSSMパラメータは作成しない
 
-// デプロイメント完了フラグ
-const deploymentCompleteParam = new aws.ssm.Parameter("security-deployed", {
-    name: pulumi.interpolate`${paramPrefix}/deployment/complete`,
-    type: "String",
-    value: "true",
-    description: "Security stack deployment completion flag",
-    tags: commonTags,
-});
 
-// ========================================
-// セキュリティチェックリスト
-// ========================================
-
-const securityChecklistParameter = new aws.ssm.Parameter("security-checklist", {
-    name: pulumi.interpolate`/${projectName}/${environment}/security/checklist`,
-    type: "String",
-    value: JSON.stringify({
-        completed: [
-            "VPC isolation for Lambda functions",
-            "Least privilege security groups",
-            "No unnecessary inbound rules for Lambda",
-            "VPC endpoints for AWS services (reduces exposure)",
-            "NAT for controlled internet access",
-        ],
-        recommended: [
-            "Enable VPC Flow Logs for network monitoring",
-            "Restrict NAT Instance SSH to specific IPs in production",
-            "Enable AWS GuardDuty for threat detection",
-            "Regular security group audits",
-            "Use AWS Config rules for compliance checking",
-        ],
-        phase2: [
-            "Encrypt RDS at rest and in transit",
-            "Enable DynamoDB encryption",
-            "Database security group restrictions",
-            "Secrets Manager for database credentials",
-            "Enable database audit logging",
-        ],
-    }),
-    description: "Security best practices checklist for Lambda API",
-    tags: commonTags,
-});
 
 // ========================================
 // エクスポート（表示用のみ）
@@ -385,5 +328,4 @@ export const outputs = {
     dlqSecurityGroupId: dlqSecurityGroup.id,
     ssmParameterPrefix: paramPrefix,
     phase2Enabled: createDatabaseSecurityGroups,
-    deploymentComplete: deploymentCompleteParam.name,
 };
