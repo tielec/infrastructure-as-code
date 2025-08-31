@@ -708,19 +708,33 @@ def executePreview() {
         # 空の認証情報環境変数をクリア（IAMロール使用のため）
         if [ -z "$AWS_ACCESS_KEY_ID" ] || [ "$AWS_ACCESS_KEY_ID" = "" ]; then
             unset AWS_ACCESS_KEY_ID
+            unset AWS_SECRET_ACCESS_KEY
+            unset AWS_SESSION_TOKEN
             
-            # IAMロール使用時は、AWS CLIから一時認証情報を取得
-            echo "AWS CLIから一時認証情報を取得中..."
+            # EC2メタデータサービスの確認
+            echo "EC2メタデータサービスの確認..."
             
-            # AWS CLIを使って新しいセッショントークンを取得
-            CREDS=$(aws sts get-session-token --duration-seconds 3600 --output json)
-            if [ $? -eq 0 ]; then
-                export AWS_ACCESS_KEY_ID=$(echo $CREDS | jq -r '.Credentials.AccessKeyId')
-                export AWS_SECRET_ACCESS_KEY=$(echo $CREDS | jq -r '.Credentials.SecretAccessKey')
-                export AWS_SESSION_TOKEN=$(echo $CREDS | jq -r '.Credentials.SessionToken')
-                echo "一時認証情報を環境変数に設定しました"
+            # IMDSv2のトークンを取得
+            TOKEN=$(curl -X PUT "http://169.254.169.254/latest/api/token" -H "X-aws-ec2-metadata-token-ttl-seconds: 21600" 2>/dev/null)
+            if [ -n "$TOKEN" ]; then
+                echo "IMDSv2トークンを取得しました"
+                
+                # IAMロール名を取得
+                ROLE_NAME=$(curl -H "X-aws-ec2-metadata-token: $TOKEN" http://169.254.169.254/latest/meta-data/iam/security-credentials/ 2>/dev/null)
+                if [ -n "$ROLE_NAME" ]; then
+                    echo "IAMロール: $ROLE_NAME"
+                    
+                    # 認証情報を取得
+                    CREDS=$(curl -H "X-aws-ec2-metadata-token: $TOKEN" http://169.254.169.254/latest/meta-data/iam/security-credentials/$ROLE_NAME 2>/dev/null)
+                    if [ -n "$CREDS" ]; then
+                        export AWS_ACCESS_KEY_ID=$(echo $CREDS | jq -r '.AccessKeyId')
+                        export AWS_SECRET_ACCESS_KEY=$(echo $CREDS | jq -r '.SecretAccessKey')
+                        export AWS_SESSION_TOKEN=$(echo $CREDS | jq -r '.Token')
+                        echo "EC2インスタンスの認証情報を環境変数に設定しました"
+                    fi
+                fi
             else
-                echo "警告: セッショントークンの取得に失敗しました"
+                echo "警告: IMDSトークンの取得に失敗しました"
             fi
         else
             echo "明示的に指定された認証情報を使用"
@@ -772,19 +786,33 @@ def executeDeploy() {
         # 空の認証情報環境変数をクリア（IAMロール使用のため）
         if [ -z "$AWS_ACCESS_KEY_ID" ] || [ "$AWS_ACCESS_KEY_ID" = "" ]; then
             unset AWS_ACCESS_KEY_ID
+            unset AWS_SECRET_ACCESS_KEY
+            unset AWS_SESSION_TOKEN
             
-            # IAMロール使用時は、AWS CLIから一時認証情報を取得
-            echo "AWS CLIから一時認証情報を取得中..."
+            # EC2メタデータサービスの確認
+            echo "EC2メタデータサービスの確認..."
             
-            # AWS CLIを使って新しいセッショントークンを取得
-            CREDS=$(aws sts get-session-token --duration-seconds 3600 --output json)
-            if [ $? -eq 0 ]; then
-                export AWS_ACCESS_KEY_ID=$(echo $CREDS | jq -r '.Credentials.AccessKeyId')
-                export AWS_SECRET_ACCESS_KEY=$(echo $CREDS | jq -r '.Credentials.SecretAccessKey')
-                export AWS_SESSION_TOKEN=$(echo $CREDS | jq -r '.Credentials.SessionToken')
-                echo "一時認証情報を環境変数に設定しました"
+            # IMDSv2のトークンを取得
+            TOKEN=$(curl -X PUT "http://169.254.169.254/latest/api/token" -H "X-aws-ec2-metadata-token-ttl-seconds: 21600" 2>/dev/null)
+            if [ -n "$TOKEN" ]; then
+                echo "IMDSv2トークンを取得しました"
+                
+                # IAMロール名を取得
+                ROLE_NAME=$(curl -H "X-aws-ec2-metadata-token: $TOKEN" http://169.254.169.254/latest/meta-data/iam/security-credentials/ 2>/dev/null)
+                if [ -n "$ROLE_NAME" ]; then
+                    echo "IAMロール: $ROLE_NAME"
+                    
+                    # 認証情報を取得
+                    CREDS=$(curl -H "X-aws-ec2-metadata-token: $TOKEN" http://169.254.169.254/latest/meta-data/iam/security-credentials/$ROLE_NAME 2>/dev/null)
+                    if [ -n "$CREDS" ]; then
+                        export AWS_ACCESS_KEY_ID=$(echo $CREDS | jq -r '.AccessKeyId')
+                        export AWS_SECRET_ACCESS_KEY=$(echo $CREDS | jq -r '.SecretAccessKey')
+                        export AWS_SESSION_TOKEN=$(echo $CREDS | jq -r '.Token')
+                        echo "EC2インスタンスの認証情報を環境変数に設定しました"
+                    fi
+                fi
             else
-                echo "警告: セッショントークンの取得に失敗しました"
+                echo "警告: IMDSトークンの取得に失敗しました"
             fi
         else
             echo "明示的に指定された認証情報を使用"
@@ -826,19 +854,33 @@ def executeDestroy() {
         # 空の認証情報環境変数をクリア（IAMロール使用のため）
         if [ -z "$AWS_ACCESS_KEY_ID" ] || [ "$AWS_ACCESS_KEY_ID" = "" ]; then
             unset AWS_ACCESS_KEY_ID
+            unset AWS_SECRET_ACCESS_KEY
+            unset AWS_SESSION_TOKEN
             
-            # IAMロール使用時は、AWS CLIから一時認証情報を取得
-            echo "AWS CLIから一時認証情報を取得中..."
+            # EC2メタデータサービスの確認
+            echo "EC2メタデータサービスの確認..."
             
-            # AWS CLIを使って新しいセッショントークンを取得
-            CREDS=$(aws sts get-session-token --duration-seconds 3600 --output json)
-            if [ $? -eq 0 ]; then
-                export AWS_ACCESS_KEY_ID=$(echo $CREDS | jq -r '.Credentials.AccessKeyId')
-                export AWS_SECRET_ACCESS_KEY=$(echo $CREDS | jq -r '.Credentials.SecretAccessKey')
-                export AWS_SESSION_TOKEN=$(echo $CREDS | jq -r '.Credentials.SessionToken')
-                echo "一時認証情報を環境変数に設定しました"
+            # IMDSv2のトークンを取得
+            TOKEN=$(curl -X PUT "http://169.254.169.254/latest/api/token" -H "X-aws-ec2-metadata-token-ttl-seconds: 21600" 2>/dev/null)
+            if [ -n "$TOKEN" ]; then
+                echo "IMDSv2トークンを取得しました"
+                
+                # IAMロール名を取得
+                ROLE_NAME=$(curl -H "X-aws-ec2-metadata-token: $TOKEN" http://169.254.169.254/latest/meta-data/iam/security-credentials/ 2>/dev/null)
+                if [ -n "$ROLE_NAME" ]; then
+                    echo "IAMロール: $ROLE_NAME"
+                    
+                    # 認証情報を取得
+                    CREDS=$(curl -H "X-aws-ec2-metadata-token: $TOKEN" http://169.254.169.254/latest/meta-data/iam/security-credentials/$ROLE_NAME 2>/dev/null)
+                    if [ -n "$CREDS" ]; then
+                        export AWS_ACCESS_KEY_ID=$(echo $CREDS | jq -r '.AccessKeyId')
+                        export AWS_SECRET_ACCESS_KEY=$(echo $CREDS | jq -r '.SecretAccessKey')
+                        export AWS_SESSION_TOKEN=$(echo $CREDS | jq -r '.Token')
+                        echo "EC2インスタンスの認証情報を環境変数に設定しました"
+                    fi
+                fi
             else
-                echo "警告: セッショントークンの取得に失敗しました"
+                echo "警告: IMDSトークンの取得に失敗しました"
             fi
         else
             echo "明示的に指定された認証情報を使用"
