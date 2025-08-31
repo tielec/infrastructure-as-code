@@ -7,6 +7,8 @@
 import * as pulumi from "@pulumi/pulumi";
 import * as aws from "@pulumi/aws";
 import * as tls from "@pulumi/tls";
+import * as fs from "fs";
+import * as path from "path";
 
 // 環境名をスタック名から取得
 const environment = pulumi.getStack();
@@ -269,13 +271,32 @@ const agentLaunchTemplate = new aws.ec2.LaunchTemplate(`agent-lt`, {
     // ユーザーデータをBase64エンコード（カスタムAMI使用時は最小限の設定）
     userData: pulumi.all([amiX86Id, customAmiX86Promise]).apply(([id, customId]) => {
         const isCustomAmi = customId && !customId.startsWith("ami-placeholder");
-        const userData = isCustomAmi ? 
-            // カスタムAMI用の最小限のユーザーデータ
-            `#!/bin/bash
-exec > >(tee /var/log/user-data.log|logger -t user-data -s 2>/dev/console) 2>&1
-set -x
-
-# IPv6設定の有効化
+        
+        // 外部スクリプトファイルのパスを決定
+        const scriptName = isCustomAmi ? 'jenkins-agent-custom-ami.sh' : 'jenkins-agent-setup.sh';
+        const scriptPath = path.resolve(__dirname, '..', '..', 'scripts', 'aws', 'userdata', scriptName);
+        
+        let userDataTemplate: string;
+        
+        try {
+            if (!fs.existsSync(scriptPath)) {
+                // フォールバックパス（Pulumi実行時のカレントディレクトリから）
+                const alternativePath = path.resolve(process.cwd(), 'scripts', 'aws', 'userdata', scriptName);
+                if (fs.existsSync(alternativePath)) {
+                    userDataTemplate = fs.readFileSync(alternativePath, 'utf8');
+                } else {
+                    throw new Error(`Userdata script not found at ${scriptPath} or ${alternativePath}`);
+                }
+            } else {
+                userDataTemplate = fs.readFileSync(scriptPath, 'utf8');
+            }
+        } catch (error) {
+            pulumi.log.error(`Failed to read userdata script: ${error}`);
+            throw error;
+        }
+        
+        // テンプレート変数の置換
+        const ipv6Config = isCustomAmi ? `# IPv6設定の有効化
 echo "Configuring IPv6..."
 cat >> /etc/sysconfig/network << EOF
 NETWORKING_IPV6=yes
@@ -289,84 +310,15 @@ if [ -n "$IPV6_ADDR" ]; then
     echo "$IPV6_ADDR" > /home/jenkins/ipv6_address
 fi
 
-# スワップの有効化（既に作成済み）
-swapon /swapfile || true
-
-# Dockerの起動と権限設定
-systemctl start docker
-chmod 666 /var/run/docker.sock || true
-usermod -aG docker jenkins || true
-
-# 環境情報の保存
-echo "PROJECT_NAME=jenkins-infra" > /etc/jenkins-agent-env
-echo "ENVIRONMENT=${environment}" >> /etc/jenkins-agent-env
-echo "AGENT_ROOT=/home/jenkins/agent" >> /etc/jenkins-agent-env
-echo "IPV6_ENABLED=true" >> /etc/jenkins-agent-env
-chmod 644 /etc/jenkins-agent-env
-
-# SSMエージェントの起動
-systemctl start amazon-ssm-agent
-
-# 起動完了のマーク
-echo "$(date) - Agent bootstrap completed (custom AMI)" > /home/jenkins/agent/bootstrap-complete
-chown jenkins:jenkins /home/jenkins/agent/bootstrap-complete
-` :
-            // デフォルトAMI用のフルユーザーデータ
-            `#!/bin/bash
-# Jenkins Agent Bootstrap Script
-exec > >(tee /var/log/user-data.log|logger -t user-data -s 2>/dev/console) 2>&1
-set -x
-
-# スワップファイルの作成（2GB）
-dd if=/dev/zero of=/swapfile bs=1M count=2048
-chmod 600 /swapfile
-mkswap /swapfile
-swapon /swapfile
-echo '/swapfile none swap sw 0 0' >> /etc/fstab
-
-# /tmpの容量を確保（tmpfsのサイズを調整）
-mount -o remount,size=2G /tmp
-
-# システムのアップデートと必要なパッケージのインストール（Javaを除く）
-dnf update -y
-dnf install -y docker git jq amazon-ssm-agent
-
-# 不要なパッケージキャッシュをクリーンアップ
-dnf clean all
-
-# Dockerの設定と起動
-systemctl enable docker
-systemctl start docker
-
-# Dockerソケットの権限設定
-chmod 666 /var/run/docker.sock || true
-
-# Jenkinsユーザーの作成
-useradd -m -d /home/jenkins -s /bin/bash jenkins
-usermod -aG docker jenkins
-
-# エージェント作業ディレクトリの設定
-mkdir -p /home/jenkins/agent
-chown -R jenkins:jenkins /home/jenkins
-
-# 環境情報の保存
-echo "PROJECT_NAME=jenkins-infra" > /etc/jenkins-agent-env
-echo "ENVIRONMENT=${environment}" >> /etc/jenkins-agent-env
-echo "AGENT_ROOT=/home/jenkins/agent" >> /etc/jenkins-agent-env
-chmod 644 /etc/jenkins-agent-env
-
-# SSMエージェントの起動
-systemctl enable amazon-ssm-agent
-systemctl start amazon-ssm-agent
-
-# Javaのインストール（最後に実行）
-echo "Installing Java..."
-dnf install -y java-21-amazon-corretto
-
-# 起動完了のマーク
-echo "$(date) - Agent bootstrap completed" > /home/jenkins/agent/bootstrap-complete
-chown jenkins:jenkins /home/jenkins/agent/bootstrap-complete
-`;
+` : '';
+        
+        const userData = userDataTemplate
+            .replace(/\${PROJECT_NAME}/g, 'jenkins-infra')
+            .replace(/\${ENVIRONMENT}/g, environment)
+            .replace(/\${IPV6_CONFIG}/g, ipv6Config)
+            .replace(/\${IPV6_ENV}/g, isCustomAmi ? 'echo "IPV6_ENABLED=true" >> /etc/jenkins-agent-env\n' : '')
+            .replace(/\${ARCHITECTURE_ENV}/g, '');
+        
         return Buffer.from(userData).toString("base64");
     }),
     tags: {
@@ -419,91 +371,38 @@ const agentLaunchTemplateArm = new aws.ec2.LaunchTemplate(`agent-lt-arm`, {
     // ユーザーデータをBase64エンコード（カスタムAMI使用時は最小限の設定）
     userData: pulumi.all([amiArmId, customAmiArmPromise]).apply(([id, customId]) => {
         const isCustomAmi = customId && !customId.startsWith("ami-placeholder");
-        const userData = isCustomAmi ? 
-            // カスタムAMI用の最小限のユーザーデータ
-            `#!/bin/bash
-exec > >(tee /var/log/user-data.log|logger -t user-data -s 2>/dev/console) 2>&1
-set -x
-
-# スワップの有効化（既に作成済み）
-swapon /swapfile || true
-
-# Dockerの起動と権限設定
-systemctl start docker
-chmod 666 /var/run/docker.sock || true
-usermod -aG docker jenkins || true
-
-# 環境情報の保存
-echo "PROJECT_NAME=jenkins-infra" > /etc/jenkins-agent-env
-echo "ENVIRONMENT=${environment}" >> /etc/jenkins-agent-env
-echo "AGENT_ROOT=/home/jenkins/agent" >> /etc/jenkins-agent-env
-echo "ARCHITECTURE=arm64" >> /etc/jenkins-agent-env
-chmod 644 /etc/jenkins-agent-env
-
-# SSMエージェントの起動
-systemctl start amazon-ssm-agent
-
-# 起動完了のマーク
-echo "$(date) - Agent bootstrap completed (custom AMI)" > /home/jenkins/agent/bootstrap-complete
-chown jenkins:jenkins /home/jenkins/agent/bootstrap-complete
-` :
-            // デフォルトAMI用のフルユーザーデータ
-            `#!/bin/bash
-# Jenkins Agent Bootstrap Script
-exec > >(tee /var/log/user-data.log|logger -t user-data -s 2>/dev/console) 2>&1
-set -x
-
-# スワップファイルの作成（2GB）
-dd if=/dev/zero of=/swapfile bs=1M count=2048
-chmod 600 /swapfile
-mkswap /swapfile
-swapon /swapfile
-echo '/swapfile none swap sw 0 0' >> /etc/fstab
-
-# /tmpの容量を確保（tmpfsのサイズを調整）
-mount -o remount,size=2G /tmp
-
-# システムのアップデートと必要なパッケージのインストール（Javaを除く）
-dnf update -y
-dnf install -y docker git jq amazon-ssm-agent
-
-# 不要なパッケージキャッシュをクリーンアップ
-dnf clean all
-
-# Dockerの設定と起動
-systemctl enable docker
-systemctl start docker
-
-# Dockerソケットの権限設定
-chmod 666 /var/run/docker.sock || true
-
-# Jenkinsユーザーの作成
-useradd -m -d /home/jenkins -s /bin/bash jenkins
-usermod -aG docker jenkins
-
-# エージェント作業ディレクトリの設定
-mkdir -p /home/jenkins/agent
-chown -R jenkins:jenkins /home/jenkins
-
-# 環境情報の保存
-echo "PROJECT_NAME=jenkins-infra" > /etc/jenkins-agent-env
-echo "ENVIRONMENT=${environment}" >> /etc/jenkins-agent-env
-echo "AGENT_ROOT=/home/jenkins/agent" >> /etc/jenkins-agent-env
-echo "ARCHITECTURE=arm64" >> /etc/jenkins-agent-env
-chmod 644 /etc/jenkins-agent-env
-
-# SSMエージェントの起動
-systemctl enable amazon-ssm-agent
-systemctl start amazon-ssm-agent
-
-# Javaのインストール（最後に実行）
-echo "Installing Java..."
-dnf install -y java-21-amazon-corretto
-
-# 起動完了のマーク
-echo "$(date) - Agent bootstrap completed" > /home/jenkins/agent/bootstrap-complete
-chown jenkins:jenkins /home/jenkins/agent/bootstrap-complete
-`;
+        
+        // 外部スクリプトファイルのパスを決定
+        const scriptName = isCustomAmi ? 'jenkins-agent-custom-ami.sh' : 'jenkins-agent-setup.sh';
+        const scriptPath = path.resolve(__dirname, '..', '..', 'scripts', 'aws', 'userdata', scriptName);
+        
+        let userDataTemplate: string;
+        
+        try {
+            if (!fs.existsSync(scriptPath)) {
+                // フォールバックパス（Pulumi実行時のカレントディレクトリから）
+                const alternativePath = path.resolve(process.cwd(), 'scripts', 'aws', 'userdata', scriptName);
+                if (fs.existsSync(alternativePath)) {
+                    userDataTemplate = fs.readFileSync(alternativePath, 'utf8');
+                } else {
+                    throw new Error(`Userdata script not found at ${scriptPath} or ${alternativePath}`);
+                }
+            } else {
+                userDataTemplate = fs.readFileSync(scriptPath, 'utf8');
+            }
+        } catch (error) {
+            pulumi.log.error(`Failed to read userdata script: ${error}`);
+            throw error;
+        }
+        
+        // テンプレート変数の置換
+        const userData = userDataTemplate
+            .replace(/\${PROJECT_NAME}/g, 'jenkins-infra')
+            .replace(/\${ENVIRONMENT}/g, environment)
+            .replace(/\${IPV6_CONFIG}/g, '')
+            .replace(/\${IPV6_ENV}/g, '')
+            .replace(/\${ARCHITECTURE_ENV}/g, 'echo "ARCHITECTURE=arm64" >> /etc/jenkins-agent-env\n');
+        
         return Buffer.from(userData).toString("base64");
     }),
     tags: {
