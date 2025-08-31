@@ -195,9 +195,26 @@ Action: add|update|fix|remove|refactor
 ```
 main           → 安定版（保護ブランチ）
 develop        → 開発版
+bug/*          → バグ修正
 feature/*      → 機能開発
-bugfix/*       → バグ修正
-hotfix/*       → 緊急修正
+task/*         → タスク作業
+hotfix/*       → 緊急修正（本番環境の重大な問題）
+```
+
+### ブランチ命名規則
+
+```
+{type}/issue-{番号}-{説明}
+
+タイプはIssueテンプレートと対応:
+- bug/      → [BUG] バグ報告
+- feature/  → [FEATURE] 機能要望
+- task/     → [TASK] タスク
+
+例:
+bug/issue-123-fix-memory-leak
+feature/issue-456-add-monitoring
+task/issue-789-update-documentation
 ```
 
 ### プルリクエスト
