@@ -246,6 +246,7 @@ export function createNatGateway(args: NatGatewayArgs): NatGatewayOutputs {
         value: "gateway-ha",
         description: "NAT type (gateway-ha)",
         tags: commonTags,
+        overwrite: true,
     });
 
     // NAT設定情報を保存
@@ -262,6 +263,7 @@ export function createNatGateway(args: NatGatewayArgs): NatGatewayOutputs {
         })),
         description: "NAT Gateway configuration for Lambda API infrastructure",
         tags: commonTags,
+        overwrite: true,
     });
 
     // コスト最適化情報のパラメータ
@@ -280,6 +282,7 @@ export function createNatGateway(args: NatGatewayArgs): NatGatewayOutputs {
         }),
         description: "Cost optimization information for NAT Gateway configuration",
         tags: commonTags,
+        overwrite: true,
     });
 
     // デプロイメント完了フラグ
@@ -289,6 +292,7 @@ export function createNatGateway(args: NatGatewayArgs): NatGatewayOutputs {
         value: "true",
         description: "NAT Gateway stack deployment completion flag",
         tags: commonTags,
+        overwrite: true,
     });
 
     return {

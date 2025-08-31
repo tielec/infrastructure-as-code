@@ -412,6 +412,7 @@ The script should be located in the 'scripts' directory relative to your project
         value: "instance",
         description: "NAT type (instance)",
         tags: commonTags,
+        overwrite: true,
     });
 
     // NAT設定情報を保存
@@ -428,6 +429,7 @@ The script should be located in the 'scripts' directory relative to your project
         })),
         description: "NAT Instance configuration for Lambda API infrastructure",
         tags: commonTags,
+        overwrite: true,
     });
 
     // コスト最適化情報のパラメータ
@@ -447,6 +449,7 @@ The script should be located in the 'scripts' directory relative to your project
         })),
         description: "Cost optimization information for NAT Instance configuration",
         tags: commonTags,
+        overwrite: true,
     });
 
     // デプロイメント完了フラグ
@@ -456,6 +459,7 @@ The script should be located in the 'scripts' directory relative to your project
         value: "true",
         description: "NAT Instance stack deployment completion flag",
         tags: commonTags,
+        overwrite: true,
     });
 
     return {
