@@ -142,32 +142,54 @@ function check_result() {
 echo "1. Checking SSM Parameters"
 echo "----------------------------"
 
-# API Gateway設定の確認
-if aws ssm get-parameter --name "/lambda-api/${ENV_NAME}/api-gateway/config" --query 'Parameter.Value' --output text >/dev/null 2>&1; then
-    API_CONFIG=$(aws ssm get-parameter --name "/lambda-api/${ENV_NAME}/api-gateway/config" --query 'Parameter.Value' --output text)
-    API_ID=$(echo "$API_CONFIG" | jq -r '.apiId')
-    API_ENDPOINT=$(echo "$API_CONFIG" | jq -r '.apiEndpoint')
-    log_info "API ID: ${API_ID}"
-    log_info "API Endpoint: ${API_ENDPOINT}"
-    check_result "API Gateway Config in SSM" "pass"
+# API Gateway設定の確認（新しいSSM構造に対応）
+# プロジェクト名を取得
+if aws ssm get-parameter --name "/lambda-api/${ENV_NAME}/common/project-name" --query 'Parameter.Value' --output text >/dev/null 2>&1; then
+    PROJECT_NAME=$(aws ssm get-parameter --name "/lambda-api/${ENV_NAME}/common/project-name" --query 'Parameter.Value' --output text)
+    
+    # API IDを取得
+    if aws ssm get-parameter --name "/${PROJECT_NAME}/${ENV_NAME}/api-gateway/api-id" --query 'Parameter.Value' --output text >/dev/null 2>&1; then
+        API_ID=$(aws ssm get-parameter --name "/${PROJECT_NAME}/${ENV_NAME}/api-gateway/api-id" --query 'Parameter.Value' --output text)
+        log_info "API ID: ${API_ID}"
+        check_result "API ID in SSM" "pass"
+    else
+        check_result "API ID in SSM" "fail"
+        API_ID=""
+    fi
+    
+    # API Endpointを取得
+    if aws ssm get-parameter --name "/${PROJECT_NAME}/${ENV_NAME}/api-gateway/endpoint" --query 'Parameter.Value' --output text >/dev/null 2>&1; then
+        API_ENDPOINT=$(aws ssm get-parameter --name "/${PROJECT_NAME}/${ENV_NAME}/api-gateway/endpoint" --query 'Parameter.Value' --output text)
+        log_info "API Endpoint: ${API_ENDPOINT}"
+        check_result "API Endpoint in SSM" "pass"
+    else
+        check_result "API Endpoint in SSM" "fail"
+        API_ENDPOINT=""
+    fi
 else
-    check_result "API Gateway Config in SSM" "fail"
+    check_result "Project Name in SSM" "fail"
     API_ID=""
     API_ENDPOINT=""
 fi
 
-# APIキーの確認
-if aws ssm get-parameter --name "/lambda-api/${ENV_NAME}/api-gateway/keys" --with-decryption --query 'Parameter.Value' --output text >/dev/null 2>&1; then
-    API_KEYS=$(aws ssm get-parameter --name "/lambda-api/${ENV_NAME}/api-gateway/keys" --with-decryption --query 'Parameter.Value' --output text)
-    BUBBLE_KEY=$(echo "$API_KEYS" | jq -r '.bubble.key')
-    EXTERNAL_KEY=$(echo "$API_KEYS" | jq -r '.external.key')
-    check_result "API Keys in SSM" "pass"
-    if [ "$VERBOSE" == "1" ]; then
-        log_info "Bubble.io API Key: ${BUBBLE_KEY:0:10}..."
-        log_info "External API Key: ${EXTERNAL_KEY:0:10}..."
+# APIキーの確認（プロジェクト名が取得できている場合のみ）
+if [ -n "${PROJECT_NAME:-}" ]; then
+    if aws ssm get-parameter --name "/${PROJECT_NAME}/${ENV_NAME}/api-gateway/keys" --with-decryption --query 'Parameter.Value' --output text >/dev/null 2>&1; then
+        API_KEYS=$(aws ssm get-parameter --name "/${PROJECT_NAME}/${ENV_NAME}/api-gateway/keys" --with-decryption --query 'Parameter.Value' --output text)
+        BUBBLE_KEY=$(echo "$API_KEYS" | jq -r '.bubble.key')
+        EXTERNAL_KEY=$(echo "$API_KEYS" | jq -r '.external.key')
+        check_result "API Keys in SSM" "pass"
+        if [ "$VERBOSE" == "1" ]; then
+            log_info "Bubble.io API Key: ${BUBBLE_KEY:0:10}..."
+            log_info "External API Key: ${EXTERNAL_KEY:0:10}..."
+        fi
+    else
+        check_result "API Keys in SSM" "fail"
+        BUBBLE_KEY=""
+        EXTERNAL_KEY=""
     fi
 else
-    check_result "API Keys in SSM" "fail"
+    log_warn "Skipping API key check (project name not found)"
     BUBBLE_KEY=""
     EXTERNAL_KEY=""
 fi
