@@ -16,9 +16,15 @@ def instance = Jenkins.getInstance()
 def pm = instance.getPluginManager()
 def uc = instance.getUpdateCenter()
 
-// 更新サイトを更新
-println("Updating update center...")
-uc.updateAllSites()
+// 更新サイトを強制的に更新
+println("Forcing update center refresh...")
+uc.getSites().each { site ->
+    println("Updating site: ${site.getId()}")
+    site.updateDirectlyNow(true)  // 強制的に即座に更新
+}
+
+// 少し待機して更新を完了させる
+Thread.sleep(3000)
 
 // インストールするプラグインのリスト
 def plugins = [
@@ -98,25 +104,28 @@ boolean updateCenterInitialized = false
 
 // 初回起動時の場合、Update Centerの初期化に時間がかかる
 println("Waiting for Update Center to initialize...")
-Thread.sleep(10000) // 初期待機時間を設ける
+Thread.sleep(5000) // 初期待機時間を設ける
 
 while (!updateCenterInitialized && attempts < maxAttempts) {
     try {
         println("Checking update center... (attempt ${attempts + 1}/${maxAttempts})")
         
-        // Update Centerを更新
-        uc.updateAllSites()
+        // Update Centerを強制的に更新
+        uc.getSites().each { site ->
+            site.updateDirectlyNow(true)
+        }
         
         // 少し待機してからチェック
-        Thread.sleep(5000)
+        Thread.sleep(3000)
         
         def updateCenter = uc.getById("default")
+        def updates = updateCenter.getUpdates()
         def available = updateCenter.getAvailables()
         
         // プラグインの利用可能リストを取得できるかチェック
-        if (updateCenter.getUpdates().size() > 0 || available.size() > 0) {
+        if (updates.size() > 0 || available.size() > 0) {
             updateCenterInitialized = true
-            println("Update center initialized successfully. Available plugins: ${available.size()}")
+            println("Update center initialized successfully. Updates: ${updates.size()}, Available: ${available.size()}")
         } else {
             // まだ初期化されていない場合は、updateSiteのURLから直接チェック
             def site = updateCenter.getSite()
@@ -125,12 +134,12 @@ while (!updateCenterInitialized && attempts < maxAttempts) {
                 println("Update center initialized (data timestamp: ${new Date(site.getDataTimestamp())})")
             } else {
                 println("Update center not initialized yet. Waiting...")
-                Thread.sleep(10000) // 10秒待機
+                Thread.sleep(5000) // 5秒待機
             }
         }
     } catch (Exception e) {
         println("Error checking update center: ${e.message}")
-        Thread.sleep(5000)
+        Thread.sleep(3000)
     }
     attempts++
 }
@@ -178,32 +187,39 @@ def installOrUpdatePlugin = { pluginId ->
     } else {
         // プラグインが既にインストールされている場合、更新が必要かチェック
         def updateSite = uc.getById("default")
-        def available = updateSite.getAvailables()
-        def updateInfo = available.find { it.name == pluginId }
+        def updates = updateSite.getUpdates()
+        def updateInfo = updates.find { it.name == pluginId }
         
         if (updateInfo) {
             def currentVersion = plugin.getVersionNumber()
             def availableVersion = updateInfo.version
             
-            if (availableVersion > currentVersion) {
-                println("Updating plugin ${pluginId} from ${currentVersion} to ${availableVersion}")
-                try {
-                    def installFuture = updateInfo.deploy()
-                    while(!installFuture.isDone()) {
-                        Thread.sleep(500)
-                    }
+            println("Updating plugin ${pluginId} from ${currentVersion} to ${availableVersion}")
+            try {
+                def installFuture = updateInfo.deploy(true)  // true = dynamicLoad
+                
+                // 更新完了を待つ
+                int waitCount = 0
+                while(!installFuture.isDone() && waitCount < 60) {  // 最大30秒待機
+                    Thread.sleep(500)
+                    waitCount++
+                }
+                
+                if (installFuture.isDone()) {
                     println("Successfully updated plugin: ${pluginId}")
                     return true
-                } catch (Exception e) {
-                    println("Failed to update plugin ${pluginId}: ${e.message}")
+                } else {
+                    println("Plugin ${pluginId} update timed out")
                     return false
                 }
-            } else {
-                println("Plugin ${pluginId} is already up to date (${currentVersion})")
+            } catch (Exception e) {
+                println("Failed to update plugin ${pluginId}: ${e.message}")
                 return false
             }
         } else {
-            println("Plugin ${pluginId} is installed but no update information is available")
+            // 更新がない場合でも、最新版かどうかを確認
+            def currentVersion = plugin.getVersionNumber()
+            println("Plugin ${pluginId} is installed (${currentVersion}) - no updates available")
             return false
         }
     }
