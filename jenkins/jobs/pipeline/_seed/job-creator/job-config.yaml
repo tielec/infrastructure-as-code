@@ -303,34 +303,6 @@ pulumi-projects:
         description: "Lambda用API Gateway"
         environments: ['dev', 'prod']  # 両環境に配置
       
-      lambda_waf:
-        project_path: "pulumi/lambda-waf"
-        display_name: "Lambda WAF"
-        project_type: "nodejs"
-        description: "Lambda用WAF設定"
-        environments: ['prod']  # 本番環境のみ
-      
-      lambda_websocket:
-        project_path: "pulumi/lambda-websocket"
-        display_name: "Lambda WebSocket"
-        project_type: "nodejs"
-        description: "Lambda WebSocket API"
-        environments: ['dev', 'prod']  # 両環境に配置
-      
-      lambda_account_setup:
-        project_path: "pulumi/lambda-account-setup"
-        display_name: "Lambda Account Setup"
-        project_type: "nodejs"
-        description: "Lambdaアカウント設定"
-        environments: ['dev', 'prod']  # 両環境に配置
-      
-      lambda_ip_whitelist:
-        project_path: "pulumi/lambda-ip-whitelist"
-        display_name: "Lambda IP Whitelist"
-        project_type: "nodejs"
-        description: "Lambda IPホワイトリスト管理"
-        environments: ['dev', 'prod']  # 両環境に配置
-      
       # テスト用プロジェクト
       test_s3:
         project_path: "pulumi/test-s3"
