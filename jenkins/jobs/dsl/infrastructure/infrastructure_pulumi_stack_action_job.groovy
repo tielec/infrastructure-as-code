@@ -78,9 +78,10 @@ pulumiProjects.each { repoKey, repoConfig ->
                     choiceParam('ENVIRONMENT', [env], '環境（自動設定） - この値は変更できません。ジョブの配置場所により自動的に決定されます。')
                     
                     // アクション
-                    choiceParam('ACTION', ['preview', 'deploy', 'destroy'], '''実行するアクション - 実行するPulumiアクションを選択してください：
+                    choiceParam('ACTION', ['preview', 'deploy', 'refresh', 'destroy'], '''実行するアクション - 実行するPulumiアクションを選択してください：
                         |* preview: 変更内容の確認のみ（推奨: 初回実行時）
                         |* deploy: リソースの作成・更新
+                        |* refresh: 実インフラとPulumi状態の同期
                         |* destroy: リソースの削除（要注意）'''.stripMargin())
                     
                     // === AWS認証情報 ===
