@@ -226,35 +226,27 @@ const logGroup = new aws.cloudwatch.LogGroup("log-group", {
 // SSMパラメータへの保存
 // ========================================
 // 他のスタックが参照する値をSSMに保存
-const functionConfig = new aws.ssm.Parameter("function-config", {
-    name: pulumi.interpolate`/${projectName}/${environment}/lambda/config`,
+const functionArnParam = new aws.ssm.Parameter("function-arn", {
+    name: pulumi.interpolate`/${projectName}/${environment}/lambda/main-function-arn`,
     type: "String",
-    value: pulumi.all([mainFunction.name, mainFunction.arn, dlq.url, memorySize, timeout]).apply(
-        ([name, arn, dlqUrl, memory, time]) => JSON.stringify({
-            function: {
-                name: name,
-                arn: arn,
-                runtime: "nodejs18.x",
-                architecture: "arm64",
-                memorySize: memory,
-                timeout: time,
-            },
-            dlq: {
-                url: dlqUrl,
-            },
-            deployment: {
-                environment: environment,
-                lastUpdated: new Date().toISOString(),
-            },
-            // 将来の拡張ポイント
-            future: {
-                additionalFunctions: "Add more functions as needed",
-                database: "Add RDS/DynamoDB configuration when needed",
-                layers: "Add shared libraries as Lambda Layers",
-            },
-        })
-    ),
-    description: "Lambda function configuration",
+    value: mainFunction.arn,
+    description: "Main Lambda function ARN",
+    tags: commonTags,
+});
+
+const functionNameParam = new aws.ssm.Parameter("function-name", {
+    name: pulumi.interpolate`/${projectName}/${environment}/lambda/main-function-name`,
+    type: "String",
+    value: mainFunction.name,
+    description: "Main Lambda function name",
+    tags: commonTags,
+});
+
+const dlqArnParam = new aws.ssm.Parameter("dlq-arn", {
+    name: pulumi.interpolate`/${projectName}/${environment}/lambda/dlq-arn`,
+    type: "String",
+    value: dlq.arn,
+    description: "Dead Letter Queue ARN",
     tags: commonTags,
 });
 
@@ -271,7 +263,6 @@ export const outputs = {
     dlqArn: dlq.arn,
     lambdaRoleArn: lambdaRole.arn,
     logGroupName: logGroup.name,
-    ssmParameterName: functionConfig.name,
 };
 
 // 簡潔な情報サマリー

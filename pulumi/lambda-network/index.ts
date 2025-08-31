@@ -326,17 +326,9 @@ const vpcIdParam = new aws.ssm.Parameter("vpc-id", {
     value: vpc.id,
     description: "VPC ID for Lambda API infrastructure",
     tags: commonTags,
-    overwrite: true,
 });
 
-const vpcCidrSsmParam = new aws.ssm.Parameter("vpc-cidr", {
-    name: pulumi.interpolate`${paramPrefix}/vpc-cidr`,
-    type: "String",
-    value: vpc.cidrBlock,
-    description: "VPC CIDR block",
-    tags: commonTags,
-    overwrite: true,
-});
+// VPC CIDRはSSMから取得した値なので、再度保存は不要
 
 // Internet Gateway
 const igwIdParam = new aws.ssm.Parameter("igw-id", {
@@ -345,7 +337,6 @@ const igwIdParam = new aws.ssm.Parameter("igw-id", {
     value: igw.id,
     description: "Internet Gateway ID",
     tags: commonTags,
-    overwrite: true,
 });
 
 // Public Subnets
@@ -355,7 +346,6 @@ const publicSubnetAIdParam = new aws.ssm.Parameter("public-subnet-a-id", {
     value: publicSubnetA.id,
     description: "Public Subnet A ID",
     tags: commonTags,
-    overwrite: true,
 });
 
 const publicSubnetBIdParam = new aws.ssm.Parameter("public-subnet-b-id", {
@@ -364,7 +354,6 @@ const publicSubnetBIdParam = new aws.ssm.Parameter("public-subnet-b-id", {
     value: publicSubnetB.id,
     description: "Public Subnet B ID",
     tags: commonTags,
-    overwrite: true,
 });
 
 const publicSubnetIdsParam = new aws.ssm.Parameter("public-subnet-ids", {
@@ -373,7 +362,6 @@ const publicSubnetIdsParam = new aws.ssm.Parameter("public-subnet-ids", {
     value: pulumi.interpolate`${publicSubnetA.id},${publicSubnetB.id}`,
     description: "Public Subnet IDs (comma-separated)",
     tags: commonTags,
-    overwrite: true,
 });
 
 // Private Subnets
@@ -383,7 +371,6 @@ const privateSubnetAIdParam = new aws.ssm.Parameter("private-subnet-a-id", {
     value: privateSubnetA.id,
     description: "Private Subnet A ID",
     tags: commonTags,
-    overwrite: true,
 });
 
 const privateSubnetBIdParam = new aws.ssm.Parameter("private-subnet-b-id", {
@@ -392,7 +379,6 @@ const privateSubnetBIdParam = new aws.ssm.Parameter("private-subnet-b-id", {
     value: privateSubnetB.id,
     description: "Private Subnet B ID",
     tags: commonTags,
-    overwrite: true,
 });
 
 const privateSubnetIdsParam = new aws.ssm.Parameter("private-subnet-ids", {
@@ -401,7 +387,6 @@ const privateSubnetIdsParam = new aws.ssm.Parameter("private-subnet-ids", {
     value: pulumi.interpolate`${privateSubnetA.id},${privateSubnetB.id}`,
     description: "Private Subnet IDs (comma-separated)",
     tags: commonTags,
-    overwrite: true,
 });
 
 // Route Tables
@@ -411,7 +396,6 @@ const publicRouteTableIdParam = new aws.ssm.Parameter("public-rt-id", {
     value: publicRouteTable.id,
     description: "Public Route Table ID",
     tags: commonTags,
-    overwrite: true,
 });
 
 const privateRouteTableAIdParam = new aws.ssm.Parameter("private-rt-a-id", {
@@ -420,7 +404,6 @@ const privateRouteTableAIdParam = new aws.ssm.Parameter("private-rt-a-id", {
     value: privateRouteTableA.id,
     description: "Private Route Table A ID",
     tags: commonTags,
-    overwrite: true,
 });
 
 const privateRouteTableBIdParam = new aws.ssm.Parameter("private-rt-b-id", {
@@ -429,7 +412,6 @@ const privateRouteTableBIdParam = new aws.ssm.Parameter("private-rt-b-id", {
     value: privateRouteTableB.id,
     description: "Private Route Table B ID",
     tags: commonTags,
-    overwrite: true,
 });
 
 const privateRouteTableIdsParam = new aws.ssm.Parameter("private-rt-ids", {
@@ -438,7 +420,6 @@ const privateRouteTableIdsParam = new aws.ssm.Parameter("private-rt-ids", {
     value: pulumi.interpolate`${privateRouteTableA.id},${privateRouteTableB.id}`,
     description: "Private Route Table IDs (comma-separated)",
     tags: commonTags,
-    overwrite: true,
 });
 
 // Isolated Subnets (将来用) - 空文字列をデフォルトとして保存
@@ -449,7 +430,6 @@ if (createIsolatedSubnets && isolatedSubnetA && isolatedSubnetB && isolatedRoute
         value: isolatedSubnetA.id,
         description: "Isolated Subnet A ID",
         tags: commonTags,
-    overwrite: true,
 });
 
     const isolatedSubnetBIdParam = new aws.ssm.Parameter("isolated-subnet-b-id", {
@@ -458,7 +438,6 @@ if (createIsolatedSubnets && isolatedSubnetA && isolatedSubnetB && isolatedRoute
         value: isolatedSubnetB.id,
         description: "Isolated Subnet B ID",
         tags: commonTags,
-    overwrite: true,
 });
 
     const isolatedSubnetIdsParam = new aws.ssm.Parameter("isolated-subnet-ids", {
@@ -467,7 +446,6 @@ if (createIsolatedSubnets && isolatedSubnetA && isolatedSubnetB && isolatedRoute
         value: pulumi.interpolate`${isolatedSubnetA.id},${isolatedSubnetB.id}`,
         description: "Isolated Subnet IDs (comma-separated)",
         tags: commonTags,
-    overwrite: true,
 });
 
     const isolatedRouteTableAIdParam = new aws.ssm.Parameter("isolated-rt-a-id", {
@@ -476,7 +454,6 @@ if (createIsolatedSubnets && isolatedSubnetA && isolatedSubnetB && isolatedRoute
         value: isolatedRouteTableA.id,
         description: "Isolated Route Table A ID",
         tags: commonTags,
-    overwrite: true,
 });
 
     const isolatedRouteTableBIdParam = new aws.ssm.Parameter("isolated-rt-b-id", {
@@ -485,55 +462,9 @@ if (createIsolatedSubnets && isolatedSubnetA && isolatedSubnetB && isolatedRoute
         value: isolatedRouteTableB.id,
         description: "Isolated Route Table B ID",
         tags: commonTags,
-    overwrite: true,
-});
-} else {
-    // 現在は空文字列を設定
-    new aws.ssm.Parameter("isolated-subnet-a-id-empty", {
-        name: pulumi.interpolate`${paramPrefix}/subnets/isolated-a-id`,
-        type: "String",
-        value: "",
-        description: "Isolated Subnet A ID (not created yet)",
-        tags: commonTags,
-    overwrite: true,
-});
-
-    new aws.ssm.Parameter("isolated-subnet-b-id-empty", {
-        name: pulumi.interpolate`${paramPrefix}/subnets/isolated-b-id`,
-        type: "String",
-        value: "",
-        description: "Isolated Subnet B ID (not created yet)",
-        tags: commonTags,
-    overwrite: true,
-});
-
-    new aws.ssm.Parameter("isolated-subnet-ids-empty", {
-        name: pulumi.interpolate`${paramPrefix}/subnets/isolated-ids`,
-        type: "String",
-        value: "",
-        description: "Isolated Subnet IDs (not created yet)",
-        tags: commonTags,
-    overwrite: true,
-});
-
-    new aws.ssm.Parameter("isolated-rt-a-id-empty", {
-        name: pulumi.interpolate`${paramPrefix}/route-tables/isolated-a-id`,
-        type: "String",
-        value: "",
-        description: "Isolated Route Table A ID (not created yet)",
-        tags: commonTags,
-    overwrite: true,
-});
-
-    new aws.ssm.Parameter("isolated-rt-b-id-empty", {
-        name: pulumi.interpolate`${paramPrefix}/route-tables/isolated-b-id`,
-        type: "String",
-        value: "",
-        description: "Isolated Route Table B ID (not created yet)",
-        tags: commonTags,
-    overwrite: true,
 });
 }
+// Isolated Subnetが作成されていない場合、空のSSMパラメータは作成しない
 
 // Flow Logs
 if (enableFlowLogs && flowLog && flowLogGroup) {
@@ -543,7 +474,6 @@ if (enableFlowLogs && flowLog && flowLogGroup) {
         value: flowLog.id,
         description: "VPC Flow Log ID",
         tags: commonTags,
-    overwrite: true,
 });
 
     const flowLogGroupNameParam = new aws.ssm.Parameter("flow-log-group", {
@@ -552,37 +482,10 @@ if (enableFlowLogs && flowLog && flowLogGroup) {
         value: flowLogGroup.name,
         description: "VPC Flow Log CloudWatch Log Group Name",
         tags: commonTags,
-    overwrite: true,
-});
-} else {
-    new aws.ssm.Parameter("flow-log-id-empty", {
-        name: pulumi.interpolate`${paramPrefix}/flow-logs/id`,
-        type: "String",
-        value: "",
-        description: "VPC Flow Log ID (not enabled)",
-        tags: commonTags,
-    overwrite: true,
-});
-
-    new aws.ssm.Parameter("flow-log-group-empty", {
-        name: pulumi.interpolate`${paramPrefix}/flow-logs/log-group-name`,
-        type: "String",
-        value: "",
-        description: "VPC Flow Log CloudWatch Log Group Name (not enabled)",
-        tags: commonTags,
-    overwrite: true,
 });
 }
+// Flow Logsが無効の場合、空のSSMパラメータは作成しない
 
-// デプロイメント完了フラグ
-const deploymentCompleteParam = new aws.ssm.Parameter("network-deployed", {
-    name: pulumi.interpolate`${paramPrefix}/deployment/complete`,
-    type: "String",
-    value: "true",
-    description: "Network stack deployment completion flag",
-    tags: commonTags,
-    overwrite: true,
-});
 
 // ========================================
 // エクスポート（表示用のみ）
@@ -593,6 +496,6 @@ export const outputs = {
     stack: "lambda-network",
     environment: environment,
     vpcId: vpc.id,
+    vpcCidr: vpc.cidrBlock,
     ssmParameterPrefix: paramPrefix,
-    deploymentComplete: deploymentCompleteParam.name,
 };

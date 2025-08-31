@@ -180,14 +180,6 @@ const dynamodbEndpointIdParam = new aws.ssm.Parameter("vpce-dynamodb-id", {
 // Interface型エンドポイントは作成しないため、SSMパラメータも作成しない
 // Secrets ManagerとKMSへのアクセスはNAT経由で行う
 
-// デプロイメント完了フラグ
-const deploymentCompleteParam = new aws.ssm.Parameter("vpce-deployed", {
-    name: pulumi.interpolate`${paramPrefix}/deployment/complete`,
-    type: "String",
-    value: "true",
-    description: "VPC Endpoints stack deployment completion flag",
-    tags: commonTags,
-});
 
 
 // ========================================
@@ -201,5 +193,4 @@ export const outputs = {
     s3EndpointId: s3Endpoint.id,
     dynamodbEndpointId: dynamodbEndpoint.id,
     ssmParameterPrefix: paramPrefix,
-    deploymentComplete: deploymentCompleteParam.name,
 };

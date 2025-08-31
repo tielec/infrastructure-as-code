@@ -432,6 +432,52 @@ const dbPassword = pulumi.output(dbPasswordParam).apply(p => p.value);
 /jenkins-infra/production/controller/instance-type
 ```
 
+### ⚠️ 重要: overwrite設定の禁止
+
+**SSMパラメータ作成時の`overwrite: true`は原則使用禁止です。**
+
+```typescript
+// ❌ 間違い: overwrite: trueの使用
+const param = new aws.ssm.Parameter("param", {
+    name: `/path/to/parameter`,
+    type: "String",
+    value: "value",
+    overwrite: true,  // 危険：他のスタックのパラメータを上書きする可能性
+});
+
+// ✅ 正しい: overwriteを指定しない（デフォルトはfalse）
+const param = new aws.ssm.Parameter("param", {
+    name: `/path/to/parameter`,
+    type: "String",
+    value: "value",
+    // overwriteは指定しない
+});
+```
+
+#### overwrite: trueが引き起こす問題
+
+1. **スタック間の競合**: 複数のスタックが同じパラメータを上書きし合う
+2. **値の消失**: 別のスタックが設定した重要な値を意図せず上書き
+3. **デバッグの困難**: どのスタックが最後に値を設定したか追跡が困難
+4. **Pulumi状態の不整合**: リソースの所有権が曖昧になる
+
+#### 例外的に使用可能なケース
+
+`ssm-init`スタックなど、初期値設定専用のスタックでのみ使用を検討できます：
+
+```typescript
+// ssm-initスタックでの初期値設定（例外的に許可）
+if (stackName === "lambda-ssm-init") {
+    const param = new aws.ssm.Parameter("initial-param", {
+        name: `/path/to/parameter`,
+        type: "String",
+        value: "initial-value",
+        overwrite: true,  // 初期化スタックでのみ許可
+        description: "Initial configuration parameter",
+    });
+}
+```
+
 ### 初期パラメータの設定（ssm-initスタック）
 
 各システムには`ssm-init`スタックを用意し、初期パラメータを設定します：
@@ -457,6 +503,57 @@ Object.entries(parameters).forEach(([name, value]) => {
             ManagedBy: "pulumi",
         },
     });
+});
+```
+
+## SSMパラメータ管理のベストプラクティス
+
+### パラメータの所有権
+
+各パラメータは**1つのスタックのみが所有**すべきです：
+
+```typescript
+// lambda-ssm-init: 初期設定値を所有
+/lambda-api/dev/common/project-name     → lambda-ssm-init が所有
+/lambda-api/dev/network/vpc-cidr        → lambda-ssm-init が所有
+
+// lambda-network: ネットワークリソースIDを所有  
+/lambda-api/dev/network/vpc-id          → lambda-network が所有
+/lambda-api/dev/network/subnets/*       → lambda-network が所有
+
+// lambda-security: セキュリティグループIDを所有
+/lambda-api/dev/security/lambda-sg-id   → lambda-security が所有
+```
+
+### パラメータのライフサイクル
+
+1. **作成**: 所有スタックでのみ作成
+2. **参照**: 任意のスタックから参照可能
+3. **更新**: 所有スタックでのみ更新（overwriteなし）
+4. **削除**: 依存関係を確認してから削除
+
+### 推奨されるパラメータ構造
+
+```typescript
+// ❌ 避けるべき: 複雑なJSON構造
+const complexParam = new aws.ssm.Parameter("complex", {
+    name: `/path/to/complex`,
+    value: JSON.stringify({
+        resources: { vpc: vpcId, subnets: [...] },
+        config: { memory: 512, timeout: 30 },
+        metadata: { created: new Date(), version: "1.0" }
+    }),
+});
+
+// ✅ 推奨: シンプルな単一値
+const vpcIdParam = new aws.ssm.Parameter("vpc-id", {
+    name: `/path/to/vpc-id`,
+    value: vpc.id,
+});
+
+const memoryParam = new aws.ssm.Parameter("memory", {
+    name: `/path/to/memory`,
+    value: "512",
 });
 ```
 
@@ -503,10 +600,32 @@ const vpcId = networkConfig.apply(c => c.vpcId);
 const subnetIds = networkConfig.apply(c => c.subnetIds);
 ```
 
+### SSMパラメータの削除に関する注意
+
+**Pulumiスタックからパラメータ定義を削除すると、実際のSSMパラメータも削除されます。**
+
+```typescript
+// 例：lambda-networkスタックでこのパラメータ定義を削除すると...
+const vpcCidrParam = new aws.ssm.Parameter("vpc-cidr", {
+    name: `/lambda-api/dev/network/vpc-cidr`,
+    type: "String",
+    value: vpcCidr,
+});
+
+// → pulumi up実行時にSSMパラメータ自体が削除される
+// → 他のスタックがこのパラメータを参照している場合、エラーが発生
+```
+
+#### パラメータ削除前のチェックリスト
+
+1. **他のスタックの依存確認**: パラメータを参照している全スタックを確認
+2. **代替パラメータの準備**: 必要に応じて別のスタックでパラメータを作成
+3. **段階的な移行**: 参照側を先に更新してから削除
+
 ### 値の保存パターン
 
 ```typescript
-// 単一の値を保存
+// 単一の値を保存（overwriteなし）
 const vpcIdParam = new aws.ssm.Parameter("vpc-id", {
     name: pulumi.interpolate`/${projectName}/${environment}/network/vpc-id`,
     type: "String",
@@ -515,6 +634,7 @@ const vpcIdParam = new aws.ssm.Parameter("vpc-id", {
     tags: {
         Environment: environment,
     },
+    // overwrite: true は指定しない
 });
 
 // 複数の値をJSON形式で保存
