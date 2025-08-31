@@ -74,6 +74,9 @@ pipeline {
                 AWS_REGION            = "${params.AWS_REGION}"
                 AWS_DEFAULT_REGION    = "${params.AWS_REGION}"
                 
+                // EC2 IMDSアクセス設定（Dockerコンテナ内では明示的に設定）
+                AWS_EC2_METADATA_DISABLED = "${params.AWS_ACCESS_KEY_ID ? 'true' : 'false'}"
+                
                 // Pulumi設定
                 PULUMI_BACKEND_URL       = "${env.PULUMI_BACKEND_URL}"
                 PULUMI_CONFIG_PASSPHRASE = credentials("${env.PULUMI_CONFIG_PASSPHRASE_ID}")
@@ -477,8 +480,16 @@ def setupEnvironment(projectType) {
 def verifyAWSAuthentication() {
     sh """
         echo "AWS認証情報の確認..."
-        if [ -n "\${AWS_SESSION_TOKEN}" ]; then
-            echo "一時認証情報を使用します"
+        echo "AWS_ACCESS_KEY_ID: \${AWS_ACCESS_KEY_ID:+設定済み}"
+        echo "AWS_SECRET_ACCESS_KEY: \${AWS_SECRET_ACCESS_KEY:+設定済み}"
+        echo "AWS_SESSION_TOKEN: \${AWS_SESSION_TOKEN:+設定済み}"
+        echo "AWS_REGION: \${AWS_REGION}"
+        echo "AWS_DEFAULT_REGION: \${AWS_DEFAULT_REGION}"
+        
+        if [ -z "\${AWS_ACCESS_KEY_ID}" ] || [ -z "\${AWS_SECRET_ACCESS_KEY}" ]; then
+            echo "警告: AWS認証情報が設定されていません。IAMロールを使用します。"
+            # EC2 IMDSが無効化されている場合のエラーを防ぐ
+            export AWS_EC2_METADATA_DISABLED=false
         fi
         
         aws sts get-caller-identity || {
