@@ -62,7 +62,7 @@ pipeline {
                 docker {
                     label 'ec2-fleet'
                     image 'pulumi/pulumi:latest'
-                    args "--entrypoint='' -v ${WORKSPACE}:/workspace -w /workspace -u root"
+                    args "--entrypoint='' -v ${WORKSPACE}:/workspace -w /workspace -u root --network=host"
                     reuseNode true
                 }
             }
@@ -160,7 +160,8 @@ pipeline {
                                     withEnv([
                                         "AWS_ACCESS_KEY_ID=${params.AWS_ACCESS_KEY_ID}",
                                         "AWS_SECRET_ACCESS_KEY=${params.AWS_SECRET_ACCESS_KEY}",
-                                        "AWS_SESSION_TOKEN=${params.AWS_SESSION_TOKEN ?: ''}"
+                                        "AWS_SESSION_TOKEN=${params.AWS_SESSION_TOKEN ?: ''}",
+                                        "AWS_EC2_METADATA_DISABLED=true"
                                     ]) {
                                         try {
                                             executePulumiAction(params.ACTION)
@@ -170,12 +171,17 @@ pipeline {
                                         }
                                     }
                                 } else {
-                                    // 認証情報なしで実行（IAMロール使用）
-                                    try {
-                                        executePulumiAction(params.ACTION)
-                                    } catch (Exception e) {
-                                        echo "警告: Pulumiアクション実行中にエラーが発生しました: ${e.message}"
-                                        env.PULUMI_ACTION_ERROR = 'true'
+                                    // IAMロール使用時はIMDSを有効化
+                                    withEnv([
+                                        "AWS_EC2_METADATA_DISABLED=false",
+                                        "AWS_SDK_LOAD_CONFIG=true"
+                                    ]) {
+                                        try {
+                                            executePulumiAction(params.ACTION)
+                                        } catch (Exception e) {
+                                            echo "警告: Pulumiアクション実行中にエラーが発生しました: ${e.message}"
+                                            env.PULUMI_ACTION_ERROR = 'true'
+                                        }
                                     }
                                 }
                             }
