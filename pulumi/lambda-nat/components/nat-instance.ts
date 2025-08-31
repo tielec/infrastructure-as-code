@@ -241,6 +241,7 @@ The script should be located in the 'scripts' directory relative to your project
             deleteOnTermination: true,
         },
         metadataOptions: {
+            httpEndpoint: "enabled",
             httpTokens: "required", // IMDSv2を強制
             httpPutResponseHopLimit: 1,
         },
@@ -405,7 +406,7 @@ The script should be located in the 'scripts' directory relative to your project
     });
 
     // NATタイプを保存
-    new aws.ssm.Parameter("nat-type-instance", {
+    new aws.ssm.Parameter("nat-type", {
         name: pulumi.interpolate`${paramPrefix}/type`,
         type: "String",
         value: "instance",
@@ -414,7 +415,7 @@ The script should be located in the 'scripts' directory relative to your project
     });
 
     // NAT設定情報を保存
-    new aws.ssm.Parameter("nat-config-instance", {
+    new aws.ssm.Parameter("nat-config", {
         name: pulumi.interpolate`${paramPrefix}/config`,
         type: "String",
         value: pulumi.all([natInstanceType, projectName]).apply(([instanceType, proj]) => JSON.stringify({
@@ -430,7 +431,7 @@ The script should be located in the 'scripts' directory relative to your project
     });
 
     // コスト最適化情報のパラメータ
-    new aws.ssm.Parameter("nat-cost-info-instance", {
+    new aws.ssm.Parameter("nat-cost-info", {
         name: `/lambda-api/${environment}/nat/cost-optimization`,
         type: "String",
         value: natInstanceType.apply(instanceType => JSON.stringify({
@@ -449,7 +450,7 @@ The script should be located in the 'scripts' directory relative to your project
     });
 
     // デプロイメント完了フラグ
-    new aws.ssm.Parameter("nat-deployed-instance", {
+    new aws.ssm.Parameter("nat-deployed", {
         name: pulumi.interpolate`${paramPrefix}/deployment/complete`,
         type: "String",
         value: "true",

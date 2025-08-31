@@ -240,7 +240,7 @@ export function createNatGateway(args: NatGatewayArgs): NatGatewayOutputs {
     });
 
     // NATタイプを保存
-    new aws.ssm.Parameter("nat-type-gateway", {
+    new aws.ssm.Parameter("nat-type", {
         name: pulumi.interpolate`${paramPrefix}/type`,
         type: "String",
         value: "gateway-ha",
@@ -249,7 +249,7 @@ export function createNatGateway(args: NatGatewayArgs): NatGatewayOutputs {
     });
 
     // NAT設定情報を保存
-    new aws.ssm.Parameter("nat-config-gateway", {
+    new aws.ssm.Parameter("nat-config", {
         name: pulumi.interpolate`${paramPrefix}/config`,
         type: "String",
         value: pulumi.output(projectName).apply(proj => JSON.stringify({
@@ -265,7 +265,7 @@ export function createNatGateway(args: NatGatewayArgs): NatGatewayOutputs {
     });
 
     // コスト最適化情報のパラメータ
-    new aws.ssm.Parameter("nat-cost-info-gateway", {
+    new aws.ssm.Parameter("nat-cost-info", {
         name: `/lambda-api/${environment}/nat/cost-optimization`,
         type: "String",
         value: JSON.stringify({
@@ -283,7 +283,7 @@ export function createNatGateway(args: NatGatewayArgs): NatGatewayOutputs {
     });
 
     // デプロイメント完了フラグ
-    new aws.ssm.Parameter("nat-deployed-gateway", {
+    new aws.ssm.Parameter("nat-deployed", {
         name: pulumi.interpolate`${paramPrefix}/deployment/complete`,
         type: "String",
         value: "true",
