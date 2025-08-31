@@ -78,7 +78,7 @@ job(fullJobName) {
             |fi
             |echo ""
             |echo "■ iノード使用状況:"
-            |df -i | awk 'NR==1 {print "  " $0} /\/$/ {print "  " $0}'
+            |df -i | awk 'NR==1 {print "  " $0} /\\/$/ {print "  " $0}'
             |
             |# ネットワーク情報
             |echo "IPアドレス: $(hostname -I | awk '{print $1}')"
