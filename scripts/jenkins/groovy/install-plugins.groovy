@@ -87,7 +87,8 @@ def plugins = [
     "htmlpublisher",
     "http_request",
     "ssh-agent",
-    "markdown-formatter"
+    "markdown-formatter",
+    "file-parameters"
 ]
 
 // アップデートセンターの初期化を待機
