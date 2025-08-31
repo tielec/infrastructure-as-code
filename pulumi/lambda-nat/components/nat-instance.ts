@@ -236,7 +236,7 @@ The script should be located in the 'scripts' directory relative to your project
         userData: userDataScript,
         rootBlockDevice: {
             volumeType: "gp3",
-            volumeSize: 8,
+            volumeSize: 30, // Amazon Linux 2023の最小要件
             encrypted: true,
             deleteOnTermination: true,
         },
