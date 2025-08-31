@@ -61,6 +61,32 @@ case "$ACTION" in
         cat "${WORKSPACE}/${ARTIFACTS_DIR}/stack-outputs-post-action.json" | jq '.' || true
         ;;
         
+    refresh)
+        echo "実インフラとPulumi状態の同期..."
+        
+        # refresh前の状態を保存
+        echo "同期前の状態を保存..."
+        pulumi stack export --file "${WORKSPACE}/${ARTIFACTS_DIR}/stack-state-before-refresh.json" 2>/dev/null || true
+        
+        set +e
+        pulumi refresh --yes --diff --json 2>&1 | tee "${WORKSPACE}/${ARTIFACTS_DIR}/pulumi-refresh.json"
+        PULUMI_EXIT_CODE=${PIPESTATUS[0]}
+        set -e
+        
+        if [ ${PULUMI_EXIT_CODE} -ne 0 ]; then
+            echo "Pulumi refreshが失敗しました（終了コード: ${PULUMI_EXIT_CODE}）"
+            exit ${PULUMI_EXIT_CODE}
+        fi
+        
+        # refresh後の状態を保存
+        echo "同期後の状態を保存..."
+        pulumi stack export --file "${WORKSPACE}/${ARTIFACTS_DIR}/stack-state-after-refresh.json" 2>/dev/null || true
+        
+        echo "同期後のスタック出力:"
+        pulumi stack output --json > "${WORKSPACE}/${ARTIFACTS_DIR}/stack-outputs-post-action.json" || echo "{}" > "${WORKSPACE}/${ARTIFACTS_DIR}/stack-outputs-post-action.json"
+        cat "${WORKSPACE}/${ARTIFACTS_DIR}/stack-outputs-post-action.json" | jq '.' || true
+        ;;
+        
     destroy)
         echo "リソースの削除..."
         set +e

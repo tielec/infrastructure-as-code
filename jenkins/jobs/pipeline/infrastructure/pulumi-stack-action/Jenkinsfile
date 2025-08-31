@@ -118,7 +118,7 @@ pipeline {
                 stage('Collect Pre-Action Stack Info') {
                     when {
                         expression { 
-                            (params.ACTION == 'destroy' || params.ACTION == 'deploy') && params.GENERATE_REPORT 
+                            (params.ACTION == 'destroy' || params.ACTION == 'deploy' || params.ACTION == 'refresh') && params.GENERATE_REPORT 
                         }
                     }
                     steps {
@@ -172,7 +172,7 @@ pipeline {
                 stage('Collect Post-Action Stack Info') {
                     when {
                         expression { 
-                            (params.ACTION == 'destroy' || params.ACTION == 'deploy') && params.GENERATE_REPORT 
+                            (params.ACTION == 'destroy' || params.ACTION == 'deploy' || params.ACTION == 'refresh') && params.GENERATE_REPORT 
                         }
                     }
                     steps {
@@ -187,7 +187,7 @@ pipeline {
                 stage('Process Results') {
                     when {
                         expression { 
-                            params.ACTION == 'deploy' || params.ACTION == 'destroy'
+                            params.ACTION == 'deploy' || params.ACTION == 'destroy' || params.ACTION == 'refresh'
                         }
                     }
                     steps {
@@ -696,6 +696,10 @@ def executePulumiAction(action) {
             executeDeploy()
             break
             
+        case 'refresh':
+            executeRefresh()
+            break
+            
         case 'destroy':
             executeDestroy()
             break
@@ -735,6 +739,17 @@ def executeDestroy() {
     sh """
         # Pulumi実行スクリプトを呼び出し
         ./execute-pulumi.sh destroy "${WORKSPACE}" "${ARTIFACTS_DIR}"
+    """
+}
+
+/**
+ * Refreshの実行（実インフラとPulumi状態の同期）
+ */
+def executeRefresh() {
+    // スクリプトを実行
+    sh """
+        # Pulumi実行スクリプトを呼び出し
+        ./execute-pulumi.sh refresh "${WORKSPACE}" "${ARTIFACTS_DIR}"
     """
 }
 
@@ -862,12 +877,14 @@ def publishArtifacts() {
     archiveArtifacts artifacts: "${ARTIFACTS_DIR}/**/*.json,${ARTIFACTS_DIR}/**/*.dot", allowEmptyArchive: true
     
     // HTMLレポートの公開
-    if ((params.ACTION == 'deploy' || params.ACTION == 'destroy') && 
+    if ((params.ACTION == 'deploy' || params.ACTION == 'destroy' || params.ACTION == 'refresh') && 
         params.GENERATE_REPORT && 
         fileExists("${HTML_DIR}/index.html")) {
         
         def reportTitle = params.ACTION == 'destroy' ? 
             "Pulumi Destruction Report - ${env.PULUMI_STACK_NAME}" : 
+            params.ACTION == 'refresh' ?
+            "Pulumi Refresh Report - ${env.PULUMI_STACK_NAME}" :
             "Pulumi Deployment Report - ${env.PULUMI_STACK_NAME}"
         
         // 高解像度グラフファイルも含める
