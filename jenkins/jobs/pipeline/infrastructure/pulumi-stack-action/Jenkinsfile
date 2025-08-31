@@ -30,8 +30,7 @@ pipeline {
         
         // 環境別の設定（ENVIRONMENTパラメータに基づく）
         PULUMI_STACK_NAME = "${params.ENVIRONMENT}"
-        // S3バケット名をクレデンシャルから動的に取得してバックエンドURLを構築
-        PULUMI_BACKEND_URL = "" // 初期値は空、後でクレデンシャルから構築
+        PULUMI_BACKEND_URL = ""
         PULUMI_CONFIG_PASSPHRASE_ID = "${params.PULUMI_CONFIG_PASSPHRASE_CREDENTIAL_ID ?: 'pulumi-config-passphrase'}"
         
     }
@@ -40,10 +39,8 @@ pipeline {
         stage('Initialize and Validate') {
             steps {
                 script {
-                    // ビルド表示名を設定
                     currentBuild.displayName = "#${env.BUILD_NUMBER} - ${params.ENVIRONMENT} ${params.ACTION}"
                     
-                    // PULUMI_BACKEND_URLをクレデンシャルから構築（常に実行）
                     withCredentials([string(credentialsId: 'pulumi-s3bucket-name', variable: 'S3_BUCKET_NAME')]) {
                         env.PULUMI_BACKEND_URL = "s3://${S3_BUCKET_NAME}"
                         echo "Pulumi backend URL set to: ${env.PULUMI_BACKEND_URL}"
@@ -499,13 +496,11 @@ def loginToPulumi() {
         echo "S3バックエンドへのログイン..."
         echo "PULUMI_BACKEND_URL: ${PULUMI_BACKEND_URL}"
         
-        # バックエンドURLが設定されているか確認
         if [ -z "${PULUMI_BACKEND_URL}" ]; then
             echo "エラー: PULUMI_BACKEND_URLが設定されていません"
             exit 1
         fi
         
-        # S3バックエンドへログイン（環境変数を明示的に展開）
         pulumi login "${PULUMI_BACKEND_URL}" || {
             echo "Pulumiログインに失敗しました。"
             echo "試行したバックエンドURL: ${PULUMI_BACKEND_URL}"

@@ -145,9 +145,6 @@ pulumiProjects.each { repoKey, repoConfig ->
                     
                     // === 詳細設定（通常は変更不要） ===
                     
-                    // PULUMI_BACKEND_URLはJenkinsfile内でクレデンシャルから動的に設定されるため、パラメータとしては定義しない
-                    // （実行時にpulumi-s3bucket-nameクレデンシャルから自動構築）
-                    
                     // Jenkinsfileブランチ
                     stringParam('JENKINSFILE_BRANCH', 'main', 'Jenkinsfileが格納されているブランチ')
                     
