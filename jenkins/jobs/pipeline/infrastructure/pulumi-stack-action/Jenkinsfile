@@ -67,15 +67,12 @@ pipeline {
                 }
             }
             environment {
-                // AWS認証情報が提供された場合のみ設定（空の場合はIAMロールを使用）
-                AWS_ACCESS_KEY_ID     = "${params.AWS_ACCESS_KEY_ID ?: ''}"
-                AWS_SECRET_ACCESS_KEY = "${params.AWS_SECRET_ACCESS_KEY ?: ''}"
-                AWS_SESSION_TOKEN     = "${params.AWS_SESSION_TOKEN ?: ''}"
+                // AWS認証情報 - 空文字列の場合は環境変数を設定しない
+                AWS_ACCESS_KEY_ID     = "${params.AWS_ACCESS_KEY_ID ?: null}"
+                AWS_SECRET_ACCESS_KEY = "${params.AWS_SECRET_ACCESS_KEY ?: null}"
+                AWS_SESSION_TOKEN     = "${params.AWS_SESSION_TOKEN ?: null}"
                 AWS_REGION            = "${params.AWS_REGION}"
                 AWS_DEFAULT_REGION    = "${params.AWS_REGION}"
-                
-                // EC2 IMDSアクセス設定（Dockerコンテナ内では明示的に設定）
-                AWS_EC2_METADATA_DISABLED = "${params.AWS_ACCESS_KEY_ID ? 'true' : 'false'}"
                 
                 // Pulumi設定
                 PULUMI_BACKEND_URL       = "${env.PULUMI_BACKEND_URL}"
@@ -478,25 +475,39 @@ def setupEnvironment(projectType) {
  * AWS認証の確認
  */
 def verifyAWSAuthentication() {
-    sh """
+    sh '''
         echo "AWS認証情報の確認..."
-        echo "AWS_ACCESS_KEY_ID: \${AWS_ACCESS_KEY_ID:+設定済み}"
-        echo "AWS_SECRET_ACCESS_KEY: \${AWS_SECRET_ACCESS_KEY:+設定済み}"
-        echo "AWS_SESSION_TOKEN: \${AWS_SESSION_TOKEN:+設定済み}"
-        echo "AWS_REGION: \${AWS_REGION}"
-        echo "AWS_DEFAULT_REGION: \${AWS_DEFAULT_REGION}"
         
-        if [ -z "\${AWS_ACCESS_KEY_ID}" ] || [ -z "\${AWS_SECRET_ACCESS_KEY}" ]; then
-            echo "警告: AWS認証情報が設定されていません。IAMロールを使用します。"
-            # EC2 IMDSが無効化されている場合のエラーを防ぐ
-            export AWS_EC2_METADATA_DISABLED=false
+        # 空の認証情報は環境変数から削除
+        if [ -z "${AWS_ACCESS_KEY_ID}" ]; then
+            unset AWS_ACCESS_KEY_ID
+            echo "AWS_ACCESS_KEY_ID: 未設定（IAMロール使用）"
+        else
+            echo "AWS_ACCESS_KEY_ID: 設定済み"
         fi
+        
+        if [ -z "${AWS_SECRET_ACCESS_KEY}" ]; then
+            unset AWS_SECRET_ACCESS_KEY
+            echo "AWS_SECRET_ACCESS_KEY: 未設定（IAMロール使用）"
+        else
+            echo "AWS_SECRET_ACCESS_KEY: 設定済み"
+        fi
+        
+        if [ -z "${AWS_SESSION_TOKEN}" ]; then
+            unset AWS_SESSION_TOKEN
+            echo "AWS_SESSION_TOKEN: 未設定"
+        else
+            echo "AWS_SESSION_TOKEN: 設定済み"
+        fi
+        
+        echo "AWS_REGION: ${AWS_REGION}"
+        echo "AWS_DEFAULT_REGION: ${AWS_DEFAULT_REGION}"
         
         aws sts get-caller-identity || {
             echo "AWS認証に失敗しました。認証情報を確認してください。"
             exit 1
         }
-    """
+    '''
 }
 
 /**
