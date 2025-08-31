@@ -31,11 +31,11 @@ pipelineJob(jobPath) {
     // パラメータ定義（重要: DSLで定義）
     parameters {
         // 環境選択
-        choiceParam('ENVIRONMENT', ['dev', 'staging', 'prod', 'common'], '''実行環境
+        choiceParam('ENVIRONMENT', ['common', 'dev', 'staging', 'prod'], '''実行環境
+            |• common: 全環境共通のパラメータ
             |• dev: 開発環境のパラメータ
             |• staging: ステージング環境のパラメータ  
             |• prod: 本番環境のパラメータ
-            |• common: 全環境共通のパラメータ
             |'''.stripMargin())
         
         // パラメータパスフィルタ
@@ -146,6 +146,12 @@ pipelineJob(jobPath) {
             autoRebuild(false)
             rebuildDisabled(false)
         }
+    }
+    
+    // トリガー設定
+    triggers {
+        // 3時間ごとに実行（0時、3時、6時、9時、12時、15時、18時、21時）
+        cron('0 */3 * * *')
     }
     
     // ジョブの無効化状態
