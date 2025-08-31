@@ -71,6 +71,7 @@ pipeline {
                 AWS_ACCESS_KEY_ID     = "${params.AWS_ACCESS_KEY_ID ?: ''}"
                 AWS_SECRET_ACCESS_KEY = "${params.AWS_SECRET_ACCESS_KEY ?: ''}"
                 AWS_SESSION_TOKEN     = "${params.AWS_SESSION_TOKEN ?: ''}"
+                AWS_REGION            = "${params.AWS_REGION}"
                 AWS_DEFAULT_REGION    = "${params.AWS_REGION}"
                 
                 // Pulumi設定
