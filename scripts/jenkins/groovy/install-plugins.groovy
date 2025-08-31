@@ -16,15 +16,9 @@ def instance = Jenkins.getInstance()
 def pm = instance.getPluginManager()
 def uc = instance.getUpdateCenter()
 
-// 更新サイトを強制的に更新
-println("Forcing update center refresh...")
-uc.getSites().each { site ->
-    println("Updating site: ${site.getId()}")
-    site.updateDirectlyNow(true)  // 強制的に即座に更新
-}
-
-// 少し待機して更新を完了させる
-Thread.sleep(3000)
+// 更新サイトを更新
+println("Updating update center...")
+uc.updateAllSites()
 
 // インストールするプラグインのリスト
 def plugins = [
@@ -110,13 +104,11 @@ while (!updateCenterInitialized && attempts < maxAttempts) {
     try {
         println("Checking update center... (attempt ${attempts + 1}/${maxAttempts})")
         
-        // Update Centerを強制的に更新
-        uc.getSites().each { site ->
-            site.updateDirectlyNow(true)
-        }
+        // Update Centerを更新
+        uc.updateAllSites()
         
         // 少し待機してからチェック
-        Thread.sleep(3000)
+        Thread.sleep(5000)
         
         def updateCenter = uc.getById("default")
         def updates = updateCenter.getUpdates()
@@ -229,6 +221,7 @@ def installOrUpdatePlugin = { pluginId ->
 println("Starting plugin installation/update process")
 boolean restartRequired = false
 
+// 1. まず指定されたプラグインをインストール/更新
 plugins.each { plugin ->
     try {
         boolean modified = installOrUpdatePlugin(plugin)
@@ -237,6 +230,46 @@ plugins.each { plugin ->
         println("Error processing plugin ${plugin}: ${e.message}")
         e.printStackTrace()
     }
+}
+
+// 2. すべてのインストール済みプラグインの更新をチェック
+println("\nChecking all installed plugins for updates...")
+def updateSite = uc.getById("default")
+def updates = updateSite.getUpdates()
+
+if (updates.size() > 0) {
+    println("Found ${updates.size()} plugin updates available")
+    updates.each { update ->
+        try {
+            def pluginId = update.name
+            def plugin = pm.getPlugin(pluginId)
+            if (plugin != null) {
+                def currentVersion = plugin.getVersionNumber()
+                def availableVersion = update.version
+                
+                println("Updating ${pluginId} from ${currentVersion} to ${availableVersion}")
+                def installFuture = update.deploy(true)  // true = dynamicLoad
+                
+                // 更新完了を待つ
+                int waitCount = 0
+                while(!installFuture.isDone() && waitCount < 60) {  // 最大30秒待機
+                    Thread.sleep(500)
+                    waitCount++
+                }
+                
+                if (installFuture.isDone()) {
+                    println("Successfully updated ${pluginId}")
+                    restartRequired = true
+                } else {
+                    println("Update timed out for ${pluginId}")
+                }
+            }
+        } catch (Exception e) {
+            println("Error updating plugin: ${e.message}")
+        }
+    }
+} else {
+    println("No plugin updates available")
 }
 
 // 保存して反映
