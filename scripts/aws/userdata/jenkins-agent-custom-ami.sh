@@ -7,16 +7,8 @@ swapon /swapfile || true
 
 # /tmpの容量を確保（tmpfsのサイズを調整）
 # 注意: EC2 Fleetプラグインが一時的に/tmpを使用する可能性があるため、十分な容量を確保
-# デフォルトでメモリの50%まで使用可能にする（最小3GB、最大10GB）
-TOTAL_MEM=$(free -g | awk '/^Mem:/ {print $2}')
-TMP_SIZE=$((TOTAL_MEM / 2))
-if [ $TMP_SIZE -lt 3 ]; then
-    TMP_SIZE=3
-elif [ $TMP_SIZE -gt 10 ]; then
-    TMP_SIZE=10
-fi
-mount -o remount,size=${TMP_SIZE}G /tmp
-echo "/tmpのサイズを${TMP_SIZE}GBに設定しました"
+mount -o remount,size=10G /tmp
+echo "/tmpのサイズを10GBに設定しました"
 
 # Dockerの起動と権限設定
 systemctl start docker
