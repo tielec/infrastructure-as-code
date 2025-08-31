@@ -530,21 +530,22 @@ def selectOrCreateStack(stackName) {
     sh """
         echo "スタックの確認..."
         
-        # プロジェクト名を取得
-        PROJECT_NAME=\$(pulumi about --json | jq -r '.backend.project' || echo "")
-        if [ -z "\${PROJECT_NAME}" ]; then
-            # Pulumi.yamlからプロジェクト名を取得
-            PROJECT_NAME=\$(grep '^name:' Pulumi.yaml | sed 's/name: *//')
+        # プロジェクト名を取得（Pulumi.yamlから）
+        if [ -f Pulumi.yaml ]; then
+            PROJECT_NAME=\$(grep '^name:' Pulumi.yaml | sed 's/name: *//' | tr -d '[:space:]')
+            echo "プロジェクト名: \${PROJECT_NAME}"
+        else
+            echo "エラー: Pulumi.yamlが見つかりません"
+            exit 1
         fi
-        echo "プロジェクト名: \${PROJECT_NAME}"
         
         if pulumi stack ls 2>&1 | grep -q "^${stackName}"; then
             echo "既存のスタック '${stackName}' を選択します"
             pulumi stack select ${stackName}
         else
             echo "新しいスタック '${stackName}' を作成します"
-            # S3バックエンドの場合、組織名は不要
-            pulumi stack init ${stackName} --stack \${PROJECT_NAME}/${stackName}
+            # S3バックエンドではシンプルにスタック名のみを指定
+            pulumi stack init ${stackName}
         fi
         
         echo "現在のスタック:"
