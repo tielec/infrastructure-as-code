@@ -76,6 +76,12 @@ pipelineJob(jobPath) {
         }
     }
     
+    // トリガー設定
+    triggers {
+        // 3時間ごとに実行（0時、3時、6時、9時、12時、15時、18時、21時）
+        cron('0 */3 * * *')
+    }
+    
     // パイプライン定義
     definition {
         cpsScm {
