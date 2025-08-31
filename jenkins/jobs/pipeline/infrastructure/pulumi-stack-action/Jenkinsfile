@@ -497,17 +497,27 @@ def verifyAWSAuthentication() {
  * Pulumiへのログイン
  */
 def loginToPulumi() {
-    sh """
+    sh '''
         echo "S3バックエンドへのログイン..."
-        pulumi login \${PULUMI_BACKEND_URL} || {
+        echo "PULUMI_BACKEND_URL: ${PULUMI_BACKEND_URL}"
+        
+        # バックエンドURLが設定されているか確認
+        if [ -z "${PULUMI_BACKEND_URL}" ]; then
+            echo "エラー: PULUMI_BACKEND_URLが設定されていません"
+            exit 1
+        fi
+        
+        # S3バックエンドへログイン（環境変数を明示的に展開）
+        pulumi login "${PULUMI_BACKEND_URL}" || {
             echo "Pulumiログインに失敗しました。"
-            echo "PULUMI_BACKEND_URL: \${PULUMI_BACKEND_URL}"
+            echo "試行したバックエンドURL: ${PULUMI_BACKEND_URL}"
+            echo "AWS認証情報を確認してください"
             exit 1
         }
         
         echo "現在のユーザー情報:"
         pulumi whoami -v
-    """
+    '''
 }
 
 /**
