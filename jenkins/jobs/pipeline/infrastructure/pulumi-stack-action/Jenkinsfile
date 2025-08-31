@@ -529,22 +529,27 @@ def setupProject(projectType) {
 def selectOrCreateStack(stackName) {
     sh """
         echo "スタックの確認..."
+        echo "現在のディレクトリ: \$(pwd)"
         
-        # プロジェクト名を取得（Pulumi.yamlから）
-        if [ -f Pulumi.yaml ]; then
-            PROJECT_NAME=\$(grep '^name:' Pulumi.yaml | sed 's/name: *//' | tr -d '[:space:]')
-            echo "プロジェクト名: \${PROJECT_NAME}"
-        else
+        # Pulumi.yamlの存在確認
+        if [ ! -f Pulumi.yaml ]; then
             echo "エラー: Pulumi.yamlが見つかりません"
+            echo "ディレクトリ内容:"
+            ls -la
+            echo ""
+            echo "注意: PULUMI_PROJECT_PATHは'pulumi/test-s3'のような完全パスを指定してください"
             exit 1
         fi
+        
+        # プロジェクト名を取得
+        PROJECT_NAME=\$(grep '^name:' Pulumi.yaml | sed 's/name: *//' | tr -d '[:space:]')
+        echo "プロジェクト名: \${PROJECT_NAME}"
         
         if pulumi stack ls 2>&1 | grep -q "^${stackName}"; then
             echo "既存のスタック '${stackName}' を選択します"
             pulumi stack select ${stackName}
         else
             echo "新しいスタック '${stackName}' を作成します"
-            # S3バックエンドではシンプルにスタック名のみを指定
             pulumi stack init ${stackName}
         fi
         
