@@ -1,8 +1,6 @@
 {
   "permissions": {
     "allow": [
-      "Read(C:\\Users\\ytaka\\planb\\development\\sw\\sw-chocobo-jenkins-pipeline\\jenkins\\jobs\\pipeline\\infrastructure\\pulumi-stack-action/**)",
-      "Read(C:\\Users\\ytaka\\planb\\development\\sw\\sw-chocobo-jenkins-pipeline\\jenkins\\jobs\\pipeline\\infrastructure\\pulumi-stack-action/**)"
     ],
     "deny": [],
     "ask": []
