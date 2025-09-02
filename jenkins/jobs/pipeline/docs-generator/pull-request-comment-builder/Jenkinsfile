@@ -338,6 +338,79 @@ pipeline {
                 }
             }
         }
+        
+        stage('Jenkins再実行リンクの投稿') {
+            steps {
+                script {
+                    try {
+                        def rebuildUrl = "${env.BUILD_URL}rebuild/parameterized"
+                        def buildUrl = env.BUILD_URL
+                        
+                        def rerunTag = """
+                            <!-- jenkins-pr-comment-builder-rerun-link
+                            timestamp: ${env.TIME_STAMP}
+                            jenkins-job: ${env.JOB_NAME}
+                            -->
+                        """.stripIndent()
+                        
+                        def rerunComment = rerunTag + """
+                            ## 🔄 Jenkins ジョブ再実行
+                            
+                            このPRの分析を再実行するには、以下のリンクをクリックしてください：
+                            
+                            🚀 **[分析を再実行する](${rebuildUrl})**
+                            
+                            必要に応じてパラメータを変更できます：
+                            - `FORCE_ANALYSIS`: 既存コメントがあっても再分析を強制実行
+                            - `UPDATE_TITLE`: PRタイトルの自動更新を有効化
+                            
+                            📊 [ビルドの詳細を確認](${buildUrl})
+                            
+                            > **注意**: ビルド履歴が削除されると、再実行リンクは無効になります。
+                        """.stripIndent()
+                        
+                        def existingComments = gitUtils.getPullRequestComments(
+                            env.PR_NUMBER as Integer,
+                            [
+                                repoOwner: env.REPO_OWNER,
+                                repoName: env.REPO_NAME
+                            ]
+                        )
+                        
+                        def rerunLinkComment = existingComments?.find { comment ->
+                            comment.body?.contains('<!-- jenkins-pr-comment-builder-rerun-link')
+                        }
+                        
+                        if (rerunLinkComment) {
+                            echo "既存の再実行リンクコメントを更新します: コメントID ${rerunLinkComment.id}"
+                            gitUtils.updatePullRequestComment(
+                                rerunLinkComment.id.toString(),
+                                rerunComment,
+                                [
+                                    repoOwner: env.REPO_OWNER,
+                                    repoName: env.REPO_NAME
+                                ]
+                            )
+                            echo "再実行リンクコメントを更新しました"
+                        } else {
+                            echo "新規再実行リンクコメントを作成します"
+                            gitUtils.createPullRequestComment(
+                                env.PR_NUMBER as Integer,
+                                rerunComment,
+                                [
+                                    repoOwner: env.REPO_OWNER,
+                                    repoName: env.REPO_NAME
+                                ]
+                            )
+                            echo "再実行リンクコメントを作成しました"
+                        }
+                    } catch (Exception e) {
+                        echo "再実行リンクコメントの投稿に失敗しました: ${e.message}"
+                        echo "この処理はオプショナルなため、パイプラインを継続します"
+                    }
+                }
+            }
+        }
     }
     
     post {
