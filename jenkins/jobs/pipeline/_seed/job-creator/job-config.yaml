@@ -254,6 +254,14 @@ pulumi-projects:
         description: "Lambda SSMパラメータの初期化"
         environments: ['dev', 'prod']  # 両環境に配置
       
+      # Lambda Shipmentプロジェクト
+      lambda_shipment_s3:
+        project_path: "pulumi/lambda-shipment-s3"
+        display_name: "Lambda Shipment S3"
+        project_type: "nodejs"
+        description: "Lambda関数デプロイメント用S3バケット"
+        environments: ['dev', 'prod']  # 両環境に配置
+      
       lambda_network:
         project_path: "pulumi/lambda-network"
         display_name: "Lambda Network"
