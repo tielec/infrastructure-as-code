@@ -1,0 +1,20 @@
+{
+  "name": "lambda-shipment-s3",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Common S3 lambda shipment bucket",
+  "main": "index.ts",
+  "scripts": {
+    "prepare": "cd ../components && npm install",
+    "build": "tsc"
+  },
+  "dependencies": {
+    "@pulumi/pulumi": "^3.0.0",
+    "@pulumi/aws": "^6.0.0",
+    "@tielec/pulumi-components": "file:../components"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "typescript": "^5.0.0"
+  }
+}

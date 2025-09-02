@@ -11,7 +11,9 @@ import * as aws from "@pulumi/aws";
 // ========================================
 // 環境変数取得
 // ========================================
+const config = new pulumi.Config();
 const environment = pulumi.getStack();
+const githubToken = config.require("githubToken");
 
 // ========================================
 // 初期設定
@@ -167,6 +169,16 @@ for (const [name, value] of Object.entries(secureParams)) {
     parameters.push(param);
 }
 
+// GitHub Personal Access Token 用のSSM Parameter（Pulumiコンフィグから取得）
+const githubTokenParam = new aws.ssm.Parameter("github-token", {
+    name: `${paramPrefix}/security/github-token`,
+    description: "GitHub Personal Access Token for repository access",
+    type: "SecureString",
+    value: githubToken,
+    tags: commonTags,
+});
+parameters.push(githubTokenParam);
+
 // ========================================
 // スタック依存関係定義
 // ========================================
@@ -215,6 +227,7 @@ export const outputs = {
     ssmParameterPrefix: paramPrefix,
     parametersCreated: parameters.length,
     initCompleteFlag: initComplete.name,
+    githubTokenParameterName: githubTokenParam.name,
 };
 
 // デプロイ完了の確認用
