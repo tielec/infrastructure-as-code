@@ -1,3 +1,6 @@
 config:
   aws:region: ap-northeast-1
   lambda-ssm-init:githubToken: PLACEHOLDER_PLEASE_UPDATE_WITH_ACTUAL_GITHUB_TOKEN
+  lambda-ssm-init:lambdaRepoUrl: PLACEHOLDER_PLEASE_UPDATE_WITH_ACTUAL_REPO_URL
+  lambda-ssm-init:lambdaRepoBranch: develop
+  lambda-ssm-init:lambdaVersionRetention: 3

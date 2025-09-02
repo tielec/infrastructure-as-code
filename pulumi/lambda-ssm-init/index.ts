@@ -14,6 +14,9 @@ import * as aws from "@pulumi/aws";
 const config = new pulumi.Config();
 const environment = pulumi.getStack();
 const githubToken = config.require("githubToken");
+const lambdaRepoUrl = config.require("lambdaRepoUrl");
+const lambdaRepoBranch = config.require("lambdaRepoBranch");
+const lambdaVersionRetention = config.requireNumber("lambdaVersionRetention");
 
 // ========================================
 // 初期設定
@@ -179,6 +182,36 @@ const githubTokenParam = new aws.ssm.Parameter("github-token", {
 });
 parameters.push(githubTokenParam);
 
+// Lambda関数ソースコードリポジトリURL用のSSM Parameter（Pulumiコンフィグから取得）
+const lambdaRepoUrlParam = new aws.ssm.Parameter("lambda-repo-url", {
+    name: `${paramPrefix}/lambda/source/repository-url`,
+    description: "Lambda functions source code repository URL",
+    type: "SecureString",  // プライベートリポジトリURLなのでSecureString
+    value: lambdaRepoUrl,
+    tags: commonTags,
+});
+parameters.push(lambdaRepoUrlParam);
+
+// Lambda関数ソースコードブランチ用のSSM Parameter（Pulumiコンフィグから取得、デフォルト値あり）
+const lambdaRepoBranchParam = new aws.ssm.Parameter("lambda-repo-branch", {
+    name: `${paramPrefix}/lambda/source/repository-branch`,
+    description: "Lambda functions source code repository branch",
+    type: "String",
+    value: lambdaRepoBranch,
+    tags: commonTags,
+});
+parameters.push(lambdaRepoBranchParam);
+
+// Lambda関数バージョン保持数用のSSM Parameter（Pulumiコンフィグから取得、デフォルト値あり）
+const lambdaVersionRetentionParam = new aws.ssm.Parameter("lambda-version-retention", {
+    name: `${paramPrefix}/lambda/versioning/retain-versions`,
+    description: "Number of Lambda function versions to retain",
+    type: "String",
+    value: String(lambdaVersionRetention),
+    tags: commonTags,
+});
+parameters.push(lambdaVersionRetentionParam);
+
 // ========================================
 // スタック依存関係定義
 // ========================================
@@ -228,6 +261,9 @@ export const outputs = {
     parametersCreated: parameters.length,
     initCompleteFlag: initComplete.name,
     githubTokenParameterName: githubTokenParam.name,
+    lambdaRepoUrlParameterName: lambdaRepoUrlParam.name,
+    lambdaRepoBranchParameterName: lambdaRepoBranchParam.name,
+    lambdaVersionRetentionParameterName: lambdaVersionRetentionParam.name,
 };
 
 // デプロイ完了の確認用
