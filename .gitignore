@@ -74,3 +74,6 @@ jenkins/secrets/
 # OS files
 Thumbs.db
 Desktop.ini
+
+# Claude
+.claude/
