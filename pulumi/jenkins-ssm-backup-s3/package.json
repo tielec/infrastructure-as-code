@@ -1,0 +1,23 @@
+{
+  "name": "jenkins-ssm-backup-s3",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "build": "tsc",
+    "preview": "pulumi preview",
+    "up": "pulumi up",
+    "destroy": "pulumi destroy",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "@pulumi/aws": "^7.6.0",
+    "@pulumi/pulumi": "^3.192.0",
+    "@types/node": "^24.3.0",
+    "typescript": "^5.9.2"
+  }
+}

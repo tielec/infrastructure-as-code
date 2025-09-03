@@ -67,6 +67,19 @@ jenkins-jobs:
     dslfile: jenkins/jobs/dsl/admin/admin_user_management_job.groovy
     jenkinsfile: jenkins/jobs/pipeline/admin/user-management/Jenkinsfile
 
+  # SSM Parameter Store Backup Jobs
+  admin_ssm_backup_job:
+    name: 'SSM_Parameter_Backup'
+    displayName: 'SSM Parameter Store Backup'
+    dslfile: jenkins/jobs/dsl/admin/admin_ssm_backup_job.groovy
+    jenkinsfile: jenkins/jobs/pipeline/admin/ssm-backup/Jenkinsfile
+
+  admin_ssm_restore_job:
+    name: 'SSM_Parameter_Restore'
+    displayName: 'SSM Parameter Store Restore'
+    dslfile: jenkins/jobs/dsl/admin/admin_ssm_restore_job.groovy
+    jenkinsfile: jenkins/jobs/pipeline/admin/ssm-restore/Jenkinsfile
+
   # Code Quality Checker Jobs
   code_quality_rust_code_analysis_check_job:
     name: 'rust-code-analysis-check'
@@ -311,6 +324,14 @@ pulumi-projects:
         project_type: "nodejs"
         description: "S3テスト用リソース"
         environments: ['dev']  # 開発環境のみ
+      
+      # Jenkins SSMバックアップ用プロジェクト
+      jenkins_ssm_backup_s3:
+        project_path: "pulumi/jenkins-ssm-backup-s3"
+        display_name: "Jenkins SSM Backup S3"
+        project_type: "nodejs"
+        description: "Jenkins SSM Parameter Storeバックアップ用S3バケット"
+        environments: ['dev', 'prod']  # 両環境に配置
 
 # Ansibleプレイブック定義
 ansible-playbooks:
