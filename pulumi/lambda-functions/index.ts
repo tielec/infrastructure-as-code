@@ -138,10 +138,10 @@ const githubRepoAndPackage = pulumi.all([repoUrl, repoBranch, githubToken, deplo
             lambdaPackage.zipPath,
             lambdaPackage.zipHash,
             {
-                Environment: environment,
-                Project: projName,
-                CommitHash: githubRepo.commitHash,
-                Branch: branch,
+                environment: environment,
+                project: projName,
+                commithash: githubRepo.commitHash,
+                branch: branch,
             }
         );
 
