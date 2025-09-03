@@ -123,7 +123,7 @@ const githubRepoAndPackage = pulumi.all([repoUrl, repoBranch, githubToken, deplo
         // Lambdaパッケージを作成
         const lambdaPackage = new LambdaPackage("lambda-package", {
             sourcePath: githubRepo.outputPath,
-            runtime: "nodejs20.x",  // Node.js 20を使用
+            runtime: "nodejs20.x",  // Node.js 20を使用（AWS Lambdaの最新LTS）
         });
 
         // S3デプロイメントバケットを参照
@@ -236,7 +236,7 @@ const lambdaPolicy = new aws.iam.RolePolicy("lambda-policy", {
 const mainFunction = new aws.lambda.Function("main-function", {
     name: pulumi.interpolate`${projectName}-main-${environment}`,
     description: "Main API handler for bubble.io integration",
-    runtime: "nodejs20.x",  // Node.js 20にアップグレード
+    runtime: "nodejs20.x",  // Node.js 20（AWS Lambdaの最新LTS）
     architectures: ["arm64"], // AWS Graviton2でコスト削減
     handler: "index.handler",
     role: lambdaRole.arn,

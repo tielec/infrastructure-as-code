@@ -11,7 +11,7 @@
         "destroy": "pulumi destroy"
     },
     "dependencies": {
-        "@pulumi/aws": "^5.0.0",
+        "@pulumi/aws": "^6.0.0",
         "@pulumi/pulumi": "^3.0.0",
         "@pulumi/awsx": "^1.0.0",
         "@tielec/pulumi-components": "file:../components"
