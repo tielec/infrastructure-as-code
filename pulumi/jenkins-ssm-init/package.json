@@ -5,15 +5,17 @@
   "devDependencies": {
     "@types/node": "^16.11.7"
   },
-  "dependencies": {
-    "@pulumi/aws": "^6.0.0",
-    "@pulumi/pulumi": "^3.0.0",
-    "@pulumi/random": "^4.0.0"
-  },
   "scripts": {
+    "prepare": "cd ../components && npm install",
     "build": "tsc",
     "preview": "pulumi preview",
     "deploy": "pulumi up -y",
     "destroy": "pulumi destroy -y"
+  },
+  "dependencies": {
+    "@pulumi/aws": "^6.0.0",
+    "@pulumi/pulumi": "^3.0.0",
+    "@pulumi/random": "^4.0.0",
+    "@tielec/pulumi-components": "file:../components"
   }
 }
