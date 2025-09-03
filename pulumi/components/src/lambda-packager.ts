@@ -192,17 +192,35 @@ export class LambdaPackage extends pulumi.ComponentResource {
   ): Promise<void> {
     pulumi.log.info(`Installing dependencies for ${name}`);
     
+    // package-lock.jsonの存在を確認
+    const packageLockPath = path.join(sourcePath, "package-lock.json");
+    const hasPackageLock = fs.existsSync(packageLockPath);
+    
     try {
-      // 本番用の依存関係のみインストール
-      await execAsync("npm ci --omit=dev", { cwd: sourcePath });
-    } catch (e) {
-      pulumi.log.warn(`npm ci failed, trying npm install: ${e}`);
-      try {
-        await execAsync("npm install --omit=dev", { cwd: sourcePath });
-      } catch (installError) {
-        pulumi.log.error(`Failed to install dependencies: ${installError}`);
-        throw installError;
+      if (hasPackageLock) {
+        // package-lock.jsonがある場合はnpm ciを使用
+        pulumi.log.info(`Running npm ci --omit=dev in ${sourcePath}`);
+        const result = await execAsync("npm ci --omit=dev", { cwd: sourcePath });
+        if (result.stderr) {
+          pulumi.log.warn(`npm ci stderr: ${result.stderr}`);
+        }
+      } else {
+        // package-lock.jsonがない場合はnpm installを使用
+        pulumi.log.info(`No package-lock.json found, running npm install --omit=dev in ${sourcePath}`);
+        const result = await execAsync("npm install --omit=dev", { cwd: sourcePath });
+        if (result.stderr) {
+          pulumi.log.warn(`npm install stderr: ${result.stderr}`);
+        }
       }
+    } catch (e: any) {
+      pulumi.log.error(`Failed to install dependencies: ${e.message || e}`);
+      if (e.stdout) {
+        pulumi.log.error(`Install stdout: ${e.stdout}`);
+      }
+      if (e.stderr) {
+        pulumi.log.error(`Install stderr: ${e.stderr}`);
+      }
+      throw new Error(`Failed to install dependencies: ${e.message || e}`);
     }
   }
 
@@ -222,9 +240,37 @@ export class LambdaPackage extends pulumi.ComponentResource {
     
     try {
       // まず開発依存関係をインストール（TypeScriptコンパイラが必要）
-      await execAsync("npm install", { cwd: sourcePath });
+      pulumi.log.info(`Installing dependencies in ${sourcePath}`);
+      const installResult = await execAsync("npm install", { cwd: sourcePath });
+      if (installResult.stderr) {
+        pulumi.log.warn(`npm install stderr: ${installResult.stderr}`);
+      }
+      
+      // package.jsonのスクリプトを確認
+      const packageJsonPath = path.join(sourcePath, "package.json");
+      if (fs.existsSync(packageJsonPath)) {
+        const packageJson = JSON.parse(fs.readFileSync(packageJsonPath, "utf-8"));
+        pulumi.log.info(`Available scripts: ${JSON.stringify(packageJson.scripts)}`);
+        
+        // buildスクリプトが存在しない場合はスキップ
+        if (!packageJson.scripts || !packageJson.scripts.build) {
+          pulumi.log.warn(`No build script found in package.json, skipping TypeScript build`);
+          return;
+        }
+      } else {
+        pulumi.log.warn(`No package.json found in ${sourcePath}, skipping TypeScript build`);
+        return;
+      }
+      
       // ビルドを実行
-      await execAsync("npm run build", { cwd: sourcePath });
+      pulumi.log.info(`Running npm run build in ${sourcePath}`);
+      const buildResult = await execAsync("npm run build", { cwd: sourcePath });
+      if (buildResult.stderr) {
+        pulumi.log.warn(`npm run build stderr: ${buildResult.stderr}`);
+      }
+      if (buildResult.stdout) {
+        pulumi.log.info(`npm run build stdout: ${buildResult.stdout}`);
+      }
       pulumi.log.info(`TypeScript build completed for ${name}`);
       
       // ビルド結果を確認
@@ -235,9 +281,19 @@ export class LambdaPackage extends pulumi.ComponentResource {
       } else {
         pulumi.log.warn(`No dist directory found after build`);
       }
-    } catch (e) {
-      pulumi.log.error(`TypeScript build failed: ${e}`);
-      throw new Error(`Failed to build TypeScript project: ${e}`);
+    } catch (e: any) {
+      // エラーの詳細情報をログ出力
+      pulumi.log.error(`TypeScript build failed: ${e.message || e}`);
+      if (e.stdout) {
+        pulumi.log.error(`Build stdout: ${e.stdout}`);
+      }
+      if (e.stderr) {
+        pulumi.log.error(`Build stderr: ${e.stderr}`);
+      }
+      if (e.code) {
+        pulumi.log.error(`Build exit code: ${e.code}`);
+      }
+      throw new Error(`Failed to build TypeScript project: ${e.message || e}`);
     }
   }
 
