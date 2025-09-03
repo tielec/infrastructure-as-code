@@ -11,7 +11,7 @@ import {
   generateOutputPath, 
   ensureDirectory 
 } from "./utils";
-import { LambdaDeploymentBucket } from "../lambda-deployment-bucket";
+import { LambdaDeploymentBucket } from "../lambda-deployment-bucket/index";
 
 /**
  * Lambda関数のコードをパッケージングするPulumiコンポーネント
