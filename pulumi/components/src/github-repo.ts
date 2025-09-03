@@ -102,48 +102,27 @@ export class GitHubRepoCheckout extends pulumi.ComponentResource {
 
       const isRepoCloned = fs.existsSync(path.join(outputPath, ".git"));
 
-      if (!isRepoCloned) {
-        // ブランチを指定してクローン
-        await git.clone(repoUrl, outputPath, ["--branch", branch, "--depth", "1"]);
-      }
-
-      const repoGit = simpleGit(outputPath);
-
       if (isRepoCloned) {
-        // 既存のリポジトリの場合、まず最新を取得
-        try {
-          // リモートから最新情報を取得（ブランチ指定なし）
-          await repoGit.fetch(["origin", "--depth", "1"]);
-        } catch (e) {
-          pulumi.log.warn(`Failed to fetch from origin: ${e}`);
-        }
+        // 既存のリポジトリがある場合、削除して再クローン
+        pulumi.log.info(`Removing existing repository at ${outputPath}`);
+        fs.rmSync(outputPath, { recursive: true, force: true });
       }
+
+      // 常に新しくクローン
+      pulumi.log.info(`Cloning repository from ${repositoryUrl} branch ${branch}`);
+      await git.clone(repoUrl, outputPath, ["--branch", branch, "--depth", "1"]);
+      
+      const repoGit = simpleGit(outputPath);
 
       let targetRef = branch;
       if (tag) {
         targetRef = tag;
         await repoGit.fetch(["--tags", "--depth", "1"]);
+        await repoGit.checkout(targetRef);
       } else if (commit) {
         targetRef = commit;
         await repoGit.fetch(["--depth", "1", "origin", commit]);
-      }
-
-      // ブランチまたは他のrefをチェックアウト
-      try {
         await repoGit.checkout(targetRef);
-      } catch (e) {
-        // チェックアウトが失敗した場合、リモートブランチを試す
-        pulumi.log.info(`Trying to checkout origin/${targetRef}`);
-        await repoGit.checkout(["-b", targetRef, `origin/${targetRef}`]);
-      }
-
-      if (!tag && !commit && branch) {
-        try {
-          // 最新の変更をプル
-          await repoGit.pull("origin", branch, ["--rebase"]);
-        } catch (e) {
-          pulumi.log.warn(`Failed to pull latest changes: ${e}`);
-        }
       }
 
       const currentCommit = await repoGit.revparse("HEAD");
