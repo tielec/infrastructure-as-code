@@ -1,6 +1,25 @@
 config:
   aws:region: ap-northeast-1
+  # セキュア情報（初回設定後、AWSコンソールで更新）
   lambda-ssm-init:githubToken: PLACEHOLDER_PLEASE_UPDATE_WITH_ACTUAL_GITHUB_TOKEN
   lambda-ssm-init:lambdaRepoUrl: PLACEHOLDER_PLEASE_UPDATE_WITH_ACTUAL_REPO_URL
+  # Lambda設定
   lambda-ssm-init:lambdaRepoBranch: develop
   lambda-ssm-init:lambdaVersionRetention: 3
+  lambda-ssm-init:lambdaMemory: 512
+  lambda-ssm-init:lambdaTimeout: 30
+  lambda-ssm-init:logLevel: DEBUG
+  lambda-ssm-init:logRetentionDays: 3
+  # ネットワーク設定
+  lambda-ssm-init:vpcCidr: "10.1.0.0/16"
+  lambda-ssm-init:enableFlowLogs: false
+  lambda-ssm-init:vpcEndpoints: '["s3"]'
+  lambda-ssm-init:natHighAvailability: false
+  lambda-ssm-init:natInstanceType: "t4g.nano"
+  # API Gateway設定
+  lambda-ssm-init:apiRateLimit: 100
+  lambda-ssm-init:apiBurstLimit: 200
+  lambda-ssm-init:enableWaf: false
+  lambda-ssm-init:enableWebSocket: false
+  # データベース設定
+  lambda-ssm-init:enableDatabase: false
