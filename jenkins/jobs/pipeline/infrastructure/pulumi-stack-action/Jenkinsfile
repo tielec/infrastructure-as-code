@@ -836,8 +836,8 @@ def generatePythonHtmlReport() {
  * アーティファクトの公開
  */
 def publishArtifacts() {
-    // JSONとDOTファイルのアーカイブ（Pulumi実行ログも含む）
-    archiveArtifacts artifacts: "${ARTIFACTS_DIR}/**/*.json,${ARTIFACTS_DIR}/**/*.dot", allowEmptyArchive: true
+    // JSON、DOT、LOGファイルのアーカイブ（Pulumi実行ログも含む）
+    archiveArtifacts artifacts: "${ARTIFACTS_DIR}/**/*.json,${ARTIFACTS_DIR}/**/*.dot,${ARTIFACTS_DIR}/**/*.log", allowEmptyArchive: true
     
     // HTMLレポートの公開
     if ((params.ACTION == 'deploy' || params.ACTION == 'destroy' || params.ACTION == 'refresh') && 
