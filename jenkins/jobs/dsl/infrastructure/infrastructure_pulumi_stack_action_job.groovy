@@ -122,9 +122,6 @@ pulumiProjects.each { repoKey, repoConfig ->
                             "確認プロンプトをスキップ - ⚠️ ${warningMsg}では無効化されています。安全のため、すべての操作で確認が必要です。")
                     }
                     
-                    booleanParam('REFRESH_BEFORE_ACTION', envConfig.defaultRefresh, '''アクション前にリフレッシュ実行 - pulumi refreshを実行して、クラウドの実際の状態とPulumiの状態を同期します。
-                        |* 手動でリソースを変更した場合は有効にしてください
-                        |* destroyアクションでは常に実行されます'''.stripMargin())
                     
                     // GENERATE_REPORT（本番環境と共通環境では常にtrue）
                     if (env == 'dev') {

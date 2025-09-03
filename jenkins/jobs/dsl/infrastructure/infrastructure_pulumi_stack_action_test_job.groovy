@@ -36,7 +36,6 @@ pipelineJob(fullJobName) {
         // === 基本パラメータ ===
         choiceParam('ENVIRONMENT', ['dev'], 'デプロイ先環境')
         choiceParam('ACTION', ['preview', 'deploy', 'destroy'], '実行するアクション')
-        booleanParam('REFRESH_BEFORE_ACTION', false, 'アクション実行前にpulumi refreshを実行して、クラウドの実際の状態と同期するか')
         
         // === AWS認証情報 ===
         stringParam('AWS_ACCESS_KEY_ID', '', 'AWS Access Key ID')
