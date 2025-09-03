@@ -105,7 +105,9 @@ export class SSMParameterHelper {
             type: args.type || 'String',
             description: args.description,
             tags: this.commonTags,
-            overwrite: true,  // 既存パラメータを上書き
+            // managedパラメータは常に最新値で上書き
+            // init-onlyパラメータは初回作成のみ（既存があればエラー）
+            overwrite: args.paramType === 'managed' ? true : undefined,
         };
         
         const param = new aws.ssm.Parameter(resourceName, ssmArgs, resourceOptions);
@@ -173,7 +175,9 @@ export function createSSMParameter(
         type: args.type || 'String',
         description: args.description,
         tags: commonTags || {},
-        overwrite: true,  // 既存パラメータを上書き
+        // managedパラメータは常に最新値で上書き
+        // init-onlyパラメータは初回作成のみ（既存があればエラー）
+        overwrite: args.paramType === 'managed' ? true : undefined,
     };
     
     return new aws.ssm.Parameter(resourceName, ssmArgs, resourceOptions);
