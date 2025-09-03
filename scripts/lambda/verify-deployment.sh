@@ -305,16 +305,41 @@ if [ -n "$API_ENDPOINT" ] && [ -n "$BUBBLE_KEY" ]; then
         check_result "Health Endpoint (HTTP $HEALTH_RESPONSE)" "fail"
     fi
     
-    # メインAPIエンドポイント
-    log_info "Testing main API endpoint..."
-    API_RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" \
-        -X GET "${API_ENDPOINT}/api" \
+    # バージョンAPIエンドポイント
+    log_info "Testing version API endpoint..."
+    VERSION_RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" \
+        -X GET "${API_ENDPOINT}/api/version" \
         -H "x-api-key: ${BUBBLE_KEY}" 2>/dev/null || echo "000")
     
-    if [ "$API_RESPONSE" == "200" ] || [ "$API_RESPONSE" == "403" ]; then
-        check_result "API Endpoint Accessible" "pass"
+    if [ "$VERSION_RESPONSE" == "200" ]; then
+        check_result "Version API Endpoint" "pass"
+        if [ "$VERBOSE" == "1" ]; then
+            VERSION_BODY=$(curl -s -X GET "${API_ENDPOINT}/api/version" -H "x-api-key: ${BUBBLE_KEY}")
+            log_info "Version Response: $VERSION_BODY"
+        fi
     else
-        check_result "API Endpoint (HTTP $API_RESPONSE)" "fail"
+        check_result "Version API Endpoint (HTTP $VERSION_RESPONSE)" "fail"
+    fi
+    
+    # エコーAPIエンドポイント（POSTテスト）
+    log_info "Testing echo API endpoint..."
+    ECHO_RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" \
+        -X POST "${API_ENDPOINT}/api/echo" \
+        -H "x-api-key: ${BUBBLE_KEY}" \
+        -H "Content-Type: application/json" \
+        -d '{"test":"verification"}' 2>/dev/null || echo "000")
+    
+    if [ "$ECHO_RESPONSE" == "200" ]; then
+        check_result "Echo API Endpoint" "pass"
+        if [ "$VERBOSE" == "1" ]; then
+            ECHO_BODY=$(curl -s -X POST "${API_ENDPOINT}/api/echo" \
+                -H "x-api-key: ${BUBBLE_KEY}" \
+                -H "Content-Type: application/json" \
+                -d '{"test":"verification"}')
+            log_info "Echo Response: $ECHO_BODY"
+        fi
+    else
+        check_result "Echo API Endpoint (HTTP $ECHO_RESPONSE)" "fail"
     fi
 else
     log_warn "Skipping endpoint tests (missing API endpoint or key)"

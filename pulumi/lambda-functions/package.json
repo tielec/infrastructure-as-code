@@ -4,15 +4,17 @@
     "description": "Lambda API Functions Infrastructure",
     "main": "index.ts",
     "scripts": {
+        "prepare": "cd ../components && npm install",
         "build": "tsc",
         "deploy": "pulumi up",
         "preview": "pulumi preview",
         "destroy": "pulumi destroy"
     },
     "dependencies": {
-        "@pulumi/aws": "^5.0.0",
+        "@pulumi/aws": "^7.0.0",
         "@pulumi/pulumi": "^3.0.0",
-        "@pulumi/awsx": "^1.0.0"
+        "@pulumi/awsx": "^1.0.0",
+        "@tielec/pulumi-components": "file:../components"
     },
     "devDependencies": {
         "@types/node": "^14.18.0",

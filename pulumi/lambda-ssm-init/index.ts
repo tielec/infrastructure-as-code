@@ -7,6 +7,7 @@
  */
 import * as pulumi from "@pulumi/pulumi";
 import * as aws from "@pulumi/aws";
+import { SSMParameterHelper } from "@tielec/pulumi-components";
 
 // ========================================
 // 環境変数取得
@@ -14,6 +15,9 @@ import * as aws from "@pulumi/aws";
 const config = new pulumi.Config();
 const environment = pulumi.getStack();
 const githubToken = config.require("githubToken");
+const lambdaRepoUrl = config.require("lambdaRepoUrl");
+const lambdaRepoBranch = config.require("lambdaRepoBranch");
+const lambdaVersionRetention = config.requireNumber("lambdaVersionRetention");
 
 // ========================================
 // 初期設定
@@ -22,44 +26,21 @@ const githubToken = config.require("githubToken");
 // プロジェクト名は固定値として定義
 const projectName = "lambda-api";
 
-// 環境別設定
-const environmentConfig = {
-    dev: {
-        vpcCidr: "10.1.0.0/16",
-        lambdaMemory: 512,
-        lambdaTimeout: 30,
-        logLevel: "DEBUG",
-        logRetentionDays: 3,
-        apiRateLimit: 100,
-        apiBurstLimit: 200,
-        enableFlowLogs: false,
-        enableWaf: false,
-        enableWebSocket: false,
-        enableDatabase: false,
-        natHighAvailability: false,
-        natInstanceType: "t4g.nano",
-        vpcEndpoints: ["s3"],
-    },
-    prod: {
-        vpcCidr: "10.3.0.0/16",
-        lambdaMemory: 2048,
-        lambdaTimeout: 60,
-        logLevel: "INFO",
-        logRetentionDays: 14,
-        apiRateLimit: 1000,
-        apiBurstLimit: 2000,
-        enableFlowLogs: true,
-        enableWaf: true,
-        enableWebSocket: true,
-        enableDatabase: true,
-        natHighAvailability: true,
-        natInstanceType: "t4g.medium",
-        vpcEndpoints: ["s3", "dynamodb"],
-    },
-};
-
-// 現在の環境の設定を取得
-const envConfig = environmentConfig[environment as keyof typeof environmentConfig] || environmentConfig.dev;
+// Pulumi設定から環境設定を取得
+const lambdaMemory = config.requireNumber("lambdaMemory");
+const lambdaTimeout = config.requireNumber("lambdaTimeout");
+const logLevel = config.require("logLevel");
+const logRetentionDays = config.requireNumber("logRetentionDays");
+const vpcCidr = config.require("vpcCidr");
+const enableFlowLogs = config.requireBoolean("enableFlowLogs");
+const vpcEndpoints = JSON.parse(config.require("vpcEndpoints"));
+const natHighAvailability = config.requireBoolean("natHighAvailability");
+const natInstanceType = config.require("natInstanceType");
+const apiRateLimit = config.requireNumber("apiRateLimit");
+const apiBurstLimit = config.requireNumber("apiBurstLimit");
+const enableWaf = config.requireBoolean("enableWaf");
+const enableWebSocket = config.requireBoolean("enableWebSocket");
+const enableDatabase = config.requireBoolean("enableDatabase");
 
 // ========================================
 // 共通タグ定義
@@ -76,144 +57,224 @@ const commonTags = {
 // ========================================
 const paramPrefix = `/${projectName}/${environment}`;
 
-// 共通設定パラメータ
-const commonParams = {
-    // プロジェクト基本情報
-    [`${paramPrefix}/common/project-name`]: projectName,
-    [`${paramPrefix}/common/environment`]: environment,
-    [`${paramPrefix}/common/region`]: aws.config.region || "ap-northeast-1",
-    
-    // ネットワーク設定
-    [`${paramPrefix}/network/vpc-cidr`]: envConfig.vpcCidr,
-    [`${paramPrefix}/network/enable-flow-logs`]: String(envConfig.enableFlowLogs),
-    [`${paramPrefix}/network/vpc-endpoints`]: JSON.stringify(envConfig.vpcEndpoints),
-    
-    // Lambda設定
-    [`${paramPrefix}/lambda/memory`]: String(envConfig.lambdaMemory),
-    [`${paramPrefix}/lambda/timeout`]: String(envConfig.lambdaTimeout),
-    [`${paramPrefix}/lambda/log-level`]: envConfig.logLevel,
-    [`${paramPrefix}/lambda/log-retention-days`]: String(envConfig.logRetentionDays),
-    
-    // API Gateway設定
-    [`${paramPrefix}/api/rate-limit`]: String(envConfig.apiRateLimit),
-    [`${paramPrefix}/api/burst-limit`]: String(envConfig.apiBurstLimit),
-    [`${paramPrefix}/api/enable-waf`]: String(envConfig.enableWaf),
-    [`${paramPrefix}/api/enable-websocket`]: String(envConfig.enableWebSocket),
-    
-    // NAT設定
-    [`${paramPrefix}/nat/high-availability`]: String(envConfig.natHighAvailability),
-    [`${paramPrefix}/nat/instance-type`]: envConfig.natInstanceType,
-    
-    // データベース設定
-    [`${paramPrefix}/database/enabled`]: String(envConfig.enableDatabase),
-    
-    // 将来的な機能拡張用設定
-    [`${paramPrefix}/phase/isolated-subnets-enabled`]: String(envConfig.enableDatabase),
-    [`${paramPrefix}/phase/database-sg-enabled`]: String(envConfig.enableDatabase),
-    
-    // VPCエンドポイント個別設定（Gateway型のみ）
-    [`${paramPrefix}/vpce/enable-s3`]: String(envConfig.vpcEndpoints.includes("s3")),
-    [`${paramPrefix}/vpce/enable-dynamodb`]: String(envConfig.vpcEndpoints.includes("dynamodb")),
-    
-    // Lambda設定（追加）
-    [`${paramPrefix}/lambda/memory-size`]: String(envConfig.lambdaMemory),
-    
-    // デプロイメント情報
-    [`${paramPrefix}/deployment/stack-name`]: `lambda-ssm-init-${environment}`,
-    [`${paramPrefix}/deployment/last-updated`]: new Date().toISOString(),
-};
+// ========================================
+// SSMパラメータヘルパー初期化
+// ========================================
+const ssmHelper = new SSMParameterHelper(paramPrefix, commonTags);
 
 // ========================================
-// SSMパラメータ作成
+// 管理パラメータ（Pulumiで常に管理）
 // ========================================
-const parameters: aws.ssm.Parameter[] = [];
+// プロジェクト基本情報
+ssmHelper.createParameter('/common/project-name', {
+    paramType: 'managed',
+    value: projectName,
+    description: "Project name",
+});
 
-for (const [name, value] of Object.entries(commonParams)) {
-    // リソース名は固定文字列を使用（Output<T>エラー回避）
-    const resourceName = name.replace(/\//g, "-").replace(/^-/, "");
-    const param = new aws.ssm.Parameter(
-        resourceName,
-        {
-            name: name,
-            type: "String",
-            value: value,
-            description: `Lambda API ${name.split("/").pop()} configuration`,
-            tags: commonTags,
-        }
-    );
-    parameters.push(param);
-}
+ssmHelper.createParameter('/common/environment', {
+    paramType: 'managed',
+    value: environment,
+    description: "Environment",
+});
+
+ssmHelper.createParameter('/common/region', {
+    paramType: 'managed',
+    value: aws.config.region || "ap-northeast-1",
+    description: "AWS region",
+});
+
+// ネットワーク設定
+ssmHelper.createParameter('/network/vpc-cidr', {
+    paramType: 'managed',
+    value: vpcCidr,
+    description: "VPC CIDR block",
+});
+
+ssmHelper.createParameter('/network/enable-flow-logs', {
+    paramType: 'managed',
+    value: String(enableFlowLogs),
+    description: "Enable VPC flow logs",
+});
+
+ssmHelper.createParameter('/network/vpc-endpoints', {
+    paramType: 'managed',
+    value: JSON.stringify(vpcEndpoints),
+    description: "VPC endpoints configuration",
+});
+
+// Lambda設定
+ssmHelper.createParameter('/lambda/memory', {
+    paramType: 'managed',
+    value: String(lambdaMemory),
+    description: "Lambda memory size",
+});
+
+ssmHelper.createParameter('/lambda/timeout', {
+    paramType: 'managed',
+    value: String(lambdaTimeout),
+    description: "Lambda timeout",
+});
+
+ssmHelper.createParameter('/lambda/log-level', {
+    paramType: 'managed',
+    value: logLevel,
+    description: "Lambda log level",
+});
+
+ssmHelper.createParameter('/lambda/log-retention-days', {
+    paramType: 'managed',
+    value: String(logRetentionDays),
+    description: "CloudWatch logs retention days",
+});
+
+ssmHelper.createParameter('/lambda/memory-size', {
+    paramType: 'managed',
+    value: String(lambdaMemory),
+    description: "Lambda memory size (duplicate for compatibility)",
+});
+
+// API Gateway設定
+ssmHelper.createParameter('/api/rate-limit', {
+    paramType: 'managed',
+    value: String(apiRateLimit),
+    description: "API rate limit",
+});
+
+ssmHelper.createParameter('/api/burst-limit', {
+    paramType: 'managed',
+    value: String(apiBurstLimit),
+    description: "API burst limit",
+});
+
+ssmHelper.createParameter('/api/enable-waf', {
+    paramType: 'managed',
+    value: String(enableWaf),
+    description: "Enable WAF",
+});
+
+ssmHelper.createParameter('/api/enable-websocket', {
+    paramType: 'managed',
+    value: String(enableWebSocket),
+    description: "Enable WebSocket",
+});
+
+// NAT設定
+ssmHelper.createParameter('/nat/high-availability', {
+    paramType: 'managed',
+    value: String(natHighAvailability),
+    description: "NAT high availability",
+});
+
+ssmHelper.createParameter('/nat/instance-type', {
+    paramType: 'managed',
+    value: natInstanceType,
+    description: "NAT instance type",
+});
+
+// データベース設定
+ssmHelper.createParameter('/database/enabled', {
+    paramType: 'managed',
+    value: String(enableDatabase),
+    description: "Database enabled",
+});
+
+// フェーズ設定
+ssmHelper.createParameter('/phase/isolated-subnets-enabled', {
+    paramType: 'managed',
+    value: String(enableDatabase),
+    description: "Isolated subnets enabled",
+});
+
+ssmHelper.createParameter('/phase/database-sg-enabled', {
+    paramType: 'managed',
+    value: String(enableDatabase),
+    description: "Database security group enabled",
+});
+
+// VPCエンドポイント設定
+ssmHelper.createParameter('/vpce/enable-s3', {
+    paramType: 'managed',
+    value: String(vpcEndpoints.includes("s3")),
+    description: "Enable S3 VPC endpoint",
+});
+
+ssmHelper.createParameter('/vpce/enable-dynamodb', {
+    paramType: 'managed',
+    value: String(vpcEndpoints.includes("dynamodb")),
+    description: "Enable DynamoDB VPC endpoint",
+});
+
+// デプロイメント情報
+ssmHelper.createParameter('/deployment/stack-name', {
+    paramType: 'managed',
+    value: `lambda-ssm-init-${environment}`,
+    description: "Stack name",
+});
+
+ssmHelper.createParameter('/deployment/last-updated', {
+    paramType: 'managed',
+    value: new Date().toISOString(),
+    description: "Last updated timestamp",
+});
 
 // ========================================
-// セキュアパラメータ作成
+// セキュアパラメータ（初期設定のみ）
 // ========================================
 // セキュリティ関連の暗号化パラメータ（SecureString）
 // 注: 実際の値は環境変数またはCI/CDパイプラインから設定すること
-const secureParams = {
-    [`${paramPrefix}/security/api-key`]: pulumi.secret("CHANGE-ME-IN-PRODUCTION"),
-    [`${paramPrefix}/security/jwt-secret`]: pulumi.secret("CHANGE-ME-IN-PRODUCTION"),
-};
+ssmHelper.createParameter('/security/api-key', {
+    paramType: 'init-only',  // 一度設定したら変更しない
+    value: pulumi.secret("CHANGE-ME-IN-PRODUCTION"),
+    type: "SecureString",
+    description: "API key for Lambda API",
+});
 
-for (const [name, value] of Object.entries(secureParams)) {
-    const resourceName = `secure-${name.replace(/\//g, "-").replace(/^-/, "")}`;
-    const param = new aws.ssm.Parameter(
-        resourceName,
-        {
-            name: name,
-            type: "SecureString",
-            value: value,
-            description: `Lambda API secure ${name.split("/").pop()} configuration`,
-            tags: commonTags,
-        }
-    );
-    parameters.push(param);
-}
+ssmHelper.createParameter('/security/jwt-secret', {
+    paramType: 'init-only',  // 一度設定したら変更しない
+    value: pulumi.secret("CHANGE-ME-IN-PRODUCTION"),
+    type: "SecureString",
+    description: "JWT secret for Lambda API",
+});
 
 // GitHub Personal Access Token 用のSSM Parameter（Pulumiコンフィグから取得）
-const githubTokenParam = new aws.ssm.Parameter("github-token", {
-    name: `${paramPrefix}/security/github-token`,
-    description: "GitHub Personal Access Token for repository access",
-    type: "SecureString",
+const githubTokenParam = ssmHelper.createParameter('/security/github-token', {
+    paramType: 'init-only',  // 一度設定したら変更しない
     value: githubToken,
-    tags: commonTags,
+    type: "SecureString",
+    description: "GitHub Personal Access Token for repository access",
 });
-parameters.push(githubTokenParam);
 
-// ========================================
-// スタック依存関係定義
-// ========================================
-const stackDependencies = new aws.ssm.Parameter("stack-dependencies", {
-    name: `${paramPrefix}/common/stack-dependencies`,
+// Lambda関数ソースコードリポジトリURL用のSSM Parameter（Pulumiコンフィグから取得）
+const lambdaRepoUrlParam = ssmHelper.createParameter('/lambda/source/repository-url', {
+    paramType: 'init-only',  // 一度設定したら変更しない
+    value: lambdaRepoUrl,
+    type: "SecureString",
+    description: "Lambda functions source code repository URL",
+});
+
+// Lambda関数ソースコードブランチ用のSSM Parameter
+const lambdaRepoBranchParam = ssmHelper.createParameter('/lambda/source/repository-branch', {
+    paramType: 'managed',
+    value: lambdaRepoBranch,
     type: "String",
-    value: JSON.stringify({
-        stacks: [
-            { name: "lambda-ssm-init", order: 1, required: true },
-            { name: "lambda-network", order: 2, required: true },
-            { name: "lambda-security", order: 3, required: true },
-            { name: "lambda-vpce", order: 4, required: true },
-            { name: "lambda-nat", order: 5, required: true },
-            { name: "lambda-functions", order: 6, required: true },
-            { name: "lambda-api-gateway", order: 7, required: true },
-            { name: "lambda-waf", order: 8, required: envConfig.enableWaf },
-            { name: "lambda-websocket", order: 9, required: envConfig.enableWebSocket },
-            { name: "lambda-database", order: 10, required: envConfig.enableDatabase },
-        ],
-        deployment: {
-            environment: environment,
-            timestamp: new Date().toISOString(),
-        },
-    }),
-    description: "Stack deployment dependencies and order",
-    tags: commonTags,
+    description: "Lambda functions source code repository branch",
+});
+
+// Lambda関数バージョン保持数用のSSM Parameter
+const lambdaVersionRetentionParam = ssmHelper.createParameter('/lambda/versioning/retain-versions', {
+    paramType: 'managed',
+    value: String(lambdaVersionRetention),
+    type: "String",
+    description: "Number of Lambda function versions to retain",
 });
 
 // 初期化完了フラグ
-const initComplete = new aws.ssm.Parameter("init-complete", {
-    name: `${paramPrefix}/common/init-complete`,
-    type: "String",
+const initComplete = ssmHelper.createParameter('/common/init-complete', {
+    paramType: 'managed',
     value: "true",
+    type: "String",
     description: "SSM parameter initialization complete flag",
-    tags: commonTags,
 });
 
 // ========================================
@@ -225,9 +286,12 @@ export const outputs = {
     stack: "lambda-ssm-init",
     environment: environment,
     ssmParameterPrefix: paramPrefix,
-    parametersCreated: parameters.length,
+    parametersCreated: ssmHelper.getParameterCount(),
     initCompleteFlag: initComplete.name,
     githubTokenParameterName: githubTokenParam.name,
+    lambdaRepoUrlParameterName: lambdaRepoUrlParam.name,
+    lambdaRepoBranchParameterName: lambdaRepoBranchParam.name,
+    lambdaVersionRetentionParameterName: lambdaVersionRetentionParam.name,
 };
 
 // デプロイ完了の確認用

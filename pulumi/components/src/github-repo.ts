@@ -102,33 +102,27 @@ export class GitHubRepoCheckout extends pulumi.ComponentResource {
 
       const isRepoCloned = fs.existsSync(path.join(outputPath, ".git"));
 
-      if (!isRepoCloned) {
-        await git.clone(repoUrl, outputPath, ["--depth", "1"]);
-      }
-
-      const repoGit = simpleGit(outputPath);
-
       if (isRepoCloned) {
-        await repoGit.fetch(["--depth", "1"]);
+        // 既存のリポジトリがある場合、削除して再クローン
+        pulumi.log.info(`Removing existing repository at ${outputPath}`);
+        fs.rmSync(outputPath, { recursive: true, force: true });
       }
+
+      // 常に新しくクローン
+      pulumi.log.info(`Cloning repository from ${repositoryUrl} branch ${branch}`);
+      await git.clone(repoUrl, outputPath, ["--branch", branch, "--depth", "1"]);
+      
+      const repoGit = simpleGit(outputPath);
 
       let targetRef = branch;
       if (tag) {
         targetRef = tag;
         await repoGit.fetch(["--tags", "--depth", "1"]);
+        await repoGit.checkout(targetRef);
       } else if (commit) {
         targetRef = commit;
         await repoGit.fetch(["--depth", "1", "origin", commit]);
-      }
-
-      await repoGit.checkout(targetRef);
-
-      if (!tag && !commit && branch) {
-        try {
-          await repoGit.pull("origin", branch);
-        } catch (e) {
-          pulumi.log.warn(`Failed to pull latest changes: ${e}`);
-        }
+        await repoGit.checkout(targetRef);
       }
 
       const currentCommit = await repoGit.revparse("HEAD");

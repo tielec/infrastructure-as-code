@@ -18,3 +18,10 @@ export {
   EnvConfig,
   loadEnvConfig,
 } from "./env-config-loader";
+
+export {
+  SSMParameterHelper,
+  SSMParameterHelperArgs,
+  SSMParameterType,
+  createSSMParameter,
+} from "./ssm-parameter-helper";
