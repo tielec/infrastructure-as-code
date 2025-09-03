@@ -88,25 +88,58 @@ pipeline {
                     def allParametersData = []
                     def batchSize = 5  // バッチサイズを小さくしてタイムアウトを防ぐ
                     
+                    echo "Processing ${parameters.size()} parameters in batches of ${batchSize}..."
+                    
                     for (int i = 0; i < parameters.size(); i += batchSize) {
                         def batch = parameters.subList(i, Math.min(i + batchSize, parameters.size()))
-                        def parameterNames = batch.collect { it.Name }.join(' ')
                         
-                        def batchData = sh(
-                            script: """
-                                aws ssm get-parameters \
-                                    --names ${parameterNames} \
-                                    --with-decryption \
-                                    --query 'Parameters' \
-                                    --output json \
-                                    --region ${AWS_REGION}
-                            """,
-                            returnStdout: true
-                        ).trim()
+                        echo "Processing batch ${(i/batchSize) + 1}/${Math.ceil(parameters.size()/batchSize)} (${batch.size()} parameters)..."
                         
-                        def batchParameters = readJSON text: batchData
-                        allParametersData.addAll(batchParameters)
+                        // パラメータ名を一時ファイルに書き込む
+                        def paramNamesFile = "param_names_${i}.txt"
+                        def paramNames = batch.collect { it.Name }.join('\n')
+                        writeFile file: paramNamesFile, text: paramNames
+                        
+                        try {
+                            def batchData = sh(
+                                script: """
+                                    # パラメータ名を引数として渡す
+                                    aws ssm get-parameters \
+                                        --names \$(cat ${paramNamesFile} | tr '\\n' ' ') \
+                                        --with-decryption \
+                                        --query 'Parameters' \
+                                        --output json \
+                                        --region ${AWS_REGION}
+                                """,
+                                returnStdout: true
+                            ).trim()
+                            
+                            def batchParameters = readJSON text: batchData
+                            allParametersData.addAll(batchParameters)
+                            
+                            // 進捗を表示
+                            echo "Successfully processed batch ${(i/batchSize) + 1}"
+                            
+                        } catch (Exception e) {
+                            echo "WARNING: Failed to process batch ${(i/batchSize) + 1}: ${e.message}"
+                            echo "Skipping parameters: ${batch.collect { it.Name }}"
+                        } finally {
+                            // 一時ファイルを削除
+                            sh "rm -f ${paramNamesFile} || true"
+                        }
+                        
+                        // バッチ間で少し待機（AWS APIレート制限対策）
+                        sleep(time: 1, unit: 'SECONDS')
                     }
+                    
+                    // 取得したパラメータ数を確認
+                    if (allParametersData.size() == 0) {
+                        echo "WARNING: No parameters were successfully retrieved"
+                        currentBuild.result = 'UNSTABLE'
+                        return
+                    }
+                    
+                    echo "Successfully retrieved ${allParametersData.size()} parameters"
                     
                     // バックアップデータの作成
                     def backupData = [
