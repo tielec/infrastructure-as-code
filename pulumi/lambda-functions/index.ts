@@ -109,38 +109,55 @@ const commonTags = {
 // ========================================
 // GitHubからソースコードをチェックアウトしてパッケージ化
 // ========================================
-// GitHubからLambdaコードを取得
-const githubRepo = new GitHubRepoCheckout("lambda-source", {
-    repositoryUrl: repoUrl,  // SSMから取得したリポジトリURL
-    branch: repoBranch,
-    githubToken: githubToken,  // SSMから取得したトークン
-    useParameterStore: false,  // 既にSSMから取得しているのでfalse
-});
+// pulumi.Output型をapplyで解決してリソースを作成
+const githubRepoAndPackage = pulumi.all([repoUrl, repoBranch, githubToken, deploymentBucketName, projectName]).apply(
+    ([url, branch, token, bucketName, projName]) => {
+        // GitHubからLambdaコードを取得
+        const githubRepo = new GitHubRepoCheckout("lambda-source", {
+            repositoryUrl: url,  // SSMから取得したリポジトリURL
+            branch: branch,
+            githubToken: token,  // SSMから取得したトークン
+            useParameterStore: false,  // 既にSSMから取得しているのでfalse
+        });
 
-// Lambdaパッケージを作成
-const lambdaPackage = new LambdaPackage("lambda-package", {
-    sourcePath: githubRepo.outputPath,
-    runtime: "nodejs20.x",  // Node.js 20を使用
-});
+        // Lambdaパッケージを作成
+        const lambdaPackage = new LambdaPackage("lambda-package", {
+            sourcePath: githubRepo.outputPath,
+            runtime: "nodejs20.x",  // Node.js 20を使用
+        });
 
-// S3デプロイメントバケットを参照
-const deploymentBucket = new LambdaDeploymentBucket("deployment-bucket", {
-    bucketName: deploymentBucketName,
-    useExisting: true,
-});
+        // S3デプロイメントバケットを参照
+        const deploymentBucket = new LambdaDeploymentBucket("deployment-bucket", {
+            bucketName: bucketName,
+            useExisting: true,
+        });
 
-// S3にLambdaパッケージをアップロード
-const lambdaCodeObject = deploymentBucket.uploadLambdaPackage(
-    projectName,
-    lambdaPackage.zipPath,
-    lambdaPackage.zipHash,
-    {
-        Environment: environment,
-        Project: projectName,
-        CommitHash: githubRepo.commitHash,
-        Branch: repoBranch,
+        // S3にLambdaパッケージをアップロード
+        const lambdaCodeObject = deploymentBucket.uploadLambdaPackage(
+            projName,
+            lambdaPackage.zipPath,
+            lambdaPackage.zipHash,
+            {
+                Environment: environment,
+                Project: projName,
+                CommitHash: githubRepo.commitHash,
+                Branch: branch,
+            }
+        );
+
+        return {
+            githubRepo,
+            lambdaPackage,
+            deploymentBucket,
+            lambdaCodeObject,
+        };
     }
 );
+
+// 各コンポーネントを抽出
+const deploymentBucket = githubRepoAndPackage.apply(r => r.deploymentBucket);
+const lambdaCodeObject = githubRepoAndPackage.apply(r => r.lambdaCodeObject);
+const githubRepo = githubRepoAndPackage.apply(r => r.githubRepo);
 
 // ========================================
 // リソース定義
@@ -227,8 +244,8 @@ const mainFunction = new aws.lambda.Function("main-function", {
     timeout: timeout,
     
     // S3からコードを取得
-    s3Bucket: deploymentBucket.bucketName,
-    s3Key: lambdaCodeObject.key,
+    s3Bucket: deploymentBucket.apply(b => b.bucketName),
+    s3Key: lambdaCodeObject.apply(o => o.key),
     
     // バージョン管理を有効化
     publish: true,
@@ -238,7 +255,7 @@ const mainFunction = new aws.lambda.Function("main-function", {
         variables: {
             NODE_ENV: environment,
             LOG_LEVEL: environment === "prod" ? "ERROR" : "INFO",
-            DEPLOYMENT_VERSION: githubRepo.commitHash,
+            DEPLOYMENT_VERSION: githubRepo.apply(r => r.commitHash),
             // 将来の拡張用: DB接続情報、外部APIエンドポイントなど
         },
     },
@@ -257,7 +274,7 @@ const mainFunction = new aws.lambda.Function("main-function", {
     tags: {
         ...commonTags,
         Name: pulumi.interpolate`${projectName}-main-${environment}`,
-        Version: githubRepo.commitHash,
+        Version: githubRepo.apply(r => r.commitHash),
     },
 });
 
@@ -357,12 +374,14 @@ export const outputs = {
     dlqArn: dlq.arn,
     lambdaRoleArn: lambdaRole.arn,
     logGroupName: logGroup.name,
-    deploymentInfo: {
-        bucketName: deploymentBucket.bucketName,
-        objectKey: lambdaCodeObject.key,
-        commitHash: githubRepo.commitHash,
-        branch: repoBranch,
-    },
+    deploymentInfo: pulumi.all([deploymentBucket, lambdaCodeObject, githubRepo, repoBranch]).apply(
+        ([bucket, obj, repo, branch]) => ({
+            bucketName: bucket.bucketName,
+            objectKey: obj.key,
+            commitHash: repo.commitHash,
+            branch: branch,
+        })
+    ),
 };
 
 // 簡潔な情報サマリー
