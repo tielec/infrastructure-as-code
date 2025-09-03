@@ -1,0 +1,280 @@
+@Library('jenkins-shared-library@main') _
+
+pipeline {
+    agent any
+    
+    options {
+        timestamps()
+        timeout(time: 1, unit: 'HOURS')
+        buildDiscarder(logRotator(daysToKeepStr: '30', numToKeepStr: '30'))
+    }
+    
+    environment {
+        AWS_REGION = 'ap-northeast-1'
+    }
+    
+    stages {
+        stage('Initialize') {
+            steps {
+                script {
+                    echo "=== SSM Parameter Store Restore ==="
+                    echo "Environment: ${params.ENVIRONMENT}"
+                    echo "Dry Run: ${params.DRY_RUN}"
+                    echo "Force Overwrite: ${params.FORCE_OVERWRITE}"
+                    
+                    // 環境に基づいてフィルタリング文字列を設定
+                    env.ENVIRONMENT_FILTER = "/${params.ENVIRONMENT}/"
+                    echo "Environment Filter: ${env.ENVIRONMENT_FILTER} (will restore parameters containing this string)"
+                    
+                    // バックアップ用S3バケット名を取得
+                    env.BACKUP_BUCKET = sh(
+                        script: """
+                            aws ssm get-parameter \
+                                --name "/jenkins/${params.ENVIRONMENT}/backup/s3-bucket-name" \
+                                --query 'Parameter.Value' \
+                                --output text \
+                                --region ${AWS_REGION}
+                        """,
+                        returnStdout: true
+                    ).trim()
+                    
+                    if (!env.BACKUP_BUCKET) {
+                        error("バックアップ用S3バケットの取得に失敗しました")
+                    }
+                    
+                    echo "Backup S3 Bucket: ${env.BACKUP_BUCKET}"
+                }
+            }
+        }
+        
+        stage('Find Backup File') {
+            steps {
+                script {
+                    echo "=== Finding Backup File ==="
+                    
+                    def backupFile
+                    
+                    // 常に最新のバックアップを取得
+                    backupFile = sh(
+                        script: """
+                            aws s3 cp s3://${env.BACKUP_BUCKET}/${params.ENVIRONMENT}/latest.txt - \
+                                --region ${AWS_REGION}
+                        """,
+                        returnStdout: true
+                    ).trim()
+                    
+                    if (!backupFile) {
+                        error("最新のバックアップ情報が見つかりません")
+                    }
+                    
+                    env.BACKUP_FILE_PATH = "${params.ENVIRONMENT}/${backupFile}"
+                    echo "Selected backup: ${env.BACKUP_FILE_PATH}"
+                }
+            }
+        }
+        
+        stage('Download Backup') {
+            steps {
+                script {
+                    echo "=== Downloading Backup File ==="
+                    
+                    sh """
+                        aws s3 cp s3://${env.BACKUP_BUCKET}/${env.BACKUP_FILE_PATH} \
+                            backup.json \
+                            --region ${AWS_REGION}
+                    """
+                    
+                    def backupData = readJSON file: 'backup.json'
+                    
+                    echo "Backup Information:"
+                    echo "  - Date: ${backupData.backup_date}"
+                    echo "  - Timestamp: ${backupData.backup_timestamp}"
+                    echo "  - Environment: ${backupData.environment}"
+                    echo "  - Parameter Count: ${backupData.parameter_count}"
+                    
+                    env.BACKUP_DATA = groovy.json.JsonOutput.toJson(backupData)
+                }
+            }
+        }
+        
+        stage('Analyze Changes') {
+            steps {
+                script {
+                    echo "=== Analyzing Changes ==="
+                    
+                    def backupData = readJSON text: env.BACKUP_DATA
+                    def parameters = backupData.parameters
+                    
+                    // 環境に基づいてフィルタリング（バックアップ時と同じフィルタ）
+                    parameters = parameters.findAll { 
+                        it.Name.contains(env.ENVIRONMENT_FILTER)
+                    }
+                    echo "Filtered to ${parameters.size()} parameters containing: ${env.ENVIRONMENT_FILTER}"
+                    
+                    // 現在の値と比較
+                    def toCreate = []
+                    def toUpdate = []
+                    def unchanged = []
+                    
+                    parameters.each { param ->
+                        def currentValue = sh(
+                            script: """
+                                aws ssm get-parameter \
+                                    --name "${param.Name}" \
+                                    --with-decryption \
+                                    --query 'Parameter.Value' \
+                                    --output text \
+                                    --region ${AWS_REGION} 2>/dev/null || echo "PARAMETER_NOT_FOUND"
+                            """,
+                            returnStdout: true
+                        ).trim()
+                        
+                        if (currentValue == "PARAMETER_NOT_FOUND") {
+                            toCreate.add(param.Name)
+                        } else if (currentValue != param.Value) {
+                            toUpdate.add(param.Name)
+                        } else {
+                            unchanged.add(param.Name)
+                        }
+                    }
+                    
+                    echo "Analysis Results:"
+                    echo "  - To Create: ${toCreate.size()}"
+                    echo "  - To Update: ${toUpdate.size()}"
+                    echo "  - Unchanged: ${unchanged.size()}"
+                    
+                    if (toCreate) {
+                        echo "Parameters to create:"
+                        toCreate.each { echo "  - ${it}" }
+                    }
+                    
+                    if (toUpdate) {
+                        echo "Parameters to update:"
+                        toUpdate.each { echo "  - ${it}" }
+                    }
+                    
+                    env.RESTORE_PARAMETERS = groovy.json.JsonOutput.toJson(parameters)
+                    env.TO_CREATE = groovy.json.JsonOutput.toJson(toCreate)
+                    env.TO_UPDATE = groovy.json.JsonOutput.toJson(toUpdate)
+                }
+            }
+        }
+        
+        stage('Restore Parameters') {
+            when {
+                expression { return !params.DRY_RUN }
+            }
+            steps {
+                script {
+                    echo "=== Restoring Parameters ==="
+                    
+                    def parameters = readJSON text: env.RESTORE_PARAMETERS
+                    def toCreate = readJSON text: env.TO_CREATE
+                    def toUpdate = readJSON text: env.TO_UPDATE
+                    
+                    def successCount = 0
+                    def failCount = 0
+                    
+                    parameters.each { param ->
+                        def shouldProcess = false
+                        
+                        if (param.Name in toCreate) {
+                            shouldProcess = true
+                        } else if (param.Name in toUpdate && params.FORCE_OVERWRITE) {
+                            shouldProcess = true
+                        }
+                        
+                        if (shouldProcess) {
+                            try {
+                                def overwriteFlag = params.FORCE_OVERWRITE ? "--overwrite" : ""
+                                
+                                sh """
+                                    aws ssm put-parameter \
+                                        --name "${param.Name}" \
+                                        --value '${param.Value}' \
+                                        --type "${param.Type}" \
+                                        ${overwriteFlag} \
+                                        --region ${AWS_REGION}
+                                """
+                                
+                                echo "✓ Restored: ${param.Name}"
+                                successCount++
+                                
+                            } catch (Exception e) {
+                                echo "✗ Failed to restore: ${param.Name}"
+                                echo "  Error: ${e.message}"
+                                failCount++
+                            }
+                        }
+                    }
+                    
+                    echo "Restore Summary:"
+                    echo "  - Success: ${successCount}"
+                    echo "  - Failed: ${failCount}"
+                    
+                    if (failCount > 0) {
+                        currentBuild.result = 'UNSTABLE'
+                    }
+                }
+            }
+        }
+        
+        stage('Verify Restore') {
+            when {
+                expression { return !params.DRY_RUN }
+            }
+            steps {
+                script {
+                    echo "=== Verifying Restore ==="
+                    
+                    def parameters = readJSON text: env.RESTORE_PARAMETERS
+                    def verifyFailed = []
+                    
+                    parameters.each { param ->
+                        def currentValue = sh(
+                            script: """
+                                aws ssm get-parameter \
+                                    --name "${param.Name}" \
+                                    --with-decryption \
+                                    --query 'Parameter.Value' \
+                                    --output text \
+                                    --region ${AWS_REGION} 2>/dev/null || echo "PARAMETER_NOT_FOUND"
+                            """,
+                            returnStdout: true
+                        ).trim()
+                        
+                        if (currentValue != param.Value && currentValue != "PARAMETER_NOT_FOUND") {
+                            verifyFailed.add(param.Name)
+                        }
+                    }
+                    
+                    if (verifyFailed) {
+                        echo "WARNING: The following parameters may not have been restored correctly:"
+                        verifyFailed.each { echo "  - ${it}" }
+                        currentBuild.result = 'UNSTABLE'
+                    } else {
+                        echo "All parameters verified successfully"
+                    }
+                }
+            }
+        }
+    }
+    
+    post {
+        always {
+            script {
+                // クリーンアップ
+                sh "rm -f backup.json || true"
+            }
+        }
+        success {
+            echo "SSM Parameter Store restore completed successfully"
+        }
+        failure {
+            echo "SSM Parameter Store restore failed"
+        }
+        unstable {
+            echo "SSM Parameter Store restore completed with warnings"
+        }
+    }
+}

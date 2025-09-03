@@ -105,7 +105,7 @@ aws ssm get-parameter --name /jenkins-infra/dev/jenkins/admin-password \
 
 | カテゴリ | 説明 | 主要ジョブ |
 |---------|------|-----------|
-| **Admin_Jobs** | システム管理 | backup-config（設定バックアップ）<br>restore-config（設定リストア）<br>github-webhooks-setting（GitHub Webhook設定）<br>github-deploykeys-setting（デプロイキー設定）<br>user-management（ユーザー管理） |
+| **Admin_Jobs** | システム管理 | backup-config（設定バックアップ）<br>restore-config（設定リストア）<br>ssm-parameter-backup（SSMパラメータバックアップ）<br>ssm-parameter-restore（SSMパラメータリストア）<br>github-webhooks-setting（GitHub Webhook設定）<br>github-deploykeys-setting（デプロイキー設定）<br>user-management（ユーザー管理） |
 | **Account_Setup** | アカウント管理 | account-self-activation（アカウント自己有効化） |
 | **Code_Quality_Checker** | コード品質分析 | pr-complexity-analyzer（PR複雑度分析）<br>rust-code-analysis（Rustコード解析） |
 | **Document_Generator** | ドキュメント生成 | auto-insert-doxygen-comment（Doxygenコメント自動挿入）<br>generate-doxygen-html（DoxygenHTML生成）<br>technical-docs-writer（技術文書作成）<br>pr-comment-builder（PRコメントビルダー） |
@@ -259,6 +259,38 @@ Jenkins全体で使用される環境変数（JCaSCで定義）：
 - **監査ログ**: すべての操作を記録
 
 ### 重要なジョブの詳細
+
+#### Admin_Jobs/SSM_Parameter_Backup
+
+**目的**: SSM Parameter Storeのパラメータを定期的にバックアップ
+
+**機能**:
+- 環境文字列を含むSSMパラメータを自動取得（パスに /dev/ または /prod/ を含む）
+- すべてのパラメータタイプ（SecureString含む）をバックアップ
+- JSON形式でS3バケットに保存
+- 日付ベースのディレクトリ構造で整理
+- S3ライフサイクルポリシーにより30日経過後に自動削除
+
+**パラメータ**:
+- `ENVIRONMENT`: バックアップ対象の環境（dev/prod）
+- `DRY_RUN`: 実際のバックアップを行わず確認のみ（デフォルト: false）
+
+**実行スケジュール**: 毎日 JST 03:00（UTC 18:00）
+
+#### Admin_Jobs/SSM_Parameter_Restore
+
+**目的**: バックアップからSSMパラメータをリストア
+
+**機能**:
+- 常に最新のバックアップからリストア
+- 環境に対応するパラメータを自動フィルタリング（パスに /dev/ または /prod/ を含む）
+- 変更内容の事前確認（ドライランモード）
+- 既存パラメータの上書き制御
+
+**パラメータ**:
+- `ENVIRONMENT`: リストア対象の環境（dev/prod）
+- `DRY_RUN`: 実際のリストアを行わず確認のみ（デフォルト: true）
+- `FORCE_OVERWRITE`: 既存パラメータの強制上書き
 
 #### Infrastructure_Management/Shutdown_Jenkins_Environment
 

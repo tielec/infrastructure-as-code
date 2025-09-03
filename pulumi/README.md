@@ -128,6 +128,12 @@ pulumi/
 | `jenkins-config` | Jenkins設定 | controller | SSMドキュメント、設定 |
 | `jenkins-application` | Jenkinsアプリ | config, agent | ジョブ、プラグイン設定 |
 
+### SSMバックアップスタック
+
+| スタック名 | 説明 | 依存関係 | 主要リソース |
+|-----------|------|----------|--------------|
+| `ssm-backup-s3` | SSMバックアップ用S3バケット | なし | S3バケット、ライフサイクルポリシー |
+
 ### Lambda Functionsスタック
 
 | スタック名 | 説明 | 依存関係 | 主要リソース |
