@@ -12,7 +12,7 @@ import * as aws from "@pulumi/aws";
 export type SSMParameterType = 'init-only' | 'managed';
 
 // 拡張されたParameterArgs
-export interface SSMParameterHelperArgs extends Omit<aws.ssm.ParameterArgs, 'name' | 'value' | 'tags'> {
+export interface SSMParameterHelperArgs {
     /**
      * パラメータの管理タイプ
      * - init-only: 初期設定のみ。一度設定したら変更しない（セキュア情報等）
@@ -32,8 +32,9 @@ export interface SSMParameterHelperArgs extends Omit<aws.ssm.ParameterArgs, 'nam
     
     /**
      * パラメータのタイプ（String, SecureString, StringList）
+     * デフォルト: String
      */
-    type?: 'String' | 'SecureString' | 'StringList';
+    type?: pulumi.Input<'String' | 'SecureString' | 'StringList'>;
 }
 
 /**
@@ -97,14 +98,16 @@ export class SSMParameterHelper {
                 break;
         }
         
-        // paramTypeを除いたargs
-        const { paramType, ...ssmArgs } = args;
-        
-        const param = new aws.ssm.Parameter(resourceName, {
+        // SSMパラメータ作成用の引数を構築
+        const ssmArgs: aws.ssm.ParameterArgs = {
             name: fullName,
+            value: args.value,
+            type: args.type || 'String',
+            description: args.description,
             tags: this.commonTags,
-            ...ssmArgs,
-        }, resourceOptions);
+        };
+        
+        const param = new aws.ssm.Parameter(resourceName, ssmArgs, resourceOptions);
         
         this.parameters.push(param);
         return param;
@@ -162,11 +165,14 @@ export function createSSMParameter(
             break;
     }
     
-    const { paramType, ...ssmArgs } = args;
-    
-    return new aws.ssm.Parameter(resourceName, {
+    // SSMパラメータ作成用の引数を構築
+    const ssmArgs: aws.ssm.ParameterArgs = {
         name: fullName,
+        value: args.value,
+        type: args.type || 'String',
+        description: args.description,
         tags: commonTags || {},
-        ...ssmArgs,
-    }, resourceOptions);
+    };
+    
+    return new aws.ssm.Parameter(resourceName, ssmArgs, resourceOptions);
 }
