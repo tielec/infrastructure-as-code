@@ -1,6 +1,6 @@
 import * as pulumi from "@pulumi/pulumi";
 import * as aws from "@pulumi/aws";
-import archiver from "archiver";
+import * as archiver from "archiver";
 import * as fs from "fs";
 import * as path from "path";
 import * as crypto from "crypto";
@@ -99,7 +99,7 @@ export class LambdaPackage extends pulumi.ComponentResource {
         sizeBytes: number;
       }>((resolve, reject) => {
         const output = fs.createWriteStream(outputPath);
-        const archive = archiver("zip", {
+        const archive = archiver.create("zip", {
           zlib: { level: 9 },
         });
 
