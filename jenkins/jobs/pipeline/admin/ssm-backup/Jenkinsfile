@@ -1,12 +1,15 @@
 @Library('jenkins-shared-lib') _
 
 pipeline {
-    agent any
+    agent {
+        label 'ec2-fleet'
+    }
     
     options {
         timestamps()
         timeout(time: 1, unit: 'HOURS')
         buildDiscarder(logRotator(daysToKeepStr: '30', numToKeepStr: '100'))
+        disableConcurrentBuilds()
     }
     
     environment {
@@ -83,7 +86,7 @@ pipeline {
                     
                     // パラメータの詳細を取得（値を含む）
                     def allParametersData = []
-                    def batchSize = 10  // AWS APIの制限に合わせて調整
+                    def batchSize = 5  // バッチサイズを小さくしてタイムアウトを防ぐ
                     
                     for (int i = 0; i < parameters.size(); i += batchSize) {
                         def batch = parameters.subList(i, Math.min(i + batchSize, parameters.size()))
