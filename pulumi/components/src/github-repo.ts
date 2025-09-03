@@ -103,13 +103,15 @@ export class GitHubRepoCheckout extends pulumi.ComponentResource {
       const isRepoCloned = fs.existsSync(path.join(outputPath, ".git"));
 
       if (!isRepoCloned) {
-        await git.clone(repoUrl, outputPath, ["--depth", "1"]);
+        // ブランチを指定してクローン
+        await git.clone(repoUrl, outputPath, ["--branch", branch, "--depth", "1"]);
       }
 
       const repoGit = simpleGit(outputPath);
 
       if (isRepoCloned) {
-        await repoGit.fetch(["--depth", "1"]);
+        // 既存のリポジトリの場合、指定ブランチをフェッチ
+        await repoGit.fetch(["origin", `${branch}:${branch}`, "--depth", "1"]);
       }
 
       let targetRef = branch;
