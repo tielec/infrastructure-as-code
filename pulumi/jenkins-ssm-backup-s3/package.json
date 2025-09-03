@@ -2,7 +2,7 @@
   "name": "jenkins-ssm-backup-s3",
   "version": "1.0.0",
   "description": "",
-  "main": "index.js",
+  "main": "bin/index.js",
   "scripts": {
     "build": "tsc",
     "preview": "pulumi preview",
