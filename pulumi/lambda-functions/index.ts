@@ -238,7 +238,7 @@ const mainFunction = new aws.lambda.Function("main-function", {
     description: "Main API handler for bubble.io integration",
     runtime: "nodejs20.x",  // Node.js 20（AWS Lambdaの最新LTS）
     architectures: ["arm64"], // AWS Graviton2でコスト削減
-    handler: "index.handler",
+    handler: "dist/index.handler",
     role: lambdaRole.arn,
     memorySize: memorySize,
     timeout: timeout,
