@@ -105,6 +105,7 @@ export class SSMParameterHelper {
             type: args.type || 'String',
             description: args.description,
             tags: this.commonTags,
+            overwrite: true,  // 既存パラメータを上書き
         };
         
         const param = new aws.ssm.Parameter(resourceName, ssmArgs, resourceOptions);
@@ -172,6 +173,7 @@ export function createSSMParameter(
         type: args.type || 'String',
         description: args.description,
         tags: commonTags || {},
+        overwrite: true,  // 既存パラメータを上書き
     };
     
     return new aws.ssm.Parameter(resourceName, ssmArgs, resourceOptions);
