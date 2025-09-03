@@ -99,21 +99,6 @@ pipeline {
                     }
                 }
                 
-                stage('Refresh Stack State') {
-                    when {
-                        expression { 
-                            params.ACTION == 'destroy' || 
-                            (params.ACTION in ['deploy', 'preview'] && params.REFRESH_BEFORE_ACTION)
-                        }
-                    }
-                    steps {
-                        script {
-                            dir("${SOURCE_CODE_DIR}/${params.PULUMI_PROJECT_PATH}") {
-                                refreshStackState()
-                            }
-                        }
-                    }
-                }
                 
                 stage('Collect Pre-Action Stack Info') {
                     when {
@@ -459,7 +444,7 @@ def printHeader() {
         AWSリージョン: ${params.AWS_REGION}
         Pulumiバックエンド: ${env.PULUMI_BACKEND_URL}
         確認スキップ: ${params.SKIP_CONFIRMATION ? 'はい' : 'いいえ'}
-        Refresh実行: ${params.ACTION == 'destroy' ? '必須' : params.REFRESH_BEFORE_ACTION ? 'あり' : 'なし'}
+        Refresh実行: ${params.ACTION in ['deploy', 'preview', 'destroy'] ? 'あり' : params.ACTION == 'refresh' ? '単独実行' : 'なし'}
         =============================================
     """.stripIndent()
 }
@@ -589,41 +574,6 @@ def selectOrCreateStack(stackName) {
     """
 }
 
-/**
- * スタック状態のリフレッシュ
- */
-def refreshStackState() {
-    echo "スタック状態をリフレッシュしています..."
-    
-    def actionMessage = params.ACTION == 'destroy' ? 
-        "Destroy前の必須リフレッシュ" : 
-        "手動変更の可能性があるためリフレッシュ"
-    
-    sh """
-        echo "====================================="
-        echo "Pulumi Refresh 実行"
-        echo "理由: ${actionMessage}"
-        echo "====================================="
-        echo "クラウドの実際の状態とPulumiの状態を同期します"
-        
-        # 現在の状態を確認
-        echo "リフレッシュ前の状態:"
-        pulumi stack --show-urns || true
-        
-        # リフレッシュ実行
-        echo "実行中..."
-        pulumi refresh --yes --diff || {
-            echo "警告: リフレッシュ中にエラーが発生しましたが、処理を続行します"
-        }
-        
-        echo "リフレッシュ後の状態:"
-        pulumi stack --show-urns || true
-        
-        echo "====================================="
-        echo "Refresh 完了"
-        echo "====================================="
-    """
-}
 
 /**
  * スタック情報の収集
@@ -688,69 +638,82 @@ def executePulumiAction(action) {
     
     switch(action) {
         case 'preview':
-            executePreview()
+            // preview: refresh + preview
+            echo "====================================="
+            echo "Preview実行（refresh + preview）"
+            echo "====================================="
+            
+            // Refresh実行
+            sh """
+                echo "ステップ 1/2: Refresh実行"
+                ./execute-pulumi.sh refresh "${WORKSPACE}" "${ARTIFACTS_DIR}"
+            """
+            
+            // Preview実行
+            sh """
+                echo "ステップ 2/2: Preview実行"
+                ./execute-pulumi.sh preview "${WORKSPACE}" "${ARTIFACTS_DIR}"
+            """
             break
             
         case 'deploy':
-            executePreview()
-            executeDeploy()
+            // deploy: refresh + preview + deploy
+            echo "====================================="
+            echo "Deploy実行（refresh + preview + deploy）"
+            echo "====================================="
+            
+            // Refresh実行
+            sh """
+                echo "ステップ 1/3: Refresh実行"
+                ./execute-pulumi.sh refresh "${WORKSPACE}" "${ARTIFACTS_DIR}"
+            """
+            
+            // Preview実行
+            sh """
+                echo "ステップ 2/3: Preview実行"
+                ./execute-pulumi.sh preview "${WORKSPACE}" "${ARTIFACTS_DIR}"
+            """
+            
+            // Deploy実行
+            sh """
+                echo "ステップ 3/3: Deploy実行"
+                ./execute-pulumi.sh deploy "${WORKSPACE}" "${ARTIFACTS_DIR}"
+            """
             break
             
         case 'refresh':
-            executeRefresh()
+            // refresh: refresh only
+            echo "====================================="
+            echo "Refresh単独実行"
+            echo "====================================="
+            
+            sh """
+                ./execute-pulumi.sh refresh "${WORKSPACE}" "${ARTIFACTS_DIR}"
+            """
             break
             
         case 'destroy':
-            executeDestroy()
+            // destroy: refresh + destroy
+            echo "====================================="
+            echo "Destroy実行（refresh + destroy）"
+            echo "====================================="
+            
+            // Refresh実行（destroy前は必須）
+            sh """
+                echo "ステップ 1/2: Refresh実行（destroy前の必須処理）"
+                ./execute-pulumi.sh refresh "${WORKSPACE}" "${ARTIFACTS_DIR}"
+            """
+            
+            // Destroy実行
+            sh """
+                echo "ステップ 2/2: Destroy実行"
+                ./execute-pulumi.sh destroy "${WORKSPACE}" "${ARTIFACTS_DIR}"
+            """
             break
             
         default:
             error "不明なアクション: ${action}"
     }
-}
-
-/**
- * プレビューの実行
- */
-def executePreview() {
-    // スクリプトを実行
-    sh """
-        # Pulumi実行スクリプトを呼び出し
-        ./execute-pulumi.sh preview "${WORKSPACE}" "${ARTIFACTS_DIR}"
-    """
-}
-
-/**
- * デプロイの実行（常に--yesを使用）
- */
-def executeDeploy() {
-    // スクリプトを実行
-    sh """
-        # Pulumi実行スクリプトを呼び出し
-        ./execute-pulumi.sh deploy "${WORKSPACE}" "${ARTIFACTS_DIR}"
-    """
-}
-
-/**
- * 削除の実行（常に--yesを使用）
- */
-def executeDestroy() {
-    // スクリプトを実行
-    sh """
-        # Pulumi実行スクリプトを呼び出し
-        ./execute-pulumi.sh destroy "${WORKSPACE}" "${ARTIFACTS_DIR}"
-    """
-}
-
-/**
- * Refreshの実行（実インフラとPulumi状態の同期）
- */
-def executeRefresh() {
-    // スクリプトを実行
-    sh """
-        # Pulumi実行スクリプトを呼び出し
-        ./execute-pulumi.sh refresh "${WORKSPACE}" "${ARTIFACTS_DIR}"
-    """
 }
 
 /**
@@ -918,7 +881,7 @@ def printSummary() {
         ビルド番号: ${env.BUILD_NUMBER}
         設定ファイル: ${env.PULUMI_CONFIG_OVERRIDDEN == 'true' ? 'カスタム（アップロード）' : 'デフォルト（リポジトリ）'}
         確認スキップ: ${params.SKIP_CONFIRMATION ? 'はい' : 'いいえ'}
-        Refresh実行: ${params.ACTION == 'destroy' ? '必須' : params.REFRESH_BEFORE_ACTION ? 'あり' : 'なし'}
+        Refresh実行: ${params.ACTION in ['deploy', 'preview', 'destroy'] ? 'あり' : params.ACTION == 'refresh' ? '単独実行' : 'なし'}
         実行結果: ${currentBuild.result ?: 'SUCCESS'}
         =============================================
     """.stripIndent()
