@@ -1,16 +1,6 @@
 import * as pulumi from "@pulumi/pulumi";
 import * as aws from "@pulumi/aws";
-
-export interface LambdaDeploymentBucketArgs {
-  bucketName?: pulumi.Input<string>;
-  lifecycleDays?: pulumi.Input<number>;
-  versioning?: pulumi.Input<boolean>;
-  tags?: pulumi.Input<{ [key: string]: string }>;
-  /**
-   * If true, references an existing bucket instead of creating a new one
-   */
-  useExisting?: boolean;
-}
+import { LambdaDeploymentBucketArgs } from "./types";
 
 export class LambdaDeploymentBucket extends pulumi.ComponentResource {
   public readonly bucket?: aws.s3.Bucket;
@@ -178,3 +168,6 @@ export class LambdaDeploymentBucket extends pulumi.ComponentResource {
     }
   }
 }
+
+// 型エクスポート
+export type { LambdaDeploymentBucketArgs } from "./types";

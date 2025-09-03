@@ -4,21 +4,7 @@ import simpleGit from "simple-git";
 import * as fs from "fs";
 import * as path from "path";
 import * as crypto from "crypto";
-
-export interface GitHubRepoCheckoutArgs {
-  // Either provide repositoryUrl or owner/repo
-  repositoryUrl?: string;
-  owner?: string;
-  repo?: string;
-  branch?: pulumi.Input<string>;
-  tag?: pulumi.Input<string>;
-  commit?: pulumi.Input<string>;
-  outputPath?: string;
-  githubToken?: pulumi.Input<string>;
-  // SSM Parameter Store path for GitHub token (default: /tielec-iac/GITHUB_TOKEN)
-  githubTokenParameterName?: pulumi.Input<string>;
-  useParameterStore?: boolean; // default: true
-}
+import { GitHubRepoCheckoutArgs } from "./types";
 
 export class GitHubRepoCheckout extends pulumi.ComponentResource {
   public readonly localPath: pulumi.Output<string>;
@@ -148,3 +134,6 @@ export class GitHubRepoCheckout extends pulumi.ComponentResource {
     });
   }
 }
+
+// 型エクスポート
+export type { GitHubRepoCheckoutArgs } from "./types";
