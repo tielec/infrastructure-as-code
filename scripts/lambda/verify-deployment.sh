@@ -244,12 +244,10 @@ if aws lambda invoke \
     
     if echo "$RESPONSE" | jq -e '.statusCode == 200' >/dev/null 2>&1; then
         check_result "Lambda Function Execution" "pass"
-        if [ "$VERBOSE" == "1" ]; then
-            log_info "Response: $(echo "$RESPONSE" | jq -c .)"
-        fi
+        log_info "Lambda Response: $(echo "$RESPONSE" | jq -c .)"
     else
         check_result "Lambda Function Execution" "fail"
-        log_warn "Response: $(echo "$RESPONSE" | jq -c .)"
+        log_warn "Lambda Response: $(echo "$RESPONSE" | jq -c .)"
     fi
 else
     check_result "Lambda Function Execution" "fail"
@@ -297,10 +295,8 @@ if [ -n "$API_ENDPOINT" ] && [ -n "$BUBBLE_KEY" ]; then
     
     if [ "$HEALTH_RESPONSE" == "200" ]; then
         check_result "Health Endpoint" "pass"
-        if [ "$VERBOSE" == "1" ]; then
-            HEALTH_BODY=$(curl -s -X GET "${API_ENDPOINT}/health" -H "x-api-key: ${BUBBLE_KEY}")
-            log_info "Health Response: $HEALTH_BODY"
-        fi
+        HEALTH_BODY=$(curl -s -X GET "${API_ENDPOINT}/health" -H "x-api-key: ${BUBBLE_KEY}")
+        log_info "Health Response: $HEALTH_BODY"
     else
         check_result "Health Endpoint (HTTP $HEALTH_RESPONSE)" "fail"
     fi
@@ -313,10 +309,8 @@ if [ -n "$API_ENDPOINT" ] && [ -n "$BUBBLE_KEY" ]; then
     
     if [ "$VERSION_RESPONSE" == "200" ]; then
         check_result "Version API Endpoint" "pass"
-        if [ "$VERBOSE" == "1" ]; then
-            VERSION_BODY=$(curl -s -X GET "${API_ENDPOINT}/api/version" -H "x-api-key: ${BUBBLE_KEY}")
-            log_info "Version Response: $VERSION_BODY"
-        fi
+        VERSION_BODY=$(curl -s -X GET "${API_ENDPOINT}/api/version" -H "x-api-key: ${BUBBLE_KEY}")
+        log_info "Version Response: $VERSION_BODY"
     else
         check_result "Version API Endpoint (HTTP $VERSION_RESPONSE)" "fail"
     fi
@@ -331,13 +325,11 @@ if [ -n "$API_ENDPOINT" ] && [ -n "$BUBBLE_KEY" ]; then
     
     if [ "$ECHO_RESPONSE" == "200" ]; then
         check_result "Echo API Endpoint" "pass"
-        if [ "$VERBOSE" == "1" ]; then
-            ECHO_BODY=$(curl -s -X POST "${API_ENDPOINT}/api/echo" \
-                -H "x-api-key: ${BUBBLE_KEY}" \
-                -H "Content-Type: application/json" \
-                -d '{"test":"verification"}')
-            log_info "Echo Response: $ECHO_BODY"
-        fi
+        ECHO_BODY=$(curl -s -X POST "${API_ENDPOINT}/api/echo" \
+            -H "x-api-key: ${BUBBLE_KEY}" \
+            -H "Content-Type: application/json" \
+            -d '{"test":"verification"}')
+        log_info "Echo Response: $ECHO_BODY"
     else
         check_result "Echo API Endpoint (HTTP $ECHO_RESPONSE)" "fail"
     fi
