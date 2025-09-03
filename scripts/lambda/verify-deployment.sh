@@ -113,14 +113,15 @@ echo ""
 TOTAL_CHECKS=0
 PASSED_CHECKS=0
 FAILED_CHECKS=0
+SKIPPED_CHECKS=0
 
 #######################################
 # チェック結果を記録する関数
 # Globals:
-#   TOTAL_CHECKS, PASSED_CHECKS, FAILED_CHECKS
+#   TOTAL_CHECKS, PASSED_CHECKS, FAILED_CHECKS, SKIPPED_CHECKS
 # Arguments:
 #   $1 - チェック項目名
-#   $2 - 結果 (pass/fail)
+#   $2 - 結果 (pass/fail/skip)
 # Returns:
 #   0 - 成功
 #######################################
@@ -132,6 +133,9 @@ function check_result() {
     if [[ "$result" == "pass" ]]; then
         PASSED_CHECKS=$((PASSED_CHECKS + 1))
         log_success "$check_name"
+    elif [[ "$result" == "skip" ]]; then
+        SKIPPED_CHECKS=$((SKIPPED_CHECKS + 1))
+        log_warn "$check_name (Skipped)"
     else
         FAILED_CHECKS=$((FAILED_CHECKS + 1))
         log_error "$check_name"
@@ -174,16 +178,43 @@ fi
 
 # APIキーの確認（プロジェクト名が取得できている場合のみ）
 if [ -n "${PROJECT_NAME:-}" ]; then
-    if aws ssm get-parameter --name "/${PROJECT_NAME}/${ENV_NAME}/api-gateway/keys" --with-decryption --query 'Parameter.Value' --output text >/dev/null 2>&1; then
-        API_KEYS=$(aws ssm get-parameter --name "/${PROJECT_NAME}/${ENV_NAME}/api-gateway/keys" --with-decryption --query 'Parameter.Value' --output text)
-        BUBBLE_KEY=$(echo "$API_KEYS" | jq -r '.bubble.key')
-        EXTERNAL_KEY=$(echo "$API_KEYS" | jq -r '.external.key')
-        check_result "API Keys in SSM" "pass"
-        if [ "$VERBOSE" == "1" ]; then
-            log_info "Bubble.io API Key: ${BUBBLE_KEY:0:10}..."
-            log_info "External API Key: ${EXTERNAL_KEY:0:10}..."
+    SSM_KEY_PATH="/${PROJECT_NAME}/${ENV_NAME}/api-gateway/keys"
+    if aws ssm get-parameter --name "${SSM_KEY_PATH}" --with-decryption --query 'Parameter.Value' --output text >/dev/null 2>&1; then
+        API_KEYS=$(aws ssm get-parameter --name "${SSM_KEY_PATH}" --with-decryption --query 'Parameter.Value' --output text)
+        
+        # JSON形式を確認
+        if echo "$API_KEYS" | jq . >/dev/null 2>&1; then
+            BUBBLE_KEY=$(echo "$API_KEYS" | jq -r '.bubble.key // empty')
+            EXTERNAL_KEY=$(echo "$API_KEYS" | jq -r '.external.key // empty')
+            
+            if [ -n "$BUBBLE_KEY" ] || [ -n "$EXTERNAL_KEY" ]; then
+                check_result "API Keys in SSM" "pass"
+                if [ "$VERBOSE" == "1" ]; then
+                    if [ -n "$BUBBLE_KEY" ]; then
+                        log_info "Bubble.io API Key found: ${BUBBLE_KEY:0:10}..."
+                    else
+                        log_warn "Bubble.io API Key not found in SSM"
+                    fi
+                    if [ -n "$EXTERNAL_KEY" ]; then
+                        log_info "External API Key found: ${EXTERNAL_KEY:0:10}..."
+                    else
+                        log_warn "External API Key not found in SSM"
+                    fi
+                fi
+            else
+                log_warn "API keys found in SSM but values are empty"
+                check_result "API Keys in SSM" "fail"
+                BUBBLE_KEY=""
+                EXTERNAL_KEY=""
+            fi
+        else
+            log_error "Invalid JSON format in SSM parameter: ${SSM_KEY_PATH}"
+            check_result "API Keys in SSM" "fail"
+            BUBBLE_KEY=""
+            EXTERNAL_KEY=""
         fi
     else
+        log_warn "SSM parameter not found: ${SSM_KEY_PATH}"
         check_result "API Keys in SSM" "fail"
         BUBBLE_KEY=""
         EXTERNAL_KEY=""
@@ -317,21 +348,45 @@ if [ -n "$API_ENDPOINT" ] && [ -n "$BUBBLE_KEY" ]; then
     
     # エコーAPIエンドポイント（POSTテスト）
     log_info "Testing echo API endpoint..."
-    ECHO_RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" \
-        -X POST "${API_ENDPOINT}/api/echo" \
-        -H "x-api-key: ${BUBBLE_KEY}" \
-        -H "Content-Type: application/json" \
-        -d '{"test":"verification"}' 2>/dev/null || echo "000")
     
-    if [ "$ECHO_RESPONSE" == "200" ]; then
-        check_result "Echo API Endpoint" "pass"
-        ECHO_BODY=$(curl -s -X POST "${API_ENDPOINT}/api/echo" \
+    # APIキーの確認
+    if [ -z "${BUBBLE_KEY}" ]; then
+        log_warn "API key not found, skipping echo endpoint test"
+        check_result "Echo API Endpoint" "skip"
+    else
+        # デバッグ情報出力（-vオプション時）
+        if [ "$VERBOSE" == "1" ]; then
+            log_info "Using API key: ${BUBBLE_KEY:0:10}..."
+        fi
+        
+        # エコーAPIリクエスト
+        ECHO_RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" \
+            -X POST "${API_ENDPOINT}/api/echo" \
             -H "x-api-key: ${BUBBLE_KEY}" \
             -H "Content-Type: application/json" \
-            -d '{"test":"verification"}')
-        log_info "Echo Response: $ECHO_BODY"
-    else
-        check_result "Echo API Endpoint (HTTP $ECHO_RESPONSE)" "fail"
+            -d '{"test":"verification"}' 2>/dev/null || echo "000")
+        
+        if [ "$ECHO_RESPONSE" == "200" ]; then
+            check_result "Echo API Endpoint" "pass"
+            ECHO_BODY=$(curl -s -X POST "${API_ENDPOINT}/api/echo" \
+                -H "x-api-key: ${BUBBLE_KEY}" \
+                -H "Content-Type: application/json" \
+                -d '{"test":"verification"}')
+            log_info "Echo Response: $ECHO_BODY"
+        elif [ "$ECHO_RESPONSE" == "401" ]; then
+            # 401エラーの詳細情報を取得
+            ERROR_BODY=$(curl -s -X POST "${API_ENDPOINT}/api/echo" \
+                -H "x-api-key: ${BUBBLE_KEY}" \
+                -H "Content-Type: application/json" \
+                -d '{"test":"verification"}')
+            log_error "Echo API Endpoint (HTTP 401 - Unauthorized)"
+            if [ "$VERBOSE" == "1" ]; then
+                log_info "Error Response: $ERROR_BODY"
+            fi
+            check_result "Echo API Endpoint" "fail"
+        else
+            check_result "Echo API Endpoint (HTTP $ECHO_RESPONSE)" "fail"
+        fi
     fi
 else
     log_warn "Skipping endpoint tests (missing API endpoint or key)"
@@ -418,6 +473,9 @@ echo "Verification Summary"
 echo "=========================================="
 echo "Total Checks: $TOTAL_CHECKS"
 echo -e "${GREEN}Passed: $PASSED_CHECKS${NC}"
+if [ $SKIPPED_CHECKS -gt 0 ]; then
+    echo -e "${YELLOW}Skipped: $SKIPPED_CHECKS${NC}"
+fi
 if [ $FAILED_CHECKS -gt 0 ]; then
     echo -e "${RED}Failed: $FAILED_CHECKS${NC}"
 else
