@@ -34,7 +34,7 @@ case "$ACTION" in
     preview)
         echo "変更内容のプレビュー..."
         set +e
-        pulumi preview --verbose --diff --save-plan=plan.json 2>&1 | tee "${WORKSPACE}/${ARTIFACTS_DIR}/pulumi-preview.log"
+        pulumi preview --diff --save-plan=plan.json 2>&1 | tee "${WORKSPACE}/${ARTIFACTS_DIR}/pulumi-preview.log"
         PULUMI_EXIT_CODE=${PIPESTATUS[0]}
         set -e
         
@@ -47,7 +47,7 @@ case "$ACTION" in
     deploy)
         echo "リソースのデプロイ..."
         set +e
-        pulumi up --verbose --yes --diff 2>&1 | tee "${WORKSPACE}/${ARTIFACTS_DIR}/pulumi-up.log"
+        pulumi up --yes --diff 2>&1 | tee "${WORKSPACE}/${ARTIFACTS_DIR}/pulumi-up.log"
         PULUMI_EXIT_CODE=${PIPESTATUS[0]}
         set -e
         
@@ -69,7 +69,7 @@ case "$ACTION" in
         pulumi stack export --file "${WORKSPACE}/${ARTIFACTS_DIR}/stack-state-before-refresh.json" 2>/dev/null || true
         
         set +e
-        pulumi refresh --verbose --yes --diff 2>&1 | tee "${WORKSPACE}/${ARTIFACTS_DIR}/pulumi-refresh.log"
+        pulumi refresh --yes --diff 2>&1 | tee "${WORKSPACE}/${ARTIFACTS_DIR}/pulumi-refresh.log"
         PULUMI_EXIT_CODE=${PIPESTATUS[0]}
         set -e
         
@@ -90,7 +90,7 @@ case "$ACTION" in
     destroy)
         echo "リソースの削除..."
         set +e
-        pulumi destroy --verbose --yes 2>&1 | tee "${WORKSPACE}/${ARTIFACTS_DIR}/pulumi-destroy.log"
+        pulumi destroy --yes 2>&1 | tee "${WORKSPACE}/${ARTIFACTS_DIR}/pulumi-destroy.log"
         PULUMI_EXIT_CODE=${PIPESTATUS[0]}
         set -e
         
