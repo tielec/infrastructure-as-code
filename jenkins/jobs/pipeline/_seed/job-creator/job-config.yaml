@@ -241,6 +241,15 @@ jenkins-managed-repositories:
     technicalDocsStartDate: '2025-01-01'
     technicalDocsFile: REPODOC.md
     updatePullRequestTitle: 'true'
+  
+  reflection-cloud-api:
+    httpsUrl: https://github.com/tielec/reflection-cloud-api
+    mainBranch: main
+    docBranch: document
+    credentialsId: github-app-credentials
+    technicalDocsStartDate: '2025-01-01'
+    technicalDocsFile: REPODOC.md
+    updatePullRequestTitle: 'true'
 
 # Pulumiプロジェクト定義
 pulumi-projects:
