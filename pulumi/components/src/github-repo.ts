@@ -110,8 +110,13 @@ export class GitHubRepoCheckout extends pulumi.ComponentResource {
       const repoGit = simpleGit(outputPath);
 
       if (isRepoCloned) {
-        // 既存のリポジトリの場合、指定ブランチをフェッチ
-        await repoGit.fetch(["origin", `${branch}:${branch}`, "--depth", "1"]);
+        // 既存のリポジトリの場合、まず最新を取得
+        try {
+          // リモートから最新情報を取得（ブランチ指定なし）
+          await repoGit.fetch(["origin", "--depth", "1"]);
+        } catch (e) {
+          pulumi.log.warn(`Failed to fetch from origin: ${e}`);
+        }
       }
 
       let targetRef = branch;
@@ -123,11 +128,19 @@ export class GitHubRepoCheckout extends pulumi.ComponentResource {
         await repoGit.fetch(["--depth", "1", "origin", commit]);
       }
 
-      await repoGit.checkout(targetRef);
+      // ブランチまたは他のrefをチェックアウト
+      try {
+        await repoGit.checkout(targetRef);
+      } catch (e) {
+        // チェックアウトが失敗した場合、リモートブランチを試す
+        pulumi.log.info(`Trying to checkout origin/${targetRef}`);
+        await repoGit.checkout(["-b", targetRef, `origin/${targetRef}`]);
+      }
 
       if (!tag && !commit && branch) {
         try {
-          await repoGit.pull("origin", branch);
+          // 最新の変更をプル
+          await repoGit.pull("origin", branch, ["--rebase"]);
         } catch (e) {
           pulumi.log.warn(`Failed to pull latest changes: ${e}`);
         }
