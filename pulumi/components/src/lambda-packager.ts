@@ -226,6 +226,15 @@ export class LambdaPackage extends pulumi.ComponentResource {
       // ビルドを実行
       await execAsync("npm run build", { cwd: sourcePath });
       pulumi.log.info(`TypeScript build completed for ${name}`);
+      
+      // ビルド結果を確認
+      const distPath = path.join(sourcePath, "dist");
+      if (fs.existsSync(distPath)) {
+        const files = fs.readdirSync(distPath);
+        pulumi.log.info(`Built files in dist/: ${files.join(", ")}`);
+      } else {
+        pulumi.log.warn(`No dist directory found after build`);
+      }
     } catch (e) {
       pulumi.log.error(`TypeScript build failed: ${e}`);
       throw new Error(`Failed to build TypeScript project: ${e}`);
@@ -305,6 +314,9 @@ export class LambdaPackage extends pulumi.ComponentResource {
     const defaultExcludes = this.getDefaultExcludes();
     const allExcludes = [...defaultExcludes, ...excludePatterns];
 
+    pulumi.log.info(`Adding files from ${sourcePath} with patterns: ${includePatterns.join(", ")}`);
+    pulumi.log.info(`Exclude patterns: ${allExcludes.join(", ")}`);
+
     // ソースファイルを追加
     archive.glob(includePatterns.join(","), {
       cwd: sourcePath,
@@ -314,6 +326,7 @@ export class LambdaPackage extends pulumi.ComponentResource {
 
     // 追加ファイルを含める
     for (const [destPath, content] of Object.entries(extraFiles)) {
+      pulumi.log.info(`Adding extra file: ${destPath}`);
       archive.append(content, { name: destPath });
     }
   }
@@ -342,10 +355,9 @@ export class LambdaPackage extends pulumi.ComponentResource {
       "tsconfig.json",
       "package-lock.json",
       "yarn.lock",
-      // TypeScript関連の除外を追加
-      "src/**/*.ts",  // TypeScriptソースファイル（コンパイル済みのJSのみ含める）
-      "*.ts",
-      "!*.d.ts",      // 型定義ファイルは含める
+      // TypeScript関連の除外
+      "src/**",       // srcディレクトリ全体を除外（TypeScriptソースコード）
+      ".claude/**",   // Claudeの設定ディレクトリ
     ];
   }
 
