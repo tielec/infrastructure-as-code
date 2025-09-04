@@ -28,6 +28,14 @@ echo "Backup Date: ${BACKUP_DATE}"
 echo "Backup Timestamp: ${BACKUP_TIMESTAMP}"
 echo "======================================"
 
+# AWS認証情報の確認
+echo "Checking AWS credentials..."
+if ! aws sts get-caller-identity --region ${AWS_REGION}; then
+    echo "Error: Failed to get AWS credentials. Please check IAM role or credentials."
+    exit 1
+fi
+echo "AWS credentials verified."
+
 # パラメータ一覧の取得（ページネーション対応）
 fetch_all_parameters() {
     local next_token=""
@@ -38,33 +46,46 @@ fetch_all_parameters() {
         echo "Fetching page ${page}..."
         
         # AWS CLIコマンドの実行とエラーハンドリング
-        local cmd="aws ssm describe-parameters"
-        cmd="$cmd --query '{Parameters: Parameters, NextToken: NextToken}'"
-        cmd="$cmd --output json"
-        cmd="$cmd --region ${AWS_REGION}"
+        local result
+        local error_msg
         
         if [ -n "$next_token" ]; then
-            cmd="$cmd --starting-token '$next_token'"
-        fi
-        
-        # コマンド実行（エラー時は空のJSONを返す）
-        local result
-        if ! result=$(eval $cmd 2>/dev/null); then
-            echo "Warning: Failed to describe parameters on page ${page}. Retrying..." >&2
-            sleep 2
-            # リトライ
-            if ! result=$(eval $cmd 2>/dev/null); then
-                echo "Error: Failed to describe parameters after retry. Stopping." >&2
+            echo "  Executing: aws ssm describe-parameters --starting-token ... --region ${AWS_REGION}" >&2
+            if ! result=$(aws ssm describe-parameters \
+                --starting-token "$next_token" \
+                --query '{Parameters: Parameters, NextToken: NextToken}' \
+                --output json \
+                --region ${AWS_REGION} 2>&1); then
+                error_msg=$result
+                echo "Error: AWS CLI command failed: $error_msg" >&2
+                echo '{"Parameters": [], "NextToken": null}'
+                return 1
+            fi
+        else
+            echo "  Executing: aws ssm describe-parameters --region ${AWS_REGION}" >&2
+            if ! result=$(aws ssm describe-parameters \
+                --query '{Parameters: Parameters, NextToken: NextToken}' \
+                --output json \
+                --region ${AWS_REGION} 2>&1); then
+                error_msg=$result
+                echo "Error: AWS CLI command failed: $error_msg" >&2
                 echo '{"Parameters": [], "NextToken": null}'
                 return 1
             fi
         fi
         
         # 結果が空またはエラーメッセージの場合の処理
-        if [ -z "$result" ] || ! echo "$result" | jq empty 2>/dev/null; then
-            echo "Warning: Invalid JSON response received" >&2
+        if [ -z "$result" ]; then
+            echo "Warning: Empty response received" >&2
+            result='{"Parameters": [], "NextToken": null}'
+        elif ! echo "$result" | jq empty 2>/dev/null; then
+            echo "Warning: Invalid JSON response: ${result:0:100}..." >&2
             result='{"Parameters": [], "NextToken": null}'
         fi
+        
+        # デバッグ: パラメータ数を表示
+        local param_count=$(echo "$result" | jq '.Parameters | length' 2>/dev/null || echo "0")
+        echo "  Found ${param_count} parameters on page ${page}" >&2
         
         # パラメータを追加
         local params
