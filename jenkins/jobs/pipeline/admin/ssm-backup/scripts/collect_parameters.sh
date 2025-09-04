@@ -39,7 +39,7 @@ echo "AWS credentials verified."
 # AWS API呼び出しのリトライ機能
 aws_cli_with_retry() {
     local max_retries=5
-    local retry_delay=2
+    local retry_delay=3  # 初期待機時間を長めに設定
     local retry_count=0
     local cmd="$@"
     
@@ -53,8 +53,8 @@ aws_cli_with_retry() {
                 echo "  Rate limit hit. Retry ${retry_count}/${max_retries} after ${retry_delay}s..." >&2
                 sleep $retry_delay
                 retry_delay=$((retry_delay * 2))  # Exponential backoff
-                if [ $retry_delay -gt 30 ]; then
-                    retry_delay=30  # Max delay 30s
+                if [ $retry_delay -gt 60 ]; then
+                    retry_delay=60  # Max delay 60s
                 fi
             else
                 echo "Error: $output" >&2
@@ -67,11 +67,15 @@ aws_cli_with_retry() {
     return 1
 }
 
-# パラメータ一覧の取得（ページネーション対応）
+# パラメータ一覧の取得（ページネーション対応、フィルタリング最適化）
 fetch_all_parameters() {
     local next_token=""
     local page=1
     local all_params="[]"
+    
+    # 初回実行前に待機（レート制限対策）
+    echo "Waiting 2 seconds before API calls to avoid rate limiting..." >&2
+    sleep 2
     
     while true; do
         echo "Fetching page ${page}..." >&2
@@ -81,9 +85,11 @@ fetch_all_parameters() {
         local error_msg
         
         if [ -n "$next_token" ]; then
-            echo "  Executing: aws ssm describe-parameters --starting-token ... --region ${AWS_REGION}" >&2
+            echo "  Executing: aws ssm describe-parameters with filter --region ${AWS_REGION}" >&2
             if ! result=$(aws_cli_with_retry "aws ssm describe-parameters \
                 --starting-token '$next_token' \
+                --max-results 50 \
+                --parameter-filters 'Key=Name,Option=Contains,Values=${ENV_FILTER:1:-1}' \
                 --query '{Parameters: Parameters, NextToken: NextToken}' \
                 --output json \
                 --region ${AWS_REGION}"); then
@@ -92,8 +98,10 @@ fetch_all_parameters() {
                 return 1
             fi
         else
-            echo "  Executing: aws ssm describe-parameters --region ${AWS_REGION}" >&2
+            echo "  Executing: aws ssm describe-parameters with filter --region ${AWS_REGION}" >&2
             if ! result=$(aws_cli_with_retry "aws ssm describe-parameters \
+                --max-results 50 \
+                --parameter-filters 'Key=Name,Option=Contains,Values=${ENV_FILTER:1:-1}' \
                 --query '{Parameters: Parameters, NextToken: NextToken}' \
                 --output json \
                 --region ${AWS_REGION}"); then
@@ -136,8 +144,8 @@ fetch_all_parameters() {
         
         page=$((page + 1))
         
-        # APIレート制限対策（より長い待機時間）
-        sleep 1
+        # APIレート制限対策（ページ間の待機時間を長めに）
+        sleep 2
     done
     
     echo "$all_params"
@@ -146,16 +154,8 @@ fetch_all_parameters() {
 # メイン処理
 echo "Starting parameter collection..."
 
-# すべてのパラメータを取得
-ALL_PARAMS=$(fetch_all_parameters || echo '[]')
-TOTAL_COUNT=$(echo "$ALL_PARAMS" | jq 'length' 2>/dev/null || echo "0")
-echo "Total parameters found: ${TOTAL_COUNT}"
-
-# 環境フィルタを適用
-echo "Filtering parameters containing '${ENV_FILTER}'..."
-FILTERED_PARAMS=$(echo "$ALL_PARAMS" | jq --arg filter "${ENV_FILTER}" \
-    '[.[] | select(.Name | contains($filter))]' 2>/dev/null || echo '[]')
-
+# フィルタリングされたパラメータを取得（API側でフィルタリング済み）
+FILTERED_PARAMS=$(fetch_all_parameters || echo '[]')
 PARAM_COUNT=$(echo "$FILTERED_PARAMS" | jq 'length' 2>/dev/null || echo "0")
 echo "Found ${PARAM_COUNT} parameters for environment ${ENVIRONMENT}"
 
@@ -178,6 +178,10 @@ fi
 
 # パラメータ名の一覧を保存
 echo "$FILTERED_PARAMS" | jq -r '.[].Name' > ${DATA_DIR}/parameter_names.txt
+
+# パラメータ取得前に待機（レート制限対策）
+echo "Waiting before fetching parameter values..."
+sleep 2
 
 # パラメータを取得してバックアップデータを作成（バッチ処理で高速化）
 echo "Fetching parameter values..."
@@ -233,9 +237,9 @@ for ((i=0; i<$TOTAL_PARAMS; i+=BATCH_SIZE)); do
         fi
     fi
     
-    # APIレート制限対策（より長い待機時間）
+    # APIレート制限対策（バッチ間の待機時間を長めに）
     if [ $end -lt $TOTAL_PARAMS ]; then
-        sleep 1
+        sleep 2
     fi
 done
 
