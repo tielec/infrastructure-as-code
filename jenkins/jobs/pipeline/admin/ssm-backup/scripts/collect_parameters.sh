@@ -41,10 +41,9 @@ aws_cli_with_retry() {
     local max_retries=5
     local retry_delay=3  # 初期待機時間を長めに設定
     local retry_count=0
-    local cmd="$@"
     
     while [ $retry_count -lt $max_retries ]; do
-        if output=$(eval "$cmd" 2>&1); then
+        if output=$("$@" 2>&1); then
             echo "$output"
             return 0
         else
@@ -88,8 +87,13 @@ fetch_all_parameters() {
             echo "  Executing: aws ssm describe-parameters with filter --region ${AWS_REGION}" >&2
             # パラメータフィルタの値を変数に格納
             local filter_value="${ENV_FILTER:1:-1}"  # /dev/ -> dev
-            cmd="aws ssm describe-parameters --starting-token \"$next_token\" --max-results 50 --parameter-filters \"Key=Name,Option=Contains,Values=$filter_value\" --query '{Parameters: Parameters, NextToken: NextToken}' --output json --region ${AWS_REGION}"
-            if ! result=$(aws_cli_with_retry "$cmd"); then
+            if ! result=$(aws_cli_with_retry aws ssm describe-parameters \
+                --starting-token "$next_token" \
+                --max-results 50 \
+                --parameter-filters "Key=Name,Option=Contains,Values=$filter_value" \
+                --query '{Parameters: Parameters, NextToken: NextToken}' \
+                --output json \
+                --region ${AWS_REGION}); then
                 echo "Error: Failed to describe parameters" >&2
                 echo '{"Parameters": [], "NextToken": null}'
                 return 1
@@ -98,8 +102,12 @@ fetch_all_parameters() {
             echo "  Executing: aws ssm describe-parameters with filter --region ${AWS_REGION}" >&2
             # パラメータフィルタの値を変数に格納
             local filter_value="${ENV_FILTER:1:-1}"  # /dev/ -> dev
-            cmd="aws ssm describe-parameters --max-results 50 --parameter-filters \"Key=Name,Option=Contains,Values=$filter_value\" --query '{Parameters: Parameters, NextToken: NextToken}' --output json --region ${AWS_REGION}"
-            if ! result=$(aws_cli_with_retry "$cmd"); then
+            if ! result=$(aws_cli_with_retry aws ssm describe-parameters \
+                --max-results 50 \
+                --parameter-filters "Key=Name,Option=Contains,Values=$filter_value" \
+                --query '{Parameters: Parameters, NextToken: NextToken}' \
+                --output json \
+                --region ${AWS_REGION}); then
                 echo "Error: Failed to describe parameters" >&2
                 echo '{"Parameters": [], "NextToken": null}'
                 return 1
