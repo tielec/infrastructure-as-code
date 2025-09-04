@@ -284,6 +284,30 @@ if [ "${FAILED_COUNT}" -gt 0 ]; then
     done
 fi
 
+# 変更がない場合は早期終了
+if [ -z "${TO_CREATE}" ] && [ -z "${TO_UPDATE}" ]; then
+    echo ""
+    echo "======================================"
+    echo "✅ No changes needed - all parameters are up-to-date"
+    echo "======================================"
+    
+    # 結果ファイルを作成
+    jq -n \
+        --arg success_count "0" \
+        --arg failed_count "0" \
+        --arg verify_failed "0" \
+        '{ 
+            restore_date: now | todate,
+            success_count: $success_count | tonumber,
+            failed_count: $failed_count | tonumber,
+            verification_failed: $verify_failed | tonumber,
+            failed_parameters: [],
+            status: "no_changes"
+        }' > "${DATA_DIR}/restore_result.json"
+    
+    exit 0
+fi
+
 # 検証
 echo ""
 echo "======================================"
