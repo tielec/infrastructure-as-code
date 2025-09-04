@@ -185,6 +185,12 @@ jenkins-jobs:
     displayName: "Ansible Playbook Executor"
     dslfile: jenkins/jobs/dsl/infrastructure/infrastructure_ansible_playbook_executor_job.groovy
     jenkinsfile: jenkins/jobs/pipeline/infrastructure/ansible-playbook-executor/Jenkinsfile
+  
+  infrastructure_lambda_verification_job:
+    name: 'Lambda_Verification'
+    displayName: 'Lambda Deployment Verification'
+    dslfile: jenkins/jobs/dsl/infrastructure/infrastructure_lambda_verification_job.groovy
+    jenkinsfile: jenkins/jobs/pipeline/infrastructure/lambda-verification/Jenkinsfile
 
   # Shared Library Jobs
   shared_library_aws_sqs_check_operation_test_job:
