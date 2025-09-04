@@ -1,5 +1,9 @@
 @Library('jenkins-shared-lib') _
 
+/**
+ * SSM Parameter Store Backup Pipeline
+ * AWS Systems Manager Parameter Storeのパラメータを定期的にバックアップ
+ */
 pipeline {
     agent {
         label 'ec2-fleet'
@@ -13,38 +17,61 @@ pipeline {
     }
     
     environment {
+        // AWS設定
         AWS_REGION = 'ap-northeast-1'
-        BACKUP_TIMESTAMP = sh(script: "date '+%Y%m%d_%H%M%S'", returnStdout: true).trim()
+        
+        // タイムスタンプ
         BACKUP_DATE = sh(script: "date '+%Y-%m-%d'", returnStdout: true).trim()
+        BACKUP_TIMESTAMP = sh(script: "date '+%Y%m%d_%H%M%S'", returnStdout: true).trim()
+        
+        // ディレクトリ構造
+        WORK_DIR = "${WORKSPACE}/backup-work"
+        DATA_DIR = "${WORK_DIR}/data"
+        
+        // 環境フィルタ（環境に含まれる文字列）
+        ENV_FILTER = "/${params.ENVIRONMENT}/"
     }
     
     stages {
         stage('Initialize') {
             steps {
                 script {
-                    echo "=== SSM Parameter Store Backup ==="
-                    echo "Environment: ${params.ENVIRONMENT}"
-                    echo "Dry Run: ${params.DRY_RUN}"
-                    echo "Backup Timestamp: ${env.BACKUP_TIMESTAMP}"
+                    // ビルド表示名を設定
+                    currentBuild.displayName = "#${env.BUILD_NUMBER} - ${params.ENVIRONMENT} Backup"
+                    currentBuild.description = "Backup at ${env.BACKUP_TIMESTAMP}"
                     
-                    // 環境に基づいてフィルタリング文字列を設定
-                    env.ENVIRONMENT_FILTER = "/${params.ENVIRONMENT}/"
-                    echo "Environment Filter: ${env.ENVIRONMENT_FILTER} (will match parameters containing this string)"
+                    echo """
+                    =============================================
+                    SSM Parameter Store Backup
+                    =============================================
+                    Environment: ${params.ENVIRONMENT}
+                    Filter: Parameters containing '${env.ENV_FILTER}'
+                    Dry Run: ${params.DRY_RUN}
+                    Timestamp: ${env.BACKUP_TIMESTAMP}
+                    Date: ${env.BACKUP_DATE}
+                    =============================================
+                    """.stripIndent()
                     
-                    // バックアップ用S3バケット名を取得
+                    // 作業ディレクトリの準備
+                    sh """
+                        rm -rf ${WORK_DIR}
+                        mkdir -p ${DATA_DIR}
+                    """
+                    
+                    // S3バケット名の取得
                     env.BACKUP_BUCKET = sh(
                         script: """
                             aws ssm get-parameter \
                                 --name "/jenkins/${params.ENVIRONMENT}/backup/s3-bucket-name" \
                                 --query 'Parameter.Value' \
                                 --output text \
-                                --region ${AWS_REGION}
+                                --region ${AWS_REGION} 2>/dev/null || echo ""
                         """,
                         returnStdout: true
                     ).trim()
                     
                     if (!env.BACKUP_BUCKET) {
-                        error("バックアップ用S3バケットの取得に失敗しました")
+                        error("バックアップ用S3バケットが見つかりません。Pulumiスタックがデプロイされていることを確認してください。")
                     }
                     
                     echo "Backup S3 Bucket: ${env.BACKUP_BUCKET}"
@@ -52,156 +79,189 @@ pipeline {
             }
         }
         
-        stage('Fetch Parameters') {
+        stage('Collect Parameters') {
             steps {
                 script {
-                    echo "=== Fetching SSM Parameters ==="
+                    echo "=== Collecting SSM Parameters ==="
                     
-                    // すべてのパラメータを取得
-                    def allParametersJson = sh(
-                        script: """
-                            aws ssm describe-parameters \
-                                --query 'Parameters' \
-                                --output json \
-                                --region ${AWS_REGION}
-                        """,
-                        returnStdout: true
-                    ).trim()
+                    // バックアップスクリプトの作成
+                    writeFile file: "${WORK_DIR}/collect_params.sh", text: '''#!/bin/bash
+set -e
+
+echo "Starting parameter collection..."
+
+# パラメータ一覧の取得（ページネーション対応）
+fetch_all_parameters() {
+    local next_token=""
+    local page=1
+    local all_params="[]"
+    
+    while true; do
+        echo "Fetching page ${page}..."
+        
+        if [ -n "$next_token" ]; then
+            local result=$(aws ssm describe-parameters \
+                --starting-token "$next_token" \
+                --query "{Parameters: Parameters, NextToken: NextToken}" \
+                --output json \
+                --region ${AWS_REGION})
+        else
+            local result=$(aws ssm describe-parameters \
+                --query "{Parameters: Parameters, NextToken: NextToken}" \
+                --output json \
+                --region ${AWS_REGION})
+        fi
+        
+        # パラメータを追加
+        local params=$(echo "$result" | jq -r '.Parameters // []')
+        all_params=$(echo "$all_params" | jq ". + $params")
+        
+        # 次のトークンを確認
+        next_token=$(echo "$result" | jq -r '.NextToken // empty')
+        
+        if [ -z "$next_token" ]; then
+            break
+        fi
+        
+        page=$((page + 1))
+        
+        # APIレート制限対策
+        sleep 0.5
+    done
+    
+    echo "$all_params"
+}
+
+# すべてのパラメータを取得
+ALL_PARAMS=$(fetch_all_parameters)
+
+# 環境フィルタを適用
+echo "Filtering parameters containing '${ENV_FILTER}'..."
+FILTERED_PARAMS=$(echo "$ALL_PARAMS" | jq --arg filter "${ENV_FILTER}" \
+    '[.[] | select(.Name | contains($filter))]')
+
+PARAM_COUNT=$(echo "$FILTERED_PARAMS" | jq 'length')
+echo "Found ${PARAM_COUNT} parameters for environment ${ENVIRONMENT}"
+
+# パラメータ名の一覧を保存
+echo "$FILTERED_PARAMS" | jq -r '.[].Name' > ${DATA_DIR}/parameter_names.txt
+
+# パラメータを取得してバックアップデータを作成
+echo "Fetching parameter values..."
+BACKUP_DATA="[]"
+BATCH_SIZE=10
+COUNTER=0
+
+while IFS= read -r param_name; do
+    if [ $((COUNTER % BATCH_SIZE)) -eq 0 ] && [ $COUNTER -gt 0 ]; then
+        echo "Processed ${COUNTER} parameters..."
+        sleep 1  # APIレート制限対策
+    fi
+    
+    # パラメータの値を取得（エラー時はスキップ）
+    PARAM_DATA=$(aws ssm get-parameter \
+        --name "$param_name" \
+        --with-decryption \
+        --query 'Parameter' \
+        --output json \
+        --region ${AWS_REGION} 2>/dev/null || echo '{}')
+    
+    if [ "$PARAM_DATA" != '{}' ]; then
+        BACKUP_DATA=$(echo "$BACKUP_DATA" | jq ". + [$PARAM_DATA]")
+    else
+        echo "Warning: Failed to get parameter: $param_name"
+    fi
+    
+    COUNTER=$((COUNTER + 1))
+done < ${DATA_DIR}/parameter_names.txt
+
+echo "Successfully fetched ${COUNTER} parameters"
+
+# バックアップファイルの作成
+BACKUP_JSON=$(jq -n \
+    --arg date "${BACKUP_DATE}" \
+    --arg timestamp "${BACKUP_TIMESTAMP}" \
+    --arg environment "${ENVIRONMENT}" \
+    --arg count "$COUNTER" \
+    --argjson parameters "$BACKUP_DATA" \
+    '{
+        backup_date: $date,
+        backup_timestamp: $timestamp,
+        environment: $environment,
+        parameter_count: $count | tonumber,
+        parameters: $parameters
+    }')
+
+echo "$BACKUP_JSON" | jq '.' > ${DATA_DIR}/backup.json
+
+echo "Backup data created: ${DATA_DIR}/backup.json"
+echo "Total parameters backed up: $(echo "$BACKUP_JSON" | jq '.parameter_count')"
+'''
                     
-                    def allParameters = readJSON text: allParametersJson
-                    
-                    // 環境文字列を含むパラメータのみフィルタリング
-                    def parameters = allParameters.findAll { param ->
-                        param.Name.contains(env.ENVIRONMENT_FILTER)
-                    }
-                    
-                    echo "Found ${parameters.size()} parameters containing: ${env.ENVIRONMENT_FILTER}"
-                    echo "(Filtered from ${allParameters.size()} total parameters)"
-                    
-                    if (parameters.size() == 0) {
-                        echo "WARNING: No parameters found containing: ${env.ENVIRONMENT_FILTER}"
-                        currentBuild.result = 'SUCCESS'
-                        return
-                    }
-                    
-                    // パラメータの詳細を取得（値を含む）
-                    def allParametersData = []
-                    def batchSize = 5  // バッチサイズを小さくしてタイムアウトを防ぐ
-                    
-                    echo "Processing ${parameters.size()} parameters in batches of ${batchSize}..."
-                    
-                    for (int i = 0; i < parameters.size(); i += batchSize) {
-                        def batch = parameters.subList(i, Math.min(i + batchSize, parameters.size()))
+                    // スクリプトの実行
+                    sh """
+                        chmod +x ${WORK_DIR}/collect_params.sh
                         
-                        echo "Processing batch ${(i/batchSize) + 1}/${Math.ceil(parameters.size()/batchSize)} (${batch.size()} parameters)..."
+                        # 環境変数を設定
+                        export ENVIRONMENT="${params.ENVIRONMENT}"
+                        export ENV_FILTER="${env.ENV_FILTER}"
+                        export AWS_REGION="${AWS_REGION}"
+                        export BACKUP_DATE="${env.BACKUP_DATE}"
+                        export BACKUP_TIMESTAMP="${env.BACKUP_TIMESTAMP}"
+                        export DATA_DIR="${DATA_DIR}"
                         
-                        // パラメータ名を一時ファイルに書き込む
-                        def paramNamesFile = "param_names_${i}.txt"
-                        def paramNames = batch.collect { it.Name }.join('\n')
-                        writeFile file: paramNamesFile, text: paramNames
-                        
-                        try {
-                            def batchData = sh(
-                                script: """
-                                    # パラメータ名を引数として渡す
-                                    aws ssm get-parameters \
-                                        --names \$(cat ${paramNamesFile} | tr '\\n' ' ') \
-                                        --with-decryption \
-                                        --query 'Parameters' \
-                                        --output json \
-                                        --region ${AWS_REGION}
-                                """,
-                                returnStdout: true
-                            ).trim()
-                            
-                            def batchParameters = readJSON text: batchData
-                            allParametersData.addAll(batchParameters)
-                            
-                            // 進捗を表示
-                            echo "Successfully processed batch ${(i/batchSize) + 1}"
-                            
-                        } catch (Exception e) {
-                            echo "WARNING: Failed to process batch ${(i/batchSize) + 1}: ${e.message}"
-                            echo "Skipping parameters: ${batch.collect { it.Name }}"
-                        } finally {
-                            // 一時ファイルを削除
-                            sh "rm -f ${paramNamesFile} || true"
-                        }
-                        
-                        // バッチ間で少し待機（AWS APIレート制限対策）
-                        sleep(time: 1, unit: 'SECONDS')
-                    }
+                        # スクリプト実行
+                        ${WORK_DIR}/collect_params.sh
+                    """
                     
-                    // 取得したパラメータ数を確認
-                    if (allParametersData.size() == 0) {
-                        echo "WARNING: No parameters were successfully retrieved"
+                    // バックアップファイルの確認
+                    def backupData = readJSON file: "${DATA_DIR}/backup.json"
+                    env.PARAM_COUNT = backupData.parameter_count.toString()
+                    
+                    if (backupData.parameter_count == 0) {
+                        echo "WARNING: No parameters found for backup"
                         currentBuild.result = 'UNSTABLE'
-                        return
+                    } else {
+                        echo "Backup file contains ${backupData.parameter_count} parameters"
                     }
-                    
-                    echo "Successfully retrieved ${allParametersData.size()} parameters"
-                    
-                    // バックアップデータの作成
-                    def backupData = [
-                        backup_date: env.BACKUP_DATE,
-                        backup_timestamp: env.BACKUP_TIMESTAMP,
-                        environment: params.ENVIRONMENT,
-                        parameter_count: allParametersData.size(),
-                        parameters: allParametersData
-                    ]
-                    
-                    // JSONファイルとして保存
-                    def backupJson = groovy.json.JsonOutput.toJson(backupData)
-                    def backupFileName = "ssm-backup-${params.ENVIRONMENT}-${env.BACKUP_TIMESTAMP}.json"
-                    writeFile file: backupFileName, text: groovy.json.JsonOutput.prettyPrint(backupJson)
-                    
-                    env.BACKUP_FILE_NAME = backupFileName
-                    env.BACKUP_FILE_SIZE = sh(script: "wc -c < ${backupFileName}", returnStdout: true).trim()
-                    
-                    echo "Backup file created: ${backupFileName} (${env.BACKUP_FILE_SIZE} bytes)"
                 }
             }
         }
         
         stage('Upload to S3') {
             when {
-                expression { return !params.DRY_RUN }
+                expression { 
+                    return !params.DRY_RUN && env.PARAM_COUNT.toInteger() > 0
+                }
             }
             steps {
                 script {
                     echo "=== Uploading Backup to S3 ==="
                     
-                    def s3Key = "${params.ENVIRONMENT}/${env.BACKUP_DATE}/${env.BACKUP_FILE_NAME}"
+                    def backupFileName = "ssm-backup-${params.ENVIRONMENT}-${env.BACKUP_TIMESTAMP}.json"
+                    def s3Key = "${params.ENVIRONMENT}/${env.BACKUP_DATE}/${backupFileName}"
                     
+                    // バックアップファイルの名前を変更
+                    sh "cp ${DATA_DIR}/backup.json ${DATA_DIR}/${backupFileName}"
+                    
+                    // S3へアップロード
                     sh """
-                        aws s3 cp ${env.BACKUP_FILE_NAME} \
+                        aws s3 cp ${DATA_DIR}/${backupFileName} \
                             s3://${env.BACKUP_BUCKET}/${s3Key} \
                             --region ${AWS_REGION}
                     """
                     
                     echo "Backup uploaded to: s3://${env.BACKUP_BUCKET}/${s3Key}"
                     
-                    // 最新バックアップのメタデータを更新
+                    // 最新バックアップ情報を更新
                     sh """
-                        echo '${env.BACKUP_DATE}/${env.BACKUP_FILE_NAME}' | \
+                        echo '${env.BACKUP_DATE}/${backupFileName}' | \
                         aws s3 cp - s3://${env.BACKUP_BUCKET}/${params.ENVIRONMENT}/latest.txt \
                             --region ${AWS_REGION}
                     """
-                }
-            }
-        }
-        
-        stage('Verify Backup') {
-            when {
-                expression { return !params.DRY_RUN }
-            }
-            steps {
-                script {
-                    echo "=== Verifying Backup ==="
                     
-                    def s3Key = "${params.ENVIRONMENT}/${env.BACKUP_DATE}/${env.BACKUP_FILE_NAME}"
-                    
-                    def s3Object = sh(
+                    // アップロード確認
+                    def s3ObjectInfo = sh(
                         script: """
                             aws s3api head-object \
                                 --bucket ${env.BACKUP_BUCKET} \
@@ -213,8 +273,42 @@ pipeline {
                         returnStdout: true
                     ).trim()
                     
-                    echo "S3 Object Info: ${s3Object}"
-                    echo "Backup verification completed successfully"
+                    echo "S3 Object Info: ${s3ObjectInfo}"
+                    
+                    // アーティファクトとして保存
+                    archiveArtifacts artifacts: "backup-work/data/${backupFileName}", fingerprint: true
+                }
+            }
+        }
+        
+        stage('Dry Run Report') {
+            when {
+                expression { params.DRY_RUN }
+            }
+            steps {
+                script {
+                    echo """
+                    =============================================
+                    DRY RUN - バックアップ実行レポート
+                    =============================================
+                    
+                    このドライランでは実際のS3アップロードは行われませんでした。
+                    
+                    バックアップ対象:
+                    - 環境: ${params.ENVIRONMENT}
+                    - パラメータ数: ${env.PARAM_COUNT}
+                    - バックアップ日時: ${env.BACKUP_TIMESTAMP}
+                    
+                    実行時の動作:
+                    - S3バケット: ${env.BACKUP_BUCKET}
+                    - S3パス: ${params.ENVIRONMENT}/${env.BACKUP_DATE}/
+                    - ファイル名: ssm-backup-${params.ENVIRONMENT}-${env.BACKUP_TIMESTAMP}.json
+                    
+                    =============================================
+                    """.stripIndent()
+                    
+                    // ドライラン時もアーティファクトとして保存
+                    archiveArtifacts artifacts: "backup-work/data/backup.json", fingerprint: true
                 }
             }
         }
@@ -223,15 +317,37 @@ pipeline {
     post {
         always {
             script {
-                // ローカルのバックアップファイルを削除
-                sh "rm -f ${env.BACKUP_FILE_NAME} || true"
+                // 実行サマリーの表示
+                echo """
+                =============================================
+                SSM Parameter Store Backup Summary
+                =============================================
+                Build: #${env.BUILD_NUMBER}
+                Status: ${currentBuild.result ?: 'SUCCESS'}
+                Environment: ${params.ENVIRONMENT}
+                Parameters: ${env.PARAM_COUNT ?: '0'}
+                Timestamp: ${env.BACKUP_TIMESTAMP}
+                Dry Run: ${params.DRY_RUN}
+                =============================================
+                """.stripIndent()
             }
         }
+        
         success {
-            echo "SSM Parameter Store backup completed successfully"
+            echo "✅ SSMパラメータのバックアップが正常に完了しました"
         }
+        
         failure {
-            echo "SSM Parameter Store backup failed"
+            echo "❌ バックアップが失敗しました。ログを確認してください"
+        }
+        
+        unstable {
+            echo "⚠️ バックアップは完了しましたが、警告があります"
+        }
+        
+        cleanup {
+            // 作業ディレクトリのクリーンアップ
+            sh "rm -rf ${WORK_DIR} || true"
         }
     }
 }
