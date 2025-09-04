@@ -176,70 +176,51 @@ else
     API_ENDPOINT=""
 fi
 
-# APIキーの確認（新しいSSMパス: /lambda-api/{env}/security/api-key）
+# APIキーの確認（API Gatewayの実際のキーを取得）
 if [ -n "${PROJECT_NAME:-}" ]; then
-    # 新しいパス構造に対応
-    SSM_KEY_PATH="/lambda-api/${ENV_NAME}/security/api-key"
-    log_info "Checking SSM parameter: ${SSM_KEY_PATH}"
+    # API Gatewayの実際のキーパス
+    SSM_KEY_PATH="/${PROJECT_NAME}/${ENV_NAME}/api-gateway/keys"
+    log_info "Checking API Gateway keys from SSM: ${SSM_KEY_PATH}"
     
     if aws ssm get-parameter --name "${SSM_KEY_PATH}" --with-decryption --query 'Parameter.Value' --output text >/dev/null 2>&1; then
         API_KEYS=$(aws ssm get-parameter --name "${SSM_KEY_PATH}" --with-decryption --query 'Parameter.Value' --output text)
         
         # JSON形式を確認
         if echo "$API_KEYS" | jq . >/dev/null 2>&1; then
-            # 配列形式（新Lambda実装）のチェック
-            if echo "$API_KEYS" | jq -e 'type == "array"' >/dev/null 2>&1; then
-                log_info "API Keys format: Array (new format with multiple clients)"
-                
-                # test-clientのキーを取得（テスト用）
-                TEST_KEY=$(echo "$API_KEYS" | jq -r '.[] | select(.clientId == "test-client") | select(.enabled == true) | .apiKey // empty' | head -1)
-                
-                # bubble-clientのキーを取得（本番用）
-                BUBBLE_KEY=$(echo "$API_KEYS" | jq -r '.[] | select(.clientId == "bubble-client") | select(.enabled == true) | .apiKey // empty' | head -1)
-                
-                # admin-clientのキーを取得（管理用）
-                ADMIN_KEY=$(echo "$API_KEYS" | jq -r '.[] | select(.clientId == "admin-client") | select(.enabled == true) | .apiKey // empty' | head -1)
-                
-                # テスト用にtest-clientを優先的に使用
-                if [ -n "$TEST_KEY" ]; then
-                    log_info "Using test-client API key for verification"
-                    VERIFICATION_KEY="$TEST_KEY"
-                elif [ -n "$BUBBLE_KEY" ]; then
-                    log_info "test-client not found, using bubble-client API key"
-                    VERIFICATION_KEY="$BUBBLE_KEY"
-                elif [ -n "$ADMIN_KEY" ]; then
-                    log_info "Using admin-client API key as fallback"
-                    VERIFICATION_KEY="$ADMIN_KEY"
-                else
-                    log_warn "No enabled API keys found"
-                    VERIFICATION_KEY=""
-                fi
-                
-                # 外部用キーも同様に取得（互換性維持）
-                EXTERNAL_KEY="$TEST_KEY"
-            else
-                # オブジェクト形式（旧形式）のフォールバック
-                log_info "API Keys format: Object (legacy format)"
-                BUBBLE_KEY=$(echo "$API_KEYS" | jq -r '.bubble.key // empty')
-                EXTERNAL_KEY=$(echo "$API_KEYS" | jq -r '.external.key // empty')
+            # API Gatewayキー形式（bubbleとexternal）
+            log_info "API Keys format: API Gateway format"
+            
+            # bubble.io用のキーを取得
+            BUBBLE_KEY=$(echo "$API_KEYS" | jq -r '.bubble.key // empty')
+            
+            # 外部システム用のキーを取得  
+            EXTERNAL_KEY=$(echo "$API_KEYS" | jq -r '.external.key // empty')
+            
+            # テスト用に外部キーを優先的に使用（テスト環境では外部キーが適切）
+            if [ -n "$EXTERNAL_KEY" ]; then
+                log_info "Using external API key for verification"
+                VERIFICATION_KEY="$EXTERNAL_KEY"
+            elif [ -n "$BUBBLE_KEY" ]; then
+                log_info "Using bubble.io API key for verification"
                 VERIFICATION_KEY="$BUBBLE_KEY"
+            else
+                log_warn "No API keys found in SSM"
+                VERIFICATION_KEY=""
             fi
+            
             
             if [ -n "$VERIFICATION_KEY" ]; then
                 check_result "API Keys in SSM" "pass"
                 if [ "$VERBOSE" == "1" ]; then
-                    if [ -n "$TEST_KEY" ]; then
-                        log_info "Test Client API Key found: ${TEST_KEY:0:20}..."
-                    fi
                     if [ -n "$BUBBLE_KEY" ]; then
-                        log_info "Bubble Client API Key found: ${BUBBLE_KEY:0:20}..."
+                        log_info "Bubble.io API Key found: ${BUBBLE_KEY:0:20}..."
                     fi
-                    if [ -n "$ADMIN_KEY" ]; then
-                        log_info "Admin Client API Key found: ${ADMIN_KEY:0:20}..."
+                    if [ -n "$EXTERNAL_KEY" ]; then
+                        log_info "External API Key found: ${EXTERNAL_KEY:0:20}..."
                     fi
                 fi
             else
-                log_warn "API keys found in SSM but no enabled keys available"
+                log_warn "No API keys found in SSM"
                 check_result "API Keys in SSM" "fail"
                 BUBBLE_KEY=""
                 EXTERNAL_KEY=""
@@ -375,6 +356,12 @@ if [ -n "$API_ENDPOINT" ] && [ -n "$VERIFICATION_KEY" ]; then
     
     # バージョンAPIエンドポイント
     log_info "Testing version API endpoint..."
+    # デバッグ: APIキーの確認
+    if [ "$VERBOSE" == "1" ]; then
+        log_debug "API Key being used: ${VERIFICATION_KEY}"
+        log_debug "Full curl command: curl -X GET '${API_ENDPOINT}/api/version' -H 'x-api-key: ${VERIFICATION_KEY}'"
+    fi
+    
     VERSION_RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" \
         -X GET "${API_ENDPOINT}/api/version" \
         -H "x-api-key: ${VERIFICATION_KEY}" 2>/dev/null || echo "000")
@@ -384,6 +371,14 @@ if [ -n "$API_ENDPOINT" ] && [ -n "$VERIFICATION_KEY" ]; then
         VERSION_BODY=$(curl -s -X GET "${API_ENDPOINT}/api/version" -H "x-api-key: ${VERIFICATION_KEY}")
         log_info "Version Response: $VERSION_BODY"
     else
+        # 403エラーの場合、詳細を取得
+        if [ "$VERSION_RESPONSE" == "403" ]; then
+            ERROR_RESPONSE=$(curl -s -X GET "${API_ENDPOINT}/api/version" -H "x-api-key: ${VERIFICATION_KEY}")
+            log_error "Version API returned 403 Forbidden"
+            log_info "Error response: $ERROR_RESPONSE"
+            # APIキーの形式を確認
+            log_info "API key format check: ${VERIFICATION_KEY:0:10}... (length: ${#VERIFICATION_KEY})"
+        fi
         check_result "Version API Endpoint (HTTP $VERSION_RESPONSE)" "fail"
     fi
     
@@ -444,6 +439,17 @@ if [ -n "$API_ENDPOINT" ] && [ -n "$VERIFICATION_KEY" ]; then
                 fi
             else
                 log_error "Echo API failed with unexpected response (HTTP $ECHO_RESPONSE)"
+                # 403エラーの場合、詳細を取得
+                if [ "$ECHO_RESPONSE" == "403" ]; then
+                    ERROR_RESPONSE=$(curl -s -X POST "${API_ENDPOINT}/api/echo" \
+                        -H "x-api-key: ${VERIFICATION_KEY}" \
+                        -H "Content-Type: application/json" \
+                        -d '{"test":"verification"}')
+                    log_error "Echo API returned 403 Forbidden with API key"
+                    log_info "Error response: $ERROR_RESPONSE"
+                    log_info "API key being used: ${VERIFICATION_KEY:0:20}... (length: ${#VERIFICATION_KEY})"
+                    log_info "Note: This may indicate API Gateway is not configured to accept this API key"
+                fi
                 check_result "Echo API Endpoint" "fail"
             fi
         else

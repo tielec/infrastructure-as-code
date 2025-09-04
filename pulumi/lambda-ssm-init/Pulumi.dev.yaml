@@ -23,22 +23,3 @@ config:
   lambda-ssm-init:enableWebSocket: false
   # データベース設定
   lambda-ssm-init:enableDatabase: false
-  # APIキークライアント設定
-  lambda-ssm-init:apiKeyClients: |
-    [
-      {
-        "clientId": "bubble-client",
-        "rateLimit": 1000,
-        "enabled": true
-      },
-      {
-        "clientId": "test-client",
-        "rateLimit": 100,
-        "enabled": true
-      },
-      {
-        "clientId": "admin-client",
-        "rateLimit": 5000,
-        "enabled": true
-      }
-    ]
