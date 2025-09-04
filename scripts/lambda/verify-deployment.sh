@@ -176,9 +176,12 @@ else
     API_ENDPOINT=""
 fi
 
-# APIキーの確認（プロジェクト名が取得できている場合のみ）
+# APIキーの確認（新しいSSMパス: /lambda-api/{env}/security/api-key）
 if [ -n "${PROJECT_NAME:-}" ]; then
-    SSM_KEY_PATH="/${PROJECT_NAME}/${ENV_NAME}/api-gateway/keys"
+    # 新しいパス構造に対応
+    SSM_KEY_PATH="/lambda-api/${ENV_NAME}/security/api-key"
+    log_info "Checking SSM parameter: ${SSM_KEY_PATH}"
+    
     if aws ssm get-parameter --name "${SSM_KEY_PATH}" --with-decryption --query 'Parameter.Value' --output text >/dev/null 2>&1; then
         API_KEYS=$(aws ssm get-parameter --name "${SSM_KEY_PATH}" --with-decryption --query 'Parameter.Value' --output text)
         
@@ -186,61 +189,81 @@ if [ -n "${PROJECT_NAME:-}" ]; then
         if echo "$API_KEYS" | jq . >/dev/null 2>&1; then
             # 配列形式（新Lambda実装）のチェック
             if echo "$API_KEYS" | jq -e 'type == "array"' >/dev/null 2>&1; then
-                log_info "API Keys format: Array (new Lambda implementation)"
-                # 配列からbubbleクライアントのキーを取得
-                BUBBLE_KEY=$(echo "$API_KEYS" | jq -r '.[] | select(.clientId == "bubble" or .clientId == "bubble.io") | select(.enabled == true) | .apiKey // empty' | head -1)
-                # bubbleキーがない場合は最初の有効なキーを使用
-                if [ -z "$BUBBLE_KEY" ]; then
-                    BUBBLE_KEY=$(echo "$API_KEYS" | jq -r '.[] | select(.enabled == true) | .apiKey // empty' | head -1)
-                    if [ -n "$BUBBLE_KEY" ]; then
-                        log_info "Using first available API key from array"
-                    fi
+                log_info "API Keys format: Array (new format with multiple clients)"
+                
+                # test-clientのキーを取得（テスト用）
+                TEST_KEY=$(echo "$API_KEYS" | jq -r '.[] | select(.clientId == "test-client") | select(.enabled == true) | .apiKey // empty' | head -1)
+                
+                # bubble-clientのキーを取得（本番用）
+                BUBBLE_KEY=$(echo "$API_KEYS" | jq -r '.[] | select(.clientId == "bubble-client") | select(.enabled == true) | .apiKey // empty' | head -1)
+                
+                # admin-clientのキーを取得（管理用）
+                ADMIN_KEY=$(echo "$API_KEYS" | jq -r '.[] | select(.clientId == "admin-client") | select(.enabled == true) | .apiKey // empty' | head -1)
+                
+                # テスト用にtest-clientを優先的に使用
+                if [ -n "$TEST_KEY" ]; then
+                    log_info "Using test-client API key for verification"
+                    VERIFICATION_KEY="$TEST_KEY"
+                elif [ -n "$BUBBLE_KEY" ]; then
+                    log_info "test-client not found, using bubble-client API key"
+                    VERIFICATION_KEY="$BUBBLE_KEY"
+                elif [ -n "$ADMIN_KEY" ]; then
+                    log_info "Using admin-client API key as fallback"
+                    VERIFICATION_KEY="$ADMIN_KEY"
+                else
+                    log_warn "No enabled API keys found"
+                    VERIFICATION_KEY=""
                 fi
-                # 外部用キーも同様に取得
-                EXTERNAL_KEY=$(echo "$API_KEYS" | jq -r '.[] | select(.clientId == "external") | select(.enabled == true) | .apiKey // empty' | head -1)
+                
+                # 外部用キーも同様に取得（互換性維持）
+                EXTERNAL_KEY="$TEST_KEY"
             else
                 # オブジェクト形式（旧形式）のフォールバック
                 log_info "API Keys format: Object (legacy format)"
                 BUBBLE_KEY=$(echo "$API_KEYS" | jq -r '.bubble.key // empty')
                 EXTERNAL_KEY=$(echo "$API_KEYS" | jq -r '.external.key // empty')
+                VERIFICATION_KEY="$BUBBLE_KEY"
             fi
             
-            if [ -n "$BUBBLE_KEY" ] || [ -n "$EXTERNAL_KEY" ]; then
+            if [ -n "$VERIFICATION_KEY" ]; then
                 check_result "API Keys in SSM" "pass"
                 if [ "$VERBOSE" == "1" ]; then
-                    if [ -n "$BUBBLE_KEY" ]; then
-                        log_info "Bubble.io API Key found: ${BUBBLE_KEY:0:10}..."
-                    else
-                        log_warn "Bubble.io API Key not found in SSM"
+                    if [ -n "$TEST_KEY" ]; then
+                        log_info "Test Client API Key found: ${TEST_KEY:0:20}..."
                     fi
-                    if [ -n "$EXTERNAL_KEY" ]; then
-                        log_info "External API Key found: ${EXTERNAL_KEY:0:10}..."
-                    else
-                        log_warn "External API Key not found in SSM"
+                    if [ -n "$BUBBLE_KEY" ]; then
+                        log_info "Bubble Client API Key found: ${BUBBLE_KEY:0:20}..."
+                    fi
+                    if [ -n "$ADMIN_KEY" ]; then
+                        log_info "Admin Client API Key found: ${ADMIN_KEY:0:20}..."
                     fi
                 fi
             else
-                log_warn "API keys found in SSM but values are empty"
+                log_warn "API keys found in SSM but no enabled keys available"
                 check_result "API Keys in SSM" "fail"
                 BUBBLE_KEY=""
                 EXTERNAL_KEY=""
+                VERIFICATION_KEY=""
             fi
         else
             log_error "Invalid JSON format in SSM parameter: ${SSM_KEY_PATH}"
             check_result "API Keys in SSM" "fail"
             BUBBLE_KEY=""
             EXTERNAL_KEY=""
+            VERIFICATION_KEY=""
         fi
     else
         log_warn "SSM parameter not found: ${SSM_KEY_PATH}"
         check_result "API Keys in SSM" "fail"
         BUBBLE_KEY=""
         EXTERNAL_KEY=""
+        VERIFICATION_KEY=""
     fi
 else
     log_warn "Skipping API key check (project name not found)"
     BUBBLE_KEY=""
     EXTERNAL_KEY=""
+    VERIFICATION_KEY=""
 fi
 
 echo ""
@@ -335,16 +358,16 @@ echo ""
 echo "4. Testing API Endpoints"
 echo "----------------------------"
 
-if [ -n "$API_ENDPOINT" ] && [ -n "$BUBBLE_KEY" ]; then
+if [ -n "$API_ENDPOINT" ] && [ -n "$VERIFICATION_KEY" ]; then
     # ヘルスチェックエンドポイント
     log_info "Testing health endpoint..."
     HEALTH_RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" \
         -X GET "${API_ENDPOINT}/health" \
-        -H "x-api-key: ${BUBBLE_KEY}" 2>/dev/null || echo "000")
+        -H "x-api-key: ${VERIFICATION_KEY}" 2>/dev/null || echo "000")
     
     if [ "$HEALTH_RESPONSE" == "200" ]; then
         check_result "Health Endpoint" "pass"
-        HEALTH_BODY=$(curl -s -X GET "${API_ENDPOINT}/health" -H "x-api-key: ${BUBBLE_KEY}")
+        HEALTH_BODY=$(curl -s -X GET "${API_ENDPOINT}/health" -H "x-api-key: ${VERIFICATION_KEY}")
         log_info "Health Response: $HEALTH_BODY"
     else
         check_result "Health Endpoint (HTTP $HEALTH_RESPONSE)" "fail"
@@ -354,11 +377,11 @@ if [ -n "$API_ENDPOINT" ] && [ -n "$BUBBLE_KEY" ]; then
     log_info "Testing version API endpoint..."
     VERSION_RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" \
         -X GET "${API_ENDPOINT}/api/version" \
-        -H "x-api-key: ${BUBBLE_KEY}" 2>/dev/null || echo "000")
+        -H "x-api-key: ${VERIFICATION_KEY}" 2>/dev/null || echo "000")
     
     if [ "$VERSION_RESPONSE" == "200" ]; then
         check_result "Version API Endpoint" "pass"
-        VERSION_BODY=$(curl -s -X GET "${API_ENDPOINT}/api/version" -H "x-api-key: ${BUBBLE_KEY}")
+        VERSION_BODY=$(curl -s -X GET "${API_ENDPOINT}/api/version" -H "x-api-key: ${VERIFICATION_KEY}")
         log_info "Version Response: $VERSION_BODY"
     else
         check_result "Version API Endpoint (HTTP $VERSION_RESPONSE)" "fail"
@@ -377,23 +400,23 @@ if [ -n "$API_ENDPOINT" ] && [ -n "$BUBBLE_KEY" ]; then
         log_info "Echo API correctly requires authentication ($ECHO_RESPONSE_NO_AUTH without key)"
         
         # APIキーがある場合は認証付きでテスト
-        if [ -n "${BUBBLE_KEY}" ]; then
+        if [ -n "${VERIFICATION_KEY}" ]; then
             # デバッグ情報出力（-vオプション時）
             if [ "$VERBOSE" == "1" ]; then
-                log_info "Using API key: ${BUBBLE_KEY:0:10}..."
+                log_info "Using API key: ${VERIFICATION_KEY:0:20}..."
             fi
             
             # 認証付きエコーAPIリクエスト
             ECHO_RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" \
                 -X POST "${API_ENDPOINT}/api/echo" \
-                -H "x-api-key: ${BUBBLE_KEY}" \
+                -H "x-api-key: ${VERIFICATION_KEY}" \
                 -H "Content-Type: application/json" \
                 -d '{"test":"verification"}' 2>/dev/null || echo "000")
             
             if [ "$ECHO_RESPONSE" == "200" ]; then
                 check_result "Echo API Endpoint" "pass"
                 ECHO_BODY=$(curl -s -X POST "${API_ENDPOINT}/api/echo" \
-                    -H "x-api-key: ${BUBBLE_KEY}" \
+                    -H "x-api-key: ${VERIFICATION_KEY}" \
                     -H "Content-Type: application/json" \
                     -d '{"test":"verification"}')
                 log_info "Echo Response: $ECHO_BODY"
@@ -401,7 +424,7 @@ if [ -n "$API_ENDPOINT" ] && [ -n "$BUBBLE_KEY" ]; then
                 # 401の場合、Lambda側の設定問題の可能性
                 log_warn "Echo API returned 401 with API key - possible Lambda configuration issue"
                 ERROR_BODY=$(curl -s -X POST "${API_ENDPOINT}/api/echo" \
-                    -H "x-api-key: ${BUBBLE_KEY}" \
+                    -H "x-api-key: ${VERIFICATION_KEY}" \
                     -H "Content-Type: application/json" \
                     -d '{"test":"verification"}')
                 log_info "Error details: $ERROR_BODY"
