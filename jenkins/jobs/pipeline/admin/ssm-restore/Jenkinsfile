@@ -274,8 +274,8 @@ pipeline {
                             """.stripIndent()
                         }
                         
-                        // レポートをアーティファクトとして保存
-                        archiveArtifacts artifacts: "restore-work/data/*.json", fingerprint: true
+                        // セキュリティ上の理由によりアーティファクトとしては保存しない
+                        // 分析結果はログで確認可能
                     }
                 }
             }

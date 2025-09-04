@@ -194,8 +194,8 @@ pipeline {
                     
                     echo "S3 Object Info: ${s3ObjectInfo}"
                     
-                    // アーティファクトとして保存
-                    archiveArtifacts artifacts: "backup-work/data/${backupFileName}", fingerprint: true
+                    // セキュリティ上の理由によりアーティファクトとしては保存しない
+                    // バックアップファイルは暗号化されたS3バケットでのみ管理
                 }
             }
         }
@@ -228,10 +228,7 @@ pipeline {
                     =============================================
                     """.stripIndent()
                     
-                    // ドライラン時もアーティファクトとして保存
-                    if (fileExists("${DATA_DIR}/backup.json")) {
-                        archiveArtifacts artifacts: "backup-work/data/backup.json", fingerprint: true
-                    }
+                    // セキュリティ上の理由によりドライラン時もアーティファクトとして保存しない
                 }
             }
         }
