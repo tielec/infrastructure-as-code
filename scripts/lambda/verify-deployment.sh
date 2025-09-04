@@ -340,18 +340,18 @@ echo "4. Testing API Endpoints"
 echo "----------------------------"
 
 if [ -n "$API_ENDPOINT" ] && [ -n "$VERIFICATION_KEY" ]; then
-    # ヘルスチェックエンドポイント
-    log_info "Testing health endpoint..."
+    # ヘルスチェックエンドポイント（/api/hello に変更）
+    log_info "Testing hello endpoint..."
     HEALTH_RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" \
-        -X GET "${API_ENDPOINT}/health" \
+        -X GET "${API_ENDPOINT}/api/hello" \
         -H "x-api-key: ${VERIFICATION_KEY}" 2>/dev/null || echo "000")
     
     if [ "$HEALTH_RESPONSE" == "200" ]; then
-        check_result "Health Endpoint" "pass"
-        HEALTH_BODY=$(curl -s -X GET "${API_ENDPOINT}/health" -H "x-api-key: ${VERIFICATION_KEY}")
-        log_info "Health Response: $HEALTH_BODY"
+        check_result "Hello Endpoint" "pass"
+        HEALTH_BODY=$(curl -s -X GET "${API_ENDPOINT}/api/hello" -H "x-api-key: ${VERIFICATION_KEY}")
+        log_info "Hello Response: $HEALTH_BODY"
     else
-        check_result "Health Endpoint (HTTP $HEALTH_RESPONSE)" "fail"
+        check_result "Hello Endpoint (HTTP $HEALTH_RESPONSE)" "fail"
     fi
     
     # バージョンAPIエンドポイント
@@ -562,7 +562,7 @@ if [ $FAILED_CHECKS -eq 0 ]; then
     log_success "All checks passed! Lambda API environment is fully operational."
     echo ""
     echo "Next Steps:"
-    echo "  1. Test your API endpoints with: curl -X GET ${API_ENDPOINT}/health -H \"x-api-key: YOUR_KEY\""
+    echo "  1. Test your API endpoints with: curl -X GET ${API_ENDPOINT}/api/hello -H \"x-api-key: YOUR_KEY\""
     echo "  2. Monitor logs: aws logs tail $LOG_GROUP --follow"
     echo "  3. Check metrics in CloudWatch Console"
     exit 0
