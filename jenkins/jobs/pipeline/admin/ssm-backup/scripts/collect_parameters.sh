@@ -89,9 +89,10 @@ fetch_all_parameters() {
         
         # パラメータを追加
         local params
-        if params=$(echo "$result" | jq -r '.Parameters // []' 2>/dev/null); then
-            if [ "$params" != "null" ] && [ -n "$params" ]; then
-                all_params=$(echo "$all_params" | jq ". + $params")
+        if params=$(echo "$result" | jq '.Parameters // []' 2>/dev/null); then
+            if [ "$params" != "null" ] && [ "$params" != "[]" ] && [ -n "$params" ]; then
+                all_params=$(echo "$all_params" | jq --argjson new_params "$params" '. + $new_params')
+                echo "  Total accumulated parameters: $(echo "$all_params" | jq 'length')" >&2
             fi
         else
             echo "Warning: Failed to parse parameters from response" >&2
