@@ -43,8 +43,8 @@ aws_cli_with_retry() {
     local retry_count=0
     
     while [ $retry_count -lt $max_retries ]; do
-        # AWS CLIを実行（--no-cli-pagerを使用）
-        if output=$(AWS_PAGER="" "$@" --no-cli-pager 2>&1); then
+        # AWS CLIを実行（環境変数で制御）
+        if output=$(AWS_PAGER="" AWS_CLI_AUTO_PROMPT=off "$@" 2>&1); then
             echo "$output"
             return 0
         else
@@ -88,12 +88,11 @@ fetch_all_parameters() {
             echo "  Executing: aws ssm describe-parameters with filter --region ${AWS_REGION}" >&2
             # パラメータフィルタの値を変数に格納
             local filter_value="${ENV_FILTER:1:-1}"  # /dev/ -> dev
-            # リトライ機能を使用
+            # リトライ機能を使用（--next-tokenを使用）
             if ! result=$(aws_cli_with_retry aws ssm describe-parameters \
-                --starting-token "$next_token" \
+                --next-token "$next_token" \
                 --max-results 50 \
                 --parameter-filters "Key=Name,Option=Contains,Values=$filter_value" \
-                --query '{Parameters: Parameters, NextToken: NextToken}' \
                 --output json \
                 --region ${AWS_REGION}); then
                 echo "Error: Failed to describe parameters" >&2
@@ -108,7 +107,6 @@ fetch_all_parameters() {
             if ! result=$(aws_cli_with_retry aws ssm describe-parameters \
                 --max-results 50 \
                 --parameter-filters "Key=Name,Option=Contains,Values=$filter_value" \
-                --query '{Parameters: Parameters, NextToken: NextToken}' \
                 --output json \
                 --region ${AWS_REGION}); then
                 echo "Error: Failed to describe parameters" >&2
@@ -141,7 +139,7 @@ fetch_all_parameters() {
             echo "Warning: Failed to parse parameters from response" >&2
         fi
         
-        # 次のトークンを確認
+        # 次のトークンを確認（NextTokenフィールドを直接参照）
         next_token=$(echo "$result" | jq -r '.NextToken // empty' 2>/dev/null || echo "")
         
         if [ -z "$next_token" ]; then
