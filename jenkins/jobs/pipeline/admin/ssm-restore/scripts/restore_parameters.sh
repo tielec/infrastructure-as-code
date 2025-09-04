@@ -82,9 +82,9 @@ analyze_parameters() {
     # 各パラメータを確認
     echo "${FILTERED_PARAMS}" | jq -c '.[]' | while IFS= read -r param; do
         counter=$((counter + 1))
-        local param_name=$(echo "$param" | jq -r '.Name')
-        local param_value=$(echo "$param" | jq -r '.Value')
-        local param_type=$(echo "$param" | jq -r '.Type')
+        param_name=$(echo "$param" | jq -r '.Name')
+        param_value=$(echo "$param" | jq -r '.Value')
+        param_type=$(echo "$param" | jq -r '.Type')
         
         # 進捗表示
         if [ $((counter % 10)) -eq 0 ]; then
@@ -92,7 +92,7 @@ analyze_parameters() {
         fi
         
         # 現在の値を取得
-        local current_value
+        current_value=""
         if current_value=$(aws ssm get-parameter \
             --name "${param_name}" \
             --with-decryption \
@@ -247,11 +247,11 @@ echo "${FILTERED_PARAMS}" | jq -c '.[]' | while IFS= read -r param; do
             ${OVERWRITE_FLAG} \
             --region ${AWS_REGION} >/dev/null 2>&1; then
             echo "✓ Success"
-            local current_success=$(cat "${TEMP_SUCCESS_FILE}")
+            current_success=$(cat "${TEMP_SUCCESS_FILE}")
             echo $((current_success + 1)) > "${TEMP_SUCCESS_FILE}"
         else
             echo "✗ Failed"
-            local current_failed=$(cat "${TEMP_FAILED_FILE}")
+            current_failed=$(cat "${TEMP_FAILED_FILE}")
             echo $((current_failed + 1)) > "${TEMP_FAILED_FILE}"
             echo "${PARAM_NAME}" >> "${TEMP_FAILED_PARAMS_FILE}"
         fi
@@ -321,12 +321,12 @@ echo "0" > "${TEMP_VERIFY_FILE}"
             echo "✓ OK"
         else
             echo "✗ Value mismatch"
-            local current_verify_failed=$(cat "${TEMP_VERIFY_FILE}")
+            current_verify_failed=$(cat "${TEMP_VERIFY_FILE}")
             echo $((current_verify_failed + 1)) > "${TEMP_VERIFY_FILE}"
         fi
     else
         echo "✗ Not found"
-        local current_verify_failed=$(cat "${TEMP_VERIFY_FILE}")
+        current_verify_failed=$(cat "${TEMP_VERIFY_FILE}")
         echo $((current_verify_failed + 1)) > "${TEMP_VERIFY_FILE}"
     fi
 done
