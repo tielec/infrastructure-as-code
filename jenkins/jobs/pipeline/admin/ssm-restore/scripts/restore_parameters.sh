@@ -115,14 +115,29 @@ analyze_parameters() {
 echo "Starting parameter analysis..."
 ANALYSIS_RESULT=$(analyze_parameters)
 
-# 結果の集計
-TO_CREATE=$(echo "${ANALYSIS_RESULT}" | grep "^CREATE:" | cut -d: -f2- | sort)
-TO_UPDATE=$(echo "${ANALYSIS_RESULT}" | grep "^UPDATE:" | cut -d: -f2- | sort)
-UNCHANGED=$(echo "${ANALYSIS_RESULT}" | grep "^UNCHANGED:" | cut -d: -f2- | sort)
+# 結果の集計（grepの失敗を許容）
+TO_CREATE=$(echo "${ANALYSIS_RESULT}" | grep "^CREATE:" | cut -d: -f2- | sort || true)
+TO_UPDATE=$(echo "${ANALYSIS_RESULT}" | grep "^UPDATE:" | cut -d: -f2- | sort || true)
+UNCHANGED=$(echo "${ANALYSIS_RESULT}" | grep "^UNCHANGED:" | cut -d: -f2- | sort || true)
 
-CREATE_COUNT=$(echo "${TO_CREATE}" | grep -c . || echo 0)
-UPDATE_COUNT=$(echo "${TO_UPDATE}" | grep -c . || echo 0)
-UNCHANGED_COUNT=$(echo "${UNCHANGED}" | grep -c . || echo 0)
+# カウント処理（空の場合は0を返す）
+if [ -n "${TO_CREATE}" ]; then
+    CREATE_COUNT=$(echo "${TO_CREATE}" | wc -l | tr -d ' ')
+else
+    CREATE_COUNT=0
+fi
+
+if [ -n "${TO_UPDATE}" ]; then
+    UPDATE_COUNT=$(echo "${TO_UPDATE}" | wc -l | tr -d ' ')
+else
+    UPDATE_COUNT=0
+fi
+
+if [ -n "${UNCHANGED}" ]; then
+    UNCHANGED_COUNT=$(echo "${UNCHANGED}" | wc -l | tr -d ' ')
+else
+    UNCHANGED_COUNT=0
+fi
 
 echo "======================================"
 echo "Analysis Results:"
@@ -193,10 +208,10 @@ echo "${FILTERED_PARAMS}" | jq -c '.[]' | while IFS= read -r param; do
     # このパラメータを処理するか判定
     SHOULD_PROCESS=false
     
-    if echo "${TO_CREATE}" | grep -q "^${PARAM_NAME}$"; then
+    if [ -n "${TO_CREATE}" ] && echo "${TO_CREATE}" | grep -q "^${PARAM_NAME}$"; then
         SHOULD_PROCESS=true
         ACTION="CREATE"
-    elif echo "${TO_UPDATE}" | grep -q "^${PARAM_NAME}$"; then
+    elif [ -n "${TO_UPDATE}" ] && echo "${TO_UPDATE}" | grep -q "^${PARAM_NAME}$"; then
         if [ "${FORCE_OVERWRITE}" = "true" ]; then
             SHOULD_PROCESS=true
             ACTION="UPDATE"
@@ -259,7 +274,10 @@ echo "======================================"
 VERIFY_FAILED=0
 
 # 作成・更新対象のパラメータを検証
-{ echo "${TO_CREATE}"; [ "${FORCE_OVERWRITE}" = "true" ] && echo "${TO_UPDATE}"; } | sort -u | while read -r param_name; do
+{
+    [ -n "${TO_CREATE}" ] && echo "${TO_CREATE}"
+    [ "${FORCE_OVERWRITE}" = "true" ] && [ -n "${TO_UPDATE}" ] && echo "${TO_UPDATE}"
+} | sort -u | while read -r param_name; do
     [ -z "${param_name}" ] && continue
     
     echo -n "Verifying ${param_name} ... "
