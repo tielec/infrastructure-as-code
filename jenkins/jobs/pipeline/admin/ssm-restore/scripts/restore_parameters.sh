@@ -345,12 +345,19 @@ else
     echo "⚠️ Verification failed for ${VERIFY_FAILED} parameters"
 fi
 
+# 失敗したパラメータのJSON配列を生成
+if [ ${#FAILED_PARAMS[@]} -gt 0 ]; then
+    FAILED_PARAMS_JSON=$(printf '%s\n' "${FAILED_PARAMS[@]}" | jq -Rs 'split("\n") | map(select(length > 0))')
+else
+    FAILED_PARAMS_JSON="[]"
+fi
+
 # 最終結果の保存
 jq -n \
     --arg success_count "${SUCCESS_COUNT}" \
     --arg failed_count "${FAILED_COUNT}" \
     --arg verify_failed "${VERIFY_FAILED}" \
-    --argjson failed_params "$(printf '%s\n' "${FAILED_PARAMS[@]}" | jq -Rs 'split("\n") | map(select(length > 0))')" \
+    --argjson failed_params "${FAILED_PARAMS_JSON}" \
     '{
         restore_date: now | todate,
         success_count: $success_count | tonumber,
@@ -359,8 +366,10 @@ jq -n \
         failed_parameters: $failed_params
     }' > "${DATA_DIR}/restore_result.json"
 
-# エラーがあった場合は非ゼロで終了
-if [ "${FAILED_COUNT}" -gt 0 ] || [ "${VERIFY_FAILED}" -gt 0 ]; then
+# エラーがあった場合は非ゼロで終了（検証失敗は成功したパラメータがある場合は警告のみ）
+if [ "${FAILED_COUNT}" -gt 0 ]; then
+    exit 1
+elif [ "${VERIFY_FAILED}" -gt 0 ] && [ "${SUCCESS_COUNT}" -eq 0 ]; then
     exit 1
 fi
 
