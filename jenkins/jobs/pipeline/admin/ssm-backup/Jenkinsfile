@@ -163,19 +163,21 @@ pipeline {
                     // バックアップファイルの名前を変更
                     sh "cp ${DATA_DIR}/backup.json ${DATA_DIR}/${backupFileName}"
                     
-                    // S3へアップロード
+                    // S3へアップロード（暗号化を明示的に指定）
                     sh """
                         aws s3 cp ${DATA_DIR}/${backupFileName} \
                             s3://${env.BACKUP_BUCKET}/${s3Key} \
+                            --server-side-encryption AES256 \
                             --region ${AWS_REGION}
                     """
                     
                     echo "Backup uploaded to: s3://${env.BACKUP_BUCKET}/${s3Key}"
                     
-                    // 最新バックアップ情報を更新（完全なS3キーを保存）
+                    // 最新バックアップ情報を更新（完全なS3キーを保存、暗号化を明示的に指定）
                     sh """
                         echo '${s3Key}' | \
                         aws s3 cp - s3://${env.BACKUP_BUCKET}/latest.txt \
+                            --server-side-encryption AES256 \
                             --region ${AWS_REGION}
                     """
                     

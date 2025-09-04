@@ -23,10 +23,11 @@ const backupBucket = new aws.s3.Bucket("ssm-backup-bucket", {
             bucketKeyEnabled: true,  // S3 Bucket Keysを有効化（暗号化コストを削減）
         },
     },
-    logging: {
-        targetBucket: bucketName,  // 自己ログ記録（本番では専用ログバケットを推奨）
-        targetPrefix: "access-logs/",
-    },
+    // ログ記録は別途専用バケットで実装する必要があるため、一旦コメントアウト
+    // logging: {
+    //     targetBucket: bucketName,  // 自己ログ記録はHTTPS強制ポリシーと競合
+    //     targetPrefix: "access-logs/",
+    // },
     lifecycleRules: [{
         id: "delete-old-backups",
         enabled: true,
@@ -35,13 +36,6 @@ const backupBucket = new aws.s3.Bucket("ssm-backup-bucket", {
         },
         noncurrentVersionExpiration: {
             days: 7,  // 非現行バージョンは7日間保持
-        },
-    }, {
-        id: "delete-old-logs",
-        enabled: true,
-        prefix: "access-logs/",
-        expiration: {
-            days: 90,  // ログは90日間保持
         },
     }],
     objectLockEnabled: false,  // 必要に応じてObject Lockを有効化可能
