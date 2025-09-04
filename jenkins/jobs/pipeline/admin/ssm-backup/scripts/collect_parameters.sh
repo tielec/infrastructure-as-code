@@ -86,25 +86,20 @@ fetch_all_parameters() {
         
         if [ -n "$next_token" ]; then
             echo "  Executing: aws ssm describe-parameters with filter --region ${AWS_REGION}" >&2
-            if ! result=$(aws_cli_with_retry "aws ssm describe-parameters \
-                --starting-token '$next_token' \
-                --max-results 50 \
-                --parameter-filters 'Key=Name,Option=Contains,Values=${ENV_FILTER:1:-1}' \
-                --query '{Parameters: Parameters, NextToken: NextToken}' \
-                --output json \
-                --region ${AWS_REGION}"); then
+            # パラメータフィルタの値を変数に格納
+            local filter_value="${ENV_FILTER:1:-1}"  # /dev/ -> dev
+            cmd="aws ssm describe-parameters --starting-token \"$next_token\" --max-results 50 --parameter-filters \"Key=Name,Option=Contains,Values=$filter_value\" --query '{Parameters: Parameters, NextToken: NextToken}' --output json --region ${AWS_REGION}"
+            if ! result=$(aws_cli_with_retry "$cmd"); then
                 echo "Error: Failed to describe parameters" >&2
                 echo '{"Parameters": [], "NextToken": null}'
                 return 1
             fi
         else
             echo "  Executing: aws ssm describe-parameters with filter --region ${AWS_REGION}" >&2
-            if ! result=$(aws_cli_with_retry "aws ssm describe-parameters \
-                --max-results 50 \
-                --parameter-filters 'Key=Name,Option=Contains,Values=${ENV_FILTER:1:-1}' \
-                --query '{Parameters: Parameters, NextToken: NextToken}' \
-                --output json \
-                --region ${AWS_REGION}"); then
+            # パラメータフィルタの値を変数に格納
+            local filter_value="${ENV_FILTER:1:-1}"  # /dev/ -> dev
+            cmd="aws ssm describe-parameters --max-results 50 --parameter-filters \"Key=Name,Option=Contains,Values=$filter_value\" --query '{Parameters: Parameters, NextToken: NextToken}' --output json --region ${AWS_REGION}"
+            if ! result=$(aws_cli_with_retry "$cmd"); then
                 echo "Error: Failed to describe parameters" >&2
                 echo '{"Parameters": [], "NextToken": null}'
                 return 1
