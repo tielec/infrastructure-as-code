@@ -366,10 +366,23 @@ jq -n \
         failed_parameters: $failed_params
     }' > "${DATA_DIR}/restore_result.json"
 
-# エラーがあった場合は非ゼロで終了（検証失敗は成功したパラメータがある場合は警告のみ）
+# エラーがあった場合は非ゼロで終了
+# DRY_RUN時は成功で終了
+if [ "${DRY_RUN}" = "true" ]; then
+    exit 0
+fi
+
+# 実際の復元で失敗があった場合のみエラー
 if [ "${FAILED_COUNT}" -gt 0 ]; then
     exit 1
-elif [ "${VERIFY_FAILED}" -gt 0 ] && [ "${SUCCESS_COUNT}" -eq 0 ]; then
+fi
+
+# すべてのパラメータが検証失敗で、成功が0の場合のみエラー
+if [ "${VERIFY_FAILED}" -gt 0 ] && [ "${SUCCESS_COUNT}" -eq 0 ]; then
+    # 何も復元されていない場合のみエラー（変更なしの場合は正常）
+    if [ -z "${TO_CREATE}" ] && [ -z "${TO_UPDATE}" ]; then
+        exit 0  # 変更がない場合は正常終了
+    fi
     exit 1
 fi
 
