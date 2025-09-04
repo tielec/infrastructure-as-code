@@ -69,9 +69,6 @@ environments.each { envKey, envConfig ->
         
         // プロパティ設定
         properties {
-            // 同時実行を許可
-            disableConcurrentBuilds(false)
-            
             // リビルド設定
             rebuild {
                 autoRebuild(false)
