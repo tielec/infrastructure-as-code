@@ -167,7 +167,7 @@ pipeline {
                     sh """
                         aws s3 cp ${DATA_DIR}/${backupFileName} \
                             s3://${env.BACKUP_BUCKET}/${s3Key} \
-                            --server-side-encryption AES256 \
+                            --sse AES256 \
                             --region ${AWS_REGION}
                     """
                     
@@ -177,7 +177,7 @@ pipeline {
                     sh """
                         echo '${s3Key}' | \
                         aws s3 cp - s3://${env.BACKUP_BUCKET}/latest.txt \
-                            --server-side-encryption AES256 \
+                            --sse AES256 \
                             --region ${AWS_REGION}
                     """
                     
