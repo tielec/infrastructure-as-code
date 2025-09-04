@@ -150,36 +150,68 @@ fi
 # パラメータ名の一覧を保存
 echo "$FILTERED_PARAMS" | jq -r '.[].Name' > ${DATA_DIR}/parameter_names.txt
 
-# パラメータを取得してバックアップデータを作成
+# パラメータを取得してバックアップデータを作成（バッチ処理で高速化）
 echo "Fetching parameter values..."
 BACKUP_DATA="[]"
-BATCH_SIZE=10
-COUNTER=0
+BATCH_SIZE=10  # AWS APIの制限により最大10個
 FAILED_COUNT=0
+FAILED_PARAMS=()
 
-while IFS= read -r param_name; do
-    if [ $((COUNTER % BATCH_SIZE)) -eq 0 ] && [ $COUNTER -gt 0 ]; then
-        echo "Processed ${COUNTER}/${PARAM_COUNT} parameters..."
-        sleep 1  # APIレート制限対策
+# パラメータ名を配列に読み込み
+mapfile -t PARAM_NAMES < ${DATA_DIR}/parameter_names.txt
+TOTAL_PARAMS=${#PARAM_NAMES[@]}
+
+# バッチ処理でパラメータを取得
+for ((i=0; i<$TOTAL_PARAMS; i+=BATCH_SIZE)); do
+    # バッチの終了インデックスを計算
+    end=$((i + BATCH_SIZE))
+    if [ $end -gt $TOTAL_PARAMS ]; then
+        end=$TOTAL_PARAMS
     fi
     
-    # パラメータの値を取得（エラー時はスキップ）
-    PARAM_DATA=$(aws ssm get-parameter \
-        --name "$param_name" \
-        --with-decryption \
-        --query 'Parameter' \
-        --output json \
-        --region ${AWS_REGION} 2>/dev/null || echo '{}')
+    # 進捗表示
+    echo "Fetching parameters $((i + 1))-$end of ${TOTAL_PARAMS}..."
     
-    if [ "$PARAM_DATA" != '{}' ]; then
-        BACKUP_DATA=$(echo "$BACKUP_DATA" | jq ". + [$PARAM_DATA]")
-    else
-        echo "Warning: Failed to get parameter: $param_name"
-        FAILED_COUNT=$((FAILED_COUNT + 1))
+    # バッチ用のパラメータ名を準備
+    batch_params=()
+    for ((j=i; j<end; j++)); do
+        batch_params+=("${PARAM_NAMES[$j]}")
+    done
+    
+    # get-parameters（複数形）でバッチ取得
+    if [ ${#batch_params[@]} -gt 0 ]; then
+        # パラメータ名を改行区切りで渡す
+        BATCH_RESULT=$(printf '%s\n' "${batch_params[@]}" | \
+            xargs -d '\n' aws ssm get-parameters \
+                --names \
+                --with-decryption \
+                --output json \
+                --region ${AWS_REGION} 2>/dev/null || echo '{"Parameters": [], "InvalidParameters": []}')
+        
+        # 取得成功したパラメータを追加
+        VALID_PARAMS=$(echo "$BATCH_RESULT" | jq '.Parameters // []')
+        if [ "$VALID_PARAMS" != "[]" ]; then
+            BACKUP_DATA=$(echo "$BACKUP_DATA" | jq --argjson new_params "$VALID_PARAMS" '. + $new_params')
+        fi
+        
+        # 取得失敗したパラメータを記録
+        INVALID_PARAMS=$(echo "$BATCH_RESULT" | jq -r '.InvalidParameters[]?' 2>/dev/null)
+        if [ -n "$INVALID_PARAMS" ]; then
+            while IFS= read -r invalid_param; do
+                echo "Warning: Failed to get parameter: $invalid_param"
+                FAILED_PARAMS+=("$invalid_param")
+                FAILED_COUNT=$((FAILED_COUNT + 1))
+            done <<< "$INVALID_PARAMS"
+        fi
     fi
     
-    COUNTER=$((COUNTER + 1))
-done < ${DATA_DIR}/parameter_names.txt
+    # APIレート制限対策
+    if [ $end -lt $TOTAL_PARAMS ]; then
+        sleep 0.5
+    fi
+done
+
+COUNTER=$TOTAL_PARAMS
 
 echo "Successfully fetched $((COUNTER - FAILED_COUNT)) parameters"
 if [ "$FAILED_COUNT" -gt 0 ]; then
