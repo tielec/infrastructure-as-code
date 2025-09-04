@@ -7,6 +7,7 @@
  */
 import * as pulumi from "@pulumi/pulumi";
 import * as aws from "@pulumi/aws";
+import * as crypto from "crypto";
 import { SSMParameterHelper } from "@tielec/pulumi-components";
 
 // ========================================
@@ -41,6 +42,18 @@ const apiBurstLimit = config.requireNumber("apiBurstLimit");
 const enableWaf = config.requireBoolean("enableWaf");
 const enableWebSocket = config.requireBoolean("enableWebSocket");
 const enableDatabase = config.requireBoolean("enableDatabase");
+
+// ========================================
+// ヘルパー関数
+// ========================================
+/**
+ * 暗号学的に安全なAPIキーを生成
+ * @param length キーの長さ（バイト数、デフォルト16 = 32文字のhex）
+ * @returns 生成されたAPIキー
+ */
+function generateSecureApiKey(length: number = 16): string {
+    return crypto.randomBytes(length).toString('hex');
+}
 
 // ========================================
 // 共通タグ定義
@@ -222,19 +235,19 @@ ssmHelper.createParameter('/deployment/last-updated', {
 // セキュアパラメータ（初期設定のみ）
 // ========================================
 // セキュリティ関連の暗号化パラメータ（SecureString）
-// 注: 実際の値は環境変数またはCI/CDパイプラインから設定すること
+// APIキーは毎回ランダムに生成されるため、セキュリティリスクを低減
 ssmHelper.createParameter('/security/api-key', {
-    paramType: 'init-only',  // 一度設定したら変更しない
-    value: pulumi.secret("CHANGE-ME-IN-PRODUCTION"),
+    paramType: 'managed',  // Pulumiで管理（更新可能）
+    value: pulumi.secret(generateSecureApiKey()),  // 32文字のランダムAPIキー生成
     type: "SecureString",
-    description: "API key for Lambda API",
+    description: "API key for Lambda API (auto-generated)",
 });
 
 ssmHelper.createParameter('/security/jwt-secret', {
-    paramType: 'init-only',  // 一度設定したら変更しない
-    value: pulumi.secret("CHANGE-ME-IN-PRODUCTION"),
+    paramType: 'managed',  // Pulumiで管理（更新可能）
+    value: pulumi.secret(generateSecureApiKey(32)),  // 64文字のランダムシークレット生成
     type: "SecureString",
-    description: "JWT secret for Lambda API",
+    description: "JWT secret for Lambda API (auto-generated)",
 });
 
 // GitHub Personal Access Token 用のSSM Parameter（Pulumiコンフィグから取得）
