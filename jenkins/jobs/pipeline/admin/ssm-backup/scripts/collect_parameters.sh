@@ -43,7 +43,7 @@ fetch_all_parameters() {
     local all_params="[]"
     
     while true; do
-        echo "Fetching page ${page}..."
+        echo "Fetching page ${page}..." >&2
         
         # AWS CLIコマンドの実行とエラーハンドリング
         local result
