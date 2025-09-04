@@ -402,8 +402,8 @@ if [ -n "$API_ENDPOINT" ] && [ -n "$BUBBLE_KEY" ]; then
             check_result "Echo API Endpoint (Auth Check)" "pass"
         fi
     else
-        # 認証なしで401以外が返った場合はエラー
-        log_error "Echo API should return 401 without authentication, got HTTP $ECHO_RESPONSE_NO_AUTH"
+        # 認証なしで401/403以外が返った場合はエラー
+        log_error "Echo API should return 401 or 403 without authentication, got HTTP $ECHO_RESPONSE_NO_AUTH"
         check_result "Echo API Endpoint" "fail"
     fi
 else
