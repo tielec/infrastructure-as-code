@@ -43,6 +43,9 @@ const enableWaf = config.requireBoolean("enableWaf");
 const enableWebSocket = config.requireBoolean("enableWebSocket");
 const enableDatabase = config.requireBoolean("enableDatabase");
 
+// APIキークライアント設定を取得
+const apiKeyClientsConfig = JSON.parse(config.require("apiKeyClients"));
+
 // ========================================
 // ヘルパー関数
 // ========================================
@@ -53,6 +56,39 @@ const enableDatabase = config.requireBoolean("enableDatabase");
  */
 function generateSecureApiKey(length: number = 16): string {
     return crypto.randomBytes(length).toString('hex');
+}
+
+/**
+ * クライアント用APIキー設定インターフェース（入力用）
+ */
+interface ApiKeyClientConfig {
+    clientId: string;
+    rateLimit: number;
+    enabled: boolean;
+}
+
+/**
+ * クライアント用APIキー設定インターフェース（出力用）
+ */
+interface ApiKeyConfig {
+    clientId: string;
+    apiKey: string;
+    rateLimit: number;
+    enabled: boolean;
+}
+
+/**
+ * 複数のクライアント用APIキー設定を生成
+ * @param clientConfigs Pulumiコンフィグから取得したクライアント設定
+ * @returns APIキー設定の配列（ランダム生成されたAPIキー付き）
+ */
+function generateApiKeyConfigs(clientConfigs: ApiKeyClientConfig[]): ApiKeyConfig[] {
+    return clientConfigs.map(config => ({
+        clientId: config.clientId,
+        apiKey: `sk-${environment}-${config.clientId}-${generateSecureApiKey()}`,
+        rateLimit: config.rateLimit,
+        enabled: config.enabled
+    }));
 }
 
 // ========================================
@@ -236,11 +272,12 @@ ssmHelper.createParameter('/deployment/last-updated', {
 // ========================================
 // セキュリティ関連の暗号化パラメータ（SecureString）
 // APIキーは毎回ランダムに生成されるため、セキュリティリスクを低減
+// 複数のクライアント用APIキー設定をJSON配列として保存（コンフィグから設定を取得）
 ssmHelper.createParameter('/security/api-key', {
     paramType: 'managed',  // Pulumiで管理（更新可能）
-    value: pulumi.secret(generateSecureApiKey()),  // 32文字のランダムAPIキー生成
+    value: pulumi.secret(JSON.stringify(generateApiKeyConfigs(apiKeyClientsConfig), null, 2)),  // コンフィグベースでAPIキー設定を生成
     type: "SecureString",
-    description: "API key for Lambda API (auto-generated)",
+    description: "API key configurations for Lambda API clients (auto-generated)",
 });
 
 ssmHelper.createParameter('/security/jwt-secret', {
