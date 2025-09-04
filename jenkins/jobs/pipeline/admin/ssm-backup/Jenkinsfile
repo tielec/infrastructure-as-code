@@ -1,0 +1,277 @@
+@Library('jenkins-shared-lib') _
+
+/**
+ * SSM Parameter Store Backup Pipeline
+ * AWS Systems Manager Parameter Storeのパラメータを定期的にバックアップ
+ */
+pipeline {
+    agent {
+        label 'ec2-fleet'
+    }
+    
+    options {
+        timestamps()
+        timeout(time: 1, unit: 'HOURS')
+        buildDiscarder(logRotator(daysToKeepStr: '30', numToKeepStr: '100'))
+        disableConcurrentBuilds()
+    }
+    
+    environment {
+        // AWS設定
+        AWS_REGION = 'ap-northeast-1'
+        
+        // タイムスタンプ
+        BACKUP_DATE = sh(script: "date '+%Y-%m-%d'", returnStdout: true).trim()
+        BACKUP_TIMESTAMP = sh(script: "date '+%Y%m%d_%H%M%S'", returnStdout: true).trim()
+        
+        // ディレクトリ構造
+        WORK_DIR = "${WORKSPACE}/backup-work"
+        DATA_DIR = "${WORK_DIR}/data"
+        SCRIPT_DIR = "${WORKSPACE}/scripts"
+        
+        // 環境フィルタ（環境に含まれる文字列）
+        ENV_FILTER = "/${params.ENVIRONMENT}/"
+    }
+    
+    stages {
+        stage('Initialize') {
+            steps {
+                script {
+                    // ビルド表示名を設定
+                    currentBuild.displayName = "#${env.BUILD_NUMBER} - ${params.ENVIRONMENT} Backup"
+                    currentBuild.description = "Backup at ${env.BACKUP_TIMESTAMP}"
+                    
+                    echo """
+                    =============================================
+                    SSM Parameter Store Backup
+                    =============================================
+                    Environment: ${params.ENVIRONMENT}
+                    Filter: Parameters containing '${env.ENV_FILTER}'
+                    Dry Run: ${params.DRY_RUN}
+                    Timestamp: ${env.BACKUP_TIMESTAMP}
+                    Date: ${env.BACKUP_DATE}
+                    =============================================
+                    """.stripIndent()
+                    
+                    // 作業ディレクトリの準備
+                    sh """
+                        rm -rf ${WORK_DIR}
+                        mkdir -p ${DATA_DIR}
+                        mkdir -p ${SCRIPT_DIR}
+                    """
+                    
+                    // S3バケット名の取得
+                    env.BACKUP_BUCKET = sh(
+                        script: """
+                            aws ssm get-parameter \
+                                --name "/jenkins/${params.ENVIRONMENT}/backup/s3-bucket-name" \
+                                --query 'Parameter.Value' \
+                                --output text \
+                                --region ${AWS_REGION} 2>/dev/null || echo ""
+                        """,
+                        returnStdout: true
+                    ).trim()
+                    
+                    if (!env.BACKUP_BUCKET) {
+                        error("バックアップ用S3バケットが見つかりません。Pulumiスタックがデプロイされていることを確認してください。")
+                    }
+                    
+                    echo "Backup S3 Bucket: ${env.BACKUP_BUCKET}"
+                }
+            }
+        }
+        
+        stage('Prepare Scripts') {
+            steps {
+                script {
+                    echo "=== Preparing Collection Scripts ==="
+                    
+                    // Jenkinsリポジトリをチェックアウト
+                    dir('jenkins-repo') {
+                        checkout([
+                            $class: 'GitSCM',
+                            branches: [[name: "${params.JENKINSFILE_BRANCH}"]],
+                            userRemoteConfigs: [[
+                                url: 'https://github.com/tielec/infrastructure-as-code',
+                                credentialsId: 'github-app-credentials'
+                            ]]
+                        ])
+                    }
+                    
+                    // スクリプトをコピー
+                    sh """
+                        cp jenkins-repo/jenkins/jobs/pipeline/admin/ssm-backup/scripts/collect_parameters.sh ${SCRIPT_DIR}/
+                        chmod +x ${SCRIPT_DIR}/collect_parameters.sh
+                        
+                        echo "Script copied and made executable"
+                        ls -la ${SCRIPT_DIR}/
+                    """
+                }
+            }
+        }
+        
+        stage('Collect Parameters') {
+            steps {
+                script {
+                    echo "=== Collecting SSM Parameters ==="
+                    
+                    // スクリプトの実行
+                    sh """
+                        # 環境変数を設定
+                        export ENVIRONMENT="${params.ENVIRONMENT}"
+                        export ENV_FILTER="${env.ENV_FILTER}"
+                        export AWS_REGION="${AWS_REGION}"
+                        export BACKUP_DATE="${env.BACKUP_DATE}"
+                        export BACKUP_TIMESTAMP="${env.BACKUP_TIMESTAMP}"
+                        export DATA_DIR="${DATA_DIR}"
+                        
+                        # スクリプト実行
+                        ${SCRIPT_DIR}/collect_parameters.sh
+                    """
+                    
+                    // バックアップファイルの確認
+                    if (fileExists("${DATA_DIR}/backup.json")) {
+                        def backupData = readJSON file: "${DATA_DIR}/backup.json"
+                        env.PARAM_COUNT = backupData.parameter_count.toString()
+                        
+                        if (backupData.parameter_count == 0) {
+                            echo "WARNING: No parameters found for backup"
+                            currentBuild.result = 'UNSTABLE'
+                        } else {
+                            echo "Backup file contains ${backupData.parameter_count} parameters"
+                        }
+                    } else {
+                        error("Backup file was not created")
+                    }
+                }
+            }
+        }
+        
+        stage('Upload to S3') {
+            when {
+                expression { 
+                    return !params.DRY_RUN && env.PARAM_COUNT && env.PARAM_COUNT.toInteger() > 0
+                }
+            }
+            steps {
+                script {
+                    echo "=== Uploading Backup to S3 ==="
+                    
+                    def backupFileName = "ssm-backup-${params.ENVIRONMENT}-${env.BACKUP_TIMESTAMP}.json"
+                    def s3Key = "${env.BACKUP_DATE}/${backupFileName}"
+                    
+                    // バックアップファイルの名前を変更
+                    sh "cp ${DATA_DIR}/backup.json ${DATA_DIR}/${backupFileName}"
+                    
+                    // S3へアップロード（暗号化を明示的に指定）
+                    sh """
+                        aws s3 cp ${DATA_DIR}/${backupFileName} \
+                            s3://${env.BACKUP_BUCKET}/${s3Key} \
+                            --sse AES256 \
+                            --region ${AWS_REGION}
+                    """
+                    
+                    echo "Backup uploaded to: s3://${env.BACKUP_BUCKET}/${s3Key}"
+                    
+                    // 最新バックアップ情報を更新（完全なS3キーを保存、暗号化を明示的に指定）
+                    sh """
+                        echo '${s3Key}' | \
+                        aws s3 cp - s3://${env.BACKUP_BUCKET}/latest.txt \
+                            --sse AES256 \
+                            --region ${AWS_REGION}
+                    """
+                    
+                    // アップロード確認
+                    def s3ObjectInfo = sh(
+                        script: """
+                            aws s3api head-object \
+                                --bucket ${env.BACKUP_BUCKET} \
+                                --key ${s3Key} \
+                                --query '[ContentLength, LastModified]' \
+                                --output text \
+                                --region ${AWS_REGION}
+                        """,
+                        returnStdout: true
+                    ).trim()
+                    
+                    echo "S3 Object Info: ${s3ObjectInfo}"
+                    
+                    // セキュリティ上の理由によりアーティファクトとしては保存しない
+                    // バックアップファイルは暗号化されたS3バケットでのみ管理
+                }
+            }
+        }
+        
+        stage('Dry Run Report') {
+            when {
+                expression { params.DRY_RUN }
+            }
+            steps {
+                script {
+                    def paramCount = env.PARAM_COUNT ?: '0'
+                    
+                    echo """
+                    =============================================
+                    DRY RUN - バックアップ実行レポート
+                    =============================================
+                    
+                    このドライランでは実際のS3アップロードは行われませんでした。
+                    
+                    バックアップ対象:
+                    - 環境: ${params.ENVIRONMENT}
+                    - パラメータ数: ${paramCount}
+                    - バックアップ日時: ${env.BACKUP_TIMESTAMP}
+                    
+                    実行時の動作:
+                    - S3バケット: ${env.BACKUP_BUCKET}
+                    - S3パス: ${env.BACKUP_DATE}/
+                    - ファイル名: ssm-backup-${params.ENVIRONMENT}-${env.BACKUP_TIMESTAMP}.json
+                    
+                    =============================================
+                    """.stripIndent()
+                    
+                    // セキュリティ上の理由によりドライラン時もアーティファクトとして保存しない
+                }
+            }
+        }
+    }
+    
+    post {
+        always {
+            script {
+                def paramCount = env.PARAM_COUNT ?: '0'
+                
+                // 実行サマリーの表示
+                echo """
+                =============================================
+                SSM Parameter Store Backup Summary
+                =============================================
+                Build: #${env.BUILD_NUMBER}
+                Status: ${currentBuild.result ?: 'SUCCESS'}
+                Environment: ${params.ENVIRONMENT}
+                Parameters: ${paramCount}
+                Timestamp: ${env.BACKUP_TIMESTAMP}
+                Dry Run: ${params.DRY_RUN}
+                =============================================
+                """.stripIndent()
+            }
+        }
+        
+        success {
+            echo "✅ SSMパラメータのバックアップが正常に完了しました"
+        }
+        
+        failure {
+            echo "❌ バックアップが失敗しました。ログを確認してください"
+        }
+        
+        unstable {
+            echo "⚠️ バックアップは完了しましたが、警告があります"
+        }
+        
+        cleanup {
+            // 作業ディレクトリのクリーンアップ
+            sh "rm -rf ${WORK_DIR} ${SCRIPT_DIR} jenkins-repo || true"
+        }
+    }
+}

@@ -1,0 +1,6 @@
+name: jenkins-ssm-backup-s3
+runtime:
+  name: nodejs
+  options:
+    typescript: true
+description: SSM Parameter Store自動バックアップ用のS3バケット

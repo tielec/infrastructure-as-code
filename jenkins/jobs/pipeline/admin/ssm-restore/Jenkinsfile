@@ -1,0 +1,323 @@
+@Library('jenkins-shared-lib') _
+
+/**
+ * SSM Parameter Store Restore Pipeline
+ * AWS Systems Manager Parameter Storeのパラメータをバックアップから復元
+ */
+pipeline {
+    agent {
+        label 'ec2-fleet'
+    }
+    
+    options {
+        timestamps()
+        timeout(time: 1, unit: 'HOURS')
+        buildDiscarder(logRotator(daysToKeepStr: '30', numToKeepStr: '30'))
+        disableConcurrentBuilds()
+    }
+    
+    environment {
+        // AWS設定
+        AWS_REGION = 'ap-northeast-1'
+        
+        // ディレクトリ構造
+        WORK_DIR = "${WORKSPACE}/restore-work"
+        DATA_DIR = "${WORK_DIR}/data"
+        SCRIPT_DIR = "${WORKSPACE}/scripts"
+        
+        // 環境フィルタ（環境に含まれる文字列）
+        ENV_FILTER = "/${params.ENVIRONMENT}/"
+    }
+    
+    stages {
+        stage('Initialize') {
+            steps {
+                script {
+                    // ビルド表示名を設定
+                    currentBuild.displayName = "#${env.BUILD_NUMBER} - ${params.ENVIRONMENT} Restore"
+                    currentBuild.description = "Dry Run: ${params.DRY_RUN}, Force: ${params.FORCE_OVERWRITE}"
+                    
+                    echo """
+                    =============================================
+                    SSM Parameter Store Restore
+                    =============================================
+                    Environment: ${params.ENVIRONMENT}
+                    Filter: Parameters containing '${env.ENV_FILTER}'
+                    Dry Run: ${params.DRY_RUN}
+                    Force Overwrite: ${params.FORCE_OVERWRITE}
+                    =============================================
+                    """.stripIndent()
+                    
+                    // 作業ディレクトリの準備
+                    sh """
+                        rm -rf ${WORK_DIR}
+                        mkdir -p ${DATA_DIR}
+                        mkdir -p ${SCRIPT_DIR}
+                    """
+                    
+                    // S3バケット名の取得
+                    env.BACKUP_BUCKET = sh(
+                        script: """
+                            aws ssm get-parameter \
+                                --name "/jenkins/${params.ENVIRONMENT}/backup/s3-bucket-name" \
+                                --query 'Parameter.Value' \
+                                --output text \
+                                --region ${AWS_REGION} 2>/dev/null || echo ""
+                        """,
+                        returnStdout: true
+                    ).trim()
+                    
+                    if (!env.BACKUP_BUCKET) {
+                        error("バックアップ用S3バケットが見つかりません。バックアップが作成されていることを確認してください。")
+                    }
+                    
+                    echo "Backup S3 Bucket: ${env.BACKUP_BUCKET}"
+                }
+            }
+        }
+        
+        stage('Prepare Scripts') {
+            steps {
+                script {
+                    echo "=== Preparing Restore Scripts ==="
+                    
+                    // Jenkinsリポジトリをチェックアウト
+                    dir('jenkins-repo') {
+                        checkout([
+                            $class: 'GitSCM',
+                            branches: [[name: "${params.JENKINSFILE_BRANCH}"]],
+                            userRemoteConfigs: [[
+                                url: 'https://github.com/tielec/infrastructure-as-code',
+                                credentialsId: 'github-app-credentials'
+                            ]]
+                        ])
+                    }
+                    
+                    // スクリプトをコピー
+                    sh """
+                        cp jenkins-repo/jenkins/jobs/pipeline/admin/ssm-restore/scripts/restore_parameters.sh ${SCRIPT_DIR}/
+                        chmod +x ${SCRIPT_DIR}/restore_parameters.sh
+                        
+                        echo "Script copied and made executable"
+                        ls -la ${SCRIPT_DIR}/
+                    """
+                }
+            }
+        }
+        
+        stage('Find Backup File') {
+            steps {
+                script {
+                    echo "=== Finding Latest Backup ==="
+                    
+                    // 最新のバックアップ情報を取得
+                    def latestBackup = sh(
+                        script: """
+                            aws s3 cp s3://${env.BACKUP_BUCKET}/latest.txt - \
+                                --region ${AWS_REGION} 2>/dev/null || echo ""
+                        """,
+                        returnStdout: true
+                    ).trim()
+                    
+                    if (!latestBackup) {
+                        echo "WARNING: latest.txt not found. Searching for backup files..."
+                        
+                        // 最新のバックアップファイルを検索（ルートから全体を検索）
+                        def backupFileName = sh(
+                            script: """
+                                aws s3 ls s3://${env.BACKUP_BUCKET}/ --recursive \
+                                    --region ${AWS_REGION} | \
+                                    grep 'ssm-backup-${params.ENVIRONMENT}' | \
+                                    sort -r | \
+                                    head -1 | \
+                                    awk '{print \$4}' || echo ""
+                            """,
+                            returnStdout: true
+                        ).trim()
+                        
+                        if (!backupFileName) {
+                            error("バックアップファイルが見つかりません。先にバックアップを実行してください。")
+                        }
+                        
+                        // backupFileNameには既に完全なS3キーが含まれている
+                        // 例: "2025-09-04/ssm-backup-dev-20250904_014349.json"
+                        env.BACKUP_S3_PATH = backupFileName
+                        env.BACKUP_FILE_NAME = backupFileName.split('/').last()
+                        
+                    } else {
+                        // latest.txtの内容をそのまま使用
+                        // 例: "2025-09-04/ssm-backup-dev-20250904_014349.json"
+                        env.BACKUP_S3_PATH = latestBackup.trim()
+                        env.BACKUP_FILE_NAME = latestBackup.split('/').last()
+                    }
+                    
+                    echo "Selected backup: ${env.BACKUP_S3_PATH}"
+                }
+            }
+        }
+        
+        stage('Download Backup') {
+            steps {
+                script {
+                    echo "=== Downloading Backup File ==="
+                    
+                    // バックアップファイルをダウンロード
+                    sh """
+                        aws s3 cp s3://${env.BACKUP_BUCKET}/${env.BACKUP_S3_PATH} \
+                            ${DATA_DIR}/backup.json \
+                            --region ${AWS_REGION}
+                        
+                        echo "Backup file downloaded:"
+                        ls -lh ${DATA_DIR}/backup.json
+                    """
+                    
+                    // バックアップ情報の表示
+                    def backupInfo = sh(
+                        script: """
+                            jq '{
+                                backup_date: .backup_date,
+                                backup_timestamp: .backup_timestamp,
+                                environment: .environment,
+                                parameter_count: .parameter_count
+                            }' ${DATA_DIR}/backup.json
+                        """,
+                        returnStdout: true
+                    ).trim()
+                    
+                    echo "Backup Information:"
+                    echo backupInfo
+                }
+            }
+        }
+        
+        stage('Restore Parameters') {
+            steps {
+                script {
+                    echo "=== Restoring Parameters ==="
+                    
+                    // 復元スクリプトの実行
+                    def exitCode = sh(
+                        script: """
+                            # 環境変数を設定
+                            export ENVIRONMENT="${params.ENVIRONMENT}"
+                            export ENV_FILTER="${env.ENV_FILTER}"
+                            export AWS_REGION="${AWS_REGION}"
+                            export BACKUP_FILE="${DATA_DIR}/backup.json"
+                            export DRY_RUN="${params.DRY_RUN}"
+                            export FORCE_OVERWRITE="${params.FORCE_OVERWRITE}"
+                            export DATA_DIR="${DATA_DIR}"
+                            
+                            # スクリプト実行
+                            ${SCRIPT_DIR}/restore_parameters.sh
+                        """,
+                        returnStatus: true
+                    )
+                    
+                    // 結果の確認
+                    if (exitCode != 0) {
+                        if (fileExists("${DATA_DIR}/restore_result.json")) {
+                            def result = readJSON file: "${DATA_DIR}/restore_result.json"
+                            
+                            if (result.failed_count > 0 || result.verification_failed > 0) {
+                                echo "WARNING: Some parameters failed to restore or verify"
+                                currentBuild.result = 'UNSTABLE'
+                            }
+                        } else if (!params.DRY_RUN) {
+                            error("Restore script failed with exit code: ${exitCode}")
+                        }
+                    }
+                }
+            }
+        }
+        
+        stage('Generate Report') {
+            steps {
+                script {
+                    echo "=== Generating Restore Report ==="
+                    
+                    def reportFile = params.DRY_RUN ? 
+                        "${DATA_DIR}/analysis.json" : 
+                        "${DATA_DIR}/restore_result.json"
+                    
+                    if (fileExists(reportFile)) {
+                        def report = readJSON file: reportFile
+                        
+                        if (params.DRY_RUN) {
+                            echo """
+                            =============================================
+                            DRY RUN - 復元シミュレーション結果
+                            =============================================
+                            
+                            分析結果:
+                            - 作成対象: ${report.create_count} パラメータ
+                            - 更新対象: ${report.update_count} パラメータ
+                            - 変更なし: ${report.unchanged_count} パラメータ
+                            
+                            実行時の動作:
+                            - 新規作成されるパラメータ数: ${report.create_count}
+                            - 更新されるパラメータ数: ${params.FORCE_OVERWRITE ? report.update_count : '0 (強制上書きが無効)'}
+                            
+                            =============================================
+                            """.stripIndent()
+                        } else {
+                            echo """
+                            =============================================
+                            復元実行結果
+                            =============================================
+                            
+                            復元結果:
+                            - 成功: ${report.success_count} パラメータ
+                            - 失敗: ${report.failed_count} パラメータ
+                            - 検証失敗: ${report.verification_failed} パラメータ
+                            
+                            =============================================
+                            """.stripIndent()
+                        }
+                        
+                        // セキュリティ上の理由によりアーティファクトとしては保存しない
+                        // 分析結果はログで確認可能
+                    }
+                }
+            }
+        }
+    }
+    
+    post {
+        always {
+            script {
+                def status = currentBuild.result ?: 'SUCCESS'
+                
+                // 実行サマリーの表示
+                echo """
+                =============================================
+                SSM Parameter Store Restore Summary
+                =============================================
+                Build: #${env.BUILD_NUMBER}
+                Status: ${status}
+                Environment: ${params.ENVIRONMENT}
+                Backup File: ${env.BACKUP_FILE_NAME ?: 'N/A'}
+                Dry Run: ${params.DRY_RUN}
+                Force Overwrite: ${params.FORCE_OVERWRITE}
+                =============================================
+                """.stripIndent()
+            }
+        }
+        
+        success {
+            echo "✅ SSMパラメータの復元が正常に完了しました"
+        }
+        
+        failure {
+            echo "❌ 復元が失敗しました。ログを確認してください"
+        }
+        
+        unstable {
+            echo "⚠️ 復元は完了しましたが、一部のパラメータで問題が発生しました"
+        }
+        
+        cleanup {
+            // 作業ディレクトリのクリーンアップ
+            sh "rm -rf ${WORK_DIR} ${SCRIPT_DIR} jenkins-repo || true"
+        }
+    }
+}
