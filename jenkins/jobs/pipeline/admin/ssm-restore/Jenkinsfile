@@ -144,18 +144,25 @@ pipeline {
                         env.BACKUP_S3_PATH = "${params.ENVIRONMENT}/${backupFileName}"
                         
                     } else {
-                        // latest.txtには既に完全なパスが含まれている
-                        // 例: "dev/ssm-backup-dev-20250904_014349.json"
-                        env.BACKUP_S3_PATH = latestBackup.trim()
+                        // latest.txtの内容を確認
+                        latestBackup = latestBackup.trim()
                         
-                        // ファイル名を抽出（最後の/以降）
-                        if (latestBackup.contains('/')) {
-                            env.BACKUP_FILE_NAME = latestBackup.split('/').last()
+                        // パスの形式を判定
+                        if (latestBackup.startsWith("${params.ENVIRONMENT}/")) {
+                            // 既に完全なパス（新形式）
+                            // 例: "dev/2025-09-04/ssm-backup-dev-20250904_014349.json"
+                            env.BACKUP_S3_PATH = latestBackup
+                        } else if (latestBackup.contains('/')) {
+                            // 日付から始まる相対パス（旧形式）
+                            // 例: "2025-09-04/ssm-backup-dev-20250904_014349.json"
+                            env.BACKUP_S3_PATH = "${params.ENVIRONMENT}/${latestBackup}"
                         } else {
-                            // /が含まれない場合はファイル名のみと判断
-                            env.BACKUP_FILE_NAME = latestBackup
+                            // ファイル名のみ
                             env.BACKUP_S3_PATH = "${params.ENVIRONMENT}/${latestBackup}"
                         }
+                        
+                        // ファイル名を抽出（最後の/以降）
+                        env.BACKUP_FILE_NAME = env.BACKUP_S3_PATH.split('/').last()
                     }
                     
                     echo "Selected backup: ${env.BACKUP_S3_PATH}"
