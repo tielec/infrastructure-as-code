@@ -113,7 +113,7 @@ pipeline {
                     // 最新のバックアップ情報を取得
                     def latestBackup = sh(
                         script: """
-                            aws s3 cp s3://${env.BACKUP_BUCKET}/${params.ENVIRONMENT}/latest.txt - \
+                            aws s3 cp s3://${env.BACKUP_BUCKET}/latest.txt - \
                                 --region ${AWS_REGION} 2>/dev/null || echo ""
                         """,
                         returnStdout: true
@@ -122,10 +122,10 @@ pipeline {
                     if (!latestBackup) {
                         echo "WARNING: latest.txt not found. Searching for backup files..."
                         
-                        // 最新のバックアップファイルを検索
+                        // 最新のバックアップファイルを検索（ルートから全体を検索）
                         def backupFileName = sh(
                             script: """
-                                aws s3 ls s3://${env.BACKUP_BUCKET}/${params.ENVIRONMENT}/ \
+                                aws s3 ls s3://${env.BACKUP_BUCKET}/ --recursive \
                                     --region ${AWS_REGION} | \
                                     grep 'ssm-backup-${params.ENVIRONMENT}' | \
                                     sort -r | \
@@ -139,30 +139,16 @@ pipeline {
                             error("バックアップファイルが見つかりません。先にバックアップを実行してください。")
                         }
                         
-                        // ファイル名から完全なS3パスを構築
-                        env.BACKUP_FILE_NAME = backupFileName
-                        env.BACKUP_S3_PATH = "${params.ENVIRONMENT}/${backupFileName}"
+                        // backupFileNameには既に完全なS3キーが含まれている
+                        // 例: "2025-09-04/ssm-backup-dev-20250904_014349.json"
+                        env.BACKUP_S3_PATH = backupFileName
+                        env.BACKUP_FILE_NAME = backupFileName.split('/').last()
                         
                     } else {
-                        // latest.txtの内容を確認
-                        latestBackup = latestBackup.trim()
-                        
-                        // パスの形式を判定
-                        if (latestBackup.startsWith("${params.ENVIRONMENT}/")) {
-                            // 既に完全なパス（新形式）
-                            // 例: "dev/2025-09-04/ssm-backup-dev-20250904_014349.json"
-                            env.BACKUP_S3_PATH = latestBackup
-                        } else if (latestBackup.contains('/')) {
-                            // 日付から始まる相対パス（旧形式）
-                            // 例: "2025-09-04/ssm-backup-dev-20250904_014349.json"
-                            env.BACKUP_S3_PATH = "${params.ENVIRONMENT}/${latestBackup}"
-                        } else {
-                            // ファイル名のみ
-                            env.BACKUP_S3_PATH = "${params.ENVIRONMENT}/${latestBackup}"
-                        }
-                        
-                        // ファイル名を抽出（最後の/以降）
-                        env.BACKUP_FILE_NAME = env.BACKUP_S3_PATH.split('/').last()
+                        // latest.txtの内容をそのまま使用
+                        // 例: "2025-09-04/ssm-backup-dev-20250904_014349.json"
+                        env.BACKUP_S3_PATH = latestBackup.trim()
+                        env.BACKUP_FILE_NAME = latestBackup.split('/').last()
                     }
                     
                     echo "Selected backup: ${env.BACKUP_S3_PATH}"

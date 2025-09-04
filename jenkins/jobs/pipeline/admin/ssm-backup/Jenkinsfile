@@ -158,7 +158,7 @@ pipeline {
                     echo "=== Uploading Backup to S3 ==="
                     
                     def backupFileName = "ssm-backup-${params.ENVIRONMENT}-${env.BACKUP_TIMESTAMP}.json"
-                    def s3Key = "${params.ENVIRONMENT}/${env.BACKUP_DATE}/${backupFileName}"
+                    def s3Key = "${env.BACKUP_DATE}/${backupFileName}"
                     
                     // バックアップファイルの名前を変更
                     sh "cp ${DATA_DIR}/backup.json ${DATA_DIR}/${backupFileName}"
@@ -175,7 +175,7 @@ pipeline {
                     // 最新バックアップ情報を更新（完全なS3キーを保存）
                     sh """
                         echo '${s3Key}' | \
-                        aws s3 cp - s3://${env.BACKUP_BUCKET}/${params.ENVIRONMENT}/latest.txt \
+                        aws s3 cp - s3://${env.BACKUP_BUCKET}/latest.txt \
                             --region ${AWS_REGION}
                     """
                     
@@ -222,7 +222,7 @@ pipeline {
                     
                     実行時の動作:
                     - S3バケット: ${env.BACKUP_BUCKET}
-                    - S3パス: ${params.ENVIRONMENT}/${env.BACKUP_DATE}/
+                    - S3パス: ${env.BACKUP_DATE}/
                     - ファイル名: ssm-backup-${params.ENVIRONMENT}-${env.BACKUP_TIMESTAMP}.json
                     
                     =============================================
