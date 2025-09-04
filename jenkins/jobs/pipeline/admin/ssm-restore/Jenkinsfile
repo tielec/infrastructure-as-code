@@ -123,7 +123,7 @@ pipeline {
                         echo "WARNING: latest.txt not found. Searching for backup files..."
                         
                         // 最新のバックアップファイルを検索
-                        latestBackup = sh(
+                        def backupFileName = sh(
                             script: """
                                 aws s3 ls s3://${env.BACKUP_BUCKET}/${params.ENVIRONMENT}/ \
                                     --region ${AWS_REGION} | \
@@ -135,16 +135,28 @@ pipeline {
                             returnStdout: true
                         ).trim()
                         
-                        if (!latestBackup) {
+                        if (!backupFileName) {
                             error("バックアップファイルが見つかりません。先にバックアップを実行してください。")
                         }
+                        
+                        // ファイル名から完全なS3パスを構築
+                        env.BACKUP_FILE_NAME = backupFileName
+                        env.BACKUP_S3_PATH = "${params.ENVIRONMENT}/${backupFileName}"
+                        
                     } else {
-                        // latest.txtからファイル名を抽出
-                        latestBackup = latestBackup.split('/').last()
+                        // latest.txtには既に完全なパスが含まれている
+                        // 例: "dev/ssm-backup-dev-20250904_014349.json"
+                        env.BACKUP_S3_PATH = latestBackup.trim()
+                        
+                        // ファイル名を抽出（最後の/以降）
+                        if (latestBackup.contains('/')) {
+                            env.BACKUP_FILE_NAME = latestBackup.split('/').last()
+                        } else {
+                            // /が含まれない場合はファイル名のみと判断
+                            env.BACKUP_FILE_NAME = latestBackup
+                            env.BACKUP_S3_PATH = "${params.ENVIRONMENT}/${latestBackup}"
+                        }
                     }
-                    
-                    env.BACKUP_FILE_NAME = latestBackup
-                    env.BACKUP_S3_PATH = "${params.ENVIRONMENT}/${latestBackup}"
                     
                     echo "Selected backup: ${env.BACKUP_S3_PATH}"
                 }
