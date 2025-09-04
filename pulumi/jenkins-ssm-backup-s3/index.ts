@@ -20,8 +20,13 @@ const backupBucket = new aws.s3.Bucket("ssm-backup-bucket", {
             applyServerSideEncryptionByDefault: {
                 sseAlgorithm: "AES256",
             },
+            bucketKeyEnabled: true,  // S3 Bucket Keysを有効化（暗号化コストを削減）
         },
     },
+    loggings: [{
+        targetBucket: bucketName,  // 自己ログ記録（本番では専用ログバケットを推奨）
+        targetPrefix: "access-logs/",
+    }],
     lifecycleRules: [{
         id: "delete-old-backups",
         enabled: true,
@@ -31,12 +36,21 @@ const backupBucket = new aws.s3.Bucket("ssm-backup-bucket", {
         noncurrentVersionExpiration: {
             days: 7,  // 非現行バージョンは7日間保持
         },
+    }, {
+        id: "delete-old-logs",
+        enabled: true,
+        prefix: "access-logs/",
+        expiration: {
+            days: 90,  // ログは90日間保持
+        },
     }],
+    objectLockEnabled: false,  // 必要に応じてObject Lockを有効化可能
     tags: {
         Name: bucketName,
         Environment: environment,
         Purpose: "SSM Parameter Store Backup Storage",
         ManagedBy: "Pulumi",
+        DataClassification: "Confidential",  // データ分類を明示
     },
 });
 
@@ -47,6 +61,43 @@ const bucketPublicAccessBlock = new aws.s3.BucketPublicAccessBlock("ssm-backup-b
     blockPublicPolicy: true,
     ignorePublicAcls: true,
     restrictPublicBuckets: true,
+});
+
+// バケットポリシー：HTTPS通信の強制とIP制限（オプション）
+const bucketPolicy = new aws.s3.BucketPolicy("ssm-backup-bucket-policy", {
+    bucket: backupBucket.id,
+    policy: pulumi.all([backupBucket.arn]).apply(([bucketArn]) => JSON.stringify({
+        Version: "2012-10-17",
+        Statement: [
+            {
+                Sid: "DenyInsecureConnections",
+                Effect: "Deny",
+                Principal: "*",
+                Action: "s3:*",
+                Resource: [
+                    bucketArn,
+                    `${bucketArn}/*`,
+                ],
+                Condition: {
+                    Bool: {
+                        "aws:SecureTransport": "false"
+                    }
+                }
+            },
+            {
+                Sid: "DenyUnencryptedObjectUploads",
+                Effect: "Deny",
+                Principal: "*",
+                Action: "s3:PutObject",
+                Resource: `${bucketArn}/*`,
+                Condition: {
+                    StringNotEquals: {
+                        "s3:x-amz-server-side-encryption": "AES256"
+                    }
+                }
+            }
+        ]
+    })),
 });
 
 // SSMパラメータストアにバケット名を保存
