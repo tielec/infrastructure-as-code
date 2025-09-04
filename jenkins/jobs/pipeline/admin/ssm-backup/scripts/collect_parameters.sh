@@ -180,17 +180,16 @@ for ((i=0; i<$TOTAL_PARAMS; i+=BATCH_SIZE)); do
     
     # get-parameters（複数形）でバッチ取得
     if [ ${#batch_params[@]} -gt 0 ]; then
-        # パラメータ名を改行区切りで渡す
-        BATCH_RESULT=$(printf '%s\n' "${batch_params[@]}" | \
-            xargs -d '\n' aws ssm get-parameters \
-                --names \
-                --with-decryption \
-                --output json \
-                --region ${AWS_REGION} 2>/dev/null || echo '{"Parameters": [], "InvalidParameters": []}')
+        # AWS CLIコマンドを直接実行（xargsを使わない）
+        BATCH_RESULT=$(aws ssm get-parameters \
+            --names "${batch_params[@]}" \
+            --with-decryption \
+            --output json \
+            --region ${AWS_REGION} 2>/dev/null || echo '{"Parameters": [], "InvalidParameters": []}')
         
         # 取得成功したパラメータを追加
         VALID_PARAMS=$(echo "$BATCH_RESULT" | jq '.Parameters // []')
-        if [ "$VALID_PARAMS" != "[]" ]; then
+        if [ "$VALID_PARAMS" != "[]" ] && [ "$VALID_PARAMS" != "null" ]; then
             BACKUP_DATA=$(echo "$BACKUP_DATA" | jq --argjson new_params "$VALID_PARAMS" '. + $new_params')
         fi
         
