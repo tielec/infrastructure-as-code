@@ -23,11 +23,6 @@ const backupBucket = new aws.s3.Bucket("ssm-backup-bucket", {
             bucketKeyEnabled: true,  // S3 Bucket Keysを有効化（暗号化コストを削減）
         },
     },
-    // ログ記録は別途専用バケットで実装する必要があるため、一旦コメントアウト
-    // logging: {
-    //     targetBucket: bucketName,  // 自己ログ記録はHTTPS強制ポリシーと競合
-    //     targetPrefix: "access-logs/",
-    // },
     lifecycleRules: [{
         id: "delete-old-backups",
         enabled: true,
