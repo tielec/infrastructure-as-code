@@ -42,6 +42,10 @@ aws_cli_with_retry() {
     local retry_delay=3  # 初期待機時間を長めに設定
     local retry_count=0
     
+    # AWS CLIのページネーション設定を明示的に無効化
+    unset AWS_PAGER
+    export AWS_PAGER=""
+    
     while [ $retry_count -lt $max_retries ]; do
         if output=$("$@" 2>&1); then
             echo "$output"
@@ -157,12 +161,20 @@ fetch_all_parameters() {
 # メイン処理
 echo "Starting parameter collection..."
 
+# AWS CLIのページネーション設定を無効化
+export AWS_PAGER=""
+
 # フィルタリングされたパラメータを取得（API側でフィルタリング済み）
-FILTERED_PARAMS=$(fetch_all_parameters || echo '[]')
+FILTERED_PARAMS=$(fetch_all_parameters 2>/dev/null || echo '[]')
+if [ -z "$FILTERED_PARAMS" ] || [ "$FILTERED_PARAMS" = "[]" ]; then
+    FILTERED_PARAMS='[]'
+fi
 PARAM_COUNT=$(echo "$FILTERED_PARAMS" | jq 'length' 2>/dev/null || echo "0")
+# 改行を除去
+PARAM_COUNT=$(echo "$PARAM_COUNT" | tr -d '\n\r')
 echo "Found ${PARAM_COUNT} parameters for environment ${ENVIRONMENT}"
 
-if [ "$PARAM_COUNT" -eq 0 ]; then
+if [ "$PARAM_COUNT" = "0" ] || [ -z "$PARAM_COUNT" ]; then
     echo "WARNING: No parameters found matching filter '${ENV_FILTER}'"
     # 空のバックアップファイルを作成
     jq -n \
