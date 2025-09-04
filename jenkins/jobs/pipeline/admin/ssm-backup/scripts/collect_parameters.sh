@@ -165,16 +165,23 @@ echo "Starting parameter collection..."
 export AWS_PAGER=""
 
 # フィルタリングされたパラメータを取得（API側でフィルタリング済み）
-FILTERED_PARAMS=$(fetch_all_parameters 2>/dev/null || echo '[]')
-if [ -z "$FILTERED_PARAMS" ] || [ "$FILTERED_PARAMS" = "[]" ]; then
+FILTERED_PARAMS=$(fetch_all_parameters)
+if [ $? -ne 0 ] || [ -z "$FILTERED_PARAMS" ]; then
+    echo "Warning: fetch_all_parameters failed or returned empty" >&2
     FILTERED_PARAMS='[]'
 fi
+
+# JSONの検証
+if ! echo "$FILTERED_PARAMS" | jq empty 2>/dev/null; then
+    echo "Warning: Invalid JSON received from fetch_all_parameters" >&2
+    echo "Received data (first 200 chars): ${FILTERED_PARAMS:0:200}" >&2
+    FILTERED_PARAMS='[]'
+fi
+
 PARAM_COUNT=$(echo "$FILTERED_PARAMS" | jq 'length' 2>/dev/null || echo "0")
-# 改行を除去
-PARAM_COUNT=$(echo "$PARAM_COUNT" | tr -d '\n\r')
 echo "Found ${PARAM_COUNT} parameters for environment ${ENVIRONMENT}"
 
-if [ "$PARAM_COUNT" = "0" ] || [ -z "$PARAM_COUNT" ]; then
+if [ "$PARAM_COUNT" = "0" ]; then
     echo "WARNING: No parameters found matching filter '${ENV_FILTER}'"
     # 空のバックアップファイルを作成
     jq -n \
