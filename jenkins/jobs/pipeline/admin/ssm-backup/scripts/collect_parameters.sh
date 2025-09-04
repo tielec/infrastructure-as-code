@@ -1,8 +1,22 @@
 #!/bin/bash
 # SSM Parameter Collection and Backup Script
 # SSMパラメータを収集してバックアップファイルを作成
+# 
+# 使用方法:
+#   このスクリプトは環境変数を通じて設定を受け取ります
+#   必須環境変数:
+#     - ENVIRONMENT: バックアップ対象の環境 (dev/prod)
+#     - ENV_FILTER: パラメータフィルタ文字列 (/dev/, /prod/)
+#     - AWS_REGION: AWSリージョン
+#     - BACKUP_DATE: バックアップ日付 (YYYY-MM-DD)
+#     - BACKUP_TIMESTAMP: バックアップタイムスタンプ
+#     - DATA_DIR: データ出力ディレクトリ
+#
+# 戻り値:
+#   0: 正常終了
+#   1: エラー発生
 
-set -e
+set -euo pipefail
 
 echo "======================================"
 echo "SSM Parameter Collection Script"
@@ -23,25 +37,47 @@ fetch_all_parameters() {
     while true; do
         echo "Fetching page ${page}..."
         
+        # AWS CLIコマンドの実行とエラーハンドリング
+        local cmd="aws ssm describe-parameters"
+        cmd="$cmd --query '{Parameters: Parameters, NextToken: NextToken}'"
+        cmd="$cmd --output json"
+        cmd="$cmd --region ${AWS_REGION}"
+        
         if [ -n "$next_token" ]; then
-            local result=$(aws ssm describe-parameters \
-                --starting-token "$next_token" \
-                --query "{Parameters: Parameters, NextToken: NextToken}" \
-                --output json \
-                --region ${AWS_REGION})
-        else
-            local result=$(aws ssm describe-parameters \
-                --query "{Parameters: Parameters, NextToken: NextToken}" \
-                --output json \
-                --region ${AWS_REGION})
+            cmd="$cmd --starting-token '$next_token'"
+        fi
+        
+        # コマンド実行（エラー時は空のJSONを返す）
+        local result
+        if ! result=$(eval $cmd 2>/dev/null); then
+            echo "Warning: Failed to describe parameters on page ${page}. Retrying..." >&2
+            sleep 2
+            # リトライ
+            if ! result=$(eval $cmd 2>/dev/null); then
+                echo "Error: Failed to describe parameters after retry. Stopping." >&2
+                echo '{"Parameters": [], "NextToken": null}'
+                return 1
+            fi
+        fi
+        
+        # 結果が空またはエラーメッセージの場合の処理
+        if [ -z "$result" ] || ! echo "$result" | jq empty 2>/dev/null; then
+            echo "Warning: Invalid JSON response received" >&2
+            result='{"Parameters": [], "NextToken": null}'
         fi
         
         # パラメータを追加
-        local params=$(echo "$result" | jq -r '.Parameters // []')
-        all_params=$(echo "$all_params" | jq ". + $params")
+        local params
+        if params=$(echo "$result" | jq -r '.Parameters // []' 2>/dev/null); then
+            if [ "$params" != "null" ] && [ -n "$params" ]; then
+                all_params=$(echo "$all_params" | jq ". + $params")
+            fi
+        else
+            echo "Warning: Failed to parse parameters from response" >&2
+        fi
         
         # 次のトークンを確認
-        next_token=$(echo "$result" | jq -r '.NextToken // empty')
+        next_token=$(echo "$result" | jq -r '.NextToken // empty' 2>/dev/null || echo "")
         
         if [ -z "$next_token" ]; then
             break
@@ -60,16 +96,16 @@ fetch_all_parameters() {
 echo "Starting parameter collection..."
 
 # すべてのパラメータを取得
-ALL_PARAMS=$(fetch_all_parameters)
-TOTAL_COUNT=$(echo "$ALL_PARAMS" | jq 'length')
+ALL_PARAMS=$(fetch_all_parameters || echo '[]')
+TOTAL_COUNT=$(echo "$ALL_PARAMS" | jq 'length' 2>/dev/null || echo "0")
 echo "Total parameters found: ${TOTAL_COUNT}"
 
 # 環境フィルタを適用
 echo "Filtering parameters containing '${ENV_FILTER}'..."
 FILTERED_PARAMS=$(echo "$ALL_PARAMS" | jq --arg filter "${ENV_FILTER}" \
-    '[.[] | select(.Name | contains($filter))]')
+    '[.[] | select(.Name | contains($filter))]' 2>/dev/null || echo '[]')
 
-PARAM_COUNT=$(echo "$FILTERED_PARAMS" | jq 'length')
+PARAM_COUNT=$(echo "$FILTERED_PARAMS" | jq 'length' 2>/dev/null || echo "0")
 echo "Found ${PARAM_COUNT} parameters for environment ${ENVIRONMENT}"
 
 if [ "$PARAM_COUNT" -eq 0 ]; then
