@@ -368,8 +368,8 @@ if [ -n "$API_ENDPOINT" ] && [ -n "$BUBBLE_KEY" ]; then
         -H "Content-Type: application/json" \
         -d '{"test":"verification"}' 2>/dev/null || echo "000")
     
-    if [ "$ECHO_RESPONSE_NO_AUTH" == "401" ]; then
-        log_info "Echo API correctly requires authentication (401 without key)"
+    if [ "$ECHO_RESPONSE_NO_AUTH" == "401" ] || [ "$ECHO_RESPONSE_NO_AUTH" == "403" ]; then
+        log_info "Echo API correctly requires authentication ($ECHO_RESPONSE_NO_AUTH without key)"
         
         # APIキーがある場合は認証付きでテスト
         if [ -n "${BUBBLE_KEY}" ]; then
