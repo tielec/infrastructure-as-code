@@ -36,6 +36,37 @@ if ! aws sts get-caller-identity --region ${AWS_REGION}; then
 fi
 echo "AWS credentials verified."
 
+# AWS API呼び出しのリトライ機能
+aws_cli_with_retry() {
+    local max_retries=5
+    local retry_delay=2
+    local retry_count=0
+    local cmd="$@"
+    
+    while [ $retry_count -lt $max_retries ]; do
+        if output=$(eval "$cmd" 2>&1); then
+            echo "$output"
+            return 0
+        else
+            if echo "$output" | grep -q "ThrottlingException\|Rate exceeded"; then
+                retry_count=$((retry_count + 1))
+                echo "  Rate limit hit. Retry ${retry_count}/${max_retries} after ${retry_delay}s..." >&2
+                sleep $retry_delay
+                retry_delay=$((retry_delay * 2))  # Exponential backoff
+                if [ $retry_delay -gt 30 ]; then
+                    retry_delay=30  # Max delay 30s
+                fi
+            else
+                echo "Error: $output" >&2
+                return 1
+            fi
+        fi
+    done
+    
+    echo "Error: Max retries reached" >&2
+    return 1
+}
+
 # パラメータ一覧の取得（ページネーション対応）
 fetch_all_parameters() {
     local next_token=""
@@ -51,24 +82,22 @@ fetch_all_parameters() {
         
         if [ -n "$next_token" ]; then
             echo "  Executing: aws ssm describe-parameters --starting-token ... --region ${AWS_REGION}" >&2
-            if ! result=$(aws ssm describe-parameters \
-                --starting-token "$next_token" \
+            if ! result=$(aws_cli_with_retry "aws ssm describe-parameters \
+                --starting-token '$next_token' \
                 --query '{Parameters: Parameters, NextToken: NextToken}' \
                 --output json \
-                --region ${AWS_REGION} 2>&1); then
-                error_msg=$result
-                echo "Error: AWS CLI command failed: $error_msg" >&2
+                --region ${AWS_REGION}"); then
+                echo "Error: Failed to describe parameters" >&2
                 echo '{"Parameters": [], "NextToken": null}'
                 return 1
             fi
         else
             echo "  Executing: aws ssm describe-parameters --region ${AWS_REGION}" >&2
-            if ! result=$(aws ssm describe-parameters \
+            if ! result=$(aws_cli_with_retry "aws ssm describe-parameters \
                 --query '{Parameters: Parameters, NextToken: NextToken}' \
                 --output json \
-                --region ${AWS_REGION} 2>&1); then
-                error_msg=$result
-                echo "Error: AWS CLI command failed: $error_msg" >&2
+                --region ${AWS_REGION}"); then
+                echo "Error: Failed to describe parameters" >&2
                 echo '{"Parameters": [], "NextToken": null}'
                 return 1
             fi
@@ -107,8 +136,8 @@ fetch_all_parameters() {
         
         page=$((page + 1))
         
-        # APIレート制限対策
-        sleep 0.5
+        # APIレート制限対策（より長い待機時間）
+        sleep 1
     done
     
     echo "$all_params"
@@ -204,9 +233,9 @@ for ((i=0; i<$TOTAL_PARAMS; i+=BATCH_SIZE)); do
         fi
     fi
     
-    # APIレート制限対策
+    # APIレート制限対策（より長い待機時間）
     if [ $end -lt $TOTAL_PARAMS ]; then
-        sleep 0.5
+        sleep 1
     fi
 done
 
