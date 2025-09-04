@@ -12,7 +12,7 @@
   },
   "dependencies": {
     "@pulumi/pulumi": "^3.0.0",
-    "@pulumi/aws": "^6.0.0",
+    "@pulumi/aws": "^7.0.0",
     "simple-git": "^3.20.0",
     "archiver": "^6.0.1",
     "js-yaml": "^4.1.0"

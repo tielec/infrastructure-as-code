@@ -2,10 +2,7 @@ import * as fs from "fs";
 import * as path from "path";
 import * as yaml from "js-yaml";
 import * as pulumi from "@pulumi/pulumi";
-
-export interface EnvConfig {
-  [key: string]: any;
-}
+import { EnvConfig } from "./types";
 
 /**
  * SharePointからダウンロードしたYAML設定ファイルを読み込むためのローダー
@@ -167,3 +164,6 @@ export function loadEnvConfig(
 
   return loader;
 }
+
+// 型エクスポート
+export type { EnvConfig } from "./types";

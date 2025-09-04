@@ -4,21 +4,7 @@ import simpleGit from "simple-git";
 import * as fs from "fs";
 import * as path from "path";
 import * as crypto from "crypto";
-
-export interface GitHubRepoCheckoutArgs {
-  // Either provide repositoryUrl or owner/repo
-  repositoryUrl?: string;
-  owner?: string;
-  repo?: string;
-  branch?: pulumi.Input<string>;
-  tag?: pulumi.Input<string>;
-  commit?: pulumi.Input<string>;
-  outputPath?: string;
-  githubToken?: pulumi.Input<string>;
-  // SSM Parameter Store path for GitHub token (default: /tielec-iac/GITHUB_TOKEN)
-  githubTokenParameterName?: pulumi.Input<string>;
-  useParameterStore?: boolean; // default: true
-}
+import { GitHubRepoCheckoutArgs } from "./types";
 
 export class GitHubRepoCheckout extends pulumi.ComponentResource {
   public readonly localPath: pulumi.Output<string>;
@@ -102,33 +88,27 @@ export class GitHubRepoCheckout extends pulumi.ComponentResource {
 
       const isRepoCloned = fs.existsSync(path.join(outputPath, ".git"));
 
-      if (!isRepoCloned) {
-        await git.clone(repoUrl, outputPath, ["--depth", "1"]);
-      }
-
-      const repoGit = simpleGit(outputPath);
-
       if (isRepoCloned) {
-        await repoGit.fetch(["--depth", "1"]);
+        // 既存のリポジトリがある場合、削除して再クローン
+        pulumi.log.info(`Removing existing repository at ${outputPath}`);
+        fs.rmSync(outputPath, { recursive: true, force: true });
       }
+
+      // 常に新しくクローン
+      pulumi.log.info(`Cloning repository from ${repositoryUrl} branch ${branch}`);
+      await git.clone(repoUrl, outputPath, ["--branch", branch, "--depth", "1"]);
+      
+      const repoGit = simpleGit(outputPath);
 
       let targetRef = branch;
       if (tag) {
         targetRef = tag;
         await repoGit.fetch(["--tags", "--depth", "1"]);
+        await repoGit.checkout(targetRef);
       } else if (commit) {
         targetRef = commit;
         await repoGit.fetch(["--depth", "1", "origin", commit]);
-      }
-
-      await repoGit.checkout(targetRef);
-
-      if (!tag && !commit && branch) {
-        try {
-          await repoGit.pull("origin", branch);
-        } catch (e) {
-          pulumi.log.warn(`Failed to pull latest changes: ${e}`);
-        }
+        await repoGit.checkout(targetRef);
       }
 
       const currentCommit = await repoGit.revparse("HEAD");
@@ -154,3 +134,6 @@ export class GitHubRepoCheckout extends pulumi.ComponentResource {
     });
   }
 }
+
+// 型エクスポート
+export type { GitHubRepoCheckoutArgs } from "./types";

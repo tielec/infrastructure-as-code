@@ -4,6 +4,7 @@
   "description": "Lambda APIインフラのSSMパラメータ初期化",
   "main": "index.js",
   "scripts": {
+    "prepare": "cd ../components && npm install",
     "build": "tsc",
     "preview": "pulumi preview --stack dev",
     "deploy": "pulumi up --stack dev --yes",
@@ -15,6 +16,7 @@
   },
   "dependencies": {
     "@pulumi/aws": "^6.0.0",
-    "@pulumi/pulumi": "^3.0.0"
+    "@pulumi/pulumi": "^3.0.0",
+    "@tielec/pulumi-components": "file:../components"
   }
 }

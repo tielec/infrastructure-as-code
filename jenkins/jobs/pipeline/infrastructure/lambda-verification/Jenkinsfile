@@ -1,0 +1,193 @@
+#!/usr/bin/env groovy
+
+@Library('jenkins-shared-lib') _
+
+pipeline {
+    agent {
+        label 'ec2-fleet'
+    }
+    
+    options {
+        ansiColor('xterm')
+        timestamps()
+        timeout(time: 10, unit: 'MINUTES')
+        disableConcurrentBuilds()
+    }
+    
+    environment {
+        AWS_DEFAULT_REGION = 'ap-northeast-1'
+        // インフラストラクチャーリポジトリの設定
+        INFRA_REPO = 'https://github.com/tielec/infrastructure-as-code'
+        INFRA_REPO_CREDS = 'github-app-credentials'
+        INFRA_REPO_DIR = 'infrastructure-as-code'
+    }
+    
+    stages {
+        stage('Checkout Infrastructure Repository') {
+            steps {
+                script {
+                    echo "リポジトリをチェックアウト中..."
+                    
+                    // infrastructure-as-codeリポジトリのチェックアウト
+                    dir(env.INFRA_REPO_DIR) {
+                        gitUtils.checkoutRepository(
+                            env.INFRA_REPO,
+                            params.BRANCH ?: 'main',
+                            env.INFRA_REPO_CREDS
+                        )
+                    }
+                    
+                    echo "チェックアウト完了: ブランチ ${params.BRANCH}"
+                }
+            }
+        }
+        
+        stage('Validate Parameters') {
+            steps {
+                script {
+                    echo "=== Lambda検証ジョブ設定 ==="
+                    echo "対象環境: ${params.ENVIRONMENT}"
+                    echo "ブランチ: ${params.BRANCH}"
+                    echo "詳細出力: ${params.VERBOSE ? 'ON' : 'OFF'}"
+                    echo "ログレベル: ${params.LOG_LEVEL}"
+                    
+                    // 環境の検証
+                    def validEnvironments = ['dev', 'prod']
+                    if (!validEnvironments.contains(params.ENVIRONMENT)) {
+                        error("無効な環境: ${params.ENVIRONMENT}")
+                    }
+                    
+                    // AWS環境確認
+                    sh '''
+                        echo "=== AWS環境確認 ==="
+                        aws sts get-caller-identity
+                        echo ""
+                    '''
+                }
+            }
+        }
+        
+        stage('Prepare Verification Script') {
+            steps {
+                script {
+                    dir(env.INFRA_REPO_DIR) {
+                        // スクリプトの存在確認
+                        sh '''
+                            if [ ! -f scripts/lambda/verify-deployment.sh ]; then
+                                echo "エラー: verify-deployment.shが見つかりません"
+                                exit 1
+                            fi
+                            
+                            echo "=== スクリプトの準備 ==="
+                            chmod +x scripts/lambda/verify-deployment.sh
+                            ls -la scripts/lambda/verify-deployment.sh
+                        '''
+                    }
+                }
+            }
+        }
+        
+        stage('Execute Lambda Verification') {
+            steps {
+                script {
+                    dir(env.INFRA_REPO_DIR) {
+                        echo "=== Lambda検証実行 ==="
+                        
+                        // 環境変数の設定
+                        def envVars = [
+                            "AWS_REGION=${env.AWS_DEFAULT_REGION}",
+                            "LOG_LEVEL=${params.LOG_LEVEL}"
+                        ]
+                        
+                        if (params.VERBOSE) {
+                            envVars.add("VERBOSE=1")
+                        }
+                        
+                        // スクリプトの実行
+                        withEnv(envVars) {
+                            def result = sh(
+                                script: "./scripts/lambda/verify-deployment.sh ${params.ENVIRONMENT}",
+                                returnStatus: true
+                            )
+                            
+                            if (result != 0) {
+                                error("Lambda検証が失敗しました (終了コード: ${result})")
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        
+        stage('Collect Results') {
+            steps {
+                script {
+                    dir(env.INFRA_REPO_DIR) {
+                        // 結果ファイルが生成されている場合は保存
+                        sh '''
+                            echo "=== 検証結果の収集 ==="
+                            
+                            # 結果ファイルをワークスペースルートにコピー
+                            if [ -f lambda-verification-results.json ]; then
+                                cp lambda-verification-results.json ${WORKSPACE}/
+                                echo "検証結果JSONファイルを保存しました"
+                            fi
+                            
+                            if [ -f lambda-verification-summary.txt ]; then
+                                cp lambda-verification-summary.txt ${WORKSPACE}/
+                                echo "検証サマリーファイルを保存しました"
+                            fi
+                            
+                            if [ -f lambda-verification-errors.log ]; then
+                                cp lambda-verification-errors.log ${WORKSPACE}/
+                                echo "エラーログファイルを保存しました"
+                            fi
+                        '''
+                    }
+                }
+            }
+        }
+    }
+    
+    post {
+        success {
+            script {
+                echo "✅ Lambda検証が正常に完了しました"
+                
+                // 結果サマリーを表示
+                if (fileExists('lambda-verification-summary.txt')) {
+                    echo "=== 検証サマリー ==="
+                    def summary = readFile('lambda-verification-summary.txt')
+                    echo summary
+                }
+            }
+        }
+        
+        failure {
+            script {
+                echo "❌ Lambda検証中にエラーが発生しました"
+                
+                // エラーログを表示
+                if (fileExists('lambda-verification-errors.log')) {
+                    echo "=== エラーログ ==="
+                    def errorLog = readFile('lambda-verification-errors.log')
+                    echo errorLog
+                }
+            }
+        }
+        
+        always {
+            script {
+                // アーティファクトの保存
+                archiveArtifacts(
+                    artifacts: 'lambda-verification-*.json, lambda-verification-*.txt, lambda-verification-*.log',
+                    allowEmptyArchive: true,
+                    fingerprint: true
+                )
+                
+                // ワークスペースのクリーンアップ
+                cleanWs()
+            }
+        }
+    }
+}
