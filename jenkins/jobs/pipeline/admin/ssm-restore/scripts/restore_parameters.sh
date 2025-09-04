@@ -199,6 +199,13 @@ SUCCESS_COUNT=0
 FAILED_COUNT=0
 FAILED_PARAMS=()
 
+# 一時ファイルでカウントを管理
+TEMP_SUCCESS_FILE=$(mktemp)
+TEMP_FAILED_FILE=$(mktemp)
+TEMP_FAILED_PARAMS_FILE=$(mktemp)
+echo "0" > "${TEMP_SUCCESS_FILE}"
+echo "0" > "${TEMP_FAILED_FILE}"
+
 # 復元処理
 echo "${FILTERED_PARAMS}" | jq -c '.[]' | while IFS= read -r param; do
     PARAM_NAME=$(echo "$param" | jq -r '.Name')
@@ -240,14 +247,26 @@ echo "${FILTERED_PARAMS}" | jq -c '.[]' | while IFS= read -r param; do
             ${OVERWRITE_FLAG} \
             --region ${AWS_REGION} >/dev/null 2>&1; then
             echo "✓ Success"
-            SUCCESS_COUNT=$((SUCCESS_COUNT + 1))
+            local current_success=$(cat "${TEMP_SUCCESS_FILE}")
+            echo $((current_success + 1)) > "${TEMP_SUCCESS_FILE}"
         else
             echo "✗ Failed"
-            FAILED_COUNT=$((FAILED_COUNT + 1))
-            FAILED_PARAMS+=("${PARAM_NAME}")
+            local current_failed=$(cat "${TEMP_FAILED_FILE}")
+            echo $((current_failed + 1)) > "${TEMP_FAILED_FILE}"
+            echo "${PARAM_NAME}" >> "${TEMP_FAILED_PARAMS_FILE}"
         fi
     fi
 done
+
+# 一時ファイルからカウントを取得
+SUCCESS_COUNT=$(cat "${TEMP_SUCCESS_FILE}")
+FAILED_COUNT=$(cat "${TEMP_FAILED_FILE}")
+if [ -f "${TEMP_FAILED_PARAMS_FILE}" ] && [ -s "${TEMP_FAILED_PARAMS_FILE}" ]; then
+    mapfile -t FAILED_PARAMS < "${TEMP_FAILED_PARAMS_FILE}"
+fi
+
+# 一時ファイルのクリーンアップ
+rm -f "${TEMP_SUCCESS_FILE}" "${TEMP_FAILED_FILE}" "${TEMP_FAILED_PARAMS_FILE}"
 
 # 復元結果のサマリー
 echo ""
@@ -272,6 +291,10 @@ echo "Verifying Restored Parameters"
 echo "======================================"
 
 VERIFY_FAILED=0
+
+# 一時ファイルで検証失敗カウントを管理
+TEMP_VERIFY_FILE=$(mktemp)
+echo "0" > "${TEMP_VERIFY_FILE}"
 
 # 作成・更新対象のパラメータを検証
 {
@@ -298,13 +321,19 @@ VERIFY_FAILED=0
             echo "✓ OK"
         else
             echo "✗ Value mismatch"
-            VERIFY_FAILED=$((VERIFY_FAILED + 1))
+            local current_verify_failed=$(cat "${TEMP_VERIFY_FILE}")
+            echo $((current_verify_failed + 1)) > "${TEMP_VERIFY_FILE}"
         fi
     else
         echo "✗ Not found"
-        VERIFY_FAILED=$((VERIFY_FAILED + 1))
+        local current_verify_failed=$(cat "${TEMP_VERIFY_FILE}")
+        echo $((current_verify_failed + 1)) > "${TEMP_VERIFY_FILE}"
     fi
 done
+
+# 一時ファイルから検証失敗カウントを取得
+VERIFY_FAILED=$(cat "${TEMP_VERIFY_FILE}")
+rm -f "${TEMP_VERIFY_FILE}"
 
 echo ""
 echo "======================================"
