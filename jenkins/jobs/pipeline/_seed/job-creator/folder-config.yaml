@@ -4,7 +4,7 @@
 folders:
   # 管理者用ジョブフォルダ
   - path: "Admin_Jobs"
-    displayName: "Admin Jobs"
+    displayName: "01. [Admin] 管理ジョブ"
     description: |
       このフォルダーには、管理者用のジョブが含まれています。
       
@@ -20,7 +20,7 @@ folders:
 
   # アカウントセットアップフォルダ
   - path: "Account_Setup"
-    displayName: "Account Setup Jobs"
+    displayName: "02. [Admin] アカウントセットアップ"
     description: |
       このフォルダーには、アカウントセットアップを行うジョブが含まれています。
       
@@ -29,7 +29,7 @@ folders:
 
   # プレイグラウンドフォルダ
   - path: "Playgrounds"
-    displayName: "Playgrounds for Job Creation and Testing"
+    displayName: "90. [Sandbox] プレイグラウンド"
     description: |
       このフォルダーは、ユーザーが自由にジョブの作成と検証を行うための場所です。
       
@@ -52,7 +52,7 @@ folders:
 
   # コード品質チェッカーフォルダ
   - path: "Code_Quality_Checker"
-    displayName: "Code Quality Checker Jobs"
+    displayName: "30. [Quality] コード品質チェック"
     description: |
       このフォルダーには、コード品質チェックを行うジョブが含まれています。
       
@@ -75,7 +75,7 @@ folders:
 
   # ドキュメント生成フォルダ
   - path: "Document_Generator"
-    displayName: "Document Generator Jobs"
+    displayName: "31. [Quality] ドキュメント生成"
     description: |
       このフォルダーには、ドキュメント自動生成を行うジョブが含まれています。
       
@@ -92,7 +92,7 @@ folders:
 
   # デリバリー管理ジョブフォルダ
   - path: "delivery-management-jobs"
-    displayName: "Delivery Management Jobs"
+    displayName: "10. [Deploy] デリバリー管理"
     description: |
       このフォルダーには、インフラストラクチャとアプリケーションの
       デリバリー（配信・展開）を管理するジョブが含まれています。
@@ -232,7 +232,7 @@ folders:
 
   # 共有ライブラリフォルダ
   - path: "Shared_Library"
-    displayName: "Shared Library Tests & Examples"
+    displayName: "40. [Test] 共有ライブラリテスト"
     description: |
       このフォルダーには、共有ライブラリのテストやサンプルジョブが含まれています。
       
@@ -270,7 +270,7 @@ folders:
 
   # パイプラインテストフォルダ
   - path: "Pipeline_Tests"
-    displayName: "Pipeline Tests"
+    displayName: "41. [Test] パイプラインテスト"
     description: |
       このフォルダーには、パイプラインのテストジョブが含まれています。
       
@@ -300,7 +300,7 @@ folders:
 
   # インフラストラクチャー管理フォルダ  
   - path: "Infrastructure_Management"
-    displayName: "Infrastructure Management Jobs"
+    displayName: "20. [Ops] インフラ運用管理"
     description: |
       このフォルダーには、インフラストラクチャーの管理ジョブが含まれています。
       
