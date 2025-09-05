@@ -80,15 +80,7 @@ pipeline {
                     
                     // Dockerコンテナ内で全体の処理を実行
                     docker.image(CONSTANTS.DOCKER_IMAGE).inside('-v ${WORKSPACE}:/workspace -w /workspace -u root') {
-                        // Git設定
-                        sh '''
-                            git config --global --add safe.directory '*'
-                            git config --global --add safe.directory /workspace
-                            git config --global --add safe.directory /tmp
-                            echo "✓ Git Safe Directory設定完了"
-                        '''
-                        
-                        // 環境セットアップを実行
+                        // 環境セットアップを実行（gitのインストールを含む）
                         setupEnvironment()
                     }
                 }
@@ -104,8 +96,13 @@ pipeline {
                     echo "\n🔍 Docker環境でコード複雑度解析とAIコメント生成を開始します..."
                     
                     docker.image(CONSTANTS.DOCKER_IMAGE).inside('-v ${WORKSPACE}:/workspace -w /workspace -u root') {
-                        // Git設定
-                        sh 'git config --global --add safe.directory "*"'
+                        // 最小限の環境セットアップ（既にインストール済みの場合はスキップ）
+                        sh '''
+                            if ! command -v git &> /dev/null; then
+                                apt-get update -qq && apt-get install -qq -y git > /dev/null 2>&1
+                            fi
+                            git config --global --add safe.directory '*'
+                        '''
                         
                         // 複雑度解析の実行
                         analyzeComplexity()
@@ -523,6 +520,12 @@ def installSystemPackages() {
         else
             echo "✓ 必要なシステムパッケージは既にインストール済みです"
         fi
+        
+        # Git Safe Directoryを設定
+        git config --global --add safe.directory '*'
+        git config --global --add safe.directory /workspace
+        git config --global --add safe.directory /tmp
+        echo "✓ Git Safe Directory設定完了"
     """
 }
 
