@@ -22,14 +22,16 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/lists/*
 
 # rootのホームディレクトリを作成し、権限を設定
-RUN mkdir -p /root && chmod 755 /root
+RUN mkdir -p /root && \
+    chmod 755 /root && \
+    touch /root/.gitconfig && \
+    chmod 644 /root/.gitconfig
 
 # Git safe.directoryをグローバルに設定
-RUN git config --global --add safe.directory '*' \
-    && git config --global --add safe.directory /workspace \
-    && git config --global --add safe.directory /tmp \
-    && git config --global user.name "Jenkins" \
-    && git config --global user.email "jenkins@localhost"
+# 注: Dockerビルド時の設定は、実行時に上書きされる可能性があるため最小限に
+RUN git config --global user.name "Jenkins" && \
+    git config --global user.email "jenkins@localhost" && \
+    git config --global --add safe.directory '*'
 
 # 作業ディレクトリを設定
 WORKDIR /workspace

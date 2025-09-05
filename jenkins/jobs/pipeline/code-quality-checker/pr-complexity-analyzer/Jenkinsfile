@@ -26,7 +26,7 @@ pipeline {
             label 'ec2-fleet'
             dir 'jenkins/jobs/pipeline/code-quality-checker/pr-complexity-analyzer'
             additionalBuildArgs '--no-cache'
-            args '-v ${WORKSPACE}:/workspace -w /workspace'
+            args '-v ${WORKSPACE}:/workspace -w /workspace -u root --privileged'
         }
     }
         
@@ -59,20 +59,30 @@ pipeline {
                 script {
                     echo "\n🔒 Git設定を確認中..."
                     sh '''
-                        # ホームディレクトリの確認と設定
+                        # ホームディレクトリの確認と作成
                         export HOME=/root
                         echo "HOME directory: $HOME"
                         
-                        # .gitconfigファイルの権限を確認・修正
-                        if [ -f "$HOME/.gitconfig" ]; then
-                            chmod 644 "$HOME/.gitconfig" 2>/dev/null || true
+                        # ホームディレクトリが存在しない場合は作成
+                        if [ ! -d "$HOME" ]; then
+                            mkdir -p "$HOME"
+                            chmod 755 "$HOME"
+                        fi
+                        
+                        # .gitconfigファイルが存在しない場合は作成
+                        if [ ! -f "$HOME/.gitconfig" ]; then
+                            touch "$HOME/.gitconfig"
+                            chmod 644 "$HOME/.gitconfig"
                         fi
                         
                         # Gitバージョンを確認
                         echo "Git version:"
                         git --version
                         
-                        # 追加のsafe.directory設定（必要に応じて）
+                        # Git設定のリセットと再設定
+                        echo "Configuring Git safe directories..."
+                        git config --global --unset-all safe.directory 2>/dev/null || true
+                        git config --global --add safe.directory '*' 2>/dev/null || echo "Failed to add safe.directory *"
                         git config --global --add safe.directory "${WORKSPACE}" 2>/dev/null || true
                         
                         # Jenkinsワークスペースのサブディレクトリも追加
