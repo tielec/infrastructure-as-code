@@ -26,12 +26,18 @@ pipeline {
                     // リポジトリ名の正規化（ハイフンを除去、小文字に変換）
                     env.REPO_NAME_NORMALIZED = env.REPO_NAME.replaceAll('-', '').toLowerCase()
                     
+                    // JENKINS_BASE_URLの末尾のスラッシュを取り除く
+                    def jenkinsBaseUrl = params.JENKINS_BASE_URL
+                    if (jenkinsBaseUrl.endsWith('/')) {
+                        jenkinsBaseUrl = jenkinsBaseUrl.substring(0, jenkinsBaseUrl.length() - 1)
+                    }
+                    
                     // Webhook URLの構築
                     if (params.CUSTOM_WEBHOOK_URL) {
                         env.WEBHOOK_URL = params.CUSTOM_WEBHOOK_URL
                         echo "カスタムWebhook URLを使用します"
                     } else {
-                        env.WEBHOOK_URL = "${params.JENKINS_BASE_URL}/generic-webhook-trigger/invoke?token=${env.REPO_NAME_NORMALIZED}-${params.WEBHOOK_TOKEN_SUFFIX}"
+                        env.WEBHOOK_URL = "${jenkinsBaseUrl}/generic-webhook-trigger/invoke?token=${env.REPO_NAME_NORMALIZED}-${params.WEBHOOK_TOKEN_SUFFIX}"
                     }
                     
                     echo "Repository: ${env.REPO_OWNER}/${env.REPO_NAME}"
