@@ -1,3 +1,5 @@
+import jenkins.model.Jenkins
+
 // 共通設定を取得
 def jenkinsPipelineRepo = commonSettings['jenkins-pipeline-repo']
 
@@ -7,6 +9,9 @@ def jobConfig = jenkinsJobsConfig[jobKey]
 
 // フォルダとジョブ名を組み合わせる
 def fullJobName = "Admin_Jobs/${jobConfig.name}"
+
+// JenkinsのルートURLを取得
+def jenkinsUrl = Jenkins.getInstance().getRootUrl() ?: 'http://localhost:8080/'
 
 pipelineJob(fullJobName) {
     displayName(jobConfig.displayName)
@@ -48,7 +53,7 @@ pipelineJob(fullJobName) {
         // Webhook設定
         stringParam('WEBHOOK_TOKEN_SUFFIX', 'jenkins-webhook', 'Webhook URLのトークン接尾辞 (デフォルト: jenkins-webhook)')
         
-        stringParam('JENKINS_BASE_URL', System.getenv("JENKINS_URL") ?: 'http://localhost:8080', 'Jenkins のベースURL')
+        stringParam('JENKINS_BASE_URL', jenkinsUrl, 'Jenkins のベースURL')
         
         // イベント設定
         textParam('WEBHOOK_EVENTS', 'pull_request', 'トリガーするイベント (カンマ区切り)。例: pull_request,push,issues')
