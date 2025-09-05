@@ -471,6 +471,23 @@ def setupEnvironment() {
     // ディレクトリ作成
     createDirectories()
     
+    // 並列実行前にGit設定を確実に適用
+    sh """
+        echo "Git設定を適用中..."
+        git config --global --add safe.directory '*'
+        git config --global --add safe.directory /workspace
+        git config --global --add safe.directory /tmp
+        git config --global --add safe.directory ${env.WORKSPACE}
+        # /tmp配下のすべてのJenkinsワークスペースを信頼
+        for dir in /tmp/jenkins-*; do
+            if [ -d "\$dir" ]; then
+                git config --global --add safe.directory "\$dir" 2>/dev/null || true
+            fi
+        done
+        echo "現在のGit safe.directory設定:"
+        git config --global --get-all safe.directory | head -20
+    """
+    
     // Gitリポジトリのチェックアウト（並列実行）
     echo "\n📦 必要なリポジトリをチェックアウト中..."
     parallel(
@@ -538,6 +555,14 @@ def createDirectories() {
 
 def checkoutJenkinsRepo() {
     echo "Jenkinsリポジトリをチェックアウト中..."
+    
+    // Git safe.directoryを事前に設定
+    sh """
+        git config --global --add safe.directory '*' 2>/dev/null || true
+        git config --global --add safe.directory ${env.WORKSPACE}/${CONFIG_DIR} 2>/dev/null || true
+        git config --global --add safe.directory /tmp/jenkins-* 2>/dev/null || true
+    """
+    
     dir(CONFIG_DIR) {
         gitUtils.checkoutRepository(
             env.GIT_INFRASTRUCTURE_REPO_URL,
@@ -550,6 +575,14 @@ def checkoutJenkinsRepo() {
 
 def checkoutSourceRepo() {
     echo "PR対象リポジトリをチェックアウト中... (${env.PR_HEAD_REF})"
+    
+    // Git safe.directoryを事前に設定
+    sh """
+        git config --global --add safe.directory '*' 2>/dev/null || true
+        git config --global --add safe.directory ${env.WORKSPACE}/${SOURCE_DIR} 2>/dev/null || true
+        git config --global --add safe.directory /tmp/jenkins-* 2>/dev/null || true
+    """
+    
     dir(SOURCE_DIR) {
         gitUtils.checkoutRepository(
             params.REPO_URL,
