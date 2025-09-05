@@ -359,21 +359,21 @@ if [ -n "$API_ENDPOINT" ] && [ -n "$VERIFICATION_KEY" ]; then
     # デバッグ: APIキーの確認
     if [ "$VERBOSE" == "1" ]; then
         log_debug "API Key being used: ${VERIFICATION_KEY}"
-        log_debug "Full curl command: curl -X GET '${API_ENDPOINT}/api/version' -H 'x-api-key: ${VERIFICATION_KEY}'"
+        log_debug "Full curl command: curl -X GET '${API_ENDPOINT}/api/v1/version' -H 'x-api-key: ${VERIFICATION_KEY}'"
     fi
     
     VERSION_RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" \
-        -X GET "${API_ENDPOINT}/api/version" \
+        -X GET "${API_ENDPOINT}/api/v1/version" \
         -H "x-api-key: ${VERIFICATION_KEY}" 2>/dev/null || echo "000")
     
     if [ "$VERSION_RESPONSE" == "200" ]; then
         check_result "Version API Endpoint" "pass"
-        VERSION_BODY=$(curl -s -X GET "${API_ENDPOINT}/api/version" -H "x-api-key: ${VERIFICATION_KEY}")
+        VERSION_BODY=$(curl -s -X GET "${API_ENDPOINT}/api/v1/version" -H "x-api-key: ${VERIFICATION_KEY}")
         log_info "Version Response: $VERSION_BODY"
     else
         # 403エラーの場合、詳細を取得
         if [ "$VERSION_RESPONSE" == "403" ]; then
-            ERROR_RESPONSE=$(curl -s -X GET "${API_ENDPOINT}/api/version" -H "x-api-key: ${VERIFICATION_KEY}")
+            ERROR_RESPONSE=$(curl -s -X GET "${API_ENDPOINT}/api/v1/version" -H "x-api-key: ${VERIFICATION_KEY}")
             log_error "Version API returned 403 Forbidden"
             log_info "Error response: $ERROR_RESPONSE"
             # APIキーの形式を確認
@@ -387,7 +387,7 @@ if [ -n "$API_ENDPOINT" ] && [ -n "$VERIFICATION_KEY" ]; then
     
     # まず認証なしでテスト（401が期待される）
     ECHO_RESPONSE_NO_AUTH=$(curl -s -o /dev/null -w "%{http_code}" \
-        -X POST "${API_ENDPOINT}/api/echo" \
+        -X POST "${API_ENDPOINT}/api/v1/echo" \
         -H "Content-Type: application/json" \
         -d '{"test":"verification"}' 2>/dev/null || echo "000")
     
@@ -403,14 +403,14 @@ if [ -n "$API_ENDPOINT" ] && [ -n "$VERIFICATION_KEY" ]; then
             
             # 認証付きエコーAPIリクエスト
             ECHO_RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" \
-                -X POST "${API_ENDPOINT}/api/echo" \
+                -X POST "${API_ENDPOINT}/api/v1/echo" \
                 -H "x-api-key: ${VERIFICATION_KEY}" \
                 -H "Content-Type: application/json" \
                 -d '{"test":"verification"}' 2>/dev/null || echo "000")
             
             if [ "$ECHO_RESPONSE" == "200" ]; then
                 check_result "Echo API Endpoint" "pass"
-                ECHO_BODY=$(curl -s -X POST "${API_ENDPOINT}/api/echo" \
+                ECHO_BODY=$(curl -s -X POST "${API_ENDPOINT}/api/v1/echo" \
                     -H "x-api-key: ${VERIFICATION_KEY}" \
                     -H "Content-Type: application/json" \
                     -d '{"test":"verification"}')
@@ -418,7 +418,7 @@ if [ -n "$API_ENDPOINT" ] && [ -n "$VERIFICATION_KEY" ]; then
             elif [ "$ECHO_RESPONSE" == "401" ]; then
                 # 401の場合、Lambda側の設定問題の可能性
                 log_warn "Echo API returned 401 with API key - possible Lambda configuration issue"
-                ERROR_BODY=$(curl -s -X POST "${API_ENDPOINT}/api/echo" \
+                ERROR_BODY=$(curl -s -X POST "${API_ENDPOINT}/api/v1/echo" \
                     -H "x-api-key: ${VERIFICATION_KEY}" \
                     -H "Content-Type: application/json" \
                     -d '{"test":"verification"}')
@@ -441,7 +441,7 @@ if [ -n "$API_ENDPOINT" ] && [ -n "$VERIFICATION_KEY" ]; then
                 log_error "Echo API failed with unexpected response (HTTP $ECHO_RESPONSE)"
                 # 403エラーの場合、詳細を取得
                 if [ "$ECHO_RESPONSE" == "403" ]; then
-                    ERROR_RESPONSE=$(curl -s -X POST "${API_ENDPOINT}/api/echo" \
+                    ERROR_RESPONSE=$(curl -s -X POST "${API_ENDPOINT}/api/v1/echo" \
                         -H "x-api-key: ${VERIFICATION_KEY}" \
                         -H "Content-Type: application/json" \
                         -d '{"test":"verification"}')
