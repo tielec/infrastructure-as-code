@@ -176,21 +176,6 @@
         nat_resource_ids: "[{{ nat_gateway_a_id | default('N/A') }}, {{ nat_gateway_b_id | default('N/A') }}]"
       when: nat_type == "gateway-ha"
     
-    # NAT Instance の場合、追加情報を取得
-    - name: Get NAT instance public IP from SSM Parameter Store
-      ansible.builtin.include_role:
-        name: ssm_parameter_store
-        tasks_from: get_parameter
-      vars:
-        parameter_name: "/jenkins-infra/{{ env_name }}/nat/instance-public-ip"
-        store_as: "nat_instance_public_ip"
-      ignore_errors: true
-      when: nat_type == "instance"
-    
-    - name: Set default NAT instance IP if not found
-      ansible.builtin.set_fact:
-        nat_instance_public_ip: "N/A"
-      when: nat_instance_public_ip is not defined or nat_instance_public_ip == ""
     
     - name: Set NAT facts for use in other playbooks
       ansible.builtin.set_fact:
@@ -204,8 +189,8 @@
           Stack Name: {{ nat_project_name }}
           NAT Type: {{ nat_type }}
           NAT Resource IDs: {{ nat_resource_ids }}
-          {% if nat_type == "instance" and nat_instance_public_ip is defined %}
-          NAT Instance Public IP: {{ nat_instance_public_ip }}
+          {% if nat_type == "instance" %}
+          Note: NAT Instance uses dynamic public IP (no EIP)
           {% endif %}
           {% if nat_type == "gateway-ha" %}
           NAT Gateway A ID: {{ nat_gateway_a_id | default('N/A') }}
