@@ -48,7 +48,7 @@ pipelineJob(fullJobName) {
         // Webhook設定
         stringParam('WEBHOOK_TOKEN_SUFFIX', 'jenkins-webhook', 'Webhook URLのトークン接尾辞 (デフォルト: jenkins-webhook)')
         
-        stringParam('JENKINS_BASE_URL', '${JENKINS_URL}', 'Jenkins のベースURL')
+        stringParam('JENKINS_BASE_URL', System.getenv("JENKINS_URL") ?: 'http://localhost:8080', 'Jenkins のベースURL')
         
         // イベント設定
         textParam('WEBHOOK_EVENTS', 'pull_request', 'トリガーするイベント (カンマ区切り)。例: pull_request,push,issues')
