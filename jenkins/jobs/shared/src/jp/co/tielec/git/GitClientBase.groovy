@@ -626,20 +626,8 @@ class GitClientBase implements Serializable {
             git config --global --add safe.directory \$(pwd)
             git config --global --add safe.directory ${script.env.WORKSPACE ?: '/workspace'}
             
-            # Dockerコンテナ内での実行を考慮（/tmp配下のワークスペース）
-            git config --global --add safe.directory '/tmp/*' 2>/dev/null || true
-            
-            # Jenkins特有のワークスペースパターンにも対応
-            for dir in /tmp/jenkins-* /var/jenkins_home/workspace/* /workspace/* ${script.env.WORKSPACE}/*; do
-                if [ -d "\$dir" ]; then
-                    git config --global --add safe.directory "\$dir" 2>/dev/null || true
-                fi
-            done
-            
-            # 現在のGitバージョンとセーフディレクトリ設定を確認
+            # 現在のGitバージョンを確認
             echo "Git version: \$(git --version)"
-            echo "Safe directories configured:"
-            git config --global --get-all safe.directory || echo "No safe directories configured"
         """
     }
     
