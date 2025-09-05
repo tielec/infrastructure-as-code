@@ -22,12 +22,7 @@ def DIRECTORIES = [
 
 pipeline {
     agent {
-        dockerfile {
-            label 'ec2-fleet'
-            dir 'jenkins/jobs/pipeline/code-quality-checker/pr-complexity-analyzer'
-            additionalBuildArgs '--no-cache'
-            args '-v ${WORKSPACE}:/workspace -w /workspace -u root --privileged'
-        }
+        label 'ec2-fleet'
     }
         
     environment {
@@ -54,59 +49,6 @@ pipeline {
     }
     
     stages {
-        stage('Git設定の確認') {
-            steps {
-                script {
-                    echo "\n🔒 Git設定を確認中..."
-                    sh '''
-                        # ホームディレクトリの確認と作成
-                        export HOME=/root
-                        echo "HOME directory: $HOME"
-                        
-                        # ホームディレクトリが存在しない場合は作成
-                        if [ ! -d "$HOME" ]; then
-                            mkdir -p "$HOME"
-                            chmod 755 "$HOME"
-                        fi
-                        
-                        # .gitconfigファイルが存在しない場合は作成
-                        if [ ! -f "$HOME/.gitconfig" ]; then
-                            touch "$HOME/.gitconfig"
-                            chmod 644 "$HOME/.gitconfig"
-                        fi
-                        
-                        # Gitバージョンを確認
-                        echo "Git version:"
-                        git --version
-                        
-                        # Git設定のリセットと再設定
-                        echo "Configuring Git safe directories..."
-                        git config --global --unset-all safe.directory 2>/dev/null || true
-                        git config --global --add safe.directory '*' 2>/dev/null || echo "Failed to add safe.directory *"
-                        git config --global --add safe.directory "${WORKSPACE}" 2>/dev/null || true
-                        
-                        # Jenkinsワークスペースのサブディレクトリも追加
-                        for dir in "${WORKSPACE}"/*; do
-                            if [ -d "$dir" ]; then
-                                git config --global --add safe.directory "$dir" 2>/dev/null || true
-                            fi
-                        done
-                        
-                        # /tmp配下のJenkinsワークスペースも追加
-                        for dir in /tmp/jenkins-*; do
-                            if [ -d "$dir" ]; then
-                                git config --global --add safe.directory "$dir" 2>/dev/null || true
-                            fi
-                        done
-                        
-                        # 設定を確認
-                        echo "✓ Git Safe Directory設定:"
-                        git config --global --get-all safe.directory 2>/dev/null | head -10 || echo "No safe directories configured"
-                    '''
-                }
-            }
-        }
-        
         stage('初期化とPR解析') {
             steps {
                 script {
@@ -134,8 +76,21 @@ pipeline {
             }
             steps {
                 script {
-                    echo "\n🔧 環境セットアップを開始します..."
-                    setupEnvironment()
+                    echo "\n🔧 Docker環境でセットアップを開始します..."
+                    
+                    // Dockerコンテナ内で全体の処理を実行
+                    docker.image(CONSTANTS.DOCKER_IMAGE).inside('-v ${WORKSPACE}:/workspace -w /workspace -u root') {
+                        // Git設定
+                        sh '''
+                            git config --global --add safe.directory '*'
+                            git config --global --add safe.directory /workspace
+                            git config --global --add safe.directory /tmp
+                            echo "✓ Git Safe Directory設定完了"
+                        '''
+                        
+                        // 環境セットアップを実行
+                        setupEnvironment()
+                    }
                 }
             }
         }
@@ -146,13 +101,18 @@ pipeline {
             }
             steps {
                 script {
-                    echo "\n🔍 コード複雑度解析とAIコメント生成を開始します..."
+                    echo "\n🔍 Docker環境でコード複雑度解析とAIコメント生成を開始します..."
                     
-                    // 複雑度解析の実行
-                    analyzeComplexity()
-                    
-                    // 解析結果に基づいてAIコメントを生成
-                    generatePRComment()
+                    docker.image(CONSTANTS.DOCKER_IMAGE).inside('-v ${WORKSPACE}:/workspace -w /workspace -u root') {
+                        // Git設定
+                        sh 'git config --global --add safe.directory "*"'
+                        
+                        // 複雑度解析の実行
+                        analyzeComplexity()
+                        
+                        // 解析結果に基づいてAIコメントを生成
+                        generatePRComment()
+                    }
                 }
             }
         }
