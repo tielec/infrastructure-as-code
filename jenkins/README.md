@@ -29,12 +29,28 @@ Jenkins環境の設定、ジョブ定義、パイプライン、共有ライブ�
 
 ### ジョブカテゴリ
 
-- **Admin Jobs**: Jenkins管理・メンテナンス
-- **Account Setup**: ユーザーアカウント管理
-- **Code Quality Checker**: コード品質分析
-- **Docs Generator**: ドキュメント自動生成
-- **Infrastructure Management**: インフラストラクチャー管理（Pulumi、Ansible）
-- **Shared Library Tests**: 共有ライブラリのテスト
+#### フォルダ構成（ナンバリング体系）
+
+| 番号 | カテゴリ | フォルダ名 | 説明 |
+|------|----------|------------|------|
+| 01 | [Admin] | Admin_Jobs | Jenkins管理・メンテナンス |
+| 02 | [Admin] | Account_Setup | ユーザーアカウント管理 |
+| 10 | [Deploy] | delivery-management-jobs | デリバリー・デプロイメント管理 |
+| 20 | [Ops] | Infrastructure_Management | インフラ運用・保守 |
+| 30 | [Quality] | Code_Quality_Checker | コード品質分析 |
+| 31 | [Quality] | Document_Generator | ドキュメント自動生成 |
+| 40 | [Test] | Shared_Library | 共有ライブラリテスト |
+| 41 | [Test] | Pipeline_Tests | パイプラインテスト |
+| 90 | [Sandbox] | Playgrounds | 個人作業・実験環境 |
+
+#### カテゴリ分類ルール
+
+- **01-09 [Admin]**: 管理系 - Jenkins自体の管理、ユーザー管理等
+- **10-19 [Deploy]**: デプロイ系 - アプリケーション、インフラのデプロイ
+- **20-29 [Ops]**: 運用系 - インフラの運用、メンテナンス、コスト最適化
+- **30-39 [Quality]**: 品質系 - コード品質、ドキュメント生成
+- **40-49 [Test]**: テスト系 - ライブラリ、パイプラインのテスト
+- **90-99 [Sandbox]**: サンドボックス - 個人の実験、検証用
 
 ## ディレクトリ構造
 
