@@ -49,7 +49,7 @@ pipeline {
     }
     
     stages {
-        stage('初期化とPR解析') {
+        stage('準備と検証') {
             steps {
                 script {
                     echo "\n📋 初期化とPR解析を開始します..."
@@ -70,45 +70,76 @@ pipeline {
             }
         }
         
-        stage('環境準備') {
+        stage('リポジトリ準備') {
             when {
                 expression { env.SKIP_ANALYSIS == 'false' && env.HAS_CODE_FILES == 'true' }
             }
             steps {
                 script {
-                    echo "\n🔧 Docker環境でセットアップを開始します..."
+                    echo "\n🔧 リポジトリをチェックアウトします..."
                     
-                    // Dockerコンテナ内で全体の処理を実行
-                    docker.image(CONSTANTS.DOCKER_IMAGE).inside('-v ${WORKSPACE}:/workspace -w /workspace -u root') {
-                        // 環境セットアップを実行（gitのインストールを含む）
-                        setupEnvironment()
-                    }
+                    // ディレクトリ作成
+                    createDirectories()
+                    
+                    // Gitリポジトリのチェックアウト（Docker外で順次実行）
+                    echo "\n📦 必要なリポジトリをチェックアウト中..."
+                    
+                    // Jenkinsリポジトリをチェックアウト
+                    checkoutJenkinsRepo()
+                    
+                    // ソースリポジトリをチェックアウト
+                    checkoutSourceRepo()
+                    
+                    // 必要なファイルの確認
+                    verifyRequiredFiles()
                 }
             }
         }
 
-        stage('複雑度解析とコメント生成') {
+        stage('Docker環境での解析実行') {
+            agent {
+                docker {
+                    label 'ec2-fleet'
+                    image CONSTANTS.DOCKER_IMAGE
+                    args "--entrypoint='' -v ${WORKSPACE}:/workspace -w /workspace -u root"
+                    reuseNode true
+                }
+            }
             when {
                 expression { env.SKIP_ANALYSIS == 'false' && env.HAS_CODE_FILES == 'true' }
             }
-            steps {
-                script {
-                    echo "\n🔍 Docker環境でコード複雑度解析とAIコメント生成を開始します..."
-                    
-                    docker.image(CONSTANTS.DOCKER_IMAGE).inside('-v ${WORKSPACE}:/workspace -w /workspace -u root') {
-                        // 最小限の環境セットアップ（既にインストール済みの場合はスキップ）
-                        sh '''
-                            if ! command -v git &> /dev/null; then
-                                apt-get update -qq && apt-get install -qq -y git > /dev/null 2>&1
-                            fi
-                            git config --global --add safe.directory '*'
-                        '''
-                        
-                        // 複雑度解析の実行
-                        analyzeComplexity()
-                        
-                        // 解析結果に基づいてAIコメントを生成
-                        generatePRComment()
+            stages {
+                stage('環境セットアップ') {
+                    steps {
+                        script {
+                            echo "\n🐳 Docker環境をセットアップ中..."
+                            // システムパッケージのインストール
+                            installSystemPackages()
+                            
+                            // Python環境とRustツールのセットアップ
+                            setupPythonEnvironment()
+                            installRustTools()
+                        }
+                    }
+                }
+                
+                stage('複雑度解析') {
+                    steps {
+                        script {
+                            echo "\n🔍 コード複雑度を解析中..."
+                            // 複雑度解析の実行
+                            analyzeComplexity()
+                        }
+                    }
+                }
+                
+                stage('AIコメント生成') {
+                    steps {
+                        script {
+                            echo "\n💬 AIコメントを生成中..."
+                            // 解析結果に基づいてAIコメントを生成
+                            generatePRComment()
+                        }
                     }
                 }
             }
@@ -464,85 +495,23 @@ def printPRInfo(prInfo, changedFiles) {
     }
 }
 
-def setupEnvironment() {
-    // システムパッケージのインストール
-    installSystemPackages()
-    
-    // ディレクトリ作成
-    createDirectories()
-    
-    // 並列実行前にGit設定を確実に適用
-    sh """
-        echo "Git設定を適用中..."
-        git config --global --add safe.directory '*'
-        git config --global --add safe.directory /workspace
-        git config --global --add safe.directory /tmp
-        git config --global --add safe.directory ${env.WORKSPACE}
-        # /tmp配下のすべてのJenkinsワークスペースを信頼
-        for dir in /tmp/jenkins-*; do
-            if [ -d "\$dir" ]; then
-                git config --global --add safe.directory "\$dir" 2>/dev/null || true
-            fi
-        done
-        echo "現在のGit safe.directory設定:"
-        git config --global --get-all safe.directory | head -20
-    """
-    
-    // Gitリポジトリのチェックアウト（並列実行）
-    echo "\n📦 必要なリポジトリをチェックアウト中..."
-    parallel(
-        'jenkinsRepo': {
-            checkoutJenkinsRepo()
-        },
-        'sourceRepo': {
-            checkoutSourceRepo()
-        }
-    )
-    
-    // 必要なファイルの確認
-    verifyRequiredFiles()
-    
-    // Python環境とRustツールのセットアップ（並列実行）
-    echo "\n🛠️  開発ツールをセットアップ中..."
-    parallel(
-        'pythonEnv': {
-            setupPythonEnvironment()
-        },
-        'rustTools': {
-            installRustTools()
-        }
-    )
-    
-    // 最終確認
-    finalEnvironmentCheck()
-}
+// setupEnvironmentメソッドは削除（個別のメソッドを直接呼び出すため）
 
 def installSystemPackages() {
     echo "システムパッケージをインストール中..."
     sh """
-        # 必要なパッケージがすでにインストールされているかチェック
-        if ! command -v jq &> /dev/null || ! command -v curl &> /dev/null || ! command -v ssh &> /dev/null || ! command -v python3-venv &> /dev/null; then
-            apt-get update -qq && apt-get install -qq -y \\
-                build-essential \\
-                pkg-config \\
-                libssl-dev \\
-                git \\
-                openssh-client \\
-                python3 \\
-                python3-pip \\
-                python3-venv \\
-                curl \\
-                jq > /dev/null 2>&1
-            echo "✓ システムパッケージのインストールが完了しました"
-        else
-            echo "✓ 必要なシステムパッケージは既にインストール済みです"
-        fi
-        
-        # Git Safe Directoryを設定
-        git config --global --add safe.directory '*'
-        git config --global --add safe.directory /workspace
-        git config --global --add safe.directory /tmp
-        echo "✓ Git Safe Directory設定完了"
+        # 必要なパッケージをインストール
+        apt-get update -qq && apt-get install -qq -y \\
+            build-essential \\
+            pkg-config \\
+            libssl-dev \\
+            openssh-client \\
+            python3 \\
+            python3-pip \\
+            python3-venv \\
+            curl \\
+            jq > /dev/null 2>&1
+        echo "✓ システムパッケージのインストールが完了しました"
     """
 }
 
@@ -555,14 +524,6 @@ def createDirectories() {
 
 def checkoutJenkinsRepo() {
     echo "Jenkinsリポジトリをチェックアウト中..."
-    
-    // Git safe.directoryを事前に設定
-    sh """
-        git config --global --add safe.directory '*' 2>/dev/null || true
-        git config --global --add safe.directory ${env.WORKSPACE}/${CONFIG_DIR} 2>/dev/null || true
-        git config --global --add safe.directory /tmp/jenkins-* 2>/dev/null || true
-    """
-    
     dir(CONFIG_DIR) {
         gitUtils.checkoutRepository(
             env.GIT_INFRASTRUCTURE_REPO_URL,
@@ -575,14 +536,6 @@ def checkoutJenkinsRepo() {
 
 def checkoutSourceRepo() {
     echo "PR対象リポジトリをチェックアウト中... (${env.PR_HEAD_REF})"
-    
-    // Git safe.directoryを事前に設定
-    sh """
-        git config --global --add safe.directory '*' 2>/dev/null || true
-        git config --global --add safe.directory ${env.WORKSPACE}/${SOURCE_DIR} 2>/dev/null || true
-        git config --global --add safe.directory /tmp/jenkins-* 2>/dev/null || true
-    """
-    
     dir(SOURCE_DIR) {
         gitUtils.checkoutRepository(
             params.REPO_URL,
