@@ -43,8 +43,6 @@ export interface NatInstanceArgs {
 export interface NatInstanceOutputs {
     /** NAT Instance ID */
     natInstanceId: pulumi.Output<string>;
-    /** NAT Instance Public IP */
-    natInstancePublicIp: pulumi.Output<string>;
     /** NAT Instance Private IP */
     natInstancePrivateIp: pulumi.Output<string>;
     /** NAT Instance Type */
@@ -136,16 +134,6 @@ export function createNatInstance(args: NatInstanceArgs): NatInstanceOutputs {
         tags: commonTags,
     });
 
-    // ========================================
-    // Elastic IP
-    // ========================================
-    const natInstanceEip = new aws.ec2.Eip("nat-instance-eip", {
-        tags: {
-            ...commonTags,
-            Name: pulumi.interpolate`${projectName}-nat-instance-eip-${environment}`,
-            Type: "nat-instance",
-        },
-    });
 
     // ========================================
     // ユーザーデータスクリプト
@@ -202,6 +190,7 @@ export function createNatInstance(args: NatInstanceArgs): NatInstanceOutputs {
         vpcSecurityGroupIds: [natInstanceSecurityGroupId],
         iamInstanceProfile: natInstanceProfile.name,
         sourceDestCheck: false, // NATとして機能するために必要
+        associatePublicIpAddress: true, // 動的パブリックIPを自動割り当て
         userData: userDataScript,
         tags: {
             ...commonTags,
@@ -209,12 +198,6 @@ export function createNatInstance(args: NatInstanceArgs): NatInstanceOutputs {
             Role: "nat-instance",
             InstanceType: pulumi.interpolate`${natInstanceType}`,
         },
-    });
-
-    // Elastic IPをNATインスタンスに関連付け
-    new aws.ec2.EipAssociation("nat-instance-eip-assoc", {
-        instanceId: natInstance.id,
-        allocationId: natInstanceEip.id,
     });
 
     // ========================================
@@ -290,18 +273,6 @@ export function createNatInstance(args: NatInstanceArgs): NatInstanceOutputs {
         },
     });
 
-    // NAT Instance Public IPをSSMに保存
-    new aws.ssm.Parameter("nat-instance-public-ip", {
-        name: `${ssmPrefix}/nat/instance-public-ip`,
-        type: "String",
-        value: natInstanceEip.publicIp,
-        overwrite: true,
-        tags: {
-            ...commonTags,
-            Component: "nat",
-        },
-    });
-
     // NAT Instance Private IPをSSMに保存
     new aws.ssm.Parameter("nat-instance-private-ip", {
         name: `${ssmPrefix}/nat/instance-private-ip`,
@@ -320,13 +291,15 @@ export function createNatInstance(args: NatInstanceArgs): NatInstanceOutputs {
     natInstanceType.apply(type => {
         pulumi.log.info(`NAT Instance Type: ${type}`);
     });
-    natInstanceEip.publicIp.apply(ip => {
-        pulumi.log.info(`NAT Instance EIP: ${ip}`);
+    natInstance.publicIp.apply(ip => {
+        pulumi.log.info(`NAT Instance Public IP (Dynamic): ${ip || 'Pending'}`);
+    });
+    natInstance.privateIp.apply(ip => {
+        pulumi.log.info(`NAT Instance Private IP: ${ip}`);
     });
 
     return {
         natInstanceId: natInstance.id,
-        natInstancePublicIp: natInstanceEip.publicIp,
         natInstancePrivateIp: natInstance.privateIp,
         natInstanceType: natInstanceType,
         natResourceIds: [natInstance.id],
