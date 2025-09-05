@@ -234,6 +234,7 @@ const agentLaunchTemplate = new aws.ec2.LaunchTemplate(`agent-lt`, {
     imageId: amiX86Id,
     instanceType: "t3a.medium", // デフォルトをt3a.mediumに変更（AMDプロセッサで10%安価）
     keyName: agentKeyPair.keyName,  // 作成したキーペアを使用
+    ebsOptimized: true,  // EBS最適化を有効化
     // vpcSecurityGroupIds は networkInterfaces と競合するため削除
     iamInstanceProfile: {
         name: jenkinsAgentProfile.name,
@@ -333,6 +334,7 @@ const agentLaunchTemplateArm = new aws.ec2.LaunchTemplate(`agent-lt-arm`, {
     imageId: amiArmId,
     instanceType: "t4g.medium",
     keyName: agentKeyPair.keyName,
+    ebsOptimized: true,  // EBS最適化を有効化
     // vpcSecurityGroupIds は networkInterfaces と競合するため削除
     iamInstanceProfile: {
         name: jenkinsAgentProfile.name,
