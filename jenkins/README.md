@@ -109,7 +109,7 @@ aws ssm get-parameter --name /jenkins-infra/dev/jenkins/admin-password \
 | **Account_Setup** | アカウント管理 | account-self-activation（アカウント自己有効化） |
 | **Code_Quality_Checker** | コード品質分析 | pr-complexity-analyzer（PR複雑度分析）<br>rust-code-analysis（Rustコード解析） |
 | **Document_Generator** | ドキュメント生成 | auto-insert-doxygen-comment（Doxygenコメント自動挿入）<br>generate-doxygen-html（DoxygenHTML生成）<br>technical-docs-writer（技術文書作成）<br>pr-comment-builder（PRコメントビルダー） |
-| **Infrastructure_Management** | インフラ管理 | shutdown-jenkins-environment（Jenkins環境停止）、Ansible Playbook実行、Pulumi Stack管理 |
+| **Infrastructure_Management** | インフラ管理 | shutdown-jenkins-environment（Jenkins環境停止）<br>terminate-lambda-nat（Lambda NAT削除）<br>Ansible Playbook実行、Pulumi Stack管理 |
 | **Shared_Library** | ライブラリテスト | git-webhook-operation（Git Webhook操作）<br>jenkins-credentials-operation（認証情報操作）<br>aws-sqs-check-operation（SQS操作）<br>github-apps-basic-operation（GitHub Apps操作） |
 
 ### ジョブの実行方法
@@ -420,6 +420,52 @@ Jenkins UI > Infrastructure_Management > Shutdown-Environment-Scheduler > 設定
 
 # 手動実行
 Jenkins UI > Infrastructure_Management > Shutdown-Environment-Scheduler > "Build Now"をクリック
+```
+
+#### Infrastructure_Management/Terminate_Lambda_NAT
+
+**目的**: Lambda NAT Instanceを夜間に自動削除してコスト削減
+
+**実行タイミング**:
+- 日本時間（JST）23:30（毎日）
+- 開発環境のみ対象
+
+**削除対象リソース**:
+- NAT Instance (EC2)
+- Elastic IP
+- ルートテーブルのルート設定
+- CloudWatchアラーム
+- SSMパラメータ
+
+**パラメータ（固定値）**:
+- `ACTION`: destroy
+- `PULUMI_PROJECT_PATH`: pulumi/lambda-nat
+- `GENERATE_REPORT`: false
+- `ENVIRONMENT`: dev
+- `SKIP_CONFIRMATION`: true
+
+**特徴**:
+- 既存の`pulumi-stack-action`パイプラインを再利用
+- 夜間はLambda実行がないため削除してコスト削減
+- 朝の再作成は手動または別ジョブで実施
+- Elastic IPも削除されるため、再作成時は新しいIPが割り当てられる
+
+**注意事項**:
+- 削除中はLambda関数から外部APIへのアクセス不可
+- Elastic IPが変わるため、IP制限がある外部APIは再設定が必要
+- 再作成時はルーティングが自動的に再設定される
+
+**管理方法**:
+```bash
+# 手動削除
+Jenkins UI > Infrastructure_Management > Terminate_Lambda_NAT > "Build Now"
+
+# 手動再作成（コマンドライン）
+cd pulumi/lambda-nat
+pulumi up -y
+
+# スケジュール無効化
+Jenkins UI > Infrastructure_Management > Terminate_Lambda_NAT > 設定 > ビルドトリガから"Build periodically"のチェックを外す
 ```
 
 ## トラブルシューティング
