@@ -162,15 +162,11 @@ export function createNatInstance(args: NatInstanceArgs): NatInstanceOutputs {
     });
 
     // ========================================
-    // Elastic IP
+    // 動的Public IP設定
     // ========================================
-    const natInstanceEip = new aws.ec2.Eip("nat-instance-eip", {
-        tags: {
-            ...commonTags,
-            Name: pulumi.interpolate`${projectName}-nat-instance-eip-${environment}`,
-            Type: "nat-instance",
-        },
-    });
+    // EIPは使用せず、動的Public IPを使用してコスト削減
+    // NAT Instanceはパブリックサブネットに配置され、
+    // associatePublicIpAddress: true で動的IPが割り当てられる
 
     // ========================================
     // ユーザーデータスクリプト
@@ -230,6 +226,7 @@ The script should be located in the 'scripts' directory relative to your project
         ami: natAmiId,
         instanceType: natInstanceType,
         subnetId: publicSubnetAId,
+        associatePublicIpAddress: true, // 動的Public IPを自動割り当て
         vpcSecurityGroupIds: [natInstanceSecurityGroupId],
         iamInstanceProfile: natInstanceProfile.name,
         sourceDestCheck: false, // NATとして機能するために必要
@@ -255,11 +252,7 @@ The script should be located in the 'scripts' directory relative to your project
         },
     });
 
-    // Elastic IPをNAT Instanceに関連付け
-    const natInstanceEipAssociation = new aws.ec2.EipAssociation("nat-instance-eip-assoc", {
-        instanceId: natInstance.id,
-        allocationId: natInstanceEip.id,
-    });
+    // EIP関連付けは削除（動的Public IPを使用）
 
     // ========================================
     // ルーティング設定
@@ -387,14 +380,8 @@ The script should be located in the 'scripts' directory relative to your project
         tags: commonTags,
     });
 
-    // NAT Instance Public IPを保存
-    new aws.ssm.Parameter("nat-instance-public-ip", {
-        name: pulumi.interpolate`${paramPrefix}/instance/public-ip`,
-        type: "String",
-        value: natInstanceEip.publicIp,
-        description: "NAT Instance Public IP",
-        tags: commonTags,
-    });
+    // NAT Instance Public IPは動的IPのため保存しない
+    // 毎回のインスタンス起動時に新しいIPが割り当てられる
 
     // NAT Instance Private IPは動的に変化する可能性があるためSSMに保存しない
 
@@ -414,7 +401,7 @@ The script should be located in the 'scripts' directory relative to your project
 
     return {
         natInstanceId: natInstance.id,
-        natInstancePublicIp: natInstanceEip.publicIp,
+        natInstancePublicIp: natInstance.publicIp || pulumi.output("Dynamic IP - changes on each deployment"),
         natInstancePrivateIp: natInstance.privateIp,
         natResourceIds: [natInstance.id],
     };
