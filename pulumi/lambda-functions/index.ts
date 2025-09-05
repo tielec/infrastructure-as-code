@@ -225,6 +225,31 @@ const lambdaPolicy = new aws.iam.RolePolicy("lambda-policy", {
                 Action: ["secretsmanager:GetSecretValue"],
                 Resource: `arn:aws:secretsmanager:*:*:secret:${proj}/*`,
             },
+            {
+                // SSM Parameter Store（設定値とAPIキーの取得用）
+                Effect: "Allow",
+                Action: [
+                    "ssm:GetParameter",
+                    "ssm:GetParameters",
+                    "ssm:GetParametersByPath",
+                    "ssm:DescribeParameters"
+                ],
+                Resource: `arn:aws:ssm:*:*:parameter/lambda-api/${environment}/*`,
+            },
+            {
+                // KMS（暗号化されたパラメータの復号用）
+                Effect: "Allow",
+                Action: [
+                    "kms:Decrypt",
+                    "kms:DescribeKey"
+                ],
+                Resource: "*",
+                Condition: {
+                    StringEquals: {
+                        "kms:ViaService": `ssm.${process.env.AWS_REGION || 'ap-northeast-1'}.amazonaws.com`
+                    }
+                }
+            },
         ],
     })),
 });

@@ -222,20 +222,8 @@ ssmHelper.createParameter('/deployment/last-updated', {
 // セキュアパラメータ（初期設定のみ）
 // ========================================
 // セキュリティ関連の暗号化パラメータ（SecureString）
-// 注: 実際の値は環境変数またはCI/CDパイプラインから設定すること
-ssmHelper.createParameter('/security/api-key', {
-    paramType: 'init-only',  // 一度設定したら変更しない
-    value: pulumi.secret("CHANGE-ME-IN-PRODUCTION"),
-    type: "SecureString",
-    description: "API key for Lambda API",
-});
-
-ssmHelper.createParameter('/security/jwt-secret', {
-    paramType: 'init-only',  // 一度設定したら変更しない
-    value: pulumi.secret("CHANGE-ME-IN-PRODUCTION"),
-    type: "SecureString",
-    description: "JWT secret for Lambda API",
-});
+// 注: APIキーはAPI Gatewayで管理され、/{projectName}/{env}/api-gateway/keys に保存される
+// JWTは現在未使用のため、将来必要になった時点で追加する
 
 // GitHub Personal Access Token 用のSSM Parameter（Pulumiコンフィグから取得）
 const githubTokenParam = ssmHelper.createParameter('/security/github-token', {
