@@ -86,8 +86,8 @@ else
     AWS_SESSION_TOKEN=$(aws configure get aws_session_token 2>/dev/null || echo "")
     [ -n "$AWS_SESSION_TOKEN" ] && export AWS_SESSION_TOKEN="$AWS_SESSION_TOKEN"
     
-    # リージョンの取得（デフォルト: ap-northeast-1 = 東京リージョン）
-    export AWS_REGION=$(aws configure get region 2>/dev/null || echo "ap-northeast-1")
+    # リージョンの取得（デフォルト: us-west-2 = 米国西部リージョン）
+    export AWS_REGION=$(aws configure get region 2>/dev/null || echo "us-west-2")
     
     log "# AWS認証情報がAWS CLIの設定から取得されました"
 fi

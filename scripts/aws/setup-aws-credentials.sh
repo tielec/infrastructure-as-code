@@ -31,7 +31,7 @@ else
         export AWS_SECRET_ACCESS_KEY=$(aws configure get aws_secret_access_key)
         AWS_SESSION_TOKEN=$(aws configure get aws_session_token 2>/dev/null || echo "")
         [ -n "$AWS_SESSION_TOKEN" ] && export AWS_SESSION_TOKEN="$AWS_SESSION_TOKEN"
-        export AWS_REGION=$(aws configure get region 2>/dev/null || echo "ap-northeast-1")
+        export AWS_REGION=$(aws configure get region 2>/dev/null || echo "us-west-2")
     fi
 fi
 

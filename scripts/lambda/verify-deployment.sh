@@ -12,7 +12,7 @@
 #   環境名     対象環境 (デフォルト: dev)
 #
 # 環境変数:
-#   AWS_REGION    AWSリージョン (デフォルト: ap-northeast-1)
+#   AWS_REGION    AWSリージョン (デフォルト: us-west-2)
 #   VERBOSE       詳細出力モード (1で有効、デフォルト: 0)
 #   LOG_LEVEL     ログレベル (DEBUG|INFO|WARN|ERROR、デフォルト: INFO)
 #
@@ -37,7 +37,7 @@ readonly TIMESTAMP="$(date +%Y%m%d_%H%M%S)"
 
 # 設定可能な変数
 ENV_NAME="${1:-dev}"
-AWS_REGION="${AWS_REGION:-ap-northeast-1}"
+AWS_REGION="${AWS_REGION:-us-west-2}"
 VERBOSE="${VERBOSE:-0}"
 LOG_LEVEL="${LOG_LEVEL:-INFO}"
 

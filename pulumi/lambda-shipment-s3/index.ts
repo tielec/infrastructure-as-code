@@ -12,7 +12,7 @@ import { LambdaDeploymentBucket } from "@tielec/pulumi-components";
 // 環境変数取得
 // ========================================
 const environment = pulumi.getStack();
-const region = aws.config.region || "ap-northeast-1";
+const region = aws.config.region || "us-west-2";
 
 // ========================================
 // SSMパラメータ参照（Single Source of Truth）

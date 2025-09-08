@@ -246,7 +246,7 @@ const lambdaPolicy = new aws.iam.RolePolicy("lambda-policy", {
                 Resource: "*",
                 Condition: {
                     StringEquals: {
-                        "kms:ViaService": `ssm.${process.env.AWS_REGION || 'ap-northeast-1'}.amazonaws.com`
+                        "kms:ViaService": `ssm.${process.env.AWS_REGION || 'us-west-2'}.amazonaws.com`
                     }
                 }
             },

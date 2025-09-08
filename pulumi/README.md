@@ -68,7 +68,7 @@ aws configure
 
 # 環境変数の設定
 export PULUMI_CONFIG_PASSPHRASE=your-secure-passphrase
-export AWS_REGION=ap-northeast-1
+export AWS_REGION=us-west-2
 ```
 
 ## ディレクトリ構造
@@ -168,7 +168,7 @@ pulumi stack init {environment}
 
 ```bash
 # 基本設定
-pulumi config set aws:region ap-northeast-1
+pulumi config set aws:region us-west-2
 
 # 機密情報（暗号化）
 pulumi config set --secret dbPassword mySecurePassword
@@ -259,7 +259,7 @@ export PULUMI_BACKEND_URL=s3://your-pulumi-state-bucket
 ```bash
 # 1. 環境準備
 export PULUMI_CONFIG_PASSPHRASE=your-secure-passphrase
-export AWS_REGION=ap-northeast-1
+export AWS_REGION=us-west-2
 
 # 2. テストスタックでPulumiの動作確認
 cd pulumi/test-s3
@@ -267,7 +267,7 @@ npm install
 
 # 3. スタック初期化とデプロイ
 pulumi stack init dev
-pulumi config set aws:region ap-northeast-1
+pulumi config set aws:region us-west-2
 pulumi up
 
 # 4. リソース確認
@@ -465,7 +465,7 @@ pipeline {
     
     environment {
         PULUMI_CONFIG_PASSPHRASE = credentials('pulumi-passphrase')
-        AWS_REGION = 'ap-northeast-1'
+        AWS_REGION = 'us-west-2'
     }
     
     stages {
