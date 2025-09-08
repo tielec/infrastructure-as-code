@@ -84,7 +84,7 @@ lambda_api_infra:
 
   # AWS設定
   aws:
-    default_region: "ap-northeast-1"
+    default_region: "us-west-2"
     vpc_cidr: "10.1.0.0/16"  # Jenkinsとは異なるCIDR
     key_name: ""  # NAT Instance用（必要に応じて設定）
 
