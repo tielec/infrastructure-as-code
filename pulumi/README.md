@@ -310,6 +310,28 @@ pulumi up
 ../scripts/lambda/verify-deployment.sh dev
 ```
 
+#### AI API設定（lambda-ssm-init）
+
+Lambda API環境では、Claude APIとOpenAI APIを利用するための設定が`lambda-ssm-init`スタックで管理されます：
+
+**Claude API設定:**
+- `/lambda-api/{env}/settings/claude-api-key` - APIキー（SecureString）
+- `/lambda-api/{env}/settings/claude-speed-model` - 高速処理用モデル（デフォルト: claude-3-haiku-20240307）
+- `/lambda-api/{env}/settings/claude-quality-model` - 高品質処理用モデル（デフォルト: claude-3-5-sonnet-20240620）
+
+**OpenAI API設定:**
+- `/lambda-api/{env}/settings/openai-api-key` - APIキー（SecureString）
+- `/lambda-api/{env}/settings/openai-speed-model` - 高速処理用モデル（デフォルト: gpt-4-turbo）
+- `/lambda-api/{env}/settings/openai-quality-model` - 高品質処理用モデル（デフォルト: gpt-4o）
+
+```bash
+# AI APIキーの設定（初回デプロイ後、AWSコンソールで実際のキーに更新）
+cd pulumi/lambda-ssm-init
+pulumi config set --secret claudeApiKey "your-actual-claude-api-key"
+pulumi config set --secret openaiApiKey "your-actual-openai-api-key"
+pulumi up
+```
+
 詳細は[Ansible Lambda Pipeline](../ansible/README.md#lambda-api-setup-pipeline)を参照してください。
 
 ## トラブルシューティング

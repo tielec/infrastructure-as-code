@@ -257,6 +257,59 @@ const lambdaVersionRetentionParam = ssmHelper.createParameter('/lambda/versionin
     description: "Number of Lambda function versions to retain",
 });
 
+// ========================================
+// AI API設定パラメータ
+// ========================================
+// Claude API設定
+// APIキー（SecureString）- 初期設定のみ、後で手動更新
+const claudeApiKeyParam = ssmHelper.createParameter('/settings/claude-api-key', {
+    paramType: 'init-only',
+    value: config.get("claudeApiKey") || "PLACEHOLDER_PLEASE_UPDATE_WITH_ACTUAL_API_KEY",
+    type: "SecureString",
+    description: "Anthropic Claude APIのAPIキー",
+});
+
+// 高速処理用モデル
+const claudeSpeedModelParam = ssmHelper.createParameter('/settings/claude-speed-model', {
+    paramType: 'managed',
+    value: config.get("claudeSpeedModel") || "claude-3-haiku-20240307",
+    type: "String",
+    description: "高速処理用のClaudeモデル名",
+});
+
+// 高品質処理用モデル
+const claudeQualityModelParam = ssmHelper.createParameter('/settings/claude-quality-model', {
+    paramType: 'managed',
+    value: config.get("claudeQualityModel") || "claude-3-5-sonnet-20240620",
+    type: "String",
+    description: "高品質処理用のClaudeモデル名",
+});
+
+// OpenAI API設定
+// APIキー（SecureString）- 初期設定のみ、後で手動更新
+const openaiApiKeyParam = ssmHelper.createParameter('/settings/openai-api-key', {
+    paramType: 'init-only',
+    value: config.get("openaiApiKey") || "PLACEHOLDER_PLEASE_UPDATE_WITH_ACTUAL_API_KEY",
+    type: "SecureString",
+    description: "OpenAI APIのAPIキー",
+});
+
+// 高速処理用モデル
+const openaiSpeedModelParam = ssmHelper.createParameter('/settings/openai-speed-model', {
+    paramType: 'managed',
+    value: config.get("openaiSpeedModel") || "gpt-4-turbo",
+    type: "String",
+    description: "高速処理用のOpenAIモデル名",
+});
+
+// 高品質処理用モデル
+const openaiQualityModelParam = ssmHelper.createParameter('/settings/openai-quality-model', {
+    paramType: 'managed',
+    value: config.get("openaiQualityModel") || "gpt-4o",
+    type: "String",
+    description: "高品質処理用のOpenAIモデル名",
+});
+
 // 初期化完了フラグ
 const initComplete = ssmHelper.createParameter('/common/init-complete', {
     paramType: 'managed',
@@ -280,6 +333,13 @@ export const outputs = {
     lambdaRepoUrlParameterName: lambdaRepoUrlParam.name,
     lambdaRepoBranchParameterName: lambdaRepoBranchParam.name,
     lambdaVersionRetentionParameterName: lambdaVersionRetentionParam.name,
+    // AI API関連パラメータ名
+    claudeApiKeyParameterName: claudeApiKeyParam.name,
+    claudeSpeedModelParameterName: claudeSpeedModelParam.name,
+    claudeQualityModelParameterName: claudeQualityModelParam.name,
+    openaiApiKeyParameterName: openaiApiKeyParam.name,
+    openaiSpeedModelParameterName: openaiSpeedModelParam.name,
+    openaiQualityModelParameterName: openaiQualityModelParam.name,
 };
 
 // デプロイ完了の確認用
