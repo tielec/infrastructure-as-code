@@ -44,7 +44,7 @@ export function createApplicationParameters(
     
     // Claude API設定
     if (config.aiApi.claudeApiKey !== undefined) {
-        parameters.claudeApiKey = ssmHelper.createParameter('/settings/claude-api-key', {
+        parameters.claudeApiKey = ssmHelper.createParameter('/app/settings/claude-api-key', {
             paramType: 'init-only',
             value: config.aiApi.claudeApiKey,
             type: "SecureString",
@@ -53,7 +53,7 @@ export function createApplicationParameters(
     }
 
     if (config.aiApi.claudeSpeedModel !== undefined) {
-        parameters.claudeSpeedModel = ssmHelper.createParameter('/settings/claude-speed-model', {
+        parameters.claudeSpeedModel = ssmHelper.createParameter('/app/settings/claude-speed-model', {
             paramType: 'managed',
             value: config.aiApi.claudeSpeedModel,
             type: "String",
@@ -62,7 +62,7 @@ export function createApplicationParameters(
     }
 
     if (config.aiApi.claudeQualityModel !== undefined) {
-        parameters.claudeQualityModel = ssmHelper.createParameter('/settings/claude-quality-model', {
+        parameters.claudeQualityModel = ssmHelper.createParameter('/app/settings/claude-quality-model', {
             paramType: 'managed',
             value: config.aiApi.claudeQualityModel,
             type: "String",
@@ -72,7 +72,7 @@ export function createApplicationParameters(
 
     // OpenAI API設定
     if (config.aiApi.openaiApiKey !== undefined) {
-        parameters.openaiApiKey = ssmHelper.createParameter('/settings/openai-api-key', {
+        parameters.openaiApiKey = ssmHelper.createParameter('/app/settings/openai-api-key', {
             paramType: 'init-only',
             value: config.aiApi.openaiApiKey,
             type: "SecureString",
@@ -81,7 +81,7 @@ export function createApplicationParameters(
     }
 
     if (config.aiApi.openaiSpeedModel !== undefined) {
-        parameters.openaiSpeedModel = ssmHelper.createParameter('/settings/openai-speed-model', {
+        parameters.openaiSpeedModel = ssmHelper.createParameter('/app/settings/openai-speed-model', {
             paramType: 'managed',
             value: config.aiApi.openaiSpeedModel,
             type: "String",
@@ -90,7 +90,7 @@ export function createApplicationParameters(
     }
 
     if (config.aiApi.openaiQualityModel !== undefined) {
-        parameters.openaiQualityModel = ssmHelper.createParameter('/settings/openai-quality-model', {
+        parameters.openaiQualityModel = ssmHelper.createParameter('/app/settings/openai-quality-model', {
             paramType: 'managed',
             value: config.aiApi.openaiQualityModel,
             type: "String",

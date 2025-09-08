@@ -315,14 +315,14 @@ pulumi up
 Lambda API環境では、Claude APIとOpenAI APIを利用するための設定が`lambda-ssm-init`スタックで管理されます：
 
 **Claude API設定:**
-- `/lambda-api/{env}/settings/claude-api-key` - APIキー（SecureString）
-- `/lambda-api/{env}/settings/claude-speed-model` - 高速処理用モデル（デフォルト: claude-3-haiku-20240307）
-- `/lambda-api/{env}/settings/claude-quality-model` - 高品質処理用モデル（デフォルト: claude-3-5-sonnet-20240620）
+- `/lambda-api/{env}/app/settings/claude-api-key` - APIキー（SecureString）
+- `/lambda-api/{env}/app/settings/claude-speed-model` - 高速処理用モデル（デフォルト: claude-3-haiku-20240307）
+- `/lambda-api/{env}/app/settings/claude-quality-model` - 高品質処理用モデル（デフォルト: claude-3-5-sonnet-20240620）
 
 **OpenAI API設定:**
-- `/lambda-api/{env}/settings/openai-api-key` - APIキー（SecureString）
-- `/lambda-api/{env}/settings/openai-speed-model` - 高速処理用モデル（デフォルト: gpt-4-turbo）
-- `/lambda-api/{env}/settings/openai-quality-model` - 高品質処理用モデル（デフォルト: gpt-4o）
+- `/lambda-api/{env}/app/settings/openai-api-key` - APIキー（SecureString）
+- `/lambda-api/{env}/app/settings/openai-speed-model` - 高速処理用モデル（デフォルト: gpt-4-turbo）
+- `/lambda-api/{env}/app/settings/openai-quality-model` - 高品質処理用モデル（デフォルト: gpt-4o）
 
 ```bash
 # AI APIキーの設定（初回デプロイ後、AWSコンソールで実際のキーに更新）
