@@ -131,6 +131,11 @@ export const outputs = {
     environment: environment,
     natType: highAvailabilityMode.apply(ha => ha ? "gateway-ha" : "instance"),
     ssmParameterPrefix: pulumi.interpolate`/${projectName}/${environment}/nat`,
+    ...(environment === "dev" ? {
+        autoStopEnabled: true,
+        autoStopSchedule: "Daily at 0:00 AM JST (15:00 UTC)",
+        manualStartCommand: pulumi.interpolate`aws ec2 start-instances --instance-ids $(aws ssm get-parameter --name /${projectName}/${environment}/nat/instance/id --query 'Parameter.Value' --output text) --region ${aws.config.region || 'us-west-2'}`,
+    } : {}),
 };
 
 // デバッグ情報をログに出力

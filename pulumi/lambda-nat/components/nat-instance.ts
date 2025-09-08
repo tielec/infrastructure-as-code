@@ -249,6 +249,7 @@ The script should be located in the 'scripts' directory relative to your project
             Role: "nat-instance",
             InstanceType: natInstanceType,
             Architecture: isArmInstance.apply(isArm => isArm ? "arm64" : "x86_64"),
+            ...(environment === "dev" ? { AutoStop: "Enabled" } : {}),
         },
     });
 
@@ -365,6 +366,122 @@ The script should be located in the 'scripts' directory relative to your project
         },
         tags: commonTags,
     });
+
+    // ========================================
+    // Maintenance Window設定（dev環境のみ）
+    // ========================================
+    if (environment === "dev") {
+        // Maintenance Window用のIAMロール
+        const maintenanceWindowRole = new aws.iam.Role("nat-maintenance-window-role", {
+            assumeRolePolicy: JSON.stringify({
+                Version: "2012-10-17",
+                Statement: [{
+                    Effect: "Allow",
+                    Principal: {
+                        Service: "ssm.amazonaws.com",
+                    },
+                    Action: "sts:AssumeRole",
+                }],
+            }),
+            tags: {
+                ...commonTags,
+                Name: pulumi.interpolate`${projectName}-nat-maintenance-role-${environment}`,
+            },
+        });
+
+        // Maintenance Window用の権限を付与
+        new aws.iam.RolePolicyAttachment("nat-maintenance-window-policy", {
+            role: maintenanceWindowRole.name,
+            policyArn: "arn:aws:iam::aws:policy/service-role/AmazonSSMMaintenanceWindowRole",
+        });
+
+        // EC2停止権限を追加
+        new aws.iam.RolePolicy("nat-maintenance-ec2-policy", {
+            role: maintenanceWindowRole.name,
+            policy: JSON.stringify({
+                Version: "2012-10-17",
+                Statement: [{
+                    Effect: "Allow",
+                    Action: [
+                        "ec2:StopInstances",
+                        "ec2:DescribeInstances",
+                        "ec2:DescribeInstanceStatus",
+                    ],
+                    Resource: "*",
+                }],
+            }),
+        });
+
+        // Maintenance Window（日本時間午前0時に停止）
+        const maintenanceWindow = new aws.ssm.MaintenanceWindow("nat-stop-window", {
+            name: pulumi.interpolate`${projectName}-nat-stop-${environment}`,
+            description: "Stop NAT instance daily at 0:00 AM JST (dev environment)",
+            schedule: "cron(0 15 ? * * *)", // 毎日UTC 15:00（日本時間午前0時）
+            duration: 1,  // 1時間のウィンドウ
+            cutoff: 0,    // ウィンドウ終了前に新しいタスクを開始しない
+            allowUnassociatedTargets: false,
+            tags: {
+                ...commonTags,
+                Name: pulumi.interpolate`${projectName}-nat-stop-window-${environment}`,
+                Purpose: "CostOptimization",
+            },
+        });
+
+        // Maintenance Windowのターゲット
+        const maintenanceTarget = new aws.ssm.MaintenanceWindowTarget("nat-stop-target", {
+            name: pulumi.interpolate`${projectName}-nat-stop-target-${environment}`,
+            description: "Target for stopping NAT instance",
+            windowId: maintenanceWindow.id,
+            resourceType: "INSTANCE",
+            targets: [{
+                key: "InstanceIds",
+                values: [natInstance.id],
+            }],
+        });
+
+        // Maintenance Windowのタスク（EC2停止）
+        new aws.ssm.MaintenanceWindowTask("nat-stop-task", {
+            name: pulumi.interpolate`${projectName}-nat-stop-task-${environment}`,
+            description: "Stop NAT EC2 instance",
+            windowId: maintenanceWindow.id,
+            serviceRoleArn: maintenanceWindowRole.arn,
+            priority: 1,
+            maxConcurrency: "1",  // 同時実行数
+            maxErrors: "0",       // エラー許容数
+            taskType: "AUTOMATION",
+            taskArn: "AWS-StopEC2Instance", // AWS提供の自動化ドキュメント
+            targets: [{
+                key: "WindowTargetIds",
+                values: [maintenanceTarget.id],
+            }],
+            taskInvocationParameters: {
+                maintenanceWindowAutomationParameters: {
+                    parameters: {
+                        InstanceId: [natInstance.id],
+                    },
+                },
+            },
+        });
+
+        // 自動停止設定をSSMパラメータに保存
+        new aws.ssm.Parameter("nat-auto-stop-enabled", {
+            name: pulumi.interpolate`${paramPrefix}/auto-stop/enabled`,
+            type: "String",
+            value: "true",
+            description: "NAT instance auto-stop enabled (dev environment)",
+            tags: commonTags,
+        });
+
+        new aws.ssm.Parameter("nat-auto-stop-schedule", {
+            name: pulumi.interpolate`${paramPrefix}/auto-stop/schedule`,
+            type: "String",
+            value: "0:00 AM JST daily",
+            description: "NAT instance auto-stop schedule",
+            tags: commonTags,
+        });
+
+        pulumi.log.info("Maintenance Window created for dev environment: NAT instance will stop daily at 0:00 AM JST");
+    }
 
     // ========================================
     // SSMパラメータへの保存
