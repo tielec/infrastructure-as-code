@@ -1,5 +1,31 @@
 ---
 # インフラストラクチャ共通設定
+#
+# このファイルには、すべての環境とロールで共通して使用される変数を定義します。
+# 環境固有の設定は、dev.yml, staging.yml, prod.yml で上書きしてください。
+
+# ============================================================
+# パスとディレクトリ設定（共通変数）
+# ============================================================
+# スクリプトディレクトリへのパス（15以上のロールで使用）
+scripts_dir: "{{ inventory_dir }}/../../scripts"
+# Pulumiプロジェクトディレクトリへのパス（15以上のロールで使用）
+pulumi_path: "{{ inventory_dir }}/../../pulumi"
+# AWS認証スクリプトのパス
+aws_credentials_script_path: "{{ scripts_dir }}/aws/setup-aws-credentials.sh"
+
+# デフォルト環境名（環境別ファイルで上書き）
+env_name: "dev"
+
+# AWS デフォルトリージョン
+aws_region: "ap-northeast-1"
+
+# 操作モード（deploy/destroy）
+operation: "deploy"
+
+# ============================================================
+# Pulumi設定
+# ============================================================
 
 # Pulumi バックエンド設定
 pulumi:
@@ -15,6 +41,10 @@ pulumi:
   # Pulumi Cloud設定（backend_type: "cloud" の場合に使用）
   cloud:
     url: "https://api.pulumi.com"
+
+# ============================================================
+# Jenkins インフラストラクチャ設定
+# ============================================================
 
 # プロジェクト識別子
 infra:
@@ -64,6 +94,10 @@ infra:
       name: "prod"
       domain: "jenkins.example.com"
 
+# ============================================================
+# Lambda インフラストラクチャ設定
+# ============================================================
+
 # Lambda API プロジェクト設定
 lambda_api_infra:
   # メインのプロジェクト名
@@ -93,6 +127,18 @@ lambda_api_infra:
     # 環境別の設定は各環境のvarsファイルで上書き
     high_availability_mode: false
     instance_type: "t4g.nano"
+  
+  # ネットワーク設定
+  network:
+    enable_flow_logs: false
+    create_isolated_subnets: false
+  
+  # セキュリティ設定
+  security:
+    enable_database_security_groups: false
+  
+  # プレビューモード（すべてのLambdaロール共通）
+  preview_only: false
 
   # 環境設定
   environments:
@@ -146,6 +192,10 @@ lambda_api_infra:
           - percent: 100
             email: "cto@example.com"
 
+# ============================================================
+# Jenkins プロジェクト設定
+# ============================================================
+
 # Jenkins設定
 jenkins:
   version: "latest"
@@ -153,15 +203,47 @@ jenkins:
   recovery_mode: false
   instance_type: "t4g.medium"
   key_name: ""  # 必要に応じて設定
+  
+  # Jenkinsアプリケーション設定
+  install_plugins: true
+  create_seed_job: true
+  restart_jenkins: true
+  setup_cli_user: true
+  seed_job_name: "seed-job"
+  
+  # Git設定
   git:
     repo: "https://github.com/tielec/infrastructure-as-code.git"
     branch: "main"
+    credentials_id: "github-app-credentials"
+  
+  # Jenkinsエージェント設定
+  agent:
+    instance_type: "t3a.medium"
+    min_capacity: 0
+    max_capacity: 10
+    spot_price: "0.052"  # t3a.medium spot price limit
+    
+    # AMI Builder設定
+    ami_builder:
+      build_ami_on_deploy: false      # Deprecated - use trigger_ami_build instead
+      trigger_ami_build: true         # Automatically trigger pipeline execution after deployment
+      update_ssm_with_ami: true       # Automatically update SSM parameters with new AMI IDs
+      wait_for_ami_build: true        # Wait for AMI build to complete before updating SSM (30-45 minutes)
+      cleanup_old_amis: true          # Automatically delete old AMIs
+      ami_retention_count: 2          # Number of AMIs to keep per architecture
+
+# ============================================================
+# Lambda API設定
+# ============================================================
 
 # Lambda API設定
 lambda_api:
   runtime: "nodejs18.x"
   default_memory: 256
   default_timeout: 30
+  stage_name: "v1"  # API Gateway ステージ名
+  log_level: "INFO"  # デフォルトログレベル
   log_retention_days:
     dev: 3
     staging: 7

@@ -10,10 +10,10 @@
       - Network Pulumi Project: {{ network_project_name }}
       - Security Pulumi Project: {{ security_project_name }}
       - Environment: {{ env_name }}
-      - Instance Type: {{ instance_type }}
-      - Min Capacity: {{ min_capacity }}
-      - Max Capacity: {{ max_capacity }}
-      - Spot Price: {{ spot_price }}
+      - Instance Type: {{ jenkins.agent.instance_type }}
+      - Min Capacity: {{ jenkins.agent.min_capacity }}
+      - Max Capacity: {{ jenkins.agent.max_capacity }}
+      - Spot Price: {{ jenkins.agent.spot_price }}
 
 # ファイル権限設定
 - name: Ensure aws-env.sh has execute permissions
@@ -119,6 +119,14 @@
       vars:
         parameter_name: "/jenkins-infra/{{ env_name }}/config/agent-spot-price"
         store_as: "ssm_agent_spot_price"
+    
+    # SSMパラメータが取得できなかった場合、all.ymlの値を使用
+    - name: Set default values from all.yml if SSM parameters are not found
+      ansible.builtin.set_fact:
+        ssm_agent_instance_type: "{{ ssm_agent_instance_type | default(jenkins.agent.instance_type) }}"
+        ssm_agent_max_capacity: "{{ ssm_agent_max_capacity | default(jenkins.agent.max_capacity) }}"
+        ssm_agent_min_capacity: "{{ ssm_agent_min_capacity | default(jenkins.agent.min_capacity) }}"
+        ssm_agent_spot_price: "{{ ssm_agent_spot_price | default(jenkins.agent.spot_price) }}"
     
     - name: Display configuration from SSM
       ansible.builtin.debug:
