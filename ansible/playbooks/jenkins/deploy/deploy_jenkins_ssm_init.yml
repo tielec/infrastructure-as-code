@@ -14,9 +14,6 @@
   vars:
     # コマンドラインから環境名を受け取る
     env_name: "{{ env | default('dev') }}"
-    # パスを明示的に定義（inventory_dirを基準にした相対パス）
-    scripts_dir: "{{ inventory_dir }}/../../scripts"
-    pulumi_path: "{{ inventory_dir }}/../../pulumi"
   
   pre_tasks:
     # all.yml から変数を読み込む
