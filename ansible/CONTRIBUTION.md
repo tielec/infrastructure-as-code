@@ -745,16 +745,43 @@ dependencies:
 
 ### 変数管理
 
-```yaml
-# defaults/main.yml - オーバーライド可能
----
-component_version: "1.0.0"
-component_enabled: true
+#### ⚠️ 重要: defaults/main.yml の使用禁止
 
-# vars/main.yml - 固定値
+**defaults/main.yml は使用しません。** 以下の理由により、すべての変数は集中管理します：
+
+1. **循環参照の防止**: defaults/main.yml は循環参照の温床になりやすい
+2. **視認性の向上**: 変数が各所に散らばると管理が困難
+3. **優先順位の簡潔化**: Ansibleの変数優先順位を単純化
+
+#### 変数の配置場所
+
+```yaml
+# 1. 共通変数 → inventory/group_vars/all.yml
 ---
-component_home: "/opt/component"
-component_user: "component"
+# すべての環境・ロールで共通の変数
+scripts_dir: "{{ inventory_dir }}/../../scripts"
+pulumi_path: "{{ inventory_dir }}/../../pulumi"
+env_name: "dev"
+aws_region: "ap-northeast-1"
+
+# 2. 環境別変数 → inventory/group_vars/{env}.yml
+---
+# 環境固有の設定
+env_name: "prod"
+instance_type: "t4g.large"
+
+# 3. プレイブック変数 → playbooks/{playbook}.yml の vars セクション
+---
+- hosts: localhost
+  vars:
+    operation: "deploy"
+    jenkins_color: "blue"
+  tasks:
+    - include_role:
+        name: jenkins_controller
+
+# 4. 実行時変数 → -e オプション
+ansible-playbook playbook.yml -e "operation=destroy"
 ```
 
 ## テスト
