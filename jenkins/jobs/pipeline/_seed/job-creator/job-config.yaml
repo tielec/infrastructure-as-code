@@ -250,12 +250,6 @@ jenkins-jobs:
     dslfile: jenkins/jobs/dsl/infrastructure-management/infrastructure_shutdown_scheduler_job.groovy
     # jenkinsfile: 不要（freestyleジョブ）
 
-  # Lambda NAT夜間削除ジョブ
-  infrastructure_terminate_lambda_nat_job:
-    name: 'Terminate_Lambda_NAT'
-    displayName: 'Terminate Lambda NAT Instance'
-    dslfile: jenkins/jobs/dsl/infrastructure-management/infrastructure_terminate_lambda_nat_job.groovy
-    jenkinsfile: jenkins/jobs/pipeline/infrastructure/pulumi-stack-action/Jenkinsfile
 
 # docs-generator 生成対象リポジトリ設定
 jenkins-managed-repositories:
