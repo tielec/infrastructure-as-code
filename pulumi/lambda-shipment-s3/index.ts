@@ -14,6 +14,9 @@ import { LambdaDeploymentBucket } from "@tielec/pulumi-components";
 const environment = pulumi.getStack();
 const region = aws.config.region || "ap-northeast-1";
 
+// AWSアカウント情報を取得
+const accountId = aws.getCallerIdentity().then(identity => identity.accountId);
+
 // ========================================
 // SSMパラメータ参照（Single Source of Truth）
 // ========================================
@@ -25,7 +28,8 @@ const projectNameParam = aws.ssm.getParameter({
 // ========================================
 // S3バケット作成
 // ========================================
-const bucketName = `tielec-lambda-shipment-${environment}`;
+// アカウント番号とリージョンを含めて一意性を確保
+const bucketName = pulumi.interpolate`tielec-lambda-shipment-${environment}-${accountId}-${region}`;
 
 // プロジェクト名を解決してからバケットを作成
 const deploymentBucket = pulumi.output(projectNameParam).apply(param => {

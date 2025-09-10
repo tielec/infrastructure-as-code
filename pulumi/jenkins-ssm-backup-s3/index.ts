@@ -6,8 +6,12 @@ const config = new pulumi.Config();
 const projectName = config.require("projectName");
 const environment = config.require("environment");
 
-// S3バケット名の生成
-const bucketName = `${projectName}-ssm-backup-${environment}`;
+// AWSアカウント情報とリージョンを取得
+const accountId = aws.getCallerIdentity().then(identity => identity.accountId);
+const region = aws.config.region || "ap-northeast-1";
+
+// S3バケット名の生成（アカウント番号とリージョンを含めて一意性を確保）
+const bucketName = pulumi.interpolate`${projectName}-ssm-backup-${environment}-${accountId}-${region}`;
 
 // SSMパラメータバックアップ用S3バケット
 const backupBucket = new aws.s3.Bucket("ssm-backup-bucket", {
