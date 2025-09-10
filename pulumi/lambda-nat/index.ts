@@ -84,6 +84,8 @@ const commonTags = {
 // ========================================
 // 高可用性モードに応じてNATリソースを作成
 // Pulumiの条件付きリソース作成パターンを使用
+let natInstanceAutoStopSchedule: pulumi.Output<string> | undefined;
+
 highAvailabilityMode.apply(isHA => {
     if (isHA) {
         // ========================================
@@ -106,7 +108,7 @@ highAvailabilityMode.apply(isHA => {
         // ========================================
         pulumi.log.info("Creating NAT Instance resources for normal mode");
         
-        createNatInstance({
+        const natInstanceOutputs = createNatInstance({
             projectName,
             environment,
             vpcCidr,
@@ -117,6 +119,9 @@ highAvailabilityMode.apply(isHA => {
             natInstanceSecurityGroupId,
             commonTags,
         });
+        
+        // 自動停止スケジュール情報を保存（dev環境のみ）
+        natInstanceAutoStopSchedule = natInstanceOutputs.autoStopSchedule;
     }
 });
 
@@ -131,6 +136,7 @@ export const outputs = {
     environment: environment,
     natType: highAvailabilityMode.apply(ha => ha ? "gateway-ha" : "instance"),
     ssmParameterPrefix: pulumi.interpolate`/${projectName}/${environment}/nat`,
+    autoStopSchedule: natInstanceAutoStopSchedule || pulumi.output("N/A - Auto-stop only available for NAT Instance in dev environment"),
 };
 
 // デバッグ情報をログに出力
