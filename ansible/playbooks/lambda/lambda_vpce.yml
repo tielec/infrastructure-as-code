@@ -28,8 +28,6 @@
         vpce_project_name: "{{ lambda_api_infra.pulumi.vpce_project }}"
         network_project_name: "{{ lambda_api_infra.pulumi.network_project }}"
         security_project_name: "{{ lambda_api_infra.pulumi.security_project }}"
-        pulumi_path: "{{ inventory_dir }}/../../pulumi"
-        scripts_dir: "{{ inventory_dir }}/../../scripts"
         environment_config: "{{ lambda_api_infra.environments[env_name] }}"
         vpc_endpoints: "{{ environment_config.enable_vpc_endpoints | default(['s3']) }}"
         

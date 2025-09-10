@@ -13,12 +13,6 @@
   vars:
     # コマンドラインから環境名を受け取る
     env_name: "{{ env | default('dev') }}"
-    # エージェント設定 - 再帰参照を避けるために変数名を変更
-    agent_instance_type_param: "{{ instance_type | default('t3a.medium') }}"
-    agent_min_capacity_param: "{{ min_capacity | default(0) }}"
-    agent_max_capacity_param: "{{ max_capacity | default(10) }}"
-    # Spot価格上限をオンデマンド価格に設定（ap-northeast-1）
-    agent_spot_price_param: "{{ spot_price | default('0.052') }}"
 
   pre_tasks:
     # all.yml から変数を読み込む
@@ -34,11 +28,6 @@
         network_project_name: "{{ infra.pulumi.network_project }}"
         security_project_name: "{{ infra.pulumi.security_project }}"
         agent_project_name: "{{ infra.pulumi.agent_project }}"
-        # 再帰参照を避けるために明示的に変数を設定
-        instance_type: "{{ agent_instance_type_param }}"
-        min_capacity: "{{ agent_min_capacity_param }}"
-        max_capacity: "{{ agent_max_capacity_param }}" 
-        spot_price: "{{ agent_spot_price_param }}"
   
   roles:
     - jenkins_agent

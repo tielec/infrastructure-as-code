@@ -25,8 +25,6 @@
         project_name: "{{ lambda_api_infra.project_name }}"
         aws_region_name: "{{ lambda_api_infra.aws.default_region }}"
         network_project_name: "{{ lambda_api_infra.pulumi.network_project }}"
-        pulumi_path: "{{ inventory_dir }}/../../pulumi"
-        scripts_dir: "{{ inventory_dir }}/../../scripts"
         # 環境別設定
         environment_config: "{{ lambda_api_infra.environments[env_name] }}"
         
