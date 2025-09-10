@@ -1,8 +1,8 @@
 /**
  * pulumi/lambda-functions/index.ts
  * 
- * Lambda APIのLambda関数を構築するPulumiスクリプト
- * プライベートリポジトリからソースコードを取得してデプロイ
+ * Lambda関数を構築するPulumiスクリプト
+ * わかりやすさを重視したシンプルな実装
  */
 import * as pulumi from "@pulumi/pulumi";
 import * as aws from "@pulumi/aws";
@@ -11,23 +11,28 @@ import {
     LambdaPackage, 
     LambdaDeploymentBucket 
 } from "@tielec/pulumi-components";
+import { createLambdaFunction } from "./components/lambda-factory";
 
 // ========================================
-// 環境変数取得
+// 1. 基本設定
 // ========================================
 const environment = pulumi.getStack();
-const config = new pulumi.Config();
+const commonTags = {
+    Environment: environment,
+    ManagedBy: "pulumi",
+    Project: "lambda-api",
+};
 
 // ========================================
-// SSMパラメータ参照（Single Source of Truth）
+// 2. SSMパラメータから設定値を取得
 // ========================================
-// プロジェクト名を取得
+// プロジェクト名
 const projectNameParam = aws.ssm.getParameter({
     name: `/lambda-api/${environment}/common/project-name`,
 });
 const projectName = pulumi.output(projectNameParam).apply(p => p.value);
 
-// GitHub認証情報とリポジトリ情報を取得
+// GitHub設定
 const githubTokenParam = aws.ssm.getParameter({
     name: `/lambda-api/${environment}/security/github-token`,
     withDecryption: true,
@@ -45,18 +50,7 @@ const repoBranchParam = aws.ssm.getParameter({
 });
 const repoBranch = pulumi.output(repoBranchParam).apply(p => p.value);
 
-const versionRetentionParam = aws.ssm.getParameter({
-    name: `/lambda-api/${environment}/lambda/versioning/retain-versions`,
-});
-const versionRetention = pulumi.output(versionRetentionParam).apply(p => parseInt(p.value) || 3);
-
-// S3デプロイメントバケット情報を取得
-const deploymentBucketNameParam = aws.ssm.getParameter({
-    name: `/lambda-shipment/${environment}/bucket/name`,
-});
-const deploymentBucketName = pulumi.output(deploymentBucketNameParam).apply(p => p.value);
-
-// Lambda関数の設定を取得
+// Lambda設定
 const memorySizeParam = aws.ssm.getParameter({
     name: `/lambda-api/${environment}/lambda/memory-size`,
 });
@@ -70,14 +64,9 @@ const timeout = pulumi.output(timeoutParam).apply(p => parseInt(p.value) || 30);
 const logRetentionDaysParam = aws.ssm.getParameter({
     name: `/lambda-api/${environment}/lambda/log-retention-days`,
 });
-const logRetentionDays = pulumi.output(logRetentionDaysParam).apply(p => {
-    const days = parseInt(p.value);
-    if (!isNaN(days)) return days;
-    // デフォルト値：dev=3日、staging=7日、prod=14日
-    return environment === "dev" ? 3 : environment === "staging" ? 7 : 14;
-});
+const logRetentionDays = pulumi.output(logRetentionDaysParam).apply(p => parseInt(p.value) || 7);
 
-// ネットワーク情報を取得
+// ネットワーク設定
 const privateSubnetAIdParam = aws.ssm.getParameter({
     name: `/lambda-api/${environment}/network/subnets/private-a-id`,
 });
@@ -93,46 +82,38 @@ const lambdaSecurityGroupIdParam = aws.ssm.getParameter({
 });
 const lambdaSecurityGroupId = pulumi.output(lambdaSecurityGroupIdParam).apply(p => p.value);
 
-// サブネットIDの配列
-const privateSubnetIds = pulumi.all([privateSubnetAId, privateSubnetBId]);
+// デプロイメントバケット
+const deploymentBucketNameParam = aws.ssm.getParameter({
+    name: `/lambda-shipment/${environment}/bucket/name`,
+});
+const deploymentBucketName = pulumi.output(deploymentBucketNameParam).apply(p => p.value);
 
 // ========================================
-// 共通タグ定義
+// 3. GitHubからソースコードを取得してパッケージ化
 // ========================================
-const commonTags = {
-    Environment: environment,
-    ManagedBy: "pulumi",
-    Project: "lambda-api",
-    Stack: pulumi.getProject(),
-};
-
-// ========================================
-// GitHubからソースコードをチェックアウトしてパッケージ化
-// ========================================
-// pulumi.Output型をapplyで解決してリソースを作成
+// Pulumi Outputを解決してから処理
 const githubRepoAndPackage = pulumi.all([repoUrl, repoBranch, githubToken, deploymentBucketName, projectName]).apply(
     ([url, branch, token, bucketName, projName]) => {
-        // GitHubからLambdaコードを取得
+        // GitHubからソースコードを取得
         const githubRepo = new GitHubRepoCheckout("lambda-source", {
-            repositoryUrl: url,  // SSMから取得したリポジトリURL
+            repositoryUrl: url,
             branch: branch,
-            githubToken: token,  // SSMから取得したトークン
-            useParameterStore: false,  // 既にSSMから取得しているのでfalse
+            githubToken: token,
+            useParameterStore: false,
         });
-
+        
         // Lambdaパッケージを作成
         const lambdaPackage = new LambdaPackage("lambda-package", {
             sourcePath: githubRepo.outputPath,
-            runtime: "nodejs20.x",  // Node.js 20を使用（AWS Lambdaの最新LTS）
+            runtime: "nodejs20.x",
         });
-
-        // S3デプロイメントバケットを参照
+        
+        // S3バケットにアップロード
         const deploymentBucket = new LambdaDeploymentBucket("deployment-bucket", {
             bucketName: bucketName,
             useExisting: true,
         });
-
-        // S3にLambdaパッケージをアップロード
+        
         const lambdaCodeObject = deploymentBucket.uploadLambdaPackage(
             projName,
             lambdaPackage.zipPath,
@@ -144,7 +125,7 @@ const githubRepoAndPackage = pulumi.all([repoUrl, repoBranch, githubToken, deplo
                 branch: branch,
             }
         );
-
+        
         return {
             githubRepo,
             lambdaPackage,
@@ -154,26 +135,23 @@ const githubRepoAndPackage = pulumi.all([repoUrl, repoBranch, githubToken, deplo
     }
 );
 
-// 各コンポーネントを抽出
+// 各リソースを抽出
 const deploymentBucket = githubRepoAndPackage.apply(r => r.deploymentBucket);
 const lambdaCodeObject = githubRepoAndPackage.apply(r => r.lambdaCodeObject);
 const githubRepo = githubRepoAndPackage.apply(r => r.githubRepo);
 
 // ========================================
-// リソース定義
+// 4. DLQ（Dead Letter Queue）を作成
 // ========================================
-// Dead Letter Queue (DLQ) - エラー処理用
 const dlq = new aws.sqs.Queue("dlq", {
     name: pulumi.interpolate`${projectName}-dlq-${environment}`,
     messageRetentionSeconds: 14 * 24 * 60 * 60, // 14日間保持
-    visibilityTimeoutSeconds: timeout.apply(t => t * 6), // Lambdaタイムアウトの6倍
-    tags: {
-        ...commonTags,
-        Name: pulumi.interpolate`${projectName}-dlq-${environment}`,
-    },
+    tags: commonTags,
 });
 
-// IAMロール - Lambda実行権限
+// ========================================
+// 5. IAMロールを作成
+// ========================================
 const lambdaRole = new aws.iam.Role("lambda-role", {
     assumeRolePolicy: JSON.stringify({
         Version: "2012-10-17",
@@ -185,26 +163,22 @@ const lambdaRole = new aws.iam.Role("lambda-role", {
             },
         }],
     }),
-    tags: {
-        ...commonTags,
-        Name: pulumi.interpolate`${projectName}-lambda-role-${environment}`,
-    },
+    tags: commonTags,
 });
 
-// VPC内でLambdaを実行するための権限
+// VPCアクセス権限
 new aws.iam.RolePolicyAttachment("vpc-access-policy", {
     role: lambdaRole.name,
     policyArn: "arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole",
 });
 
-// 基本的な権限（CloudWatch Logs、DLQ、Secrets Manager）
-const lambdaPolicy = new aws.iam.RolePolicy("lambda-policy", {
+// その他の権限
+new aws.iam.RolePolicy("lambda-policy", {
     role: lambdaRole.id,
     policy: pulumi.all([dlq.arn, projectName]).apply(([dlqArn, proj]) => JSON.stringify({
         Version: "2012-10-17",
         Statement: [
             {
-                // CloudWatch Logsへの書き込み
                 Effect: "Allow",
                 Action: [
                     "logs:CreateLogGroup",
@@ -214,211 +188,83 @@ const lambdaPolicy = new aws.iam.RolePolicy("lambda-policy", {
                 Resource: "*",
             },
             {
-                // DLQへのメッセージ送信
                 Effect: "Allow",
                 Action: ["sqs:SendMessage"],
                 Resource: dlqArn,
             },
             {
-                // Secrets Manager（APIキーなどの機密情報用）
                 Effect: "Allow",
                 Action: ["secretsmanager:GetSecretValue"],
                 Resource: `arn:aws:secretsmanager:*:*:secret:${proj}/*`,
             },
             {
-                // SSM Parameter Store（設定値とAPIキーの取得用）
                 Effect: "Allow",
                 Action: [
                     "ssm:GetParameter",
                     "ssm:GetParameters",
                     "ssm:GetParametersByPath",
-                    "ssm:DescribeParameters"
                 ],
                 Resource: `arn:aws:ssm:*:*:parameter/lambda-api/${environment}/*`,
-            },
-            {
-                // KMS（暗号化されたパラメータの復号用）
-                Effect: "Allow",
-                Action: [
-                    "kms:Decrypt",
-                    "kms:DescribeKey"
-                ],
-                Resource: "*",
-                Condition: {
-                    StringEquals: {
-                        "kms:ViaService": `ssm.${process.env.AWS_REGION || 'ap-northeast-1'}.amazonaws.com`
-                    }
-                }
             },
         ],
     })),
 });
 
 // ========================================
-// Lambda関数定義
+// 6. Lambda関数を作成（シンプルなヘルパー関数を使用）
 // ========================================
-// メインのLambda関数
-const mainFunction = new aws.lambda.Function("main-function", {
-    name: pulumi.interpolate`${projectName}-main-${environment}`,
-    description: "Main API handler for bubble.io integration",
-    runtime: "nodejs20.x",  // Node.js 20（AWS Lambdaの最新LTS）
-    architectures: ["arm64"], // AWS Graviton2でコスト削減
-    handler: "dist/index.handler",
-    role: lambdaRole.arn,
-    memorySize: memorySize,
-    timeout: timeout,
-    
-    // S3からコードを取得
-    s3Bucket: deploymentBucket.apply(b => b.bucketName),
-    s3Key: lambdaCodeObject.apply(o => o.key),
-    
-    // バージョン管理を有効化
-    publish: true,
-    
-    // 環境変数
-    environment: {
-        variables: {
+const mainLambda = createLambdaFunction(
+    "main",
+    projectName,
+    environment,
+    {
+        // 必須パラメータ
+        role: lambdaRole,
+        s3Bucket: deploymentBucket.apply(b => b.bucketName),
+        s3Key: lambdaCodeObject.apply(o => o.key),
+        dlqArn: dlq.arn,
+        vpcSubnetIds: pulumi.all([privateSubnetAId, privateSubnetBId]),
+        vpcSecurityGroupIds: [lambdaSecurityGroupId],
+        
+        // オプションパラメータ
+        description: "Main API handler for bubble.io integration",
+        handler: "dist/index.handler",
+        runtime: "nodejs20.x",
+        memorySize: memorySize,
+        timeout: timeout,
+        environmentVariables: {
             NODE_ENV: environment,
             LOG_LEVEL: environment === "prod" ? "ERROR" : "INFO",
             DEPLOYMENT_VERSION: githubRepo.apply(r => r.commitHash),
-            // 将来の拡張用: DB接続情報、外部APIエンドポイントなど
         },
-    },
-    
-    // VPC設定（プライベートサブネットで実行）
-    vpcConfig: {
-        subnetIds: privateSubnetIds,
-        securityGroupIds: [lambdaSecurityGroupId],
-    },
-    
-    // エラー時はDLQに送信
-    deadLetterConfig: {
-        targetArn: dlq.arn,
-    },
-    
-    tags: {
-        ...commonTags,
-        Name: pulumi.interpolate`${projectName}-main-${environment}`,
-        Version: githubRepo.apply(r => r.commitHash),
-    },
-});
+        logRetentionDays: logRetentionDays,
+        tags: commonTags,
+    }
+);
 
 // ========================================
-// Lambda バージョン管理とエイリアス
+// 7. エクスポート（確認用）
 // ========================================
-// 環境別のエイリアスを作成
-const functionAlias = new aws.lambda.Alias("function-alias", {
-    name: environment,  // dev, staging, prod
-    functionName: mainFunction.name,
-    functionVersion: mainFunction.version,  // 最新の発行済みバージョン
-    description: pulumi.interpolate`Alias for ${environment} environment`,
-});
-
-// カナリアデプロイメント用のエイリアス（prodのみ）
-const canaryAlias = environment === "prod" ? new aws.lambda.Alias("canary-alias", {
-    name: "canary",
-    functionName: mainFunction.name,
-    functionVersion: mainFunction.version,
-    description: "Canary deployment alias",
-    routingConfig: {
-        additionalVersionWeights: {
-            // 新バージョンに10%のトラフィックを送る設定例
-            // 実際の運用では、段階的に割合を増やす
-        },
-    },
-}) : undefined;
-
-// 古いバージョンのクリーンアップ（保持数を超えたバージョンを削除）
-// 注: Pulumiでは直接削除はできないため、別途Lambda関数やスクリプトで実装が必要
-
-// ========================================
-// CloudWatch Logs設定
-// ========================================
-const logGroup = new aws.cloudwatch.LogGroup("log-group", {
-    name: pulumi.interpolate`/aws/lambda/${mainFunction.name}`,
-    retentionInDays: logRetentionDays,
-    tags: commonTags,
-});
-
-// ========================================
-// SSMパラメータへの保存
-// ========================================
-// 他のスタックが参照する値をSSMに保存
-const functionArnParam = new aws.ssm.Parameter("function-arn", {
-    name: pulumi.interpolate`/${projectName}/${environment}/lambda/main-function-arn`,
-    type: "String",
-    value: mainFunction.arn,
-    description: "Main Lambda function ARN",
-    tags: commonTags,
-});
-
-const functionNameParam = new aws.ssm.Parameter("function-name", {
-    name: pulumi.interpolate`/${projectName}/${environment}/lambda/main-function-name`,
-    type: "String",
-    value: mainFunction.name,
-    description: "Main Lambda function name",
-    tags: commonTags,
-});
-
-const dlqArnParam = new aws.ssm.Parameter("dlq-arn", {
-    name: pulumi.interpolate`/${projectName}/${environment}/lambda/dlq-arn`,
-    type: "String",
-    value: dlq.arn,
-    description: "Dead Letter Queue ARN",
-    tags: commonTags,
-});
-
-const functionVersionParam = new aws.ssm.Parameter("function-version", {
-    name: pulumi.interpolate`/${projectName}/${environment}/lambda/main-function-version`,
-    type: "String",
-    value: mainFunction.version,
-    description: "Main Lambda function version",
-    tags: commonTags,
-});
-
-const functionAliasArnParam = new aws.ssm.Parameter("function-alias-arn", {
-    name: pulumi.interpolate`/${projectName}/${environment}/lambda/main-function-alias-arn`,
-    type: "String",
-    value: functionAlias.arn,
-    description: "Main Lambda function alias ARN",
-    tags: commonTags,
-});
-
-// ========================================
-// エクスポート（表示用のみ）
-// ========================================
-// エクスポートは表示・確認用のみ
-// 他のスタックはSSMパラメータから値を取得すること
 export const outputs = {
-    functionName: mainFunction.name,
-    functionArn: mainFunction.arn,
-    functionVersion: mainFunction.version,
-    functionAliasArn: functionAlias.arn,
-    functionUrl: mainFunction.invokeArn,
+    // Lambda関数情報
+    functionName: mainLambda.function.name,
+    functionArn: mainLambda.function.arn,
+    functionVersion: mainLambda.function.version,
+    aliasArn: mainLambda.alias.arn,
+    
+    // DLQ情報
     dlqUrl: dlq.url,
     dlqArn: dlq.arn,
+    
+    // ロール情報
     lambdaRoleArn: lambdaRole.arn,
-    logGroupName: logGroup.name,
-    deploymentInfo: pulumi.all([deploymentBucket, lambdaCodeObject, githubRepo, repoBranch]).apply(
-        ([bucket, obj, repo, branch]) => ({
-            bucketName: bucket.bucketName,
-            objectKey: obj.key,
-            commitHash: repo.commitHash,
-            branch: branch,
-        })
-    ),
+    
+    // ログ情報
+    logGroupName: mainLambda.logGroup.name,
+    
+    // デプロイメント情報
+    deploymentBucket: deploymentBucket.apply(b => b.bucketName),
+    codeObjectKey: lambdaCodeObject.apply(o => o.key),
+    commitHash: githubRepo.apply(r => r.commitHash),
 };
 
-// 簡潔な情報サマリー
-export const summary = pulumi.all([memorySize, timeout, versionRetention]).apply(([mem, time, retention]) => ({
-    runtime: "nodejs20.x",
-    architecture: "arm64",
-    memorySize: mem,
-    timeout: time,
-    environment: environment,
-    vpcEnabled: true,
-    dlqEnabled: true,
-    versioningEnabled: true,
-    versionRetention: retention,
-    aliasName: environment,
-}));
