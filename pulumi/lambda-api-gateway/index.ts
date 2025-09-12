@@ -53,7 +53,18 @@ const api = new aws.apigateway.RestApi("api", {
 });
 
 // ========================================
-// 4. ヘルスチェックエンドポイント（/health）
+// 4. Lambda実行権限
+// ========================================
+// Lambda実行権限（すべてのエンドポイントで使用）
+const lambdaPermission = new aws.lambda.Permission("lambda-permission", {
+    action: "lambda:InvokeFunction",
+    function: lambdaFunctionName,
+    principal: "apigateway.amazonaws.com",
+    sourceArn: pulumi.interpolate`${api.executionArn}/*/*`,
+});
+
+// ========================================
+// 5. ヘルスチェックエンドポイント（/health）
 // ========================================
 // リソース作成
 const healthResource = new aws.apigateway.Resource("health-resource", {
@@ -83,21 +94,13 @@ const healthIntegration = new aws.apigateway.Integration("health-integration", {
 });
 
 // ========================================
-// 5. メインAPIエンドポイント（/api）
+// 6. メインAPIエンドポイント（/api）
 // ========================================
 // /apiリソース
 const apiResource = new aws.apigateway.Resource("api-resource", {
     restApi: api.id,
     parentId: api.rootResourceId,
     pathPart: "api",
-});
-
-// Lambda実行権限
-const lambdaPermission = new aws.lambda.Permission("lambda-permission", {
-    action: "lambda:InvokeFunction",
-    function: lambdaFunctionName,
-    principal: "apigateway.amazonaws.com",
-    sourceArn: pulumi.interpolate`${api.executionArn}/*/*`,
 });
 
 // /api直下のメソッド
@@ -122,7 +125,7 @@ const apiIntegration = new aws.apigateway.Integration("api-integration", {
 });
 
 // ========================================
-// 6. プロキシエンドポイント（/api/{proxy+}）
+// 7. プロキシエンドポイント（/api/{proxy+}）
 // ========================================
 // すべてのサブパスをキャッチ
 const proxyResource = new aws.apigateway.Resource("proxy-resource", {
@@ -153,7 +156,7 @@ const proxyIntegration = new aws.apigateway.Integration("proxy-integration", {
 });
 
 // ========================================
-// 7. デプロイメントとステージ
+// 8. デプロイメントとステージ
 // ========================================
 // デプロイメント
 const deployment = new aws.apigateway.Deployment("deployment", {
@@ -195,7 +198,7 @@ const stage = new aws.apigateway.Stage("stage", {
 });
 
 // ========================================
-// 8. 使用プランとAPIキー
+// 9. 使用プランとAPIキー
 // ========================================
 // 使用プラン
 const usagePlan = new aws.apigateway.UsagePlan("usage-plan", {
@@ -253,7 +256,7 @@ const externalUsagePlanKey = new aws.apigateway.UsagePlanKey("external-usage-key
 });
 
 // ========================================
-// 9. SSMパラメータに保存（他スタックから参照用）
+// 10. SSMパラメータに保存（他スタックから参照用）
 // ========================================
 // APIエンドポイント
 const apiEndpointParam = new aws.ssm.Parameter("api-endpoint-param", {
@@ -297,7 +300,7 @@ const apiKeysParam = new aws.ssm.Parameter("api-keys-param", {
 });
 
 // ========================================
-// 10. エクスポート（確認用）
+// 11. エクスポート（確認用）
 // ========================================
 export const outputs = {
     // API情報
