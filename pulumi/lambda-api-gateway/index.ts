@@ -53,7 +53,18 @@ const api = new aws.apigateway.RestApi("api", {
 });
 
 // ========================================
-// 4. ヘルスチェックエンドポイント（/health）
+// 4. Lambda実行権限
+// ========================================
+// Lambda実行権限（すべてのエンドポイントで使用）
+const lambdaPermission = new aws.lambda.Permission("lambda-permission", {
+    action: "lambda:InvokeFunction",
+    function: lambdaFunctionName,
+    principal: "apigateway.amazonaws.com",
+    sourceArn: pulumi.interpolate`${api.executionArn}/*/*`,
+});
+
+// ========================================
+// 5. ヘルスチェックエンドポイント（/health）
 // ========================================
 // リソース作成
 const healthResource = new aws.apigateway.Resource("health-resource", {
@@ -70,55 +81,26 @@ const healthMethod = new aws.apigateway.Method("health-method", {
     authorization: "NONE",  // 認証不要
 });
 
-// モック統合（Lambda呼び出しなし）
+// Lambda統合（ヘルスチェックもLambda関数で処理）
 const healthIntegration = new aws.apigateway.Integration("health-integration", {
     restApi: api.id,
     resourceId: healthResource.id,
     httpMethod: healthMethod.httpMethod,
-    type: "MOCK",
-    requestTemplates: {
-        "application/json": JSON.stringify({ statusCode: 200 }),
-    },
-});
-
-// モックレスポンス
-const healthResponse = new aws.apigateway.IntegrationResponse("health-response", {
-    restApi: api.id,
-    resourceId: healthResource.id,
-    httpMethod: healthMethod.httpMethod,
-    statusCode: "200",
-    responseTemplates: {
-        "application/json": pulumi.interpolate`{"status":"healthy","environment":"${environment}","service":"${projectName}"}`,
-    },
+    type: "AWS_PROXY",
+    integrationHttpMethod: "POST",
+    uri: pulumi.interpolate`arn:aws:apigateway:${aws.config.region}:lambda:path/2015-03-31/functions/${lambdaFunctionArn}/invocations`,
 }, {
-    dependsOn: [healthIntegration],
-});
-
-const healthMethodResponse = new aws.apigateway.MethodResponse("health-method-response", {
-    restApi: api.id,
-    resourceId: healthResource.id,
-    httpMethod: healthMethod.httpMethod,
-    statusCode: "200",
-}, {
-    dependsOn: [healthMethod],
+    dependsOn: [lambdaPermission],
 });
 
 // ========================================
-// 5. メインAPIエンドポイント（/api）
+// 6. メインAPIエンドポイント（/api）
 // ========================================
 // /apiリソース
 const apiResource = new aws.apigateway.Resource("api-resource", {
     restApi: api.id,
     parentId: api.rootResourceId,
     pathPart: "api",
-});
-
-// Lambda実行権限
-const lambdaPermission = new aws.lambda.Permission("lambda-permission", {
-    action: "lambda:InvokeFunction",
-    function: lambdaFunctionName,
-    principal: "apigateway.amazonaws.com",
-    sourceArn: pulumi.interpolate`${api.executionArn}/*/*`,
 });
 
 // /api直下のメソッド
@@ -143,7 +125,7 @@ const apiIntegration = new aws.apigateway.Integration("api-integration", {
 });
 
 // ========================================
-// 6. プロキシエンドポイント（/api/{proxy+}）
+// 7. プロキシエンドポイント（/api/{proxy+}）
 // ========================================
 // すべてのサブパスをキャッチ
 const proxyResource = new aws.apigateway.Resource("proxy-resource", {
@@ -174,14 +156,14 @@ const proxyIntegration = new aws.apigateway.Integration("proxy-integration", {
 });
 
 // ========================================
-// 7. デプロイメントとステージ
+// 8. デプロイメントとステージ
 // ========================================
 // デプロイメント
 const deployment = new aws.apigateway.Deployment("deployment", {
     restApi: api.id,
 }, {
     dependsOn: [
-        healthMethod, healthIntegration, healthResponse, healthMethodResponse,
+        healthMethod, healthIntegration,
         apiMethod, apiIntegration,
         proxyMethod, proxyIntegration,
     ],
@@ -216,7 +198,7 @@ const stage = new aws.apigateway.Stage("stage", {
 });
 
 // ========================================
-// 8. 使用プランとAPIキー
+// 9. 使用プランとAPIキー
 // ========================================
 // 使用プラン
 const usagePlan = new aws.apigateway.UsagePlan("usage-plan", {
@@ -274,7 +256,7 @@ const externalUsagePlanKey = new aws.apigateway.UsagePlanKey("external-usage-key
 });
 
 // ========================================
-// 9. SSMパラメータに保存（他スタックから参照用）
+// 10. SSMパラメータに保存（他スタックから参照用）
 // ========================================
 // APIエンドポイント
 const apiEndpointParam = new aws.ssm.Parameter("api-endpoint-param", {
@@ -318,7 +300,7 @@ const apiKeysParam = new aws.ssm.Parameter("api-keys-param", {
 });
 
 // ========================================
-// 10. エクスポート（確認用）
+// 11. エクスポート（確認用）
 // ========================================
 export const outputs = {
     // API情報
