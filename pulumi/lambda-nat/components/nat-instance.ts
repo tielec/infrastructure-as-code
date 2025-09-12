@@ -451,7 +451,7 @@ The script should be located in the 'scripts' directory relative to your project
         const stopInstanceMaintenanceWindow = new aws.ssm.MaintenanceWindow("nat-stop-window", {
             name: pulumi.interpolate`${projectName}-nat-stop-${environment}`,
             description: "Stop NAT instance daily at 12:00 PM JST (dev environment)",
-            schedule: "cron(0 3 ? * * *)", // 毎日UTC 03:00（日本時間12:00）
+            schedule: "cron(0 15 ? * * *)", // 毎日UTC 15:00（日本時間24:00）
             duration: 1, // 1時間のウィンドウ
             cutoff: 0, // ウィンドウ終了前に新しいタスクを開始しない
             allowUnassociatedTargets: false,
