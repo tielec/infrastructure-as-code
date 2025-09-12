@@ -66,21 +66,6 @@ const logRetentionDaysParam = aws.ssm.getParameter({
 });
 const logRetentionDays = pulumi.output(logRetentionDaysParam).apply(p => parseInt(p.value) || 7);
 
-// ネットワーク設定
-const privateSubnetAIdParam = aws.ssm.getParameter({
-    name: `/lambda-api/${environment}/network/subnets/private-a-id`,
-});
-const privateSubnetAId = pulumi.output(privateSubnetAIdParam).apply(p => p.value);
-
-const privateSubnetBIdParam = aws.ssm.getParameter({
-    name: `/lambda-api/${environment}/network/subnets/private-b-id`,
-});
-const privateSubnetBId = pulumi.output(privateSubnetBIdParam).apply(p => p.value);
-
-const lambdaSecurityGroupIdParam = aws.ssm.getParameter({
-    name: `/lambda-api/${environment}/security/lambda-sg-id`,
-});
-const lambdaSecurityGroupId = pulumi.output(lambdaSecurityGroupIdParam).apply(p => p.value);
 
 // デプロイメントバケット
 const deploymentBucketNameParam = aws.ssm.getParameter({
@@ -166,12 +151,6 @@ const lambdaRole = new aws.iam.Role("lambda-role", {
     tags: commonTags,
 });
 
-// VPCアクセス権限
-new aws.iam.RolePolicyAttachment("vpc-access-policy", {
-    role: lambdaRole.name,
-    policyArn: "arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole",
-});
-
 // その他の権限
 new aws.iam.RolePolicy("lambda-policy", {
     role: lambdaRole.id,
@@ -223,8 +202,6 @@ const mainLambda = createLambdaFunction(
         s3Bucket: deploymentBucket.apply(b => b.bucketName),
         s3Key: lambdaCodeObject.apply(o => o.key),
         dlqArn: dlq.arn,
-        vpcSubnetIds: pulumi.all([privateSubnetAId, privateSubnetBId]),
-        vpcSecurityGroupIds: [lambdaSecurityGroupId],
         
         // オプションパラメータ
         description: "Main API handler for bubble.io integration",

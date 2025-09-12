@@ -26,8 +26,8 @@ export function createLambdaFunction(
         s3Bucket: pulumi.Output<string>;
         s3Key: pulumi.Output<string>;
         dlqArn: pulumi.Output<string>;
-        vpcSubnetIds: pulumi.Output<string[]>;
-        vpcSecurityGroupIds: pulumi.Output<string>[];
+        vpcSubnetIds?: pulumi.Output<string[]>;
+        vpcSecurityGroupIds?: pulumi.Output<string>[];
         
         // オプションパラメータ
         description?: string;
@@ -70,11 +70,11 @@ export function createLambdaFunction(
             variables: config.environmentVariables || {},
         },
         
-        // VPC設定
-        vpcConfig: {
+        // VPC設定（オプショナル）
+        vpcConfig: config.vpcSubnetIds && config.vpcSecurityGroupIds ? {
             subnetIds: config.vpcSubnetIds,
             securityGroupIds: config.vpcSecurityGroupIds,
-        },
+        } : undefined,
         
         // DLQ設定
         deadLetterConfig: {
