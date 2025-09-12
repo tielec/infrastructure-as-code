@@ -6,23 +6,23 @@ config:
   # Lambda設定
   lambda-ssm-init:lambdaRepoBranch: main
   lambda-ssm-init:lambdaVersionRetention: 10
-  lambda-ssm-init:lambdaMemory: 2048
+  lambda-ssm-init:lambdaMemory: 1024
   lambda-ssm-init:lambdaTimeout: 60
   lambda-ssm-init:logLevel: INFO
   lambda-ssm-init:logRetentionDays: 14
   # ネットワーク設定
   lambda-ssm-init:vpcCidr: "10.3.0.0/16"
   lambda-ssm-init:enableFlowLogs: true
-  lambda-ssm-init:vpcEndpoints: '["s3", "dynamodb"]'
-  lambda-ssm-init:natHighAvailability: true
-  lambda-ssm-init:natInstanceType: "t4g.medium"
+  lambda-ssm-init:vpcEndpoints: '["s3"]'
+  lambda-ssm-init:natHighAvailability: false
+  lambda-ssm-init:natInstanceType: "t4g.nano"
   # API Gateway設定
   lambda-ssm-init:apiRateLimit: 1000
   lambda-ssm-init:apiBurstLimit: 2000
-  lambda-ssm-init:enableWaf: true
-  lambda-ssm-init:enableWebSocket: true
+  lambda-ssm-init:enableWaf: false
+  lambda-ssm-init:enableWebSocket: false
   # データベース設定
-  lambda-ssm-init:enableDatabase: true
+  lambda-ssm-init:enableDatabase: false
   # AI API設定（Claude API）
   lambda-ssm-init:claudeApiKey: PLACEHOLDER_PLEASE_UPDATE_WITH_ACTUAL_API_KEY
   lambda-ssm-init:claudeSpeedModel: "claude-3-haiku-20240307"
