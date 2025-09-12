@@ -70,37 +70,16 @@ const healthMethod = new aws.apigateway.Method("health-method", {
     authorization: "NONE",  // 認証不要
 });
 
-// モック統合（Lambda呼び出しなし）
+// Lambda統合（ヘルスチェックもLambda関数で処理）
 const healthIntegration = new aws.apigateway.Integration("health-integration", {
     restApi: api.id,
     resourceId: healthResource.id,
     httpMethod: healthMethod.httpMethod,
-    type: "MOCK",
-    requestTemplates: {
-        "application/json": JSON.stringify({ statusCode: 200 }),
-    },
-});
-
-// モックレスポンス
-const healthResponse = new aws.apigateway.IntegrationResponse("health-response", {
-    restApi: api.id,
-    resourceId: healthResource.id,
-    httpMethod: healthMethod.httpMethod,
-    statusCode: "200",
-    responseTemplates: {
-        "application/json": pulumi.interpolate`{"status":"healthy","environment":"${environment}","service":"${projectName}"}`,
-    },
+    type: "AWS_PROXY",
+    integrationHttpMethod: "POST",
+    uri: pulumi.interpolate`arn:aws:apigateway:${aws.config.region}:lambda:path/2015-03-31/functions/${lambdaFunctionArn}/invocations`,
 }, {
-    dependsOn: [healthIntegration],
-});
-
-const healthMethodResponse = new aws.apigateway.MethodResponse("health-method-response", {
-    restApi: api.id,
-    resourceId: healthResource.id,
-    httpMethod: healthMethod.httpMethod,
-    statusCode: "200",
-}, {
-    dependsOn: [healthMethod],
+    dependsOn: [lambdaPermission],
 });
 
 // ========================================
@@ -181,7 +160,7 @@ const deployment = new aws.apigateway.Deployment("deployment", {
     restApi: api.id,
 }, {
     dependsOn: [
-        healthMethod, healthIntegration, healthResponse, healthMethodResponse,
+        healthMethod, healthIntegration,
         apiMethod, apiIntegration,
         proxyMethod, proxyIntegration,
     ],
