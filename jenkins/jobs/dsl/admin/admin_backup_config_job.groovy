@@ -33,7 +33,7 @@ pipelineJob(fullJobName) {
         pipelineTriggers {
             triggers {
                 cron {
-                    spec('0 17 * * *')  // JST 02:00 = UTC 17:00
+                    spec('0 13 * * *')  // UTCで13時、日本時間で22時に実行
                 }
             }
         }
