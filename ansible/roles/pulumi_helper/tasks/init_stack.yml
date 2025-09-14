@@ -5,10 +5,9 @@
   ansible.builtin.include_tasks: login.yml
   when: pulumi_authenticated is not defined
 
-# S3バックエンドの場合、プロジェクト別ログイン
+# S3バックエンドのプロジェクト別ログイン（S3バックエンド固定）
 - name: Handle S3 backend project login
   ansible.builtin.include_tasks: s3_backend_login.yml
-  when: pulumi_backend_type == 's3'
 
 - name: Initialize and set up Pulumi stack
   block:
@@ -19,9 +18,7 @@
           Initializing Pulumi stack:
           Project: {{ pulumi_project_path | basename }}
           Stack: {{ stack_name }}
-          {% if pulumi_backend_type == 's3' %}
           Backend: {{ pulumi_s3_backend_url }}
-          {% endif %}
     
     - name: Verify project directory exists
       ansible.builtin.stat:
@@ -58,13 +55,8 @@
       ansible.builtin.shell: |
         cd {{ pulumi_project_path }}
         {{ pulumi_env_prefix }}
-        {% if pulumi_backend_type == 's3' %}
         # S3バックエンドではシンプルなスタック名を使用
         {{ pulumi_sudo_cmd }} stack init {{ stack_name }} --secrets-provider=passphrase
-        {% else %}
-        # Pulumi Cloudでは解決済みの完全な名前を使用
-        {{ pulumi_sudo_cmd }} stack init {{ resolved_stack_name }}
-        {% endif %}
       register: stack_init_result
       changed_when: stack_init_result.rc == 0
       when: 
