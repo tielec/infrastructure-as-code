@@ -25,7 +25,6 @@
       ansible.builtin.set_fact:
         project_name: "{{ infra.project_name }}"
         aws_region_name: "{{ infra.aws.default_region }}"
-        agent_ami_project_name: "{{ infra.pulumi.agent_ami_project | default('jenkins-agent-ami') }}"
     
     - name: Display deployment information
       ansible.builtin.debug:

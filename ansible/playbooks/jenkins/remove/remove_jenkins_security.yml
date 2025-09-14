@@ -32,7 +32,6 @@
       ansible.builtin.set_fact:
         project_name: "{{ infra.project_name }}"
         aws_region_name: "{{ infra.aws.default_region }}"
-        security_project_name: "{{ infra.pulumi.security_project }}"
     
     - name: Check confirmation flag
       ansible.builtin.fail:

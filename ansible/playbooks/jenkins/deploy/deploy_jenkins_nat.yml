@@ -26,9 +26,6 @@
       ansible.builtin.set_fact:
         project_name: "{{ infra.project_name }}"
         aws_region_name: "{{ infra.aws.default_region }}"
-        nat_project_name: "{{ infra.pulumi.nat_project | default('jenkins-nat') }}"
-        network_project_name: "{{ infra.pulumi.network_project }}"
-        security_project_name: "{{ infra.pulumi.security_project }}"
   
   roles:
     - jenkins_nat

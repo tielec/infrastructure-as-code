@@ -18,21 +18,19 @@
     env_name: "{{ env | default('dev') }}"
     # 削除確認フラグ
     confirm_destroy: "{{ confirm | default(false) }}"
-  
+
   pre_tasks:
     # all.yml から変数を読み込む
     - name: Include group_vars/all.yml
       ansible.builtin.include_vars:
         file: "{{ inventory_dir }}/group_vars/all.yml"
-    
+
     # 必要な変数を設定
     - name: Set required variables from all.yml
       ansible.builtin.set_fact:
         project_name: "{{ infra.project_name }}"
         aws_region_name: "{{ infra.aws.default_region }}"
-        nat_project_name: "{{ infra.pulumi.nat_project }}"
-        use_nat_instance: "{{ infra.aws.nat.use_instance | default(false) }}"
-    
+
     - name: Check confirmation flag
       ansible.builtin.fail:
         msg: |
@@ -41,7 +39,7 @@
           Please run with: -e "confirm=true"
           ========================================
       when: not confirm_destroy | bool
-    
+
     - name: Display destruction warning
       ansible.builtin.debug:
         msg:
@@ -51,10 +49,9 @@
           - "Environment: {{ env_name }}"
           - "Project: {{ project_name }}"
           - "Region: {{ aws_region_name }}"
-          - "Type: {{ 'NAT Instance' if use_nat_instance else 'NAT Gateway' }}"
           - ""
           - "This will destroy:"
-          - "  - {{ 'NAT Instance (EC2)' if use_nat_instance else 'NAT Gateway' }}"
+          - "  - NAT Gateway or NAT Instance"
           - "  - Elastic IP allocation"
           - "  - Route table associations"
           - ""
@@ -63,23 +60,23 @@
           - "  - Jenkins agents cannot download packages"
           - "  - No outbound internet connectivity"
           - "=========================================="
-    
+
     - name: Countdown before destruction
       ansible.builtin.pause:
         seconds: 10
         prompt: "Starting destruction in 10 seconds... Press Ctrl+C to cancel"
-  
+
   tasks:
     - name: Setup AWS environment
       ansible.builtin.include_role:
         name: aws_setup
-    
+
     - name: Destroy Jenkins NAT
       ansible.builtin.include_role:
         name: jenkins_nat
       vars:
         operation: "destroy"
-  
+
   post_tasks:
     - name: Display completion message
       ansible.builtin.debug:
@@ -90,7 +87,7 @@
           - "Jenkins NAT has been destroyed."
           - ""
           - "Removed resources:"
-          - "  - {{ 'NAT Instance' if use_nat_instance else 'NAT Gateway' }}"
+          - "  - NAT Gateway or NAT Instance"
           - "  - Elastic IP"
           - "  - Route configurations"
           - ""
@@ -102,7 +99,7 @@
           - "  ansible-playbook deploy_jenkins_nat.yml -e 'env={{ env_name }}'"
           - "=========================================="
       when: nat_destroyed | default(false)
-    
+
     - name: Display failure message
       ansible.builtin.debug:
         msg:
@@ -114,7 +111,7 @@
           - ""
           - "Common cleanup targets:"
           - "  - VPC > NAT Gateways"
-          - "  - EC2 > Instances (if using NAT instance)"
+          - "  - EC2 > Instances (NAT Instance)"
           - "  - VPC > Elastic IPs"
           - ""
           - "Note: NAT Gateway deletion may take several minutes"

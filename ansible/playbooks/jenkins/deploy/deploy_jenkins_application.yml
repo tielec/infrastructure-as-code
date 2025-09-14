@@ -30,9 +30,6 @@
       ansible.builtin.set_fact:
         project_name: "{{ infra.project_name }}"
         aws_region_name: "{{ infra.aws.default_region }}"
-        controller_project_name: "{{ infra.pulumi.controller_project }}"
-        config_project_name: "{{ infra.pulumi.config_project }}"
-        application_project_name: "{{ infra.pulumi.application_project | default('jenkins-application') }}"
   
   roles:
     - jenkins_application
