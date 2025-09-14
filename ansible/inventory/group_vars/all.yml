@@ -63,7 +63,6 @@ infra:
   # AWS設定
   aws:
     default_region: "ap-northeast-1"
-    key_name: ""  # EC2インスタンス用のキーペア名（必要に応じて設定）
 
   # NAT設定
   nat:
@@ -112,7 +111,6 @@ lambda_api_infra:
   aws:
     default_region: "ap-northeast-1"
     vpc_cidr: "10.1.0.0/16"  # Jenkinsとは異なるCIDR
-    key_name: ""  # NAT Instance用（必要に応じて設定）
 
   # NAT設定
   nat:
@@ -160,7 +158,6 @@ jenkins:
   color: "blue"
   recovery_mode: false
   instance_type: "t4g.medium"
-  key_name: ""  # 必要に応じて設定
   
   # Jenkinsアプリケーション設定
   install_plugins: true

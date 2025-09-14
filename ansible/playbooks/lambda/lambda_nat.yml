@@ -28,7 +28,6 @@
         environment_config: "{{ lambda_api_infra.environments[env_name] }}"
         high_availability_mode: "{{ environment_config.nat_high_availability | default(lambda_api_infra.nat.high_availability_mode) }}"
         nat_instance_type: "{{ environment_config.nat_instance_type | default(lambda_api_infra.nat.instance_type) }}"
-        key_name: "{{ lambda_api_infra.aws.key_name | default('') }}"
         
     - name: Display operation info
       ansible.builtin.debug:
