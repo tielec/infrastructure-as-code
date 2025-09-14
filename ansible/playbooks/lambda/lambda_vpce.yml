@@ -23,7 +23,7 @@
     
     - name: Set required variables
       ansible.builtin.set_fact:
-        project_name: "{{ lambda_api_infra.project_name }}"
+        project_name: "{{ projects.lambda_api.name }}"
         
     - name: Display operation info
       ansible.builtin.debug:

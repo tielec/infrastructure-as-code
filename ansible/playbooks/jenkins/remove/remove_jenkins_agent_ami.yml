@@ -30,7 +30,7 @@
     # 必要な変数を設定
     - name: Set required variables from all.yml
       ansible.builtin.set_fact:
-        project_name: "{{ infra.project_name }}"
+        project_name: "{{ projects.jenkins.name }}"
     
     - name: Check confirmation flag
       ansible.builtin.fail:
