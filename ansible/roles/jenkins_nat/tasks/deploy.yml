@@ -3,15 +3,7 @@
 
 - name: Display NAT deployment information
   ansible.builtin.debug:
-    msg: |
-      Deploying NAT Infrastructure:
-      - Project: {{ project_name }}
-      - NAT Pulumi Project: {{ nat_project_name }}
-      - Environment: {{ env_name }}
-      - Mode: {{ 'High Availability (NAT Gateway)' if high_availability_mode else 'Normal (NAT Instance)' }}
-      {% if not high_availability_mode %}
-      - NAT Instance Type: {{ nat_instance_type }}
-      {% endif %}
+    msg: "Deploying NAT Infrastructure for {{ env_name }} environment"
 
 # ファイル権限設定
 - name: Ensure aws-env.sh has execute permissions
@@ -20,11 +12,6 @@
     mode: '0755'
   register: aws_env_script_permission
   no_log: true  # 詳細なログを抑制
-  
-- name: Report permission update
-  ansible.builtin.debug:
-    msg: "aws-env.sh スクリプトに実行権限を付与しました"
-  when: aws_env_script_permission.changed
 
 # Pulumiデプロイ
 - name: Deploy NAT Infrastructure with Pulumi
@@ -47,57 +34,6 @@
         config_key: "aws:region"
         config_value: "{{ aws_region_name }}"
 
-    # SSMパラメータの確認
-    - name: Get project name from SSM Parameter Store
-      ansible.builtin.include_role:
-        name: ssm_parameter_store
-        tasks_from: get_parameter
-      vars:
-        parameter_name: "/jenkins-infra/{{ env_name }}/config/project-name"
-        store_as: "ssm_project_name"
-    
-    - name: Get VPC ID from SSM Parameter Store
-      ansible.builtin.include_role:
-        name: ssm_parameter_store
-        tasks_from: get_parameter
-      vars:
-        parameter_name: "/jenkins-infra/{{ env_name }}/network/vpc-id"
-        store_as: "ssm_vpc_id"
-    
-    - name: Get NAT high availability mode from SSM Parameter Store
-      ansible.builtin.include_role:
-        name: ssm_parameter_store
-        tasks_from: get_parameter
-      vars:
-        parameter_name: "/jenkins-infra/{{ env_name }}/config/nat-high-availability"
-        store_as: "ssm_nat_high_availability"
-    
-    - name: Get NAT instance type from SSM Parameter Store
-      ansible.builtin.include_role:
-        name: ssm_parameter_store
-        tasks_from: get_parameter
-      vars:
-        parameter_name: "/jenkins-infra/{{ env_name }}/config/nat-instance-type"
-        store_as: "ssm_nat_instance_type"
-    
-    - name: Get NAT instance security group ID from SSM Parameter Store
-      ansible.builtin.include_role:
-        name: ssm_parameter_store
-        tasks_from: get_parameter
-      vars:
-        parameter_name: "/jenkins-infra/{{ env_name }}/security/nat-instance-sg-id"
-        store_as: "ssm_nat_instance_sg_id"
-    
-    - name: Display configuration from SSM
-      ansible.builtin.debug:
-        msg: |
-          Using configuration from SSM:
-          - Project Name: {{ ssm_project_name }}
-          - VPC ID: {{ ssm_vpc_id }}
-          - NAT High Availability: {{ ssm_nat_high_availability }}
-          - NAT Instance Type: {{ ssm_nat_instance_type }}
-          - NAT Instance Security Group ID: {{ ssm_nat_instance_sg_id }}
-
     # Pulumiプレビュー
     - name: Preview NAT deployment
       ansible.builtin.include_role:
@@ -114,88 +50,13 @@
       vars:
         pulumi_project_path: "{{ pulumi_path }}/jenkins-nat"
     
-    # デプロイ後に少し待機
-    - name: Wait for stack outputs to be available
-      ansible.builtin.pause:
-        seconds: 10
-      when: not ansible_check_mode
-    
-    # SSMパラメータからNATタイプを取得
-    - name: Get NAT type from SSM Parameter Store
-      ansible.builtin.include_role:
-        name: ssm_parameter_store
-        tasks_from: get_parameter
-      vars:
-        parameter_name: "/jenkins-infra/{{ env_name }}/nat/type"
-        store_as: "nat_type"
-      ignore_errors: true
-    
-    - name: Set default NAT type if not found
-      ansible.builtin.set_fact:
-        nat_type: "instance"
-      when: nat_type is not defined or nat_type == ""
-    
-    # NATインスタンスIDの取得
-    - name: Get NAT instance ID from SSM Parameter Store
-      ansible.builtin.include_role:
-        name: ssm_parameter_store
-        tasks_from: get_parameter
-      vars:
-        parameter_name: "/jenkins-infra/{{ env_name }}/nat/instance-id"
-        store_as: "nat_instance_id"
-      ignore_errors: true
-      when: nat_type == "instance"
-    
-    - name: Get NAT gateway A ID from SSM Parameter Store
-      ansible.builtin.include_role:
-        name: ssm_parameter_store
-        tasks_from: get_parameter
-      vars:
-        parameter_name: "/jenkins-infra/{{ env_name }}/nat/gateway-a-id"
-        store_as: "nat_gateway_a_id"
-      ignore_errors: true
-      when: nat_type == "gateway-ha"
-    
-    - name: Get NAT gateway B ID from SSM Parameter Store
-      ansible.builtin.include_role:
-        name: ssm_parameter_store
-        tasks_from: get_parameter
-      vars:
-        parameter_name: "/jenkins-infra/{{ env_name }}/nat/gateway-b-id"
-        store_as: "nat_gateway_b_id"
-      ignore_errors: true
-      when: nat_type == "gateway-ha"
-    
-    - name: Set NAT resource IDs for instance mode
-      ansible.builtin.set_fact:
-        nat_resource_ids: "[{{ nat_instance_id | default('N/A') }}]"
-      when: nat_type == "instance"
-    
-    - name: Set NAT resource IDs for gateway mode
-      ansible.builtin.set_fact:
-        nat_resource_ids: "[{{ nat_gateway_a_id | default('N/A') }}, {{ nat_gateway_b_id | default('N/A') }}]"
-      when: nat_type == "gateway-ha"
-    
-    
-    - name: Set NAT facts for use in other playbooks
+    - name: Set NAT deployment status
       ansible.builtin.set_fact:
         nat_deployed: true
-        nat_stack_name: "{{ nat_project_name }}"
-      
+
     - name: Summary of NAT deployment
       ansible.builtin.debug:
-        msg: |
-          NAT Infrastructure Deployed Successfully:
-          Stack Name: {{ nat_project_name }}
-          NAT Type: {{ nat_type }}
-          NAT Resource IDs: {{ nat_resource_ids }}
-          {% if nat_type == "instance" %}
-          Note: NAT Instance uses dynamic public IP (no EIP)
-          {% endif %}
-          {% if nat_type == "gateway-ha" %}
-          NAT Gateway A ID: {{ nat_gateway_a_id | default('N/A') }}
-          NAT Gateway B ID: {{ nat_gateway_b_id | default('N/A') }}
-          {% endif %}
+        msg: "NAT Infrastructure deployed successfully for {{ env_name }} environment"
   
   rescue:
     - name: Set NAT deployment status on failure
