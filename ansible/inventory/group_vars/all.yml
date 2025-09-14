@@ -85,19 +85,3 @@ lambda_api_infra:
   # AWS設定
   aws:
     default_region: "ap-northeast-1"
-
-# ============================================================
-# Jenkins プロジェクト設定
-# ============================================================
-
-# Jenkins設定
-jenkins:
-  version: "latest"
-  color: "blue"
-  recovery_mode: false
-
-  # Git設定
-  git:
-    repo: "https://github.com/tielec/infrastructure-as-code.git"
-    branch: "main"
-
