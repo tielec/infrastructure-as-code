@@ -307,7 +307,6 @@ ansible-playbook playbooks/lambda/lambda_api_gateway.yml -e "env=dev"
 | 変数名 | 説明 | デフォルト値 |
 |--------|------|-------------|
 | `JENKINS_VERSION` | Jenkinsバージョン | 2.426.1 |
-| `PULUMI_STATE_BUCKET_NAME` | Pulumiステート用S3バケット | 自動検出 |
 | `DEPLOY_ENV` | デプロイ環境 | dev |
 | `ANSIBLE_VAULT_PASSWORD_FILE` | Vault パスワードファイル | なし |
 

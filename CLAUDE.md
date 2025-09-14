@@ -408,7 +408,6 @@ AWS_REGION                 # AWSリージョン（デフォルト: ap-northeast-
 ### オプション
 ```bash
 JENKINS_VERSION           # Jenkinsバージョン
-PULUMI_STATE_BUCKET_NAME  # S3バケット名（自動検出可能）
 DEPLOY_ENV               # デプロイ環境（dev/staging/prod）
 ```
 

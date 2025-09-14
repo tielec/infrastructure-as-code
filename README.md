@@ -271,11 +271,7 @@ export PULUMI_CONFIG_PASSPHRASE=$(aws ssm get-parameter \
   --query 'Parameter.Value' \
   --output text)
 
-# S3バケット名を設定（オプション - 通常は自動検出）
-export PULUMI_STATE_BUCKET_NAME=$(aws cloudformation describe-stacks \
-  --stack-name bootstrap-environment \
-  --query "Stacks[0].Outputs[?OutputKey=='PulumiStateBucketName'].OutputValue" \
-  --output text)
+# S3バケット名はSSMパラメータストアから自動取得されるため、手動設定は不要
 ```
 
 **パスフレーズの優先順位**:

@@ -4,9 +4,7 @@
 # 各タスクからincludeして使用する共通処理
 
 - name: Login to S3 backend for current project
-  when: 
-    - pulumi_backend_type == 's3'
-    - pulumi_project_path is defined
+  when: pulumi_project_path is defined
   block:
     # プロジェクト名を取得（未定義の場合）
     - name: Get project name if not already set
