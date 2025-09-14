@@ -35,15 +35,9 @@ aws_credentials_script_path: "{{ scripts_dir }}/aws/setup-aws-credentials.sh"
 # Pulumi設定
 # ============================================================
 
-pulumi:
-  # バックエンドタイプ（"cloud" または "s3"）
-  backend_type: "s3"
-
-  # S3バックエンド設定
-  s3:
-    # S3バケット名（CloudFormationで作成されたバケット名を指定）
-    bucket: ""  # 空の場合はSSMパラメータストアから取得
-    region: "ap-northeast-1"
+# S3バックエンド固定
+# S3バケット名はSSMパラメータストア(/bootstrap/pulumi/s3bucket-name)から自動取得
+# リージョンはaws_regionパラメータを使用
 
 # ============================================================
 # Jenkins インフラストラクチャ設定
