@@ -6,20 +6,54 @@ source "$(dirname "${BASH_SOURCE[0]}")/common.sh"
 
 # Pulumi関連の定数
 readonly PULUMI_PASSPHRASE_PARAM="/bootstrap/pulumi/config-passphrase"
-readonly PULUMI_STACK_NAME="bootstrap-iac-environment"
 
 # Pulumiバケット名を取得
 get_pulumi_bucket() {
-    aws cloudformation describe-stacks \
-        --stack-name "$PULUMI_STACK_NAME" \
+    # 引数チェック
+    if [ $# -ne 1 ]; then
+        log_error "使用方法: get_pulumi_bucket <REGION>"
+        return 1
+    fi
+
+    local REGION="$1"
+    local STACK_NAME=""
+    local RESULT=""
+
+    # まず bootstrap-iac-environment を探す
+    RESULT=$(aws cloudformation describe-stacks \
+        --stack-name "bootstrap-iac-environment" \
+        --region "$REGION" \
         --query "Stacks[0].Outputs[?OutputKey=='PulumiStateBucketName'].OutputValue" \
-        --output text 2>/dev/null || echo ""
+        --output text 2>/dev/null || echo "")
+
+    if [ -n "$RESULT" ]; then
+        echo "$RESULT"
+        return 0
+    fi
+
+    # 見つからない場合は bootstrap-iac-environment-[region] を探す
+    RESULT=$(aws cloudformation describe-stacks \
+        --stack-name "bootstrap-iac-environment-${REGION}" \
+        --region "$REGION" \
+        --query "Stacks[0].Outputs[?OutputKey=='PulumiStateBucketName'].OutputValue" \
+        --output text 2>/dev/null || echo "")
+
+    echo "$RESULT"
 }
 
 # Pulumiパスフレーズを取得
 get_pulumi_passphrase() {
+    # 引数チェック
+    if [ $# -ne 1 ]; then
+        log_error "使用方法: get_pulumi_passphrase <REGION>"
+        return 1
+    fi
+
+    local REGION="$1"
+
     aws ssm get-parameter \
         --name "$PULUMI_PASSPHRASE_PARAM" \
+        --region "$REGION" \
         --with-decryption \
         --query 'Parameter.Value' \
         --output text 2>/dev/null || echo ""
@@ -132,11 +166,13 @@ setup_pulumi_config() {
     
     # CloudFormationスタックからPulumi S3バケット名を取得
     log_info "Pulumi用S3バケットを確認しています..."
-    local pulumi_bucket=$(get_pulumi_bucket)
-    
+    local pulumi_bucket=$(get_pulumi_bucket "$REGION")
+
     if [ -z "$pulumi_bucket" ]; then
         log_warn "Pulumi S3バケットが見つかりません"
-        log_warn "CloudFormationスタック '$PULUMI_STACK_NAME' が存在することを確認してください"
+        log_warn "以下のCloudFormationスタックが存在することを確認してください:"
+        log_warn "  - bootstrap-iac-environment"
+        log_warn "  - bootstrap-iac-environment-${REGION}"
         return 1
     fi
     
@@ -144,7 +180,7 @@ setup_pulumi_config() {
     
     # SSMパラメータストアからパスフレーズを確認
     log_info "Pulumi設定パスフレーズを確認しています..."
-    local existing_passphrase=$(get_pulumi_passphrase)
+    local existing_passphrase=$(get_pulumi_passphrase "$REGION")
     
     if [ -n "$existing_passphrase" ]; then
         log_info "✓ Pulumi設定パスフレーズが既に設定されています"
