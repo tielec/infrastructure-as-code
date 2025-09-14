@@ -3,13 +3,7 @@
 
 - name: Display agent deployment information
   ansible.builtin.debug:
-    msg: |
-      Deploying Jenkins Agent Infrastructure:
-      - Project: {{ project_name }}
-      - Agent Pulumi Project: {{ agent_project_name }}
-      - Network Pulumi Project: {{ network_project_name }}
-      - Security Pulumi Project: {{ security_project_name }}
-      - Environment: {{ env_name }}
+    msg: "Deploying Jenkins Agent Infrastructure for {{ env_name }} environment"
 
 # ファイル権限設定
 - name: Ensure aws-env.sh has execute permissions
