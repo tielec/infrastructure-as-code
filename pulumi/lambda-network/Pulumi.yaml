@@ -1,3 +1,5 @@
 name: lambda-network
 runtime: nodejs
 description: Lambda API Network Infrastructure - VPC, Subnets, Route Tables, VPC Endpoints
+config:
+  aws:region: ap-northeast-1

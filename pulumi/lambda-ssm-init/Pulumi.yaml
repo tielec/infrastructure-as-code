@@ -1,3 +1,5 @@
 name: lambda-ssm-init
 runtime: nodejs
 description: Lambda APIインフラのSSMパラメータ初期化
+config:
+  aws:region: ap-northeast-1
