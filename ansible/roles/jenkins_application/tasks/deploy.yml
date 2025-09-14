@@ -288,7 +288,7 @@
     - name: Execute final cleanup
       ansible.builtin.include_tasks: execute_ssm_command.yml
       vars:
-        ssm_document_name: "{{ ssm_documents.executeScript }}"
+        ssm_document_name: "{{ execute_script_document_name }}"
         ssm_parameters: "ScriptPath=scripts/jenkins/shell/application-cleanup-groovy.sh,ScriptArgs=all"
         ssm_comment: "Final cleanup of all temporary files"
         instance_id: "{{ jenkins_instance_id }}"
