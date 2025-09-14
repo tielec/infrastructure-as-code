@@ -69,25 +69,15 @@
       vars:
         pulumi_project_path: "{{ pulumi_path }}/jenkins-agent"
     
-    - name: Set agent facts for use in other playbooks
-      ansible.builtin.set_fact:
-        agent_deployed: true
-        # スタック参照情報も保存
-        agent_stack_name: "{{ agent_project_name }}"
-
     - name: Summary of agent deployment
       ansible.builtin.debug:
         msg: "Jenkins Agent Infrastructure Deployed Successfully"
   
   rescue:
-    - name: Set agent deployment status on failure
-      ansible.builtin.set_fact:
-        agent_deployed: false
-      
     - name: Display error
       ansible.builtin.debug:
         msg: "Failed to deploy agent infrastructure. See error details above."
-      
+
     - name: Fail the playbook
       ansible.builtin.fail:
         msg: "Agent deployment failed."
