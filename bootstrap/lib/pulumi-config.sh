@@ -32,8 +32,14 @@ generate_passphrase() {
 
 # パスフレーズをSSMに保存
 save_passphrase_to_ssm() {
+    # 引数チェック
+    if [ $# -ne 2 ]; then
+        log_error "使用方法: save_passphrase_to_ssm <passphrase> <region>"
+        return 1
+    fi
+
     local passphrase="$1"
-    local region="${AWS_REGION:-ap-northeast-1}"
+    local region="$2"
     
     log_info "パスフレーズをSSMパラメータストアに保存しています..."
     
@@ -114,6 +120,14 @@ show_pulumi_usage() {
 
 # Pulumi設定のメイン処理
 setup_pulumi_config() {
+    # 引数チェック
+    if [ $# -ne 1 ]; then
+        log_error "使用方法: setup_pulumi_config <REGION>"
+        return 1
+    fi
+
+    local REGION="$1"
+
     log_section "Pulumi設定"
     
     # CloudFormationスタックからPulumi S3バケット名を取得
@@ -143,7 +157,7 @@ setup_pulumi_config() {
         if confirm_action "Pulumi設定パスフレーズを設定しますか？" "y"; then
             local passphrase=$(setup_passphrase_interactive)
             
-            if save_passphrase_to_ssm "$passphrase"; then
+            if save_passphrase_to_ssm "$passphrase" "$REGION"; then
                 log_info "✓ パスフレーズの設定が完了しました"
             else
                 log_error "パスフレーズの保存に失敗しました"
