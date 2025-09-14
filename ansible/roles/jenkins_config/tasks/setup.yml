@@ -3,12 +3,7 @@
 
 - name: Display jenkins configuration information
   ansible.builtin.debug:
-    msg: |
-      Configuring Jenkins Controller:
-      - Project: {{ project_name }}
-      - Config Pulumi Project: {{ config_project_name }}
-      - Environment: {{ env_name }}
-      - Jenkins Color: {{ jenkins_color | default('blue') }}
+    msg: "Configuring Jenkins Controller for {{ env_name }} environment"
 
 # JenkinsインスタンスIDの取得（Parameter Storeから）
 - name: Get Jenkins instance ID from SSM Parameter Store
@@ -24,10 +19,6 @@
     msg: "Invalid Jenkins instance ID format: {{ jenkins_instance_id }}"
   when: not (jenkins_instance_id | regex_search('^i-[a-f0-9]+$'))
 
-- name: Display Jenkins instance ID
-  ansible.builtin.debug:
-    msg: "Using Jenkins Instance ID: {{ jenkins_instance_id }}"
-
 # EFSファイルシステムIDの取得 - SSM Parameter Storeから優先的に取得
 - name: Get EFS file system ID from Parameter Store
   when: efs_file_system_id is not defined or efs_file_system_id == ""
@@ -37,10 +28,6 @@
   vars:
     parameter_name: "/jenkins-infra/{{ env_name }}/storage/efs-file-system-id"
     store_as: "efs_file_system_id"
-
-- name: Display Jenkins EFS file system ID
-  ansible.builtin.debug:
-    msg: "Using EFS File System ID: {{ efs_file_system_id | default('Not defined') }}"
 
 # ファイル権限設定
 - name: Ensure aws-env.sh has execute permissions
@@ -71,56 +58,6 @@
         config_key: "aws:region"
         config_value: "{{ aws_region_name }}"
     
-    # SSMパラメータの確認
-    - name: Get project name from SSM Parameter Store
-      ansible.builtin.include_role:
-        name: ssm_parameter_store
-        tasks_from: get_parameter
-      vars:
-        parameter_name: "/jenkins-infra/{{ env_name }}/config/project-name"
-        store_as: "ssm_project_name"
-    
-    - name: Get Jenkins version from SSM Parameter Store
-      ansible.builtin.include_role:
-        name: ssm_parameter_store
-        tasks_from: get_parameter
-      vars:
-        parameter_name: "/jenkins-infra/{{ env_name }}/config/jenkins-version"
-        store_as: "ssm_jenkins_version"
-    
-    - name: Get recovery mode from SSM Parameter Store
-      ansible.builtin.include_role:
-        name: ssm_parameter_store
-        tasks_from: get_parameter
-      vars:
-        parameter_name: "/jenkins-infra/{{ env_name }}/config/jenkins-recovery-mode"
-        store_as: "ssm_recovery_mode"
-    
-    - name: Get Git repo from SSM Parameter Store
-      ansible.builtin.include_role:
-        name: ssm_parameter_store
-        tasks_from: get_parameter
-      vars:
-        parameter_name: "/jenkins-infra/{{ env_name }}/config/git-repo"
-        store_as: "ssm_git_repo"
-    
-    - name: Get Git branch from SSM Parameter Store
-      ansible.builtin.include_role:
-        name: ssm_parameter_store
-        tasks_from: get_parameter
-      vars:
-        parameter_name: "/jenkins-infra/{{ env_name }}/config/git-branch"
-        store_as: "ssm_git_branch"
-    
-    - name: Display configuration from SSM
-      ansible.builtin.debug:
-        msg: |
-          Using configuration from SSM:
-          - Project Name: {{ ssm_project_name }}
-          - Jenkins Version: {{ ssm_jenkins_version }}
-          - Recovery Mode: {{ ssm_recovery_mode }}
-          - Git Repo: {{ ssm_git_repo }}
-          - Git Branch: {{ ssm_git_branch }}
     
     # Pulumiプレビュー
     - name: Preview config deployment
@@ -155,18 +92,6 @@
         parameter_name: "/jenkins-infra/{{ env_name }}/config/execute-script-document-name"
         store_as: "execute_script_document_name"
     
-    - name: Set SSM document names
-      ansible.builtin.set_fact:
-        ssm_documents:
-          updateRepo: "{{ update_repo_document_name }}"
-          executeScript: "{{ execute_script_document_name }}"
-      
-    - name: Display SSM document names
-      ansible.builtin.debug:
-        msg: |
-          SSM Documents available:
-          - Update Repo: {{ ssm_documents.updateRepo }}
-          - Execute Script: {{ ssm_documents.executeScript }}
   
   rescue:
     - name: Display error on config deployment
@@ -190,7 +115,7 @@
     - name: Update Git repository
       ansible.builtin.include_tasks: execute_ssm_command.yml
       vars:
-        ssm_document_name: "{{ ssm_documents.updateRepo }}"
+        ssm_document_name: "{{ update_repo_document_name }}"
         ssm_parameters: "ProjectName={{ project_name }},Environment={{ env_name }},GitBranch={{ git_branch }},GitRepo={{ git_repo }}"
         ssm_comment: "Updating Git repository"
         instance_id: "{{ jenkins_instance_id }}"
@@ -199,7 +124,7 @@
     - name: Mount EFS
       ansible.builtin.include_tasks: execute_ssm_command.yml
       vars:
-        ssm_document_name: "{{ ssm_documents.executeScript }}"
+        ssm_document_name: "{{ execute_script_document_name }}"
         ssm_parameters: "ScriptPath=scripts/jenkins/shell/controller-mount-efs.sh,ScriptArgs={{ efs_file_system_id }} {{ aws_region_name }}"
         ssm_comment: "Mounting EFS"
         instance_id: "{{ jenkins_instance_id }}"
@@ -208,7 +133,7 @@
     - name: Install Jenkins
       ansible.builtin.include_tasks: execute_ssm_command.yml
       vars:
-        ssm_document_name: "{{ ssm_documents.executeScript }}"
+        ssm_document_name: "{{ execute_script_document_name }}"
         ssm_parameters: "ScriptPath=scripts/jenkins/shell/controller-install.sh,ScriptArgs={{ jenkins_version }} {{ jenkins_color }}"
         ssm_comment: "Installing Jenkins"
         instance_id: "{{ jenkins_instance_id }}"
@@ -217,7 +142,7 @@
     - name: Configure Jenkins
       ansible.builtin.include_tasks: execute_ssm_command.yml
       vars:
-        ssm_document_name: "{{ ssm_documents.executeScript }}"
+        ssm_document_name: "{{ execute_script_document_name }}"
         ssm_parameters: "ScriptPath=scripts/jenkins/shell/controller-configure.sh,ScriptArgs={{ recovery_mode | ternary('recovery', 'normal') }} {{ jenkins_color }}"
         ssm_comment: "Configuring Jenkins"
         instance_id: "{{ jenkins_instance_id }}"
@@ -226,24 +151,12 @@
     - name: Start Jenkins
       ansible.builtin.include_tasks: execute_ssm_command.yml
       vars:
-        ssm_document_name: "{{ ssm_documents.executeScript }}"
+        ssm_document_name: "{{ execute_script_document_name }}"
         ssm_parameters: "ScriptPath=scripts/jenkins/shell/controller-startup.sh,ScriptArgs={{ jenkins_color }}"
         ssm_comment: "Starting Jenkins"
         instance_id: "{{ jenkins_instance_id }}"
 
-# 設定完了を示す変数設定
-- name: Set config deployment status
-  ansible.builtin.set_fact:
-    config_deployed: true
-
 # 設定結果のサマリー表示
 - name: Display Jenkins setup completion status
   ansible.builtin.debug:
-    msg: |
-      Jenkins Setup Status:
-      - Git Repository Updated: Success
-      - EFS Mounted: Success
-      - Jenkins Installed: Success
-      - Jenkins Configured: Success
-      - Jenkins Started: Success
-      - Configuration Deployment: {{ config_deployed | ternary('Success', 'Failed') }}
+    msg: "Jenkins Controller setup completed successfully for {{ env_name }} environment"
