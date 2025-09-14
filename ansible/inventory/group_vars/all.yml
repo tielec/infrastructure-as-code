@@ -178,11 +178,6 @@ jenkins:
   
   # Jenkinsエージェント設定
   agent:
-    instance_type: "t3a.medium"
-    min_capacity: 0
-    max_capacity: 10
-    spot_price: "0.052"  # t3a.medium spot price limit
-    
     # AMI Builder設定
     ami_builder:
       trigger_ami_build: true         # Automatically trigger pipeline execution after deployment
