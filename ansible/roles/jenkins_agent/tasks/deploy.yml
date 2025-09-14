@@ -75,59 +75,15 @@
       vars:
         pulumi_project_path: "{{ pulumi_path }}/jenkins-agent"
     
-    # デプロイ後に少し待機してスタックが完全に更新されるのを待つ
-    - name: Wait for stack outputs to be available
-      ansible.builtin.pause:
-        seconds: 10
-      when: not ansible_check_mode
-    
-    # デプロイ後の情報取得（表示用）
-    - name: Get agent Spot Fleet request ID from SSM
-      ansible.builtin.include_role:
-        name: ssm_parameter_store
-        tasks_from: get_parameter
-      vars:
-        parameter_name: "/jenkins-infra/{{ env_name }}/agent/spotFleetRequestId"
-        store_as: "spot_fleet_request_id"
-    
-    - name: Get agent launch template ID from SSM
-      ansible.builtin.include_role:
-        name: ssm_parameter_store
-        tasks_from: get_parameter
-      vars:
-        parameter_name: "/jenkins-infra/{{ env_name }}/agent/launch-template-id"
-        store_as: "launch_template_id"
-    
-    - name: Get agent role ARN from SSM
-      ansible.builtin.include_role:
-        name: ssm_parameter_store
-        tasks_from: get_parameter
-      vars:
-        parameter_name: "/jenkins-infra/{{ env_name }}/agent/role-arn"
-        store_as: "agent_role_arn"
-    
-    - name: Get agent keypair name from SSM
-      ansible.builtin.include_role:
-        name: ssm_parameter_store
-        tasks_from: get_parameter
-      vars:
-        parameter_name: "/jenkins-infra/{{ env_name }}/agent/keypair-name"
-        store_as: "agent_keypair_name"
-    
     - name: Set agent facts for use in other playbooks
       ansible.builtin.set_fact:
         agent_deployed: true
         # スタック参照情報も保存
         agent_stack_name: "{{ agent_project_name }}"
-      
+
     - name: Summary of agent deployment
       ansible.builtin.debug:
-        msg: |
-          Jenkins Agent Infrastructure Deployed Successfully:
-          - Spot Fleet Request ID: {{ spot_fleet_request_id }}
-          - Launch Template ID: {{ launch_template_id }}
-          - Agent Role ARN: {{ agent_role_arn }}
-          - Agent Keypair Name: {{ agent_keypair_name }}
+        msg: "Jenkins Agent Infrastructure Deployed Successfully"
   
   rescue:
     - name: Set agent deployment status on failure
