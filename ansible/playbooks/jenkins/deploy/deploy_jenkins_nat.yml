@@ -29,9 +29,6 @@
         nat_project_name: "{{ infra.pulumi.nat_project | default('jenkins-nat') }}"
         network_project_name: "{{ infra.pulumi.network_project }}"
         security_project_name: "{{ infra.pulumi.security_project }}"
-        # NAT設定
-        high_availability_mode: "{{ infra.nat.high_availability_mode | default(false) }}"
-        nat_instance_type: "{{ infra.nat.instance_type | default('t4g.nano') }}"
   
   roles:
     - jenkins_nat

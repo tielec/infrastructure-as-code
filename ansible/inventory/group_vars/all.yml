@@ -64,19 +64,6 @@ infra:
   aws:
     default_region: "ap-northeast-1"
 
-  # NAT設定
-  nat:
-    # High Availability モード
-    # true: NAT Gateway x2 (高可用性、月額約$90)
-    # false: NAT Instance x1 (低コスト、月額約$5)
-    high_availability_mode: false  # 開発環境はfalse推奨
-    
-    # NAT Instance使用時のインスタンスタイプ
-    # t4g.nano: 最小構成（月額約$3-5）
-    # t4g.micro: 小規模環境向け（月額約$7-10）
-    # t4g.small: 中規模環境向け（月額約$15-20）
-    instance_type: "t4g.nano"
-
   # 環境設定
   environments:
     dev:
