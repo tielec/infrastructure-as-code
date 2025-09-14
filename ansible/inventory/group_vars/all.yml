@@ -132,30 +132,11 @@ jenkins:
   version: "latest"
   color: "blue"
   recovery_mode: false
-  instance_type: "t4g.medium"
-  
-  # Jenkinsアプリケーション設定
-  install_plugins: true
-  create_seed_job: true
-  restart_jenkins: true
-  setup_cli_user: true
-  seed_job_name: "seed-job"
-  
+
   # Git設定
   git:
     repo: "https://github.com/tielec/infrastructure-as-code.git"
     branch: "main"
-    credentials_id: "github-app-credentials"
-  
-  # Jenkinsエージェント設定
-  agent:
-    # AMI Builder設定
-    ami_builder:
-      trigger_ami_build: true         # Automatically trigger pipeline execution after deployment
-      update_ssm_with_ami: true       # Automatically update SSM parameters with new AMI IDs
-      wait_for_ami_build: true        # Wait for AMI build to complete before updating SSM (30-45 minutes)
-      cleanup_old_amis: true          # Automatically delete old AMIs
-      ami_retention_count: 2          # Number of AMIs to keep per architecture
 
 # ============================================================
 # Lambda API設定
