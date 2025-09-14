@@ -10,10 +10,6 @@
       - Network Pulumi Project: {{ network_project_name }}
       - Security Pulumi Project: {{ security_project_name }}
       - Environment: {{ env_name }}
-      - Instance Type: {{ jenkins.agent.instance_type }}
-      - Min Capacity: {{ jenkins.agent.min_capacity }}
-      - Max Capacity: {{ jenkins.agent.max_capacity }}
-      - Spot Price: {{ jenkins.agent.spot_price }}
 
 # ファイル権限設定
 - name: Ensure aws-env.sh has execute permissions
@@ -88,46 +84,6 @@
         parameter_name: "/jenkins-infra/{{ env_name }}/security/jenkins-agent-sg-id"
         store_as: "ssm_agent_sg_id"
     
-    - name: Get agent instance type from SSM Parameter Store
-      ansible.builtin.include_role:
-        name: ssm_parameter_store
-        tasks_from: get_parameter
-      vars:
-        parameter_name: "/jenkins-infra/{{ env_name }}/config/agent-instance-type"
-        store_as: "ssm_agent_instance_type"
-    
-    - name: Get agent max capacity from SSM Parameter Store
-      ansible.builtin.include_role:
-        name: ssm_parameter_store
-        tasks_from: get_parameter
-      vars:
-        parameter_name: "/jenkins-infra/{{ env_name }}/config/agent-max-capacity"
-        store_as: "ssm_agent_max_capacity"
-    
-    - name: Get agent min capacity from SSM Parameter Store
-      ansible.builtin.include_role:
-        name: ssm_parameter_store
-        tasks_from: get_parameter
-      vars:
-        parameter_name: "/jenkins-infra/{{ env_name }}/config/agent-min-capacity"
-        store_as: "ssm_agent_min_capacity"
-    
-    - name: Get agent spot price from SSM Parameter Store
-      ansible.builtin.include_role:
-        name: ssm_parameter_store
-        tasks_from: get_parameter
-      vars:
-        parameter_name: "/jenkins-infra/{{ env_name }}/config/agent-spot-price"
-        store_as: "ssm_agent_spot_price"
-    
-    # SSMパラメータが取得できなかった場合、all.ymlの値を使用
-    - name: Set default values from all.yml if SSM parameters are not found
-      ansible.builtin.set_fact:
-        ssm_agent_instance_type: "{{ ssm_agent_instance_type | default(jenkins.agent.instance_type) }}"
-        ssm_agent_max_capacity: "{{ ssm_agent_max_capacity | default(jenkins.agent.max_capacity) }}"
-        ssm_agent_min_capacity: "{{ ssm_agent_min_capacity | default(jenkins.agent.min_capacity) }}"
-        ssm_agent_spot_price: "{{ ssm_agent_spot_price | default(jenkins.agent.spot_price) }}"
-    
     - name: Display configuration from SSM
       ansible.builtin.debug:
         msg: |
@@ -135,10 +91,6 @@
           - Project Name: {{ ssm_project_name }}
           - VPC ID: {{ ssm_vpc_id }}
           - Agent Security Group ID: {{ ssm_agent_sg_id }}
-          - Instance Type: {{ ssm_agent_instance_type }}
-          - Max Capacity: {{ ssm_agent_max_capacity }}
-          - Min Capacity: {{ ssm_agent_min_capacity }}
-          - Spot Price: {{ ssm_agent_spot_price }}
     
     # 依存関係の確認: 必要なスタックが全てデプロイ済みであることを確認
     - name: Check network stack outputs
@@ -245,8 +197,6 @@
           - Launch Template ID: {{ launch_template_id }}
           - Agent Role ARN: {{ agent_role_arn }}
           - Agent Keypair Name: {{ agent_keypair_name }}
-          - Min Capacity: {{ ssm_agent_min_capacity }}
-          - Max Capacity: {{ ssm_agent_max_capacity }}
   
   rescue:
     - name: Set agent deployment status on failure
