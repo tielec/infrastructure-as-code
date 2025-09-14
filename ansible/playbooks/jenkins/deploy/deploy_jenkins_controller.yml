@@ -26,11 +26,6 @@
       ansible.builtin.set_fact:
         project_name: "{{ infra.project_name }}"
         aws_region_name: "{{ infra.aws.default_region }}"
-        network_project_name: "{{ infra.pulumi.network_project }}"
-        security_project_name: "{{ infra.pulumi.security_project }}"
-        storage_project_name: "{{ infra.pulumi.storage_project }}"
-        loadbalancer_project_name: "{{ infra.pulumi.loadbalancer_project }}"
-        controller_project_name: "{{ infra.pulumi.controller_project }}"
   
   roles:
     - jenkins_controller

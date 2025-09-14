@@ -48,18 +48,6 @@ infra:
   # メインのプロジェクト名（変数展開に使用）
   project_name: "jenkins-infra"
   
-  # Pulumiプロジェクト名（スタック参照に使用）
-  pulumi:
-    network_project: "jenkins-network"
-    security_project: "jenkins-security"
-    nat_project: "jenkins-nat"
-    storage_project: "jenkins-storage"
-    loadbalancer_project: "jenkins-loadbalancer"
-    controller_project: "jenkins-controller"
-    agent_project: "jenkins-agent"
-    config_project: "jenkins-config"
-    application_project: "jenkins-application"
-
   # AWS設定
   aws:
     default_region: "ap-northeast-1"
