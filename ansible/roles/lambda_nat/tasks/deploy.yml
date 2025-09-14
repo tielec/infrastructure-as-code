@@ -3,15 +3,7 @@
 
 - name: Display NAT deployment information
   ansible.builtin.debug:
-    msg: |
-      Deploying Lambda API NAT Infrastructure:
-      - Project: {{ project_name }}
-      - NAT Pulumi Project: {{ nat_project_name }}
-      - Environment: {{ env_name }}
-      - High Availability Mode: {{ high_availability_mode }}
-      {% if not high_availability_mode %}
-      - NAT Instance Type: {{ nat_instance_type }}
-      {% endif %}
+    msg: "Deploying Lambda API NAT Infrastructure for {{ env_name }} environment ({{ 'NAT Gateway' if high_availability_mode else 'NAT Instance' }})"
 
 # Pulumiデプロイ
 - name: Deploy NAT Infrastructure with Pulumi
@@ -61,60 +53,13 @@
         nat_type: "{{ 'NAT Gateway' if high_availability_mode else 'NAT Instance' }}"
       when: not preview_only | default(false) | bool
     
-    # SSMからNAT情報を取得（オプション）
-    - name: Get NAT Instance ID from SSM
-      ansible.builtin.include_role:
-        name: ssm_parameter_store
-        tasks_from: get_parameter
-      vars:
-        parameter_name: "/{{ project_name }}/{{ env_name }}/nat/instance-id"
-        store_as: "nat_instance_id"
-        default_value: ""
-        ssm_parameter_store_fail_on_missing: false
-      when: 
-        - not preview_only | default(false) | bool
-        - not high_availability_mode
-    
-    - name: Get NAT Gateway IDs from SSM
-      ansible.builtin.include_role:
-        name: ssm_parameter_store
-        tasks_from: get_parameter
-      vars:
-        parameter_name: "/{{ project_name }}/{{ env_name }}/nat/gateway-ids"
-        store_as: "nat_gateway_ids"
-        default_value: "[]"
-        ssm_parameter_store_fail_on_missing: false
-      when: 
-        - not preview_only | default(false) | bool
-        - high_availability_mode
-    
     # NAT情報の表示
     - name: Display NAT deployment summary
       ansible.builtin.debug:
-        msg: |
-          NAT deployment successful:
-          - Type: {{ nat_type }}
-          {% if high_availability_mode %}
-          {% if nat_gateway_ids is defined and nat_gateway_ids | length > 0 %}
-          - NAT Gateway IDs: {{ nat_gateway_ids }}
-          {% endif %}
-          {% else %}
-          {% if nat_instance_id is defined and nat_instance_id | length > 0 %}
-          - NAT Instance ID: {{ nat_instance_id }}
-          {% endif %}
-          {% endif %}
-      when: 
-        - nat_deployed is defined and nat_deployed
+        msg: "Lambda API NAT Infrastructure deployed successfully for {{ env_name }} environment ({{ nat_type }})"
+      when: not preview_only | default(false) | bool
   
   rescue:
-    - name: Display error on NAT deployment
-      ansible.builtin.debug:
-        msg: "Failed to deploy Lambda API NAT infrastructure. See error details above."
-      
-    - name: Set NAT deployment failure
-      ansible.builtin.set_fact:
-        nat_deployed: false
-      
     - name: Fail the playbook
       ansible.builtin.fail:
         msg: "Lambda API NAT deployment failed."

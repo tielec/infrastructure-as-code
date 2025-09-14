@@ -34,14 +34,7 @@
 
 - name: Display network deployment information
   ansible.builtin.debug:
-    msg: |
-      Deploying Lambda API Network Infrastructure:
-      - Project: {{ project_name }}
-      - Network Pulumi Project: {{ network_project_name }}
-      - Environment: {{ env_name }}
-      - VPC CIDR: {{ vpc_cidr }}
-      - Create Isolated Subnets: {{ enable_isolated_subnets }}
-      - Enable Flow Logs: {{ enable_flow_logs }}
+    msg: "Deploying Lambda API Network Infrastructure for {{ env_name }} environment"
 
 # ファイル権限設定
 - name: Ensure aws-env.sh has execute permissions
@@ -136,23 +129,6 @@
         pulumi_project_path: "{{ pulumi_path }}/lambda-network"
       when: not preview_only | default(false) | bool
     
-    # SSMからネットワーク情報を取得（Pulumiスタックのoutputは最小限のため）
-    - name: Get VPC ID from SSM
-      ansible.builtin.include_role:
-        name: ssm_parameter_store
-        tasks_from: get_parameter
-      vars:
-        parameter_name: "/{{ project_name }}/{{ env_name }}/network/vpc-id"
-        store_as: "vpc_id"
-      when: not preview_only | default(false) | bool
-    
-    - name: Set network outputs from SSM
-      ansible.builtin.set_fact:
-        network_outputs:
-          vpcId: "{{ ssm_parameter_store_vpc_id | default('N/A') }}"
-          deploymentComplete: true
-      when: not preview_only | default(false) | bool
-    
     # デプロイ成功を示す変数設定
     - name: Set network deployment status
       ansible.builtin.set_fact:
@@ -161,38 +137,13 @@
         - not preview_only | default(false) | bool
         - not ansible_check_mode
     
-    # checkモード用のモック設定
-    - name: Set mock network deployment status (check mode)
-      ansible.builtin.set_fact:
-        network_deployed: false
-        network_outputs:
-          vpcId: "mock-vpc-id"
-          publicSubnetIds: ["mock-subnet-1", "mock-subnet-2"]
-          privateSubnetIds: ["mock-subnet-3", "mock-subnet-4"]
-      when: ansible_check_mode
-    
     # ネットワーク情報の表示
     - name: Display network deployment summary
       ansible.builtin.debug:
-        msg: |
-          Network deployment successful:
-          - VPC ID: {{ network_outputs.vpcId | default('N/A') }}
-          - Public Subnets: {{ network_outputs.publicSubnetIds | default([]) | length }}
-          - Private Subnets: {{ network_outputs.privateSubnetIds | default([]) | length }}
-          - Isolated Subnets: {{ network_outputs.isolatedSubnetIds | default([]) | length }}
-      when: 
-        - network_deployed is defined and network_deployed
-        - network_outputs is defined
+        msg: "Lambda API Network Infrastructure deployed successfully for {{ env_name }} environment"
+      when: not preview_only | default(false) | bool
   
   rescue:
-    - name: Display error on network deployment
-      ansible.builtin.debug:
-        msg: "Failed to deploy Lambda API network infrastructure. See error details above."
-      
-    - name: Set network deployment failure
-      ansible.builtin.set_fact:
-        network_deployed: false
-      
     - name: Fail the playbook
       ansible.builtin.fail:
         msg: "Lambda API network deployment failed."
