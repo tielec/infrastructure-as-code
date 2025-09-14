@@ -73,14 +73,16 @@ ensure_file() {
 confirm_action() {
     local message=$1
     local default=${2:-n}
-    
+
     if [ "$default" = "y" ]; then
-        read -p "$message (Y/n): " response
+        echo -n "$message (Y/n): "
+        read response
         if [[ $response =~ ^[Nn]$ ]]; then
             return 1
         fi
     else
-        read -p "$message (y/N): " response
+        echo -n "$message (y/N): "
+        read response
         if [[ ! $response =~ ^[Yy]$ ]]; then
             return 1
         fi

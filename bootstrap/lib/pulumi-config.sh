@@ -96,19 +96,25 @@ save_passphrase_to_ssm() {
 
 # 対話的にパスフレーズを設定
 setup_passphrase_interactive() {
-    log_warn "パスフレーズの設定方法を選択してください:"
-    echo -e "1) 自動生成（推奨）"
-    echo -e "2) 手動入力"
-    read -p "選択 (1/2): " passphrase_choice
+    echo
+    log_info "パスフレーズの設定方法を選択してください:"
+    echo "  1) 自動生成（推奨）"
+    echo "  2) 手動入力"
+    echo
+    echo -n "選択 (1/2): "
+    read passphrase_choice
     
     local passphrase=""
     
     if [ "$passphrase_choice" = "2" ]; then
         # 手動入力
         while true; do
-            read -s -p "パスフレーズを入力してください（16文字以上推奨）: " passphrase1
             echo
-            read -s -p "確認のためもう一度入力してください: " passphrase2
+            echo -n "パスフレーズを入力してください（16文字以上推奨）: "
+            read -s passphrase1
+            echo
+            echo -n "確認のためもう一度入力してください: "
+            read -s passphrase2
             echo
             
             if [ "$passphrase1" != "$passphrase2" ]; then
