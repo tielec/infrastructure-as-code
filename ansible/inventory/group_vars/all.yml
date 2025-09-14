@@ -63,7 +63,6 @@ infra:
   # AWS設定
   aws:
     default_region: "ap-northeast-1"
-    vpc_cidr: "10.0.0.0/16"
     key_name: ""  # EC2インスタンス用のキーペア名（必要に応じて設定）
 
   # NAT設定
