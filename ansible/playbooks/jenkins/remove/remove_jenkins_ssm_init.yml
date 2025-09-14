@@ -25,7 +25,6 @@
     - name: Set required variables from all.yml
       ansible.builtin.set_fact:
         project_name: "{{ infra.project_name }}"
-        aws_region_name: "{{ infra.aws.default_region }}"
     
     # 削除確認
     - name: Confirm SSM parameter deletion
@@ -59,7 +58,7 @@
           SSM Parameter Store Deletion Summary
           =====================================
           Environment: {{ env_name }}
-          AWS Region: {{ aws_region_name }}
+          AWS Region: {{ aws_region }}
           Project: {{ project_name }}
           Status: {{ 'SUCCESS' if ssm_destroyed | default(false) else 'FAILED' }}
           

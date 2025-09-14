@@ -1,3 +1,5 @@
 name: lambda-api-gateway
 runtime: nodejs
 description: Lambda API Gateway Infrastructure - REST API, Usage Plans, and API Keys
+config:
+  aws:region: ap-northeast-1

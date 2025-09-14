@@ -4,3 +4,5 @@ runtime:
   options:
     typescript: true
 description: SSM Parameter Store自動バックアップ用のS3バケット
+config:
+  aws:region: ap-northeast-1

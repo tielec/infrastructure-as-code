@@ -53,10 +53,6 @@ infra:
   # プロジェクト名
   project_name: "jenkins-infra"
 
-  # AWS設定
-  aws:
-    default_region: "ap-northeast-1"
-
 # ============================================================
 # Lambda API インフラストラクチャ設定
 # ============================================================
@@ -64,7 +60,3 @@ infra:
 lambda_api_infra:
   # プロジェクト名
   project_name: "lambda-api"
-
-  # AWS設定
-  aws:
-    default_region: "ap-northeast-1"

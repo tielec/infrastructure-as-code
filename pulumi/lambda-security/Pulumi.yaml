@@ -1,3 +1,5 @@
 name: lambda-security
 runtime: nodejs
 description: Lambda API Security Groups Infrastructure
+config:
+  aws:region: ap-northeast-1

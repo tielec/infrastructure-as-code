@@ -23,14 +23,6 @@
         stack_name: "{{ env }}"
     
     # Pulumi configuration
-    - name: Configure agent AMI stack - AWS region
-      ansible.builtin.include_role:
-        name: pulumi_helper
-        tasks_from: set_config
-      vars:
-        pulumi_project_path: "{{ pulumi_dir }}"
-        config_key: "aws:region"
-        config_value: "{{ aws_region_name }}"
     
     
     # Pulumi preview

@@ -32,7 +32,6 @@
     - name: Set required variables from all.yml
       ansible.builtin.set_fact:
         project_name: "{{ infra.project_name }}"
-        aws_region_name: "{{ infra.aws.default_region }}"
     
     - name: Check confirmation flag
       ansible.builtin.fail:
@@ -51,7 +50,7 @@
           - "=========================================="
           - "Environment: {{ env_name }}"
           - "Project: {{ project_name }}"
-          - "Region: {{ aws_region_name }}"
+          - "Region: {{ aws_region }}"
           - "Force: {{ force_destroy }}"
           - ""
           - "This will destroy:"

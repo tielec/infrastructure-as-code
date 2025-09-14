@@ -79,14 +79,6 @@
         pulumi_project_path: "{{ pulumi_path }}/jenkins-application"
         stack_name: "{{ env_name }}"
 
-    - name: Configure application stack - AWS region
-      ansible.builtin.include_role:
-        name: pulumi_helper
-        tasks_from: set_config
-      vars:
-        pulumi_project_path: "{{ pulumi_path }}/jenkins-application"
-        config_key: "aws:region"
-        config_value: "{{ aws_region_name }}"
 
 
     # Pulumiデプロイ（ステータスパラメータのみ）

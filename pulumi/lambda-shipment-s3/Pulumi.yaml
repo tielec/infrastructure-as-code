@@ -1,3 +1,5 @@
 name: lambda-shipment-s3
 runtime: nodejs
 description: Common S3 lambda shipment bucket
+config:
+  aws:region: ap-northeast-1

@@ -15,7 +15,7 @@
       ================================
       Project: {{ lambda_ssm_init_project }}
       Environment: {{ env_name }}
-      Region: {{ aws_region_name }}
+      Region: {{ aws_region }}
       Parameter Prefix: {{ param_prefix }}
       
       ⚠️  WARNING: This will delete all SSM parameters for this environment!

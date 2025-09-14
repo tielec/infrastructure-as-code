@@ -10,7 +10,7 @@
           execution:
             timestamp: "{{ ansible_date_time.iso8601 }}"
             environment: "{{ env_name }}"
-            region: "{{ aws_region_name }}"
+            region: "{{ aws_region }}"
             dry_run: "{{ dry_run }}"
             retention_count: "{{ retention_count }}"
           configuration:

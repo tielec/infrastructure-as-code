@@ -35,14 +35,6 @@
         pulumi_project_path: "{{ pulumi_path }}/lambda-network"
         stack_name: "{{ env_name }}"
     
-    - name: Configure network stack - AWS region
-      ansible.builtin.include_role:
-        name: pulumi_helper
-        tasks_from: set_config
-      vars:
-        pulumi_project_path: "{{ pulumi_path }}/lambda-network"
-        config_key: "aws:region"
-        config_value: "{{ aws_region_name }}"
 
     # Pulumiプレビュー
     - name: Preview network deployment

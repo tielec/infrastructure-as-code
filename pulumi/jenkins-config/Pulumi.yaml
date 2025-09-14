@@ -1,3 +1,5 @@
 name: jenkins-config
 runtime: nodejs
 description: Jenkins Configuration Resources (SSM Documents and Parameters)
+config:
+  aws:region: ap-northeast-1

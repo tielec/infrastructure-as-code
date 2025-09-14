@@ -42,7 +42,6 @@
     - name: Set required variables from all.yml
       ansible.builtin.set_fact:
         project_name: "{{ infra.project_name }}"
-        aws_region_name: "{{ infra.aws.default_region }}"
         cleanup_dry_run: "{{ dry_run | default(true) }}"
         cleanup_retention_count: "{{ retention_count | default(1) }}"
     
@@ -55,7 +54,7 @@
           - "=========================================="
           - "Environment: {{ env_name }}"
           - "Project: {{ project_name }}"
-          - "Region: {{ aws_region_name }}"
+          - "Region: {{ aws_region }}"
           - "Retention Count: {{ cleanup_retention_count }}"
           - "Dry Run Mode: {{ cleanup_dry_run }}"
           - "=========================================="

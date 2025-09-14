@@ -1,3 +1,5 @@
 name: jenkins-security
 runtime: nodejs
 description: Jenkins Security Groups Infrastructure
+config:
+  aws:region: ap-northeast-1

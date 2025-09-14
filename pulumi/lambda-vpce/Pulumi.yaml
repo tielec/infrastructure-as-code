@@ -1,3 +1,5 @@
 name: lambda-vpce
 runtime: nodejs
 description: Lambda API VPC Endpoints Infrastructure - Gateway and Interface endpoints for AWS services
+config:
+  aws:region: ap-northeast-1

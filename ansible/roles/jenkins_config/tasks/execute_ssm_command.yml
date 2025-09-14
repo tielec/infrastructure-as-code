@@ -5,7 +5,7 @@
   ansible.builtin.shell: |
     eval $({{ scripts_dir }}/aws/aws-env.sh)
     aws ssm send-command \
-      --region {{ aws_region_name }} \
+      --region {{ aws_region }} \
       --document-name "{{ ssm_document_name }}" \
       --targets "Key=instanceids,Values={{ instance_id }}" \
       {% if ssm_parameters | default('') %}--parameters "{{ ssm_parameters }}" {% endif %}\
@@ -25,7 +25,7 @@
   ansible.builtin.shell: |
     eval $({{ scripts_dir }}/aws/aws-env.sh)
     aws ssm list-commands \
-      --region {{ aws_region_name }} \
+      --region {{ aws_region }} \
       --command-id "{{ command_data.Command.CommandId }}" \
       --query "Commands[0].Status" \
       --output text
@@ -39,7 +39,7 @@
   ansible.builtin.shell: |
     eval $({{ scripts_dir }}/aws/aws-env.sh)
     aws ssm get-command-invocation \
-      --region {{ aws_region_name }} \
+      --region {{ aws_region }} \
       --command-id "{{ command_data.Command.CommandId }}" \
       --instance-id "{{ instance_id }}" \
       --output json

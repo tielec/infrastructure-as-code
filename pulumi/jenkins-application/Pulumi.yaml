@@ -1,3 +1,5 @@
 name: jenkins-application
 runtime: nodejs
 description: Jenkins Application Configuration Resources (Updates, Plugins, Jobs)
+config:
+  aws:region: ap-northeast-1

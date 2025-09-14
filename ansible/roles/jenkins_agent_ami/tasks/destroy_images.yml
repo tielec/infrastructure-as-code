@@ -7,7 +7,7 @@
     # AMIの検索 - CreatedByタグで検索
     - name: Find AMIs created by Image Builder (by CreatedBy tag)
       amazon.aws.ec2_ami_info:
-        region: "{{ aws_region_name }}"
+        region: "{{ aws_region }}"
         owners: self
         filters:
           "tag:CreatedBy": "EC2 Image Builder"
@@ -17,7 +17,7 @@
     # AMIの検索 - 名前パターンで検索
     - name: Find AMIs by name pattern
       amazon.aws.ec2_ami_info:
-        region: "{{ aws_region_name }}"
+        region: "{{ aws_region }}"
         owners: self
         filters:
           name: "{{ project_name }}-agent-*"
@@ -72,7 +72,7 @@
     # 実際の削除処理
     - name: Deregister AMIs
       amazon.aws.ec2_ami:
-        region: "{{ aws_region_name }}"
+        region: "{{ aws_region }}"
         image_id: "{{ item.image_id }}"
         state: absent
         delete_snapshot: true
