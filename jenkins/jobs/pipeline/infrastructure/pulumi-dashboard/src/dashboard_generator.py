@@ -273,9 +273,9 @@ def main():
     
     # データを読み込み
     data = load_data(args.data_dir)
-    
-    # デフォルトのソート（最終更新日時の降順）
-    data = sort_data(data, 'last_updated', 'desc')
+
+    # デフォルトのソート（プロジェクト名順）
+    data = sort_data(data, 'project_name', 'asc')
     
     # タイムスタンプの設定
     timestamp = args.timestamp or datetime.now().strftime('%Y-%m-%d %H:%M:%S')
