@@ -33,7 +33,7 @@
           Operation: {{ operation | default('deploy') }}
           Environment: {{ env_name }}
           Project: {{ project_name }}-api-gateway
-          Region: {{ aws_region_name }}
+          Region: {{ aws_region }}
           Preview Only: {{ preview_only }}
           ==========================================
           

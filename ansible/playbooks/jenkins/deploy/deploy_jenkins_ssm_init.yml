@@ -38,7 +38,7 @@
           SSM Parameter Store Initialization Summary
           ==========================================
           Environment: {{ env_name }}
-          AWS Region: {{ aws_region_name }}
+          AWS Region: {{ aws_region }}
           Project: {{ project_name }}
           Status: {{ 'SUCCESS' if ssm_initialized | default(false) else 'FAILED' }}
           

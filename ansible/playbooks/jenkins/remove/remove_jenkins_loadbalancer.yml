@@ -47,7 +47,7 @@
           - "=========================================="
           - "Environment: {{ env_name }}"
           - "Project: {{ project_name }}"
-          - "Region: {{ aws_region_name }}"
+          - "Region: {{ aws_region }}"
           - ""
           - "This will destroy:"
           - "  - Application Load Balancer"

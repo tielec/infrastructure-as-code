@@ -52,7 +52,7 @@
           - "=========================================="
           - "Environment: {{ env_name }}"
           - "Project: {{ project_name }}"
-          - "Region: {{ aws_region_name }}"
+          - "Region: {{ aws_region }}"
           - "Backup: {{ create_backup }}"
           - "Force: {{ force_destroy }}"
           - ""

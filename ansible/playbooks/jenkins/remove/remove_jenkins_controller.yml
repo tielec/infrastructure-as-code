@@ -49,7 +49,7 @@
           - "=========================================="
           - "Environment: {{ env_name }}"
           - "Project: {{ project_name }}"
-          - "Region: {{ aws_region_name }}"
+          - "Region: {{ aws_region }}"
           - "Target: {{ target_color }}"
           - ""
           - "This will destroy:"
