@@ -79,16 +79,36 @@ save_passphrase_to_ssm() {
     log_info "  リージョン: $region"
     log_info "  パラメータ名: $PULUMI_PASSPHRASE_PARAM"
 
-    # SSMパラメータを保存（エラー出力を一時的に表示）
-    local error_output
-    error_output=$(aws ssm put-parameter \
+    # 既存のパラメータが存在するか確認
+    local existing_param
+    existing_param=$(aws ssm get-parameter \
         --name "$PULUMI_PASSPHRASE_PARAM" \
-        --value "$passphrase" \
-        --type "SecureString" \
-        --description "Pulumi configuration passphrase for S3 backend encryption" \
-        --tags "Key=Name,Value=Pulumi-Config-Passphrase" "Key=Purpose,Value=Pulumi-Backend" \
         --region "$region" \
-        --overwrite 2>&1)
+        --query 'Parameter.Value' \
+        --output text 2>/dev/null || echo "")
+
+    local error_output
+    if [ -n "$existing_param" ]; then
+        # 既存のパラメータを上書き（タグなし）
+        log_info "既存のパラメータを更新しています..."
+        error_output=$(aws ssm put-parameter \
+            --name "$PULUMI_PASSPHRASE_PARAM" \
+            --value "$passphrase" \
+            --type "SecureString" \
+            --description "Pulumi configuration passphrase for S3 backend encryption" \
+            --region "$region" \
+            --overwrite 2>&1)
+    else
+        # 新規作成（タグ付き）
+        log_info "新規パラメータを作成しています..."
+        error_output=$(aws ssm put-parameter \
+            --name "$PULUMI_PASSPHRASE_PARAM" \
+            --value "$passphrase" \
+            --type "SecureString" \
+            --description "Pulumi configuration passphrase for S3 backend encryption" \
+            --tags "Key=Name,Value=Pulumi-Config-Passphrase" "Key=Purpose,Value=Pulumi-Backend" \
+            --region "$region" 2>&1)
+    fi
 
     if [ $? -eq 0 ]; then
         log_info "✓ パスフレーズがSSMパラメータストアに安全に保存されました"
