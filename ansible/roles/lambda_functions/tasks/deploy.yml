@@ -3,14 +3,7 @@
 
 - name: Display Lambda functions deployment information
   ansible.builtin.debug:
-    msg: |
-      Deploying Lambda API Functions:
-      - Project: {{ project_name }}
-      - Functions Pulumi Project: {{ functions_project_name }}
-      - Environment: {{ env_name }}
-      - Runtime: {{ lambda_runtime }}
-      - Memory: {{ memory_size }}MB
-      - Timeout: {{ timeout }}s
+    msg: "Deploying Lambda API Functions for {{ env_name }} environment"
 
 # Pulumiデプロイ
 - name: Deploy Lambda functions with Pulumi
@@ -24,16 +17,6 @@
         pulumi_project_path: "{{ pulumi_path }}/lambda-functions"
         stack_name: "{{ env_name }}"
     
-    # スタック参照名を設定
-    - name: Set network stack reference
-      ansible.builtin.shell: |
-        cd {{ pulumi_path }}/lambda-functions
-        # スタック参照名を返す（例: organization/project/stack）
-        # これはPulumiスタック内でStackReferenceを使用する際に必要
-        echo "tielec/{{ network_project_name }}/{{ env_name }}"
-      register: network_stack_ref
-      changed_when: false
-
     - name: Configure functions stack - AWS region
       ansible.builtin.include_role:
         name: pulumi_helper
@@ -69,77 +52,14 @@
         functions_deployed: true
       when: not preview_only | default(false) | bool
     
-    # SSMから作成されたLambda関数ARNを取得（オプション）
-    - name: Get Lambda function ARN from SSM
-      ansible.builtin.include_role:
-        name: ssm_parameter_store
-        tasks_from: get_parameter
-      vars:
-        parameter_name: "/{{ project_name }}/{{ env_name }}/lambda/main-function-arn"
-        store_as: "lambda_function_arn"
-        default_value: ""
-        ssm_parameter_store_fail_on_missing: false
-      when: not preview_only | default(false) | bool
-    
     # Lambda関数情報の表示
     - name: Display Lambda functions deployment summary
       ansible.builtin.debug:
-        msg: |
-          Lambda functions deployment successful:
-          - Runtime: {{ lambda_runtime }}
-          - Memory: {{ memory_size }}MB
-          - Timeout: {{ timeout }}s
-          {% if lambda_function_arn is defined and lambda_function_arn | length > 0 %}
-          - Function ARN: {{ lambda_function_arn }}
-          {% endif %}
-      when: 
-        - functions_deployed is defined and functions_deployed
+        msg: "Lambda functions deployed successfully for {{ env_name }} environment"
+      when: not preview_only | default(false) | bool
   
   rescue:
-    - name: Display error on functions deployment
-      ansible.builtin.debug:
-        msg: "Failed to deploy Lambda API functions. See error details above."
-      
-    - name: Set functions deployment failure
-      ansible.builtin.set_fact:
-        functions_deployed: false
-      
     - name: Fail the playbook
       ansible.builtin.fail:
         msg: "Lambda API functions deployment failed."
 
-# デストロイ処理
-- name: Destroy Lambda functions
-  block:
-    - name: Initialize functions stack for destroy
-      ansible.builtin.include_role:
-        name: pulumi_helper
-        tasks_from: init_stack
-      vars:
-        pulumi_project_path: "{{ pulumi_path }}/lambda-functions"
-        stack_name: "{{ env_name }}"
-    
-    - name: Destroy Lambda functions stack
-      ansible.builtin.include_role:
-        name: pulumi_helper
-        tasks_from: destroy
-      vars:
-        pulumi_project_path: "{{ pulumi_path }}/lambda-functions"
-    
-    - name: Set functions destroy status
-      ansible.builtin.set_fact:
-        functions_destroyed: true
-        
-  rescue:
-    - name: Display error on functions destroy
-      ansible.builtin.debug:
-        msg: "Failed to destroy Lambda API functions. See error details above."
-      
-    - name: Set functions destroy failure
-      ansible.builtin.set_fact:
-        functions_destroyed: false
-      
-    - name: Fail the playbook
-      ansible.builtin.fail:
-        msg: "Lambda API functions destroy failed."
-  when: operation | default('deploy') == 'destroy'
