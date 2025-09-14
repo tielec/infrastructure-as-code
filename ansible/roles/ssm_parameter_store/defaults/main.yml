@@ -2,7 +2,7 @@
 # SSMパラメータストアヘルパーのデフォルト変数
 
 # AWS設定
-ssm_parameter_store_region: "{{ aws_region | default('ap-northeast-1') }}"
+aws_region: "{{ aws_region }}"
 
 # キャッシュ設定
 ssm_parameter_store_cache:
