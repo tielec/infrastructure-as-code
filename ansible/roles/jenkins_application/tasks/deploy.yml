@@ -3,14 +3,7 @@
 
 - name: Display application deployment information
   ansible.builtin.debug:
-    msg: |
-      Deploying Jenkins Application Configuration:
-      - Project: {{ project_name }}
-      - Application Pulumi Project: {{ application_project_name }}
-      - Environment: {{ env_name }}
-      - Jenkins Version: {{ jenkins_version }}
-      - Install Plugins: {{ install_plugins }}
-      - Update Repository: {{ update_repo }}
+    msg: "Deploying Jenkins Application Configuration for {{ env_name }} environment"
 
 # ファイル権限設定
 - name: Ensure aws-env.sh has execute permissions
@@ -19,6 +12,24 @@
     mode: '0755'
   register: aws_env_script_permission
   no_log: true
+
+# SSMドキュメント名の取得（jenkins-configで作成されたものを使用）
+- name: Get execute script document name from SSM Parameter Store
+  ansible.builtin.include_role:
+    name: ssm_parameter_store
+    tasks_from: get_parameter
+  vars:
+    parameter_name: "/jenkins-infra/{{ env_name }}/config/execute-script-document-name"
+    store_as: "execute_script_document_name"
+
+# jenkins_configのSSMドキュメントも取得（SSMパラメータから）
+- name: Get config update repo document name from SSM Parameter Store
+  ansible.builtin.include_role:
+    name: ssm_parameter_store
+    tasks_from: get_parameter
+  vars:
+    parameter_name: "/jenkins-infra/{{ env_name }}/config/update-repo-document-name"
+    store_as: "config_update_repo_document_name"
 
 # Pulumiデプロイ（アプリケーションステータスパラメータのみを作成）
 - name: Deploy Application Status Parameters with Pulumi
@@ -31,7 +42,7 @@
       vars:
         pulumi_project_path: "{{ pulumi_path }}/jenkins-application"
         stack_name: "{{ env_name }}"
-    
+
     - name: Configure application stack - AWS region
       ansible.builtin.include_role:
         name: pulumi_helper
@@ -40,31 +51,8 @@
         pulumi_project_path: "{{ pulumi_path }}/jenkins-application"
         config_key: "aws:region"
         config_value: "{{ aws_region_name }}"
-    
-    # SSMパラメータの確認
-    - name: Get project name from SSM Parameter Store
-      ansible.builtin.include_role:
-        name: ssm_parameter_store
-        tasks_from: get_parameter
-      vars:
-        parameter_name: "/jenkins-infra/{{ env_name }}/config/project-name"
-        store_as: "ssm_project_name"
-    
-    - name: Get Jenkins version from SSM Parameter Store
-      ansible.builtin.include_role:
-        name: ssm_parameter_store
-        tasks_from: get_parameter
-      vars:
-        parameter_name: "/jenkins-infra/{{ env_name }}/config/jenkins-version"
-        store_as: "ssm_jenkins_version"
-    
-    - name: Display configuration from SSM
-      ansible.builtin.debug:
-        msg: |
-          Using configuration from SSM:
-          - Project Name: {{ ssm_project_name }}
-          - Jenkins Version: {{ ssm_jenkins_version }}
-    
+
+
     # Pulumiデプロイ（ステータスパラメータのみ）
     - name: Deploy application status parameters
       ansible.builtin.include_role:
@@ -72,48 +60,12 @@
         tasks_from: deploy
       vars:
         pulumi_project_path: "{{ pulumi_path }}/jenkins-application"
-    
-    # SSMドキュメント名の取得（jenkins-configで作成されたものを使用）
-    - name: Get execute script document name from SSM Parameter Store
-      ansible.builtin.include_role:
-        name: ssm_parameter_store
-        tasks_from: get_parameter
-      vars:
-        parameter_name: "/jenkins-infra/{{ env_name }}/config/execute-script-document-name"
-        store_as: "execute_script_document_name"
-    
-    - name: Set SSM document names
-      ansible.builtin.set_fact:
-        ssm_documents:
-          executeScript: "{{ execute_script_document_name }}"
-          restart: "{{ execute_script_document_name }}"
-    
-    # jenkins_configのSSMドキュメントも取得（SSMパラメータから）
-    - name: Get config update repo document name from SSM Parameter Store
-      ansible.builtin.include_role:
-        name: ssm_parameter_store
-        tasks_from: get_parameter
-      vars:
-        parameter_name: "/jenkins-infra/{{ env_name }}/config/update-repo-document-name"
-        store_as: "config_update_repo_document_name"
-    
-    - name: Set config SSM document names
-      ansible.builtin.set_fact:
-        config_ssm_documents:
-          updateRepo: "{{ config_update_repo_document_name }}"
-      
-    - name: Display SSM document names
-      ansible.builtin.debug:
-        msg: |
-          SSM Documents available (from jenkins-config):
-          - Execute Script: {{ ssm_documents.executeScript }}
-          - Update Repo: {{ config_ssm_documents.updateRepo }}
-  
+
   rescue:
     - name: Display error on application deployment
       ansible.builtin.debug:
         msg: "Failed to deploy Jenkins application configuration. See error details above."
-      
+
     - name: Fail the playbook
       ansible.builtin.fail:
         msg: "Jenkins application deployment failed."
@@ -134,9 +86,6 @@
         msg: "Invalid Jenkins instance ID format: {{ jenkins_instance_id }}"
       when: not (jenkins_instance_id | regex_search('^i-[a-f0-9]+$'))
     
-    - name: Display Jenkins instance ID
-      ansible.builtin.debug:
-        msg: "Using Jenkins Instance ID: {{ jenkins_instance_id }}"
 
 # アプリケーション設定の実行
 - name: Execute application configuration tasks
@@ -149,7 +98,7 @@
         - name: Execute Git repository update
           ansible.builtin.include_tasks: execute_ssm_command.yml
           vars:
-            ssm_document_name: "{{ config_ssm_documents.updateRepo }}"
+            ssm_document_name: "{{ config_update_repo_document_name }}"
             ssm_parameters: "ProjectName={{ project_name }},Environment={{ env_name }},GitBranch={{ git_branch }},GitRepo={{ git_repo }}"
             ssm_comment: "Updating Git repository"
             instance_id: "{{ jenkins_instance_id }}"
@@ -161,7 +110,7 @@
         - name: Execute Jenkins version update
           ansible.builtin.include_tasks: execute_ssm_command.yml
           vars:
-            ssm_document_name: "{{ ssm_documents.executeScript }}"
+            ssm_document_name: "{{ execute_script_document_name }}"
             ssm_parameters: "ScriptPath=scripts/jenkins/shell/application-update-version.sh"
             ssm_comment: "Updating Jenkins version"
             instance_id: "{{ jenkins_instance_id }}"
@@ -173,7 +122,7 @@
         - name: Execute plugin installation
           ansible.builtin.include_tasks: execute_ssm_command.yml
           vars:
-            ssm_document_name: "{{ ssm_documents.executeScript }}"
+            ssm_document_name: "{{ execute_script_document_name }}"
             ssm_parameters: "ScriptPath=scripts/jenkins/shell/application-install-plugins.sh"
             ssm_comment: "Installing Jenkins plugins"
             instance_id: "{{ jenkins_instance_id }}"
@@ -182,7 +131,7 @@
         - name: Restart Jenkins after plugin installation
           ansible.builtin.include_tasks: execute_ssm_command.yml
           vars:
-            ssm_document_name: "{{ ssm_documents.executeScript }}"
+            ssm_document_name: "{{ execute_script_document_name }}"
             ssm_parameters: "ScriptPath=scripts/jenkins/shell/jenkins-restart.sh"
             ssm_comment: "Restarting Jenkins after plugin installation"
             instance_id: "{{ jenkins_instance_id }}"
@@ -197,7 +146,7 @@
         - name: Verify plugin installation
           ansible.builtin.include_tasks: execute_ssm_command.yml
           vars:
-            ssm_document_name: "{{ ssm_documents.executeScript }}"
+            ssm_document_name: "{{ execute_script_document_name }}"
             ssm_parameters: "ScriptPath=scripts/jenkins/shell/application-verify-plugins.sh"
             ssm_comment: "Verifying plugin installation"
             instance_id: "{{ jenkins_instance_id }}"
@@ -206,7 +155,7 @@
         - name: Clean up plugin installation scripts
           ansible.builtin.include_tasks: execute_ssm_command.yml
           vars:
-            ssm_document_name: "{{ ssm_documents.executeScript }}"
+            ssm_document_name: "{{ execute_script_document_name }}"
             ssm_parameters: "ScriptPath=scripts/jenkins/shell/application-cleanup-groovy.sh,ScriptArgs=plugins"
             ssm_comment: "Cleaning up plugin installation scripts"
             instance_id: "{{ jenkins_instance_id }}"
@@ -219,7 +168,7 @@
         - name: Setup admin and CLI users
           ansible.builtin.include_tasks: execute_ssm_command.yml
           vars:
-            ssm_document_name: "{{ ssm_documents.executeScript }}"
+            ssm_document_name: "{{ execute_script_document_name }}"
             ssm_parameters: "ScriptPath=scripts/jenkins/shell/application-setup-users.sh"
             ssm_comment: "Setting up Jenkins users (admin and CLI)"
             instance_id: "{{ jenkins_instance_id }}"
@@ -231,7 +180,7 @@
         - name: Setup all credentials from Parameter Store
           ansible.builtin.include_tasks: execute_ssm_command.yml
           vars:
-            ssm_document_name: "{{ ssm_documents.executeScript }}"
+            ssm_document_name: "{{ execute_script_document_name }}"
             ssm_parameters: "ScriptPath=scripts/jenkins/shell/application-setup-credentials.sh"
             ssm_comment: "Setting up all Jenkins credentials from Parameter Store"
             instance_id: "{{ jenkins_instance_id }}"
@@ -243,7 +192,7 @@
         - name: Execute Jenkins restart for security settings
           ansible.builtin.include_tasks: execute_ssm_command.yml
           vars:
-            ssm_document_name: "{{ ssm_documents.executeScript }}"
+            ssm_document_name: "{{ execute_script_document_name }}"
             ssm_parameters: "ScriptPath=scripts/jenkins/shell/jenkins-restart.sh"
             ssm_comment: "Restarting Jenkins to apply CLI user and SSH credentials"
             instance_id: "{{ jenkins_instance_id }}"
@@ -258,7 +207,7 @@
         - name: Verify security settings
           ansible.builtin.include_tasks: execute_ssm_command.yml
           vars:
-            ssm_document_name: "{{ ssm_documents.executeScript }}"
+            ssm_document_name: "{{ execute_script_document_name }}"
             ssm_parameters: "ScriptPath=scripts/jenkins/shell/application-verify-security.sh"
             ssm_comment: "Verifying security settings"
             instance_id: "{{ jenkins_instance_id }}"
@@ -267,7 +216,7 @@
         - name: Clean up security setup scripts
           ansible.builtin.include_tasks: execute_ssm_command.yml
           vars:
-            ssm_document_name: "{{ ssm_documents.executeScript }}"
+            ssm_document_name: "{{ execute_script_document_name }}"
             ssm_parameters: "ScriptPath=scripts/jenkins/shell/application-cleanup-groovy.sh,ScriptArgs=security"
             ssm_comment: "Cleaning up security setup scripts"
             instance_id: "{{ jenkins_instance_id }}"
@@ -280,7 +229,7 @@
         - name: Execute JCasC configuration
           ansible.builtin.include_tasks: execute_ssm_command.yml
           vars:
-            ssm_document_name: "{{ ssm_documents.executeScript }}"
+            ssm_document_name: "{{ execute_script_document_name }}"
             ssm_parameters: "ScriptPath=scripts/jenkins/shell/application-configure-with-casc.sh"
             ssm_comment: "Configuring Jenkins with JCasC"
             instance_id: "{{ jenkins_instance_id }}"
@@ -292,7 +241,7 @@
         - name: Execute seed job creation
           ansible.builtin.include_tasks: execute_ssm_command.yml
           vars:
-            ssm_document_name: "{{ ssm_documents.executeScript }}"
+            ssm_document_name: "{{ execute_script_document_name }}"
             ssm_parameters: "ScriptPath=scripts/jenkins/shell/application-create-seed-job.sh"
             ssm_comment: "Creating Jenkins seed job"
             instance_id: "{{ jenkins_instance_id }}"
@@ -304,7 +253,7 @@
         - name: Execute final Jenkins restart
           ansible.builtin.include_tasks: execute_ssm_command.yml
           vars:
-            ssm_document_name: "{{ ssm_documents.executeScript }}"
+            ssm_document_name: "{{ execute_script_document_name }}"
             ssm_parameters: "ScriptPath=scripts/jenkins/shell/jenkins-restart.sh"
             ssm_comment: "Final Jenkins restart to apply JCasC and seed job configurations"
             instance_id: "{{ jenkins_instance_id }}"
@@ -319,7 +268,7 @@
         - name: Verify all configurations
           ansible.builtin.include_tasks: execute_ssm_command.yml
           vars:
-            ssm_document_name: "{{ ssm_documents.executeScript }}"
+            ssm_document_name: "{{ execute_script_document_name }}"
             ssm_parameters: "ScriptPath=scripts/jenkins/shell/application-verify-all.sh"
             ssm_comment: "Verifying all configurations"
             instance_id: "{{ jenkins_instance_id }}"
@@ -328,7 +277,7 @@
         - name: Clean up seed job scripts
           ansible.builtin.include_tasks: execute_ssm_command.yml
           vars:
-            ssm_document_name: "{{ ssm_documents.executeScript }}"
+            ssm_document_name: "{{ execute_script_document_name }}"
             ssm_parameters: "ScriptPath=scripts/jenkins/shell/application-cleanup-groovy.sh,ScriptArgs=seedjob"
             ssm_comment: "Cleaning up seed job scripts"
             instance_id: "{{ jenkins_instance_id }}"
@@ -339,28 +288,13 @@
     - name: Execute final cleanup
       ansible.builtin.include_tasks: execute_ssm_command.yml
       vars:
-        ssm_document_name: "{{ ssm_documents.executeScript }}"
+        ssm_document_name: "{{ execute_script_document_name }}"
         ssm_parameters: "ScriptPath=scripts/jenkins/shell/application-cleanup-groovy.sh,ScriptArgs=all"
         ssm_comment: "Final cleanup of all temporary files"
         instance_id: "{{ jenkins_instance_id }}"
   when: final_cleanup | default(true) | bool
 
-# 設定完了を示す変数設定
-- name: Set application deployment status
-  ansible.builtin.set_fact:
-    application_deployed: true
-
 # 設定結果のサマリー表示
 - name: Display application deployment summary
   ansible.builtin.debug:
-    msg: |
-      Jenkins Application Configuration Summary:
-      - Repository Updated: {{ update_repo }}
-      - Jenkins Version: {{ jenkins_version }}
-      - Plugins Installed: {{ install_plugins }}
-      - Users Setup: {{ setup_users | default(true) }}
-      - Credentials Setup: {{ setup_credentials | default(true) }}
-      - JCasC Configuration Applied: {{ configure_with_casc | default(true) }}
-      - Seed Job Created: {{ create_seed_job | default(true) }}
-      - Jenkins Restarted: {{ restart_jenkins }}
-      - Configuration Status: {{ application_deployed | ternary('Success', 'Failed') }}
+    msg: "Jenkins Application Configuration completed successfully for {{ env_name }} environment"

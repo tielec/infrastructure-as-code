@@ -34,8 +34,6 @@
         jenkins_version: "{{ version | default(jenkins.version) }}"
         jenkins_color: "{{ color | default(jenkins.color) }}"
         recovery_mode: "{{ recovery | default(jenkins.recovery_mode) }}"
-        instance_type: "{{ instance_type | default(jenkins.instance_type) }}"
-        key_name: "{{ key_name | default(jenkins.key_name) }}"
   
   roles:
     - jenkins_controller

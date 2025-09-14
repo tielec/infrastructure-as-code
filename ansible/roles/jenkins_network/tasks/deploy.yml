@@ -3,12 +3,7 @@
 
 - name: Display network deployment information
   ansible.builtin.debug:
-    msg: |
-      Deploying Network Infrastructure:
-      - Project: {{ project_name }}
-      - Network Pulumi Project: {{ network_project_name }}
-      - Environment: {{ env_name }}
-      - VPC CIDR: {{ vpc_cidr | default('10.0.0.0/16') }}
+    msg: "Deploying Network Infrastructure for {{ env_name }} environment"
 
 # ファイル権限設定
 - name: Ensure aws-env.sh has execute permissions
@@ -17,11 +12,6 @@
     mode: '0755'
   register: aws_env_script_permission
   no_log: true  # 詳細なログを抑制
-  
-- name: Report permission update
-  ansible.builtin.debug:
-    msg: "aws-env.sh スクリプトに実行権限を付与しました"
-  when: aws_env_script_permission.changed
 
 # Pulumiデプロイ
 - name: Deploy Network Infrastructure with Pulumi
@@ -63,78 +53,14 @@
       vars:
         pulumi_project_path: "{{ pulumi_path }}/jenkins-network"
     
-    # デプロイ後に少し待機してスタックが完全に更新されるのを待つ
-    - name: Wait for stack outputs to be available
-      ansible.builtin.pause:
-        seconds: 10
-      when: not ansible_check_mode
     
-    # スタック出力の取得
-    - name: Get VPC ID from stack outputs
-      ansible.builtin.shell: |
-        {{ scripts_dir }}/aws/aws-env.sh
-        cd {{ pulumi_path }}/jenkins-network
-        # スタック出力を確認
-        pulumi stack output || echo "No outputs available yet"
-        
-        # VPC IDの取得を試みる (存在しなければモック値を使用)
-        pulumi stack output vpcId 2>/dev/null || echo "mock-vpc-id-for-empty-output"
-      register: vpc_id_result
-      changed_when: false
-      ignore_errors: true
-    
-    - name: Set VPC ID
-      ansible.builtin.set_fact:
-        vpc_id: "{{ vpc_id_result.stdout | trim }}"
-    
-    - name: Display VPC ID
-      ansible.builtin.debug:
-        msg: "VPC ID: {{ vpc_id }}"
-    
-    # Public Subnet IDs取得
-    - name: Get public subnet IDs
-      ansible.builtin.shell: |
-        {{ scripts_dir }}/aws/aws-env.sh
-        cd {{ pulumi_path }}/jenkins-network
-        pulumi stack output publicSubnetIds 2>/dev/null || 
-          echo "['mock-public-subnet-1','mock-public-subnet-2']"
-      register: public_subnets_result
-      changed_when: false
-      ignore_errors: true
-    
-    - name: Set public subnet IDs
-      ansible.builtin.set_fact:
-        public_subnet_ids: "{{ public_subnets_result.stdout | trim }}"
-    
-    # Private Subnet IDs取得
-    - name: Get private subnet IDs
-      ansible.builtin.shell: |
-        {{ scripts_dir }}/aws/aws-env.sh
-        cd {{ pulumi_path }}/jenkins-network
-        pulumi stack output privateSubnetIds 2>/dev/null || 
-          echo "['mock-private-subnet-1','mock-private-subnet-2']"
-      register: private_subnets_result
-      changed_when: false
-      ignore_errors: true
-    
-    - name: Set private subnet IDs
-      ansible.builtin.set_fact:
-        private_subnet_ids: "{{ private_subnets_result.stdout | trim }}"
-    
-    - name: Set network facts for use in other playbooks
+    - name: Set network deployment status
       ansible.builtin.set_fact:
         network_deployed: true
-        # スタック参照情報も保存
-        network_stack_name: "{{ network_project_name }}"
-      
+
     - name: Summary of network deployment
       ansible.builtin.debug:
-        msg: |
-          Network Infrastructure Deployed Successfully:
-          Stack Name: {{ network_project_name }}
-          VPC ID: {{ vpc_id }}
-          Public Subnet IDs: {{ public_subnet_ids }}
-          Private Subnet IDs: {{ private_subnet_ids }}
+        msg: "Network Infrastructure deployed successfully for {{ env_name }} environment"
   
   rescue:
     - name: Set network deployment status on failure

@@ -3,12 +3,7 @@
 
 - name: Display application destruction information
   ansible.builtin.debug:
-    msg: |
-      Destroying Jenkins Application Configuration Resources:
-      - Project: {{ project_name }}
-      - Application Pulumi Project: {{ application_project_name }}
-      - Environment: {{ env_name }}
-      - Remove Stack: {{ remove_stacks | default(false) }}
+    msg: "Destroying Jenkins Application Configuration for {{ env_name }} environment (Remove Stack: {{ remove_stacks | default(false) }})"
 
 # ファイル権限設定
 - name: Ensure aws-env.sh has execute permissions
@@ -48,25 +43,8 @@
         stack_name: "{{ env_name }}"
       when: remove_stacks | default(false) | bool
     
-    # 削除ステータスの設定
-    - name: Set application destruction status on success
-      ansible.builtin.set_fact:
-        application_destroyed: true
-  
-  rescue:
-    # エラーハンドリング
-    - name: Set application destruction status on failure
-      ansible.builtin.set_fact:
-        application_destroyed: false
-    
-    - name: Display error
-      ansible.builtin.debug:
-        msg: "Failed to destroy application resources. See error details above."
 
-# 削除結果のサマリー表示
-- name: Display application destruction summary
-  ansible.builtin.debug:
-    msg: |
-      Jenkins Application Destruction Summary:
-      - Application Resources: {{ application_destroyed | ternary('Destroyed', 'Failed') }}
-      - Stack Removed: {{ (remove_stacks | default(false) | bool and application_destroyed) | ternary('Yes', 'No') }}
+  rescue:
+    - name: Fail the playbook
+      ansible.builtin.fail:
+        msg: "Application destruction failed."

@@ -3,12 +3,7 @@
 
 - name: Display loadbalancer destruction information
   ansible.builtin.debug:
-    msg: |
-      Destroying Jenkins LoadBalancer Infrastructure:
-      - Project: {{ project_name }}
-      - LoadBalancer Pulumi Project: {{ loadbalancer_project_name }}
-      - Environment: {{ env_name }}
-      - Remove Stack: {{ remove_stacks | default(false) }}
+    msg: "Destroying Jenkins LoadBalancer Infrastructure for {{ env_name }} environment (Remove Stack: {{ remove_stacks | default(false) }})"
 
 # ファイル権限設定
 - name: Ensure aws-env.sh has execute permissions
@@ -48,17 +43,8 @@
         stack_name: "{{ env_name }}"
       when: remove_stacks | default(false) | bool
     
-    # 削除ステータスの設定
-    - name: Set loadbalancer destruction status on success
-      ansible.builtin.set_fact:
-        loadbalancer_destroyed: true
-  
+
   rescue:
-    # エラーハンドリング
-    - name: Set loadbalancer destruction status on failure
-      ansible.builtin.set_fact:
-        loadbalancer_destroyed: false
-    
-    - name: Display error
-      ansible.builtin.debug:
-        msg: "Failed to destroy loadbalancer infrastructure. See error details above."
+    - name: Fail the playbook
+      ansible.builtin.fail:
+        msg: "LoadBalancer destruction failed."

@@ -26,7 +26,6 @@
         project_name: "{{ infra.project_name }}"
         aws_region_name: "{{ infra.aws.default_region }}"
         network_project_name: "{{ infra.pulumi.network_project }}"
-        vpc_cidr: "{{ infra.aws.vpc_cidr }}"
   
   roles:
     - jenkins_network

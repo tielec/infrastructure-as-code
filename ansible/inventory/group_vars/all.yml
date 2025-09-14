@@ -38,9 +38,6 @@ pulumi:
     bucket: ""  # 空の場合はSSMパラメータストアから取得
     region: "ap-northeast-1"
   
-  # Pulumi Cloud設定（backend_type: "cloud" の場合に使用）
-  cloud:
-    url: "https://api.pulumi.com"
 
 # ============================================================
 # Jenkins インフラストラクチャ設定
@@ -66,33 +63,6 @@ infra:
   # AWS設定
   aws:
     default_region: "ap-northeast-1"
-    vpc_cidr: "10.0.0.0/16"
-    key_name: ""  # EC2インスタンス用のキーペア名（必要に応じて設定）
-
-  # NAT設定
-  nat:
-    # High Availability モード
-    # true: NAT Gateway x2 (高可用性、月額約$90)
-    # false: NAT Instance x1 (低コスト、月額約$5)
-    high_availability_mode: false  # 開発環境はfalse推奨
-    
-    # NAT Instance使用時のインスタンスタイプ
-    # t4g.nano: 最小構成（月額約$3-5）
-    # t4g.micro: 小規模環境向け（月額約$7-10）
-    # t4g.small: 中規模環境向け（月額約$15-20）
-    instance_type: "t4g.nano"
-
-  # 環境設定
-  environments:
-    dev:
-      name: "dev"
-      domain: "dev.jenkins.example.com"
-    staging:
-      name: "staging"
-      domain: "staging.jenkins.example.com"
-    prod:
-      name: "prod"
-      domain: "jenkins.example.com"
 
 # ============================================================
 # Lambda インフラストラクチャ設定
@@ -105,40 +75,23 @@ lambda_api_infra:
   
   # Pulumiプロジェクト名
   pulumi:
-    account_setup_project: "lambda-account-setup"  # アカウントレベル設定（追加）
     network_project: "lambda-network"
     security_project: "lambda-security"
     vpce_project: "lambda-vpce"
     nat_project: "lambda-nat"
     functions_project: "lambda-functions"
     api_gateway_project: "lambda-api-gateway"
-    waf_project: "lambda-waf"
-    websocket_project: "lambda-websocket"
-    database_project: "lambda-database"  # Phase 2用
 
   # AWS設定
   aws:
     default_region: "ap-northeast-1"
     vpc_cidr: "10.1.0.0/16"  # Jenkinsとは異なるCIDR
-    key_name: ""  # NAT Instance用（必要に応じて設定）
 
   # NAT設定
   nat:
     # 環境別の設定は各環境のvarsファイルで上書き
     high_availability_mode: false
     instance_type: "t4g.nano"
-  
-  # ネットワーク設定
-  network:
-    enable_flow_logs: false
-    create_isolated_subnets: false
-  
-  # セキュリティ設定
-  security:
-    enable_database_security_groups: false
-  
-  # プレビューモード（すべてのLambdaロール共通）
-  preview_only: false
 
   # 環境設定
   environments:
@@ -170,28 +123,6 @@ lambda_api_infra:
         - "secretsmanager"
         - "kms"
 
-  # アラート設定（追加）
-  alerts:
-    # 通常のアラート通知先
-    email: "dev-team@example.com"
-    # 重要なアラート通知先（本番環境の予算超過など）
-    critical_email: "cto@example.com"
-    # Budget設定
-    budgets:
-      dev:
-        limit: 25  # USD
-        threshold: 80  # %
-      staging:
-        limit: 55  # USD
-        threshold: 80  # %
-      prod:
-        limit: 160  # USD
-        thresholds:  # 複数の閾値
-          - percent: 80
-            email: "ops-team@example.com"
-          - percent: 100
-            email: "cto@example.com"
-
 # ============================================================
 # Jenkins プロジェクト設定
 # ============================================================
@@ -201,37 +132,11 @@ jenkins:
   version: "latest"
   color: "blue"
   recovery_mode: false
-  instance_type: "t4g.medium"
-  key_name: ""  # 必要に応じて設定
-  
-  # Jenkinsアプリケーション設定
-  install_plugins: true
-  create_seed_job: true
-  restart_jenkins: true
-  setup_cli_user: true
-  seed_job_name: "seed-job"
-  
+
   # Git設定
   git:
     repo: "https://github.com/tielec/infrastructure-as-code.git"
     branch: "main"
-    credentials_id: "github-app-credentials"
-  
-  # Jenkinsエージェント設定
-  agent:
-    instance_type: "t3a.medium"
-    min_capacity: 0
-    max_capacity: 10
-    spot_price: "0.052"  # t3a.medium spot price limit
-    
-    # AMI Builder設定
-    ami_builder:
-      build_ami_on_deploy: false      # Deprecated - use trigger_ami_build instead
-      trigger_ami_build: true         # Automatically trigger pipeline execution after deployment
-      update_ssm_with_ami: true       # Automatically update SSM parameters with new AMI IDs
-      wait_for_ami_build: true        # Wait for AMI build to complete before updating SSM (30-45 minutes)
-      cleanup_old_amis: true          # Automatically delete old AMIs
-      ami_retention_count: 2          # Number of AMIs to keep per architecture
 
 # ============================================================
 # Lambda API設定
@@ -242,20 +147,8 @@ lambda_api:
   runtime: "nodejs18.x"
   default_memory: 256
   default_timeout: 30
-  stage_name: "v1"  # API Gateway ステージ名
   log_level: "INFO"  # デフォルトログレベル
   log_retention_days:
     dev: 3
     staging: 7
     prod: 14
-  # IP Whitelist設定
-  ip_whitelist:
-    secret_name_pattern: "lambda-api/ip-whitelist/{environment}"
-    rate_limit_per_5min: 2000
-    block_duration_seconds: 240
-  # DLQ設定
-  dlq:
-    max_retry_count: 3
-    visibility_timeout_multiplier: 6
-    retention_days: 14
-    handler_interval_minutes: 5
