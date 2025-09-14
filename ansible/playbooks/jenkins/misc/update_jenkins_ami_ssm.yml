@@ -25,7 +25,7 @@
     
     - name: Set required variables
       ansible.builtin.set_fact:
-        project_name: "{{ infra.project_name }}"
+        project_name: "{{ projects.jenkins.name }}"
         env: "{{ env_name }}"
     
     - name: Get Pipeline ARNs from SSM

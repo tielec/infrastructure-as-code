@@ -40,17 +40,11 @@ aws_credentials_script_path: "{{ scripts_dir }}/aws/setup-aws-credentials.sh"
 # リージョンはaws_regionパラメータを使用
 
 # ============================================================
-# Jenkins インフラストラクチャ設定
+# プロジェクト設定
 # ============================================================
 
-infra:
-  # プロジェクト名
-  project_name: "jenkins-infra"
-
-# ============================================================
-# Lambda API インフラストラクチャ設定
-# ============================================================
-
-lambda_api_infra:
-  # プロジェクト名
-  project_name: "lambda-api"
+projects:
+  jenkins:
+    name: "jenkins-infra"
+  lambda_api:
+    name: "lambda-api"
