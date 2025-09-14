@@ -22,14 +22,6 @@
         stack_name: "{{ env_name }}"
     
     # AWS設定
-    - name: Configure SSM init stack - AWS region
-      ansible.builtin.include_role:
-        name: pulumi_helper
-        tasks_from: set_config
-      vars:
-        pulumi_project_path: "{{ pulumi_path }}/jenkins-ssm-init"
-        config_key: "aws:region"
-        config_value: "{{ aws_region_name }}"
 
     # Pulumiプレビュー
     - name: Preview SSM parameter deployment

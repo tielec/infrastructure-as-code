@@ -25,14 +25,6 @@
         pulumi_project_path: "{{ pulumi_path }}/jenkins-controller"
         stack_name: "{{ env_name }}"
     
-    - name: Configure controller stack - AWS region
-      ansible.builtin.include_role:
-        name: pulumi_helper
-        tasks_from: set_config
-      vars:
-        pulumi_project_path: "{{ pulumi_path }}/jenkins-controller"
-        config_key: "aws:region"
-        config_value: "{{ aws_region_name }}"
     # Pulumiプレビュー
     - name: Preview controller deployment
       ansible.builtin.include_role:
