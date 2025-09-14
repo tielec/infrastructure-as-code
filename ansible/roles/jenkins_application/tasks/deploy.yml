@@ -13,6 +13,24 @@
   register: aws_env_script_permission
   no_log: true
 
+# SSMドキュメント名の取得（jenkins-configで作成されたものを使用）
+- name: Get execute script document name from SSM Parameter Store
+  ansible.builtin.include_role:
+    name: ssm_parameter_store
+    tasks_from: get_parameter
+  vars:
+    parameter_name: "/jenkins-infra/{{ env_name }}/config/execute-script-document-name"
+    store_as: "execute_script_document_name"
+
+# jenkins_configのSSMドキュメントも取得（SSMパラメータから）
+- name: Get config update repo document name from SSM Parameter Store
+  ansible.builtin.include_role:
+    name: ssm_parameter_store
+    tasks_from: get_parameter
+  vars:
+    parameter_name: "/jenkins-infra/{{ env_name }}/config/update-repo-document-name"
+    store_as: "config_update_repo_document_name"
+
 # Pulumiデプロイ（アプリケーションステータスパラメータのみを作成）
 - name: Deploy Application Status Parameters with Pulumi
   block:
@@ -24,7 +42,7 @@
       vars:
         pulumi_project_path: "{{ pulumi_path }}/jenkins-application"
         stack_name: "{{ env_name }}"
-    
+
     - name: Configure application stack - AWS region
       ansible.builtin.include_role:
         name: pulumi_helper
@@ -33,8 +51,8 @@
         pulumi_project_path: "{{ pulumi_path }}/jenkins-application"
         config_key: "aws:region"
         config_value: "{{ aws_region_name }}"
-    
-    
+
+
     # Pulumiデプロイ（ステータスパラメータのみ）
     - name: Deploy application status parameters
       ansible.builtin.include_role:
@@ -42,30 +60,12 @@
         tasks_from: deploy
       vars:
         pulumi_project_path: "{{ pulumi_path }}/jenkins-application"
-    
-    # SSMドキュメント名の取得（jenkins-configで作成されたものを使用）
-    - name: Get execute script document name from SSM Parameter Store
-      ansible.builtin.include_role:
-        name: ssm_parameter_store
-        tasks_from: get_parameter
-      vars:
-        parameter_name: "/jenkins-infra/{{ env_name }}/config/execute-script-document-name"
-        store_as: "execute_script_document_name"
-    
-    # jenkins_configのSSMドキュメントも取得（SSMパラメータから）
-    - name: Get config update repo document name from SSM Parameter Store
-      ansible.builtin.include_role:
-        name: ssm_parameter_store
-        tasks_from: get_parameter
-      vars:
-        parameter_name: "/jenkins-infra/{{ env_name }}/config/update-repo-document-name"
-        store_as: "config_update_repo_document_name"
-  
+
   rescue:
     - name: Display error on application deployment
       ansible.builtin.debug:
         msg: "Failed to deploy Jenkins application configuration. See error details above."
-      
+
     - name: Fail the playbook
       ansible.builtin.fail:
         msg: "Jenkins application deployment failed."
