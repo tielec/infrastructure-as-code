@@ -60,15 +60,6 @@ infra:
 lambda_api_infra:
   # メインのプロジェクト名
   project_name: "lambda-api"
-  
-  # Pulumiプロジェクト名
-  pulumi:
-    network_project: "lambda-network"
-    security_project: "lambda-security"
-    vpce_project: "lambda-vpce"
-    nat_project: "lambda-nat"
-    functions_project: "lambda-functions"
-    api_gateway_project: "lambda-api-gateway"
 
   # AWS設定
   aws:
