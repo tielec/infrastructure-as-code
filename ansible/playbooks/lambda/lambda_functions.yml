@@ -23,7 +23,6 @@
     - name: Set required variables
       ansible.builtin.set_fact:
         project_name: "{{ lambda_api_infra.project_name }}"
-        aws_region_name: "{{ lambda_api_infra.aws.default_region }}"
         
     - name: Display operation info
       ansible.builtin.debug:

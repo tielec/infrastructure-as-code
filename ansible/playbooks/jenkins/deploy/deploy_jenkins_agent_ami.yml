@@ -24,7 +24,6 @@
     - name: Set required variables from all.yml
       ansible.builtin.set_fact:
         project_name: "{{ infra.project_name }}"
-        aws_region_name: "{{ infra.aws.default_region }}"
     
     - name: Display deployment information
       ansible.builtin.debug:

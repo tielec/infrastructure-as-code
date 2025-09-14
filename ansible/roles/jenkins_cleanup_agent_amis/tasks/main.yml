@@ -5,7 +5,7 @@
   ansible.builtin.assert:
     that:
       - env_name is defined
-      - aws_region_name is defined
+      - aws_region is defined
       - retention_count is defined
       - retention_count | int >= safety_checks.minimum_retention | int
     fail_msg: "Required variables are not defined or retention_count is too low"
@@ -17,7 +17,7 @@
       - "Image Builder AMI Cleanup Configuration"
       - "=========================================="
       - "Environment: {{ env_name }}"
-      - "Region: {{ aws_region_name }}"
+      - "Region: {{ aws_region }}"
       - "Retention Count: {{ retention_count }}"
       - "Dry Run: {{ dry_run }}"
       - "Cleanup Targets:"

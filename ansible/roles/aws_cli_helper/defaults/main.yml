@@ -2,7 +2,8 @@
 # AWS CLI Helper デフォルト変数
 
 # AWS設定
-aws_cli_helper_region: "{{ aws_region | default('ap-northeast-1') }}"
+# all.ymlのaws_regionを参照（デフォルト: ap-northeast-1）
+aws_cli_helper_region: "{{ aws_region }}"
 
 # リトライ設定
 aws_cli_helper_retry_enabled: true

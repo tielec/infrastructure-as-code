@@ -26,7 +26,6 @@
     - name: Set required variables
       ansible.builtin.set_fact:
         project_name: "{{ infra.project_name }}"
-        aws_region: "{{ infra.aws.default_region }}"
         env: "{{ env_name }}"
     
     - name: Get Pipeline ARNs from SSM

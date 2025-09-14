@@ -7,7 +7,7 @@
       Destroying SSM Parameters:
       - Project: {{ project_name }}
       - Environment: {{ env_name }}
-      - AWS Region: {{ aws_region_name }}
+      - AWS Region: {{ aws_region }}
 
 - name: Confirm SSM parameter deletion
   ansible.builtin.pause:

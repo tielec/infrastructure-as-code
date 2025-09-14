@@ -165,7 +165,7 @@
       ansible.builtin.include_tasks: execute_ssm_command.yml
       vars:
         ssm_document_name: "{{ execute_script_document_name }}"
-        ssm_parameters: "ScriptPath=scripts/jenkins/shell/controller-mount-efs.sh,ScriptArgs={{ efs_file_system_id }} {{ aws_region_name }}"
+        ssm_parameters: "ScriptPath=scripts/jenkins/shell/controller-mount-efs.sh,ScriptArgs={{ efs_file_system_id }} {{ aws_region }}"
         ssm_comment: "Mounting EFS"
         instance_id: "{{ jenkins_instance_id }}"
     

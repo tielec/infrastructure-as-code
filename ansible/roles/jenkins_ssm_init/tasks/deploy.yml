@@ -7,7 +7,7 @@
       Initializing SSM Parameter Store:
       - Project: {{ project_name }}
       - Environment: {{ env_name }}
-      - AWS Region: {{ aws_region_name }}
+      - AWS Region: {{ aws_region }}
 
 # Pulumiヘルパータスクを使用してSSMパラメータを初期化
 - name: Initialize SSM Parameter Store with Pulumi
@@ -68,7 +68,7 @@
     
     - name: Verify critical SSM parameter exists
       ansible.builtin.command:
-        cmd: "aws ssm get-parameter --name /jenkins-infra/{{ env_name }}/config/project-name --region {{ aws_region_name }}"
+        cmd: "aws ssm get-parameter --name /jenkins-infra/{{ env_name }}/config/project-name --region {{ aws_region }}"
       register: ssm_verify_result
       changed_when: false
       when: ssm_initialized | default(false) | bool

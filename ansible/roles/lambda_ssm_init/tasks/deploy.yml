@@ -15,7 +15,7 @@
       ===================================
       Project: {{ lambda_ssm_init_project }}
       Environment: {{ env_name }}
-      Region: {{ aws_region_name }}
+      Region: {{ aws_region }}
       Path: {{ lambda_ssm_init_path }}
 
 - name: Check if Pulumi project exists
@@ -68,7 +68,7 @@
       vars:
         pulumi_project_path: "{{ lambda_ssm_init_path }}"
         config_key: "aws:region"
-        config_value: "{{ aws_region_name }}"
+        config_value: "{{ aws_region }}"
 
     - name: Preview SSM parameter deployment
       ansible.builtin.include_role:
