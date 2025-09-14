@@ -5,29 +5,96 @@
   ansible.builtin.debug:
     msg: "Configuring Jenkins Controller for {{ env_name }} environment"
 
-# JenkinsインスタンスIDの取得（Parameter Storeから）
-- name: Get Jenkins instance ID from SSM Parameter Store
-  ansible.builtin.include_role:
-    name: ssm_parameter_store
-    tasks_from: get_parameter
-  vars:
-    parameter_name: "/jenkins-infra/{{ env_name }}/controller/instance-id"
-    store_as: "jenkins_instance_id"
+# SSMパラメータストアから必要な設定を一括取得
+- name: Retrieve all required parameters from SSM Parameter Store
+  block:
+    # Jenkins設定パラメータの取得
+    - name: Get Jenkins version from SSM
+      ansible.builtin.include_role:
+        name: ssm_parameter_store
+        tasks_from: get_parameter
+      vars:
+        parameter_name: "/{{ project_name }}/{{ env_name }}/config/jenkins-version"
+        store_as: "jenkins_version"
+      when: jenkins_version is not defined
 
-- name: Verify Jenkins instance ID
+    - name: Get Jenkins color from SSM
+      ansible.builtin.include_role:
+        name: ssm_parameter_store
+        tasks_from: get_parameter
+      vars:
+        parameter_name: "/{{ project_name }}/{{ env_name }}/config/jenkins-color"
+        store_as: "jenkins_color"
+      when: jenkins_color is not defined
+
+    - name: Get Jenkins recovery mode from SSM
+      ansible.builtin.include_role:
+        name: ssm_parameter_store
+        tasks_from: get_parameter
+      vars:
+        parameter_name: "/{{ project_name }}/{{ env_name }}/config/jenkins-recovery-mode"
+        store_as: "recovery_mode"
+      when: recovery_mode is not defined
+
+    # Git設定パラメータの取得
+    - name: Get Git repository from SSM
+      ansible.builtin.include_role:
+        name: ssm_parameter_store
+        tasks_from: get_parameter
+      vars:
+        parameter_name: "/{{ project_name }}/{{ env_name }}/config/git-repo"
+        store_as: "git_repo"
+      when: git_repo is not defined
+
+    - name: Get Git branch from SSM
+      ansible.builtin.include_role:
+        name: ssm_parameter_store
+        tasks_from: get_parameter
+      vars:
+        parameter_name: "/{{ project_name }}/{{ env_name }}/config/git-branch"
+        store_as: "git_branch"
+      when: git_branch is not defined
+
+    # インフラストラクチャIDの取得
+    - name: Get Jenkins instance ID from SSM
+      ansible.builtin.include_role:
+        name: ssm_parameter_store
+        tasks_from: get_parameter
+      vars:
+        parameter_name: "/jenkins-infra/{{ env_name }}/controller/instance-id"
+        store_as: "jenkins_instance_id"
+
+    - name: Get EFS file system ID from SSM
+      ansible.builtin.include_role:
+        name: ssm_parameter_store
+        tasks_from: get_parameter
+      vars:
+        parameter_name: "/jenkins-infra/{{ env_name }}/storage/efs-file-system-id"
+        store_as: "efs_file_system_id"
+      when: efs_file_system_id is not defined or efs_file_system_id == ""
+
+    # SSMドキュメント名の取得
+    - name: Get update repo document name from SSM
+      ansible.builtin.include_role:
+        name: ssm_parameter_store
+        tasks_from: get_parameter
+      vars:
+        parameter_name: "/jenkins-infra/{{ env_name }}/config/update-repo-document-name"
+        store_as: "update_repo_document_name"
+
+    - name: Get execute script document name from SSM
+      ansible.builtin.include_role:
+        name: ssm_parameter_store
+        tasks_from: get_parameter
+      vars:
+        parameter_name: "/jenkins-infra/{{ env_name }}/config/execute-script-document-name"
+        store_as: "execute_script_document_name"
+
+# パラメータの検証
+- name: Verify Jenkins instance ID format
   ansible.builtin.fail:
     msg: "Invalid Jenkins instance ID format: {{ jenkins_instance_id }}"
   when: not (jenkins_instance_id | regex_search('^i-[a-f0-9]+$'))
-
-# EFSファイルシステムIDの取得 - SSM Parameter Storeから優先的に取得
-- name: Get EFS file system ID from Parameter Store
-  when: efs_file_system_id is not defined or efs_file_system_id == ""
-  ansible.builtin.include_role:
-    name: ssm_parameter_store
-    tasks_from: get_parameter
-  vars:
-    parameter_name: "/jenkins-infra/{{ env_name }}/storage/efs-file-system-id"
-    store_as: "efs_file_system_id"
 
 # ファイル権限設定
 - name: Ensure aws-env.sh has execute permissions
@@ -74,23 +141,6 @@
         tasks_from: deploy
       vars:
         pulumi_project_path: "{{ pulumi_path }}/jenkins-config"
-    
-    # SSMドキュメント名の取得（SSMパラメータから）
-    - name: Get update repo document name from SSM Parameter Store
-      ansible.builtin.include_role:
-        name: ssm_parameter_store
-        tasks_from: get_parameter
-      vars:
-        parameter_name: "/jenkins-infra/{{ env_name }}/config/update-repo-document-name"
-        store_as: "update_repo_document_name"
-    
-    - name: Get execute script document name from SSM Parameter Store
-      ansible.builtin.include_role:
-        name: ssm_parameter_store
-        tasks_from: get_parameter
-      vars:
-        parameter_name: "/jenkins-infra/{{ env_name }}/config/execute-script-document-name"
-        store_as: "execute_script_document_name"
     
   
   rescue:

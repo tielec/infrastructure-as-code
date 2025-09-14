@@ -13,23 +13,59 @@
   register: aws_env_script_permission
   no_log: true
 
-# SSMドキュメント名の取得（jenkins-configで作成されたものを使用）
-- name: Get execute script document name from SSM Parameter Store
-  ansible.builtin.include_role:
-    name: ssm_parameter_store
-    tasks_from: get_parameter
-  vars:
-    parameter_name: "/jenkins-infra/{{ env_name }}/config/execute-script-document-name"
-    store_as: "execute_script_document_name"
+# SSMパラメータストアから必要な設定を一括取得
+- name: Retrieve all required parameters from SSM Parameter Store
+  block:
+    # Git設定パラメータの取得
+    - name: Get Git repository from SSM
+      ansible.builtin.include_role:
+        name: ssm_parameter_store
+        tasks_from: get_parameter
+      vars:
+        parameter_name: "/{{ project_name }}/{{ env_name }}/config/git-repo"
+        store_as: "git_repo"
+      when: git_repo is not defined
 
-# jenkins_configのSSMドキュメントも取得（SSMパラメータから）
-- name: Get config update repo document name from SSM Parameter Store
-  ansible.builtin.include_role:
-    name: ssm_parameter_store
-    tasks_from: get_parameter
-  vars:
-    parameter_name: "/jenkins-infra/{{ env_name }}/config/update-repo-document-name"
-    store_as: "config_update_repo_document_name"
+    - name: Get Git branch from SSM
+      ansible.builtin.include_role:
+        name: ssm_parameter_store
+        tasks_from: get_parameter
+      vars:
+        parameter_name: "/{{ project_name }}/{{ env_name }}/config/git-branch"
+        store_as: "git_branch"
+      when: git_branch is not defined
+
+    # SSMドキュメント名の取得
+    - name: Get execute script document name from SSM
+      ansible.builtin.include_role:
+        name: ssm_parameter_store
+        tasks_from: get_parameter
+      vars:
+        parameter_name: "/jenkins-infra/{{ env_name }}/config/execute-script-document-name"
+        store_as: "execute_script_document_name"
+
+    - name: Get config update repo document name from SSM
+      ansible.builtin.include_role:
+        name: ssm_parameter_store
+        tasks_from: get_parameter
+      vars:
+        parameter_name: "/jenkins-infra/{{ env_name }}/config/update-repo-document-name"
+        store_as: "config_update_repo_document_name"
+
+    # JenkinsインスタンスIDの取得
+    - name: Get Jenkins instance ID from SSM
+      ansible.builtin.include_role:
+        name: ssm_parameter_store
+        tasks_from: get_parameter
+      vars:
+        parameter_name: "/jenkins-infra/{{ env_name }}/controller/instance-id"
+        store_as: "jenkins_instance_id"
+
+# パラメータの検証
+- name: Verify Jenkins instance ID format
+  ansible.builtin.fail:
+    msg: "Invalid Jenkins instance ID format: {{ jenkins_instance_id }}"
+  when: not (jenkins_instance_id | regex_search('^i-[a-f0-9]+$'))
 
 # Pulumiデプロイ（アプリケーションステータスパラメータのみを作成）
 - name: Deploy Application Status Parameters with Pulumi
@@ -70,23 +106,6 @@
       ansible.builtin.fail:
         msg: "Jenkins application deployment failed."
 
-# Jenkinsインスタンスの取得（Parameter Storeから）
-- name: Get active Jenkins instance
-  block:
-    - name: Get Jenkins instance ID from SSM Parameter Store
-      ansible.builtin.include_role:
-        name: ssm_parameter_store
-        tasks_from: get_parameter
-      vars:
-        parameter_name: "/jenkins-infra/{{ env_name }}/controller/instance-id"
-        store_as: "jenkins_instance_id"
-    
-    - name: Verify Jenkins instance ID
-      ansible.builtin.fail:
-        msg: "Invalid Jenkins instance ID format: {{ jenkins_instance_id }}"
-      when: not (jenkins_instance_id | regex_search('^i-[a-f0-9]+$'))
-    
-
 # アプリケーション設定の実行
 - name: Execute application configuration tasks
   block:
@@ -105,7 +124,7 @@
     
     # 2. Jenkinsバージョン更新（プラグインインストール前に実行）
     - name: Update Jenkins version if required
-      when: jenkins_version != 'latest' or update_jenkins | default(false) | bool
+      when: update_jenkins | default(false) | bool
       block:
         - name: Execute Jenkins version update
           ansible.builtin.include_tasks: execute_ssm_command.yml
