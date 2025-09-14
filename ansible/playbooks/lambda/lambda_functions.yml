@@ -27,14 +27,6 @@
         functions_project_name: "{{ lambda_api_infra.pulumi.functions_project }}"
         network_project_name: "{{ lambda_api_infra.pulumi.network_project }}"
         security_project_name: "{{ lambda_api_infra.pulumi.security_project }}"
-        environment_config: "{{ lambda_api_infra.environments[env_name] }}"
-        lambda_memory: "{{ environment_config.lambda_memory | default(lambda_api.default_memory) }}"
-        memory_size: "{{ environment_config.lambda_memory | default(lambda_api.default_memory) }}"
-        lambda_timeout: "{{ lambda_api.default_timeout }}"
-        timeout: "{{ lambda_api.default_timeout }}"
-        lambda_runtime: "{{ lambda_api.runtime | default('nodejs18.x') }}"
-        log_level: "{{ environment_config.log_level | default('INFO') }}"
-        log_retention_days: "{{ lambda_api.log_retention_days[env_name] | default(7) }}"
         
     - name: Display operation info
       ansible.builtin.debug:
@@ -46,10 +38,6 @@
           Environment: {{ env_name }}
           Project: {{ functions_project_name }}
           Region: {{ aws_region_name }}
-          Memory: {{ lambda_memory }}MB
-          Timeout: {{ lambda_timeout }}s
-          Log Level: {{ log_level }}
-          Log Retention: {{ log_retention_days }} days
           Preview Only: {{ preview_only }}
           ==========================================
           

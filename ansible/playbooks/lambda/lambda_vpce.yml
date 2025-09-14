@@ -28,8 +28,6 @@
         vpce_project_name: "{{ lambda_api_infra.pulumi.vpce_project }}"
         network_project_name: "{{ lambda_api_infra.pulumi.network_project }}"
         security_project_name: "{{ lambda_api_infra.pulumi.security_project }}"
-        environment_config: "{{ lambda_api_infra.environments[env_name] }}"
-        vpc_endpoints: "{{ environment_config.enable_vpc_endpoints | default(['s3']) }}"
         
     - name: Display operation info
       ansible.builtin.debug:
@@ -41,7 +39,6 @@
           Environment: {{ env_name }}
           Project: {{ vpce_project_name }}
           Region: {{ aws_region_name }}
-          Endpoints: {{ vpc_endpoints | join(', ') }}
           Preview Only: {{ preview_only }}
           ==========================================
           

@@ -3,7 +3,7 @@
 
 - name: Display NAT deployment information
   ansible.builtin.debug:
-    msg: "Deploying Lambda API NAT Infrastructure for {{ env_name }} environment ({{ 'NAT Gateway' if high_availability_mode else 'NAT Instance' }})"
+    msg: "Deploying Lambda API NAT Infrastructure for {{ env_name }} environment"
 
 # Pulumiデプロイ
 - name: Deploy NAT Infrastructure with Pulumi
@@ -50,13 +50,12 @@
     - name: Set NAT deployment status
       ansible.builtin.set_fact:
         nat_deployed: true
-        nat_type: "{{ 'NAT Gateway' if high_availability_mode else 'NAT Instance' }}"
       when: not preview_only | default(false) | bool
-    
+
     # NAT情報の表示
     - name: Display NAT deployment summary
       ansible.builtin.debug:
-        msg: "Lambda API NAT Infrastructure deployed successfully for {{ env_name }} environment ({{ nat_type }})"
+        msg: "Lambda API NAT Infrastructure deployed successfully for {{ env_name }} environment"
       when: not preview_only | default(false) | bool
   
   rescue:

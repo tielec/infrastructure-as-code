@@ -25,9 +25,6 @@
         project_name: "{{ lambda_api_infra.project_name }}"
         aws_region_name: "{{ lambda_api_infra.aws.default_region }}"
         nat_project_name: "{{ lambda_api_infra.pulumi.nat_project }}"
-        environment_config: "{{ lambda_api_infra.environments[env_name] }}"
-        high_availability_mode: "{{ environment_config.nat_high_availability | default(lambda_api_infra.nat.high_availability_mode) }}"
-        nat_instance_type: "{{ environment_config.nat_instance_type | default(lambda_api_infra.nat.instance_type) }}"
         
     - name: Display operation info
       ansible.builtin.debug:
@@ -39,10 +36,6 @@
           Environment: {{ env_name }}
           Project: {{ nat_project_name }}
           Region: {{ aws_region_name }}
-          NAT Mode: {{ 'High Availability (NAT Gateway)' if high_availability_mode else 'Normal (NAT Instance)' }}
-          {% if not high_availability_mode %}
-          Instance Type: {{ nat_instance_type }}
-          {% endif %}
           Preview Only: {{ preview_only }}
           ==========================================
           
