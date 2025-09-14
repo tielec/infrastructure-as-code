@@ -4,3 +4,5 @@ runtime:
   options:
     typescript: true
 description: Jenkins Agent AMI builder using EC2 Image Builder
+config:
+  aws:region: ap-northeast-1

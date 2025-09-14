@@ -1,3 +1,5 @@
 name: jenkins-agent
 runtime: nodejs
 description: Jenkins Agent Infrastructure (Spot Fleet)
+config:
+  aws:region: ap-northeast-1

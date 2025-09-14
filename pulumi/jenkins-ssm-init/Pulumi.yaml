@@ -1,3 +1,5 @@
 name: jenkins-ssm-init
 runtime: nodejs
 description: SSM Parameter Store initialization for Jenkins infrastructure
+config:
+  aws:region: ap-northeast-1

@@ -1,3 +1,5 @@
 name: jenkins-storage
 runtime: nodejs
 description: Jenkins Storage Infrastructure (EFS)
+config:
+  aws:region: ap-northeast-1

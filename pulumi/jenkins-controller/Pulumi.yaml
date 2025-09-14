@@ -1,3 +1,5 @@
 name: jenkins-controller
 runtime: nodejs
 description: Jenkins Controller Infrastructure
+config:
+  aws:region: ap-northeast-1
