@@ -76,20 +76,26 @@ save_passphrase_to_ssm() {
     local region="$2"
     
     log_info "パスフレーズをSSMパラメータストアに保存しています..."
-    
-    if aws ssm put-parameter \
+    log_info "  リージョン: $region"
+    log_info "  パラメータ名: $PULUMI_PASSPHRASE_PARAM"
+
+    # SSMパラメータを保存（エラー出力を一時的に表示）
+    local error_output
+    error_output=$(aws ssm put-parameter \
         --name "$PULUMI_PASSPHRASE_PARAM" \
         --value "$passphrase" \
         --type "SecureString" \
         --description "Pulumi configuration passphrase for S3 backend encryption" \
         --tags "Key=Name,Value=Pulumi-Config-Passphrase" "Key=Purpose,Value=Pulumi-Backend" \
         --region "$region" \
-        --overwrite 2>/dev/null; then
+        --overwrite 2>&1)
+
+    if [ $? -eq 0 ]; then
         log_info "✓ パスフレーズがSSMパラメータストアに安全に保存されました"
-        log_info "  パラメータ名: $PULUMI_PASSPHRASE_PARAM"
         return 0
     else
         log_error "パスフレーズの保存に失敗しました"
+        log_error "エラー詳細: $error_output"
         return 1
     fi
 }
