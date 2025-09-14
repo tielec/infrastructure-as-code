@@ -3,12 +3,7 @@
 
 - name: Display controller destruction information
   ansible.builtin.debug:
-    msg: |
-      Destroying Jenkins Controller Infrastructure:
-      - Project: {{ project_name }}
-      - Controller Pulumi Project: {{ controller_project_name }}
-      - Environment: {{ env_name }}
-      - Remove Stack: {{ remove_stacks | default(false) }}
+    msg: "Destroying Jenkins Controller Infrastructure for {{ env_name }} environment (Remove Stack: {{ remove_stacks | default(false) }})"
 
 # ファイル権限設定
 - name: Ensure aws-env.sh has execute permissions
@@ -48,17 +43,8 @@
         stack_name: "{{ env_name }}"
       when: remove_stacks | default(false) | bool
     
-    # 削除ステータスの設定
-    - name: Set controller destruction status on success
-      ansible.builtin.set_fact:
-        controller_destroyed: true
-  
+
   rescue:
-    # エラーハンドリング
-    - name: Set controller destruction status on failure
-      ansible.builtin.set_fact:
-        controller_destroyed: false
-    
-    - name: Display error
-      ansible.builtin.debug:
-        msg: "Failed to destroy controller infrastructure. See error details above."
+    - name: Fail the playbook
+      ansible.builtin.fail:
+        msg: "Controller destruction failed."

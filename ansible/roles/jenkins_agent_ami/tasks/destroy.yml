@@ -3,53 +3,17 @@
 
 - name: Destroy Agent AMI Builder Infrastructure
   block:
-    - name: Set destroy variables
-      ansible.builtin.set_fact:
-        stack_name: "jenkins-agent-ami"
-        pulumi_dir: "{{ pulumi_path }}/jenkins-agent-ami"
-        env: "{{ env_name }}"
-        aws_region: "{{ aws_region_name }}"
-    
-    - name: Check if Pulumi directory exists
-      ansible.builtin.stat:
-        path: "{{ pulumi_dir }}"
-      register: pulumi_dir_stat
-    
-    - name: Skip destroy if directory doesn't exist
-      ansible.builtin.debug:
-        msg: "Pulumi directory doesn't exist, skipping destroy: {{ pulumi_dir }}"
-      when: not pulumi_dir_stat.stat.exists
     
     - name: Destroy agent AMI stack
       ansible.builtin.include_role:
         name: pulumi_helper
         tasks_from: destroy
       vars:
-        pulumi_stack_name: "{{ stack_name }}"
-        pulumi_project_path: "{{ pulumi_dir }}"
-      when: pulumi_dir_stat.stat.exists
+        pulumi_project_path: "{{ pulumi_path }}/jenkins-agent-ami"
     
     - name: Display destroy completion message
       ansible.builtin.debug:
-        msg:
-          - "=========================================="
-          - "Jenkins Agent AMI Builder Infrastructure Destroyed"
-          - "=========================================="
-          - "Stack: {{ stack_name }}"
-          - "Environment: {{ env }}"
-          - ""
-          - "Pulumi has destroyed:"
-          - "  - Image Builder pipelines"
-          - "  - Image Builder recipes"
-          - "  - Image Builder components"
-          - "  - Distribution configurations"
-          - "  - Infrastructure configurations"
-          - "  - IAM roles and policies"
-          - "=========================================="
-    
-    - name: Set destroy success flag
-      ansible.builtin.set_fact:
-        agent_ami_destroyed: true
+        msg: "Jenkins Agent AMI Builder Infrastructure destroyed for {{ env_name }} environment"
     
     # AMI削除（デフォルトで実行）
     - name: Check if AMI deletion should be skipped
@@ -61,13 +25,6 @@
       when: not (skip_ami_deletion | default(false) | bool)
   
   rescue:
-    - name: Display destroy failure message
-      ansible.builtin.debug:
-        msg:
-          - "WARNING: Agent AMI Builder destroy encountered issues"
-          - "Some resources may not have been cleaned up"
-          - "Please check AWS Console for remaining resources"
-    
-    - name: Set destroy failure flag
-      ansible.builtin.set_fact:
-        agent_ami_destroyed: false
+    - name: Fail the playbook
+      ansible.builtin.fail:
+        msg: "Agent AMI Builder destruction failed."

@@ -3,12 +3,7 @@
 
 - name: Display storage destruction information
   ansible.builtin.debug:
-    msg: |
-      Destroying Jenkins Storage Infrastructure:
-      - Project: {{ project_name }}
-      - Storage Pulumi Project: {{ storage_project_name }}
-      - Environment: {{ env_name }}
-      - Remove Stack: {{ remove_stacks | default(false) }}
+    msg: "Destroying Jenkins Storage Infrastructure for {{ env_name }} environment (Remove Stack: {{ remove_stacks | default(false) }})"
 
 # ファイル権限設定
 - name: Ensure aws-env.sh has execute permissions
@@ -48,17 +43,8 @@
         stack_name: "{{ env_name }}"
       when: remove_stacks | default(false) | bool
     
-    # 削除ステータスの設定
-    - name: Set storage destruction status on success
-      ansible.builtin.set_fact:
-        storage_destroyed: true
-  
+
   rescue:
-    # エラーハンドリング
-    - name: Set storage destruction status on failure
-      ansible.builtin.set_fact:
-        storage_destroyed: false
-    
-    - name: Display error
-      ansible.builtin.debug:
-        msg: "Failed to destroy storage infrastructure. See error details above."
+    - name: Fail the playbook
+      ansible.builtin.fail:
+        msg: "Storage destruction failed."
