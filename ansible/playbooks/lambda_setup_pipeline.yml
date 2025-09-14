@@ -58,14 +58,6 @@
   tags:
     - vpce
 
-# NATインフラのデプロイ
-- import_playbook: lambda/lambda_nat.yml
-  vars:
-    env: "{{ env | default('dev') }}"
-  when: run_nat | default(true) | bool
-  tags:
-    - nat
-
 # Lambda関数のデプロイ
 - import_playbook: lambda/lambda_functions.yml
   vars:
