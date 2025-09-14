@@ -96,31 +96,38 @@ save_passphrase_to_ssm() {
 
 # 対話的にパスフレーズを設定
 setup_passphrase_interactive() {
-    echo
-    log_info "パスフレーズの設定方法を選択してください:"
-    echo "  1) 自動生成（推奨）"
-    echo "  2) 手動入力"
-    echo
-    echo -n "選択 (1/2): "
-    read passphrase_choice
+    echo >&2
+    log_info "パスフレーズの設定方法を選択してください:" >&2
+    echo "  1) 自動生成（推奨）" >&2
+    echo "  2) 手動入力" >&2
+    echo >&2
+    local passphrase_choice
+    while true; do
+        echo -n "選択 (1/2): " >&2
+        read passphrase_choice
+        if [[ "$passphrase_choice" =~ ^[12]$ ]]; then
+            break
+        fi
+        log_warn "有効な選択肢を入力してください (1 または 2)" >&2
+    done
     
     local passphrase=""
     
     if [ "$passphrase_choice" = "2" ]; then
         # 手動入力
         while true; do
-            echo
-            echo -n "パスフレーズを入力してください（16文字以上推奨）: "
+            echo >&2
+            echo -n "パスフレーズを入力してください（16文字以上推奨）: " >&2
             read -s passphrase1
-            echo
-            echo -n "確認のためもう一度入力してください: "
+            echo >&2
+            echo -n "確認のためもう一度入力してください: " >&2
             read -s passphrase2
-            echo
-            
+            echo >&2
+
             if [ "$passphrase1" != "$passphrase2" ]; then
-                log_error "パスフレーズが一致しません。もう一度お試しください。"
+                log_error "パスフレーズが一致しません。もう一度お試しください。" >&2
             elif [ ${#passphrase1} -lt 16 ]; then
-                log_error "パスフレーズは16文字以上にしてください。"
+                log_error "パスフレーズは16文字以上にしてください。" >&2
             else
                 passphrase="$passphrase1"
                 break
@@ -128,11 +135,17 @@ setup_passphrase_interactive() {
         done
     else
         # 自動生成
-        log_info "セキュアなパスフレーズを自動生成しています..."
+        log_info "セキュアなパスフレーズを自動生成しています..." >&2
         passphrase=$(generate_passphrase)
-        log_info "✓ パスフレーズが生成されました"
+        log_info "✓ パスフレーズが生成されました" >&2
     fi
-    
+
+    # パスフレーズが空の場合はエラー
+    if [ -z "$passphrase" ]; then
+        log_error "パスフレーズの生成に失敗しました" >&2
+        return 1
+    fi
+
     echo "$passphrase"
 }
 
@@ -197,9 +210,10 @@ setup_pulumi_config() {
         echo
         
         if confirm_action "Pulumi設定パスフレーズを設定しますか？" "y"; then
-            local passphrase=$(setup_passphrase_interactive)
+            local passphrase
+            passphrase=$(setup_passphrase_interactive)
             
-            if save_passphrase_to_ssm "$passphrase" "$REGION"; then
+            if [ -n "$passphrase" ] && save_passphrase_to_ssm "$passphrase" "$REGION"; then
                 log_info "✓ パスフレーズの設定が完了しました"
             else
                 log_error "パスフレーズの保存に失敗しました"
