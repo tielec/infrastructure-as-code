@@ -17,13 +17,29 @@
     msg: "Lambda Shipment S3 project not found at {{ shipment_s3_project_path }}"
   when: not shipment_s3_project.stat.exists
 
+- name: Initialize Lambda Shipment S3 stack
+  ansible.builtin.include_role:
+    name: pulumi_helper
+    tasks_from: init_stack
+  vars:
+    pulumi_project_path: "{{ shipment_s3_project_path }}"
+    stack_name: "{{ env_name }}"
+
+- name: Preview Lambda Shipment S3 deployment
+  ansible.builtin.include_role:
+    name: pulumi_helper
+    tasks_from: preview
+  vars:
+    pulumi_project_path: "{{ shipment_s3_project_path }}"
+  when: preview_only | default(false) | bool
+
 - name: Deploy Lambda Shipment S3 bucket
   ansible.builtin.include_role:
     name: pulumi_helper
+    tasks_from: deploy
   vars:
     pulumi_project_path: "{{ shipment_s3_project_path }}"
-    pulumi_stack_name: "{{ env_name }}"
-    pulumi_operation: "{{ 'preview' if preview_only else 'up' }}"
+  when: not preview_only | default(false) | bool
 
 - name: Get deployment outputs
   ansible.builtin.set_fact:
