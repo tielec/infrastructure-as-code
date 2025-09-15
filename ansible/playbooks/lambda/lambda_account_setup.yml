@@ -2,9 +2,12 @@
 # lambda_account_setup.yml
 # Lambda APIアカウントレベル設定プレイブック
 #
+# 注意: これはAWSアカウント全体で1回だけ実行する設定です
+#       環境（dev/staging/prod）に依存しません
+#
 # 使用方法:
-#   ansible-playbook playbooks/lambda/lambda_account_setup.yml -e "env=dev"
-#   ansible-playbook playbooks/lambda/lambda_account_setup.yml -e "env=dev operation=destroy"
+#   ansible-playbook playbooks/lambda/lambda_account_setup.yml
+#   ansible-playbook playbooks/lambda/lambda_account_setup.yml -e "operation=destroy"
 
 - name: Lambda Account Setup Deployment
   hosts: localhost
