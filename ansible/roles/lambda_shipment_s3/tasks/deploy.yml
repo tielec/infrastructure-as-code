@@ -5,7 +5,7 @@
 - name: Set deployment variables
   ansible.builtin.set_fact:
     shipment_s3_stack_name: "lambda-shipment-s3"
-    shipment_s3_project_path: "{{ pulumi_projects_base }}/lambda-shipment-s3"
+    shipment_s3_project_path: "{{ pulumi_path }}/lambda-shipment-s3"
 
 - name: Check if project exists
   ansible.builtin.stat:
