@@ -7,7 +7,9 @@
  * 動作確認とテストを行います。
  */
 pipeline {
-    agent any
+    agent {
+        label 'ec2-fleet'
+    }
 
     environment {
         TEST_REGION = "${params.AWS_REGION}"
