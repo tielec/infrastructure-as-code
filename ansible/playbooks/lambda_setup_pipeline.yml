@@ -25,16 +25,7 @@
           Environment: {{ env_name }}
           Starting infrastructure deployment...
 
-# アカウントレベル設定（最初に一度だけ実行）
-- import_playbook: lambda/lambda_account_setup.yml
-  vars:
-    env: "{{ env | default('dev') }}"
-  when: run_account_setup | default(true) | bool
-  tags:
-    - account-setup
-    - always
-
-# SSMパラメータストアの初期化
+# SSMパラメータストアの初期化（最初に実行）
 - import_playbook: lambda/lambda_ssm_init.yml
   vars:
     env: "{{ env | default('dev') }}"
