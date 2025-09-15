@@ -41,12 +41,9 @@
     pulumi_project_path: "{{ shipment_s3_project_path }}"
   when: not preview_only | default(false) | bool
 
-- name: Get deployment outputs
+- name: Set deployment status
   ansible.builtin.set_fact:
-    shipment_bucket_name: "{{ pulumi_outputs.bucketName | default('') }}"
-    shipment_bucket_arn: "{{ pulumi_outputs.bucketArn | default('') }}"
-    shipment_s3_deployed: "{{ pulumi_success | default(false) }}"
-  when: pulumi_outputs is defined
+    shipment_s3_deployed: "{{ pulumi_deployment_succeeded | default(false) }}"
 
 - name: Display deployment summary
   ansible.builtin.debug:
@@ -55,7 +52,6 @@
       =====================================
       Stack: {{ shipment_s3_stack_name }}
       Environment: {{ env_name }}
-      Status: {{ 'Success' if (shipment_s3_deployed | default(false)) else 'Failed' }}
-      Bucket Name: {{ shipment_bucket_name | default('N/A') }}
+      Status: {{ 'Success' if shipment_s3_deployed else 'Failed' }}
       Preview Only: {{ preview_only }}
   when: not preview_only

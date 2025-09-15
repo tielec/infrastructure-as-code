@@ -61,7 +61,6 @@
           ==========================================
           {% if role_operation == 'deploy' and not preview_only %}
           Status: {{ 'Success' if shipment_s3_deployed | default(false) else 'Failed' }}
-          Bucket Name: {{ shipment_bucket_name | default('N/A') }}
 
           Next step:
           ansible-playbook playbooks/lambda/lambda_functions.yml -e "env={{ env_name }}"
