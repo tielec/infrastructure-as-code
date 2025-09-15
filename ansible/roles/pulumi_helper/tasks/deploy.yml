@@ -42,14 +42,14 @@
       changed_when: false
       failed_when: false
       when: not ansible_check_mode
-    
+
     - name: Report lock cancellation
       ansible.builtin.debug:
         msg: "Previous lock has been cancelled if it existed"
-      when: 
+      when:
         - not ansible_check_mode
         - "'the stack is currently locked' in lock_check.stderr | default('')"
-    
+
     # スタックが選択されているか確認
     - name: Ensure stack is selected
       ansible.builtin.shell: |
@@ -58,6 +58,14 @@
       register: current_stack
       changed_when: false
       failed_when: current_stack.rc != 0
+      when: not ansible_check_mode
+
+    # AWSリージョンを設定
+    - name: Set AWS region in Pulumi config
+      ansible.builtin.shell: |
+        cd {{ pulumi_project_path }}
+        {{ pulumi_env_prefix }} && {{ pulumi_sudo_cmd }} config set aws:region {{ aws_region }} --stack {{ current_stack.stdout }}
+      changed_when: false
       when: not ansible_check_mode
     
     - name: Start deployment
