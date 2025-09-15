@@ -6,7 +6,6 @@
     msg: |
       Destroying Lambda Functions:
       - Project: {{ project_name }}
-      - Functions Pulumi Project: {{ functions_project_name }}
       - Environment: {{ env_name }}
       - Remove Stack: {{ remove_stacks | default(false) }}
 
