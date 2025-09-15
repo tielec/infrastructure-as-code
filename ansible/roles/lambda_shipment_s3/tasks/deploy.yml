@@ -39,7 +39,7 @@
       =====================================
       Stack: {{ shipment_s3_stack_name }}
       Environment: {{ env_name }}
-      Status: {{ 'Success' if shipment_s3_deployed else 'Failed' }}
+      Status: {{ 'Success' if (shipment_s3_deployed | default(false)) else 'Failed' }}
       Bucket Name: {{ shipment_bucket_name | default('N/A') }}
       Preview Only: {{ preview_only }}
   when: not preview_only
