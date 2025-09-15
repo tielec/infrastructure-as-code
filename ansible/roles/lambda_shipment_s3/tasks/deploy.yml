@@ -32,27 +32,6 @@
     shipment_s3_deployed: "{{ pulumi_success | default(false) }}"
   when: pulumi_outputs is defined
 
-- name: Verify SSM parameters created
-  when:
-    - not preview_only
-    - shipment_s3_deployed
-  block:
-    - name: Check bucket name in SSM
-      ansible.builtin.include_role:
-        name: ssm_parameter_store
-      vars:
-        ssm_action: "get"
-        ssm_parameter_name: "/lambda-shipment/{{ env_name }}/bucket/name"
-        ssm_output_var: "ssm_bucket_name"
-
-    - name: Display SSM parameter verification
-      ansible.builtin.debug:
-        msg: |
-          SSM Parameters Created:
-          - /lambda-shipment/{{ env_name }}/bucket/name: {{ ssm_bucket_name | default('Not found') }}
-          - /lambda-shipment/{{ env_name }}/bucket/arn
-          - /lambda-shipment/{{ env_name }}/region
-
 - name: Display deployment summary
   ansible.builtin.debug:
     msg: |
