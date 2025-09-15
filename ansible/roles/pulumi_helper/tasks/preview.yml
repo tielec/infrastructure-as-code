@@ -20,6 +20,14 @@
       changed_when: false
       failed_when: current_stack.rc != 0
       when: not ansible_check_mode
+
+    # AWSリージョンを設定
+    - name: Set AWS region in Pulumi config
+      ansible.builtin.shell: |
+        cd {{ pulumi_project_path }}
+        {{ pulumi_env_prefix }} && {{ pulumi_sudo_cmd }} config set aws:region {{ aws_region }} --stack {{ current_stack.stdout }}
+      changed_when: false
+      when: not ansible_check_mode
     
     - name: Start preview
       ansible.builtin.debug:

@@ -6,7 +6,6 @@
     msg: |
       Destroying Lambda API VPC Endpoints:
       - Project: {{ project_name }}
-      - VPC Endpoints Pulumi Project: {{ vpce_project_name }}
       - Environment: {{ env_name }}
       - Remove Stack: {{ remove_stacks | default(false) }}
 

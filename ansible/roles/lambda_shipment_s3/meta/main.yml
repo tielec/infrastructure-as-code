@@ -1,0 +1,33 @@
+---
+# roles/lambda_shipment_s3/meta/main.yml
+# Lambda Shipment S3ロールのメタデータと依存関係
+
+dependencies:
+  - pulumi_helper
+  - ssm_parameter_store
+  - aws_setup
+
+galaxy_info:
+  author: TIELEC Team
+  description: Lambda Shipment S3 bucket deployment role
+  company: TIELEC
+
+  license: MIT
+
+  min_ansible_version: "2.9"
+
+  platforms:
+    - name: Ubuntu
+      versions:
+        - focal
+        - jammy
+    - name: Amazon
+      versions:
+        - all
+
+  galaxy_tags:
+    - aws
+    - s3
+    - lambda
+    - deployment
+    - pulumi

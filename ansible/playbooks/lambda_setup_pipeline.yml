@@ -25,7 +25,16 @@
           Environment: {{ env_name }}
           Starting infrastructure deployment...
 
-# SSMパラメータストアの初期化（最初に実行）
+# アカウントレベル設定（最初に一度だけ実行）
+- import_playbook: lambda/lambda_account_setup.yml
+  vars:
+    env: "{{ env | default('dev') }}"
+  when: run_account_setup | default(true) | bool
+  tags:
+    - account-setup
+    - always
+
+# SSMパラメータストアの初期化
 - import_playbook: lambda/lambda_ssm_init.yml
   vars:
     env: "{{ env | default('dev') }}"
@@ -57,6 +66,14 @@
   when: run_vpce | default(true) | bool
   tags:
     - vpce
+
+# Lambda Shipment S3バケットのデプロイ
+- import_playbook: lambda/lambda_shipment_s3.yml
+  vars:
+    env: "{{ env | default('dev') }}"
+  when: run_shipment_s3 | default(true) | bool
+  tags:
+    - shipment-s3
 
 # Lambda関数のデプロイ
 - import_playbook: lambda/lambda_functions.yml

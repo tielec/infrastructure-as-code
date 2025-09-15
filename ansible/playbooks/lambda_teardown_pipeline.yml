@@ -94,14 +94,14 @@
   tags:
     - functions
 
-# NATインフラの削除
-- import_playbook: lambda/lambda_nat.yml
+# Lambda Shipment S3バケットの削除
+- import_playbook: lambda/lambda_shipment_s3.yml
   vars:
     env: "{{ env | default('dev') }}"
     operation: "destroy"
-  when: destroy_nat | default(true) | bool
+  when: destroy_shipment_s3 | default(true) | bool
   tags:
-    - nat
+    - shipment-s3
 
 # VPCエンドポイントの削除
 - import_playbook: lambda/lambda_vpce.yml
@@ -130,7 +130,7 @@
   tags:
     - network
 
-# SSMパラメータの削除（最後、オプション）
+# SSMパラメータの削除（オプション）
 - import_playbook: lambda/lambda_ssm_init.yml
   vars:
     env: "{{ env | default('dev') }}"
@@ -138,6 +138,15 @@
   when: destroy_ssm | default(false) | bool
   tags:
     - ssm-destroy
+
+# アカウントレベル設定の削除（最後、オプション）
+- import_playbook: lambda/lambda_account_setup.yml
+  vars:
+    env: "{{ env | default('dev') }}"
+    operation: "destroy"
+  when: destroy_account_setup | default(false) | bool
+  tags:
+    - account-setup-destroy
 
 - name: Teardown Complete
   hosts: localhost

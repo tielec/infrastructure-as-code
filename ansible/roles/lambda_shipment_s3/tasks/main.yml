@@ -1,0 +1,15 @@
+---
+# roles/lambda_shipment_s3/tasks/main.yml
+# Lambda Shipment S3バケットデプロイメントロール
+
+- name: Set operation
+  ansible.builtin.set_fact:
+    shipment_operation: "{{ operation | default('deploy') }}"
+
+- name: Include deploy tasks
+  ansible.builtin.include_tasks: deploy.yml
+  when: shipment_operation == 'deploy'
+
+- name: Include destroy tasks
+  ansible.builtin.include_tasks: destroy.yml
+  when: shipment_operation == 'destroy'

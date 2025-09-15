@@ -1,0 +1,69 @@
+---
+# lambda_shipment_s3.yml
+# Lambda Shipment S3バケットデプロイメントプレイブック
+#
+# 使用方法:
+#   ansible-playbook playbooks/lambda/lambda_shipment_s3.yml -e "env=dev"
+#   ansible-playbook playbooks/lambda/lambda_shipment_s3.yml -e "env=dev operation=destroy"
+
+- name: Lambda Shipment S3 Deployment
+  hosts: localhost
+  connection: local
+  gather_facts: yes
+
+  vars:
+    env_name: "{{ env | default('dev') }}"
+    preview_only: "{{ preview | default(false) }}"
+
+  pre_tasks:
+    - name: Include group_vars/all.yml
+      ansible.builtin.include_vars:
+        file: "{{ inventory_dir }}/group_vars/all.yml"
+
+    - name: Set required variables
+      ansible.builtin.set_fact:
+        project_name: "{{ projects.lambda_api.name }}"
+
+    - name: Display operation info
+      ansible.builtin.debug:
+        msg: |
+          ==========================================
+          Lambda Shipment S3 Deployment
+          ==========================================
+          Operation: {{ operation | default('deploy') }}
+          Environment: {{ env_name }}
+          Project: {{ project_name }}-shipment-s3
+          Region: {{ aws_region }}
+          Preview Only: {{ preview_only }}
+          ==========================================
+
+  roles:
+    - aws_setup
+    - pulumi_helper
+
+  tasks:
+
+    - name: Set operation variable
+      ansible.builtin.set_fact:
+        role_operation: "{{ operation | default('deploy') }}"
+
+    - name: Execute Lambda Shipment S3 deployment
+      ansible.builtin.include_role:
+        name: lambda_shipment_s3
+      vars:
+        operation: "{{ role_operation }}"
+
+    - name: Display results
+      ansible.builtin.debug:
+        msg: |
+          ==========================================
+          Lambda Shipment S3 {{ 'Preview' if preview_only else role_operation | title }} Complete
+          ==========================================
+          {% if role_operation == 'deploy' and not preview_only %}
+          Status: {{ 'Success' if shipment_s3_deployed | default(false) else 'Failed' }}
+
+          Next step:
+          ansible-playbook playbooks/lambda/lambda_functions.yml -e "env={{ env_name }}"
+          {% elif role_operation == 'destroy' %}
+          Lambda Shipment S3 bucket has been removed.
+          {% endif %}

@@ -244,6 +244,27 @@ else
     fi
 fi
 
+# EC2インスタンスのリージョンを取得（IMDSv2を使用）
+info_msg "EC2インスタンスのリージョンを取得中..."
+
+# IMDSv2トークンを取得
+EC2_TOKEN=$(curl -X PUT "http://169.254.169.254/latest/api/token" -H "X-aws-ec2-metadata-token-ttl-seconds: 21600" -s 2>/dev/null)
+
+if [ -n "$EC2_TOKEN" ]; then
+    # トークンを使用してリージョン情報を取得
+    EC2_REGION=$(curl -H "X-aws-ec2-metadata-token: $EC2_TOKEN" -s http://169.254.169.254/latest/meta-data/placement/region 2>/dev/null)
+
+    if [ -n "$EC2_REGION" ]; then
+        success_msg "EC2インスタンスのリージョン: $EC2_REGION"
+    else
+        warn_msg "EC2リージョンの取得に失敗しました。デフォルトのリージョンを使用します"
+        EC2_REGION=""
+    fi
+else
+    warn_msg "EC2環境ではないか、メタデータの取得に失敗しました"
+    EC2_REGION=""
+fi
+
 # Jenkins設定ファイルの更新
 echo ""
 info_msg "Jenkins設定ファイルを更新中..."
@@ -252,7 +273,9 @@ if [ ! -f "$CONFIG_FILE" ]; then
     warn_msg "設定ファイルが見つかりません: $CONFIG_FILE"
     warn_msg "Jenkins設定の更新をスキップします"
 else
-    # 現在の設定値を確認
+    CONFIG_UPDATED=false
+
+    # 現在のブランチ設定値を確認
     CURRENT_CONFIG_BRANCH=$(grep -E "^\s*branch:" "$CONFIG_FILE" 2>/dev/null | sed 's/.*branch:[[:space:]]*"\(.*\)".*/\1/')
 
     if [ -z "$CURRENT_CONFIG_BRANCH" ]; then
@@ -274,13 +297,41 @@ else
         if grep -q "branch: \"$BRANCH_NAME\"" "$CONFIG_FILE"; then
             success_msg "Jenkins設定のブランチを '$CURRENT_CONFIG_BRANCH' → '$BRANCH_NAME' に更新しました"
             CONFIG_UPDATED=true
-            
+
             # 変更内容を表示
             echo ""
             info_msg "設定ファイルの変更内容:"
             grep -A1 -B1 "branch:" "$CONFIG_FILE" | grep -E "(git:|branch:)" || true
         else
             warn_msg "設定ファイルの更新に失敗しました"
+        fi
+    fi
+
+    # aws_regionの更新（EC2リージョンが取得できた場合）
+    if [ -n "$EC2_REGION" ]; then
+        CURRENT_AWS_REGION=$(grep -E "^aws_region:" "$CONFIG_FILE" 2>/dev/null | sed 's/aws_region:[[:space:]]*"\?\([^"]*\)"\?/\1/')
+
+        if [ -z "$CURRENT_AWS_REGION" ]; then
+            warn_msg "設定ファイルにaws_region設定が見つかりません"
+        elif [ "$CURRENT_AWS_REGION" = "$EC2_REGION" ]; then
+            info_msg "aws_regionは既に '$EC2_REGION' です（変更不要）"
+        else
+            # YAMLファイルのaws_region設定を更新
+            if [[ "$OSTYPE" == "darwin"* ]]; then
+                # macOS
+                sed -i '' "s|^aws_region:[[:space:]]*\".*\"|aws_region: \"$EC2_REGION\"|" "$CONFIG_FILE"
+            else
+                # Linux
+                sed -i "s|^aws_region:[[:space:]]*\".*\"|aws_region: \"$EC2_REGION\"|" "$CONFIG_FILE"
+            fi
+
+            # 変更が正しく適用されたか確認
+            if grep -q "aws_region: \"$EC2_REGION\"" "$CONFIG_FILE"; then
+                success_msg "aws_regionを '$CURRENT_AWS_REGION' → '$EC2_REGION' に更新しました"
+                CONFIG_UPDATED=true
+            else
+                warn_msg "aws_regionの更新に失敗しました"
+            fi
         fi
     fi
 fi

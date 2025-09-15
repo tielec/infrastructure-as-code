@@ -1,0 +1,99 @@
+---
+# roles/lambda_shipment_s3/tasks/destroy.yml
+# Lambda Shipment S3バケットの削除タスク
+
+- name: Set destroy variables
+  ansible.builtin.set_fact:
+    shipment_s3_stack_name: "lambda-shipment-s3"
+    shipment_s3_project_path: "{{ pulumi_path }}/lambda-shipment-s3"
+
+- name: Check if project exists
+  ansible.builtin.stat:
+    path: "{{ shipment_s3_project_path }}"
+  register: shipment_s3_project
+
+- name: Skip if project doesn't exist
+  ansible.builtin.debug:
+    msg: "Lambda Shipment S3 project not found at {{ shipment_s3_project_path }}, skipping destroy"
+  when: not shipment_s3_project.stat.exists
+
+- name: Get bucket name from SSM before destroy
+  ansible.builtin.include_role:
+    name: ssm_parameter_store
+  vars:
+    ssm_action: "get"
+    ssm_parameter_name: "/lambda-shipment/{{ env_name }}/bucket/name"
+    ssm_output_var: "bucket_to_destroy"
+  when: shipment_s3_project.stat.exists
+
+- name: Display bucket to be destroyed
+  ansible.builtin.debug:
+    msg: |
+      WARNING: About to destroy Lambda Shipment S3 bucket:
+      Bucket Name: {{ bucket_to_destroy | default('Not found in SSM') }}
+      Environment: {{ env_name }}
+  when:
+    - shipment_s3_project.stat.exists
+    - not preview_only
+
+- name: Empty S3 bucket before deletion
+  when:
+    - shipment_s3_project.stat.exists
+    - bucket_to_destroy is defined
+    - bucket_to_destroy | length > 0
+    - not preview_only
+  block:
+    - name: Empty S3 bucket
+      amazon.aws.s3_bucket:
+        name: "{{ bucket_to_destroy }}"
+        state: absent
+        force: true
+      ignore_errors: yes
+      register: bucket_empty_result
+
+    - name: Display bucket empty status
+      ansible.builtin.debug:
+        msg: "Bucket {{ bucket_to_destroy }} emptied: {{ 'Success' if not bucket_empty_result.failed else 'Failed' }}"
+
+- name: Initialize Lambda Shipment S3 stack for destroy
+  ansible.builtin.include_role:
+    name: pulumi_helper
+    tasks_from: init_stack
+  vars:
+    pulumi_project_path: "{{ shipment_s3_project_path }}"
+    stack_name: "{{ env_name }}"
+  when: shipment_s3_project.stat.exists
+
+- name: Preview Lambda Shipment S3 destroy
+  ansible.builtin.include_role:
+    name: pulumi_helper
+    tasks_from: preview
+  vars:
+    pulumi_project_path: "{{ shipment_s3_project_path }}"
+  when:
+    - shipment_s3_project.stat.exists
+    - preview_only | default(false) | bool
+
+- name: Destroy Lambda Shipment S3 stack
+  ansible.builtin.include_role:
+    name: pulumi_helper
+    tasks_from: destroy
+  vars:
+    pulumi_project_path: "{{ shipment_s3_project_path }}"
+  when:
+    - shipment_s3_project.stat.exists
+    - not preview_only | default(false) | bool
+
+- name: Display destroy summary
+  ansible.builtin.debug:
+    msg: |
+      Lambda Shipment S3 Destroy Summary:
+      ===================================
+      Stack: {{ shipment_s3_stack_name }}
+      Environment: {{ env_name }}
+      Bucket Destroyed: {{ bucket_to_destroy | default('N/A') }}
+      Status: {{ 'Success' if pulumi_success | default(false) else 'Failed' }}
+      Preview Only: {{ preview_only }}
+  when:
+    - shipment_s3_project.stat.exists
+    - not preview_only

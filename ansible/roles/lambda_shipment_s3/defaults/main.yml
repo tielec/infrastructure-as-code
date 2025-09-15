@@ -1,0 +1,20 @@
+---
+# roles/lambda_shipment_s3/defaults/main.yml
+# Lambda Shipment S3ロールのデフォルト変数
+
+# プレビューモード
+preview_only: false
+
+# S3バケット設定
+shipment_s3_versioning: true
+shipment_s3_lifecycle_days: 7
+
+# タグ設定
+shipment_s3_tags:
+  Environment: "{{ env_name }}"
+  ManagedBy: "pulumi"
+  Project: "{{ project_name | default('lambda-api') }}"
+  SharedResource: "true"
+
+# SSMパラメータプレフィックス
+shipment_ssm_prefix: "/lambda-shipment/{{ env_name }}"

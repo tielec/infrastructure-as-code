@@ -6,7 +6,6 @@
     msg: |
       Destroying Lambda API Security Infrastructure:
       - Project: {{ project_name }}
-      - Security Pulumi Project: {{ security_project_name }}
       - Environment: {{ env_name }}
       - Remove Stack: {{ remove_stacks | default(false) }}
 

@@ -1,0 +1,15 @@
+---
+# roles/lambda_account_setup/tasks/main.yml
+# Lambda Account Setupデプロイメントロール
+
+- name: Set operation
+  ansible.builtin.set_fact:
+    account_setup_operation: "{{ operation | default('deploy') }}"
+
+- name: Include deploy tasks
+  ansible.builtin.include_tasks: deploy.yml
+  when: account_setup_operation == 'deploy'
+
+- name: Include destroy tasks
+  ansible.builtin.include_tasks: destroy.yml
+  when: account_setup_operation == 'destroy'
