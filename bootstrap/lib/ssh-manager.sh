@@ -12,16 +12,26 @@ readonly SSH_KEY_PATH="$HOME/.ssh/id_ed25519"
 
 # SSMからSSHキーを復元
 restore_ssh_key_from_ssm() {
+    # 引数チェック
+    if [ $# -ne 1 ]; then
+        log_error "使用方法: restore_ssh_key_from_ssm <REGION>"
+        return 1
+    fi
+
+    local REGION="$1"
+
     log_info "SSMパラメータストアからSSHキーを復元しています..."
-    
+
     local private_key=$(aws ssm get-parameter \
         --name "$SSH_PRIVATE_KEY_PARAM" \
+        --region "$REGION" \
         --with-decryption \
         --query 'Parameter.Value' \
         --output text 2>/dev/null || echo "")
-    
+
     local public_key=$(aws ssm get-parameter \
         --name "$SSH_PUBLIC_KEY_PARAM" \
+        --region "$REGION" \
         --query 'Parameter.Value' \
         --output text 2>/dev/null || echo "")
     
@@ -45,7 +55,14 @@ restore_ssh_key_from_ssm() {
 
 # SSHキーをSSMに保存
 save_ssh_key_to_ssm() {
+    # 引数チェック
+    if [ $# -ne 2 ]; then
+        log_error "使用方法: save_ssh_key_to_ssm <git_email> <REGION>"
+        return 1
+    fi
+
     local git_email="$1"
+    local REGION="$2"
     
     log_info "SSHキーをSSMパラメータストアに保存しています..."
     
@@ -55,6 +72,7 @@ save_ssh_key_to_ssm() {
         --value "$git_email" \
         --type "String" \
         --description "GitHub email address for SSH key" \
+        --region "$REGION" \
         --overwrite \
         2>/dev/null; then
         log_info "✓ メールアドレスを保存しました"
@@ -68,6 +86,7 @@ save_ssh_key_to_ssm() {
         --value "$(cat "$SSH_KEY_PATH")" \
         --type "SecureString" \
         --description "GitHub SSH private key" \
+        --region "$REGION" \
         --overwrite \
         2>/dev/null; then
         log_info "✓ 秘密鍵を保存しました"
@@ -82,6 +101,7 @@ save_ssh_key_to_ssm() {
         --value "$(cat "${SSH_KEY_PATH}.pub")" \
         --type "String" \
         --description "GitHub SSH public key" \
+        --region "$REGION" \
         --overwrite \
         2>/dev/null; then
         log_info "✓ 公開鍵を保存しました"
@@ -139,8 +159,17 @@ generate_new_ssh_key() {
 
 # メールアドレスを取得
 get_git_email() {
+    # 引数チェック
+    if [ $# -ne 1 ]; then
+        log_error "使用方法: get_git_email <REGION>"
+        return 1
+    fi
+
+    local REGION="$1"
+
     local existing_email=$(aws ssm get-parameter \
         --name "$SSH_EMAIL_PARAM" \
+        --region "$REGION" \
         --query 'Parameter.Value' \
         --output text 2>/dev/null || echo "")
     
@@ -154,11 +183,20 @@ get_git_email() {
 
 # SSHキーのセットアップメイン処理
 setup_ssh_keys() {
+    # 引数チェック
+    if [ $# -ne 1 ]; then
+        log_error "使用方法: setup_ssh_keys <REGION>"
+        return 1
+    fi
+
+    local REGION="$1"
+
     log_section "GitHub SSH キーの設定"
-    
+
     # SSMから既存の設定を確認
     local git_email_check=$(aws ssm get-parameter \
         --name "$SSH_EMAIL_PARAM" \
+        --region "$REGION" \
         --query 'Parameter.Value' \
         --output text 2>/dev/null || echo "")
     
@@ -167,7 +205,7 @@ setup_ssh_keys() {
         
         if [ ! -f "$SSH_KEY_PATH" ]; then
             # ローカルにキーがない場合は復元
-            if restore_ssh_key_from_ssm; then
+            if restore_ssh_key_from_ssm "$REGION"; then
                 display_public_key
                 return 0
             fi
@@ -183,8 +221,8 @@ setup_ssh_keys() {
         
         if [ -z "$git_email_check" ]; then
             if confirm_action "このキーをSSMパラメータストアに保存しますか？" "y"; then
-                local git_email=$(get_git_email)
-                save_ssh_key_to_ssm "$git_email"
+                local git_email=$(get_git_email "$REGION")
+                save_ssh_key_to_ssm "$git_email" "$REGION"
             fi
         fi
         return 0
@@ -194,10 +232,10 @@ setup_ssh_keys() {
     log_warn "SSHキーが設定されていません"
     
     if confirm_action "新しいSSHキーを生成しますか？" "y"; then
-        local git_email=$(get_git_email)
-        
+        local git_email=$(get_git_email "$REGION")
+
         if generate_new_ssh_key "$git_email"; then
-            save_ssh_key_to_ssm "$git_email"
+            save_ssh_key_to_ssm "$git_email" "$REGION"
             display_public_key
             show_github_instructions
             

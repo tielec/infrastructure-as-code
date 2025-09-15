@@ -168,8 +168,36 @@ show_completion_message() {
 
 # メイン処理
 main() {
+    # デフォルトリージョンの取得
+    local DEFAULT_REGION
+
+    # IMDSv2を使用してEC2インスタンスメタデータからリージョンを取得
+    local TOKEN=$(curl -s -X PUT "http://169.254.169.254/latest/api/token" -H "X-aws-ec2-metadata-token-ttl-seconds: 21600" 2>/dev/null || echo "")
+    if [ -n "$TOKEN" ]; then
+        DEFAULT_REGION=$(curl -s -H "X-aws-ec2-metadata-token: $TOKEN" http://169.254.169.254/latest/dynamic/instance-identity/document | grep region | cut -d'"' -f4 || echo "")
+    fi
+
+    # 取得できない場合はエラー
+    if [ -z "$DEFAULT_REGION" ]; then
+        log_error "EC2インスタンスメタデータからリージョンを取得できませんでした"
+        log_error "EC2インスタンス上で実行されていることを確認してください"
+        exit 1
+    fi
+
+    # リージョンの設定（引数があれば優先、なければデフォルト使用）
+    local REGION
+    if [ $# -ge 1 ]; then
+        REGION="$1"
+        log_info "指定されたリージョンを使用: $REGION"
+    else
+        REGION="$DEFAULT_REGION"
+        log_info "現在のAWS設定からリージョンを自動検出: $REGION"
+    fi
+
+    export AWS_REGION="$REGION"
+
     # ヘッダー表示
-    log_header "Jenkins インフラストラクチャ ブートストラップセットアップ\n   Amazon Linux 2023 Edition"
+    log_header "Jenkins インフラストラクチャ ブートストラップセットアップ\n   Amazon Linux 2023 Edition\n   Region: $REGION"
     
     # リポジトリルートディレクトリに移動
     cd "$REPO_ROOT"
@@ -192,19 +220,19 @@ main() {
     check_aws_credentials
     
     # AWSアカウントIDの設定（SSMパラメータストア）
-    setup_aws_account_ids
+    setup_aws_account_ids "$REGION"
     
     # SSH鍵の設定（SSMアクセスを含むが対話的処理が含まれる可能性）
-    setup_ssh_keys
+    setup_ssh_keys "$REGION"
     
     # OpenAI APIキーの設定（SSMアクセスを含む）
-    setup_openai_api_key
+    setup_openai_api_key "$REGION"
     
     # GitHub App設定（SSMアクセスを含む）
-    setup_github_app
+    setup_github_app "$REGION"
     
     # Pulumi設定（AWS認証後に実行、SSMアクセスを含む）
-    setup_pulumi_config
+    setup_pulumi_config "$REGION"
     
     # === 重い処理（インストールと実行） ===
     # Ansibleのインストール（パッケージインストールを含む可能性）

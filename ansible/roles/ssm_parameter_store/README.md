@@ -65,7 +65,7 @@ AWS Systems Manager Parameter Storeと連携して、セキュアな設定管理
 
 | 変数名 | デフォルト値 | 説明 |
 |--------|--------------|------|
-| `ssm_parameter_store_region` | `ap-northeast-1` | AWS リージョン |
+| `aws_region` | `ap-northeast-1` | AWS リージョン |
 | `ssm_parameter_store_cache.enabled` | `true` | キャッシュの有効/無効 |
 | `ssm_parameter_store_cache.ttl` | `300` | キャッシュの有効期限（秒） |
 | `ssm_parameter_store_cache.scope` | `playbook` | キャッシュのスコープ |

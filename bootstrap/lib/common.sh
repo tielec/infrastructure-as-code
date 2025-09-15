@@ -73,19 +73,27 @@ ensure_file() {
 confirm_action() {
     local message=$1
     local default=${2:-n}
-    
+    local response
+
     if [ "$default" = "y" ]; then
-        read -p "$message (Y/n): " response
-        if [[ $response =~ ^[Nn]$ ]]; then
+        echo -n "$message (Y/n): "
+        read response
+        # 空のレスポンスまたはY/yの場合はtrue
+        if [[ -z "$response" || $response =~ ^[Yy]$ ]]; then
+            return 0
+        else
             return 1
         fi
     else
-        read -p "$message (y/N): " response
-        if [[ ! $response =~ ^[Yy]$ ]]; then
+        echo -n "$message (y/N): "
+        read response
+        # Y/yの場合のみtrue
+        if [[ $response =~ ^[Yy]$ ]]; then
+            return 0
+        else
             return 1
         fi
     fi
-    return 0
 }
 
 # プログレス表示

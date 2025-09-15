@@ -9,8 +9,17 @@ readonly OPENAI_API_KEY_PARAM="/bootstrap/openai/api-key"
 
 # OpenAI APIキーを取得
 get_openai_api_key() {
+    # 引数チェック
+    if [ $# -ne 1 ]; then
+        log_error "使用方法: get_openai_api_key <REGION>"
+        return 1
+    fi
+
+    local REGION="$1"
+
     aws ssm get-parameter \
         --name "$OPENAI_API_KEY_PARAM" \
+        --region "$REGION" \
         --with-decryption \
         --query 'Parameter.Value' \
         --output text 2>/dev/null || echo ""
@@ -33,15 +42,23 @@ validate_api_key() {
 
 # APIキーをSSMに保存
 save_api_key_to_ssm() {
+    # 引数チェック
+    if [ $# -ne 2 ]; then
+        log_error "使用方法: save_api_key_to_ssm <api_key> <REGION>"
+        return 1
+    fi
+
     local api_key="$1"
-    
+    local REGION="$2"
+
     log_info "APIキーをSSMパラメータストアに保存しています..."
-    
+
     if aws ssm put-parameter \
         --name "$OPENAI_API_KEY_PARAM" \
         --value "$api_key" \
         --type "SecureString" \
         --description "OpenAI API Key for various services" \
+        --region "$REGION" \
         --overwrite 2>/dev/null; then
         log_info "✓ OpenAI APIキーがSSMパラメータストアに安全に保存されました"
         log_info "  パラメータ名: $OPENAI_API_KEY_PARAM"
@@ -70,12 +87,20 @@ input_api_key_interactive() {
 
 # OpenAI APIキー設定のメイン処理
 setup_openai_api_key() {
+    # 引数チェック
+    if [ $# -ne 1 ]; then
+        log_error "使用方法: setup_openai_api_key <REGION>"
+        return 1
+    fi
+
+    local REGION="$1"
+
     log_section "OpenAI APIキー設定"
-    
+
     log_info "OpenAI APIキーをSSMパラメータストアで確認しています..."
-    
+
     # 既存のキーを確認
-    local existing_key=$(get_openai_api_key)
+    local existing_key=$(get_openai_api_key "$REGION")
     
     if [ -n "$existing_key" ]; then
         log_info "✓ OpenAI APIキーは既にSSMパラメータストアに設定されています"
@@ -94,7 +119,7 @@ setup_openai_api_key() {
     local api_key=$(input_api_key_interactive)
     
     if [ -n "$api_key" ]; then
-        save_api_key_to_ssm "$api_key"
+        save_api_key_to_ssm "$api_key" "$REGION"
         return $?
     fi
     
@@ -103,7 +128,7 @@ setup_openai_api_key() {
 
 # APIキーの取得と環境変数への設定
 export_openai_api_key() {
-    local api_key=$(get_openai_api_key)
+    local api_key=$(get_openai_api_key "$REGION")
     
     if [ -n "$api_key" ]; then
         export OPENAI_API_KEY="$api_key"

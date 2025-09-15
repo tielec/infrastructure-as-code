@@ -89,7 +89,7 @@
                   Test Run ID: {{ test_run_id }}
                   Timestamp: {{ test_timestamp }}
                   Operation Mode: {{ operation }}
-                  AWS Region: {{ ssm_parameter_store_region | default('ap-northeast-1') }}
+                  AWS Region: {{ aws_region }}
                   ========================================
             
             # SSM Parameter Storeロールの初期化
@@ -380,7 +380,7 @@
                   - Cleanup: {{ '✓ Success' if operation in ['full', 'cleanup-only'] else 'Skipped' }}
                   
                   Parameters Tested: {{ test_parameters | length }}
-                  AWS Region: {{ ssm_parameter_store_region | default('ap-northeast-1') }}
+                  AWS Region: {{ aws_region }}
                   
                   Test Status: PASSED
                   ========================================
@@ -428,7 +428,7 @@
                   ansible.builtin.shell: |
                     aws ssm delete-parameter \
                       --name "{{ item.value }}" \
-                      --region {{ ssm_parameter_store_region | default('ap-northeast-1') }} 2>/dev/null || true
+                      --region {{ aws_region }} 2>/dev/null || true
                   loop: "{{ test_parameters | dict2items }}"
                   failed_when: false
             

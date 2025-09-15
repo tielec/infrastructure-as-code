@@ -3,10 +3,15 @@
 
 # GitHub App設定をセットアップ
 setup_github_app() {
+    # 引数チェック
+    if [ $# -ne 1 ]; then
+        log_error "使用方法: setup_github_app <REGION>"
+        return 1
+    fi
+
+    local REGION="$1"
+
     log_section "GitHub App設定"
-    
-    # リージョンとプロジェクト情報を取得
-    local REGION="${AWS_REGION:-ap-northeast-1}"
     
     # 既存のGitHub App設定を確認
     local APP_ID_PARAM="/bootstrap/github/app-id"

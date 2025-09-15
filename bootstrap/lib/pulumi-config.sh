@@ -6,20 +6,54 @@ source "$(dirname "${BASH_SOURCE[0]}")/common.sh"
 
 # Pulumi関連の定数
 readonly PULUMI_PASSPHRASE_PARAM="/bootstrap/pulumi/config-passphrase"
-readonly PULUMI_STACK_NAME="bootstrap-iac-environment"
 
 # Pulumiバケット名を取得
 get_pulumi_bucket() {
-    aws cloudformation describe-stacks \
-        --stack-name "$PULUMI_STACK_NAME" \
+    # 引数チェック
+    if [ $# -ne 1 ]; then
+        log_error "使用方法: get_pulumi_bucket <REGION>"
+        return 1
+    fi
+
+    local REGION="$1"
+    local STACK_NAME=""
+    local RESULT=""
+
+    # まず bootstrap-iac-environment を探す
+    RESULT=$(aws cloudformation describe-stacks \
+        --stack-name "bootstrap-iac-environment" \
+        --region "$REGION" \
         --query "Stacks[0].Outputs[?OutputKey=='PulumiStateBucketName'].OutputValue" \
-        --output text 2>/dev/null || echo ""
+        --output text 2>/dev/null || echo "")
+
+    if [ -n "$RESULT" ]; then
+        echo "$RESULT"
+        return 0
+    fi
+
+    # 見つからない場合は bootstrap-iac-environment-[region] を探す
+    RESULT=$(aws cloudformation describe-stacks \
+        --stack-name "bootstrap-iac-environment-${REGION}" \
+        --region "$REGION" \
+        --query "Stacks[0].Outputs[?OutputKey=='PulumiStateBucketName'].OutputValue" \
+        --output text 2>/dev/null || echo "")
+
+    echo "$RESULT"
 }
 
 # Pulumiパスフレーズを取得
 get_pulumi_passphrase() {
+    # 引数チェック
+    if [ $# -ne 1 ]; then
+        log_error "使用方法: get_pulumi_passphrase <REGION>"
+        return 1
+    fi
+
+    local REGION="$1"
+
     aws ssm get-parameter \
         --name "$PULUMI_PASSPHRASE_PARAM" \
+        --region "$REGION" \
         --with-decryption \
         --query 'Parameter.Value' \
         --output text 2>/dev/null || echo ""
@@ -32,49 +66,94 @@ generate_passphrase() {
 
 # パスフレーズをSSMに保存
 save_passphrase_to_ssm() {
+    # 引数チェック
+    if [ $# -ne 2 ]; then
+        log_error "使用方法: save_passphrase_to_ssm <passphrase> <region>"
+        return 1
+    fi
+
     local passphrase="$1"
-    local region="${AWS_REGION:-ap-northeast-1}"
+    local region="$2"
     
     log_info "パスフレーズをSSMパラメータストアに保存しています..."
-    
-    if aws ssm put-parameter \
+    log_info "  リージョン: $region"
+    log_info "  パラメータ名: $PULUMI_PASSPHRASE_PARAM"
+
+    # 既存のパラメータが存在するか確認
+    local existing_param
+    existing_param=$(aws ssm get-parameter \
         --name "$PULUMI_PASSPHRASE_PARAM" \
-        --value "$passphrase" \
-        --type "SecureString" \
-        --description "Pulumi configuration passphrase for S3 backend encryption" \
-        --tags "Key=Name,Value=Pulumi-Config-Passphrase" "Key=Purpose,Value=Pulumi-Backend" \
         --region "$region" \
-        --overwrite 2>/dev/null; then
+        --query 'Parameter.Value' \
+        --output text 2>/dev/null || echo "")
+
+    local error_output
+    if [ -n "$existing_param" ]; then
+        # 既存のパラメータを上書き（タグなし）
+        log_info "既存のパラメータを更新しています..."
+        error_output=$(aws ssm put-parameter \
+            --name "$PULUMI_PASSPHRASE_PARAM" \
+            --value "$passphrase" \
+            --type "SecureString" \
+            --description "Pulumi configuration passphrase for S3 backend encryption" \
+            --region "$region" \
+            --overwrite 2>&1)
+    else
+        # 新規作成（タグ付き）
+        log_info "新規パラメータを作成しています..."
+        error_output=$(aws ssm put-parameter \
+            --name "$PULUMI_PASSPHRASE_PARAM" \
+            --value "$passphrase" \
+            --type "SecureString" \
+            --description "Pulumi configuration passphrase for S3 backend encryption" \
+            --tags "Key=Name,Value=Pulumi-Config-Passphrase" "Key=Purpose,Value=Pulumi-Backend" \
+            --region "$region" 2>&1)
+    fi
+
+    if [ $? -eq 0 ]; then
         log_info "✓ パスフレーズがSSMパラメータストアに安全に保存されました"
-        log_info "  パラメータ名: $PULUMI_PASSPHRASE_PARAM"
         return 0
     else
         log_error "パスフレーズの保存に失敗しました"
+        log_error "エラー詳細: $error_output"
         return 1
     fi
 }
 
 # 対話的にパスフレーズを設定
 setup_passphrase_interactive() {
-    log_warn "パスフレーズの設定方法を選択してください:"
-    echo -e "1) 自動生成（推奨）"
-    echo -e "2) 手動入力"
-    read -p "選択 (1/2): " passphrase_choice
+    echo >&2
+    log_info "パスフレーズの設定方法を選択してください:" >&2
+    echo "  1) 自動生成（推奨）" >&2
+    echo "  2) 手動入力" >&2
+    echo >&2
+    local passphrase_choice
+    while true; do
+        echo -n "選択 (1/2): " >&2
+        read passphrase_choice
+        if [[ "$passphrase_choice" =~ ^[12]$ ]]; then
+            break
+        fi
+        log_warn "有効な選択肢を入力してください (1 または 2)" >&2
+    done
     
     local passphrase=""
     
     if [ "$passphrase_choice" = "2" ]; then
         # 手動入力
         while true; do
-            read -s -p "パスフレーズを入力してください（16文字以上推奨）: " passphrase1
-            echo
-            read -s -p "確認のためもう一度入力してください: " passphrase2
-            echo
-            
+            echo >&2
+            echo -n "パスフレーズを入力してください（16文字以上推奨）: " >&2
+            read -s passphrase1
+            echo >&2
+            echo -n "確認のためもう一度入力してください: " >&2
+            read -s passphrase2
+            echo >&2
+
             if [ "$passphrase1" != "$passphrase2" ]; then
-                log_error "パスフレーズが一致しません。もう一度お試しください。"
+                log_error "パスフレーズが一致しません。もう一度お試しください。" >&2
             elif [ ${#passphrase1} -lt 16 ]; then
-                log_error "パスフレーズは16文字以上にしてください。"
+                log_error "パスフレーズは16文字以上にしてください。" >&2
             else
                 passphrase="$passphrase1"
                 break
@@ -82,11 +161,17 @@ setup_passphrase_interactive() {
         done
     else
         # 自動生成
-        log_info "セキュアなパスフレーズを自動生成しています..."
+        log_info "セキュアなパスフレーズを自動生成しています..." >&2
         passphrase=$(generate_passphrase)
-        log_info "✓ パスフレーズが生成されました"
+        log_info "✓ パスフレーズが生成されました" >&2
     fi
-    
+
+    # パスフレーズが空の場合はエラー
+    if [ -z "$passphrase" ]; then
+        log_error "パスフレーズの生成に失敗しました" >&2
+        return 1
+    fi
+
     echo "$passphrase"
 }
 
@@ -114,15 +199,25 @@ show_pulumi_usage() {
 
 # Pulumi設定のメイン処理
 setup_pulumi_config() {
+    # 引数チェック
+    if [ $# -ne 1 ]; then
+        log_error "使用方法: setup_pulumi_config <REGION>"
+        return 1
+    fi
+
+    local REGION="$1"
+
     log_section "Pulumi設定"
     
     # CloudFormationスタックからPulumi S3バケット名を取得
     log_info "Pulumi用S3バケットを確認しています..."
-    local pulumi_bucket=$(get_pulumi_bucket)
-    
+    local pulumi_bucket=$(get_pulumi_bucket "$REGION")
+
     if [ -z "$pulumi_bucket" ]; then
         log_warn "Pulumi S3バケットが見つかりません"
-        log_warn "CloudFormationスタック '$PULUMI_STACK_NAME' が存在することを確認してください"
+        log_warn "以下のCloudFormationスタックが存在することを確認してください:"
+        log_warn "  - bootstrap-iac-environment"
+        log_warn "  - bootstrap-iac-environment-${REGION}"
         return 1
     fi
     
@@ -130,7 +225,7 @@ setup_pulumi_config() {
     
     # SSMパラメータストアからパスフレーズを確認
     log_info "Pulumi設定パスフレーズを確認しています..."
-    local existing_passphrase=$(get_pulumi_passphrase)
+    local existing_passphrase=$(get_pulumi_passphrase "$REGION")
     
     if [ -n "$existing_passphrase" ]; then
         log_info "✓ Pulumi設定パスフレーズが既に設定されています"
@@ -141,9 +236,10 @@ setup_pulumi_config() {
         echo
         
         if confirm_action "Pulumi設定パスフレーズを設定しますか？" "y"; then
-            local passphrase=$(setup_passphrase_interactive)
+            local passphrase
+            passphrase=$(setup_passphrase_interactive)
             
-            if save_passphrase_to_ssm "$passphrase"; then
+            if [ -n "$passphrase" ] && save_passphrase_to_ssm "$passphrase" "$REGION"; then
                 log_info "✓ パスフレーズの設定が完了しました"
             else
                 log_error "パスフレーズの保存に失敗しました"

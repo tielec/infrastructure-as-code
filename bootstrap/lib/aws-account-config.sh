@@ -6,10 +6,15 @@ source "$(dirname "${BASH_SOURCE[0]}")/common.sh"
 
 # SSMパラメータストアにAWSアカウントIDを対話的に設定
 setup_aws_account_ids() {
+    # 引数チェック
+    if [ $# -ne 1 ]; then
+        log_error "使用方法: setup_aws_account_ids <REGION>"
+        return 1
+    fi
+
+    local REGION="$1"
+
     log_section "AWSアカウントID設定（SSMパラメータストア）"
-    
-    # リージョンを取得
-    local REGION="${AWS_REGION:-ap-northeast-1}"
     
     # SSMパラメータ名（他のライブラリと同じ命名規則）
     local PROD_ACCOUNT_PARAM="/bootstrap/aws/prod-account-ids"
