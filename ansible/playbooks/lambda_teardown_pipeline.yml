@@ -94,6 +94,15 @@
   tags:
     - functions
 
+# Lambda Shipment S3バケットの削除
+- import_playbook: lambda/lambda_shipment_s3.yml
+  vars:
+    env: "{{ env | default('dev') }}"
+    operation: "destroy"
+  when: destroy_shipment_s3 | default(true) | bool
+  tags:
+    - shipment-s3
+
 # NATインフラの削除
 - import_playbook: lambda/lambda_nat.yml
   vars:

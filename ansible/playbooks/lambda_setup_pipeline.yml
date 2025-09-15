@@ -58,6 +58,14 @@
   tags:
     - vpce
 
+# Lambda Shipment S3バケットのデプロイ
+- import_playbook: lambda/lambda_shipment_s3.yml
+  vars:
+    env: "{{ env | default('dev') }}"
+  when: run_shipment_s3 | default(true) | bool
+  tags:
+    - shipment-s3
+
 # Lambda関数のデプロイ
 - import_playbook: lambda/lambda_functions.yml
   vars:

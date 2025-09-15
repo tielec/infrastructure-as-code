@@ -1,0 +1,66 @@
+---
+# roles/lambda_shipment_s3/tasks/deploy.yml
+# Lambda Shipment S3バケットのデプロイタスク
+
+- name: Set deployment variables
+  ansible.builtin.set_fact:
+    shipment_s3_stack_name: "lambda-shipment-s3"
+    shipment_s3_project_path: "{{ pulumi_projects_base }}/lambda-shipment-s3"
+
+- name: Check if project exists
+  ansible.builtin.stat:
+    path: "{{ shipment_s3_project_path }}"
+  register: shipment_s3_project
+
+- name: Fail if project doesn't exist
+  ansible.builtin.fail:
+    msg: "Lambda Shipment S3 project not found at {{ shipment_s3_project_path }}"
+  when: not shipment_s3_project.stat.exists
+
+- name: Deploy Lambda Shipment S3 bucket
+  ansible.builtin.include_role:
+    name: pulumi_helper
+  vars:
+    pulumi_project_path: "{{ shipment_s3_project_path }}"
+    pulumi_stack_name: "{{ env_name }}"
+    pulumi_operation: "{{ 'preview' if preview_only else 'up' }}"
+
+- name: Get deployment outputs
+  ansible.builtin.set_fact:
+    shipment_bucket_name: "{{ pulumi_outputs.bucketName | default('') }}"
+    shipment_bucket_arn: "{{ pulumi_outputs.bucketArn | default('') }}"
+    shipment_s3_deployed: "{{ pulumi_success | default(false) }}"
+  when: pulumi_outputs is defined
+
+- name: Verify SSM parameters created
+  when:
+    - not preview_only
+    - shipment_s3_deployed
+  block:
+    - name: Check bucket name in SSM
+      ansible.builtin.include_role:
+        name: ssm_parameter_store
+      vars:
+        ssm_action: "get"
+        ssm_parameter_name: "/lambda-shipment/{{ env_name }}/bucket/name"
+        ssm_output_var: "ssm_bucket_name"
+
+    - name: Display SSM parameter verification
+      ansible.builtin.debug:
+        msg: |
+          SSM Parameters Created:
+          - /lambda-shipment/{{ env_name }}/bucket/name: {{ ssm_bucket_name | default('Not found') }}
+          - /lambda-shipment/{{ env_name }}/bucket/arn
+          - /lambda-shipment/{{ env_name }}/region
+
+- name: Display deployment summary
+  ansible.builtin.debug:
+    msg: |
+      Lambda Shipment S3 Deployment Summary:
+      =====================================
+      Stack: {{ shipment_s3_stack_name }}
+      Environment: {{ env_name }}
+      Status: {{ 'Success' if shipment_s3_deployed else 'Failed' }}
+      Bucket Name: {{ shipment_bucket_name | default('N/A') }}
+      Preview Only: {{ preview_only }}
+  when: not preview_only
