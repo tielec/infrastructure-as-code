@@ -187,6 +187,7 @@ aws ssm get-parameter --name /jenkins-infra/dev/jenkins/admin-password \
 | **gitUtils** | Git/GitHub操作 | checkoutRepository（リポジトリチェックアウト）<br>postPRComment（PRコメント投稿）<br>createTag（タグ作成） |
 | **awsUtils** | AWS操作 | uploadToS3（S3アップロード）<br>getParameter（SSMパラメータ取得）<br>sendSQSMessage（SQSメッセージ送信） |
 | **jenkinsCliUtils** | Jenkins操作 | triggerJob（ジョブトリガー）<br>getJobStatus（ジョブステータス取得）<br>copyArtifacts（成果物コピー） |
+| **ssmParameter** | SSMパラメータ取得 | get（単一パラメータ取得）<br>getMultiple（複数パラメータ一括取得）<br>getByPath（パス配下のパラメータ取得）<br>exists（存在確認）<br>withParameters（環境変数として設定） |
 
 ### 共有ライブラリの使用方法
 
@@ -208,6 +209,29 @@ pipeline {
                         bucket: 'my-bucket',
                         key: 'releases/output.zip'
                     )
+                }
+            }
+        }
+
+        stage('Get SSM Parameters') {
+            steps {
+                script {
+                    // SSMパラメータの取得（リージョン明示的指定）
+                    def dbPassword = ssmParameter.get('/jenkins/db/password', 'ap-northeast-1')
+
+                    // 複数パラメータの一括取得
+                    def params = ssmParameter.getMultiple([
+                        '/jenkins/api/key',
+                        '/jenkins/api/secret'
+                    ], 'ap-northeast-1')
+
+                    // 環境変数として設定して使用
+                    ssmParameter.withParameters([
+                        '/jenkins/db/username': 'DB_USER',
+                        '/jenkins/db/password': 'DB_PASSWORD'
+                    ], 'ap-northeast-1') {
+                        sh 'echo "Database user: ${DB_USER}"'
+                    }
                 }
             }
         }
