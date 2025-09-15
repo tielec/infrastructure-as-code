@@ -1,12 +1,11 @@
 ---
-# lambda_security.yml
+# deploy_lambda_security.yml
 # Lambda API用セキュリティグループデプロイメントプレイブック
 # 
 # 使用方法:
-#   ansible-playbook playbooks/lambda/lambda_security.yml -e "env=dev"
-#   ansible-playbook playbooks/lambda/lambda_security.yml -e "env=dev operation=destroy"
+#   ansible-playbook playbooks/lambda/deploy/deploy_lambda_security.yml -e "env=dev"
 
-- name: Lambda API Security Groups Deployment
+- name: Deploy Lambda API Security Groups
   hosts: localhost
   connection: local
   gather_facts: yes
@@ -28,9 +27,8 @@
       ansible.builtin.debug:
         msg: |
           ==========================================
-          Lambda API Security Groups
+          Lambda API Security Groups Deploy
           ==========================================
-          Operation: {{ operation | default('deploy') }}
           Environment: {{ env_name }}
           Project: {{ project_name }}-security
           Region: {{ aws_region }}
@@ -51,38 +49,25 @@
       ansible.builtin.fail:
         msg: |
           Network infrastructure is not deployed!
-          Please run: ansible-playbook playbooks/lambda/lambda_network.yml -e "env={{ env_name }}"
+          Please run: ansible-playbook playbooks/lambda/deploy/deploy_lambda_network.yml -e "env={{ env_name }}"
       when:
-        - operation | default('deploy') == 'deploy'
         - ssm_parameter_value | default('') | length == 0
   
   roles:
     - aws_setup
     - pulumi_helper
-    
-  tasks:
-
-    - name: Set operation variable
-      ansible.builtin.set_fact:
-        role_operation: "{{ operation | default('deploy') }}"
+    - lambda_security
         
-    - name: Execute security group deployment
-      ansible.builtin.include_role:
-        name: lambda_security
-      vars:
-        operation: "{{ role_operation }}"
-        
+  post_tasks:
     - name: Display results
       ansible.builtin.debug:
         msg: |
           ==========================================
-          Security Groups {{ 'Preview' if preview_only else role_operation | title }} Complete
+          Security Groups {{ 'Preview' if preview_only else 'Deploy' }} Complete
           ==========================================
-          {% if role_operation == 'deploy' and not preview_only %}
+          {% if not preview_only %}
           Status: {{ 'Success' if security_deployed | default(false) else 'Failed' }}
           
           Next step:
-          ansible-playbook playbooks/lambda/lambda_vpce.yml -e "env={{ env_name }}"
-          {% elif role_operation == 'destroy' %}
-          Security groups have been removed.
+          ansible-playbook playbooks/lambda/deploy/deploy_lambda_vpce.yml -e "env={{ env_name }}"
           {% endif %}

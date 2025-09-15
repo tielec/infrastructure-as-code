@@ -1,19 +1,18 @@
 ---
-# lambda_account_setup.yml
-# Lambda APIアカウントレベル設定プレイブック
+# deploy_lambda_account_setup.yml
+# Lambda APIアカウントレベル設定プレイブック（デプロイ用）
 #
 # 注意: これはAWSアカウントの各リージョンで1回だけ実行する設定です
 #       環境（dev/staging/prod）に依存しません
 #       API Gateway CloudWatch Logsロールはリージョンごとに設定が必要です
 #
 # 使用方法:
-#   ansible-playbook playbooks/lambda/lambda_account_setup.yml
-#   ansible-playbook playbooks/lambda/lambda_account_setup.yml -e "operation=destroy"
+#   ansible-playbook playbooks/lambda/deploy/deploy_lambda_account_setup.yml
 #
 #   # 別リージョンで実行する場合:
-#   ansible-playbook playbooks/lambda/lambda_account_setup.yml -e "aws_region=us-east-1"
+#   ansible-playbook playbooks/lambda/deploy/deploy_lambda_account_setup.yml -e "aws_region=us-east-1"
 
-- name: Lambda Account Setup Deployment
+- name: Deploy Lambda Account Setup
   hosts: localhost
   connection: local
   gather_facts: yes
@@ -35,9 +34,8 @@
       ansible.builtin.debug:
         msg: |
           ==========================================
-          Lambda Account Setup Deployment
+          Lambda Account Setup Deploy
           ==========================================
-          Operation: {{ operation | default('deploy') }}
           Environment: {{ env_name }}
           Project: {{ project_name }}-account-setup
           Region: {{ aws_region }}
@@ -47,33 +45,20 @@
   roles:
     - aws_setup
     - pulumi_helper
-
-  tasks:
-
-    - name: Set operation variable
-      ansible.builtin.set_fact:
-        role_operation: "{{ operation | default('deploy') }}"
-
-    - name: Execute Lambda Account Setup deployment
-      ansible.builtin.include_role:
-        name: lambda_account_setup
-      vars:
-        operation: "{{ role_operation }}"
-
+    - lambda_account_setup
+        
+  post_tasks:
     - name: Display results
       ansible.builtin.debug:
         msg: |
           ==========================================
-          Lambda Account Setup {{ 'Preview' if preview_only else role_operation | title }} Complete
+          Lambda Account Setup {{ 'Preview' if preview_only else 'Deploy' }} Complete
           ==========================================
-          {% if role_operation == 'deploy' and not preview_only %}
+          {% if not preview_only %}
           Status: {{ 'Success' if account_setup_deployed | default(false) else 'Failed' }}
 
           API Gateway CloudWatch Logs role has been configured.
 
           Next step:
-          ansible-playbook playbooks/lambda/lambda_ssm_init.yml -e "env={{ env_name }}"
-          {% elif role_operation == 'destroy' %}
-          Lambda account setup has been removed.
-          Note: This may affect API Gateway logging functionality.
+          ansible-playbook playbooks/lambda/deploy/deploy_lambda_ssm_init.yml -e "env={{ env_name }}"
           {% endif %}

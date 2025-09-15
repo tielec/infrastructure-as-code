@@ -1,12 +1,11 @@
 ---
-# lambda_network.yml
+# deploy_lambda_network.yml
 # Lambda API用ネットワークインフラデプロイメントプレイブック
 # 
 # 使用方法:
-#   ansible-playbook playbooks/lambda/lambda_network.yml -e "env=dev"
-#   ansible-playbook playbooks/lambda/lambda_network.yml -e "env=dev operation=destroy"
+#   ansible-playbook playbooks/lambda/deploy/deploy_lambda_network.yml -e "env=dev"
 
-- name: Lambda API Network Infrastructure Deployment
+- name: Deploy Lambda API Network Infrastructure
   hosts: localhost
   connection: local
   gather_facts: yes
@@ -28,9 +27,8 @@
       ansible.builtin.debug:
         msg: |
           ==========================================
-          Lambda API Network Infrastructure
+          Lambda API Network Infrastructure Deploy
           ==========================================
-          Operation: {{ operation | default('deploy') }}
           Environment: {{ env_name }}
           Project: {{ project_name }}-network
           Region: {{ aws_region }}
@@ -57,39 +55,26 @@
       ansible.builtin.fail:
         msg: |
           SSM parameters are not initialized!
-          Please run: ansible-playbook playbooks/lambda/lambda_ssm_init.yml -e "env={{ env_name }}"
+          Please run: ansible-playbook playbooks/lambda/deploy/deploy_lambda_ssm_init.yml -e "env={{ env_name }}"
       when:
-        - operation | default('deploy') == 'deploy'
         - ssm_init_check | default('false') | string | lower != 'true'
   
   roles:
     - aws_setup
     - pulumi_helper
-    
-  tasks:
-
-    - name: Set operation variable
-      ansible.builtin.set_fact:
-        role_operation: "{{ operation | default('deploy') }}"
+    - lambda_network
         
-    - name: Execute network deployment
-      ansible.builtin.include_role:
-        name: lambda_network
-      vars:
-        operation: "{{ role_operation }}"
-        
+  post_tasks:
     - name: Display results
       ansible.builtin.debug:
         msg: |
           ==========================================
-          Network Infrastructure {{ 'Preview' if preview_only else role_operation | title }} Complete
+          Network Infrastructure {{ 'Preview' if preview_only else 'Deploy' }} Complete
           ==========================================
-          {% if role_operation == 'deploy' and not preview_only %}
+          {% if not preview_only %}
           Status: {{ 'Success' if network_deployed | default(false) else 'Failed' }}
           VPC ID: {{ vpc_id | default('N/A') }}
           
           Next step:
-          ansible-playbook playbooks/lambda/lambda_security.yml -e "env={{ env_name }}"
-          {% elif role_operation == 'destroy' %}
-          Network infrastructure has been removed.
+          ansible-playbook playbooks/lambda/deploy/deploy_lambda_security.yml -e "env={{ env_name }}"
           {% endif %}

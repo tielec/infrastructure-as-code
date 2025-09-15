@@ -1,12 +1,11 @@
 ---
-# lambda_functions.yml
-# Lambda関数デプロイメントプレイブック
+# deploy_lambda_functions.yml
+# Lambda関数デプロイメントプレイブック（デプロイ用）
 # 
 # 使用方法:
-#   ansible-playbook playbooks/lambda/lambda_functions.yml -e "env=dev"
-#   ansible-playbook playbooks/lambda/lambda_functions.yml -e "env=dev operation=destroy"
+#   ansible-playbook playbooks/lambda/deploy/deploy_lambda_functions.yml -e "env=dev"
 
-- name: Lambda Functions Deployment
+- name: Deploy Lambda Functions
   hosts: localhost
   connection: local
   gather_facts: yes
@@ -28,9 +27,8 @@
       ansible.builtin.debug:
         msg: |
           ==========================================
-          Lambda Functions Deployment
+          Lambda Functions Deploy
           ==========================================
-          Operation: {{ operation | default('deploy') }}
           Environment: {{ env_name }}
           Project: {{ project_name }}-functions
           Region: {{ aws_region }}
@@ -40,31 +38,19 @@
   roles:
     - aws_setup
     - pulumi_helper
-    
-  tasks:
-
-    - name: Set operation variable
-      ansible.builtin.set_fact:
-        role_operation: "{{ operation | default('deploy') }}"
+    - lambda_functions
         
-    - name: Execute Lambda functions deployment
-      ansible.builtin.include_role:
-        name: lambda_functions
-      vars:
-        operation: "{{ role_operation }}"
-        
+  post_tasks:
     - name: Display results
       ansible.builtin.debug:
         msg: |
           ==========================================
-          Lambda Functions {{ 'Preview' if preview_only else role_operation | title }} Complete
+          Lambda Functions {{ 'Preview' if preview_only else 'Deploy' }} Complete
           ==========================================
-          {% if role_operation == 'deploy' and not preview_only %}
+          {% if not preview_only %}
           Status: {{ 'Success' if functions_deployed | default(false) else 'Failed' }}
           Functions Deployed: {{ lambda_function_count | default(0) }}
           
           Next step:
-          ansible-playbook playbooks/lambda/lambda_api_gateway.yml -e "env={{ env_name }}"
-          {% elif role_operation == 'destroy' %}
-          Lambda functions have been removed.
+          ansible-playbook playbooks/lambda/deploy/deploy_lambda_api_gateway.yml -e "env={{ env_name }}"
           {% endif %}

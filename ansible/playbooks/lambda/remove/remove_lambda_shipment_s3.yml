@@ -1,0 +1,54 @@
+---
+# remove_lambda_shipment_s3.yml
+# Lambda Shipment S3バケット削除プレイブック
+#
+# 使用方法:
+#   ansible-playbook playbooks/lambda/remove/remove_lambda_shipment_s3.yml -e "env=dev"
+
+- name: Remove Lambda Shipment S3
+  hosts: localhost
+  connection: local
+  gather_facts: yes
+
+  vars:
+    env_name: "{{ env | default('dev') }}"
+
+  pre_tasks:
+    - name: Include group_vars/all.yml
+      ansible.builtin.include_vars:
+        file: "{{ inventory_dir }}/group_vars/all.yml"
+
+    - name: Set required variables
+      ansible.builtin.set_fact:
+        project_name: "{{ projects.lambda_api.name }}"
+
+    - name: Display operation info
+      ansible.builtin.debug:
+        msg: |
+          ==========================================
+          Lambda Shipment S3 Removal
+          ==========================================
+          Environment: {{ env_name }}
+          Project: {{ project_name }}-shipment-s3
+          Region: {{ aws_region }}
+          ==========================================
+
+  roles:
+    - aws_setup
+    - pulumi_helper
+
+  tasks:
+    - name: Execute Lambda Shipment S3 removal
+      ansible.builtin.include_role:
+        name: lambda_shipment_s3
+      vars:
+        operation: "destroy"
+        
+  post_tasks:
+    - name: Display results
+      ansible.builtin.debug:
+        msg: |
+          ==========================================
+          Lambda Shipment S3 Removal Complete
+          ==========================================
+          Lambda Shipment S3 bucket has been removed.

@@ -4,8 +4,8 @@
 # 各lambda_*.ymlプレイブックを順番に実行
 #
 # 使用方法 (ansibleディレクトリから実行):
-#   ansible-playbook playbooks/lambda_setup_pipeline.yml -e "env=dev"
-#   ansible-playbook playbooks/lambda_setup_pipeline.yml -e "env=dev run_network=true run_security=false"
+#   ansible-playbook playbooks/lambda/lambda_setup_pipeline.yml -e "env=dev"
+#   ansible-playbook playbooks/lambda/lambda_setup_pipeline.yml -e "env=dev run_network=true run_security=false"
 
 - name: Lambda API Infrastructure Setup Pipeline - Start
   hosts: localhost
@@ -26,7 +26,7 @@
           Starting infrastructure deployment...
 
 # SSMパラメータストアの初期化（最初に実行）
-- import_playbook: lambda/lambda_ssm_init.yml
+- import_playbook: deploy/deploy_lambda_ssm_init.yml
   vars:
     env: "{{ env | default('dev') }}"
   when: run_ssm_init | default(true) | bool
@@ -35,7 +35,7 @@
     - always
 
 # ネットワークインフラのデプロイ
-- import_playbook: lambda/lambda_network.yml
+- import_playbook: deploy/deploy_lambda_network.yml
   vars:
     env: "{{ env | default('dev') }}"
   when: run_network | default(true) | bool
@@ -43,7 +43,7 @@
     - network
 
 # セキュリティグループのデプロイ
-- import_playbook: lambda/lambda_security.yml
+- import_playbook: deploy/deploy_lambda_security.yml
   vars:
     env: "{{ env | default('dev') }}"
   when: run_security | default(true) | bool
@@ -51,7 +51,7 @@
     - security
 
 # VPCエンドポイントのデプロイ
-- import_playbook: lambda/lambda_vpce.yml
+- import_playbook: deploy/deploy_lambda_vpce.yml
   vars:
     env: "{{ env | default('dev') }}"
   when: run_vpce | default(true) | bool
@@ -59,7 +59,7 @@
     - vpce
 
 # Lambda Shipment S3バケットのデプロイ
-- import_playbook: lambda/lambda_shipment_s3.yml
+- import_playbook: deploy/deploy_lambda_shipment_s3.yml
   vars:
     env: "{{ env | default('dev') }}"
   when: run_shipment_s3 | default(true) | bool
@@ -67,7 +67,7 @@
     - shipment-s3
 
 # Lambda関数のデプロイ
-- import_playbook: lambda/lambda_functions.yml
+- import_playbook: deploy/deploy_lambda_functions.yml
   vars:
     env: "{{ env | default('dev') }}"
   when: run_functions | default(true) | bool
@@ -75,7 +75,7 @@
     - functions
 
 # API Gatewayのデプロイ
-- import_playbook: lambda/lambda_api_gateway.yml
+- import_playbook: deploy/deploy_lambda_api_gateway.yml
   vars:
     env: "{{ env | default('dev') }}"
   when: run_api_gateway | default(true) | bool
@@ -107,4 +107,4 @@
           3. Monitor Lambda functions through CloudWatch
           
           To destroy this infrastructure:
-          ansible-playbook playbooks/lambda_teardown_pipeline.yml -e "env={{ env_name }}"
+          ansible-playbook playbooks/lambda/lambda_teardown_pipeline.yml -e "env={{ env_name }}"
