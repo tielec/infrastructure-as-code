@@ -6,7 +6,6 @@
     msg: |
       Destroying Lambda API Network Infrastructure:
       - Project: {{ project_name }}
-      - Network Pulumi Project: {{ network_project_name }}
       - Environment: {{ env_name }}
       - Remove Stack: {{ remove_stacks | default(false) }}
 
