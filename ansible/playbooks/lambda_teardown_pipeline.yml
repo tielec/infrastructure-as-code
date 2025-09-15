@@ -103,15 +103,6 @@
   tags:
     - shipment-s3
 
-# NATインフラの削除
-- import_playbook: lambda/lambda_nat.yml
-  vars:
-    env: "{{ env | default('dev') }}"
-    operation: "destroy"
-  when: destroy_nat | default(true) | bool
-  tags:
-    - nat
-
 # VPCエンドポイントの削除
 - import_playbook: lambda/lambda_vpce.yml
   vars:
