@@ -2,12 +2,16 @@
 # lambda_account_setup.yml
 # Lambda APIアカウントレベル設定プレイブック
 #
-# 注意: これはAWSアカウント全体で1回だけ実行する設定です
+# 注意: これはAWSアカウントの各リージョンで1回だけ実行する設定です
 #       環境（dev/staging/prod）に依存しません
+#       API Gateway CloudWatch Logsロールはリージョンごとに設定が必要です
 #
 # 使用方法:
 #   ansible-playbook playbooks/lambda/lambda_account_setup.yml
 #   ansible-playbook playbooks/lambda/lambda_account_setup.yml -e "operation=destroy"
+#
+#   # 別リージョンで実行する場合:
+#   ansible-playbook playbooks/lambda/lambda_account_setup.yml -e "aws_region=us-east-1"
 
 - name: Lambda Account Setup Deployment
   hosts: localhost
