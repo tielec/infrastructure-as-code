@@ -94,9 +94,13 @@ pipeline {
         ANSIBLE_BASE_DIR = "${INFRA_REPO_DIR}/ansible"
         ANSIBLE_INVENTORY = "${ANSIBLE_BASE_DIR}/inventory"
         ANSIBLE_PLAYBOOKS_DIR = "${ANSIBLE_BASE_DIR}/playbooks"
+        ANSIBLE_GROUP_VARS_DIR = "${ANSIBLE_INVENTORY}/group_vars"
         ANSIBLE_FORCE_COLOR = 'true'
         ANSIBLE_HOST_KEY_CHECKING = 'False'
         PYTHONUNBUFFERED = '1'
+        
+        // 設定ファイル管理
+        ANSIBLE_CONFIG_OVERRIDDEN = 'false'
     }
     
     stages {
@@ -110,7 +114,9 @@ pipeline {
                     ========================================
                     プレイブック: ${params.PLAYBOOKS}
                     環境: ${params.ENVIRONMENT}
+                    AWSリージョン: ${params.AWS_REGION}
                     ブランチ: ${params.BRANCH}
+                    カスタム設定: ${params.USE_CUSTOM_CONFIG_FILE}
                     追加変数: ${params.ANSIBLE_EXTRA_VARS}
                     詳細出力: ${params.ANSIBLE_VERBOSE}
                     チェックモード: ${params.ANSIBLE_CHECK}
@@ -144,6 +150,11 @@ pipeline {
                     }
                     
                     echo "チェックアウト完了: ブランチ ${params.BRANCH}"
+                    
+                    // group_vars/all.yml設定ファイルの処理
+                    dir(env.ANSIBLE_GROUP_VARS_DIR) {
+                        handleAnsibleConfigFile()
+                    }
                 }
             }
         }
@@ -234,7 +245,350 @@ pipeline {
         }
         
         always {
+            script {
+                echo """
+                ========================================
+                 実行結果サマリー
+                ========================================
+                環境: ${params.ENVIRONMENT}
+                AWSリージョン: ${params.AWS_REGION}
+                設定ファイル: ${env.ANSIBLE_CONFIG_OVERRIDDEN == 'true' ? 'カスタム（更新済み）' : 'デフォルト（リポジトリ）'}
+                実行結果: ${currentBuild.result ?: 'SUCCESS'}
+                ========================================
+                """
+            }
             cleanWs()
         }
+    }
+}
+
+// ================================================================================
+// Ansible Config Handling Functions  
+// ================================================================================
+
+/**
+ * Ansible設定ファイルの処理（メイン関数）
+ * パラメータに応じて、対話的更新またはデフォルト設定の検証を行う
+ */
+def handleAnsibleConfigFile() {
+    def configFileName = "all.yml"
+
+    echo """
+        =============================================
+        Ansible設定ファイルの処理
+        =============================================
+        対象ファイル: ${configFileName}
+        カスタム設定使用: ${params.USE_CUSTOM_CONFIG_FILE}
+        AWSリージョン: ${params.AWS_REGION}
+        =============================================
+    """.stripIndent()
+
+    // all.ymlのAWSリージョン設定を更新
+    _updateAnsibleYamlRegion(configFileName)
+
+    if (params.USE_CUSTOM_CONFIG_FILE) {
+        _handleInteractiveConfigUpdate(configFileName)
+    } else {
+        _handleDefaultConfig(configFileName)
+    }
+
+    // 最終的な設定ファイル状態の表示
+    echo """
+        =============================================
+        設定ファイル処理完了
+        状態: ${env.ANSIBLE_CONFIG_OVERRIDDEN == 'true' ? 'カスタム設定使用' : 'デフォルト設定使用'}
+        =============================================
+    """.stripIndent()
+}
+
+/**
+ * all.ymlのAWSリージョン設定を更新
+ * aws_regionをパラメータの値で置き換える
+ * @param configFileName 対象の設定ファイル名
+ */
+private def _updateAnsibleYamlRegion(String configFileName) {
+    if (!fileExists(configFileName)) {
+        echo "警告: ${configFileName}が存在しません。スキップします。"
+        return
+    }
+
+    echo "all.ymlのリージョン設定を更新中..."
+
+    // YAMLファイルを読み込み
+    def yamlContent = readFile(configFileName)
+
+    // aws_region:の行を探して置き換え
+    def updatedContent = yamlContent.replaceAll(
+        /(?m)^(\s*)aws_region:\s*".*"$/,
+        "\$1aws_region: \"${params.AWS_REGION}\""
+    )
+
+    // ファイルが変更された場合のみ書き込み
+    if (yamlContent != updatedContent) {
+        writeFile file: configFileName, text: updatedContent
+        echo "✅ all.ymlのAWSリージョンを '${params.AWS_REGION}' に更新しました"
+    } else {
+        echo "all.ymlのAWSリージョンは既に '${params.AWS_REGION}' に設定されています"
+    }
+}
+
+/**
+ * 対話的な設定更新を処理する（プライベートヘルパー）
+ * @param configFileName 対象の設定ファイル名
+ */
+private def _handleInteractiveConfigUpdate(String configFileName) {
+    // 設定ファイルの状態を確認
+    def configState = _checkConfigFileState(configFileName)
+    
+    if (!configState.exists) {
+        echo "エラー: 設定ファイル '${configFileName}' が存在しません"
+        error "設定ファイルが見つかりません"
+    }
+    
+    // 入力パラメータを構築
+    def inputParams = _buildInputParameters(configState.configMap)
+    
+    if (inputParams.isEmpty()) {
+        echo "処理対象の項目がありません。"
+        env.ANSIBLE_CONFIG_OVERRIDDEN = 'false'
+        return
+    }
+    
+    // ユーザー入力を収集して処理
+    _processUserInput(configFileName, configState, inputParams)
+}
+
+/**
+ * 設定ファイルの状態を確認する
+ * @param configFileName 設定ファイル名
+ * @return 設定ファイルの状態を含むMap
+ */
+private Map _checkConfigFileState(String configFileName) {
+    def state = [exists: false, configMap: null, hasBackup: false]
+    
+    if (fileExists(configFileName)) {
+        echo "既存の設定ファイル '${configFileName}' を読み込んでいます..."
+        try {
+            state.configMap = readYaml file: configFileName
+            state.exists = true
+            
+            // バックアップファイルの存在確認
+            if (fileExists("${configFileName}.backup")) {
+                state.hasBackup = true
+            }
+        } catch (Exception e) {
+            echo "⚠️ 設定ファイルの読み込みに失敗しました: ${e.message}"
+        }
+    }
+    
+    return state
+}
+
+/**
+ * ユーザー入力を収集して処理する
+ * @param configFileName 設定ファイル名
+ * @param configState 設定ファイルの状態
+ * @param inputParams 入力パラメータリスト
+ */
+private void _processUserInput(String configFileName, Map configState, List inputParams) {
+    try {
+        // ユーザー入力を収集
+        def userInput = _collectUserInput(inputParams)
+        
+        echo "処理が実行されました (実行者: ${userInput.UPDATED_BY ?: 'unknown'})"
+        
+        // 既存ファイルのバックアップ（まだバックアップがない場合）
+        if (!configState.hasBackup) {
+            _createBackup(configFileName)
+        }
+        
+        // Ansible設定を更新
+        _saveAnsibleConfig(configFileName, configState.configMap, userInput)
+        
+    } catch (org.jenkinsci.plugins.workflow.steps.FlowInterruptedException e) {
+        _handleCancellation(configFileName, configState.hasBackup)
+    } catch (Exception e) {
+        // エラー時はバックアップから復元
+        if (fileExists("${configFileName}.backup")) {
+            _restoreFromBackup(configFileName)
+        }
+        error "⚠️ 処理中にエラーが発生しました: ${e.message}"
+    }
+}
+
+/**
+ * ユーザー入力を収集する
+ * @param inputParams 入力パラメータリスト
+ * @return ユーザー入力のMap
+ */
+private Map _collectUserInput(List inputParams) {
+    return input(
+        id: 'AnsibleConfigUpdate',
+        message: "Ansible group_vars/all.yml の設定更新",
+        parameters: inputParams,
+        ok: '確定',
+        submitterParameter: 'UPDATED_BY'
+    )
+}
+
+/**
+ * バックアップを作成する
+ * @param configFileName 設定ファイル名
+ */
+private void _createBackup(String configFileName) {
+    echo "既存の${configFileName}をバックアップします"
+    sh "cp '${configFileName}' '${configFileName}.backup'"
+    echo "バックアップ完了: ${configFileName}.backup"
+}
+
+/**
+ * バックアップから復元する
+ * @param configFileName 設定ファイル名
+ */
+private void _restoreFromBackup(String configFileName) {
+    sh "mv '${configFileName}.backup' '${configFileName}'"
+    echo "エラーのため、バックアップから復元しました"
+}
+
+/**
+ * Ansible設定を保存する
+ * @param configFileName 設定ファイル名
+ * @param configMap 設定Map
+ * @param userInput ユーザー入力
+ */
+private void _saveAnsibleConfig(String configFileName, Map configMap, Map userInput) {
+    _updateConfigMap(configMap, userInput)
+    writeYaml file: configFileName, data: configMap, overwrite: true
+    echo "✅ '${configFileName}' を更新しました。"
+    env.ANSIBLE_CONFIG_OVERRIDDEN = 'true'
+}
+
+/**
+ * キャンセル処理
+ * @param configFileName 設定ファイル名
+ * @param hasBackup バックアップが存在するか
+ */
+private void _handleCancellation(String configFileName = null, boolean hasBackup = false) {
+    echo "処理がキャンセルされました。"
+    
+    // バックアップがある場合は復元を提案
+    if (configFileName && hasBackup) {
+        echo "必要に応じて '${configFileName}.backup' から復元できます。"
+    }
+    
+    env.ANSIBLE_CONFIG_OVERRIDDEN = 'false'
+    error "設定の更新がキャンセルされたため、パイプラインを中止します。"
+}
+
+/**
+ * inputステップのためのパラメータリストを構築する（プライベートヘルパー）
+ * @param configMap 読み込まれた設定のMap
+ * @return inputステップに渡すパラメータのList
+ */
+private List _buildInputParameters(Map configMap) {
+    def inputParams = []
+    
+    if (configMap == null) {
+        return inputParams
+    }
+    
+    echo "以下の設定項目について入力を求めます:"
+    
+    // 主要な設定項目のみを対象とする（パス定義やプロジェクト設定を除外）
+    def editableKeys = ['env_name', 'aws_region']
+    
+    editableKeys.each { key ->
+        if (configMap.containsKey(key)) {
+            def value = configMap[key]
+            def defaultValueStr = value.toString()
+            echo "- ${key}: ${defaultValueStr}"
+            
+            def description = ""
+            switch(key) {
+                case 'env_name':
+                    description = "デフォルト環境名（dev/staging/prod）"
+                    break
+                case 'aws_region':
+                    description = "AWS デフォルトリージョン（例: ap-northeast-1）"
+                    break
+                default:
+                    description = "Value for '${key}'"
+            }
+            
+            inputParams.add(stringParam(
+                name: key,
+                defaultValue: defaultValueStr,
+                description: description
+            ))
+        }
+    }
+    
+    // プロジェクト設定（特別処理）
+    if (configMap.containsKey('projects') && configMap.projects instanceof Map) {
+        configMap.projects.each { projectKey, projectValue ->
+            if (projectValue instanceof Map && projectValue.containsKey('name')) {
+                def paramName = "project_${projectKey}_name"
+                def defaultValue = projectValue.name
+                echo "- ${paramName}: ${defaultValue}"
+                
+                inputParams.add(stringParam(
+                    name: paramName,
+                    defaultValue: defaultValue,
+                    description: "${projectKey}プロジェクトの名前"
+                ))
+            }
+        }
+    }
+    
+    return inputParams
+}
+
+/**
+ * ユーザー入力で設定Mapを更新する（プライベートヘルパー）
+ * @param configMap 更新対象の設定Map
+ * @param userInput inputステップから返されたユーザー入力のMap
+ */
+private void _updateConfigMap(Map configMap, Map userInput) {
+    userInput.each { key, value ->
+        if (key == 'UPDATED_BY') {
+            return
+        }
+        
+        // プロジェクト設定の特別処理
+        if (key.startsWith('project_')) {
+            def parts = key.split('_')
+            if (parts.length >= 3) {
+                def projectKey = parts[1]
+                def propertyName = parts[2]
+                
+                if (configMap.projects && configMap.projects[projectKey]) {
+                    configMap.projects[projectKey][propertyName] = value
+                }
+            }
+        } else if (configMap.containsKey(key)) {
+            // 通常の設定項目
+            configMap[key] = value
+        }
+    }
+}
+
+/**
+ * デフォルト設定を処理する（プライベートヘルパー）
+ * @param configFileName 対象の設定ファイル名
+ */
+private def _handleDefaultConfig(String configFileName) {
+    echo "カスタム設定ファイルは使用しません"
+    env.ANSIBLE_CONFIG_OVERRIDDEN = 'false'
+    
+    if (fileExists(configFileName)) {
+        echo "✅ リポジトリ内の${configFileName}を使用します"
+        try {
+            readYaml file: configFileName
+            echo "既存設定ファイルの検証: OK"
+        } catch (Exception e) {
+            echo "⚠️ 既存設定ファイルの読み込みに問題があります: ${e.message}"
+        }
+    } else {
+        error "${configFileName}が存在しません"
     }
 }
