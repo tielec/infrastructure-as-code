@@ -30,8 +30,6 @@ pipeline {
         
         // 環境別の設定（ENVIRONMENTパラメータに基づく）
         PULUMI_STACK_NAME = "${params.ENVIRONMENT}"
-        PULUMI_CONFIG_PASSPHRASE_ID = "${params.PULUMI_CONFIG_PASSPHRASE_CREDENTIAL_ID ?: 'pulumi-config-passphrase'}"
-        
     }
     
     stages {
@@ -39,20 +37,27 @@ pipeline {
             steps {
                 script {
                     currentBuild.displayName = "#${env.BUILD_NUMBER} - ${params.ENVIRONMENT} ${params.ACTION}"
-                    
-                    withCredentials([string(credentialsId: 'pulumi-s3bucket-name', variable: 'S3_BUCKET_NAME')]) {
-                        env.PULUMI_BACKEND_URL = "s3://${S3_BUCKET_NAME}"
-                        echo "Pulumi backend URL set to: ${env.PULUMI_BACKEND_URL}"
-                    }
-                    
+
+                    // SSMパラメータから必要な設定を取得
+                    def s3BucketName = ssmParameter.get('/bootstrap/pulumi/s3bucket-name', params.AWS_REGION)
+                    // SecureStringパラメータは自動的に復号化される
+                    def configPassphrase = ssmParameter.get('/bootstrap/pulumi/config-passphrase', params.AWS_REGION, true)
+
+                    // 環境変数として設定
+                    env.PULUMI_BACKEND_URL = "s3://${s3BucketName}"
+                    env.PULUMI_CONFIG_PASSPHRASE = configPassphrase
+
+                    echo "Pulumi backend URL set to: ${env.PULUMI_BACKEND_URL}"
+                    echo "Pulumi config passphrase has been securely retrieved from SSM (SecureString)"
+
                     validateParameters()
                     prepareWorkspace()
                     checkoutRepositories()
-                    verifyAwsCredentials()                   
+                    verifyAwsCredentials()
                     // Pulumi設定ファイルの処理（早期検証）
                     dir("${SOURCE_CODE_DIR}/${params.PULUMI_PROJECT_PATH}") {
                         handlePulumiConfigFile()
-                    }                    
+                    }
                 }
             }
         }
@@ -62,10 +67,10 @@ pipeline {
                 // AWSリージョン設定
                 AWS_REGION            = "${params.AWS_REGION}"
                 AWS_DEFAULT_REGION    = "${params.AWS_REGION}"
-                
+
                 // Pulumi設定
                 PULUMI_BACKEND_URL       = "${env.PULUMI_BACKEND_URL}"
-                PULUMI_CONFIG_PASSPHRASE = credentials("${env.PULUMI_CONFIG_PASSPHRASE_ID}")
+                PULUMI_CONFIG_PASSPHRASE = "${env.PULUMI_CONFIG_PASSPHRASE}"
                 PULUMI_SKIP_UPDATE_CHECK = 'true'
                 PULUMI_ACTION_ERROR = 'false'
             }
@@ -78,7 +83,7 @@ pipeline {
                         }
                     }
                 }
-                
+
                 stage('Verify Authentication') {
                     steps {
                         script {
@@ -102,8 +107,8 @@ pipeline {
                 
                 stage('Collect Pre-Action Stack Info') {
                     when {
-                        expression { 
-                            (params.ACTION == 'destroy' || params.ACTION == 'deploy' || params.ACTION == 'refresh') && params.GENERATE_REPORT 
+                        expression {
+                            (params.ACTION == 'destroy' || params.ACTION == 'deploy' || params.ACTION == 'refresh') && params.GENERATE_REPORT
                         }
                     }
                     steps {
@@ -124,7 +129,7 @@ pipeline {
                                 cp ${JENKINS_REPO_DIR}/jenkins/jobs/pipeline/infrastructure/pulumi-stack-action/scripts/*.sh ${SOURCE_CODE_DIR}/${params.PULUMI_PROJECT_PATH}/
                                 chmod +x ${SOURCE_CODE_DIR}/${params.PULUMI_PROJECT_PATH}/*.sh
                             """
-                            
+
                             dir("${SOURCE_CODE_DIR}/${params.PULUMI_PROJECT_PATH}") {
                                 // AWS認証情報を条件付きで設定
                                 if (params.AWS_ACCESS_KEY_ID && params.AWS_SECRET_ACCESS_KEY) {
@@ -897,7 +902,7 @@ def printSummary() {
  */
 def handlePulumiConfigFile() {
     def configFileName = "Pulumi.${params.ENVIRONMENT}.yaml"
-    
+
     echo """
         =============================================
         Pulumi設定ファイルの処理
@@ -906,6 +911,9 @@ def handlePulumiConfigFile() {
         カスタム設定使用: ${params.USE_CUSTOM_CONFIG_FILE}
         =============================================
     """.stripIndent()
+
+    // Pulumi.yamlのリージョン設定を更新
+    _updatePulumiYamlRegion()
 
     if (params.USE_CUSTOM_CONFIG_FILE) {
         _handleInteractiveConfigUpdate(configFileName)
@@ -920,6 +928,38 @@ def handlePulumiConfigFile() {
         状態: ${env.PULUMI_CONFIG_OVERRIDDEN == 'true' ? 'カスタム設定使用' : 'デフォルト設定使用'}
         =============================================
     """.stripIndent()
+}
+
+/**
+ * Pulumi.yamlのAWSリージョン設定を更新
+ * config.aws:regionをパラメータの値で置き換える
+ */
+private def _updatePulumiYamlRegion() {
+    def pulumiYamlFile = 'Pulumi.yaml'
+
+    if (!fileExists(pulumiYamlFile)) {
+        echo "警告: ${pulumiYamlFile}が存在しません。スキップします。"
+        return
+    }
+
+    echo "Pulumi.yamlのリージョン設定を更新中..."
+
+    // YAMLファイルを読み込み
+    def yamlContent = readFile(pulumiYamlFile)
+
+    // config.aws:regionの行を探して置き換え
+    def updatedContent = yamlContent.replaceAll(
+        /(?m)^(\s*)aws:region:\s*.+$/,
+        "\$1aws:region: ${params.AWS_REGION}"
+    )
+
+    // ファイルが変更された場合のみ書き込み
+    if (yamlContent != updatedContent) {
+        writeFile file: pulumiYamlFile, text: updatedContent
+        echo "✅ Pulumi.yamlのAWSリージョンを '${params.AWS_REGION}' に更新しました"
+    } else {
+        echo "Pulumi.yamlのAWSリージョンは既に '${params.AWS_REGION}' に設定されています"
+    }
 }
 
 /**
