@@ -1,0 +1,55 @@
+---
+# remove_lambda_vpce.yml
+# Lambda API用VPCエンドポイント削除プレイブック
+# 
+# 使用方法:
+#   ansible-playbook playbooks/lambda/remove/remove_lambda_vpce.yml -e "env=dev"
+
+- name: Remove Lambda API VPC Endpoints
+  hosts: localhost
+  connection: local
+  gather_facts: yes
+  strategy: linear
+  
+  vars:
+    env_name: "{{ env | default('dev') }}"
+    
+  pre_tasks:
+    - name: Include group_vars/all.yml
+      ansible.builtin.include_vars:
+        file: "{{ inventory_dir }}/group_vars/all.yml"
+    
+    - name: Set required variables
+      ansible.builtin.set_fact:
+        project_name: "{{ projects.lambda_api.name }}"
+        
+    - name: Display operation info
+      ansible.builtin.debug:
+        msg: |
+          ==========================================
+          Lambda API VPC Endpoints Removal
+          ==========================================
+          Environment: {{ env_name }}
+          Project: {{ project_name }}-vpce
+          Region: {{ aws_region }}
+          ==========================================
+  
+  roles:
+    - aws_setup
+    - pulumi_helper
+    
+  tasks:
+    - name: Execute VPC endpoints removal
+      ansible.builtin.include_role:
+        name: lambda_vpce
+      vars:
+        operation: "destroy"
+        
+  post_tasks:
+    - name: Display results
+      ansible.builtin.debug:
+        msg: |
+          ==========================================
+          VPC Endpoints Removal Complete
+          ==========================================
+          VPC endpoints have been removed.

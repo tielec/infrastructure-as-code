@@ -1,12 +1,11 @@
 ---
-# lambda_api_gateway.yml
-# API Gatewayデプロイメントプレイブック
+# deploy_lambda_api_gateway.yml
+# API Gatewayデプロイメントプレイブック（デプロイ用）
 # 
 # 使用方法:
-#   ansible-playbook playbooks/lambda/lambda_api_gateway.yml -e "env=dev"
-#   ansible-playbook playbooks/lambda/lambda_api_gateway.yml -e "env=dev operation=destroy"
+#   ansible-playbook playbooks/lambda/deploy/deploy_lambda_api_gateway.yml -e "env=dev"
 
-- name: API Gateway Deployment
+- name: Deploy API Gateway
   hosts: localhost
   connection: local
   gather_facts: yes
@@ -28,9 +27,8 @@
       ansible.builtin.debug:
         msg: |
           ==========================================
-          API Gateway Deployment
+          API Gateway Deploy
           ==========================================
-          Operation: {{ operation | default('deploy') }}
           Environment: {{ env_name }}
           Project: {{ project_name }}-api-gateway
           Region: {{ aws_region }}
@@ -51,34 +49,23 @@
       ansible.builtin.fail:
         msg: |
           Lambda functions are not deployed!
-          Please run: ansible-playbook playbooks/lambda/lambda_functions.yml -e "env={{ env_name }}"
+          Please run: ansible-playbook playbooks/lambda/deploy/deploy_lambda_functions.yml -e "env={{ env_name }}"
       when:
-        - operation | default('deploy') == 'deploy'
         - functions_check | default('') | length == 0
   
   roles:
     - aws_setup
     - pulumi_helper
-    
-  tasks:
-
-    - name: Set operation variable
-      ansible.builtin.set_fact:
-        role_operation: "{{ operation | default('deploy') }}"
+    - lambda_api_gateway
         
-    - name: Execute API Gateway deployment
-      ansible.builtin.include_role:
-        name: lambda_api_gateway
-      vars:
-        operation: "{{ role_operation }}"
-        
+  post_tasks:
     - name: Display results
       ansible.builtin.debug:
         msg: |
           ==========================================
-          API Gateway {{ 'Preview' if preview_only else role_operation | title }} Complete
+          API Gateway {{ 'Preview' if preview_only else 'Deploy' }} Complete
           ==========================================
-          {% if role_operation == 'deploy' and not preview_only %}
+          {% if not preview_only %}
           Status: {{ 'Success' if api_gateway_deployed | default(false) else 'Failed' }}
           API Endpoint: {{ api_endpoint | default('Not available') }}
           
@@ -86,7 +73,5 @@
           pulumi stack output apiKeyInfo -C {{ pulumi_path }}/{{ project_name }}-api-gateway
           
           Next step (optional):
-          ansible-playbook playbooks/lambda/lambda_waf.yml -e "env={{ env_name }}"
-          {% elif role_operation == 'destroy' %}
-          API Gateway has been removed.
+          ansible-playbook playbooks/lambda/deploy/deploy_lambda_waf.yml -e "env={{ env_name }}"
           {% endif %}

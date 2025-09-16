@@ -1,0 +1,54 @@
+---
+# remove_lambda_network.yml
+# Lambda API用ネットワークインフラ削除プレイブック
+# 
+# 使用方法:
+#   ansible-playbook playbooks/lambda/remove/remove_lambda_network.yml -e "env=dev"
+
+- name: Remove Lambda API Network Infrastructure
+  hosts: localhost
+  connection: local
+  gather_facts: yes
+  
+  vars:
+    env_name: "{{ env | default('dev') }}"
+    
+  pre_tasks:
+    - name: Include group_vars/all.yml
+      ansible.builtin.include_vars:
+        file: "{{ inventory_dir }}/group_vars/all.yml"
+    
+    - name: Set required variables
+      ansible.builtin.set_fact:
+        project_name: "{{ projects.lambda_api.name }}"
+        
+    - name: Display operation info
+      ansible.builtin.debug:
+        msg: |
+          ==========================================
+          Lambda API Network Infrastructure Removal
+          ==========================================
+          Environment: {{ env_name }}
+          Project: {{ project_name }}-network
+          Region: {{ aws_region }}
+          ==========================================
+  
+  roles:
+    - aws_setup
+    - pulumi_helper
+    
+  tasks:
+    - name: Execute network removal
+      ansible.builtin.include_role:
+        name: lambda_network
+      vars:
+        operation: "destroy"
+        
+  post_tasks:
+    - name: Display results
+      ansible.builtin.debug:
+        msg: |
+          ==========================================
+          Network Infrastructure Removal Complete
+          ==========================================
+          Network infrastructure has been removed.

@@ -377,74 +377,143 @@ ansible-playbooks:
         ansible_extra_vars: "retention_count=1 dry_run=false generate_report=true"
         schedule: "H 2 * * *"  # 毎日 UTC 2時に実行 （日本時間 11時）
       
-      # Lambda
-      lambda_ip_whitelist:
-        playbook_path: "lambda_ip_whitelist.yml"
-        display_name: "Lambda IP Whitelist"
-        description: "Lambda IPホワイトリストの管理"
-        category: "lambda"
-        environments: ['dev', 'prod']  # 両環境に配置
-      
       # Lambda Individual Deploy Playbooks
-      lambda_ssm_init:
-        playbook_path: "lambda/lambda_ssm_init.yml"
-        display_name: "Lambda SSM Init"
-        description: "Lambda SSMパラメータの初期化"
+      lambda_ssm_init_deploy:
+        playbook_path: "lambda/deploy/deploy_lambda_ssm_init.yml"
+        display_name: "Deploy Lambda SSM Init"
+        description: "Lambda SSMパラメータの初期化（デプロイ）"
         category: "lambda-deploy"
         environments: ['dev', 'prod']
       
-      lambda_network:
-        playbook_path: "lambda/lambda_network.yml"
-        display_name: "Lambda Network"
+      lambda_ssm_init_remove:
+        playbook_path: "lambda/remove/remove_lambda_ssm_init.yml"
+        display_name: "Remove Lambda SSM Init"
+        description: "Lambda SSMパラメータの削除"
+        category: "lambda-remove"
+        environments: ['dev', 'prod']
+      
+      lambda_network_deploy:
+        playbook_path: "lambda/deploy/deploy_lambda_network.yml"
+        display_name: "Deploy Lambda Network"
         description: "Lambdaネットワークインフラのデプロイ"
         category: "lambda-deploy"
         environments: ['dev', 'prod']
       
-      lambda_security:
-        playbook_path: "lambda/lambda_security.yml"
-        display_name: "Lambda Security"
+      lambda_network_remove:
+        playbook_path: "lambda/remove/remove_lambda_network.yml"
+        display_name: "Remove Lambda Network"
+        description: "Lambdaネットワークインフラの削除"
+        category: "lambda-remove"
+        environments: ['dev', 'prod']
+      
+      lambda_security_deploy:
+        playbook_path: "lambda/deploy/deploy_lambda_security.yml"
+        display_name: "Deploy Lambda Security"
         description: "Lambdaセキュリティグループのデプロイ"
         category: "lambda-deploy"
         environments: ['dev', 'prod']
       
-      lambda_vpce:
-        playbook_path: "lambda/lambda_vpce.yml"
-        display_name: "Lambda VPC Endpoints"
+      lambda_security_remove:
+        playbook_path: "lambda/remove/remove_lambda_security.yml"
+        display_name: "Remove Lambda Security"
+        description: "Lambdaセキュリティグループの削除"
+        category: "lambda-remove"
+        environments: ['dev', 'prod']
+      
+      lambda_vpce_deploy:
+        playbook_path: "lambda/deploy/deploy_lambda_vpce.yml"
+        display_name: "Deploy Lambda VPC Endpoints"
         description: "Lambda VPCエンドポイントのデプロイ"
         category: "lambda-deploy"
         environments: ['dev', 'prod']
       
-      lambda_nat:
-        playbook_path: "lambda/lambda_nat.yml"
-        display_name: "Lambda NAT"
+      lambda_vpce_remove:
+        playbook_path: "lambda/remove/remove_lambda_vpce.yml"
+        display_name: "Remove Lambda VPC Endpoints"
+        description: "Lambda VPCエンドポイントの削除"
+        category: "lambda-remove"
+        environments: ['dev', 'prod']
+      
+      lambda_nat_deploy:
+        playbook_path: "lambda/deploy/deploy_lambda_nat.yml"
+        display_name: "Deploy Lambda NAT"
         description: "Lambda NATインスタンスのデプロイ"
         category: "lambda-deploy"
         environments: ['dev', 'prod']
       
-      lambda_functions:
-        playbook_path: "lambda/lambda_functions.yml"
-        display_name: "Lambda Functions"
+      lambda_nat_remove:
+        playbook_path: "lambda/remove/remove_lambda_nat.yml"
+        display_name: "Remove Lambda NAT"
+        description: "Lambda NATインスタンスの削除"
+        category: "lambda-remove"
+        environments: ['dev', 'prod']
+      
+      lambda_shipment_s3_deploy:
+        playbook_path: "lambda/deploy/deploy_lambda_shipment_s3.yml"
+        display_name: "Deploy Lambda Shipment S3"
+        description: "Lambda Shipment S3バケットのデプロイ"
+        category: "lambda-deploy"
+        environments: ['dev', 'prod']
+      
+      lambda_shipment_s3_remove:
+        playbook_path: "lambda/remove/remove_lambda_shipment_s3.yml"
+        display_name: "Remove Lambda Shipment S3"
+        description: "Lambda Shipment S3バケットの削除"
+        category: "lambda-remove"
+        environments: ['dev', 'prod']
+      
+      lambda_functions_deploy:
+        playbook_path: "lambda/deploy/deploy_lambda_functions.yml"
+        display_name: "Deploy Lambda Functions"
         description: "Lambda関数のデプロイ"
         category: "lambda-deploy"
         environments: ['dev', 'prod']
       
-      lambda_api_gateway:
-        playbook_path: "lambda/lambda_api_gateway.yml"
-        display_name: "Lambda API Gateway"
+      lambda_functions_remove:
+        playbook_path: "lambda/remove/remove_lambda_functions.yml"
+        display_name: "Remove Lambda Functions"
+        description: "Lambda関数の削除"
+        category: "lambda-remove"
+        environments: ['dev', 'prod']
+      
+      lambda_api_gateway_deploy:
+        playbook_path: "lambda/deploy/deploy_lambda_api_gateway.yml"
+        display_name: "Deploy Lambda API Gateway"
         description: "API Gatewayのデプロイ"
         category: "lambda-deploy"
         environments: ['dev', 'prod']
       
+      lambda_api_gateway_remove:
+        playbook_path: "lambda/remove/remove_lambda_api_gateway.yml"
+        display_name: "Remove Lambda API Gateway"
+        description: "API Gatewayの削除"
+        category: "lambda-remove"
+        environments: ['dev', 'prod']
+      
+      lambda_account_setup_deploy:
+        playbook_path: "lambda/deploy/deploy_lambda_account_setup.yml"
+        display_name: "Deploy Lambda Account Setup"
+        description: "Lambdaアカウント設定のデプロイ"
+        category: "lambda-deploy"
+        environments: ['common']
+      
+      lambda_account_setup_remove:
+        playbook_path: "lambda/remove/remove_lambda_account_setup.yml"
+        display_name: "Remove Lambda Account Setup"
+        description: "Lambdaアカウント設定の削除"
+        category: "lambda-remove"
+        environments: ['common']
+      
       # Lambda Pipeline Playbooks
       lambda_setup_pipeline:
-        playbook_path: "lambda_setup_pipeline.yml"
+        playbook_path: "lambda/lambda_setup_pipeline.yml"
         display_name: "Lambda Setup Pipeline"
         description: "Lambda完全セットアップパイプライン"
         category: "lambda-pipeline"
         environments: ['dev', 'prod']  # 両環境に配置
       
       lambda_teardown_pipeline:
-        playbook_path: "lambda_teardown_pipeline.yml"
+        playbook_path: "lambda/lambda_teardown_pipeline.yml"
         display_name: "Lambda Teardown Pipeline"
         description: "Lambda完全削除パイプライン"
         category: "lambda-pipeline"

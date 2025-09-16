@@ -12,9 +12,6 @@
 # デフォルト環境名（環境別ファイルで上書き）
 env_name: "dev"
 
-# 操作モード（deploy/destroy）
-operation: "deploy"
-
 # AWS デフォルトリージョン
 aws_region: "ap-northeast-1"
 

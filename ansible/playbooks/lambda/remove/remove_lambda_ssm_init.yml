@@ -1,0 +1,55 @@
+---
+# remove_lambda_ssm_init.yml
+# Lambda API用SSMパラメータ削除プレイブック
+# 
+# 使用方法:
+#   ansible-playbook playbooks/lambda/remove/remove_lambda_ssm_init.yml -e "env=dev"
+
+- name: Remove Lambda API SSM Parameters
+  hosts: localhost
+  connection: local
+  gather_facts: yes
+  strategy: linear
+  
+  vars:
+    env_name: "{{ env | default('dev') }}"
+    
+  pre_tasks:
+    - name: Include group_vars/all.yml
+      ansible.builtin.include_vars:
+        file: "{{ inventory_dir }}/group_vars/all.yml"
+    
+    - name: Set required variables
+      ansible.builtin.set_fact:
+        project_name: "{{ projects.lambda_api.name }}"
+        
+    - name: Display operation info
+      ansible.builtin.debug:
+        msg: |
+          ==========================================
+          Lambda API SSM Parameter Removal
+          ==========================================
+          Environment: {{ env_name }}
+          Project: {{ project_name }}
+          Region: {{ aws_region }}
+          ==========================================
+  
+  roles:
+    - aws_setup
+    - pulumi_helper
+    
+  tasks:
+    - name: Execute SSM parameter removal
+      ansible.builtin.include_role:
+        name: lambda_ssm_init
+      vars:
+        operation: "destroy"
+        
+  post_tasks:
+    - name: Display results
+      ansible.builtin.debug:
+        msg: |
+          ==========================================
+          SSM Parameter Removal Complete
+          ==========================================
+          SSM parameters have been removed.

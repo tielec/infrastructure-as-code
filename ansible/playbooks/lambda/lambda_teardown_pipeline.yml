@@ -4,8 +4,8 @@
 # 各lambda_*.ymlプレイブックを逆順で実行
 #
 # 使用方法 (ansibleディレクトリから実行):
-#   ansible-playbook playbooks/lambda_teardown_pipeline.yml -e "env=dev"
-#   ansible-playbook playbooks/lambda_teardown_pipeline.yml -e "env=dev force_destroy=true"
+#   ansible-playbook playbooks/lambda/lambda_teardown_pipeline.yml -e "env=dev"
+#   ansible-playbook playbooks/lambda/lambda_teardown_pipeline.yml -e "env=dev force_destroy=true"
 
 - name: Lambda API Infrastructure Teardown Pipeline - Start
   hosts: localhost
@@ -77,64 +77,57 @@
 # 削除は作成の逆順で実行
 
 # API Gatewayの削除
-- import_playbook: lambda/lambda_api_gateway.yml
+- import_playbook: remove/remove_lambda_api_gateway.yml
   vars:
     env: "{{ env | default('dev') }}"
-    operation: "destroy"
   when: destroy_api_gateway | default(true) | bool
   tags:
     - api-gateway
 
 # Lambda関数の削除
-- import_playbook: lambda/lambda_functions.yml
+- import_playbook: remove/remove_lambda_functions.yml
   vars:
     env: "{{ env | default('dev') }}"
-    operation: "destroy"
   when: destroy_functions | default(true) | bool
   tags:
     - functions
 
 # Lambda Shipment S3バケットの削除
-- import_playbook: lambda/lambda_shipment_s3.yml
+- import_playbook: remove/remove_lambda_shipment_s3.yml
   vars:
     env: "{{ env | default('dev') }}"
-    operation: "destroy"
   when: destroy_shipment_s3 | default(true) | bool
   tags:
     - shipment-s3
 
 # VPCエンドポイントの削除
-- import_playbook: lambda/lambda_vpce.yml
+- import_playbook: remove/remove_lambda_vpce.yml
   vars:
     env: "{{ env | default('dev') }}"
-    operation: "destroy"
   when: destroy_vpce | default(true) | bool
   tags:
     - vpce
 
 # セキュリティグループの削除
-- import_playbook: lambda/lambda_security.yml
+- import_playbook: remove/remove_lambda_security.yml
   vars:
     env: "{{ env | default('dev') }}"
-    operation: "destroy"
   when: destroy_security | default(true) | bool
   tags:
     - security
 
 # ネットワークインフラの削除
-- import_playbook: lambda/lambda_network.yml
+- import_playbook: remove/remove_lambda_network.yml
   vars:
     env: "{{ env | default('dev') }}"
-    operation: "destroy"
   when: destroy_network | default(true) | bool
   tags:
     - network
 
 # SSMパラメータの削除（最後、オプション）
-- import_playbook: lambda/lambda_ssm_init.yml
+- import_playbook: remove/remove_lambda_ssm_init.yml
   vars:
     env: "{{ env | default('dev') }}"
-    operation: "destroy"
   when: destroy_ssm | default(false) | bool
   tags:
     - ssm-destroy
@@ -192,4 +185,4 @@
           {% endif %}
           
           To recreate this infrastructure:
-          ansible-playbook playbooks/lambda_setup_pipeline.yml -e "env={{ env_name }}"
+          ansible-playbook playbooks/lambda/lambda_setup_pipeline.yml -e "env={{ env_name }}"

@@ -1,0 +1,54 @@
+---
+# remove_lambda_api_gateway.yml
+# API Gateway削除プレイブック
+# 
+# 使用方法:
+#   ansible-playbook playbooks/lambda/remove/remove_lambda_api_gateway.yml -e "env=dev"
+
+- name: Remove API Gateway
+  hosts: localhost
+  connection: local
+  gather_facts: yes
+  
+  vars:
+    env_name: "{{ env | default('dev') }}"
+    
+  pre_tasks:
+    - name: Include group_vars/all.yml
+      ansible.builtin.include_vars:
+        file: "{{ inventory_dir }}/group_vars/all.yml"
+    
+    - name: Set required variables
+      ansible.builtin.set_fact:
+        project_name: "{{ projects.lambda_api.name }}"
+        
+    - name: Display operation info
+      ansible.builtin.debug:
+        msg: |
+          ==========================================
+          API Gateway Removal
+          ==========================================
+          Environment: {{ env_name }}
+          Project: {{ project_name }}-api-gateway
+          Region: {{ aws_region }}
+          ==========================================
+  
+  roles:
+    - aws_setup
+    - pulumi_helper
+    
+  tasks:
+    - name: Execute API Gateway removal
+      ansible.builtin.include_role:
+        name: lambda_api_gateway
+      vars:
+        operation: "destroy"
+        
+  post_tasks:
+    - name: Display results
+      ansible.builtin.debug:
+        msg: |
+          ==========================================
+          API Gateway Removal Complete
+          ==========================================
+          API Gateway has been removed.
