@@ -66,8 +66,13 @@ if [ -n "$ROLE_NAME" ]; then
     export AWS_SECRET_ACCESS_KEY=$(echo $CREDENTIALS | jq -r '.SecretAccessKey')
     export AWS_SESSION_TOKEN=$(echo $CREDENTIALS | jq -r '.Token')  # 一時認証情報のため、セッショントークンが必要
     
-    # リージョン情報も取得
-    export AWS_REGION=$(curl -s -H "X-aws-ec2-metadata-token: $TOKEN" http://169.254.169.254/latest/meta-data/placement/region)
+    # リージョン情報も取得（既に設定されていない場合のみ）
+    if [ -z "$AWS_REGION" ]; then
+        export AWS_REGION=$(curl -s -H "X-aws-ec2-metadata-token: $TOKEN" http://169.254.169.254/latest/meta-data/placement/region)
+        log "# リージョンをメタデータから取得: $AWS_REGION"
+    else
+        log "# 既存のリージョン設定を維持: $AWS_REGION"
+    fi
     
     log "# AWS認証情報がメタデータサービスから正常に取得されました"
 else
@@ -86,8 +91,13 @@ else
     AWS_SESSION_TOKEN=$(aws configure get aws_session_token 2>/dev/null || echo "")
     [ -n "$AWS_SESSION_TOKEN" ] && export AWS_SESSION_TOKEN="$AWS_SESSION_TOKEN"
     
-    # リージョンの取得（デフォルト: ap-northeast-1 = 東京リージョン）
-    export AWS_REGION=$(aws configure get region 2>/dev/null || echo "ap-northeast-1")
+    # リージョンの取得（既に設定されていない場合のみ、デフォルト: ap-northeast-1 = 東京リージョン）
+    if [ -z "$AWS_REGION" ]; then
+        export AWS_REGION=$(aws configure get region 2>/dev/null || echo "ap-northeast-1")
+        log "# リージョンをAWS CLI設定から取得: $AWS_REGION"
+    else
+        log "# 既存のリージョン設定を維持: $AWS_REGION"
+    fi
     
     log "# AWS認証情報がAWS CLIの設定から取得されました"
 fi
@@ -103,6 +113,9 @@ if [ -z "$AWS_ACCESS_KEY_ID" ] || [ -z "$AWS_SECRET_ACCESS_KEY" ]; then
 fi
 
 log "# AWS認証情報の設定が完了しました"
+
+# AWS_DEFAULT_REGIONも設定（AWS_REGIONと同じ値）
+export AWS_DEFAULT_REGION="${AWS_REGION}"
 
 # スクリプトの正常終了
 # 環境変数は呼び出し元のシェルプロセスに引き継がれる
