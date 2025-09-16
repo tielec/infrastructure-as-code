@@ -17,24 +17,21 @@ def environments = [
         displayEnv: 'Common',
         awsAccountHint: '共通AWSアカウント',
         defaultSkipConfirmation: false,
-        defaultRefresh: false,
-        passphraseCredentialId: 'pulumi-config-passphrase'
+        defaultRefresh: false
     ],
     'dev': [
         folderName: 'development',
         displayEnv: 'Development',
         awsAccountHint: '開発用AWSアカウント',
         defaultSkipConfirmation: true,
-        defaultRefresh: false,
-        passphraseCredentialId: 'pulumi-config-passphrase'
+        defaultRefresh: false
     ],
     'prod': [
         folderName: 'production',
         displayEnv: 'Production',
         awsAccountHint: '本番用AWSアカウント',
         defaultSkipConfirmation: false,
-        defaultRefresh: true,
-        passphraseCredentialId: 'pulumi-config-passphrase'
+        defaultRefresh: true
     ]
 ]
 
@@ -92,7 +89,7 @@ pulumiProjects.each { repoKey, repoConfig ->
                     
                     nonStoredPasswordParam('AWS_SESSION_TOKEN', 'AWS Session Token（オプション） - STS一時認証情報を使用する場合に入力してください')
                     
-                    choiceParam('AWS_REGION', [projectConfig.aws_region ?: 'ap-northeast-1'], 'AWSリージョン - プロジェクトで使用するAWSリージョン（固定）')
+                    choiceParam('AWS_REGION', [projectConfig.aws_region ?: 'ap-northeast-1', 'us-west-2'], 'AWSリージョン - プロジェクトで使用するAWSリージョン')
                     
                     // === Pulumiプロジェクト設定（固定値） ===
                     
@@ -142,11 +139,9 @@ pulumiProjects.each { repoKey, repoConfig ->
                         |アップロードされたファイルが最優先で使用されます。""".stripMargin())
                     
                     // === 詳細設定（通常は変更不要） ===
-                    
+
                     // Jenkinsfileブランチ
                     stringParam('JENKINSFILE_BRANCH', 'main', 'Jenkinsfileが格納されているブランチ')
-                    
-                    choiceParam('PULUMI_CONFIG_PASSPHRASE_CREDENTIAL_ID', [envConfig.passphraseCredentialId], 'Pulumiパスフレーズ（自動設定） - Pulumiスタック暗号化用のパスフレーズ（環境により自動設定）')
                 }
                 
                 // ログローテーション設定

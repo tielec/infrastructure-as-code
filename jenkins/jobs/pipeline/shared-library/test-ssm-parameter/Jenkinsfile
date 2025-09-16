@@ -1,0 +1,267 @@
+@Library('jenkins-shared-lib@main') _
+
+/**
+ * SSM Parameter Store共有ライブラリテスト
+ *
+ * このパイプラインはSSMパラメータ取得ユーティリティの
+ * 動作確認とテストを行います。
+ */
+pipeline {
+    agent {
+        label 'ec2-fleet'
+    }
+
+    environment {
+        TEST_REGION = "${params.AWS_REGION}"
+    }
+
+    stages {
+        stage('Preparation') {
+            steps {
+                echo "=== SSM Parameter Store 共有ライブラリテスト ==="
+                echo "Region: ${TEST_REGION}"
+                echo "Test Type: ${params.TEST_TYPE}"
+                echo "Test Path: ${params.TEST_PARAMETER_PATH}"
+            }
+        }
+
+        stage('Test: Single Parameter') {
+            when {
+                expression { params.TEST_TYPE in ['all', 'single'] }
+            }
+            steps {
+                script {
+                    echo "=== 単一パラメータ取得テスト ==="
+
+                    try {
+                        // パラメータの存在確認
+                        def testParam = "${params.TEST_PARAMETER_PATH}/single-test"
+
+                        if (ssmParameter.exists(testParam, TEST_REGION)) {
+                            def value = ssmParameter.get(testParam, TEST_REGION)
+                            echo "✅ パラメータ取得成功: ${testParam}"
+                            echo "取得した値の長さ: ${value.length()} 文字"
+                        } else {
+                            echo "⚠️ テストパラメータが存在しません: ${testParam}"
+                            echo "テスト用にパラメータを作成してください:"
+                            echo "aws ssm put-parameter --name '${testParam}' --value 'test-value' --type String --region ${TEST_REGION}"
+                        }
+
+                        // SecureString パラメータのテスト
+                        def secureParam = "${params.TEST_PARAMETER_PATH}/secure-test"
+                        if (ssmParameter.exists(secureParam, TEST_REGION)) {
+                            def secureValue = ssmParameter.get(secureParam, TEST_REGION, true)
+                            echo "✅ SecureStringパラメータ取得成功（復号化済み）"
+                        } else {
+                            echo "⚠️ SecureStringテストパラメータが存在しません: ${secureParam}"
+                        }
+
+                    } catch (Exception e) {
+                        echo "❌ エラー発生: ${e.message}"
+                        currentBuild.result = 'UNSTABLE'
+                    }
+                }
+            }
+        }
+
+        stage('Test: Multiple Parameters') {
+            when {
+                expression { params.TEST_TYPE in ['all', 'multiple'] }
+            }
+            steps {
+                script {
+                    echo "=== 複数パラメータ一括取得テスト ==="
+
+                    try {
+                        def paramNames = [
+                            "${params.TEST_PARAMETER_PATH}/param1",
+                            "${params.TEST_PARAMETER_PATH}/param2",
+                            "${params.TEST_PARAMETER_PATH}/param3"
+                        ]
+
+                        // 存在するパラメータをフィルタリング
+                        def existingParams = []
+                        paramNames.each { param ->
+                            if (ssmParameter.exists(param, TEST_REGION)) {
+                                existingParams << param
+                            } else {
+                                echo "⚠️ パラメータが存在しません: ${param}"
+                            }
+                        }
+
+                        if (existingParams.size() > 0) {
+                            def values = ssmParameter.getMultiple(existingParams, TEST_REGION)
+                            echo "✅ ${values.size()}個のパラメータを取得しました"
+                            values.each { name, value ->
+                                echo "  ${name}: ${value.take(50)}..." // 最初の50文字のみ表示
+                            }
+                        } else {
+                            echo "⚠️ テスト用パラメータが1つも存在しません"
+                            echo "以下のコマンドでテスト用パラメータを作成してください:"
+                            paramNames.each { param ->
+                                echo "aws ssm put-parameter --name '${param}' --value 'test-value' --type String --region ${TEST_REGION}"
+                            }
+                        }
+
+                    } catch (Exception e) {
+                        echo "❌ エラー発生: ${e.message}"
+                        currentBuild.result = 'UNSTABLE'
+                    }
+                }
+            }
+        }
+
+        stage('Test: Get By Path') {
+            when {
+                expression { params.TEST_TYPE in ['all', 'path'] }
+            }
+            steps {
+                script {
+                    echo "=== パス配下のパラメータ取得テスト ==="
+
+                    try {
+                        // 再帰的に取得
+                        echo "パス '${params.TEST_PARAMETER_PATH}' 配下のパラメータを再帰的に取得..."
+                        def recursiveParams = ssmParameter.getByPath(params.TEST_PARAMETER_PATH, TEST_REGION, true, true)
+
+                        if (recursiveParams.size() > 0) {
+                            echo "✅ ${recursiveParams.size()}個のパラメータを取得（再帰）"
+                            recursiveParams.each { name, value ->
+                                echo "  ${name}"
+                            }
+                        } else {
+                            echo "⚠️ パス配下にパラメータが存在しません"
+                        }
+
+                        // 直下のみ取得
+                        echo "\nパス '${params.TEST_PARAMETER_PATH}' 直下のパラメータのみ取得..."
+                        def directParams = ssmParameter.getByPath(params.TEST_PARAMETER_PATH, TEST_REGION, false, true)
+
+                        if (directParams.size() > 0) {
+                            echo "✅ ${directParams.size()}個のパラメータを取得（直下のみ）"
+                            directParams.each { name, value ->
+                                echo "  ${name}"
+                            }
+                        } else {
+                            echo "⚠️ パス直下にパラメータが存在しません"
+                        }
+
+                    } catch (Exception e) {
+                        echo "❌ エラー発生: ${e.message}"
+                        currentBuild.result = 'UNSTABLE'
+                    }
+                }
+            }
+        }
+
+        stage('Test: With Environment Variables') {
+            when {
+                expression { params.TEST_TYPE in ['all', 'withEnv'] }
+            }
+            steps {
+                script {
+                    echo "=== 環境変数設定テスト ==="
+
+                    try {
+                        def paramMapping = [:]
+
+                        // テスト用のパラメータマッピングを作成
+                        def testParams = [
+                            "${params.TEST_PARAMETER_PATH}/env-test1": "TEST_ENV_VAR1",
+                            "${params.TEST_PARAMETER_PATH}/env-test2": "TEST_ENV_VAR2"
+                        ]
+
+                        // 存在するパラメータのみマッピングに追加
+                        testParams.each { paramName, envName ->
+                            if (ssmParameter.exists(paramName, TEST_REGION)) {
+                                paramMapping[paramName] = envName
+                            } else {
+                                echo "⚠️ パラメータが存在しません: ${paramName}"
+                            }
+                        }
+
+                        if (paramMapping.size() > 0) {
+                            ssmParameter.withParameters(paramMapping, TEST_REGION) {
+                                echo "✅ 環境変数が設定されました"
+                                sh '''
+                                    echo "環境変数の確認:"
+                                    env | grep TEST_ENV_VAR || echo "TEST_ENV_VAR変数が見つかりません"
+                                '''
+                            }
+
+                            // ブロック外では環境変数は無効
+                            echo "ブロック外では環境変数は無効です"
+                            sh '''
+                                echo "ブロック外での環境変数確認:"
+                                env | grep TEST_ENV_VAR || echo "✅ 期待通り、環境変数は設定されていません"
+                            '''
+                        } else {
+                            echo "⚠️ テスト用パラメータが存在しないため、環境変数テストをスキップします"
+                        }
+
+                    } catch (Exception e) {
+                        echo "❌ エラー発生: ${e.message}"
+                        currentBuild.result = 'UNSTABLE'
+                    }
+                }
+            }
+        }
+
+        stage('Performance Test') {
+            when {
+                expression { params.TEST_TYPE == 'all' }
+            }
+            steps {
+                script {
+                    echo "=== パフォーマンステスト ==="
+
+                    try {
+                        def testParam = "${params.TEST_PARAMETER_PATH}/perf-test"
+
+                        if (ssmParameter.exists(testParam, TEST_REGION)) {
+                            def startTime = System.currentTimeMillis()
+
+                            // キャッシュありで複数回取得
+                            echo "キャッシュありで10回取得..."
+                            10.times {
+                                ssmParameter.get(testParam, TEST_REGION)
+                            }
+
+                            def elapsedTime = System.currentTimeMillis() - startTime
+                            echo "✅ 実行時間（キャッシュあり）: ${elapsedTime}ms"
+
+                            // パフォーマンス基準のチェック
+                            if (elapsedTime < 5000) {
+                                echo "✅ パフォーマンス基準を満たしています（< 5秒）"
+                            } else {
+                                echo "⚠️ パフォーマンスが基準を下回っています"
+                            }
+                        } else {
+                            echo "⚠️ パフォーマンステスト用パラメータが存在しません: ${testParam}"
+                        }
+
+                    } catch (Exception e) {
+                        echo "❌ エラー発生: ${e.message}"
+                        currentBuild.result = 'UNSTABLE'
+                    }
+                }
+            }
+        }
+    }
+
+    post {
+        success {
+            echo "✅ SSMパラメータ共有ライブラリのテストが正常に完了しました"
+        }
+        unstable {
+            echo "⚠️ 一部のテストが失敗しました。ログを確認してください。"
+        }
+        failure {
+            echo "❌ テストが失敗しました"
+        }
+        always {
+            echo "=== テスト完了 ==="
+            echo "テスト結果: ${currentBuild.result ?: 'SUCCESS'}"
+        }
+    }
+}

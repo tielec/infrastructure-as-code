@@ -41,16 +41,12 @@ pipelineJob(fullJobName) {
         stringParam('AWS_ACCESS_KEY_ID', '', 'AWS Access Key ID')
         nonStoredPasswordParam('AWS_SECRET_ACCESS_KEY', 'AWS Secret Access Key')
         nonStoredPasswordParam('AWS_SESSION_TOKEN', 'AWS Session Token（一時認証情報を使用する場合）')
-        choiceParam('AWS_REGION', ['ap-northeast-1'], 'AWSリージョン')        
+        choiceParam('AWS_REGION', ['ap-northeast-1', 'us-west-2'], 'AWSリージョン')        
         // === Pulumiプロジェクト設定 ===
         choiceParam('PULUMI_REPO_URL', ['https://github.com/tielec/infrastructure-as-code'], 'GitリポジトリURL')      
         stringParam('PULUMI_TARGET_BRANCH', 'main', 'チェックアウトするブランチ')
         choiceParam('PULUMI_PROJECT_PATH', ['pulumi/test-s3'], 'テスト用Pulumiプロジェクトのパス')
         choiceParam('PROJECT_TYPE', ['nodejs'], 'プロジェクトのタイプ')
-        
-        // === Pulumi設定 ===
-        choiceParam('PULUMI_BACKEND_URL', [''], 'Pulumi S3バックエンドURL (空の場合はクレデンシャルから動的取得)')
-        choiceParam('PULUMI_CONFIG_PASSPHRASE_CREDENTIAL_ID', ['pulumi-config-passphrase'], 'Pulumiスタック暗号化パスフレーズのCredential ID')
         
         // === オプション設定 ===
         booleanParam('SKIP_CONFIRMATION', true, 'デプロイ/削除時の確認をスキップ')

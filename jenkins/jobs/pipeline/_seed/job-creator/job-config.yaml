@@ -236,6 +236,12 @@ jenkins-jobs:
     dslfile: jenkins/jobs/dsl/shared-library/shared_library_jenkins_credentials_operation_test_job.groovy
     jenkinsfile: jenkins/jobs/pipeline/shared-library/test-jenkins-utils/credentials-operation/Jenkinsfile
 
+  shared_library_ssm_parameter_test_job:
+    name: 'SSM_Parameter_Test'
+    displayName: 'Test SSM Parameter Store Operations'
+    dslfile: jenkins/jobs/dsl/shared-library/shared_library_ssm_parameter_test_job.groovy
+    jenkinsfile: jenkins/jobs/pipeline/shared-library/test-ssm-parameter/Jenkinsfile
+
   # Infrastructure Management Jobs
   infrastructure_shutdown_environment_job:
     name: 'Shutdown_Jenkins_Environment'

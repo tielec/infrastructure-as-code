@@ -765,24 +765,70 @@ package jp.co.company.utils
 
 class GitUtils implements Serializable {
     private def script
-    
+
     GitUtils(def script) {
         this.script = script
     }
-    
+
     String getCurrentBranch() {
         return script.sh(
             script: 'git rev-parse --abbrev-ref HEAD',
             returnStdout: true
         ).trim()
     }
-    
+
     Boolean hasChangesIn(String path) {
         def changes = script.sh(
             script: "git diff --name-only HEAD~1 -- ${path}",
             returnStdout: true
         ).trim()
         return !changes.isEmpty()
+    }
+}
+```
+
+##### SSMパラメータ取得ユーティリティの実装例
+
+```groovy
+// src/jp/co/tielec/aws/SsmParameterStore.groovy
+package jp.co.tielec.aws
+
+class SsmParameterStore implements Serializable {
+    private def script
+    private String region
+    private Map<String, String> cache = [:]
+    private boolean useCache
+
+    SsmParameterStore(def script, String region = 'ap-northeast-1', boolean useCache = true) {
+        this.script = script
+        this.region = region
+        this.useCache = useCache
+    }
+
+    String getParameter(String parameterName, boolean withDecryption = true) {
+        // キャッシュチェック
+        if (useCache && cache.containsKey(parameterName)) {
+            return cache[parameterName]
+        }
+
+        def decryptFlag = withDecryption ? '--with-decryption' : ''
+        def result = script.sh(
+            script: """
+                aws ssm get-parameter \
+                    --name '${parameterName}' \
+                    --region ${region} \
+                    ${decryptFlag} \
+                    --query 'Parameter.Value' \
+                    --output text
+            """,
+            returnStdout: true
+        ).trim()
+
+        if (useCache) {
+            cache[parameterName] = result
+        }
+
+        return result
     }
 }
 ```
@@ -815,6 +861,50 @@ def checkoutWithSubmodules(Map config = [:]) {
 @NonCPS
 def parseJson(String jsonText) {
     return new groovy.json.JsonSlurper().parseText(jsonText)
+}
+```
+
+##### SSMパラメータ取得のグローバル変数
+
+```groovy
+// vars/ssmParameter.groovy
+import jp.co.tielec.aws.SsmParameterStore
+
+/**
+ * 単一のSSMパラメータを取得
+ * @param parameterName パラメータ名
+ * @param region AWSリージョン（明示的指定必須）
+ * @param withDecryption SecureStringの復号化（デフォルト: true）
+ * @return パラメータ値
+ */
+def get(String parameterName, String region, boolean withDecryption = true) {
+    def ssmStore = new SsmParameterStore(this, region, true)
+    return ssmStore.getParameter(parameterName, withDecryption)
+}
+
+/**
+ * パラメータを環境変数として設定してブロックを実行
+ * @param parameterMapping パラメータ名と環境変数名のマッピング
+ * @param region AWSリージョン（明示的指定必須）
+ * @param body 実行するクロージャ
+ */
+def withParameters(Map parameterMapping, String region, Closure body) {
+    def ssmStore = new SsmParameterStore(this, region, true)
+    def parameterNames = parameterMapping.keySet().toList()
+    def values = ssmStore.getParameters(parameterNames, true)
+
+    def envVars = []
+    parameterMapping.each { paramName, envName ->
+        if (values.containsKey(paramName)) {
+            envVars << "${envName}=${values[paramName]}"
+        } else {
+            error "SSMパラメータが見つかりません: ${paramName}"
+        }
+    }
+
+    withEnv(envVars) {
+        body()
+    }
 }
 ```
 

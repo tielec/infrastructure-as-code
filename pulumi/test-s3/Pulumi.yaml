@@ -2,3 +2,5 @@
 name: test-s3
 runtime: nodejs
 description: Test S3 Bucket - Minimal Pulumi Project
+config:
+  aws:region: ap-northeast-1
