@@ -48,10 +48,6 @@ pipelineJob(fullJobName) {
         choiceParam('PULUMI_PROJECT_PATH', ['pulumi/test-s3'], 'テスト用Pulumiプロジェクトのパス')
         choiceParam('PROJECT_TYPE', ['nodejs'], 'プロジェクトのタイプ')
         
-        // === Pulumi設定 ===
-        choiceParam('PULUMI_BACKEND_URL', [''], 'Pulumi S3バックエンドURL (空の場合はクレデンシャルから動的取得)')
-        choiceParam('PULUMI_CONFIG_PASSPHRASE_CREDENTIAL_ID', ['pulumi-config-passphrase'], 'Pulumiスタック暗号化パスフレーズのCredential ID')
-        
         // === オプション設定 ===
         booleanParam('SKIP_CONFIRMATION', true, 'デプロイ/削除時の確認をスキップ')
         booleanParam('GENERATE_REPORT', true, 'HTMLレポートを生成する')
