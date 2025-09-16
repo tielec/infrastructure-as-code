@@ -89,7 +89,7 @@ pulumiProjects.each { repoKey, repoConfig ->
                     
                     nonStoredPasswordParam('AWS_SESSION_TOKEN', 'AWS Session Token（オプション） - STS一時認証情報を使用する場合に入力してください')
                     
-                    choiceParam('AWS_REGION', [projectConfig.aws_region ?: 'ap-northeast-1'], 'AWSリージョン - プロジェクトで使用するAWSリージョン（固定）')
+                    choiceParam('AWS_REGION', [projectConfig.aws_region ?: 'ap-northeast-1', 'us-west-2'], 'AWSリージョン - プロジェクトで使用するAWSリージョン')
                     
                     // === Pulumiプロジェクト設定（固定値） ===
                     
