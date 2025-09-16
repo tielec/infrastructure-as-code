@@ -92,6 +92,9 @@ ${playbookListText}
                 // 環境選択
                 choiceParam('ENVIRONMENT', ['dev', 'staging', 'prod'], '実行環境')
                 
+                // AWSリージョン
+                choiceParam('AWS_REGION', ['ap-northeast-1', 'us-west-2'], 'AWSリージョン')
+                
                 // ブランチ選択
                 stringParam('BRANCH', 'main', 'リポジトリブランチ（デフォルト: main）')
                 
@@ -103,6 +106,9 @@ ${playbookListText}
                     playbookPaths.size() > 1 ? 
                     '実行するプレイブック（カンマ区切り）\n順番を変更する場合は編集してください' : 
                     'プレイブックパス（自動設定）')
+                
+                // カスタム設定ファイルオプション
+                booleanParam('USE_CUSTOM_CONFIG_FILE', false, 'カスタムgroup_vars/all.yml設定を使用（対話的に値を更新）')
                 
                 // Ansibleオプション
                 stringParam('ANSIBLE_EXTRA_VARS', ansibleExtraVarsDefault, '追加のAnsible変数（例: key1=value1 key2=value2）')
