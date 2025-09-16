@@ -130,12 +130,11 @@ def validateParameters() {
         echo "ℹ️ 明示的に指定されたAWS認証情報を使用します"
     }
     
-    // S3_BUCKETが指定されていない場合、クレデンシャルから取得
+    // S3_BUCKETが指定されていない場合、SSMパラメータから取得
     if (!params.S3_BUCKET) {
-        withCredentials([string(credentialsId: 'pulumi-s3bucket-name', variable: 'BUCKET_NAME')]) {
-            env.S3_BUCKET = BUCKET_NAME
-            echo "S3バケット名をクレデンシャルから取得: ${env.S3_BUCKET}"
-        }
+        def s3BucketName = ssmParameter.get('/bootstrap/pulumi/s3bucket-name', params.AWS_REGION)
+        env.S3_BUCKET = s3BucketName
+        echo "S3バケット名をSSMパラメータから取得: ${env.S3_BUCKET}"
     } else {
         env.S3_BUCKET = params.S3_BUCKET
     }
