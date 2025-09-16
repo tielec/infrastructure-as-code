@@ -377,14 +377,6 @@ ansible-playbooks:
         ansible_extra_vars: "retention_count=1 dry_run=false generate_report=true"
         schedule: "H 2 * * *"  # 毎日 UTC 2時に実行 （日本時間 11時）
       
-      # Lambda
-      lambda_ip_whitelist:
-        playbook_path: "lambda_ip_whitelist.yml"
-        display_name: "Lambda IP Whitelist"
-        description: "Lambda IPホワイトリストの管理"
-        category: "lambda"
-        environments: ['dev', 'prod']  # 両環境に配置
-      
       # Lambda Individual Deploy Playbooks
       lambda_ssm_init_deploy:
         playbook_path: "lambda/deploy/deploy_lambda_ssm_init.yml"
