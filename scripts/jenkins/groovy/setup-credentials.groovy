@@ -171,16 +171,6 @@ def secretTextMappings = [
         parameterPath: "/${PROJECT_NAME}/${ENVIRONMENT}/jenkins/cli-token",
         credentialId: "cli-user-token",
         description: "API token for Jenkins CLI user"
-    ],
-    [
-        parameterPath: "/bootstrap/pulumi/config-passphrase",
-        credentialId: "pulumi-config-passphrase",
-        description: "Pulumi configuration passphrase for encryption"
-    ],
-    [
-        parameterPath: "/bootstrap/pulumi/s3bucket-name",
-        credentialId: "pulumi-s3bucket-name",
-        description: "S3 bucket name for Pulumi state storage"
     ]
 ]
 
