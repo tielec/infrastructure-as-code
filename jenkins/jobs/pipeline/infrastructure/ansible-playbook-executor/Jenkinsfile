@@ -283,8 +283,8 @@ def handleAnsibleConfigFile() {
         =============================================
     """.stripIndent()
 
-    // all.ymlのAWSリージョン設定を更新
-    _updateAnsibleYamlRegion(configFileName)
+    // all.ymlのAWSリージョンと環境名設定を更新
+    _updateAnsibleYamlSettings(configFileName)
 
     if (params.USE_CUSTOM_CONFIG_FILE) {
         _handleInteractiveConfigUpdate(configFileName)
@@ -302,33 +302,44 @@ def handleAnsibleConfigFile() {
 }
 
 /**
- * all.ymlのAWSリージョン設定を更新
- * aws_regionをパラメータの値で置き換える
+ * all.ymlの環境設定を更新
+ * aws_regionとenv_nameをパラメータの値で置き換える
  * @param configFileName 対象の設定ファイル名
  */
-private def _updateAnsibleYamlRegion(String configFileName) {
+private def _updateAnsibleYamlSettings(String configFileName) {
     if (!fileExists(configFileName)) {
         echo "警告: ${configFileName}が存在しません。スキップします。"
         return
     }
 
-    echo "all.ymlのリージョン設定を更新中..."
+    echo "all.ymlのリージョンと環境名設定を更新中..."
 
     // YAMLファイルを読み込み
     def yamlContent = readFile(configFileName)
+    def updatedContent = yamlContent
 
     // aws_region:の行を探して置き換え
-    def updatedContent = yamlContent.replaceAll(
+    updatedContent = updatedContent.replaceAll(
         /(?m)^(\s*)aws_region:\s*".*"$/,
         "\$1aws_region: \"${params.AWS_REGION}\""
+    )
+
+    // env_name:の行を探して置き換え（ENVIRONMENTパラメータを使用）
+    updatedContent = updatedContent.replaceAll(
+        /(?m)^(\s*)env_name:\s*".*"$/,
+        "\$1env_name: \"${params.ENVIRONMENT}\""
     )
 
     // ファイルが変更された場合のみ書き込み
     if (yamlContent != updatedContent) {
         writeFile file: configFileName, text: updatedContent
-        echo "✅ all.ymlのAWSリージョンを '${params.AWS_REGION}' に更新しました"
+        echo "✅ all.ymlを更新しました:"
+        echo "   - AWSリージョン: '${params.AWS_REGION}'"
+        echo "   - 環境名: '${params.ENVIRONMENT}'"
     } else {
-        echo "all.ymlのAWSリージョンは既に '${params.AWS_REGION}' に設定されています"
+        echo "all.ymlは既に最新の設定です:"
+        echo "   - AWSリージョン: '${params.AWS_REGION}'"
+        echo "   - 環境名: '${params.ENVIRONMENT}'"
     }
 }
 
