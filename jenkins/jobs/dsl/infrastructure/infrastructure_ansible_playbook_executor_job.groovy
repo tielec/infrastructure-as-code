@@ -89,11 +89,11 @@ ${playbookListText}
 **リポジトリ**: ${repoKey}""")
             
             parameters {
-                // 環境選択
-                choiceParam('ENVIRONMENT', ['dev', 'staging', 'prod'], '実行環境')
+                // 環境選択（固定値：このジョブの環境のみ）
+                choiceParam('ENVIRONMENT', [env], '実行環境')
                 
                 // AWSリージョン
-                choiceParam('AWS_REGION', ['ap-northeast-1', 'us-west-2'], 'AWSリージョン')
+                choiceParam('AWS_REGION', ['us-west-2', 'ap-northeast-1'], 'AWSリージョン')
                 
                 // ブランチ選択
                 stringParam('BRANCH', 'main', 'リポジトリブランチ（デフォルト: main）')
