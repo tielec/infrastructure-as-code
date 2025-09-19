@@ -28,6 +28,14 @@ const vpcCidrParamResult = aws.ssm.getParameter({
 });
 const vpcCidrBlock = pulumi.output(vpcCidrParamResult).apply(p => p.value);
 
+// VPC CIDRからサブネットのベースオクテットを計算
+// dev: 10.1.0.0/16, staging: 10.2.0.0/16, prod: 10.3.0.0/16
+const baseOctet = vpcCidrBlock.apply(cidr => {
+    const match = cidr.match(/^(\d+)\.(\d+)\.(\d+)\.(\d+)\//);
+    if (!match) throw new Error(`Invalid VPC CIDR: ${cidr}`);
+    return `${match[1]}.${match[2]}`;
+});
+
 // Flow Logs設定を取得
 const enableFlowLogsParam = aws.ssm.getParameter({
     name: `/lambda-api/${environment}/network/enable-flow-logs`,
@@ -79,10 +87,10 @@ const azs = pulumi.output(aws.getAvailabilityZones({}));
 // ========================================
 // サブネット定義
 // ========================================
-// パブリックサブネットA (10.1.0.0/24)
+// パブリックサブネットA
 const publicSubnetA = new aws.ec2.Subnet("public-subnet-a", {
     vpcId: vpc.id,
-    cidrBlock: "10.1.0.0/24",
+    cidrBlock: pulumi.interpolate`${baseOctet}.0.0/24`,
     availabilityZone: azs.names[0],
     mapPublicIpOnLaunch: true,
     tags: {
@@ -92,10 +100,10 @@ const publicSubnetA = new aws.ec2.Subnet("public-subnet-a", {
     },
 });
 
-// パブリックサブネットB (10.1.2.0/24)
+// パブリックサブネットB
 const publicSubnetB = new aws.ec2.Subnet("public-subnet-b", {
     vpcId: vpc.id,
-    cidrBlock: "10.1.2.0/24",
+    cidrBlock: pulumi.interpolate`${baseOctet}.2.0/24`,
     availabilityZone: azs.names[1],
     mapPublicIpOnLaunch: true,
     tags: {
@@ -105,10 +113,10 @@ const publicSubnetB = new aws.ec2.Subnet("public-subnet-b", {
     },
 });
 
-// プライベートサブネットA (10.1.1.0/24)
+// プライベートサブネットA
 const privateSubnetA = new aws.ec2.Subnet("private-subnet-a", {
     vpcId: vpc.id,
-    cidrBlock: "10.1.1.0/24",
+    cidrBlock: pulumi.interpolate`${baseOctet}.1.0/24`,
     availabilityZone: azs.names[0],
     tags: {
         ...commonTags,
@@ -117,10 +125,10 @@ const privateSubnetA = new aws.ec2.Subnet("private-subnet-a", {
     },
 });
 
-// プライベートサブネットB (10.1.3.0/24)
+// プライベートサブネットB
 const privateSubnetB = new aws.ec2.Subnet("private-subnet-b", {
     vpcId: vpc.id,
-    cidrBlock: "10.1.3.0/24",
+    cidrBlock: pulumi.interpolate`${baseOctet}.3.0/24`,
     availabilityZone: azs.names[1],
     tags: {
         ...commonTags,
@@ -138,10 +146,10 @@ let isolatedRouteTableA: aws.ec2.RouteTable | undefined;
 let isolatedRouteTableB: aws.ec2.RouteTable | undefined;
 
 if (createIsolatedSubnets) {
-    // アイソレートサブネットA (10.1.10.0/24)
+    // アイソレートサブネットA
     isolatedSubnetA = new aws.ec2.Subnet("isolated-subnet-a", {
         vpcId: vpc.id,
-        cidrBlock: "10.1.10.0/24",
+        cidrBlock: pulumi.interpolate`${baseOctet}.10.0/24`,
         availabilityZone: azs.names[0],
         tags: {
             ...commonTags,
@@ -150,10 +158,10 @@ if (createIsolatedSubnets) {
         },
     });
 
-    // アイソレートサブネットB (10.1.11.0/24)
+    // アイソレートサブネットB
     isolatedSubnetB = new aws.ec2.Subnet("isolated-subnet-b", {
         vpcId: vpc.id,
-        cidrBlock: "10.1.11.0/24",
+        cidrBlock: pulumi.interpolate`${baseOctet}.11.0/24`,
         availabilityZone: azs.names[1],
         tags: {
             ...commonTags,
