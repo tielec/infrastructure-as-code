@@ -34,6 +34,20 @@ Parameters:
     Type: String
     Default: 'v1'
 
+  # EC2インスタンス作成を制御するパラメータ
+  CreateEC2Instance:
+    Description: Whether to create EC2 instance (Yes/No)
+    Type: String
+    Default: 'No'
+    AllowedValues:
+      - 'Yes'
+      - 'No'
+    ConstraintDescription: Must be Yes or No
+
+Conditions:
+  # EC2インスタンスを作成するかどうかの条件
+  ShouldCreateEC2: !Equals [!Ref CreateEC2Instance, 'Yes']
+
 Resources:
   # S3 Bucket for Pulumi Backend
   PulumiStateBucket:
@@ -77,6 +91,7 @@ Resources:
   # SSM Parameter Store に Public IP を保存
   WorkTerminalPublicIPParameter:
     Type: AWS::SSM::Parameter
+    Condition: ShouldCreateEC2
     DependsOn: BootstrapInstance
     Properties:
       Name: /bootstrap/workterminal/public-ip
@@ -263,6 +278,7 @@ Resources:
 
   BootstrapInstanceProfile:
     Type: AWS::IAM::InstanceProfile
+    Condition: ShouldCreateEC2
     Properties:
       Path: "/"
       Roles:
@@ -271,6 +287,7 @@ Resources:
   # Launch Template でUserDataを共通化
   BootstrapLaunchTemplate:
     Type: AWS::EC2::LaunchTemplate
+    Condition: ShouldCreateEC2
     Properties:
       LaunchTemplateName: !Sub '${AWS::StackName}-LaunchTemplate'
       LaunchTemplateData:
@@ -412,6 +429,7 @@ Resources:
   # SSM Maintenance Window (日本時間午前0時に停止)
   StopInstanceMaintenanceWindow:
     Type: AWS::SSM::MaintenanceWindow
+    Condition: ShouldCreateEC2
     Properties:
       Name: !Sub '${AWS::StackName}-StopInstance'
       Description: 'Stop Bootstrap instance daily at 0:00 AM JST'
@@ -426,6 +444,7 @@ Resources:
   # Maintenance Windowのターゲット（停止対象のインスタンス）
   StopInstanceTarget:
     Type: AWS::SSM::MaintenanceWindowTarget
+    Condition: ShouldCreateEC2
     Properties:
       Name: !Sub '${AWS::StackName}-StopTarget'
       Description: 'Target for stopping bootstrap instance'
@@ -439,6 +458,7 @@ Resources:
   # Maintenance Windowのタスク（EC2停止コマンド）
   StopInstanceTask:
     Type: AWS::SSM::MaintenanceWindowTask
+    Condition: ShouldCreateEC2
     Properties:
       Name: !Sub '${AWS::StackName}-StopTask'
       Description: 'Stop bootstrap EC2 instance'
@@ -462,6 +482,7 @@ Resources:
   # EC2 Instance
   BootstrapInstance:
     Type: AWS::EC2::Instance
+    Condition: ShouldCreateEC2
     DependsOn: 
       - PulumiStateBucketPolicy
       - PulumiS3AccessPolicy
@@ -485,38 +506,65 @@ Resources:
           Value: 'Enabled'
 
 Outputs:
+  # EC2インスタンスが作成された場合のみ出力
   BootstrapInstanceId:
+    Condition: ShouldCreateEC2
     Description: ID of the bootstrap EC2 instance
     Value: !Ref BootstrapInstance
 
   BootstrapPublicIP:
+    Condition: ShouldCreateEC2
     Description: Public IP address of the bootstrap EC2 instance
     Value: !GetAtt BootstrapInstance.PublicIp
 
   SSHCommand:
+    Condition: ShouldCreateEC2
     Description: SSH command to connect to the instance
     Value: !Sub 'ssh -i <your-key.pem> ec2-user@${BootstrapInstance.PublicIp}'
 
+  # ネットワークとS3は常に出力
   PulumiStateBucketName:
     Description: Name of the S3 bucket for Pulumi state storage
     Value: !Ref PulumiStateBucket
 
+  VPCId:
+    Description: VPC ID
+    Value: !Ref VPC
+
+  PublicSubnetId:
+    Description: Public Subnet ID
+    Value: !Ref PublicSubnet
+
+  SecurityGroupId:
+    Description: Security Group ID
+    Value: !Ref BootstrapSecurityGroup
+
+  # EC2インスタンス管理用のコマンド（常に表示）
+  CreateInstanceCommand:
+    Description: Command to create the EC2 instance
+    Value: !Sub 'aws cloudformation update-stack --stack-name ${AWS::StackName} --use-previous-template --parameters ParameterKey=CreateEC2Instance,ParameterValue=Yes ParameterKey=InstanceVersion,ParameterValue=$(date +%s) --capabilities CAPABILITY_NAMED_IAM --region ${AWS::Region}'
+
+  RemoveInstanceCommand:
+    Description: Command to remove the EC2 instance (keeping network and S3)
+    Value: !Sub 'aws cloudformation update-stack --stack-name ${AWS::StackName} --use-previous-template --parameters ParameterKey=CreateEC2Instance,ParameterValue=No --capabilities CAPABILITY_NAMED_IAM --region ${AWS::Region}'
+
+  # EC2インスタンスが作成された場合のみ出力
   WorkTerminalPublicIPParameter:
+    Condition: ShouldCreateEC2
     Description: SSM Parameter path for public IP
     Value: /bootstrap/workterminal/public-ip
 
   GetPublicIPCommand:
+    Condition: ShouldCreateEC2
     Description: Command to retrieve public IP from SSM Parameter Store
     Value: !Sub 'aws ssm get-parameter --name /bootstrap/workterminal/public-ip --query "Parameter.Value" --output text --region ${AWS::Region}'
 
-  RecreateInstanceCommand:
-    Description: Command to recreate the instance
-    Value: !Sub 'aws cloudformation update-stack --stack-name ${AWS::StackName} --use-previous-template --parameters ParameterKey=InstanceVersion,ParameterValue=$(date +%s) --capabilities CAPABILITY_NAMED_IAM'
-
   StopScheduleStatus:
+    Condition: ShouldCreateEC2
     Description: Daily stop schedule status
     Value: !Sub 'Instance will be stopped daily at 0:00 AM JST (15:00 UTC) via SSM Maintenance Window'
 
   ManualStartCommand:
+    Condition: ShouldCreateEC2
     Description: Command to manually start the instance
     Value: !Sub 'aws ec2 start-instances --instance-ids ${BootstrapInstance} --region ${AWS::Region}'
