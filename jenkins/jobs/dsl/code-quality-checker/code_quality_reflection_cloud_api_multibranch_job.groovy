@@ -21,6 +21,8 @@ multibranchPipelineJob(fullJobName) {
             source {
                 github {
                     id(UUID.randomUUID().toString())
+                    repositoryUrl('https://github.com/tielec/reflection-cloud-api')
+                    configuredByUrl(true)
                     apiUri('https://api.github.com')
                     credentialsId('github-app-credentials')
                     repoOwner('tielec')
