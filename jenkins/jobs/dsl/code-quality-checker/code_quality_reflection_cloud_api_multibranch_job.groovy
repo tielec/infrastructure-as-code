@@ -20,7 +20,7 @@ multibranchPipelineJob(fullJobName) {
         github {
             id(UUID.randomUUID().toString())
             apiUri('https://api.github.com')
-            credentialsId('github-app-credentials')
+            scanCredentialsId('github-app-credentials')
             repoOwner('tielec')
             repository('reflection-cloud-api')
             repositoryUrl('https://github.com/tielec/reflection-cloud-api')
