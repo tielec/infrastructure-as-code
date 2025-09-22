@@ -105,6 +105,14 @@ jenkins-jobs:
     dslfile: jenkins/jobs/dsl/code-quality-checker/code_quality_pr_complexity_analyzer_github_trigger_job.groovy
     downstreamJob: 'pr-complexity-analyzer'
 
+  # MultiBranch Pipeline Job for reflection-cloud-api
+  code_quality_reflection_cloud_api_multibranch_job:
+    name: 'pre-merge-reflection-cloud-api'
+    displayName: 'Pre-Merge Check - reflection-cloud-api'
+    description: 'MultiBranch Pipeline for reflection-cloud-api repository - Pre-Merge Check'
+    dslfile: jenkins/jobs/dsl/code-quality-checker/code_quality_reflection_cloud_api_multibranch_job.groovy
+    # jenkinsfile: 不要（リポジトリ内のJenkinsfileを使用）
+
   # Docs Generator Jobs
   docs_generator_auto_insert_doxygen_comment_job:
     name: 'auto_insert_doxygen_comment'
