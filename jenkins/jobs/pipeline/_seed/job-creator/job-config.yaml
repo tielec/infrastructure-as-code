@@ -107,9 +107,9 @@ jenkins-jobs:
 
   # MultiBranch Pipeline Job for reflection-cloud-api
   code_quality_reflection_cloud_api_multibranch_job:
-    name: 'reflection-cloud-api'
-    displayName: 'reflection-cloud-api'
-    description: 'MultiBranch Pipeline for reflection-cloud-api repository'
+    name: 'pre-merge-reflection-cloud-api'
+    displayName: 'Pre-Merge Check - reflection-cloud-api'
+    description: 'MultiBranch Pipeline for reflection-cloud-api repository - Pre-Merge Check'
     dslfile: jenkins/jobs/dsl/code-quality-checker/code_quality_reflection_cloud_api_multibranch_job.groovy
     # jenkinsfile: 不要（リポジトリ内のJenkinsfileを使用）
 
