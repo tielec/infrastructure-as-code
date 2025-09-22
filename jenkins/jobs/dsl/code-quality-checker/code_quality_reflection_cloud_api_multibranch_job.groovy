@@ -49,9 +49,9 @@ multibranchPipelineJob(fullJobName) {
     
     // トリガー設定
     triggers {
-        // 定期的なポーリング（30分ごと）
+        // 定期的なポーリング（4時間ごと）
         periodicFolderTrigger {
-            interval('30m')
+            interval('240')  // 4時間 = 240分
         }
     }
     
