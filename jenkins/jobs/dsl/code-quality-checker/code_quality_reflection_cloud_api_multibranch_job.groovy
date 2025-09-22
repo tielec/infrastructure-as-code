@@ -23,7 +23,6 @@ multibranchPipelineJob(fullJobName) {
             scanCredentialsId('github-app-credentials')
             repoOwner('tielec')
             repository('reflection-cloud-api')
-            repositoryUrl('https://github.com/tielec/reflection-cloud-api')
             
             // ブランチ検出設定
             traits {
