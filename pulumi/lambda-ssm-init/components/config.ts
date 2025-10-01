@@ -46,8 +46,8 @@ export function loadConfig() {
             claudeSpeedModel: config.get("claudeSpeedModel") || "claude-3-haiku-20240307",
             claudeQualityModel: config.get("claudeQualityModel") || "claude-3-5-sonnet-20240620",
             openaiApiKey: config.get("openaiApiKey") || "PLACEHOLDER_PLEASE_UPDATE_WITH_ACTUAL_API_KEY",
-            openaiSpeedModel: config.get("openaiSpeedModel") || "gpt-4-turbo",
-            openaiQualityModel: config.get("openaiQualityModel") || "gpt-4o",
+            openaiSpeedModel: config.get("openaiSpeedModel") || "gpt-4.1-mini",
+            openaiQualityModel: config.get("openaiQualityModel") || "gpt-4.1",
         }
     };
     

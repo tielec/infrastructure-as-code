@@ -28,5 +28,5 @@ config:
   lambda-ssm-init:claudeQualityModel: "claude-3-5-sonnet-20240620"
   # AI API設定（OpenAI API）
   lambda-ssm-init:openaiApiKey: PLACEHOLDER_PLEASE_UPDATE_WITH_ACTUAL_API_KEY
-  lambda-ssm-init:openaiSpeedModel: "gpt-4-turbo"
-  lambda-ssm-init:openaiQualityModel: "gpt-4o"
+  lambda-ssm-init:openaiSpeedModel: "gpt-4.1-mini"
+  lambda-ssm-init:openaiQualityModel: "gpt-4.1"
