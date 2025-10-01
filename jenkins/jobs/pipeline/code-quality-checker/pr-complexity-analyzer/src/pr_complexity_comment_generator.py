@@ -63,7 +63,7 @@ class ComplexityStatistics:
 class OpenAIConfig:
     """OpenAI API設定"""
     api_key: str
-    model: str = "gpt-4o"
+    model: str = "gpt-4.1"
     temperature: float = 0.7
     max_tokens: int = 3000
     debug_mode: bool = False
@@ -234,7 +234,7 @@ class PRComplexityCommentGenerator:
         # OpenAI設定を構築
         self.config = OpenAIConfig(
             api_key=os.getenv("OPENAI_API_KEY"),
-            model=os.getenv("OPENAI_MODEL", "gpt-4o"),
+            model=os.getenv("OPENAI_MODEL", "gpt-4.1"),
             debug_mode=debug_mode
         )
         

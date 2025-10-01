@@ -17,7 +17,7 @@ class OpenAIClient:
             api_key=api_key
         )
         self.model_name = model_name or "gpt-4.1"
-        self.fallback_model_name = "gpt-4o"  # フォールバック用のモデル
+        self.fallback_model_name = "gpt-4.1"  # フォールバック用のモデル
         self.usage_stats = {
             'prompt_tokens': 0,
             'completion_tokens': 0

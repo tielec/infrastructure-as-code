@@ -321,8 +321,8 @@ Lambda API環境では、Claude APIとOpenAI APIを利用するための設定�
 
 **OpenAI API設定:**
 - `/lambda-api/{env}/app/settings/openai-api-key` - APIキー（SecureString）
-- `/lambda-api/{env}/app/settings/openai-speed-model` - 高速処理用モデル（デフォルト: gpt-4-turbo）
-- `/lambda-api/{env}/app/settings/openai-quality-model` - 高品質処理用モデル（デフォルト: gpt-4o）
+- `/lambda-api/{env}/app/settings/openai-speed-model` - 高速処理用モデル（デフォルト: gpt-4.1-mini）
+- `/lambda-api/{env}/app/settings/openai-quality-model` - 高品質処理用モデル（デフォルト: gpt-4.1）
 
 ```bash
 # AI APIキーの設定（初回デプロイ後、AWSコンソールで実際のキーに更新）
