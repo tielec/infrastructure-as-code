@@ -264,6 +264,13 @@ jenkins-jobs:
     dslfile: jenkins/jobs/dsl/infrastructure-management/infrastructure_shutdown_scheduler_job.groovy
     # jenkinsfile: 不要（freestyleジョブ）
 
+  # AI Workflow Jobs
+  ai_workflow_orchestrator_job:
+    name: 'ai-workflow-orchestrator'
+    displayName: 'AI Workflow Orchestrator'
+    dslfile: jenkins/jobs/dsl/ai-workflow/ai-workflow-orchestrator.groovy
+    jenkinsfile: jenkins/jobs/pipeline/ai-workflow/ai-workflow-orchestrator/Jenkinsfile
+
 
 # docs-generator 生成対象リポジトリ設定
 jenkins-managed-repositories:

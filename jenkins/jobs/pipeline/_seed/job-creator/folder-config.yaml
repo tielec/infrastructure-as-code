@@ -298,27 +298,111 @@ folders:
       * Pulumi、Terraform等のIaCツールのパイプラインテスト
       * インフラストラクチャのデプロイメント・管理パイプラインの検証
 
-  # インフラストラクチャー管理フォルダ  
+  # インフラストラクチャー管理フォルダ
   - path: "Infrastructure_Management"
     displayName: "20. [Ops] インフラ運用管理"
     description: |
       このフォルダーには、インフラストラクチャーの管理ジョブが含まれています。
-      
+
       ### 概要
       Jenkins、Lambda、その他AWSリソースなど、プロジェクト全体のインフラストラクチャー管理タスクを実行します。
       環境の起動、停止、スケーリング、メンテナンス、コスト最適化などの操作を管理します。
-      
+
       ### 主な機能
       * **Jenkins環境停止** - Jenkins環境（Controller、Agent）を安全に停止
       * **Lambda NAT削除** - Lambda NAT Instanceの夜間自動削除
       * **環境起動** - 各種環境を起動
       * **スケーリング** - エージェントのスケール調整
       * **コスト最適化** - 不要リソースの自動削除によるコスト削減
-      
-      ### 注意事項  
+
+      ### 注意事項
       * これらのジョブはインフラストラクチャー全体に影響を与える可能性があります
       * 実行前に他のジョブの実行状況を確認してください
       * 管理者権限が必要な操作が含まれています
+
+  # AI駆動開発フォルダ
+  - path: "AI_Workflow"
+    displayName: "50. [AI] AI駆動開発"
+    description: |
+      このフォルダーには、AI駆動開発自動化ワークフローのジョブが含まれています。
+
+      ### 概要
+      GitHub IssueからPR作成まで、Claude AIが自動的に開発プロセスを実行します。
+      要件定義、詳細設計、テストシナリオ、実装、テスト、ドキュメント作成の
+      6フェーズを自動化し、開発者の生産性を向上させます。
+
+      ### 主な機能
+      * **自動要件定義** - GitHub Issueから要件定義書を生成
+      * **自動設計** - 詳細設計書とアーキテクチャドキュメントを生成
+      * **自動テストシナリオ** - BDD形式のテストシナリオを生成
+      * **自動実装** - コードの自動生成と既存コードの拡張
+      * **自動テスト** - テストの実行と結果検証
+      * **自動ドキュメント** - README、APIドキュメントを生成
+
+      ### ワークフロー
+      1. Phase 1: 要件定義 (Requirements)
+      2. Phase 2: 詳細設計 (Design)
+      3. Phase 3: テストシナリオ (Test Scenario)
+      4. Phase 4: 実装 (Implementation)
+      5. Phase 5: テスト実行 (Testing)
+      6. Phase 6: ドキュメント作成 (Documentation)
+      7. PR作成
+
+      ### AIレビュー
+      各フェーズ完了後、AIが批判的思考レビューを実施:
+      - **PASS**: 次フェーズへ進行
+      - **PASS_WITH_SUGGESTIONS**: 改善提案あり、次フェーズへ進行
+      - **FAIL**: リトライ（最大3回）
+
+      ### コスト管理
+      - 1ワークフローあたり最大 $5.00 USD
+      - トークン数の追跡とコスト制限
+      - 警告閾値: 80%（$4.00）
+
+      ### パラメータ
+      * **ISSUE_URL**: GitHub Issue URL（必須）
+      * **DRY_RUN**: ドライランモード（デフォルト: false）
+      * **SKIP_REVIEW**: レビュースキップ（デフォルト: false）
+      * **MAX_RETRIES**: 最大リトライ回数（デフォルト: 3）
+      * **COST_LIMIT_USD**: コスト上限（デフォルト: $5.00）
+      * **LOG_LEVEL**: ログレベル（デフォルト: INFO）
+
+      ### 現在の実装状況
+      **MVP v1.0.0**: ワークフロー基盤のみ実装
+      - ✅ ワークフロー初期化（metadata.json生成）
+      - ✅ Python環境セットアップ
+      - ⏳ Phase 1-6の自動実行は今後の拡張で実装予定
+
+      ### 必要な認証情報
+      * **claude-api-key**: Claude API キー（Jenkinsクレデンシャル）
+      * **github-token**: GitHub Token（Jenkinsクレデンシャル）
+
+      ### 必要な環境
+      * Python 3.10以上
+      * pip
+      * Git
+
+      ### ドキュメント
+      * **README**: scripts/ai-workflow/README.md
+      * **アーキテクチャ**: scripts/ai-workflow/ARCHITECTURE.md
+      * **トラブルシューティング**: scripts/ai-workflow/TROUBLESHOOTING.md
+      * **ロードマップ**: scripts/ai-workflow/ROADMAP.md
+
+      ### 成果物
+      実行後、`.ai-workflow/issue-{番号}/` に以下が生成されます:
+      * metadata.json - ワークフロー状態管理
+      * 01-requirements.md - 要件定義書（将来実装）
+      * 02-design.md - 詳細設計書（将来実装）
+      * 03-test-scenario.md - テストシナリオ（将来実装）
+      * 04-implementation.md - 実装ログ（将来実装）
+      * 05-testing.md - テスト実行ログ（将来実装）
+      * 06-documentation.md - ドキュメント（将来実装）
+
+      ### 注意事項
+      * このジョブはClaude APIを使用します（有料）
+      * コスト上限を超えると自動停止します
+      * 実行前にIssue内容を確認してください
+      * DRY_RUNモードで動作確認することを推奨
 
 # 動的フォルダ生成ルール
 dynamic_folders:
