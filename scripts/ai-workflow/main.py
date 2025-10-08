@@ -3,7 +3,18 @@ import click
 import os
 import sys
 from pathlib import Path
+from git import Repo
 from core.workflow_state import WorkflowState, PhaseStatus
+
+
+def _get_repo_root() -> Path:
+    """Gitリポジトリのルートディレクトリを取得"""
+    try:
+        repo = Repo(search_parent_directories=True)
+        return Path(repo.working_dir)
+    except Exception:
+        # Gitリポジトリが見つからない場合は、カレントディレクトリを返す
+        return Path.cwd()
 
 
 @click.group()
@@ -19,8 +30,9 @@ def init(issue_url: str):
     # Issue URLからIssue番号を抽出
     issue_number = issue_url.rstrip('/').split('/')[-1]
 
-    # ワークフローディレクトリ作成
-    workflow_dir = Path('.ai-workflow') / f'issue-{issue_number}'
+    # ワークフローディレクトリ作成（リポジトリルート配下）
+    repo_root = _get_repo_root()
+    workflow_dir = repo_root / '.ai-workflow' / f'issue-{issue_number}'
     metadata_path = workflow_dir / 'metadata.json'
 
     if metadata_path.exists():
@@ -35,8 +47,8 @@ def init(issue_url: str):
         issue_title=f"Issue #{issue_number}"
     )
 
-    click.echo(f'✓ Workflow initialized: {workflow_dir}')
-    click.echo(f'✓ metadata.json created')
+    click.echo(f'[OK] Workflow initialized: {workflow_dir}')
+    click.echo(f'[OK] metadata.json created')
 
 
 @cli.command()
@@ -46,7 +58,8 @@ def init(issue_url: str):
 @click.option('--issue', required=True, help='Issue number')
 def execute(phase: str, issue: str):
     """フェーズ実行"""
-    metadata_path = Path('.ai-workflow') / f'issue-{issue}' / 'metadata.json'
+    repo_root = _get_repo_root()
+    metadata_path = repo_root / '.ai-workflow' / f'issue-{issue}' / 'metadata.json'
 
     if not metadata_path.exists():
         click.echo(f'Error: Workflow not found. Run init first.')
@@ -56,7 +69,7 @@ def execute(phase: str, issue: str):
     state.update_phase_status(phase, PhaseStatus.IN_PROGRESS)
     state.save()
 
-    click.echo(f'✓ Phase {phase} started')
+    click.echo(f'[OK] Phase {phase} started')
 
 
 @cli.command()
@@ -64,7 +77,8 @@ def execute(phase: str, issue: str):
 @click.option('--issue', required=True, help='Issue number')
 def review(phase: str, issue: str):
     """フェーズレビュー"""
-    metadata_path = Path('.ai-workflow') / f'issue-{issue}' / 'metadata.json'
+    repo_root = _get_repo_root()
+    metadata_path = repo_root / '.ai-workflow' / f'issue-{issue}' / 'metadata.json'
 
     if not metadata_path.exists():
         click.echo(f'Error: Workflow not found')
@@ -73,7 +87,7 @@ def review(phase: str, issue: str):
     state = WorkflowState(metadata_path)
     current_status = state.get_phase_status(phase)
 
-    click.echo(f'✓ Phase {phase} status: {current_status}')
+    click.echo(f'[OK] Phase {phase} status: {current_status}')
 
 
 if __name__ == '__main__':
