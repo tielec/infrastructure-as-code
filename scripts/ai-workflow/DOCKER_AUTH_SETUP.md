@@ -176,7 +176,71 @@ pipeline {
 
 ## トラブルシューティング
 
-### Q1: 認証エラーが発生する
+### Q1: トークン期限切れエラー（OAuth token has expired）
+
+**エラー:**
+```
+API Error: 401 {"type":"error","error":{"type":"authentication_error","message":"OAuth token has expired. Please obtain a new token or refresh your existing token."}}
+Fatal error in message reader: Command failed with exit code 1
+```
+
+**原因:**
+OAuth 2.0トークンには有効期限があり、一定期間（通常は数時間～数日）で期限切れになります。
+
+**対策:**
+
+#### Step 1: Claude Code CLIで再認証
+
+```bash
+# Claude Code CLIにログイン（ブラウザが開きます）
+claude auth login
+```
+
+ブラウザでClaude.aiにログインすると、新しいOAuthトークンが`~/.claude/.credentials.json`に保存されます。
+
+#### Step 2: 新しいトークンを再抽出
+
+**Windows（PowerShell）:**
+```powershell
+python -c "import json; data=json.load(open(r'$env:USERPROFILE\.claude\.credentials.json')); print(data['claudeAiOauth']['accessToken'])"
+```
+
+**Linux/macOS（Bash）:**
+```bash
+cat ~/.claude/.credentials.json | python -c "import sys, json; data=json.load(sys.stdin); print(data['claudeAiOauth']['accessToken'])"
+```
+
+#### Step 3: 新しいトークンでDockerテスト実行
+
+```bash
+docker run --rm \
+  -e CLAUDE_CODE_OAUTH_TOKEN="sk-ant-oat01-..." \
+  ai-workflow:latest \
+  python test_docker.py
+```
+
+### Q2: 認証ファイルが見つからない（Git Bash環境）
+
+**エラー:**
+```
+FileNotFoundError: [Errno 2] No such file or directory: '/c/Users/ytaka\.claude\.credentials.json'
+```
+
+**原因:**
+Git Bash (MINGW64) 環境では、Windowsのパス表記が正しく解釈されないことがあります。
+
+**対策:**
+
+Git Bash環境ではPowerShellを使用してトークンを抽出してください：
+
+```bash
+# Git BashからPowerShellを呼び出してトークン抽出
+powershell -Command "python -c \"import json; data=json.load(open(r'\$env:USERPROFILE\.claude\.credentials.json')); print(data['claudeAiOauth']['accessToken'])\""
+```
+
+**推奨:** Windows環境では、トークン抽出はPowerShellで実行することを推奨します。
+
+### Q3: 認証ファイルが存在しない
 
 **エラー:**
 ```
@@ -185,32 +249,20 @@ ERROR: Invalid API key · Please run /login
 
 **原因と対策:**
 1. **トークンが正しく抽出されていない**
-   - `.credentials.json`の存在を確認: `ls ~/.claude/.credentials.json`
+   - `.credentials.json`の存在を確認:
+     - PowerShell: `Get-Item $env:USERPROFILE\.claude\.credentials.json -Force`
+     - Bash: `ls ~/.claude/.credentials.json`
    - JSON構造を確認: `cat ~/.claude/.credentials.json | python -m json.tool`
 
-2. **トークンの有効期限切れ**
-   - ホストマシンで再ログイン: `claude login`
-   - 新しいトークンを再抽出
+2. **初回ログインが必要**
+   - ホストマシンでClaude Code CLIにログイン: `claude auth login`
+   - ブラウザでOAuth認証を完了
+   - 認証ファイルの存在を確認
 
 3. **環境変数が正しく設定されていない**
    - Docker内で環境変数確認: `docker run --rm -e CLAUDE_CODE_OAUTH_TOKEN="..." ai-workflow:latest env | grep CLAUDE`
 
-### Q2: トークンが見つからない
-
-**エラー:**
-```
-FileNotFoundError: [Errno 2] No such file or directory: '~/.claude/.credentials.json'
-```
-
-**対策:**
-1. ホストマシンでClaude Code CLIにログイン:
-   ```bash
-   claude login
-   ```
-2. ブラウザでOAuth認証を完了
-3. 認証ファイルの存在を確認
-
-### Q3: Docker内でClaude Codeが起動しない
+### Q4: Docker内でClaude Codeが起動しない
 
 **エラー:**
 ```
@@ -237,4 +289,5 @@ ERROR: Claude Code not found
 
 | 日付 | バージョン | 変更内容 |
 |------|-----------|----------|
+| 2025-10-09 | 1.1.0 | トラブルシューティングを拡充 - トークン期限切れ対処、Git Bash環境の注意事項追加 |
 | 2025-10-08 | 1.0.0 | 初版作成 - OAuth認証設定方法とJenkins統合 |
