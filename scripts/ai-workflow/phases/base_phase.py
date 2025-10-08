@@ -170,14 +170,18 @@ class BasePhase(ABC):
             status: ステータス（pending, in_progress, completed, failed）
             details: 詳細情報（省略可）
         """
-        issue_number = int(self.metadata.data['issue_number'])
+        try:
+            issue_number = int(self.metadata.data['issue_number'])
 
-        self.github.post_workflow_progress(
-            issue_number=issue_number,
-            phase=self.phase_name,
-            status=status,
-            details=details
-        )
+            self.github.post_workflow_progress(
+                issue_number=issue_number,
+                phase=self.phase_name,
+                status=status,
+                details=details
+            )
+            print(f"[INFO] GitHub Issue #{issue_number} に進捗を投稿しました: {status}")
+        except Exception as e:
+            print(f"[WARNING] GitHub投稿に失敗しました: {e}")
 
     def post_review(
         self,
@@ -193,15 +197,19 @@ class BasePhase(ABC):
             feedback: フィードバック（省略可）
             suggestions: 改善提案一覧（省略可）
         """
-        issue_number = int(self.metadata.data['issue_number'])
+        try:
+            issue_number = int(self.metadata.data['issue_number'])
 
-        self.github.post_review_result(
-            issue_number=issue_number,
-            phase=self.phase_name,
-            result=result,
-            feedback=feedback,
-            suggestions=suggestions
-        )
+            self.github.post_review_result(
+                issue_number=issue_number,
+                phase=self.phase_name,
+                result=result,
+                feedback=feedback,
+                suggestions=suggestions
+            )
+            print(f"[INFO] GitHub Issue #{issue_number} にレビュー結果を投稿しました: {result}")
+        except Exception as e:
+            print(f"[WARNING] GitHub投稿に失敗しました: {e}")
 
     def execute_with_claude(
         self,

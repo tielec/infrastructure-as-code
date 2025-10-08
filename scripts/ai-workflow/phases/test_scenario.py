@@ -31,6 +31,10 @@ class TestScenarioPhase(BasePhase):
                 - error: Optional[str]
         """
         try:
+            # ステータス更新: 開始
+            self.metadata.update_phase_status('test_scenario', 'in_progress')
+            self.post_progress('in_progress', 'テストシナリオを開始しました')
+
             # Issue情報を取得
             issue_number = int(self.metadata.data['issue_number'])
             issue_info = self.github.get_issue_info(issue_number)
@@ -111,6 +115,10 @@ class TestScenarioPhase(BasePhase):
             generated_file.rename(output_file)
             print(f"[INFO] 成果物を移動: {generated_file} -> {output_file}")
 
+            # ステータス更新: 完了
+            self.metadata.update_phase_status('test_scenario', 'completed', str(output_file))
+            self.post_progress('completed', f'テストシナリオが完了しました: {output_file.name}')
+
             return {
                 'success': True,
                 'output': str(output_file),
@@ -118,6 +126,10 @@ class TestScenarioPhase(BasePhase):
             }
 
         except Exception as e:
+            # ステータス更新: 失敗
+            self.metadata.update_phase_status('test_scenario', 'failed')
+            self.post_progress('failed', f'テストシナリオが失敗しました: {str(e)}')
+
             return {
                 'success': False,
                 'output': None,
@@ -190,6 +202,13 @@ class TestScenarioPhase(BasePhase):
             review_file = self.review_dir / 'result.md'
             review_file.write_text(review_result['feedback'], encoding='utf-8')
             print(f"[INFO] レビュー結果を保存: {review_file}")
+
+            # GitHub Issueにレビュー結果を投稿
+            self.post_review(
+                result=review_result['result'],
+                feedback=review_result['feedback'],
+                suggestions=review_result.get('suggestions')
+            )
 
             return review_result
 
