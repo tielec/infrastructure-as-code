@@ -63,11 +63,13 @@ class BasePhase(ABC):
         self.output_dir = self.phase_dir / 'output'
         self.execute_dir = self.phase_dir / 'execute'
         self.review_dir = self.phase_dir / 'review'
+        self.revise_dir = self.phase_dir / 'revise'
 
         # ディレクトリを作成
         self.output_dir.mkdir(parents=True, exist_ok=True)
         self.execute_dir.mkdir(parents=True, exist_ok=True)
         self.review_dir.mkdir(parents=True, exist_ok=True)
+        self.revise_dir.mkdir(parents=True, exist_ok=True)
 
     @abstractmethod
     def execute(self) -> Dict[str, Any]:
@@ -261,6 +263,8 @@ class BasePhase(ABC):
             target_dir = self.execute_dir
         elif log_prefix == 'review':
             target_dir = self.review_dir
+        elif log_prefix == 'revise':
+            target_dir = self.revise_dir
         else:
             # デフォルトはフェーズディレクトリ
             target_dir = self.phase_dir
@@ -441,7 +445,7 @@ class BasePhase(ABC):
 
     def run(self) -> bool:
         """
-        フェーズを実行してレビュー
+        フェーズを実行してレビュー（リトライ機能付き）
 
         Returns:
             bool: 成功/失敗
@@ -451,9 +455,12 @@ class BasePhase(ABC):
             2. GitHubに進捗報告
             3. execute()を実行
             4. review()を実行
-            5. レビュー結果に応じてステータス更新
-            6. GitHubにレビュー結果を投稿
+            5. FAIL時は最大3回までrevise()でリトライ
+            6. レビュー結果に応じてステータス更新
+            7. GitHubにレビュー結果を投稿
         """
+        MAX_RETRIES = 3
+
         try:
             # フェーズ開始
             self.update_phase_status(status='in_progress')
@@ -474,36 +481,79 @@ class BasePhase(ABC):
                 )
                 return False
 
-            # レビュー実行
-            review_result = self.review()
+            # レビュー＆リトライループ
+            retry_count = 0
+            while retry_count <= MAX_RETRIES:
+                # レビュー実行
+                review_result = self.review()
 
-            result = review_result.get('result', 'FAIL')
-            feedback = review_result.get('feedback')
-            suggestions = review_result.get('suggestions', [])
+                result = review_result.get('result', 'FAIL')
+                feedback = review_result.get('feedback')
+                suggestions = review_result.get('suggestions', [])
 
-            # レビュー結果を投稿
-            self.post_review(
-                result=result,
-                feedback=feedback,
-                suggestions=suggestions
-            )
-
-            # レビュー結果に応じてステータス更新
-            if result == 'PASS' or result == 'PASS_WITH_SUGGESTIONS':
-                self.update_phase_status(status='completed')
-                self.post_progress(
-                    status='completed',
-                    details=f'{self.phase_name}フェーズが完了しました。'
+                # レビュー結果を投稿
+                self.post_review(
+                    result=result,
+                    feedback=feedback,
+                    suggestions=suggestions
                 )
-                return True
-            else:
-                # FAIL
-                self.update_phase_status(status='failed')
+
+                # レビュー結果に応じて処理
+                if result == 'PASS' or result == 'PASS_WITH_SUGGESTIONS':
+                    # 合格
+                    self.update_phase_status(status='completed')
+                    self.post_progress(
+                        status='completed',
+                        details=f'{self.phase_name}フェーズが完了しました。'
+                    )
+                    return True
+
+                # FAIL - リトライチェック
+                if retry_count >= MAX_RETRIES:
+                    # リトライ回数上限に達した
+                    self.update_phase_status(status='failed')
+                    self.post_progress(
+                        status='failed',
+                        details=f'レビューで不合格となりました（リトライ{MAX_RETRIES}回実施）。フィードバックを確認してください。'
+                    )
+                    return False
+
+                # リトライ: revise()で修正
+                retry_count += 1
+                print(f"[INFO] レビュー不合格のため修正を実施します（{retry_count}/{MAX_RETRIES}回目）")
+
                 self.post_progress(
-                    status='failed',
-                    details=f'レビューで不合格となりました。フィードバックを確認してください。'
+                    status='in_progress',
+                    details=f'レビュー不合格のため修正を実施します（{retry_count}/{MAX_RETRIES}回目）。'
                 )
-                return False
+
+                # revise()メソッドが存在するか確認
+                if not hasattr(self, 'revise'):
+                    print(f"[WARNING] {self.__class__.__name__}.revise()メソッドが実装されていません。リトライできません。")
+                    self.update_phase_status(status='failed')
+                    self.post_progress(
+                        status='failed',
+                        details='revise()メソッドが未実装のため、修正できません。'
+                    )
+                    return False
+
+                # 修正実行
+                revise_result = self.revise(review_feedback=feedback)
+
+                if not revise_result.get('success', False):
+                    # 修正失敗
+                    print(f"[ERROR] 修正に失敗しました: {revise_result.get('error')}")
+                    self.update_phase_status(status='failed')
+                    self.post_progress(
+                        status='failed',
+                        details=f"修正エラー: {revise_result.get('error', 'Unknown error')}"
+                    )
+                    return False
+
+                print(f"[INFO] 修正完了。再度レビューを実施します。")
+
+            # ループを抜けた場合（通常は到達しない）
+            return False
 
         except Exception as e:
             # 予期しないエラー

@@ -19,11 +19,10 @@ RUN apt-get update && apt-get install -y \
 RUN npm install -g @anthropic-ai/claude-code
 
 # 作業ディレクトリにコピー
-COPY requirements.txt requirements-test.txt ./
+COPY requirements.txt ./
 
 # Python依存パッケージのインストール
-RUN pip install --no-cache-dir -r requirements.txt && \
-    pip install --no-cache-dir -r requirements-test.txt
+RUN pip install --no-cache-dir -r requirements.txt
 
 # アプリケーションコードをコピー
 COPY . .

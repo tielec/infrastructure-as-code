@@ -168,6 +168,95 @@ class RequirementsPhase(BasePhase):
 """
         return formatted.strip()
 
+    def revise(self, review_feedback: str) -> Dict[str, Any]:
+        """
+        レビュー結果を元に要件定義書を修正
+
+        Args:
+            review_feedback: レビュー結果のフィードバック
+
+        Returns:
+            Dict[str, Any]: 修正結果
+                - success: bool
+                - output: str - requirements.mdのパス
+                - error: Optional[str]
+        """
+        try:
+            # Issue情報を取得
+            issue_number = int(self.metadata.data['issue_number'])
+            issue_info = self.github.get_issue_info(issue_number)
+
+            # Issue情報をフォーマット
+            issue_info_text = self._format_issue_info(issue_info)
+
+            # 元の要件定義書を読み込み
+            requirements_file = self.output_dir / 'requirements.md'
+
+            if not requirements_file.exists():
+                return {
+                    'success': False,
+                    'output': None,
+                    'error': 'requirements.mdが存在しません。'
+                }
+
+            # 修正プロンプトを読み込み
+            revise_prompt_template = self.load_prompt('revise')
+
+            # working_dirからの相対パスを使用
+            rel_path = requirements_file.relative_to(self.claude.working_dir)
+
+            # プロンプトに情報を埋め込み
+            revise_prompt = revise_prompt_template.replace(
+                '{requirements_document_path}',
+                f'@{rel_path}'
+            ).replace(
+                '{review_feedback}',
+                review_feedback
+            ).replace(
+                '{issue_info}',
+                issue_info_text
+            ).replace(
+                '{issue_number}',
+                str(issue_number)
+            )
+
+            # Claude Agent SDKでタスクを実行
+            messages = self.execute_with_claude(
+                prompt=revise_prompt,
+                max_turns=30,
+                log_prefix='revise'
+            )
+
+            # requirements.mdのパスを取得（エージェントが更新した場所）
+            # revise処理では、元のファイルを直接更新するか、新しい場所に生成する可能性がある
+            generated_file = self.metadata.workflow_dir / 'requirements.md'
+            output_file = self.output_dir / 'requirements.md'
+
+            # 新しいファイルが生成された場合は移動
+            if generated_file.exists() and generated_file != output_file:
+                generated_file.replace(output_file)
+                print(f"[INFO] 修正した成果物を移動: {generated_file} -> {output_file}")
+
+            if not output_file.exists():
+                return {
+                    'success': False,
+                    'output': None,
+                    'error': '修正されたrequirements.mdが生成されませんでした。'
+                }
+
+            return {
+                'success': True,
+                'output': str(output_file),
+                'error': None
+            }
+
+        except Exception as e:
+            return {
+                'success': False,
+                'output': None,
+                'error': str(e)
+            }
+
     def _parse_review_result(self, messages: List[str]) -> Dict[str, Any]:
         """
         レビュー結果メッセージから判定とフィードバックを抽出
