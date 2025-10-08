@@ -29,24 +29,86 @@ Claude Agent SDKは以下の認証方法をサポートしています：
 
 ホストマシンの認証ファイルからOAuthトークンを抽出します。
 
-**Windows（PowerShell）:**
-```powershell
-# 認証ファイルのパス確認
-ls $HOME\.claude\.credentials.json
+#### 方法1: Pythonスクリプト（推奨）
 
-# トークン抽出
-python -c "import json; data=json.load(open(r'$HOME\.claude\.credentials.json')); print(data['claudeAiOauth']['accessToken'])"
+シンプルなPythonスクリプトでトークンを抽出します。
+
+**Windows:**
+```powershell
+# トークン抽出スクリプトを作成
+@"
+import json
+from pathlib import Path
+
+creds_file = Path.home() / '.claude' / '.credentials.json'
+with open(creds_file) as f:
+    data = json.load(f)
+    print(data['claudeAiOauth']['accessToken'])
+"@ | python
 ```
 
-**Linux/macOS（Bash）:**
+**Linux/macOS:**
 ```bash
-# トークン抽出
-cat ~/.claude/.credentials.json | python -c "import sys, json; data=json.load(sys.stdin); print(data['claudeAiOauth']['accessToken'])"
+python3 << 'EOF'
+import json
+from pathlib import Path
+
+creds_file = Path.home() / '.claude' / '.credentials.json'
+with open(creds_file) as f:
+    data = json.load(f)
+    print(data['claudeAiOauth']['accessToken'])
+EOF
+```
+
+#### 方法2: 認証ファイルを直接開く（最も確実）
+
+**Windows:**
+1. エクスプローラーで以下のパスを開く:
+   ```
+   %USERPROFILE%\.claude\.credentials.json
+   ```
+   または:
+   ```
+   C:\Users\<ユーザー名>\.claude\.credentials.json
+   ```
+
+2. ファイルをテキストエディタ（メモ帳、VSCode等）で開く
+
+3. `claudeAiOauth` → `accessToken` の値をコピー:
+   ```json
+   {
+     "claudeAiOauth": {
+       "accessToken": "sk-ant-oat01-...",  ← この値をコピー
+       "refreshToken": "...",
+       "expiresAt": 1234567890,
+       ...
+     }
+   }
+   ```
+
+**Linux/macOS:**
+```bash
+cat ~/.claude/.credentials.json | jq -r '.claudeAiOauth.accessToken'
+# または jq がない場合
+cat ~/.claude/.credentials.json
+```
+
+#### 方法3: Claude Code環境で参照（開発時のみ）
+
+Claude Code環境では、認証ファイルを直接参照できます:
+
+```
+@C:\Users\<ユーザー名>\.claude\.credentials.json
+```
+
+または:
+```
+@~/.claude/.credentials.json
 ```
 
 **出力例:**
 ```
-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
+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
 ```
 
 ### Step 2: 環境変数としてDockerコンテナに渡す
@@ -200,15 +262,37 @@ claude auth login
 
 #### Step 2: 新しいトークンを再抽出
 
+**方法1: Pythonスクリプト（推奨）**
+
 **Windows（PowerShell）:**
 ```powershell
-python -c "import json; data=json.load(open(r'$env:USERPROFILE\.claude\.credentials.json')); print(data['claudeAiOauth']['accessToken'])"
+@"
+import json
+from pathlib import Path
+
+creds_file = Path.home() / '.claude' / '.credentials.json'
+with open(creds_file) as f:
+    data = json.load(f)
+    print(data['claudeAiOauth']['accessToken'])
+"@ | python
 ```
 
 **Linux/macOS（Bash）:**
 ```bash
-cat ~/.claude/.credentials.json | python -c "import sys, json; data=json.load(sys.stdin); print(data['claudeAiOauth']['accessToken'])"
+python3 << 'EOF'
+import json
+from pathlib import Path
+
+creds_file = Path.home() / '.claude' / '.credentials.json'
+with open(creds_file) as f:
+    data = json.load(f)
+    print(data['claudeAiOauth']['accessToken'])
+EOF
 ```
+
+**方法2: ファイルを直接開く（最も確実）**
+
+Windows: `%USERPROFILE%\.claude\.credentials.json` をテキストエディタで開き、`accessToken`の値をコピー
 
 #### Step 3: 新しいトークンでDockerテスト実行
 
@@ -289,5 +373,6 @@ ERROR: Claude Code not found
 
 | 日付 | バージョン | 変更内容 |
 |------|-----------|----------|
+| 2025-10-09 | 1.2.0 | トークン抽出方法を改善 - Pythonスクリプト、ファイル直接開く、Claude Code参照の3つの方法を追加 |
 | 2025-10-09 | 1.1.0 | トラブルシューティングを拡充 - トークン期限切れ対処、Git Bash環境の注意事項追加 |
 | 2025-10-08 | 1.0.0 | 初版作成 - OAuth認証設定方法とJenkins統合 |
