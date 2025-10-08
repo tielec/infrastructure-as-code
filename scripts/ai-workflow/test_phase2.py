@@ -69,7 +69,7 @@ def test_phase2():
     print(f"[SUCCESS] Phase 2が成功しました: {result['output']}")
 
     # design_decisionsが保存されたか確認
-    metadata_manager._state.load()
+    # メタデータは自動保存されているので、直接dataプロパティにアクセス
     if 'design_decisions' not in metadata_manager.data:
         print("[ERROR] design_decisionsがmetadata.jsonに保存されていません。")
         return False
