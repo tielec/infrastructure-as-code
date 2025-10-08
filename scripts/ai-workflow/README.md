@@ -1,298 +1,313 @@
 # AI駆動開発自動化ワークフロー
 
-GitHub IssueからPR作成まで、Claude AIが自動的に要件定義・設計・実装・テストを実行するワークフローシステムです。
+Claude Agent SDKを使った6フェーズの自動開発ワークフロー
 
 ## 概要
 
-このプロジェクトは、Claude APIを活用してソフトウェア開発プロセスを自動化します：
+このツールは、GitHubのIssueから要件定義、設計、テスト、実装、ドキュメント作成までを自動化します。
 
-```
-GitHub Issue → 要件定義 → 詳細設計 → テストシナリオ → 実装 → テスト → ドキュメント → PR作成
-```
+### 主な特徴
 
-各フェーズでAIレビューを実施し、品質を担保しながら自動で開発を進めます。
+- **Claude Pro Max活用**: Claude Code headless modeで自律的にタスクを実行
+- **6フェーズワークフロー**: 要件定義 → 設計 → テストシナリオ → 実装 → テスト → ドキュメント
+- **クリティカルシンキングレビュー**: 各フェーズで品質チェック
+- **GitHub統合**: Issue情報の取得、進捗報告、レビュー結果の投稿
+- **Docker対応**: Linux環境で安定動作
 
-## 現在の実装状況（MVP v1.0.0）
+## システム要件
 
-**実装完了機能**:
-- ✅ ワークフロー初期化（`init`コマンド）
-- ✅ メタデータ管理（metadata.json）
-- ✅ フェーズ状態管理（6フェーズ対応）
-- ✅ BDDテスト基盤
+### 必須
+- Docker Desktop
+- Claude Pro/Max契約
+- GitHub Personal Access Token
 
-**未実装機能**（今後の拡張）:
-- ⏳ Phase 1-6の自動実行
-- ⏳ Claude API統合
-- ⏳ Git操作（ブランチ作成、コミット、PR作成）
-- ⏳ AIレビュー機能
+### 推奨
+- Git 2.0+
+- Python 3.11+ (ローカル開発時)
+- Node.js 20+ (ローカル開発時)
 
 ## クイックスタート
 
-### 前提条件
+### 1. 環境変数の設定
 
-- Python 3.10以上
-- pip
-- Git
-- PowerShellまたはコマンドプロンプト（Windows）
+```bash
+# Claude Code OAuth Token（~/.claude/.credentials.jsonから抽出）
+export CLAUDE_CODE_OAUTH_TOKEN="sk-ant-oat01-..."
 
-### インストール
+# GitHub Personal Access Token
+export GITHUB_TOKEN="ghp_..."
 
-```powershell
-# 1. リポジトリのクローン（既にクローン済みの場合はスキップ）
+# GitHubリポジトリ名
+export GITHUB_REPOSITORY="tielec/infrastructure-as-code"
+```
+
+**OAuth Token取得方法**: [DOCKER_AUTH_SETUP.md](DOCKER_AUTH_SETUP.md) を参照
+
+**GitHub Token作成方法**:
+1. GitHub Settings → Developer settings → Personal access tokens → Tokens (classic)
+2. Generate new token (classic)
+3. Scopes: `repo` (Full control of private repositories)
+4. トークンをコピーして`GITHUB_TOKEN`に設定
+
+### 2. ワークフロー初期化
+
+```bash
+# リポジトリルートに移動
 cd C:\Users\ytaka\TIELEC\development\infrastructure-as-code
 
-# 2. ai-workflowディレクトリに移動
-cd scripts\ai-workflow
-
-# 3. 依存パッケージのインストール
-pip install -r requirements.txt
-pip install -r requirements-test.txt
+# Issue URLを指定してワークフロー初期化
+docker run --rm \
+  -v "$(pwd):/workspace" \
+  -w /workspace/scripts/ai-workflow \
+  ai-workflow:v1.1.0 \
+  python main.py init --issue-url https://github.com/tielec/infrastructure-as-code/issues/304
 ```
 
-### 基本的な使い方
+### 3. Phase 1（要件定義）実行
 
-#### 1. ワークフロー初期化
-
-```powershell
-python main.py init --issue-url https://github.com/tielec/infrastructure-as-code/issues/123
+```bash
+# Phase 1を実行
+docker run --rm \
+  -e CLAUDE_CODE_OAUTH_TOKEN="${CLAUDE_CODE_OAUTH_TOKEN}" \
+  -e GITHUB_TOKEN="${GITHUB_TOKEN}" \
+  -e GITHUB_REPOSITORY="${GITHUB_REPOSITORY}" \
+  -v "$(pwd):/workspace" \
+  -w /workspace/scripts/ai-workflow \
+  ai-workflow:v1.1.0 \
+  python main.py execute --phase requirements --issue 304
 ```
 
-**実行結果**:
-```
-✓ Workflow initialized: .ai-workflow\issue-123
-✓ metadata.json created
-```
+### 4. 結果確認
 
-#### 2. 生成されたファイル確認
+- **要件定義書**: `.ai-workflow/issue-304/requirements.md`
+- **GitHub Issue**: レビュー結果とフィードバックがコメント投稿される
+- **メタデータ**: `.ai-workflow/issue-304/metadata.json`
 
-```powershell
-# ワークフローディレクトリの確認
-dir ..\..\..\.ai-workflow\issue-123
+## 開発ステータス
 
-# metadata.jsonの内容確認
-type ..\..\..\.ai-workflow\issue-123\metadata.json
-```
+### ✅ 完了（v1.0.0 MVP）
+- [x] ワークフロー初期化（metadata.json）
+- [x] フェーズステータス管理（Enum: pending/in_progress/completed/failed）
+- [x] BDDテスト（behave）
+- [x] Jenkins統合（Job DSL + Jenkinsfile）
+- [x] Git workflow（feature branch）
 
-**metadata.json の内容例**:
-```json
-{
-  "issue_number": "123",
-  "issue_url": "https://github.com/tielec/infrastructure-as-code/issues/123",
-  "issue_title": "Issue #123",
-  "workflow_version": "1.0.0",
-  "current_phase": "requirements",
-  "design_decisions": {
-    "implementation_strategy": null,
-    "test_strategy": null,
-    "test_code_strategy": null
-  },
-  "cost_tracking": {
-    "total_input_tokens": 0,
-    "total_output_tokens": 0,
-    "total_cost_usd": 0.0
-  },
-  "phases": {
-    "requirements": {
-      "status": "pending",
-      "retry_count": 0,
-      "started_at": null,
-      "completed_at": null,
-      "review_result": null
-    },
-    "design": { "status": "pending", ... },
-    "test_scenario": { "status": "pending", ... },
-    "implementation": { "status": "pending", ... },
-    "testing": { "status": "pending", ... },
-    "documentation": { "status": "pending", ... }
-  },
-  "created_at": "2025-10-07T12:34:56.789Z",
-  "updated_at": "2025-10-07T12:34:56.789Z"
-}
-```
+### ✅ 完了（v1.1.0 Phase 1実装）
+- [x] Claude Agent SDK統合（Docker環境）
+- [x] OAuth認証（CLAUDE_CODE_OAUTH_TOKEN）
+- [x] GitHub API統合（PyGithub）
+- [x] Phase基底クラス（BasePhase）
+- [x] プロンプト管理（prompts/requirements/）
+- [x] Phase 1: 要件定義フェーズ（requirements.py）
 
-#### 3. BDDテスト実行
+### 🚧 開発中（v1.2.0以降）
+- [ ] レビューエンジン（reviewers/critical_thinking.py）
+- [ ] Phase 2: 設計フェーズ（phases/design.py）
+- [ ] Phase 3: テストシナリオフェーズ（phases/test_scenario.py）
+- [ ] Phase 4: 実装フェーズ（phases/implementation.py）
+- [ ] Phase 5: テストフェーズ（phases/testing.py）
+- [ ] Phase 6: ドキュメントフェーズ（phases/documentation.py）
 
-```powershell
-# テストの実行
-behave tests/features/workflow.feature
-
-# カバレッジ付きテスト（オプション）
-pytest --cov=core --cov-report=html tests/
-```
-
-**期待される出力**:
-```
-Feature: AI駆動開発自動化ワークフロー
-
-  Scenario: ワークフロー初期化とメタデータ作成
-    前提 作業ディレクトリが "..." である               passed
-    もし 開発者がワークフローを初期化する               passed
-    ならば ワークフローディレクトリ "..." が作成される    passed
-    かつ "metadata.json" ファイルが存在する             passed
-    かつ metadata.json に以下の情報が含まれる           passed
-    かつ すべてのフェーズのステータスが "pending" である passed
-
-1 scenario (1 passed)
-6 steps (6 passed)
-```
-
-## CLIコマンドリファレンス
-
-### `init` - ワークフロー初期化
-
-GitHub IssueからAIワークフローを初期化します。
-
-```powershell
-python main.py init --issue-url <ISSUE_URL>
-```
-
-**オプション**:
-- `--issue-url` (必須): GitHub Issue URL
-
-**例**:
-```powershell
-python main.py init --issue-url https://github.com/tielec/infrastructure-as-code/issues/999
-```
-
-### `execute` - フェーズ実行（未実装）
-
-指定したフェーズを実行します。
-
-```powershell
-python main.py execute --phase <PHASE_NAME> --issue <ISSUE_NUMBER>
-```
-
-**オプション**:
-- `--phase` (必須): フェーズ名（requirements, design, test_scenario, implementation, testing, documentation）
-- `--issue` (必須): Issue番号
-
-**例**:
-```powershell
-python main.py execute --phase requirements --issue 999
-```
-
-**注意**: MVP版では状態更新のみ実装。Phase 1-6の実装は今後の拡張で追加予定。
-
-### `review` - レビュー実行（未実装）
-
-指定したフェーズをAIレビューします。
-
-```powershell
-python main.py review --phase <PHASE_NAME> --issue <ISSUE_NUMBER>
-```
-
-**オプション**:
-- `--phase` (必須): フェーズ名
-- `--issue` (必須): Issue番号
-
-**例**:
-```powershell
-python main.py review --phase requirements --issue 999
-```
-
-## プロジェクト構成
+## アーキテクチャ
 
 ```
 scripts/ai-workflow/
-├── main.py                    # CLIエントリーポイント
-├── config.yaml                # 設定ファイル
-├── requirements.txt           # 本番依存パッケージ
-├── requirements-test.txt      # テスト依存パッケージ
-├── core/                      # コアモジュール
-│   ├── __init__.py
-│   ├── workflow_state.py      # metadata.json管理
-│   ├── claude_client.py       # Claude API（未実装）
-│   ├── git_operations.py      # Git操作（未実装）
-│   └── context_manager.py     # コンテキスト管理（未実装）
-├── phases/                    # フェーズ実装（未実装）
-│   ├── base_phase.py
-│   ├── requirements.py
-│   ├── design.py
-│   ├── test_scenario.py
-│   ├── implementation.py
-│   ├── testing.py
-│   └── documentation.py
-├── reviewers/                 # レビューエンジン（未実装）
-│   └── critical_thinking.py
-├── prompts/                   # プロンプトテンプレート（未実装）
+├── main.py                      # CLIエントリーポイント
+├── core/
+│   ├── workflow_state.py        # ワークフロー状態管理
+│   ├── metadata_manager.py      # メタデータ管理
+│   ├── claude_agent_client.py   # Claude Agent SDK統合
+│   └── github_client.py         # GitHub API統合
+├── phases/
+│   ├── base_phase.py            # Phase基底クラス
+│   ├── requirements.py          # Phase 1: 要件定義
+│   ├── design.py                # Phase 2: 設計（未実装）
+│   ├── test_scenario.py         # Phase 3: テストシナリオ（未実装）
+│   ├── implementation.py        # Phase 4: 実装（未実装）
+│   ├── testing.py               # Phase 5: テスト（未実装）
+│   └── documentation.py         # Phase 6: ドキュメント（未実装）
+├── prompts/
 │   ├── requirements/
-│   ├── design/
-│   └── ...
-└── tests/                     # テストコード
-    └── features/
-        ├── workflow.feature
-        └── steps/
-            └── workflow_steps.py
+│   │   ├── execute.txt          # 要件定義実行プロンプト
+│   │   └── review.txt           # 要件定義レビュープロンプト
+│   └── ...                      # 他のフェーズのプロンプト（未実装）
+├── reviewers/
+│   └── critical_thinking.py     # クリティカルシンキングレビュー（未実装）
+├── tests/
+│   ├── features/                # BDDテスト
+│   └── unit/                    # ユニットテスト
+├── Dockerfile                   # Docker環境定義
+├── requirements.txt             # Python依存パッケージ
+└── README.md                    # このファイル
 ```
 
-## 設定ファイル
+## CLIコマンド
 
-### config.yaml
+### `init` - ワークフロー初期化
 
-ワークフローの動作設定を定義します。
-
-```yaml
-# Claude API設定
-claude:
-  model: "claude-sonnet-4-5-20250929"
-  max_tokens_per_request: 4096
-  temperature: 1.0
-  timeout: 120
-
-# コスト制限
-cost_limits:
-  per_phase_max_tokens: 100000
-  per_workflow_max_cost_usd: 5.0
-  warning_threshold: 0.8
-
-# リトライ設定
-retry:
-  max_attempts: 3
-  backoff_multiplier: 2
-  initial_delay_seconds: 1
-
-# Git設定
-git:
-  branch_prefix: "feature/issue-"
-  commit_message_template: "[AI-Workflow][Phase {phase}] {phase_name}: {status}"
-  workflow_dir: ".ai-workflow"
-
-# GitHub設定
-github:
-  api_url: "https://api.github.com"
-  timeout: 30
+```bash
+python main.py init --issue-url <GitHub Issue URL>
 ```
 
-## 開発ドキュメント
+**例:**
+```bash
+python main.py init --issue-url https://github.com/tielec/infrastructure-as-code/issues/304
+```
 
-詳細な設計・実装情報は以下のドキュメントを参照してください：
+### `execute` - フェーズ実行
 
-- **[ai-workflow-requirements.md](../../ai-workflow-requirements.md)**: 要件定義書（v1.2.0）
-- **[ai-workflow-design.md](../../ai-workflow-design.md)**: 詳細設計書（v1.0.0）
-- **[ai-workflow-test-scenario.md](../../ai-workflow-test-scenario.md)**: BDDテストシナリオ（v2.0.0）
-- **[04-implementation.md](../../04-implementation.md)**: 実装ログ
-- **[05-testing.md](../../05-testing.md)**: テスト実行ログ
-- **[ARCHITECTURE.md](ARCHITECTURE.md)**: アーキテクチャドキュメント
-- **[TROUBLESHOOTING.md](TROUBLESHOOTING.md)**: トラブルシューティング
-- **[ROADMAP.md](ROADMAP.md)**: 今後の拡張計画
+```bash
+python main.py execute --phase <phase_name> --issue <issue_number>
+```
+
+**フェーズ名:**
+- `requirements`: 要件定義
+- `design`: 設計（未実装）
+- `test_scenario`: テストシナリオ（未実装）
+- `implementation`: 実装（未実装）
+- `testing`: テスト（未実装）
+- `documentation`: ドキュメント（未実装）
+
+**例:**
+```bash
+python main.py execute --phase requirements --issue 304
+```
+
+## Docker環境
+
+### イメージビルド
+
+```bash
+cd scripts/ai-workflow
+docker build -t ai-workflow:v1.1.0 .
+```
+
+### 動作確認
+
+```bash
+# Claude Agent SDK動作確認
+docker run --rm \
+  -e CLAUDE_CODE_OAUTH_TOKEN="${CLAUDE_CODE_OAUTH_TOKEN}" \
+  ai-workflow:v1.1.0 \
+  python test_docker.py
+```
+
+### Phase 1テスト
+
+```bash
+# Phase 1動作テスト（Issue #304を使用）
+docker run --rm \
+  -e CLAUDE_CODE_OAUTH_TOKEN="${CLAUDE_CODE_OAUTH_TOKEN}" \
+  -e GITHUB_TOKEN="${GITHUB_TOKEN}" \
+  -e GITHUB_REPOSITORY="${GITHUB_REPOSITORY}" \
+  -v "$(pwd)/../..:/workspace" \
+  -w /workspace/scripts/ai-workflow \
+  ai-workflow:v1.1.0 \
+  python test_phase1.py
+```
 
 ## トラブルシューティング
 
-よくある問題と解決方法は [TROUBLESHOOTING.md](TROUBLESHOOTING.md) を参照してください。
+### Q1: OAuth認証エラー
 
-## 今後の拡張計画
+**エラー:**
+```
+ERROR: Invalid API key · Please run /login
+```
 
-今後の開発ロードマップは [ROADMAP.md](ROADMAP.md) を参照してください。
+**対策:**
+1. OAuth Tokenが正しく設定されているか確認:
+   ```bash
+   echo $CLAUDE_CODE_OAUTH_TOKEN
+   ```
+2. トークンの有効期限を確認（期限切れの場合は再ログイン）:
+   ```bash
+   claude login
+   ```
+3. [DOCKER_AUTH_SETUP.md](DOCKER_AUTH_SETUP.md) を参照
+
+### Q2: GitHub API認証エラー
+
+**エラー:**
+```
+ERROR: GITHUB_TOKEN and GITHUB_REPOSITORY environment variables are required.
+```
+
+**対策:**
+1. 環境変数が設定されているか確認:
+   ```bash
+   echo $GITHUB_TOKEN
+   echo $GITHUB_REPOSITORY
+   ```
+2. GitHub Personal Access Tokenの権限を確認（`repo` scope必須）
+
+### Q3: Dockerマウントエラー
+
+**エラー:**
+```
+Error: Workflow metadata not found
+```
+
+**対策:**
+1. ボリュームマウントが正しいか確認:
+   ```bash
+   docker run --rm -v "$(pwd):/workspace" ...
+   ```
+2. `.ai-workflow`ディレクトリが存在するか確認:
+   ```bash
+   ls .ai-workflow/issue-304/
+   ```
+
+## ローカル開発環境（オプション）
+
+### セットアップ
+
+```bash
+# Python仮想環境作成
+python -m venv venv
+source venv/bin/activate  # Windows: venv\Scripts\activate
+
+# 依存パッケージインストール
+pip install -r requirements.txt
+pip install -r requirements-test.txt
+
+# Claude Code CLIインストール
+npm install -g @anthropic-ai/claude-code
+
+# Claude Codeログイン
+claude login
+```
+
+### テスト実行
+
+```bash
+# BDDテスト
+behave tests/features/
+
+# ユニットテスト
+pytest tests/unit/
+```
+
+### 新しいフェーズの追加
+
+1. `phases/`に新しいPhaseクラスを作成（`BasePhase`を継承）
+2. `prompts/{phase_name}/`にプロンプトファイルを作成
+   - `execute.txt`: フェーズ実行プロンプト
+   - `review.txt`: レビュープロンプト
+3. `main.py`の`execute`コマンドに新しいフェーズを追加
+4. BDDテストを追加
+
+## 関連ドキュメント
+
+- [DOCKER_AUTH_SETUP.md](DOCKER_AUTH_SETUP.md) - Docker環境でのOAuth認証設定
+- [ROADMAP.md](ROADMAP.md) - 開発ロードマップ
+- [../../CLAUDE.md](../../CLAUDE.md) - プロジェクト全体のガイド
 
 ## ライセンス
 
 このプロジェクトは infrastructure-as-code リポジトリの一部です。
 
-## 貢献
-
-バグ報告や機能要望は GitHub Issue で受け付けています。
-
 ---
 
-**バージョン**: 1.0.0 (MVP)
-**最終更新**: 2025-10-07
+**バージョン**: 1.1.0
+**最終更新**: 2025-10-08

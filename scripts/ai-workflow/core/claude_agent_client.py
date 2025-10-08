@@ -27,7 +27,8 @@ class ClaudeAgentClient:
         self,
         prompt: str,
         system_prompt: Optional[str] = None,
-        max_turns: int = 50
+        max_turns: int = 50,
+        verbose: bool = True
     ) -> List[str]:
         """
         タスクを実行
@@ -36,6 +37,7 @@ class ClaudeAgentClient:
             prompt: タスクプロンプト
             system_prompt: システムプロンプト
             max_turns: 最大ターン数
+            verbose: 詳細ログ出力（リアルタイムメッセージ表示）
 
         Returns:
             List[str]: レスポンスメッセージのリスト
@@ -43,12 +45,33 @@ class ClaudeAgentClient:
         options = ClaudeAgentOptions(
             system_prompt=system_prompt,
             max_turns=max_turns,
-            cwd=str(self.working_dir)
+            cwd=str(self.working_dir),
+            permission_mode='acceptEdits'  # 編集を自動的に受け入れる
         )
 
         messages = []
         async for message in query(prompt=prompt, options=options):
-            messages.append(str(message))
+            message_str = str(message)
+            messages.append(message_str)
+
+            # リアルタイムログ出力
+            if verbose:
+                # AssistantMessageの場合は思考内容を表示
+                if 'AssistantMessage' in message_str:
+                    # TextBlockを抽出して表示
+                    if 'TextBlock(text=' in message_str:
+                        start = message_str.find('TextBlock(text=') + 16
+                        end = message_str.find('\')', start)
+                        if end > start:
+                            text = message_str[start:end]
+                            print(f"[AGENT THINKING] {text[:200]}")
+                    # ToolUseBlockを抽出して表示
+                    elif 'ToolUseBlock' in message_str:
+                        if 'name=' in message_str:
+                            name_start = message_str.find('name=') + 6
+                            name_end = message_str.find('\'', name_start)
+                            tool_name = message_str[name_start:name_end]
+                            print(f"[AGENT ACTION] Using tool: {tool_name}")
 
         return messages
 
@@ -89,7 +112,8 @@ class ClaudeAgentClient:
         self,
         prompt: str,
         system_prompt: Optional[str] = None,
-        max_turns: int = 50
+        max_turns: int = 50,
+        verbose: bool = True
     ) -> List[str]:
         """
         タスクを同期実行（anyio.runを使用）
@@ -98,6 +122,7 @@ class ClaudeAgentClient:
             prompt: タスクプロンプト
             system_prompt: システムプロンプト
             max_turns: 最大ターン数
+            verbose: 詳細ログ出力（リアルタイムメッセージ表示）
 
         Returns:
             List[str]: レスポンスメッセージのリスト
@@ -106,7 +131,8 @@ class ClaudeAgentClient:
             self.execute_task,
             prompt,
             system_prompt,
-            max_turns
+            max_turns,
+            verbose
         )
 
     def execute_task_from_file_sync(

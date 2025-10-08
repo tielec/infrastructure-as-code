@@ -5,6 +5,10 @@ import sys
 from pathlib import Path
 from git import Repo
 from core.workflow_state import WorkflowState, PhaseStatus
+from core.metadata_manager import MetadataManager
+from core.claude_agent_client import ClaudeAgentClient
+from core.github_client import GitHubClient
+from phases.requirements import RequirementsPhase
 
 
 def _get_repo_root() -> Path:
@@ -59,17 +63,56 @@ def init(issue_url: str):
 def execute(phase: str, issue: str):
     """フェーズ実行"""
     repo_root = _get_repo_root()
-    metadata_path = repo_root / '.ai-workflow' / f'issue-{issue}' / 'metadata.json'
+    workflow_dir = repo_root / '.ai-workflow' / f'issue-{issue}'
+    metadata_path = workflow_dir / 'metadata.json'
 
     if not metadata_path.exists():
         click.echo(f'Error: Workflow not found. Run init first.')
         sys.exit(1)
 
-    state = WorkflowState(metadata_path)
-    state.update_phase_status(phase, PhaseStatus.IN_PROGRESS)
-    state.save()
+    # 環境変数チェック
+    github_token = os.getenv('GITHUB_TOKEN')
+    github_repository = os.getenv('GITHUB_REPOSITORY')
 
-    click.echo(f'[OK] Phase {phase} started')
+    if not github_token or not github_repository:
+        click.echo('Error: GITHUB_TOKEN and GITHUB_REPOSITORY environment variables are required.')
+        click.echo('Example:')
+        click.echo('  export GITHUB_TOKEN="ghp_..."')
+        click.echo('  export GITHUB_REPOSITORY="tielec/infrastructure-as-code"')
+        sys.exit(1)
+
+    # クライアント初期化
+    metadata_manager = MetadataManager(metadata_path)
+    claude_client = ClaudeAgentClient(working_dir=repo_root)
+    github_client = GitHubClient(token=github_token, repository=github_repository)
+
+    # フェーズ実行
+    try:
+        if phase == 'requirements':
+            phase_instance = RequirementsPhase(
+                working_dir=Path(__file__).parent,
+                metadata_manager=metadata_manager,
+                claude_client=claude_client,
+                github_client=github_client
+            )
+        else:
+            click.echo(f'Error: Phase {phase} is not implemented yet.')
+            sys.exit(1)
+
+        click.echo(f'[INFO] Starting phase: {phase}')
+        success = phase_instance.run()
+
+        if success:
+            click.echo(f'[OK] Phase {phase} completed successfully')
+        else:
+            click.echo(f'[ERROR] Phase {phase} failed. Check GitHub Issue for details.')
+            sys.exit(1)
+
+    except Exception as e:
+        click.echo(f'[ERROR] {e}')
+        import traceback
+        traceback.print_exc()
+        sys.exit(1)
 
 
 @cli.command()
