@@ -31,10 +31,6 @@ class ImplementationPhase(BasePhase):
                 - error: Optional[str]
         """
         try:
-            # ステータス更新: 開始
-            self.metadata.update_phase_status('implementation', 'in_progress')
-            self.post_progress('in_progress', '実装を開始しました')
-
             # Issue情報を取得
             issue_number = int(self.metadata.data['issue_number'])
 
@@ -118,9 +114,9 @@ class ImplementationPhase(BasePhase):
                     'error': f'implementation.mdが生成されませんでした: {output_file}'
                 }
 
-            # ステータス更新: 完了
-            self.metadata.update_phase_status('implementation', 'completed', str(output_file))
-            self.post_progress('completed', f'実装が完了しました: {output_file.name}')
+            # ステータス更新: BasePhase.run()で実行されるため不要
+            # self.metadata.update_phase_status('implementation', 'completed', str(output_file))
+            # self.post_progress('completed', f'実装が完了しました: {output_file.name}')
 
             return {
                 'success': True,
@@ -131,7 +127,8 @@ class ImplementationPhase(BasePhase):
         except Exception as e:
             # ステータス更新: 失敗
             self.metadata.update_phase_status('implementation', 'failed')
-            self.post_progress('failed', f'実装が失敗しました: {str(e)}')
+            # BasePhase.run()で実行されるため不要
+            # self.post_progress('failed', f'実装が失敗しました: {str(e)}')
 
             return {
                 'success': False,
@@ -206,12 +203,12 @@ class ImplementationPhase(BasePhase):
             review_file.write_text(review_result['feedback'], encoding='utf-8')
             print(f"[INFO] レビュー結果を保存: {review_file}")
 
-            # GitHub Issueにレビュー結果を投稿
-            self.post_review(
-                result=review_result['result'],
-                feedback=review_result['feedback'],
-                suggestions=review_result.get('suggestions')
-            )
+            # GitHub Issueにレビュー結果を投稿: BasePhase.run()で実行されるため不要
+            # self.post_review(
+            #     result=review_result['result'],
+            #     feedback=review_result['feedback'],
+            #     suggestions=review_result.get('suggestions')
+            # )
 
             return review_result
 
