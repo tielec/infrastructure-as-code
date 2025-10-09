@@ -23,7 +23,7 @@ pipeline {
         dockerfile {
             dir 'scripts/ai-workflow'
             filename 'Dockerfile'
-            args '-v ${WORKSPACE}:/workspace -w /workspace'
+            args '-u root -v ${WORKSPACE}:/workspace -w /workspace'
         }
     }
 
@@ -103,9 +103,13 @@ pipeline {
                         python -m pip --version
 
                         echo ""
+                        echo "Current user: \$(whoami)"
+                        echo "HOME directory: \$HOME"
+
+                        echo ""
                         echo "Creating Claude CLI config directory..."
-                        mkdir -p /root/.claude/debug
-                        chmod -R 777 /root/.claude
+                        mkdir -p \${HOME}/.claude/debug
+                        chmod -R 777 \${HOME}/.claude
 
                         echo ""
                         echo "Claude Code CLI version:"
