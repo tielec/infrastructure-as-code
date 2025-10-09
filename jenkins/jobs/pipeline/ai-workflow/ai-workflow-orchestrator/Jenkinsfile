@@ -96,9 +96,6 @@ pipeline {
 
                     // Git checkout: Detached HEADを回避するため、ブランチに明示的にcheckout
                     sh """
-                        git config --global user.name "AI Workflow Bot"
-                        git config --global user.email "ai-workflow@tielec.local"
-
                         # 現在のブランチを確認
                         BRANCH_NAME=\$(git rev-parse --abbrev-ref HEAD)
                         echo "Current branch: \$BRANCH_NAME"

@@ -24,8 +24,10 @@ RUN npm install -g @anthropic-ai/claude-code
 # Claude設定ディレクトリを誰でもアクセス可能に（rootと非rootユーザー両対応）
 RUN mkdir -p /root/.claude && chmod -R 777 /root/.claude
 
-# Git safe.directory設定（Jenkinsワークスペースのリポジトリアクセスを許可）
-RUN git config --global --add safe.directory '*'
+# Git設定（Jenkinsワークスペースのリポジトリアクセスを許可 & コミットユーザー設定）
+RUN git config --global --add safe.directory '*' && \
+    git config --global user.name "AI Workflow Bot" && \
+    git config --global user.email "ai-workflow@tielec.local"
 
 # 作業ディレクトリにコピー
 COPY requirements.txt ./
