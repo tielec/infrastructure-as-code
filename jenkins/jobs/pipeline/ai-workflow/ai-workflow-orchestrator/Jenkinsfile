@@ -37,12 +37,11 @@ pipeline {
 
     environment {
         // Python実行環境
-        PYTHON_PATH = '/usr/bin/python3'
         PYTHONUNBUFFERED = '1'
         PYTHONUTF8 = '1'
 
         // AI Workflow設定
-        WORKFLOW_DIR = '/workspace/scripts/ai-workflow'
+        WORKFLOW_DIR = 'scripts/ai-workflow'
         WORKFLOW_VERSION = '1.0.0'
 
         // 認証情報（Jenkinsクレデンシャルから取得）
@@ -94,24 +93,19 @@ pipeline {
                     echo "Stage: Setup Environment"
                     echo "========================================="
 
-                    // Python環境確認
+                    // Python環境確認（Dockerコンテナに含まれる環境を確認のみ）
                     sh """
                         echo "Python version:"
-                        ${env.PYTHON_PATH} --version
+                        python --version
 
                         echo ""
                         echo "pip version:"
-                        ${env.PYTHON_PATH} -m pip --version
-                    """
+                        python -m pip --version
 
-                    // 依存パッケージインストール
-                    dir(env.WORKFLOW_DIR) {
-                        sh """
-                            echo "Installing dependencies..."
-                            ${env.PYTHON_PATH} -m pip install --user -r requirements.txt
-                            ${env.PYTHON_PATH} -m pip install --user -r requirements-test.txt
-                        """
-                    }
+                        echo ""
+                        echo "Claude Code CLI version:"
+                        claude --version
+                    """
                 }
             }
         }
@@ -129,13 +123,13 @@ pipeline {
                         } else {
                             // ワークフロー初期化
                             sh """
-                                ${env.PYTHON_PATH} main.py init --issue-url ${params.ISSUE_URL}
+                                python main.py init --issue-url ${params.ISSUE_URL}
                             """
 
                             // metadata.json確認
                             sh """
                                 echo "metadata.json created:"
-                                cat ../../.ai-workflow/issue-${env.ISSUE_NUMBER}/metadata.json
+                                cat .ai-workflow/issue-${env.ISSUE_NUMBER}/metadata.json
                             """
                         }
                     }
@@ -164,7 +158,7 @@ pipeline {
                         } else {
                             // Phase実行（execute + review統合）
                             sh """
-                                ${env.PYTHON_PATH} main.py run \
+                                python main.py run \
                                     --phase requirements \
                                     --issue ${env.ISSUE_NUMBER}
                             """
@@ -194,7 +188,7 @@ pipeline {
                             echo "[DRY RUN] Phase 2実行をスキップ"
                         } else {
                             sh """
-                                ${env.PYTHON_PATH} main.py run \
+                                python main.py run \
                                     --phase design \
                                     --issue ${env.ISSUE_NUMBER}
                             """
@@ -224,7 +218,7 @@ pipeline {
                             echo "[DRY RUN] Phase 3実行をスキップ"
                         } else {
                             sh """
-                                ${env.PYTHON_PATH} main.py run \
+                                python main.py run \
                                     --phase test_scenario \
                                     --issue ${env.ISSUE_NUMBER}
                             """
@@ -254,7 +248,7 @@ pipeline {
                             echo "[DRY RUN] Phase 4実行をスキップ"
                         } else {
                             sh """
-                                ${env.PYTHON_PATH} main.py run \
+                                python main.py run \
                                     --phase implementation \
                                     --issue ${env.ISSUE_NUMBER}
                             """
@@ -284,7 +278,7 @@ pipeline {
                             echo "[DRY RUN] Phase 5実行をスキップ"
                         } else {
                             sh """
-                                ${env.PYTHON_PATH} main.py run \
+                                python main.py run \
                                     --phase testing \
                                     --issue ${env.ISSUE_NUMBER}
                             """
@@ -314,7 +308,7 @@ pipeline {
                             echo "[DRY RUN] Phase 6実行をスキップ"
                         } else {
                             sh """
-                                ${env.PYTHON_PATH} main.py run \
+                                python main.py run \
                                     --phase documentation \
                                     --issue ${env.ISSUE_NUMBER}
                             """
@@ -344,7 +338,7 @@ pipeline {
                             echo "[DRY RUN] Phase 7実行をスキップ"
                         } else {
                             sh """
-                                ${env.PYTHON_PATH} main.py run \
+                                python main.py run \
                                     --phase report \
                                     --issue ${env.ISSUE_NUMBER}
                             """
