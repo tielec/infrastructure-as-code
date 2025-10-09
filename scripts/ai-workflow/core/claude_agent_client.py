@@ -67,30 +67,38 @@ class ClaudeAgentClient:
                             print(f"[AGENT THINKING] {text}")
                     # ToolUseBlockを抽出して表示（詳細情報含む）
                     elif 'ToolUseBlock' in message_str:
-                        # メッセージ全体を表示（デバッグ用）
-                        print(f"[AGENT ACTION DEBUG] Full message: {message_str[:500]}")
-
                         if 'name=' in message_str:
                             # ツール名を抽出
                             name_start = message_str.find('name=') + 6
                             name_end = message_str.find('\'', name_start)
                             tool_name = message_str[name_start:name_end]
 
-                            # ツールパラメータを抽出
-                            params_info = ""
-                            if 'input=' in message_str:
-                                params_start = message_str.find('input=') + 6
-                                # 次のフィールド区切り(, id=)を探す
-                                params_end = message_str.find(', id=', params_start)
-                                if params_end > params_start:
-                                    params_info = message_str[params_start:params_end]
-
                             # 詳細ログを出力
                             print(f"[AGENT ACTION] Using tool: {tool_name}")
-                            if params_info:
-                                print(f"[AGENT ACTION] Parameters: {params_info}")
-                            else:
-                                print(f"[AGENT ACTION DEBUG] No parameters found (input= exists: {'input=' in message_str})")
+
+                            # ツールパラメータを抽出（input=以降、次のフィールドの手前まで）
+                            if 'input=' in message_str:
+                                params_start = message_str.find('input=') + 6
+                                # ')' が次のフィールドの開始なので、そこまでを取得
+                                # ToolUseBlock(id='...', name='...', input={...}) の構造
+                                # input= の後から最後の ')' の手前までが input の内容
+
+                                # より正確に抽出: input= から次の '), ' または末尾の ')' まで
+                                # まず 'ToolUseBlock' の終わりを探す
+                                toolblock_end = message_str.find(')]', params_start)
+                                if toolblock_end == -1:
+                                    toolblock_end = len(message_str)
+
+                                params_str = message_str[params_start:toolblock_end].strip()
+                                # 最後の ')' を除去
+                                if params_str.endswith(')'):
+                                    params_str = params_str[:-1]
+
+                                # 長すぎる場合は省略（最初の500文字）
+                                if len(params_str) > 500:
+                                    params_str = params_str[:500] + "..."
+
+                                print(f"[AGENT ACTION] Parameters: {params_str}")
 
         return messages
 
