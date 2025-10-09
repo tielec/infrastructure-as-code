@@ -166,7 +166,7 @@ pipeline {
                         } else {
                             // Phase実行（execute + review統合）
                             sh """
-                                python main.py run \
+                                python main.py execute \
                                     --phase requirements \
                                     --issue ${env.ISSUE_NUMBER}
                             """
@@ -196,7 +196,7 @@ pipeline {
                             echo "[DRY RUN] Phase 2実行をスキップ"
                         } else {
                             sh """
-                                python main.py run \
+                                python main.py execute \
                                     --phase design \
                                     --issue ${env.ISSUE_NUMBER}
                             """
@@ -226,7 +226,7 @@ pipeline {
                             echo "[DRY RUN] Phase 3実行をスキップ"
                         } else {
                             sh """
-                                python main.py run \
+                                python main.py execute \
                                     --phase test_scenario \
                                     --issue ${env.ISSUE_NUMBER}
                             """
@@ -256,7 +256,7 @@ pipeline {
                             echo "[DRY RUN] Phase 4実行をスキップ"
                         } else {
                             sh """
-                                python main.py run \
+                                python main.py execute \
                                     --phase implementation \
                                     --issue ${env.ISSUE_NUMBER}
                             """
@@ -286,7 +286,7 @@ pipeline {
                             echo "[DRY RUN] Phase 5実行をスキップ"
                         } else {
                             sh """
-                                python main.py run \
+                                python main.py execute \
                                     --phase testing \
                                     --issue ${env.ISSUE_NUMBER}
                             """
@@ -316,7 +316,7 @@ pipeline {
                             echo "[DRY RUN] Phase 6実行をスキップ"
                         } else {
                             sh """
-                                python main.py run \
+                                python main.py execute \
                                     --phase documentation \
                                     --issue ${env.ISSUE_NUMBER}
                             """
@@ -346,7 +346,7 @@ pipeline {
                             echo "[DRY RUN] Phase 7実行をスキップ"
                         } else {
                             sh """
-                                python main.py run \
+                                python main.py execute \
                                     --phase report \
                                     --issue ${env.ISSUE_NUMBER}
                             """
