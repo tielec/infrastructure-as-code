@@ -340,6 +340,7 @@ class GitManager:
 
         除外対象:
         - .ai-workflow/issue-YYY/ 配下のファイル（他のIssue）
+        - Jenkins一時ディレクトリ（*@tmp/）
 
         Args:
             files: ファイルパス一覧
@@ -352,6 +353,9 @@ class GitManager:
         result = []
 
         for f in files:
+            # 0. Jenkins一時ディレクトリは常に除外（@tmpを含むパス）
+            if '@tmp' in f:
+                continue
             # 1. 対象Issue配下のファイルは必ず含める
             if f.startswith(target_prefix):
                 result.append(f)
