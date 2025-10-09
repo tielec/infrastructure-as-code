@@ -183,7 +183,7 @@
 
 ## 出力形式
 
-設計書は `.ai-workflow/issue-{issue_number}/design.md` として保存してください。
+設計書は `.ai-workflow/issue-{issue_number}/02_design/output/design.md` として保存してください。
 
 Markdown形式で、見出しを適切に使用し、可読性の高いドキュメントを作成してください。図表が必要な場合はMarkdownのコードブロックやテーブルを活用してください。
 

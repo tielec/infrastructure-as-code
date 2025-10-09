@@ -6,7 +6,53 @@ GitHubのIssue情報から詳細な要件定義書を作成してください。
 
 ## Issue情報
 
-{issue_info}
+## Issue情報
+
+- **Issue番号**: #304
+- **タイトル**: [TASK] AI駆動開発自動化ワークフローMVP v1.0.0実装
+- **状態**: open
+- **URL**: https://github.com/tielec/infrastructure-as-code/issues/304
+- **ラベル**: なし
+
+### 本文
+
+## 概要
+GitHub IssueからPR作成まで、Claude AIが自動的に開発プロセスを実行するワークフローシステムのMVP実装
+
+## 実装内容
+
+### ワークフロー6フェーズ
+1. Phase 1: 要件定義 (Requirements)
+2. Phase 2: 詳細設計 (Design)
+3. Phase 3: テストシナリオ (Test Scenario)
+4. Phase 4: 実装 (Implementation)
+5. Phase 5: テスト実行 (Testing)
+6. Phase 6: ドキュメント作成 (Documentation)
+
+### MVP v1.0.0 スコープ
+- [x] ワークフロー初期化機能
+- [x] metadata.json による状態管理
+- [x] Click CLI フレームワーク実装
+- [x] BDD テスト（behave）
+- [x] Jenkins統合（Job DSL + Jenkinsfile）
+- [ ] Phase 1-6 の実装（将来対応）
+- [ ] PR自動作成（将来対応）
+
+## ファイル構成
+- `scripts/ai-workflow/main.py`: CLIエントリーポイント
+- `scripts/ai-workflow/core/workflow_state.py`: 状態管理
+- `scripts/ai-workflow/tests/features/workflow.feature`: BDDテストシナリオ
+- `jenkins/jobs/dsl/ai-workflow/ai-workflow-orchestrator.groovy`: Job DSL
+- `jenkins/jobs/pipeline/ai-workflow/ai-workflow-orchestrator/Jenkinsfile`: パイプライン定義
+
+## TODO
+- [x] Python環境セットアップ
+- [x] 依存パッケージインストール
+- [x] エンコーディング問題修正
+- [ ] MVP実行（ワークフロー初期化）
+- [ ] metadata.json確認
+- [ ] BDDテスト実行
+- [ ] コミット・プッシュ
 
 ## 要件定義書の構成
 
@@ -51,7 +97,7 @@ GitHubのIssue情報から詳細な要件定義書を作成してください。
 Markdown形式で要件定義書を作成し、以下のファイルに保存してください：
 
 ```
-.ai-workflow/issue-{issue_number}/01_requirements/output/requirements.md
+.ai-workflow/issue-304/01_requirements/output/requirements.md
 ```
 
 ## 品質ゲート（Phase 1）

@@ -116,7 +116,7 @@ Phase 2で決定された実装戦略に応じて、適切な実装を行って�
 - Phase 5でテストを実行
 ```
 
-このログを `.ai-workflow/issue-{issue_number}/implementation.md` として保存してください。
+このログを `.ai-workflow/issue-{issue_number}/04_implementation/output/implementation.md` として保存してください。
 
 ## 品質ゲート（Phase 4）
 

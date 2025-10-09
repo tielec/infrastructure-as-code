@@ -105,7 +105,7 @@
 
 ## 出力形式
 
-修正したテストシナリオを `.ai-workflow/issue-{issue_number}/test-scenario.md` として保存してください。
+修正したテストシナリオを `.ai-workflow/issue-{issue_number}/03_test_scenario/output/test-scenario.md` として保存してください。
 
 **上書き形式**で保存してください（元のファイルを置き換え）。
 

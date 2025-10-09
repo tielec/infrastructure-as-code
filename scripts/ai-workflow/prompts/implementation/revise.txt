@@ -120,7 +120,7 @@
 
 ## 出力形式
 
-修正後の実装ログを `.ai-workflow/issue-{issue_number}/implementation.md` として**上書き保存**してください。
+修正後の実装ログを `.ai-workflow/issue-{issue_number}/04_implementation/output/implementation.md` として**上書き保存**してください。
 
 ## 修正開始
 

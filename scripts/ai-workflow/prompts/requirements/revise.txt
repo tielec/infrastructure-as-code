@@ -60,7 +60,7 @@
 修正した要件定義書を以下のファイルに保存してください：
 
 ```
-.ai-workflow/issue-{issue_number}/requirements.md
+.ai-workflow/issue-{issue_number}/01_requirements/output/requirements.md
 ```
 
 元のファイルを上書きする形で修正してください。

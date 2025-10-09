@@ -101,7 +101,7 @@
 
 ## 出力形式
 
-修正した設計書を `.ai-workflow/issue-{issue_number}/design.md` として保存してください。
+修正した設計書を `.ai-workflow/issue-{issue_number}/02_design/output/design.md` として保存してください。
 
 **上書き形式**で保存してください（元のファイルを置き換え）。
 

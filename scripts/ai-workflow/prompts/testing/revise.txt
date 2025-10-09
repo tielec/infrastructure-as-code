@@ -63,7 +63,7 @@
 （実装のどこをどう修正すべきか）
 ```
 
-これを `test-result.md` に追記してください。
+これを `.ai-workflow/issue-{issue_number}/05_testing/output/test-result.md` に追記してください。
 
 #### 選択肢2: テスト環境を修正してテストを再実行
 
@@ -91,7 +91,7 @@
 
 ## テスト結果の更新
 
-テストを再実行した場合、結果を `test-result.md` に追記してください：
+テストを再実行した場合、結果を `.ai-workflow/issue-{issue_number}/05_testing/output/test-result.md` に追記してください：
 
 ```markdown
 ## 再実行結果
@@ -105,7 +105,7 @@
 
 ## 出力形式
 
-修正後のテスト結果を `.ai-workflow/issue-{issue_number}/test-result.md` として**上書き保存**してください。
+修正後のテスト結果を `.ai-workflow/issue-{issue_number}/05_testing/output/test-result.md` として**上書き保存**してください。
 
 ## 修正開始
 

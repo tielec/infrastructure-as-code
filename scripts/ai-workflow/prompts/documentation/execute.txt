@@ -191,7 +191,7 @@ Phase 1-5の全成果物をまとめて、最終的なドキュメントを作�
 
 ## 出力形式
 
-ドキュメントを `.ai-workflow/issue-{issue_number}/documentation.md` として保存してください。
+ドキュメントを `.ai-workflow/issue-{issue_number}/06_documentation/output/documentation.md` として保存してください。
 
 Markdown形式で、見出しを適切に使用し、可読性の高いドキュメントを作成してください。
 

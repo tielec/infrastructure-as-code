@@ -98,7 +98,7 @@ behave tests/features/
 - 実行失敗: テスト環境の確認が必要
 ```
 
-このログを `.ai-workflow/issue-{issue_number}/test-result.md` として保存してください。
+このログを `.ai-workflow/issue-{issue_number}/05_testing/output/test-result.md` として保存してください。
 
 ## 品質ゲート（Phase 5）
 

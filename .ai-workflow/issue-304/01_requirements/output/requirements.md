@@ -1,530 +1,359 @@
-# AI駆動開発自動化ワークフロー MVP v1.0.0 要件定義書
+# 要件定義書: AI駆動開発自動化ワークフローMVP v1.0.0
 
-**Issue番号**: #304
-**Issue URL**: https://github.com/tielec/infrastructure-as-code/issues/304
-**文書バージョン**: 1.0.0
-**作成日**: 2025-10-08
+## ドキュメント情報
+- **Issue番号**: #304
+- **バージョン**: v1.0.0 (MVP)
+- **作成日**: 2025-10-09
+- **ステータス**: Phase 1 - 要件定義
 
 ---
 
 ## 1. 概要
 
 ### 1.1 背景
-
-本プロジェクトは、Jenkins CI/CDインフラ自動化プロジェクト（infrastructure-as-code）の一部として、AI駆動による開発プロセスの自動化を実現するワークフローシステムの最小実装版（MVP v1.0.0）を構築する。
-
-**現在の課題**:
-- 開発プロセスの標準化と効率化が求められている
-- GitHub Issueから実装、テスト、ドキュメント作成まで手作業で実施している
-- 開発者のリソースをより創造的なタスクに集中させたい
+現在の開発プロセスでは、GitHub IssueからPR作成まで手動での作業が多く、開発者の生産性に影響を与えている。特に以下の課題が存在する：
+- Issue内容の分析と要件定義の作成に時間がかかる
+- 設計ドキュメント作成が手作業で属人化しやすい
+- テストシナリオの作成が後回しになりがち
+- 実装からドキュメント化までの一貫性が保たれにくい
 
 ### 1.2 目的
+GitHub IssueからPR作成までの開発プロセスを、Claude AIが自動的に実行するワークフローシステムを構築する。MVP（Minimum Viable Product）として、まずはワークフローの基盤部分（初期化、状態管理、CLI、テストフレームワーク、Jenkins統合）を実装し、6フェーズの自動実行機能の土台を作る。
 
-GitHub IssueからPR作成まで、Claude AI（Agent SDK）が自律的に開発プロセスを実行するワークフローシステムのMVPを実装する。
+### 1.3 ビジネス価値
+- **開発者の生産性向上**: 手動作業の削減により開発に集中できる
+- **品質の標準化**: AIによる一貫した品質のドキュメント・コード生成
+- **開発サイクルの短縮**: Issue作成からPRまでの時間を大幅に削減
+- **属人化の解消**: プロセスの標準化により誰でも同じ品質を実現
 
-**ビジネス価値**:
-- 開発サイクルの短縮（Issue作成から実装完了まで）
-- 品質の一貫性確保（AIレビューによる標準化）
-- 開発者の生産性向上（定型作業の自動化）
-
-**技術的価値**:
-- Claude Agent SDKの実践的活用事例の確立
-- AIとCI/CD統合のベストプラクティス構築
-- 既存Jenkins基盤との連携強化
-
-### 1.3 スコープ
-
-**対象範囲（MVP v1.0.0）**:
-- ワークフロー初期化機能（Issue URLからmetadata.json生成）
-- 6フェーズ構造の定義と状態管理
-- Click CLIフレームワークによるコマンドライン操作
-- BDD（behave）テストによる品質保証
-- Jenkins統合（Job DSL + Jenkinsfile）
-- Docker環境での実行基盤
-
-**スコープ外（将来対応）**:
-- Phase 1-6の実際の実行機能（Phase 1のみv1.1.0で対応済み）
-- PR自動作成機能
-- GitHub Webhook統合
-- 複数Issue同時実行
-- リアルタイムモニタリングUI
+### 1.4 技術的価値
+- **Platform Engineeringの実践**: セルフサービス化の実現
+- **Everything as Code**: ワークフロー定義もコードで管理
+- **再利用可能な基盤**: 将来的な機能拡張の土台
+- **テスト駆動開発**: BDDによる信頼性の高い実装
 
 ---
 
 ## 2. 機能要件
 
-### FR-01: ワークフロー初期化機能（優先度: 高）
+### 2.1 ワークフロー初期化機能 (優先度: 高)
+**要件ID**: FR-001
 
-**要件**: GitHub Issue URLを受け取り、ワークフロー実行環境を初期化する。
-
-**詳細**:
-- Issue URLからIssue番号を抽出
-- `.ai-workflow/issue-{number}/` ディレクトリを作成
-- `metadata.json` を初期状態で生成
-- 6フェーズ（requirements, design, test_scenario, implementation, testing, documentation）を`pending`状態で初期化
-- ISO 8601形式のタイムスタンプ（UTC）で作成・更新日時を記録
-
-**受け入れ基準**:
-- **Given**: GitHub Issue URL `https://github.com/tielec/infrastructure-as-code/issues/304`
-- **When**: `python main.py init --issue-url <URL>` を実行
-- **Then**: `.ai-workflow/issue-304/metadata.json` が作成され、以下を含む
-  - `issue_number`: "304"
-  - `workflow_version`: "1.0.0"
-  - `current_phase`: "requirements"
-  - 6フェーズすべてが`status: pending`
-
-### FR-02: ワークフロー状態管理（優先度: 高）
-
-**要件**: metadata.jsonを通じてワークフロー全体の状態を管理する。
+GitHub Issueの情報を元に、ワークフロー用のディレクトリ構造とメタデータファイルを生成する。
 
 **詳細**:
-- フェーズステータス管理（Enum: `pending`, `in_progress`, `completed`, `failed`）
-- リトライカウント管理（最大3回）
-- タイムスタンプ管理（開始時刻、完了時刻）
-- コスト追跡（トークン使用量、API利用料金）
-- 設計判断の保存（Phase 2での戦略判断）
+- Issue番号、タイトル、URL、状態、本文を受け取る
+- `.ai-workflow/issue-{番号}/` ディレクトリを作成
+- 6フェーズ用のサブディレクトリを作成（`01_requirements`, `02_design`, `03_test_scenario`, `04_implementation`, `05_testing`, `06_documentation`）
+- 各フェーズに `output/`, `review/` ディレクトリを作成
+- `metadata.json` ファイルを生成（Issue情報、フェーズ状態、タイムスタンプを含む）
 
 **受け入れ基準**:
-- **Given**: ワークフロー初期化が完了している
-- **When**: フェーズステータスを`in_progress`に更新
-- **Then**: `metadata.json`の該当フェーズが更新され、`started_at`がISO 8601形式で記録される
-- **And**: `updated_at`が最新のタイムスタンプに更新される
+```gherkin
+Given: GitHub Issue #304 の情報が入力される
+When: ワークフロー初期化コマンドを実行する
+Then: `.ai-workflow/issue-304/` ディレクトリが作成される
+And: `metadata.json` に Issue情報が正しく記録される
+And: 全6フェーズのディレクトリ構造が作成される
+And: 各フェーズの状態が "pending" として初期化される
+```
 
-### FR-03: CLI操作インターフェース（優先度: 高）
+### 2.2 状態管理機能 (優先度: 高)
+**要件ID**: FR-002
 
-**要件**: Clickフレームワークを使用したCLIコマンドを提供する。
+`metadata.json` を使用してワークフローの状態を永続化し、フェーズの進行状況を管理する。
 
 **詳細**:
-- `init`: ワークフロー初期化
-- `execute`: フェーズ実行（将来実装）
-- `status`: 現在の状態確認（将来実装）
-- `cleanup`: ワークフローのクリーンアップ（将来実装）
+- Issue情報（番号、タイトル、URL、状態、本文）の保存
+- 各フェーズの状態管理（pending/in_progress/completed/failed）
+- タイムスタンプの記録（created_at, updated_at, 各フェーズの開始・完了時刻）
+- 状態の読み込み・更新・保存機能
+- JSONスキーマ検証
 
 **受け入れ基準**:
-- **Given**: CLIスクリプトがインストールされている
-- **When**: `python main.py --help` を実行
-- **Then**: 利用可能なコマンド一覧が表示される
-- **And**: 各コマンドの説明とオプションが表示される
+```gherkin
+Given: ワークフローが初期化されている
+When: フェーズの状態を更新する
+Then: `metadata.json` が正しく更新される
+And: タイムスタンプが記録される
+And: JSON形式が正しい（バリデーション成功）
+```
 
-### FR-04: BDDテスト基盤（優先度: 中）
+### 2.3 CLIインターフェース (優先度: 高)
+**要件ID**: FR-003
 
-**要件**: behaveフレームワークを使用したBDDテストを提供する。
+Click フレームワークを使用したコマンドラインインターフェースを提供する。
 
 **詳細**:
-- Gherkin形式（Given-When-Then）でテストシナリオを記述
-- ワークフロー初期化シナリオのテスト実装
-- 将来の6フェーズ実装時のテスト拡張可能性を確保
+- `python main.py init` - ワークフロー初期化
+- `python main.py status` - 状態表示
+- `python main.py phase <phase-name>` - フェーズ実行（将来拡張用）
+- サブコマンド構造のサポート
+- ヘルプメッセージの提供
+- エラーハンドリングとユーザーフレンドリーなメッセージ
 
 **受け入れ基準**:
-- **Given**: BDDテストシナリオが定義されている
-- **When**: `behave tests/features/` を実行
-- **Then**: ワークフロー初期化のシナリオが成功する
-- **And**: テスト結果が明確に表示される
+```gherkin
+Given: ai-workflowディレクトリに移動している
+When: `python main.py --help` を実行する
+Then: 使用可能なコマンド一覧が表示される
 
-### FR-05: Jenkins統合（優先度: 高）
+Given: Issue情報が用意されている
+When: `python main.py init --issue-number 304 --title "..." --url "..." --state open --body "..."` を実行する
+Then: ワークフローが初期化される
+And: 成功メッセージが表示される
+```
 
-**要件**: JenkinsからワークフローをトリガーできるJob DSLとJenkinsfileを提供する。
+### 2.4 BDDテストフレームワーク (優先度: 高)
+**要件ID**: FR-004
+
+behave を使用したBDD（Behavior Driven Development）テストフレームワークを構築する。
 
 **詳細**:
-- Job DSL定義: `jenkins/jobs/dsl/ai-workflow/ai-workflow-orchestrator.groovy`
-- Jenkinsfile定義: `jenkins/jobs/pipeline/ai-workflow/ai-workflow-orchestrator/Jenkinsfile`
-- パラメータ: `ISSUE_URL` (String, 必須)
-- 将来のフェーズステージ追加に対応可能な構造
+- Gherkin形式のシナリオ定義（`workflow.feature`）
+- ステップ定義の実装（`workflow_steps.py`）
+- テストフィクスチャの管理（`conftest.py`）
+- テスト実行環境のセットアップ・クリーンアップ
+- テストレポートの生成
 
 **受け入れ基準**:
-- **Given**: JenkinsにJob DSLがデプロイされている
-- **When**: Job DSL Seed Jobを実行
-- **Then**: `AI-Workflow/ai-workflow-orchestrator` Jobが作成される
-- **And**: Job実行時にISSUE_URLパラメータを入力できる
+```gherkin
+Given: テストスイートが用意されている
+When: `behave tests/features/` を実行する
+Then: すべてのシナリオが成功する
+And: テストレポートが生成される
+And: カバレッジが80%以上である
+```
 
-### FR-06: Docker実行環境（優先度: 高）
+### 2.5 Jenkins統合 (優先度: 中)
+**要件ID**: FR-005
 
-**要件**: Docker環境でワークフローを実行できる基盤を提供する。
+Jenkins Job DSL と Jenkinsfile を使用したCI/CD統合を実装する。
 
 **詳細**:
-- Dockerfile定義: Python 3.11ベース
-- 依存パッケージ管理: requirements.txt
-- Claude Agent SDK統合（v0.9.1）
-- 環境変数による認証管理（`CLAUDE_CODE_OAUTH_TOKEN`, `GITHUB_TOKEN`）
+- Job DSL定義（`ai-workflow-orchestrator.groovy`）
+- Jenkinsfileによるパイプライン定義
+- GitHub Webhook連携（将来拡張用のプレースホルダー）
+- パイプラインパラメータ（Issue番号、環境変数）
+- ビルド成功/失敗の通知
 
 **受け入れ基準**:
-- **Given**: Dockerfileが定義されている
-- **When**: `docker build -t ai-workflow:v1.1.0 .` を実行
-- **Then**: イメージが正常にビルドされる
-- **And**: コンテナ内で`python main.py init`が実行できる
+```gherkin
+Given: Jenkinsサーバーが稼働している
+When: シードジョブを実行する
+Then: AI Workflow Orchestratorジョブが作成される
+
+Given: AI Workflow Orchestratorジョブが存在する
+When: ジョブを手動実行する（Issue番号をパラメータ指定）
+Then: ワークフロー初期化が実行される
+And: Jenkinsコンソールに実行ログが表示される
+And: 成功/失敗ステータスが正しく報告される
+```
+
+### 2.6 ロギング機能 (優先度: 中)
+**要件ID**: FR-006
+
+実行プロセスのロギングとトレーサビリティを提供する。
+
+**詳細**:
+- 標準出力へのログ出力（INFO, WARNING, ERROR レベル）
+- ログファイルへの永続化（`.ai-workflow/issue-{番号}/logs/`）
+- タイムスタンプ付きログ
+- 構造化ログ（JSON形式でのメタデータ記録）
+
+**受け入れ基準**:
+```gherkin
+Given: ワークフローが実行されている
+When: 各処理ステップが実行される
+Then: ログファイルに実行内容が記録される
+And: エラー発生時にスタックトレースが記録される
+```
 
 ---
 
 ## 3. 非機能要件
 
-### NFR-01: パフォーマンス
+### 3.1 パフォーマンス要件
+- **NFR-001**: ワークフロー初期化は5秒以内に完了すること
+- **NFR-002**: metadata.json の読み書きは1秒以内に完了すること
+- **NFR-003**: BDDテストスイート全体の実行時間は5分以内であること
 
-| 項目 | 要件 | 測定方法 |
-|------|------|---------|
-| ワークフロー初期化時間 | 1秒以内 | 実行時間計測 |
-| metadata.json読み込み時間 | 100ms以内 | 実行時間計測 |
-| Docker イメージビルド時間 | 5分以内 | ビルドログ確認 |
+### 3.2 セキュリティ要件
+- **NFR-004**: API キー等の機密情報は環境変数またはSSM Parameter Storeで管理すること
+- **NFR-005**: `metadata.json` に機密情報を含めないこと
+- **NFR-006**: Jenkinsクレデンシャルストアを使用してAPI認証情報を管理すること
 
-### NFR-02: セキュリティ
+### 3.3 可用性・信頼性要件
+- **NFR-007**: ワークフロー実行中の中断に対する再開機能を提供すること
+- **NFR-008**: エラー発生時に適切なエラーメッセージとリカバリー手順を提示すること
+- **NFR-009**: metadata.json の破損時にバックアップから復元できること
 
-| 項目 | 要件 |
-|------|------|
-| 認証情報管理 | Claude API Key、GitHub Tokenは環境変数で管理、ハードコーディング禁止 |
-| ログ出力 | 認証情報をログに出力しない |
-| ファイルアクセス | `.ai-workflow/`ディレクトリ配下のみ書き込み許可 |
+### 3.4 保守性・拡張性要件
+- **NFR-010**: Phase 1-6 の実装を容易に追加できるモジュラー設計とすること
+- **NFR-011**: 新しいフェーズの追加が既存コードへの影響を最小化すること
+- **NFR-012**: コーディング規約（CLAUDE.md）に準拠すること
+- **NFR-013**: PEP 8 準拠のPythonコードとすること
+- **NFR-014**: 日本語コメントとドキュメントを使用すること（CLAUDE.md要件）
 
-### NFR-03: 可用性・信頼性
-
-| 項目 | 要件 |
-|------|------|
-| エラーハンドリング | すべての例外を適切にキャッチし、明確なエラーメッセージを出力 |
-| 状態の永続化 | metadata.jsonは常に最新状態を反映 |
-| 冪等性 | 同じコマンドを複数回実行しても安全 |
-
-### NFR-04: 保守性・拡張性
-
-| 項目 | 要件 |
-|------|------|
-| コード品質 | Python PEP 8準拠、型ヒント付与 |
-| モジュール構造 | core/、phases/、reviewers/に明確に分離 |
-| 拡張性 | 新しいフェーズの追加が容易な設計 |
-| ドキュメント | README.md、ARCHITECTURE.mdで設計思想を明記 |
-
-### NFR-05: テスト容易性
-
-| 項目 | 要件 |
-|------|------|
-| ユニットテスト | 各モジュールが独立してテスト可能 |
-| 統合テスト | BDDテストによるエンドツーエンド検証 |
-| ローカル実行 | Jenkins環境以外でもPythonスクリプトを実行可能 |
+### 3.5 ユーザビリティ要件
+- **NFR-015**: CLIコマンドは直感的で覚えやすいものとすること
+- **NFR-016**: エラーメッセージは原因と対処方法を明示すること
+- **NFR-017**: `--help` オプションで詳細な使用方法を表示すること
 
 ---
 
 ## 4. 制約事項
 
 ### 4.1 技術的制約
-
-| 制約 | 理由 |
-|------|------|
-| Python 3.11以上 | Claude Agent SDK v0.9.1の要件 |
-| Docker Desktop必須 | Linux環境での安定動作のため |
-| Claude Pro/Max契約 | OAuth認証によるAgent SDK利用のため |
-| GitHub Personal Access Token | Issue情報取得、コメント投稿のため |
-| Windows開発環境 | 開発者PCがWindows（WSL2使用） |
+- **C-001**: Python 3.8以上を使用すること
+- **C-002**: Click, behave を使用すること（requirements.txt で管理）
+- **C-003**: Jenkins Job DSL と Jenkinsfile を使用すること
+- **C-004**: Groovy によるJob DSL定義を使用すること
+- **C-005**: 既存のPlatform Engineering設計思想（ARCHITECTURE.md）に準拠すること
+- **C-006**: 日本語でのコメント・ドキュメント記述（CLAUDE.md 要件）
 
 ### 4.2 リソース制約
-
-| 項目 | 制約 |
-|------|------|
-| 開発期間 | MVP v1.0.0は2週間で完了（実績） |
-| API利用料金 | Claude API利用料は1ワークフローあたり$5以下を目標 |
-| ストレージ | `.ai-workflow/`ディレクトリはリポジトリサイズに影響 |
+- **C-007**: MVP実装のため、Phase 1-6 の自動実行は将来対応とする
+- **C-008**: PR自動作成機能は将来対応とする
+- **C-009**: GitHub Webhook連携は将来対応とする（Jenkinsfileにプレースホルダーのみ）
 
 ### 4.3 ポリシー制約
-
-| 項目 | 制約 |
-|------|------|
-| コーディング規約 | `CLAUDE.md`、`scripts/CONTRIBUTION.md`に準拠 |
-| コミットメッセージ | `[scripts] action: 説明` 形式 |
-| ドキュメント言語 | 日本語（コメント、README） |
-| AI安全性 | 防御的セキュリティタスクのみ、悪意のあるコード生成禁止 |
+- **C-010**: すべてのコードはGit管理すること
+- **C-011**: コミットメッセージは `[scripts] action: 説明` 形式とすること（CONTRIBUTION.md）
+- **C-012**: 機密情報のハードコーディング禁止
+- **C-013**: CLAUDE.md に記載されたJenkinsパラメータ定義ルールを遵守すること（Job DSLで定義、Jenkinsfileでは禁止）
 
 ---
 
 ## 5. 前提条件
 
 ### 5.1 システム環境
-
-| 項目 | 要件 |
-|------|------|
-| OS | Windows 10/11 (WSL2) またはLinux |
-| Docker | Docker Desktop 20.10以上 |
-| Git | Git 2.0以上 |
-| Python | 3.11以上（ローカル開発時） |
-| Node.js | 20以上（Claude Code CLI用） |
+- **P-001**: Python 3.8以上がインストールされていること
+- **P-002**: pip3 が使用可能であること
+- **P-003**: Git がインストールされていること
+- **P-004**: Jenkinsサーバーが稼働していること（Jenkins統合機能使用時）
 
 ### 5.2 依存コンポーネント
-
-| コンポーネント | バージョン | 用途 |
-|--------------|----------|------|
-| Click | 8.1.7 | CLIフレームワーク |
-| behave | 最新 | BDDテスト |
-| claude-code-sdk | 0.9.1 | Claude Agent SDK |
-| PyGithub | 最新 | GitHub API統合 |
+- **P-005**: Click フレームワーク（CLIインターフェース）
+- **P-006**: behave フレームワーク（BDDテスト）
+- **P-007**: Jenkins Job DSL Plugin
+- **P-008**: Jenkins Pipeline Plugin
 
 ### 5.3 外部システム連携
-
-| システム | 連携内容 |
-|---------|---------|
-| Claude API | Agent SDK経由でAI実行（OAuth認証） |
-| GitHub API | Issue情報取得、コメント投稿、PR作成（PAT認証） |
-| Jenkins | ワークフローのトリガーと実行管理 |
+- **P-009**: GitHub API アクセス（将来のPR作成機能で必要）
+- **P-010**: Claude API アクセス（将来のAI実行機能で必要）
+- **P-011**: AWS SSM Parameter Store（機密情報管理）
 
 ---
 
 ## 6. 受け入れ基準
 
-### AC-01: ワークフロー初期化
-
-**シナリオ**: ワークフロー初期化とメタデータ作成
-
+### 6.1 ワークフロー初期化機能
 ```gherkin
-Given GitHub Issue "https://github.com/tielec/infrastructure-as-code/issues/304" が存在する
-When ワークフロー初期化コマンドを実行する
-Then .ai-workflow/issue-304/metadata.json が作成される
-And metadata.jsonにIssue番号 "304" が記録される
-And metadata.jsonにワークフローバージョン "1.0.0" が記録される
-And metadata.jsonに6つのフェーズ定義が含まれる
-And すべてのフェーズステータスが "pending" である
+Scenario: ワークフロー初期化
+  Given GitHub Issue #304 の情報が用意されている
+  When `python main.py init` コマンドを実行する
+  Then `.ai-workflow/issue-304/` ディレクトリが作成される
+  And 6フェーズのディレクトリ構造が作成される
+  And `metadata.json` にIssue情報が記録される
+  And すべてのフェーズの状態が "pending" である
 ```
 
-### AC-02: フェーズステータス更新
-
-**シナリオ**: Phase 1をin_progressに更新
-
+### 6.2 状態管理機能
 ```gherkin
-Given ワークフロー初期化が完了している
-When Phase 1のステータスを "in_progress" に更新する
-Then metadata.jsonのrequirementsフェーズが "in_progress" になる
-And started_atにISO 8601形式のタイムスタンプが記録される
-And updated_atが最新のタイムスタンプに更新される
+Scenario: 状態の永続化
+  Given ワークフローが初期化されている
+  When フェーズ1の状態を "in_progress" に更新する
+  Then `metadata.json` のフェーズ1の状態が "in_progress" である
+  And `updated_at` タイムスタンプが更新されている
+  And JSON形式が正しい（バリデーション成功）
 ```
 
-### AC-03: BDDテスト実行
-
-**シナリオ**: BDDテストが成功する
-
+### 6.3 CLIインターフェース
 ```gherkin
-Given BDDテストシナリオが定義されている
-When behaveコマンドを実行する
-Then ワークフロー初期化シナリオが成功する
-And テスト結果が "1 scenario passed" を含む
+Scenario: CLIヘルプ表示
+  Given ai-workflowディレクトリにいる
+  When `python main.py --help` を実行する
+  Then 使用可能なコマンド一覧が表示される
+  And 各コマンドの説明が表示される
 ```
 
-### AC-04: Docker環境での実行
-
-**シナリオ**: Docker環境でワークフロー初期化
-
+### 6.4 BDDテストフレームワーク
 ```gherkin
-Given Dockerイメージがビルドされている
-And 環境変数CLAUDE_CODE_OAUTH_TOKENが設定されている
-And 環境変数GITHUB_TOKENが設定されている
-When Dockerコンテナ内でinitコマンドを実行する
-Then ワークフロー初期化が成功する
-And metadata.jsonがホスト側に永続化される
+Scenario: BDDテスト実行
+  Given テストスイートが用意されている
+  When `behave tests/features/` を実行する
+  Then すべてのシナリオがパスする
+  And テストカバレッジが80%以上である
 ```
 
-### AC-05: Jenkins Job作成
-
-**シナリオ**: Jenkins Job DSLからJob作成
+### 6.5 Jenkins統合
+```gherkin
+Scenario: Jenkinsジョブ作成
+  Given シードジョブが実行される
+  When Job DSL定義が処理される
+  Then AI Workflow Orchestratorジョブが作成される
+  And パラメータ（Issue番号）が定義されている
+```
 
 ```gherkin
-Given Job DSLファイルが配置されている
-When Jenkins Seed Jobを実行する
-Then AI-Workflow/ai-workflow-orchestrator Jobが作成される
-And Jobパラメータに "ISSUE_URL" が含まれる
+Scenario: Jenkinsパイプライン実行
+  Given AI Workflow Orchestratorジョブが存在する
+  When ジョブを手動実行する（Issue番号=304）
+  Then ワークフロー初期化が実行される
+  And ビルドが成功する
+  And コンソールログに実行内容が記録される
 ```
 
 ---
 
 ## 7. スコープ外
 
-以下の機能は将来バージョンで対応予定：
+### 7.1 MVP v1.0.0 で対応しない機能
+以下の機能は将来バージョンで対応する：
 
-| 機能 | 理由 | 対応予定 |
-|------|------|---------|
-| Phase 1-6の実行機能 | MVP v1.0.0はフレームワーク構築のみ | v1.1.0以降で段階的実装 |
-| PR自動作成機能 | Gitワークフロー統合が必要 | v1.3.0以降 |
-| リアルタイムモニタリングUI | フロントエンド開発が必要 | v2.0.0以降 |
-| 複数Issue同時実行 | 並行処理制御が複雑 | v2.0.0以降 |
-| GitHub Webhook統合 | Issueトリガー自動化 | v2.0.0以降 |
-| マルチリポジトリ対応 | 設定管理が複雑 | v3.0.0以降 |
+- **Phase 1-6 の自動実行**: ワークフローの基盤のみ実装、各フェーズの自動実行ロジックは将来対応
+- **PR自動作成**: GitHub API連携によるPR自動作成は将来対応
+- **GitHub Webhook連携**: Issue作成時の自動トリガーは将来対応
+- **Claude API統合**: AI実行エンジンの統合は将来対応
+- **マルチIssue同時実行**: 並列実行機能は将来対応
+- **ロールバック機能**: フェーズ失敗時のロールバックは将来対応
+- **通知機能**: Slack等への通知は将来対応
 
----
-
-## 8. データ構造定義
-
-### 8.1 metadata.json スキーマ（MVP v1.0.0）
-
-```json
-{
-  "issue_number": "304",
-  "issue_url": "https://github.com/tielec/infrastructure-as-code/issues/304",
-  "issue_title": "Issue #304",
-  "workflow_version": "1.0.0",
-  "current_phase": "requirements",
-  "design_decisions": {
-    "implementation_strategy": null,
-    "test_strategy": null,
-    "test_code_strategy": null
-  },
-  "cost_tracking": {
-    "total_input_tokens": 0,
-    "total_output_tokens": 0,
-    "total_cost_usd": 0.0
-  },
-  "phases": {
-    "requirements": {
-      "status": "pending",
-      "retry_count": 0,
-      "started_at": null,
-      "completed_at": null,
-      "review_result": null
-    },
-    "design": {
-      "status": "pending",
-      "retry_count": 0,
-      "started_at": null,
-      "completed_at": null,
-      "review_result": null
-    },
-    "test_scenario": {
-      "status": "pending",
-      "retry_count": 0,
-      "started_at": null,
-      "completed_at": null,
-      "review_result": null
-    },
-    "implementation": {
-      "status": "pending",
-      "retry_count": 0,
-      "started_at": null,
-      "completed_at": null,
-      "review_result": null
-    },
-    "testing": {
-      "status": "pending",
-      "retry_count": 0,
-      "started_at": null,
-      "completed_at": null,
-      "review_result": null
-    },
-    "documentation": {
-      "status": "pending",
-      "retry_count": 0,
-      "started_at": null,
-      "completed_at": null,
-      "review_result": null
-    }
-  },
-  "created_at": "2025-10-08T01:07:54.281813Z",
-  "updated_at": "2025-10-08T01:07:54.281813Z"
-}
-```
-
-### 8.2 フィールド定義
-
-| フィールド | 型 | 必須 | 説明 |
-|-----------|-----|-----|------|
-| issue_number | String | ✓ | GitHub Issue番号 |
-| issue_url | String | ✓ | GitHub Issue URL |
-| issue_title | String | ✓ | Issue タイトル |
-| workflow_version | String | ✓ | ワークフローバージョン（"1.0.0"） |
-| current_phase | String | ✓ | 現在のフェーズ（requirements～documentation） |
-| design_decisions | Object | ✓ | Phase 2での設計判断（将来実装） |
-| cost_tracking | Object | ✓ | API利用コスト追跡 |
-| phases | Object | ✓ | 6フェーズの状態管理 |
-| phases.{phase}.status | Enum | ✓ | pending, in_progress, completed, failed |
-| phases.{phase}.retry_count | Integer | ✓ | リトライ回数（0-3） |
-| phases.{phase}.started_at | String | - | 開始時刻（ISO 8601） |
-| phases.{phase}.completed_at | String | - | 完了時刻（ISO 8601） |
-| phases.{phase}.review_result | String | - | PASS, PASS_WITH_SUGGESTIONS, FAIL（将来実装） |
-| created_at | String | ✓ | 作成時刻（ISO 8601） |
-| updated_at | String | ✓ | 更新時刻（ISO 8601） |
+### 7.2 将来的な拡張候補
+- 複数AIエージェントの並列実行
+- レビューフィードバックの自動反映
+- カスタムフェーズの追加
+- ダッシュボードUI
+- メトリクス収集と分析
 
 ---
 
-## 9. 成功基準
+## 8. 品質ゲート
 
-### 9.1 機能面
+この要件定義書は以下の品質ゲートを満たしている：
 
-- [x] GitHub Issue URLからワークフロー初期化が可能（v1.0.0で実装済み）
-- [x] metadata.jsonが正しく生成され、6フェーズが定義される（v1.0.0で実装済み）
-- [x] CLIコマンド（init）が動作する（v1.0.0で実装済み）
-- [x] BDDテストが成功する（v1.0.0で実装済み）
-- [x] Jenkins Job DSLとJenkinsfileが定義される（v1.0.0で実装済み）
-- [x] Docker環境で実行可能（v1.1.0で実装済み）
-- [x] Phase 1（要件定義）が実行可能（v1.1.0で実装済み）
-- [ ] Phase 2-6の実装（将来対応）
-- [ ] PR自動作成機能（将来対応）
-
-### 9.2 品質面
-
-- [x] Pythonコードがクリーンで可読性が高い
-- [x] エラーハンドリングが適切に実装されている
-- [x] ドキュメント（README.md、ARCHITECTURE.md）が充実している
-- [x] BDDテストでワークフロー動作が検証できる
-- [ ] ユニットテストが実装される（将来対応）
-
-### 9.3 運用面
-
-- [x] Dockerイメージが正常にビルドできる
-- [x] 環境変数による認証設定が可能
-- [x] ローカル環境でのデバッグが容易
-- [x] Jenkinsからの実行が可能（Job DSL定義済み）
-- [ ] エラー時の適切な通知（将来対応）
+- ✅ **機能要件が明確に記載されている**: FR-001 ~ FR-006 として6つの機能要件を定義
+- ✅ **受け入れ基準が定義されている**: Given-When-Then 形式で各機能の受け入れ基準を記載
+- ✅ **スコープが明確である**: MVP v1.0.0 の範囲と将来対応を明確に区分
+- ✅ **論理的な矛盾がない**: 機能要件、非機能要件、制約事項が整合している
 
 ---
 
-## 10. リスク管理
+## 9. 補足情報
 
-| リスク | 影響度 | 発生確率 | 対策 | 担当 |
-|--------|--------|---------|------|------|
-| Claude API認証エラー | 高 | 中 | OAuth Token取得手順をDOCKER_AUTH_SETUP.mdに明記 | 開発者 |
-| Docker環境での権限エラー | 中 | 中 | ボリュームマウントパスの検証、troubleshooting追加 | 開発者 |
-| metadata.json破損 | 高 | 低 | バックアップ機能、バリデーション強化 | 将来対応 |
-| GitHub Token期限切れ | 中 | 低 | エラーメッセージで明確に通知 | 開発者 |
-| BDDテストの不安定性 | 低 | 低 | テストシナリオの冪等性確保 | 開発者 |
+### 9.1 用語定義
+- **MVP (Minimum Viable Product)**: 最小限の機能で価値を提供できる製品
+- **BDD (Behavior Driven Development)**: 振る舞い駆動開発、Given-When-Then形式で要件を記述
+- **Job DSL**: Jenkinsジョブ定義をGroovyコードで記述する仕組み
+- **Metadata**: ワークフローの状態や進行情報を保存するデータ
 
----
-
-## 11. 参考資料
-
-| ドキュメント | パス | 用途 |
-|------------|------|------|
-| プロジェクト全体ガイド | `/CLAUDE.md` | 開発方針、コーディング規約 |
-| スクリプト開発ガイド | `/scripts/CONTRIBUTION.md` | Python開発ベストプラクティス |
-| Jenkins開発ガイド | `/jenkins/CONTRIBUTION.md` | Job DSL、Jenkinsfile作成方法 |
-| AI Workflow README | `/scripts/ai-workflow/README.md` | 使用方法、トラブルシューティング |
-| AI Workflow Architecture | `/scripts/ai-workflow/ARCHITECTURE.md` | アーキテクチャ設計思想 |
-| 要件定義書（参考） | `/ai-workflow-requirements.md` | 全体要件定義 |
-| 設計書（参考） | `/ai-workflow-design.md` | 詳細設計 |
+### 9.2 参考ドキュメント
+- [CLAUDE.md](/workspace/CLAUDE.md) - プロジェクトガイドライン
+- [ARCHITECTURE.md](/workspace/ARCHITECTURE.md) - Platform Engineering設計思想
+- [CONTRIBUTION.md](/workspace/CONTRIBUTION.md) - 開発ガイドライン
+- [scripts/ai-workflow/README.md](/workspace/scripts/ai-workflow/README.md) - AI Workflow詳細仕様
 
 ---
 
-## 12. 用語集
-
-| 用語 | 定義 |
-|------|------|
-| MVP | Minimum Viable Product（最小実用製品） |
-| Agent SDK | Claude Code Agent SDK（AI実行基盤） |
-| BDD | Behavior-Driven Development（振る舞い駆動開発） |
-| Gherkin | BDDシナリオ記述言語（Given-When-Then形式） |
-| metadata.json | ワークフロー状態を管理するJSONファイル |
-| フェーズ | ワークフローの1ステップ（requirements, design等） |
-| Job DSL | JenkinsでJobを定義するGroovyスクリプト |
-| Jenkinsfile | Jenkinsパイプラインを定義するGroovyスクリプト |
-| OAuth Token | Claude API認証トークン（`CLAUDE_CODE_OAUTH_TOKEN`） |
-| PAT | Personal Access Token（GitHub認証トークン） |
-
----
-
-## 13. 変更履歴
-
-| バージョン | 日付 | 変更内容 | 作成者 |
-|-----------|------|---------|--------|
-| 1.0.0 | 2025-10-08 | 初版作成（Issue #304ベース、MVP v1.0.0スコープ） | Claude Code |
-
----
-
-**承認**:
-- [ ] 開発者レビュー
-- [ ] ステークホルダー承認
-
-**次フェーズ**: Phase 2（詳細設計）へ移行
-
----
-
-**文書バージョン**: 1.0.0
-**最終更新**: 2025-10-08
-**ステータス**: レビュー待ち
+**End of Document**

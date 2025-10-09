@@ -164,7 +164,7 @@ Scenario: 新規ユーザーが正常に登録できる
 
 ## 出力形式
 
-テストシナリオを `.ai-workflow/issue-{issue_number}/test-scenario.md` として保存してください。
+テストシナリオを `.ai-workflow/issue-{issue_number}/03_test_scenario/output/test-scenario.md` として保存してください。
 
 Markdown形式で、見出しを適切に使用し、可読性の高いドキュメントを作成してください。
 
