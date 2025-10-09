@@ -1,0 +1,313 @@
+# AI駆動開発自動化ワークフロー
+
+Claude Agent SDKを使った6フェーズの自動開発ワークフロー
+
+## 概要
+
+このツールは、GitHubのIssueから要件定義、設計、テスト、実装、ドキュメント作成までを自動化します。
+
+### 主な特徴
+
+- **Claude Pro Max活用**: Claude Code headless modeで自律的にタスクを実行
+- **6フェーズワークフロー**: 要件定義 → 設計 → テストシナリオ → 実装 → テスト → ドキュメント
+- **クリティカルシンキングレビュー**: 各フェーズで品質チェック
+- **GitHub統合**: Issue情報の取得、進捗報告、レビュー結果の投稿
+- **Docker対応**: Linux環境で安定動作
+
+## システム要件
+
+### 必須
+- Docker Desktop
+- Claude Pro/Max契約
+- GitHub Personal Access Token
+
+### 推奨
+- Git 2.0+
+- Python 3.11+ (ローカル開発時)
+- Node.js 20+ (ローカル開発時)
+
+## クイックスタート
+
+### 1. 環境変数の設定
+
+```bash
+# Claude Code OAuth Token（~/.claude/.credentials.jsonから抽出）
+export CLAUDE_CODE_OAUTH_TOKEN="sk-ant-oat01-..."
+
+# GitHub Personal Access Token
+export GITHUB_TOKEN="ghp_..."
+
+# GitHubリポジトリ名
+export GITHUB_REPOSITORY="tielec/infrastructure-as-code"
+```
+
+**OAuth Token取得方法**: [DOCKER_AUTH_SETUP.md](DOCKER_AUTH_SETUP.md) を参照
+
+**GitHub Token作成方法**:
+1. GitHub Settings → Developer settings → Personal access tokens → Tokens (classic)
+2. Generate new token (classic)
+3. Scopes: `repo` (Full control of private repositories)
+4. トークンをコピーして`GITHUB_TOKEN`に設定
+
+### 2. ワークフロー初期化
+
+```bash
+# リポジトリルートに移動
+cd C:\Users\ytaka\TIELEC\development\infrastructure-as-code
+
+# Issue URLを指定してワークフロー初期化
+docker run --rm \
+  -v "$(pwd):/workspace" \
+  -w /workspace/scripts/ai-workflow \
+  ai-workflow:v1.1.0 \
+  python main.py init --issue-url https://github.com/tielec/infrastructure-as-code/issues/304
+```
+
+### 3. Phase 1（要件定義）実行
+
+```bash
+# Phase 1を実行
+docker run --rm \
+  -e CLAUDE_CODE_OAUTH_TOKEN="${CLAUDE_CODE_OAUTH_TOKEN}" \
+  -e GITHUB_TOKEN="${GITHUB_TOKEN}" \
+  -e GITHUB_REPOSITORY="${GITHUB_REPOSITORY}" \
+  -v "$(pwd):/workspace" \
+  -w /workspace/scripts/ai-workflow \
+  ai-workflow:v1.1.0 \
+  python main.py execute --phase requirements --issue 304
+```
+
+### 4. 結果確認
+
+- **要件定義書**: `.ai-workflow/issue-304/requirements.md`
+- **GitHub Issue**: レビュー結果とフィードバックがコメント投稿される
+- **メタデータ**: `.ai-workflow/issue-304/metadata.json`
+
+## 開発ステータス
+
+### ✅ 完了（v1.0.0 MVP）
+- [x] ワークフロー初期化（metadata.json）
+- [x] フェーズステータス管理（Enum: pending/in_progress/completed/failed）
+- [x] BDDテスト（behave）
+- [x] Jenkins統合（Job DSL + Jenkinsfile）
+- [x] Git workflow（feature branch）
+
+### ✅ 完了（v1.1.0 Phase 1実装）
+- [x] Claude Agent SDK統合（Docker環境）
+- [x] OAuth認証（CLAUDE_CODE_OAUTH_TOKEN）
+- [x] GitHub API統合（PyGithub）
+- [x] Phase基底クラス（BasePhase）
+- [x] プロンプト管理（prompts/requirements/）
+- [x] Phase 1: 要件定義フェーズ（requirements.py）
+
+### 🚧 開発中（v1.2.0以降）
+- [ ] レビューエンジン（reviewers/critical_thinking.py）
+- [ ] Phase 2: 設計フェーズ（phases/design.py）
+- [ ] Phase 3: テストシナリオフェーズ（phases/test_scenario.py）
+- [ ] Phase 4: 実装フェーズ（phases/implementation.py）
+- [ ] Phase 5: テストフェーズ（phases/testing.py）
+- [ ] Phase 6: ドキュメントフェーズ（phases/documentation.py）
+
+## アーキテクチャ
+
+```
+scripts/ai-workflow/
+├── main.py                      # CLIエントリーポイント
+├── core/
+│   ├── workflow_state.py        # ワークフロー状態管理
+│   ├── metadata_manager.py      # メタデータ管理
+│   ├── claude_agent_client.py   # Claude Agent SDK統合
+│   └── github_client.py         # GitHub API統合
+├── phases/
+│   ├── base_phase.py            # Phase基底クラス
+│   ├── requirements.py          # Phase 1: 要件定義
+│   ├── design.py                # Phase 2: 設計（未実装）
+│   ├── test_scenario.py         # Phase 3: テストシナリオ（未実装）
+│   ├── implementation.py        # Phase 4: 実装（未実装）
+│   ├── testing.py               # Phase 5: テスト（未実装）
+│   └── documentation.py         # Phase 6: ドキュメント（未実装）
+├── prompts/
+│   ├── requirements/
+│   │   ├── execute.txt          # 要件定義実行プロンプト
+│   │   └── review.txt           # 要件定義レビュープロンプト
+│   └── ...                      # 他のフェーズのプロンプト（未実装）
+├── reviewers/
+│   └── critical_thinking.py     # クリティカルシンキングレビュー（未実装）
+├── tests/
+│   ├── features/                # BDDテスト
+│   └── unit/                    # ユニットテスト
+├── Dockerfile                   # Docker環境定義
+├── requirements.txt             # Python依存パッケージ
+└── README.md                    # このファイル
+```
+
+## CLIコマンド
+
+### `init` - ワークフロー初期化
+
+```bash
+python main.py init --issue-url <GitHub Issue URL>
+```
+
+**例:**
+```bash
+python main.py init --issue-url https://github.com/tielec/infrastructure-as-code/issues/304
+```
+
+### `execute` - フェーズ実行
+
+```bash
+python main.py execute --phase <phase_name> --issue <issue_number>
+```
+
+**フェーズ名:**
+- `requirements`: 要件定義
+- `design`: 設計（未実装）
+- `test_scenario`: テストシナリオ（未実装）
+- `implementation`: 実装（未実装）
+- `testing`: テスト（未実装）
+- `documentation`: ドキュメント（未実装）
+
+**例:**
+```bash
+python main.py execute --phase requirements --issue 304
+```
+
+## Docker環境
+
+### イメージビルド
+
+```bash
+cd scripts/ai-workflow
+docker build -t ai-workflow:v1.1.0 .
+```
+
+### 動作確認
+
+```bash
+# Claude Agent SDK動作確認
+docker run --rm \
+  -e CLAUDE_CODE_OAUTH_TOKEN="${CLAUDE_CODE_OAUTH_TOKEN}" \
+  ai-workflow:v1.1.0 \
+  python test_docker.py
+```
+
+### Phase 1テスト
+
+```bash
+# Phase 1動作テスト（Issue #304を使用）
+docker run --rm \
+  -e CLAUDE_CODE_OAUTH_TOKEN="${CLAUDE_CODE_OAUTH_TOKEN}" \
+  -e GITHUB_TOKEN="${GITHUB_TOKEN}" \
+  -e GITHUB_REPOSITORY="${GITHUB_REPOSITORY}" \
+  -v "$(pwd)/../..:/workspace" \
+  -w /workspace/scripts/ai-workflow \
+  ai-workflow:v1.1.0 \
+  python test_phase1.py
+```
+
+## トラブルシューティング
+
+### Q1: OAuth認証エラー
+
+**エラー:**
+```
+ERROR: Invalid API key · Please run /login
+```
+
+**対策:**
+1. OAuth Tokenが正しく設定されているか確認:
+   ```bash
+   echo $CLAUDE_CODE_OAUTH_TOKEN
+   ```
+2. トークンの有効期限を確認（期限切れの場合は再ログイン）:
+   ```bash
+   claude login
+   ```
+3. [DOCKER_AUTH_SETUP.md](DOCKER_AUTH_SETUP.md) を参照
+
+### Q2: GitHub API認証エラー
+
+**エラー:**
+```
+ERROR: GITHUB_TOKEN and GITHUB_REPOSITORY environment variables are required.
+```
+
+**対策:**
+1. 環境変数が設定されているか確認:
+   ```bash
+   echo $GITHUB_TOKEN
+   echo $GITHUB_REPOSITORY
+   ```
+2. GitHub Personal Access Tokenの権限を確認（`repo` scope必須）
+
+### Q3: Dockerマウントエラー
+
+**エラー:**
+```
+Error: Workflow metadata not found
+```
+
+**対策:**
+1. ボリュームマウントが正しいか確認:
+   ```bash
+   docker run --rm -v "$(pwd):/workspace" ...
+   ```
+2. `.ai-workflow`ディレクトリが存在するか確認:
+   ```bash
+   ls .ai-workflow/issue-304/
+   ```
+
+## ローカル開発環境（オプション）
+
+### セットアップ
+
+```bash
+# Python仮想環境作成
+python -m venv venv
+source venv/bin/activate  # Windows: venv\Scripts\activate
+
+# 依存パッケージインストール
+pip install -r requirements.txt
+pip install -r requirements-test.txt
+
+# Claude Code CLIインストール
+npm install -g @anthropic-ai/claude-code
+
+# Claude Codeログイン
+claude login
+```
+
+### テスト実行
+
+```bash
+# BDDテスト
+behave tests/features/
+
+# ユニットテスト
+pytest tests/unit/
+```
+
+### 新しいフェーズの追加
+
+1. `phases/`に新しいPhaseクラスを作成（`BasePhase`を継承）
+2. `prompts/{phase_name}/`にプロンプトファイルを作成
+   - `execute.txt`: フェーズ実行プロンプト
+   - `review.txt`: レビュープロンプト
+3. `main.py`の`execute`コマンドに新しいフェーズを追加
+4. BDDテストを追加
+
+## 関連ドキュメント
+
+- [DOCKER_AUTH_SETUP.md](DOCKER_AUTH_SETUP.md) - Docker環境でのOAuth認証設定
+- [ROADMAP.md](ROADMAP.md) - 開発ロードマップ
+- [../../CLAUDE.md](../../CLAUDE.md) - プロジェクト全体のガイド
+
+## ライセンス
+
+このプロジェクトは infrastructure-as-code リポジトリの一部です。
+
+---
+
+**バージョン**: 1.1.0
+**最終更新**: 2025-10-08
