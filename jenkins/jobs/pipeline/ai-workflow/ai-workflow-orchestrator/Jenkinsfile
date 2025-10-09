@@ -107,11 +107,6 @@ pipeline {
                         echo "HOME directory: \$HOME"
 
                         echo ""
-                        echo "Creating Claude CLI config directory..."
-                        mkdir -p \${HOME}/.claude/debug
-                        chmod -R 777 \${HOME}/.claude
-
-                        echo ""
                         echo "Claude Code CLI version:"
                         claude --version
                     """
