@@ -5,6 +5,7 @@
  *
  * パラメータ（Job DSLで定義）:
  * - ISSUE_URL: GitHub Issue URL（必須）
+ * - START_PHASE: 開始フェーズ（デフォルト: requirements）
  * - DRY_RUN: ドライランモード（デフォルト: false）
  * - SKIP_REVIEW: レビュースキップ（デフォルト: false）
  * - MAX_RETRIES: 最大リトライ回数（デフォルト: 3）
@@ -19,7 +20,11 @@
 
 pipeline {
     agent {
-        label 'linux'  // Pythonが実行可能なLinuxエージェント
+        dockerfile {
+            dir 'scripts/ai-workflow'
+            filename 'Dockerfile'
+            args '-v ${WORKSPACE}:/workspace -w /workspace'
+        }
     }
 
     options {
@@ -46,11 +51,11 @@ pipeline {
         PYTHONUTF8 = '1'
 
         // AI Workflow設定
-        WORKFLOW_DIR = 'scripts/ai-workflow'
+        WORKFLOW_DIR = '/workspace/scripts/ai-workflow'
         WORKFLOW_VERSION = '1.0.0'
 
         // 認証情報（Jenkinsクレデンシャルから取得）
-        CLAUDE_API_KEY = credentials('claude-api-key')
+        CLAUDE_CODE_OAUTH_TOKEN = credentials('claude-code-oauth-token')
         GITHUB_TOKEN = credentials('github-token')
 
         // Issue番号（ISSUE_URLから抽出）
@@ -80,6 +85,8 @@ pipeline {
 
                     echo "Issue URL: ${params.ISSUE_URL}"
                     echo "Issue Number: ${env.ISSUE_NUMBER}"
+                    echo "GitHub Repository: ${params.GITHUB_REPOSITORY}"
+                    echo "Start Phase: ${params.START_PHASE}"
                     echo "Dry Run: ${params.DRY_RUN}"
                     echo "Skip Review: ${params.SKIP_REVIEW}"
                     echo "Max Retries: ${params.MAX_RETRIES}"
@@ -146,6 +153,14 @@ pipeline {
         }
 
         stage('Phase 1: Requirements') {
+            when {
+                expression {
+                    def phaseOrder = ['requirements', 'design', 'test_scenario', 'implementation', 'testing', 'documentation', 'report']
+                    def startIndex = phaseOrder.indexOf(params.START_PHASE)
+                    def currentIndex = phaseOrder.indexOf('requirements')
+                    return currentIndex >= startIndex
+                }
+            }
             steps {
                 script {
                     echo "========================================="
@@ -169,6 +184,14 @@ pipeline {
         }
 
         stage('Phase 2: Design') {
+            when {
+                expression {
+                    def phaseOrder = ['requirements', 'design', 'test_scenario', 'implementation', 'testing', 'documentation', 'report']
+                    def startIndex = phaseOrder.indexOf(params.START_PHASE)
+                    def currentIndex = phaseOrder.indexOf('design')
+                    return currentIndex >= startIndex
+                }
+            }
             steps {
                 script {
                     echo "========================================="
@@ -191,6 +214,14 @@ pipeline {
         }
 
         stage('Phase 3: Test Scenario') {
+            when {
+                expression {
+                    def phaseOrder = ['requirements', 'design', 'test_scenario', 'implementation', 'testing', 'documentation', 'report']
+                    def startIndex = phaseOrder.indexOf(params.START_PHASE)
+                    def currentIndex = phaseOrder.indexOf('test_scenario')
+                    return currentIndex >= startIndex
+                }
+            }
             steps {
                 script {
                     echo "========================================="
@@ -213,6 +244,14 @@ pipeline {
         }
 
         stage('Phase 4: Implementation') {
+            when {
+                expression {
+                    def phaseOrder = ['requirements', 'design', 'test_scenario', 'implementation', 'testing', 'documentation', 'report']
+                    def startIndex = phaseOrder.indexOf(params.START_PHASE)
+                    def currentIndex = phaseOrder.indexOf('implementation')
+                    return currentIndex >= startIndex
+                }
+            }
             steps {
                 script {
                     echo "========================================="
@@ -235,6 +274,14 @@ pipeline {
         }
 
         stage('Phase 5: Testing') {
+            when {
+                expression {
+                    def phaseOrder = ['requirements', 'design', 'test_scenario', 'implementation', 'testing', 'documentation', 'report']
+                    def startIndex = phaseOrder.indexOf(params.START_PHASE)
+                    def currentIndex = phaseOrder.indexOf('testing')
+                    return currentIndex >= startIndex
+                }
+            }
             steps {
                 script {
                     echo "========================================="
@@ -257,6 +304,14 @@ pipeline {
         }
 
         stage('Phase 6: Documentation') {
+            when {
+                expression {
+                    def phaseOrder = ['requirements', 'design', 'test_scenario', 'implementation', 'testing', 'documentation', 'report']
+                    def startIndex = phaseOrder.indexOf(params.START_PHASE)
+                    def currentIndex = phaseOrder.indexOf('documentation')
+                    return currentIndex >= startIndex
+                }
+            }
             steps {
                 script {
                     echo "========================================="
@@ -279,6 +334,14 @@ pipeline {
         }
 
         stage('Phase 7: Report') {
+            when {
+                expression {
+                    def phaseOrder = ['requirements', 'design', 'test_scenario', 'implementation', 'testing', 'documentation', 'report']
+                    def startIndex = phaseOrder.indexOf(params.START_PHASE)
+                    def currentIndex = phaseOrder.indexOf('report')
+                    return currentIndex >= startIndex
+                }
+            }
             steps {
                 script {
                     echo "========================================="
