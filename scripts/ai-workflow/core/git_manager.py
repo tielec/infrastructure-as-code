@@ -332,7 +332,14 @@ class GitManager:
         issue_number: int
     ) -> List[str]:
         """
-        .ai-workflow/issue-XXX/ 配下のファイルのみフィルタリング
+        Phaseに関連するファイルのみフィルタリング
+
+        コミット対象:
+        - .ai-workflow/issue-XXX/ 配下のすべてのファイル（必須）
+        - プロジェクト本体で変更されたファイル（.ai-workflow/以外）
+
+        除外対象:
+        - .ai-workflow/issue-YYY/ 配下のファイル（他のIssue）
 
         Args:
             files: ファイルパス一覧
@@ -341,8 +348,21 @@ class GitManager:
         Returns:
             List[str]: フィルタリング後のファイル一覧
         """
-        prefix = f".ai-workflow/issue-{issue_number}/"
-        return [f for f in files if f.startswith(prefix)]
+        target_prefix = f".ai-workflow/issue-{issue_number}/"
+        result = []
+
+        for f in files:
+            # 1. 対象Issue配下のファイルは必ず含める
+            if f.startswith(target_prefix):
+                result.append(f)
+            # 2. .ai-workflowディレクトリ配下だが対象Issue以外のファイルは除外
+            elif f.startswith(".ai-workflow/"):
+                continue
+            # 3. プロジェクト本体のファイルは含める
+            else:
+                result.append(f)
+
+        return result
 
     def _ensure_git_config(self) -> None:
         """
