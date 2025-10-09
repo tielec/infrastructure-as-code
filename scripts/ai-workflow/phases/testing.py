@@ -290,6 +290,25 @@ class TestingPhase(BasePhase):
         # テキストブロックを収集
         text_blocks = []
         for message in messages:
+            # ResultMessage.resultフィールドを優先的に解析
+            if 'ResultMessage' in message and 'result="' in message:
+                result_start = message.find('result="') + 8
+                result_end = message.find('")', result_start)
+                if result_end != -1:
+                    text_content = message[result_start:result_end]
+
+                    # エスケープシーケンスを置換
+                    text_content = text_content.replace('\\n', '\n')
+                    text_content = text_content.replace('\\t', '\t')
+                    text_content = text_content.replace('\\r', '\r')
+                    text_content = text_content.replace("\\'", "'")
+                    text_content = text_content.replace('\\"', '"')
+                    text_content = text_content.replace('\\\\', '\\')
+
+                    text_blocks.append(text_content)
+                    continue
+
+            # AssistantMessage.TextBlockも解析
             if 'AssistantMessage' in message and 'TextBlock(text=' in message:
                 text_start = message.find('TextBlock(text=') + 16
                 text_end = message.find('\')', text_start)

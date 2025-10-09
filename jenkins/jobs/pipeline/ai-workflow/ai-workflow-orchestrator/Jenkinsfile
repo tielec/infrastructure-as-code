@@ -152,22 +152,18 @@ pipeline {
                     echo "Stage: Phase 1 - Requirements Definition"
                     echo "========================================="
 
-                    // MVP v1.0.0では未実装
-                    echo "[未実装] Phase 1の自動実行は今後の拡張で実装予定"
-                    echo "ロードマップ: scripts/ai-workflow/ROADMAP.md 参照"
-
-                    // 将来の実装イメージ:
-                    // dir(env.WORKFLOW_DIR) {
-                    //     sh """
-                    //         ${env.PYTHON_PATH} main.py execute --phase requirements --issue ${env.ISSUE_NUMBER}
-                    //     """
-                    //
-                    //     if (!params.SKIP_REVIEW) {
-                    //         sh """
-                    //             ${env.PYTHON_PATH} main.py review --phase requirements --issue ${env.ISSUE_NUMBER}
-                    //         """
-                    //     }
-                    // }
+                    dir(env.WORKFLOW_DIR) {
+                        if (params.DRY_RUN) {
+                            echo "[DRY RUN] Phase 1実行をスキップ"
+                        } else {
+                            // Phase実行（execute + review統合）
+                            sh """
+                                ${env.PYTHON_PATH} main.py run \
+                                    --phase requirements \
+                                    --issue ${env.ISSUE_NUMBER}
+                            """
+                        }
+                    }
                 }
             }
         }
@@ -179,7 +175,17 @@ pipeline {
                     echo "Stage: Phase 2 - Detailed Design"
                     echo "========================================="
 
-                    echo "[未実装] Phase 2の自動実行は今後の拡張で実装予定"
+                    dir(env.WORKFLOW_DIR) {
+                        if (params.DRY_RUN) {
+                            echo "[DRY RUN] Phase 2実行をスキップ"
+                        } else {
+                            sh """
+                                ${env.PYTHON_PATH} main.py run \
+                                    --phase design \
+                                    --issue ${env.ISSUE_NUMBER}
+                            """
+                        }
+                    }
                 }
             }
         }
@@ -191,7 +197,17 @@ pipeline {
                     echo "Stage: Phase 3 - Test Scenario"
                     echo "========================================="
 
-                    echo "[未実装] Phase 3の自動実行は今後の拡張で実装予定"
+                    dir(env.WORKFLOW_DIR) {
+                        if (params.DRY_RUN) {
+                            echo "[DRY RUN] Phase 3実行をスキップ"
+                        } else {
+                            sh """
+                                ${env.PYTHON_PATH} main.py run \
+                                    --phase test_scenario \
+                                    --issue ${env.ISSUE_NUMBER}
+                            """
+                        }
+                    }
                 }
             }
         }
@@ -203,7 +219,17 @@ pipeline {
                     echo "Stage: Phase 4 - Implementation"
                     echo "========================================="
 
-                    echo "[未実装] Phase 4の自動実行は今後の拡張で実装予定"
+                    dir(env.WORKFLOW_DIR) {
+                        if (params.DRY_RUN) {
+                            echo "[DRY RUN] Phase 4実行をスキップ"
+                        } else {
+                            sh """
+                                ${env.PYTHON_PATH} main.py run \
+                                    --phase implementation \
+                                    --issue ${env.ISSUE_NUMBER}
+                            """
+                        }
+                    }
                 }
             }
         }
@@ -215,7 +241,17 @@ pipeline {
                     echo "Stage: Phase 5 - Testing"
                     echo "========================================="
 
-                    echo "[未実装] Phase 5の自動実行は今後の拡張で実装予定"
+                    dir(env.WORKFLOW_DIR) {
+                        if (params.DRY_RUN) {
+                            echo "[DRY RUN] Phase 5実行をスキップ"
+                        } else {
+                            sh """
+                                ${env.PYTHON_PATH} main.py run \
+                                    --phase testing \
+                                    --issue ${env.ISSUE_NUMBER}
+                            """
+                        }
+                    }
                 }
             }
         }
@@ -227,7 +263,39 @@ pipeline {
                     echo "Stage: Phase 6 - Documentation"
                     echo "========================================="
 
-                    echo "[未実装] Phase 6の自動実行は今後の拡張で実装予定"
+                    dir(env.WORKFLOW_DIR) {
+                        if (params.DRY_RUN) {
+                            echo "[DRY RUN] Phase 6実行をスキップ"
+                        } else {
+                            sh """
+                                ${env.PYTHON_PATH} main.py run \
+                                    --phase documentation \
+                                    --issue ${env.ISSUE_NUMBER}
+                            """
+                        }
+                    }
+                }
+            }
+        }
+
+        stage('Phase 7: Report') {
+            steps {
+                script {
+                    echo "========================================="
+                    echo "Stage: Phase 7 - Report Generation"
+                    echo "========================================="
+
+                    dir(env.WORKFLOW_DIR) {
+                        if (params.DRY_RUN) {
+                            echo "[DRY RUN] Phase 7実行をスキップ"
+                        } else {
+                            sh """
+                                ${env.PYTHON_PATH} main.py run \
+                                    --phase report \
+                                    --issue ${env.ISSUE_NUMBER}
+                            """
+                        }
+                    }
                 }
             }
         }
