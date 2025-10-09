@@ -21,8 +21,8 @@ RUN apt-get update && apt-get install -y \
 # Claude Code CLIのインストール
 RUN npm install -g @anthropic-ai/claude-code
 
-# Claude設定ディレクトリを作成（debugサブディレクトリも含む）
-RUN mkdir -p ${HOME}/.claude && chmod -R 777 ${HOME}/.claude
+# Claude設定ディレクトリを誰でもアクセス可能に（rootと非rootユーザー両対応）
+RUN mkdir -p /root/.claude && chmod -R 777 /root/.claude
 
 # Git safe.directory設定（Jenkinsワークスペースのリポジトリアクセスを許可）
 RUN git config --global --add safe.directory '*'
