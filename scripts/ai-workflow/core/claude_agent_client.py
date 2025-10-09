@@ -67,6 +67,9 @@ class ClaudeAgentClient:
                             print(f"[AGENT THINKING] {text}")
                     # ToolUseBlockを抽出して表示（詳細情報含む）
                     elif 'ToolUseBlock' in message_str:
+                        # メッセージ全体を表示（デバッグ用）
+                        print(f"[AGENT ACTION DEBUG] Full message: {message_str[:500]}")
+
                         if 'name=' in message_str:
                             # ツール名を抽出
                             name_start = message_str.find('name=') + 6
@@ -86,6 +89,8 @@ class ClaudeAgentClient:
                             print(f"[AGENT ACTION] Using tool: {tool_name}")
                             if params_info:
                                 print(f"[AGENT ACTION] Parameters: {params_info}")
+                            else:
+                                print(f"[AGENT ACTION DEBUG] No parameters found (input= exists: {'input=' in message_str})")
 
         return messages
 
