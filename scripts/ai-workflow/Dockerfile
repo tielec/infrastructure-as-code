@@ -24,6 +24,9 @@ RUN npm install -g @anthropic-ai/claude-code
 # Claude設定ディレクトリを作成（debugサブディレクトリも含む）
 RUN mkdir -p ${HOME}/.claude && chmod -R 777 ${HOME}/.claude
 
+# Git safe.directory設定（Jenkinsワークスペースのリポジトリアクセスを許可）
+RUN git config --global --add safe.directory '*'
+
 # 作業ディレクトリにコピー
 COPY requirements.txt ./
 
