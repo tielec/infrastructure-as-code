@@ -103,6 +103,11 @@ pipeline {
                         python -m pip --version
 
                         echo ""
+                        echo "Creating Claude CLI config directory..."
+                        mkdir -p /root/.claude/debug
+                        chmod -R 777 /root/.claude
+
+                        echo ""
                         echo "Claude Code CLI version:"
                         claude --version
                     """
