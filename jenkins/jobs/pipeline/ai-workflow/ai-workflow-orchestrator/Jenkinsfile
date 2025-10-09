@@ -47,9 +47,6 @@ pipeline {
         // 認証情報（Jenkinsクレデンシャルから取得）
         CLAUDE_CODE_OAUTH_TOKEN = credentials('claude-code-oauth-token')
         GITHUB_TOKEN = credentials('github-token')
-
-        // Issue番号（ISSUE_URLから抽出）
-        ISSUE_NUMBER = ''
     }
 
     stages {
@@ -123,7 +120,8 @@ pipeline {
 
                     dir(env.WORKFLOW_DIR) {
                         // metadata.jsonの存在確認
-                        def metadataExists = fileExists(".ai-workflow/issue-${env.ISSUE_NUMBER}/metadata.json")
+                        def metadataFilepath = "${WORKSPACE}/.ai-workflow/issue-${env.ISSUE_NUMBER}/metadata.json"
+                        def metadataExists = fileExists(metadataFilepath)
 
                         if (metadataExists) {
                             echo "[INFO] Workflow already initialized for issue ${env.ISSUE_NUMBER}"
