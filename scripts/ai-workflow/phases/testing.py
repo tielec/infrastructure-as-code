@@ -83,19 +83,14 @@ class TestingPhase(BasePhase):
             )
 
             # test-result.mdのパスを取得
-            generated_file = self.metadata.workflow_dir / 'test-result.md'
+            output_file = self.output_dir / 'test-result.md'
 
-            if not generated_file.exists():
+            if not output_file.exists():
                 return {
                     'success': False,
                     'output': None,
-                    'error': f'test-result.mdが生成されませんでした。'
+                    'error': f'test-result.mdが生成されませんでした: {output_file}'
                 }
-
-            # output/ディレクトリに移動
-            output_file = self.output_dir / 'test-result.md'
-            generated_file.rename(output_file)
-            print(f"[INFO] 成果物を移動: {generated_file} -> {output_file}")
 
             # ステータス更新: 完了
             self.metadata.update_phase_status('testing', 'completed', str(output_file))
@@ -258,13 +253,7 @@ class TestingPhase(BasePhase):
             )
 
             # test-result.mdのパスを取得
-            generated_file = self.metadata.workflow_dir / 'test-result.md'
             output_file = self.output_dir / 'test-result.md'
-
-            # 新しいファイルが生成された場合は移動
-            if generated_file.exists() and generated_file != output_file:
-                generated_file.replace(output_file)
-                print(f"[INFO] 修正した成果物を移動: {generated_file} -> {output_file}")
 
             if not output_file.exists():
                 return {

@@ -59,20 +59,15 @@ class RequirementsPhase(BasePhase):
                 log_prefix='execute'
             )
 
-            # requirements.mdのパスを取得（エージェントが生成した場所）
-            generated_file = self.metadata.workflow_dir / 'requirements.md'
+            # requirements.mdのパスを取得
+            output_file = self.output_dir / 'requirements.md'
 
-            if not generated_file.exists():
+            if not output_file.exists():
                 return {
                     'success': False,
                     'output': None,
-                    'error': f'requirements.mdが生成されませんでした。'
+                    'error': f'requirements.mdが生成されませんでした: {output_file}'
                 }
-
-            # output/ディレクトリに移動
-            output_file = self.output_dir / 'requirements.md'
-            generated_file.rename(output_file)
-            print(f"[INFO] 成果物を移動: {generated_file} -> {output_file}")
 
             return {
                 'success': True,
@@ -227,15 +222,8 @@ class RequirementsPhase(BasePhase):
                 log_prefix='revise'
             )
 
-            # requirements.mdのパスを取得（エージェントが更新した場所）
-            # revise処理では、元のファイルを直接更新するか、新しい場所に生成する可能性がある
-            generated_file = self.metadata.workflow_dir / 'requirements.md'
+            # requirements.mdのパスを取得
             output_file = self.output_dir / 'requirements.md'
-
-            # 新しいファイルが生成された場合は移動
-            if generated_file.exists() and generated_file != output_file:
-                generated_file.replace(output_file)
-                print(f"[INFO] 修正した成果物を移動: {generated_file} -> {output_file}")
 
             if not output_file.exists():
                 return {

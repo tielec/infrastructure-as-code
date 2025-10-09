@@ -78,20 +78,15 @@ class DesignPhase(BasePhase):
                 log_prefix='execute'
             )
 
-            # design.mdのパスを取得（エージェントが生成した場所）
-            generated_file = self.metadata.workflow_dir / 'design.md'
+            # design.mdのパスを取得
+            output_file = self.output_dir / 'design.md'
 
-            if not generated_file.exists():
+            if not output_file.exists():
                 return {
                     'success': False,
                     'output': None,
-                    'error': f'design.mdが生成されませんでした。'
+                    'error': f'design.mdが生成されませんでした: {output_file}'
                 }
-
-            # output/ディレクトリに移動
-            output_file = self.output_dir / 'design.md'
-            generated_file.rename(output_file)
-            print(f"[INFO] 成果物を移動: {generated_file} -> {output_file}")
 
             # 戦略判断を抽出してmetadata.jsonに保存
             design_content = output_file.read_text(encoding='utf-8')
@@ -268,14 +263,8 @@ class DesignPhase(BasePhase):
                 log_prefix='revise'
             )
 
-            # design.mdのパスを取得（エージェントが更新した場所）
-            generated_file = self.metadata.workflow_dir / 'design.md'
+            # design.mdのパスを取得
             output_file = self.output_dir / 'design.md'
-
-            # 新しいファイルが生成された場合は移動
-            if generated_file.exists() and generated_file != output_file:
-                generated_file.replace(output_file)
-                print(f"[INFO] 修正した成果物を移動: {generated_file} -> {output_file}")
 
             if not output_file.exists():
                 return {
