@@ -4,11 +4,11 @@
 # Python 3.11ベースイメージを使用
 FROM python:3.11-slim-bullseye
 
-# HOMEディレクトリ設定（Claude CLI用）
-ENV HOME=/root
-
 # 作業ディレクトリ
 WORKDIR /workspace
+
+# Claude CLI設定ディレクトリ（非rootユーザー対応のため/tmpを使用）
+ENV CLAUDE_CONFIG_DIR=/tmp/.claude
 
 # システムパッケージとNode.jsのインストール
 RUN apt-get update && apt-get install -y \
@@ -21,8 +21,8 @@ RUN apt-get update && apt-get install -y \
 # Claude Code CLIのインストール
 RUN npm install -g @anthropic-ai/claude-code
 
-# Claude設定ディレクトリを誰でもアクセス可能に（rootと非rootユーザー両対応）
-RUN mkdir -p /root/.claude/debug && chmod -R 777 /root/.claude
+# Claude設定ディレクトリを誰でもアクセス可能に（非rootユーザー対応）
+RUN mkdir -p /tmp/.claude && chmod -R 777 /tmp/.claude
 
 # Git設定（Jenkinsワークスペースのリポジトリアクセスを許可 & コミットユーザー設定）
 RUN git config --global --add safe.directory '*' && \
