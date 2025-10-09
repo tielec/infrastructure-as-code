@@ -90,6 +90,22 @@ pipeline {
                     echo "Stage: Setup Environment"
                     echo "========================================="
 
+                    // Git checkout: Detached HEADを回避するため、ブランチに明示的にcheckout
+                    sh """
+                        git config --global user.name "AI Workflow Bot"
+                        git config --global user.email "ai-workflow@tielec.local"
+
+                        # 現在のブランチを確認
+                        BRANCH_NAME=\$(git rev-parse --abbrev-ref HEAD)
+                        echo "Current branch: \$BRANCH_NAME"
+
+                        # Detached HEADの場合、feature/ai-workflow-mvpにcheckout
+                        if [ "\$BRANCH_NAME" = "HEAD" ]; then
+                            echo "Detached HEAD detected. Checking out feature/ai-workflow-mvp..."
+                            git checkout -B feature/ai-workflow-mvp
+                        fi
+                    """
+
                     // Python環境確認（Dockerコンテナに含まれる環境を確認のみ）
                     sh """
                         echo "Python version:"
