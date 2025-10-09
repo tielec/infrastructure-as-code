@@ -4,6 +4,9 @@
 # Python 3.11ベースイメージを使用
 FROM python:3.11-slim-bullseye
 
+# HOMEディレクトリ設定（Claude CLI用）
+ENV HOME=/root
+
 # 作業ディレクトリ
 WORKDIR /workspace
 
@@ -18,6 +21,9 @@ RUN apt-get update && apt-get install -y \
 # Claude Code CLIのインストール
 RUN npm install -g @anthropic-ai/claude-code
 
+# Claude設定ディレクトリを作成
+RUN mkdir -p ${HOME}/.claude && chmod 755 ${HOME}/.claude
+
 # 作業ディレクトリにコピー
 COPY requirements.txt ./
 
@@ -26,9 +32,6 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 # アプリケーションコードをコピー
 COPY . .
-
-# Claudeコマンドが使えることを確認
-RUN claude --version
 
 # デフォルトコマンド
 CMD ["/bin/bash"]
