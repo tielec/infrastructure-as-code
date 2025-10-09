@@ -28,20 +28,11 @@ pipeline {
     }
 
     options {
-        // ビルド保持設定
-        buildDiscarder(logRotator(numToKeep: 30, daysToKeep: 90))
-
-        // タイムアウト（最大30分）
-        timeout(time: 30, unit: 'MINUTES')
-
         // タイムスタンプ表示
         timestamps()
 
         // カラー出力
         ansiColor('xterm')
-
-        // 同時実行禁止
-        disableConcurrentBuilds()
     }
 
     environment {
