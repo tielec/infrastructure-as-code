@@ -21,6 +21,7 @@
 pipeline {
     agent {
         dockerfile {
+            label 'ec2-fleet'
             dir 'scripts/ai-workflow'
             filename 'Dockerfile'
             args '-v ${WORKSPACE}:/workspace -w /workspace'
