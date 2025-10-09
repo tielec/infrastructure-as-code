@@ -5,7 +5,7 @@
  * 6フェーズワークフロー（要件定義→詳細設計→テストシナリオ→実装→テスト→ドキュメント）
  */
 
-pipelineJob('AI_Workflow/ai-workflow-orchestrator') {
+pipelineJob('AI_Workflow/ai_workflow_orchestrator') {
     description('''
 AI駆動開発自動化ワークフロー
 
