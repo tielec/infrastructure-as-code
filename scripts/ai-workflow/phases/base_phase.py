@@ -25,7 +25,8 @@ class BasePhase(ABC):
         'test_scenario': '03',
         'implementation': '04',
         'testing': '05',
-        'documentation': '06'
+        'documentation': '06',
+        'report': '07'
     }
 
     def __init__(
@@ -40,7 +41,7 @@ class BasePhase(ABC):
         初期化
 
         Args:
-            phase_name: フェーズ名（requirements, design, test_scenario, implementation, testing, documentation）
+            phase_name: フェーズ名（requirements, design, test_scenario, implementation, testing, documentation, report）
             working_dir: 作業ディレクトリ
             metadata_manager: メタデータマネージャー
             claude_client: Claude Agent SDKクライアント
@@ -236,7 +237,8 @@ class BasePhase(ABC):
                 'test_scenario': 'テストシナリオ',
                 'implementation': '実装',
                 'testing': 'テスト',
-                'documentation': 'ドキュメント'
+                'documentation': 'ドキュメント',
+                'report': 'レポート'
             }
 
             phase_jp = phase_names.get(self.phase_name, self.phase_name)
