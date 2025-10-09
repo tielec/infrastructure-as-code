@@ -214,6 +214,44 @@ class BasePhase(ABC):
         except Exception as e:
             print(f"[WARNING] GitHub投稿に失敗しました: {e}")
 
+    def post_output(
+        self,
+        output_content: str,
+        title: Optional[str] = None
+    ):
+        """
+        GitHubに成果物の内容を投稿
+
+        Args:
+            output_content: 成果物の内容（Markdown形式）
+            title: タイトル（省略可、指定しない場合はフェーズ名を使用）
+        """
+        try:
+            issue_number = int(self.metadata.data['issue_number'])
+
+            # フェーズ名の日本語マッピング
+            phase_names = {
+                'requirements': '要件定義',
+                'design': '設計',
+                'test_scenario': 'テストシナリオ',
+                'implementation': '実装',
+                'testing': 'テスト',
+                'documentation': 'ドキュメント'
+            }
+
+            phase_jp = phase_names.get(self.phase_name, self.phase_name)
+            header = title if title else f"{phase_jp}フェーズ - 成果物"
+
+            body = f"## 📄 {header}\n\n"
+            body += output_content
+            body += "\n\n---\n"
+            body += "*AI駆動開発自動化ワークフロー (Claude Agent SDK)*"
+
+            self.github.post_comment(issue_number, body)
+            print(f"[INFO] GitHub Issue #{issue_number} に成果物を投稿しました: {header}")
+        except Exception as e:
+            print(f"[WARNING] GitHub投稿に失敗しました: {e}")
+
     def execute_with_claude(
         self,
         prompt: str,
