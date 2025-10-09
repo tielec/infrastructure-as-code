@@ -22,7 +22,7 @@ RUN apt-get update && apt-get install -y \
 RUN npm install -g @anthropic-ai/claude-code
 
 # Claude設定ディレクトリを作成（debugサブディレクトリも含む）
-RUN mkdir -p ${HOME}/.claude/debug && chmod -R 755 ${HOME}/.claude
+RUN mkdir -p ${HOME}/.claude && chmod -R 777 ${HOME}/.claude
 
 # 作業ディレクトリにコピー
 COPY requirements.txt ./
