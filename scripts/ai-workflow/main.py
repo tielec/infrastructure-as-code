@@ -9,6 +9,11 @@ from core.metadata_manager import MetadataManager
 from core.claude_agent_client import ClaudeAgentClient
 from core.github_client import GitHubClient
 from phases.requirements import RequirementsPhase
+from phases.design import DesignPhase
+from phases.test_scenario import TestScenarioPhase
+from phases.implementation import ImplementationPhase
+from phases.testing import TestingPhase
+from phases.documentation import DocumentationPhase
 
 
 def _get_repo_root() -> Path:
@@ -40,7 +45,8 @@ def init(issue_url: str):
     metadata_path = workflow_dir / 'metadata.json'
 
     if metadata_path.exists():
-        click.echo(f'Error: Workflow already exists: {workflow_dir}')
+        click.echo(f'[ERROR] Workflow already exists for issue {issue_number}')
+        click.echo(f'[INFO] Metadata file: {metadata_path}')
         sys.exit(1)
 
     # WorkflowState初期化
@@ -86,18 +92,31 @@ def execute(phase: str, issue: str):
     claude_client = ClaudeAgentClient(working_dir=repo_root)
     github_client = GitHubClient(token=github_token, repository=github_repository)
 
+    # フェーズインスタンス生成
+    phase_classes = {
+        'requirements': RequirementsPhase,
+        'design': DesignPhase,
+        'test_scenario': TestScenarioPhase,
+        'implementation': ImplementationPhase,
+        'testing': TestingPhase,
+        'documentation': DocumentationPhase
+    }
+
+    phase_class = phase_classes.get(phase)
+    if not phase_class:
+        click.echo(f'Error: Unknown phase: {phase}')
+        sys.exit(1)
+
     # フェーズ実行
     try:
-        if phase == 'requirements':
-            phase_instance = RequirementsPhase(
-                working_dir=Path(__file__).parent,
-                metadata_manager=metadata_manager,
-                claude_client=claude_client,
-                github_client=github_client
-            )
-        else:
-            click.echo(f'Error: Phase {phase} is not implemented yet.')
-            sys.exit(1)
+        # working_dirはscripts/ai-workflowディレクトリ（プロンプトファイルの基準パス）
+        working_dir = repo_root / 'scripts' / 'ai-workflow'
+        phase_instance = phase_class(
+            working_dir=working_dir,
+            metadata_manager=metadata_manager,
+            claude_client=claude_client,
+            github_client=github_client
+        )
 
         click.echo(f'[INFO] Starting phase: {phase}')
         success = phase_instance.run()
