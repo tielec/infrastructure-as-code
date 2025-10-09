@@ -34,7 +34,8 @@ class MetadataManager:
         self,
         phase_name: str,
         status: str,
-        output_file: Optional[str] = None
+        output_file: Optional[str] = None,
+        review_result: Optional[str] = None
     ):
         """
         フェーズステータスを更新
@@ -43,6 +44,7 @@ class MetadataManager:
             phase_name: フェーズ名
             status: ステータス（pending/in_progress/completed/failed）
             output_file: 出力ファイル名（省略可）
+            review_result: レビュー結果（PASS/PASS_WITH_SUGGESTIONS/FAIL）
         """
         # ステータス文字列からEnumに変換
         status_enum = PhaseStatus(status)
@@ -53,6 +55,10 @@ class MetadataManager:
             if 'output_files' not in self._state.data['phases'][phase_name]:
                 self._state.data['phases'][phase_name]['output_files'] = []
             self._state.data['phases'][phase_name]['output_files'].append(output_file)
+
+        # レビュー結果を記録
+        if review_result:
+            self._state.data['phases'][phase_name]['review_result'] = review_result
 
         # 保存
         self._state.save()

@@ -132,7 +132,8 @@ class BasePhase(ABC):
         output_file: Optional[str] = None,
         input_tokens: int = 0,
         output_tokens: int = 0,
-        cost_usd: float = 0.0
+        cost_usd: float = 0.0,
+        review_result: Optional[str] = None
     ):
         """
         フェーズステータスを更新
@@ -143,11 +144,13 @@ class BasePhase(ABC):
             input_tokens: 入力トークン数
             output_tokens: 出力トークン数
             cost_usd: コスト（USD）
+            review_result: レビュー結果（PASS/PASS_WITH_SUGGESTIONS/FAIL）
         """
         self.metadata.update_phase_status(
             phase_name=self.phase_name,
             status=status,
-            output_file=output_file
+            output_file=output_file,
+            review_result=review_result
         )
 
         # コストトラッキング更新
@@ -541,8 +544,8 @@ class BasePhase(ABC):
 
                 # レビュー結果に応じて処理
                 if result == 'PASS' or result == 'PASS_WITH_SUGGESTIONS':
-                    # 合格
-                    self.update_phase_status(status='completed')
+                    # 合格 - レビュー結果を保存
+                    self.update_phase_status(status='completed', review_result=result)
                     self.post_progress(
                         status='completed',
                         details=f'{self.phase_name}フェーズが完了しました。'
@@ -551,8 +554,8 @@ class BasePhase(ABC):
 
                 # FAIL - リトライチェック
                 if retry_count >= MAX_RETRIES:
-                    # リトライ回数上限に達した
-                    self.update_phase_status(status='failed')
+                    # リトライ回数上限に達した - 最終レビュー結果を保存
+                    self.update_phase_status(status='failed', review_result=result)
                     self.post_progress(
                         status='failed',
                         details=f'レビューで不合格となりました（リトライ{MAX_RETRIES}回実施）。フィードバックを確認してください。'
