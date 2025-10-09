@@ -5,7 +5,7 @@
 
 ---
 
-## 現在の状況（MVP v1.0.0）
+## 現在の状況（v1.2.0）
 
 **完了した機能**:
 - ✅ ワークフロー基盤（main.py, workflow_state.py）
@@ -13,8 +13,12 @@
 - ✅ BDDテスト基盤（1シナリオ）
 - ✅ 設定管理（config.yaml）
 - ✅ ドキュメント（README, ARCHITECTURE, TROUBLESHOOTING）
-
-**実装行数**: 311行（main.py 80行 + workflow_state.py 150行 + workflow_steps.py 81行）
+- ✅ Claude Agent SDK統合（Docker環境）
+- ✅ GitHub API統合（PyGithub）
+- ✅ Phase 1: 要件定義フェーズ（requirements.py）
+- ✅ Phase 2: 詳細設計フェーズ（design.py）
+- ✅ 設計判断機能（実装戦略・テスト戦略・テストコード戦略）
+- ✅ Phase 2 E2Eテスト（test_phase2.py）
 
 ---
 
@@ -41,16 +45,16 @@
 
 ---
 
-### Phase 2: Claude API統合とPhase 1実装（次のマイルストーン）
+### Phase 2: Claude API統合とPhase 1実装（完了）✅
 
 **目標**: 要件定義フェーズの自動実行を実現
 
-**予定期間**: 2-3週間
+**完了日**: 2025-10-08
 
 **実装項目**:
 
-#### 2.1 Claude API クライアント
-- [ ] `core/claude_client.py` 実装
+#### 2.1 Claude Agent SDK統合
+- [x] `core/claude_agent_client.py` 実装
   - Anthropic Python SDK統合
   - messages.create() メソッド
   - コスト追跡（input/output tokens）
@@ -79,117 +83,131 @@ class ClaudeClient:
 ```
 
 #### 2.2 GitHub API統合
-- [ ] `core/github_client.py` 実装
+- [x] `core/github_client.py` 実装
   - PyGithub使用
   - Issue取得（タイトル、本文、コメント）
-  - PR作成（将来）
+  - コメント投稿
 
 #### 2.3 プロンプト管理
-- [ ] `prompts/requirements/execute.txt` 作成
+- [x] `prompts/requirements/execute.txt` 作成
   - 要件定義生成プロンプト
-  - テンプレート変数: `{issue_title}`, `{issue_body}`
 
-- [ ] `prompts/requirements/review.txt` 作成
+- [x] `prompts/requirements/review.txt` 作成
   - 要件定義レビュープロンプト
 
+- [x] `prompts/requirements/revise.txt` 作成
+  - 要件定義修正プロンプト
+
 #### 2.4 Phase 1実装
-- [ ] `phases/base_phase.py` 基底クラス
+- [x] `phases/base_phase.py` 基底クラス
   - execute() 抽象メソッド
   - review() 抽象メソッド
+  - revise() 抽象メソッド
 
-- [ ] `phases/requirements.py` 要件定義フェーズ
-  - GitHub IssueからコンテンツU取得
-  - Claude APIで要件定義生成
-  - 01-requirements.md 保存
+- [x] `phases/requirements.py` 要件定義フェーズ
+  - GitHub Issueからコンテンツ取得
+  - Claude Agent SDKで要件定義生成
+  - requirements.md 保存
 
-#### 2.5 レビューエンジン（簡易版）
-- [ ] `reviewers/critical_thinking.py` 実装
-  - PASS/PASS_WITH_SUGGESTIONS/FAIL 判定
-  - ブロッカーと提案の分類
-
-#### 2.6 テスト
-- [ ] Phase 1統合テスト
-- [ ] Claude API モックテスト
-- [ ] BDDシナリオ追加（Phase 1実行）
+#### 2.5 E2Eテスト
+- [x] Phase 1 E2Eテスト（test_phase1.py）
 
 **期待される成果物**:
 ```
-.ai-workflow/issue-123/
+.ai-workflow/issue-304/
 ├── metadata.json
-├── 01-requirements.md
-└── 01-requirements-review.md
+└── 01_requirements/
+    ├── output/requirements.md
+    ├── execute/
+    ├── review/
+    └── revise/
 ```
 
 **マイルストーン条件**:
-- ✅ `python main.py execute --phase requirements --issue 123` が動作
-- ✅ Claude APIで要件定義が自動生成される
+- ✅ `python main.py execute --phase requirements --issue 304` が動作
+- ✅ Claude Agent SDKで要件定義が自動生成される
 - ✅ AIレビューが実行される
-- ✅ metadata.jsonにコスト情報が記録される
+- ✅ metadata.jsonに実行状況が記録される
 
 ---
 
-### Phase 3: Git操作とPhase 2-3実装
+### Phase 3: Phase 2実装（完了）✅
 
-**目標**: 詳細設計とテストシナリオの自動生成、Gitコミット
+**目標**: 詳細設計フェーズの自動生成
+
+**完了日**: 2025-10-09
+
+**実装項目**:
+
+#### 3.1 Phase 2実装（詳細設計）
+- [x] `phases/design.py` 実装
+  - requirements.md を読み込み
+  - Claude Agent SDKで詳細設計生成
+  - 設計判断の記録（implementation_strategy, test_strategy, test_code_strategy）
+  - design.md 保存
+
+- [x] `prompts/design/execute.txt` 作成
+- [x] `prompts/design/review.txt` 作成
+- [x] `prompts/design/revise.txt` 作成
+
+#### 3.2 E2Eテスト
+- [x] Phase 2 E2Eテスト（test_phase2.py）
+
+**期待される成果物**:
+```
+.ai-workflow/issue-304/
+├── metadata.json
+└── 02_design/
+    ├── output/design.md
+    ├── execute/
+    ├── review/
+    └── revise/
+```
+
+**マイルストーン条件**:
+- ✅ `python main.py execute --phase design --issue 304` が動作
+- ✅ Claude Agent SDKで詳細設計が自動生成される
+- ✅ 設計判断がmetadata.jsonに記録される（implementation_strategy, test_strategy, test_code_strategy）
+- ✅ AIレビューが実行される
+
+---
+
+### Phase 4: Phase 3実装とGit操作（次のマイルストーン）
+
+**目標**: テストシナリオの自動生成とGitコミット
 
 **予定期間**: 2-3週間
 
 **実装項目**:
 
-#### 3.1 Git操作
+#### 4.1 Git操作
 - [ ] `core/git_operations.py` 実装
   - ブランチ作成（feature/issue-{number}）
   - コミット作成
   - ブランチプッシュ
   - GitPython使用
 
-**実装例**:
-```python
-class GitOperations:
-    def create_branch(self, issue_number: str) -> None:
-        """feature/issue-{number} ブランチ作成"""
-        branch_name = f"feature/issue-{issue_number}"
-        self.repo.git.checkout('-b', branch_name)
-
-    def commit(self, message: str, files: List[str]) -> None:
-        """変更をコミット"""
-        self.repo.index.add(files)
-        self.repo.index.commit(message)
-```
-
-#### 3.2 Phase 2実装（詳細設計）
-- [ ] `phases/design.py` 実装
-  - 01-requirements.md を読み込み
-  - Claude APIで詳細設計生成
-  - 設計判断の記録（implementation_strategy, test_strategy）
-  - 02-design.md 保存
-
-- [ ] `prompts/design/execute.txt` 作成
-- [ ] `prompts/design/review.txt` 作成
-
-#### 3.3 Phase 3実装（テストシナリオ）
+#### 4.2 Phase 3実装（テストシナリオ）
 - [ ] `phases/test_scenario.py` 実装
-  - 01-requirements.md, 02-design.md を読み込み
-  - BDD形式のテストシナリオ生成
-  - 03-test-scenario.md 保存
+  - requirements.md, design.md を読み込み
+  - テスト戦略に基づいたテストシナリオ生成
+  - test-scenario.md 保存
 
 - [ ] `prompts/test_scenario/execute.txt` 作成
 - [ ] `prompts/test_scenario/review.txt` 作成
+- [ ] `prompts/test_scenario/revise.txt` 作成
 
-#### 3.4 コンテキスト管理
-- [ ] `core/context_manager.py` 実装
-  - 過去フェーズの成果物をロード
-  - トークン数を管理（max 50,000トークン）
-  - 関連ファイルの抽出
+#### 4.3 E2Eテスト
+- [ ] Phase 3 E2Eテスト（test_phase3.py）
 
 **マイルストーン条件**:
 - ✅ Phase 1-3が連続実行される
 - ✅ Gitコミットが自動作成される
-- ✅ 設計判断がmetadata.jsonに記録される
+- ✅ テスト戦略に基づいたテストシナリオが生成される
 
 ---
 
-### Phase 4: Phase 4-6実装（実装・テスト・ドキュメント）
+### Phase 5: Phase 4-6実装（実装・テスト・ドキュメント）
 
 **目標**: 完全なワークフロー実現
 
@@ -234,7 +252,7 @@ class GitOperations:
 
 ---
 
-### Phase 5: Jenkins統合
+### Phase 6: Jenkins統合
 
 **目標**: JenkinsからAIワークフローを実行
 
@@ -296,7 +314,7 @@ pipeline {
 
 ---
 
-### Phase 6: 高度な機能
+### Phase 7: 高度な機能
 
 **目標**: 実用性の向上
 
@@ -334,8 +352,9 @@ pipeline {
 | マイルストーン | 完了予定 | ステータス | 主要機能 |
 |---------------|---------|-----------|---------|
 | **MVP v1.0.0** | 2025-10-07 | ✅ 完了 | ワークフロー基盤、metadata管理 |
-| **v1.1.0** | 2025-10-末 | 🔄 計画中 | Phase 1（要件定義）実装 |
-| **v1.2.0** | 2025-11-中旬 | 📅 予定 | Phase 2-3（設計・テストシナリオ） |
+| **v1.1.0** | 2025-10-08 | ✅ 完了 | Phase 1（要件定義）実装 |
+| **v1.2.0** | 2025-10-09 | ✅ 完了 | Phase 2（詳細設計）実装 |
+| **v1.3.0** | 2025-10-末 | 🔄 計画中 | Phase 3（テストシナリオ）、Git操作 |
 | **v2.0.0** | 2025-11-末 | 📅 予定 | Phase 4-6（実装・テスト・ドキュメント） |
 | **v2.1.0** | 2025-12-中旬 | 📅 予定 | Jenkins統合 |
 | **v3.0.0** | 2026-Q1 | 📅 予定 | 高度な機能（並行実行、UI、監視） |
@@ -414,5 +433,5 @@ pytest tests/
 
 ---
 
-**バージョン**: 1.0.0 (MVP)
-**最終更新**: 2025-10-07
+**バージョン**: 1.2.0
+**最終更新**: 2025-10-09
