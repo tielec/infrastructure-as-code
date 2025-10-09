@@ -122,7 +122,13 @@ pipeline {
                     echo "========================================="
 
                     dir(env.WORKFLOW_DIR) {
-                        if (params.DRY_RUN) {
+                        // metadata.jsonの存在確認
+                        def metadataExists = fileExists(".ai-workflow/issue-${env.ISSUE_NUMBER}/metadata.json")
+
+                        if (metadataExists) {
+                            echo "[INFO] Workflow already initialized for issue ${env.ISSUE_NUMBER}"
+                            echo "Metadata file: .ai-workflow/issue-${env.ISSUE_NUMBER}/metadata.json"
+                        } else if (params.DRY_RUN) {
                             echo "[DRY RUN] ワークフロー初期化をスキップ"
                         } else {
                             // ワークフロー初期化
