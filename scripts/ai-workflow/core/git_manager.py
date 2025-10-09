@@ -119,6 +119,9 @@ class GitManager:
             # git add
             self.repo.index.add(target_files)
 
+            # Git設定（user.name、user.emailが未設定の場合に設定）
+            self._ensure_git_config()
+
             # コミットメッセージ生成
             commit_message = self.create_commit_message(
                 phase_name=phase_name,
@@ -336,6 +339,55 @@ class GitManager:
         """
         prefix = f".ai-workflow/issue-{issue_number}/"
         return [f for f in files if f.startswith(prefix)]
+
+    def _ensure_git_config(self) -> None:
+        """
+        Git設定を確認し、未設定の場合は環境変数から設定
+
+        環境変数:
+            - GIT_AUTHOR_NAME: コミットユーザー名（デフォルト: AI Workflow）
+            - GIT_AUTHOR_EMAIL: コミットユーザーメール（デフォルト: ai-workflow@tielec.local）
+
+        処理フロー:
+            1. 現在のuser.name、user.emailを取得
+            2. 未設定の場合、環境変数から取得
+            3. 環境変数も未設定の場合、デフォルト値を使用
+            4. git config --local user.name/user.emailで設定
+        """
+        import os
+
+        try:
+            # 現在の設定を取得
+            config_reader = self.repo.config_reader()
+
+            # user.nameをチェック
+            try:
+                user_name = config_reader.get_value('user', 'name')
+            except Exception:
+                user_name = None
+
+            # user.emailをチェック
+            try:
+                user_email = config_reader.get_value('user', 'email')
+            except Exception:
+                user_email = None
+
+            # 未設定の場合、環境変数またはデフォルト値を使用
+            if not user_name:
+                user_name = os.environ.get('GIT_AUTHOR_NAME', 'AI Workflow')
+
+            if not user_email:
+                user_email = os.environ.get('GIT_AUTHOR_EMAIL', 'ai-workflow@tielec.local')
+
+            # config_writerで設定
+            with self.repo.config_writer() as config_writer:
+                config_writer.set_value('user', 'name', user_name)
+                config_writer.set_value('user', 'email', user_email)
+
+            print(f"[INFO] Git設定完了: user.name={user_name}, user.email={user_email}")
+
+        except Exception as e:
+            print(f"[WARN] Git設定に失敗しましたが、コミットは続行します: {e}")
 
     def _is_retriable_error(self, error: Exception) -> bool:
         """
