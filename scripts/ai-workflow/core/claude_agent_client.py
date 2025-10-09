@@ -58,20 +58,34 @@ class ClaudeAgentClient:
             if verbose:
                 # AssistantMessageの場合は思考内容を表示
                 if 'AssistantMessage' in message_str:
-                    # TextBlockを抽出して表示
+                    # TextBlockを抽出して表示（全文表示）
                     if 'TextBlock(text=' in message_str:
                         start = message_str.find('TextBlock(text=') + 16
                         end = message_str.find('\')', start)
                         if end > start:
                             text = message_str[start:end]
-                            print(f"[AGENT THINKING] {text[:200]}")
-                    # ToolUseBlockを抽出して表示
+                            print(f"[AGENT THINKING] {text}")
+                    # ToolUseBlockを抽出して表示（詳細情報含む）
                     elif 'ToolUseBlock' in message_str:
                         if 'name=' in message_str:
+                            # ツール名を抽出
                             name_start = message_str.find('name=') + 6
                             name_end = message_str.find('\'', name_start)
                             tool_name = message_str[name_start:name_end]
+
+                            # ツールパラメータを抽出
+                            params_info = ""
+                            if 'input=' in message_str:
+                                params_start = message_str.find('input=') + 6
+                                # 次のフィールド区切り(, id=)を探す
+                                params_end = message_str.find(', id=', params_start)
+                                if params_end > params_start:
+                                    params_info = message_str[params_start:params_end]
+
+                            # 詳細ログを出力
                             print(f"[AGENT ACTION] Using tool: {tool_name}")
+                            if params_info:
+                                print(f"[AGENT ACTION] Parameters: {params_info}")
 
         return messages
 
