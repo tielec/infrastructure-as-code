@@ -385,14 +385,47 @@ class BasePhase(ABC):
                 formatted_parts.append("")
 
                 # ツール名抽出
+                tool_name = None
                 tool_match = re.search(r"name='([^']+)'", message)
                 if tool_match:
-                    formatted_parts.append(f"**ツール**: `{tool_match.group(1)}`")
+                    tool_name = tool_match.group(1)
+                    formatted_parts.append(f"**ツール**: `{tool_name}`")
+                    formatted_parts.append("")
 
-                formatted_parts.append("")
-                formatted_parts.append("```")
-                formatted_parts.append(message[:500] + "..." if len(message) > 500 else message)
-                formatted_parts.append("```")
+                # input パラメータを抽出して整形
+                input_match = re.search(r"input=(\{[^}]+\})", message)
+                if input_match:
+                    input_str = input_match.group(1)
+                    # パラメータを抽出（簡易的なパース）
+                    params = []
+                    # 'key': 'value' または 'key': value の形式を抽出
+                    param_pattern = r"'([^']+)':\s*'([^']+)'|'([^']+)':\s*([^',}\]]+)"
+                    for match in re.finditer(param_pattern, input_str):
+                        if match.group(1):  # 'key': 'value' 形式
+                            params.append((match.group(1), match.group(2)))
+                        elif match.group(3):  # 'key': value 形式
+                            params.append((match.group(3), match.group(4).strip()))
+
+                    if params:
+                        formatted_parts.append("**パラメータ**:")
+                        for key, value in params:
+                            # 長い値は省略
+                            if len(value) > 100:
+                                value = value[:100] + "..."
+                            formatted_parts.append(f"- `{key}`: `{value}`")
+                    else:
+                        # パースに失敗した場合は元のinputをそのまま表示
+                        formatted_parts.append("**入力**:")
+                        formatted_parts.append("```python")
+                        formatted_parts.append(input_str)
+                        formatted_parts.append("```")
+                else:
+                    # input が見つからない場合は、メッセージ全体を表示（デバッグ用）
+                    formatted_parts.append("**詳細**:")
+                    formatted_parts.append("```")
+                    formatted_parts.append(message[:300] + "..." if len(message) > 300 else message)
+                    formatted_parts.append("```")
+
                 formatted_parts.append("")
 
             # ResultMessageの処理
