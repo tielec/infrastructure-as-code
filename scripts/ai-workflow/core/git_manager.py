@@ -6,6 +6,7 @@ Phase完了後の成果物を自動的にcommit & pushする機能を提供
 - create_commit_message(): コミットメッセージ生成
 - get_status(): Git状態確認
 """
+import os
 import time
 from pathlib import Path
 from typing import Optional, Dict, Any, List
@@ -39,6 +40,9 @@ class GitManager:
             self.repo = Repo(repo_path)
         except Exception as e:
             raise RuntimeError(f"Git repository not found: {repo_path}") from e
+
+        # GitHub Token設定（環境変数から）
+        self._setup_github_credentials()
 
     def commit_phase_output(
         self,
@@ -437,3 +441,42 @@ class GitManager:
 
         # デフォルトはリトライ可能（ネットワークエラーの可能性）
         return True
+
+    def _setup_github_credentials(self) -> None:
+        """
+        GitHub Token認証の設定
+
+        環境変数GITHUB_TOKENを使用してGit remoteのURLを更新
+
+        処理フロー:
+            1. 環境変数GITHUB_TOKENを取得
+            2. originリモートの現在のURLを取得
+            3. HTTPS URLの場合、認証情報付きURLに変換
+            4. リモートURLを更新
+
+        注意:
+            - GITHUB_TOKENが未設定の場合は警告を出力して続行
+            - HTTPS URL以外（SSH等）の場合は変換しない
+        """
+        github_token = os.getenv('GITHUB_TOKEN')
+        if not github_token:
+            print("[WARNING] GITHUB_TOKEN not found in environment variables")
+            return
+
+        try:
+            origin = self.repo.remote(name='origin')
+            current_url = origin.url
+
+            # HTTPS URLの場合のみ変換
+            if current_url.startswith('https://github.com/'):
+                # https://github.com/owner/repo.git → owner/repo.git
+                path = current_url.replace('https://github.com/', '')
+                # 認証情報付きURLに変換
+                new_url = f'https://{github_token}@github.com/{path}'
+                origin.set_url(new_url)
+                print(f"[INFO] Git remote URL configured with GitHub token authentication")
+            else:
+                print(f"[INFO] Git remote URL is not HTTPS, skipping token configuration: {current_url}")
+
+        except Exception as e:
+            print(f"[WARNING] Failed to setup GitHub credentials: {e}")
