@@ -375,8 +375,8 @@ class DesignPhase(BasePhase):
         """
         import re
 
-        # 全テキストを結合
-        full_text = ""
+        # テキストブロックを収集
+        text_blocks = []
         for message in messages:
             if 'AssistantMessage' in message and 'TextBlock(text=' in message:
                 text_start = message.find('TextBlock(text=') + 16
@@ -386,18 +386,44 @@ class DesignPhase(BasePhase):
 
                 text_content = message[text_start:text_end]
 
-                # エスケープシーケンスを置換（日本語文字を保持）
+                # エスケープシーケンスを置換
                 text_content = text_content.replace('\\n', '\n')
                 text_content = text_content.replace('\\t', '\t')
                 text_content = text_content.replace('\\r', '\r')
+                text_content = text_content.replace("\\'", "'")
+                text_content = text_content.replace('\\\\', '\\')
 
-                full_text += text_content + "\n"
+                # デバッグメッセージや前置きを除外
+                # 明らかにレビュー本文ではないパターン
+                skip_patterns = [
+                    r"^\s*'\s+in\s+message:",  # デバッグ出力
+                    r"^\s*\d+→",  # 行番号付きデバッグ出力
+                    r"^I'll\s+conduct",  # 前置き
+                    r"^Let me\s+",  # 前置き
+                    r"^Now\s+let\s+me",  # 前置き
+                    r"^Based on\s+my\s+.*review.*,\s*let me\s+provide",  # 前置き
+                ]
+
+                should_skip = False
+                for skip_pattern in skip_patterns:
+                    if re.match(skip_pattern, text_content.strip(), re.IGNORECASE):
+                        should_skip = True
+                        break
+
+                # 短すぎるメッセージも除外（ただし判定キーワードが含まれている場合は除外しない）
+                if len(text_content.strip()) < 50 and '**判定:' not in text_content:
+                    should_skip = True
+
+                if not should_skip:
+                    text_blocks.append(text_content)
+
+        # テキストブロックを結合
+        full_text = "\n".join(text_blocks)
 
         # 判定を正規表現で抽出
         result_match = re.search(r'\*\*判定:\s*(PASS|PASS_WITH_SUGGESTIONS|FAIL)\*\*', full_text, re.IGNORECASE)
 
         if not result_match:
-            # 判定が見つからない場合
             return {
                 'result': 'FAIL',
                 'feedback': f'レビュー結果に判定が含まれていませんでした。\n\n{full_text[:500]}',
@@ -409,5 +435,5 @@ class DesignPhase(BasePhase):
         return {
             'result': result,
             'feedback': full_text.strip(),
-            'suggestions': []  # 全文に含まれているため不要
+            'suggestions': []
         }

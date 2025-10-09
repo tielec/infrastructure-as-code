@@ -5,6 +5,7 @@
  *
  * パラメータ（Job DSLで定義）:
  * - ISSUE_URL: GitHub Issue URL（必須）
+ * - START_PHASE: 開始フェーズ（デフォルト: requirements）
  * - DRY_RUN: ドライランモード（デフォルト: false）
  * - SKIP_REVIEW: レビュースキップ（デフォルト: false）
  * - MAX_RETRIES: 最大リトライ回数（デフォルト: 3）
@@ -19,29 +20,24 @@
 
 pipeline {
     agent {
-        label 'linux'  // Pythonが実行可能なLinuxエージェント
+        dockerfile {
+            label 'ec2-fleet'
+            dir 'scripts/ai-workflow'
+            filename 'Dockerfile'
+            args '-v ${WORKSPACE}:/workspace -w /workspace'
+        }
     }
 
     options {
-        // ビルド保持設定
-        buildDiscarder(logRotator(numToKeep: 30, daysToKeep: 90))
-
-        // タイムアウト（最大30分）
-        timeout(time: 30, unit: 'MINUTES')
-
         // タイムスタンプ表示
         timestamps()
 
         // カラー出力
         ansiColor('xterm')
-
-        // 同時実行禁止
-        disableConcurrentBuilds()
     }
 
     environment {
         // Python実行環境
-        PYTHON_PATH = '/usr/bin/python3'
         PYTHONUNBUFFERED = '1'
         PYTHONUTF8 = '1'
 
@@ -50,11 +46,8 @@ pipeline {
         WORKFLOW_VERSION = '1.0.0'
 
         // 認証情報（Jenkinsクレデンシャルから取得）
-        CLAUDE_API_KEY = credentials('claude-api-key')
+        CLAUDE_CODE_OAUTH_TOKEN = credentials('claude-code-oauth-token')
         GITHUB_TOKEN = credentials('github-token')
-
-        // Issue番号（ISSUE_URLから抽出）
-        ISSUE_NUMBER = ''
     }
 
     stages {
@@ -80,6 +73,8 @@ pipeline {
 
                     echo "Issue URL: ${params.ISSUE_URL}"
                     echo "Issue Number: ${env.ISSUE_NUMBER}"
+                    echo "GitHub Repository: ${params.GITHUB_REPOSITORY}"
+                    echo "Start Phase: ${params.START_PHASE}"
                     echo "Dry Run: ${params.DRY_RUN}"
                     echo "Skip Review: ${params.SKIP_REVIEW}"
                     echo "Max Retries: ${params.MAX_RETRIES}"
@@ -96,24 +91,36 @@ pipeline {
                     echo "Stage: Setup Environment"
                     echo "========================================="
 
-                    // Python環境確認
+                    // Git checkout: Detached HEADを回避するため、ブランチに明示的にcheckout
+                    sh """
+                        # 現在のブランチを確認
+                        BRANCH_NAME=\$(git rev-parse --abbrev-ref HEAD)
+                        echo "Current branch: \$BRANCH_NAME"
+
+                        # Detached HEADの場合、feature/ai-workflow-mvpにcheckout
+                        if [ "\$BRANCH_NAME" = "HEAD" ]; then
+                            echo "Detached HEAD detected. Checking out feature/ai-workflow-mvp..."
+                            git checkout -B feature/ai-workflow-mvp
+                        fi
+                    """
+
+                    // Python環境確認（Dockerコンテナに含まれる環境を確認のみ）
                     sh """
                         echo "Python version:"
-                        ${env.PYTHON_PATH} --version
+                        python --version
 
                         echo ""
                         echo "pip version:"
-                        ${env.PYTHON_PATH} -m pip --version
-                    """
+                        python -m pip --version
 
-                    // 依存パッケージインストール
-                    dir(env.WORKFLOW_DIR) {
-                        sh """
-                            echo "Installing dependencies..."
-                            ${env.PYTHON_PATH} -m pip install --user -r requirements.txt
-                            ${env.PYTHON_PATH} -m pip install --user -r requirements-test.txt
-                        """
-                    }
+                        echo ""
+                        echo "Current user: \$(whoami)"
+                        echo "HOME directory: \$HOME"
+
+                        echo ""
+                        echo "Claude Code CLI version:"
+                        claude --version
+                    """
                 }
             }
         }
@@ -126,18 +133,25 @@ pipeline {
                     echo "========================================="
 
                     dir(env.WORKFLOW_DIR) {
-                        if (params.DRY_RUN) {
+                        // metadata.jsonの存在確認
+                        def metadataFilepath = "${WORKSPACE}/.ai-workflow/issue-${env.ISSUE_NUMBER}/metadata.json"
+                        def metadataExists = fileExists(metadataFilepath)
+
+                        if (metadataExists) {
+                            echo "[INFO] Workflow already initialized for issue ${env.ISSUE_NUMBER}"
+                            echo "Metadata file: .ai-workflow/issue-${env.ISSUE_NUMBER}/metadata.json"
+                        } else if (params.DRY_RUN) {
                             echo "[DRY RUN] ワークフロー初期化をスキップ"
                         } else {
                             // ワークフロー初期化
                             sh """
-                                ${env.PYTHON_PATH} main.py init --issue-url ${params.ISSUE_URL}
+                                python main.py init --issue-url ${params.ISSUE_URL}
                             """
 
                             // metadata.json確認
                             sh """
                                 echo "metadata.json created:"
-                                cat ../../.ai-workflow/issue-${env.ISSUE_NUMBER}/metadata.json
+                                cat .ai-workflow/issue-${env.ISSUE_NUMBER}/metadata.json
                             """
                         }
                     }
@@ -146,88 +160,212 @@ pipeline {
         }
 
         stage('Phase 1: Requirements') {
+            when {
+                expression {
+                    def phaseOrder = ['requirements', 'design', 'test_scenario', 'implementation', 'testing', 'documentation', 'report']
+                    def startIndex = phaseOrder.indexOf(params.START_PHASE)
+                    def currentIndex = phaseOrder.indexOf('requirements')
+                    return currentIndex >= startIndex
+                }
+            }
             steps {
                 script {
                     echo "========================================="
                     echo "Stage: Phase 1 - Requirements Definition"
                     echo "========================================="
 
-                    // MVP v1.0.0では未実装
-                    echo "[未実装] Phase 1の自動実行は今後の拡張で実装予定"
-                    echo "ロードマップ: scripts/ai-workflow/ROADMAP.md 参照"
-
-                    // 将来の実装イメージ:
-                    // dir(env.WORKFLOW_DIR) {
-                    //     sh """
-                    //         ${env.PYTHON_PATH} main.py execute --phase requirements --issue ${env.ISSUE_NUMBER}
-                    //     """
-                    //
-                    //     if (!params.SKIP_REVIEW) {
-                    //         sh """
-                    //             ${env.PYTHON_PATH} main.py review --phase requirements --issue ${env.ISSUE_NUMBER}
-                    //         """
-                    //     }
-                    // }
+                    dir(env.WORKFLOW_DIR) {
+                        if (params.DRY_RUN) {
+                            echo "[DRY RUN] Phase 1実行をスキップ"
+                        } else {
+                            // Phase実行（execute + review統合）
+                            sh """
+                                python main.py execute \
+                                    --phase requirements \
+                                    --issue ${env.ISSUE_NUMBER}
+                            """
+                        }
+                    }
                 }
             }
         }
 
         stage('Phase 2: Design') {
+            when {
+                expression {
+                    def phaseOrder = ['requirements', 'design', 'test_scenario', 'implementation', 'testing', 'documentation', 'report']
+                    def startIndex = phaseOrder.indexOf(params.START_PHASE)
+                    def currentIndex = phaseOrder.indexOf('design')
+                    return currentIndex >= startIndex
+                }
+            }
             steps {
                 script {
                     echo "========================================="
                     echo "Stage: Phase 2 - Detailed Design"
                     echo "========================================="
 
-                    echo "[未実装] Phase 2の自動実行は今後の拡張で実装予定"
+                    dir(env.WORKFLOW_DIR) {
+                        if (params.DRY_RUN) {
+                            echo "[DRY RUN] Phase 2実行をスキップ"
+                        } else {
+                            sh """
+                                python main.py execute \
+                                    --phase design \
+                                    --issue ${env.ISSUE_NUMBER}
+                            """
+                        }
+                    }
                 }
             }
         }
 
         stage('Phase 3: Test Scenario') {
+            when {
+                expression {
+                    def phaseOrder = ['requirements', 'design', 'test_scenario', 'implementation', 'testing', 'documentation', 'report']
+                    def startIndex = phaseOrder.indexOf(params.START_PHASE)
+                    def currentIndex = phaseOrder.indexOf('test_scenario')
+                    return currentIndex >= startIndex
+                }
+            }
             steps {
                 script {
                     echo "========================================="
                     echo "Stage: Phase 3 - Test Scenario"
                     echo "========================================="
 
-                    echo "[未実装] Phase 3の自動実行は今後の拡張で実装予定"
+                    dir(env.WORKFLOW_DIR) {
+                        if (params.DRY_RUN) {
+                            echo "[DRY RUN] Phase 3実行をスキップ"
+                        } else {
+                            sh """
+                                python main.py execute \
+                                    --phase test_scenario \
+                                    --issue ${env.ISSUE_NUMBER}
+                            """
+                        }
+                    }
                 }
             }
         }
 
         stage('Phase 4: Implementation') {
+            when {
+                expression {
+                    def phaseOrder = ['requirements', 'design', 'test_scenario', 'implementation', 'testing', 'documentation', 'report']
+                    def startIndex = phaseOrder.indexOf(params.START_PHASE)
+                    def currentIndex = phaseOrder.indexOf('implementation')
+                    return currentIndex >= startIndex
+                }
+            }
             steps {
                 script {
                     echo "========================================="
                     echo "Stage: Phase 4 - Implementation"
                     echo "========================================="
 
-                    echo "[未実装] Phase 4の自動実行は今後の拡張で実装予定"
+                    dir(env.WORKFLOW_DIR) {
+                        if (params.DRY_RUN) {
+                            echo "[DRY RUN] Phase 4実行をスキップ"
+                        } else {
+                            sh """
+                                python main.py execute \
+                                    --phase implementation \
+                                    --issue ${env.ISSUE_NUMBER}
+                            """
+                        }
+                    }
                 }
             }
         }
 
         stage('Phase 5: Testing') {
+            when {
+                expression {
+                    def phaseOrder = ['requirements', 'design', 'test_scenario', 'implementation', 'testing', 'documentation', 'report']
+                    def startIndex = phaseOrder.indexOf(params.START_PHASE)
+                    def currentIndex = phaseOrder.indexOf('testing')
+                    return currentIndex >= startIndex
+                }
+            }
             steps {
                 script {
                     echo "========================================="
                     echo "Stage: Phase 5 - Testing"
                     echo "========================================="
 
-                    echo "[未実装] Phase 5の自動実行は今後の拡張で実装予定"
+                    dir(env.WORKFLOW_DIR) {
+                        if (params.DRY_RUN) {
+                            echo "[DRY RUN] Phase 5実行をスキップ"
+                        } else {
+                            sh """
+                                python main.py execute \
+                                    --phase testing \
+                                    --issue ${env.ISSUE_NUMBER}
+                            """
+                        }
+                    }
                 }
             }
         }
 
         stage('Phase 6: Documentation') {
+            when {
+                expression {
+                    def phaseOrder = ['requirements', 'design', 'test_scenario', 'implementation', 'testing', 'documentation', 'report']
+                    def startIndex = phaseOrder.indexOf(params.START_PHASE)
+                    def currentIndex = phaseOrder.indexOf('documentation')
+                    return currentIndex >= startIndex
+                }
+            }
             steps {
                 script {
                     echo "========================================="
                     echo "Stage: Phase 6 - Documentation"
                     echo "========================================="
 
-                    echo "[未実装] Phase 6の自動実行は今後の拡張で実装予定"
+                    dir(env.WORKFLOW_DIR) {
+                        if (params.DRY_RUN) {
+                            echo "[DRY RUN] Phase 6実行をスキップ"
+                        } else {
+                            sh """
+                                python main.py execute \
+                                    --phase documentation \
+                                    --issue ${env.ISSUE_NUMBER}
+                            """
+                        }
+                    }
+                }
+            }
+        }
+
+        stage('Phase 7: Report') {
+            when {
+                expression {
+                    def phaseOrder = ['requirements', 'design', 'test_scenario', 'implementation', 'testing', 'documentation', 'report']
+                    def startIndex = phaseOrder.indexOf(params.START_PHASE)
+                    def currentIndex = phaseOrder.indexOf('report')
+                    return currentIndex >= startIndex
+                }
+            }
+            steps {
+                script {
+                    echo "========================================="
+                    echo "Stage: Phase 7 - Report Generation"
+                    echo "========================================="
+
+                    dir(env.WORKFLOW_DIR) {
+                        if (params.DRY_RUN) {
+                            echo "[DRY RUN] Phase 7実行をスキップ"
+                        } else {
+                            sh """
+                                python main.py execute \
+                                    --phase report \
+                                    --issue ${env.ISSUE_NUMBER}
+                            """
+                        }
+                    }
                 }
             }
         }

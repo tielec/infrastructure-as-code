@@ -25,7 +25,8 @@ class BasePhase(ABC):
         'test_scenario': '03',
         'implementation': '04',
         'testing': '05',
-        'documentation': '06'
+        'documentation': '06',
+        'report': '07'
     }
 
     def __init__(
@@ -40,7 +41,7 @@ class BasePhase(ABC):
         初期化
 
         Args:
-            phase_name: フェーズ名（requirements, design, test_scenario, implementation, testing, documentation）
+            phase_name: フェーズ名（requirements, design, test_scenario, implementation, testing, documentation, report）
             working_dir: 作業ディレクトリ
             metadata_manager: メタデータマネージャー
             claude_client: Claude Agent SDKクライアント
@@ -211,6 +212,45 @@ class BasePhase(ABC):
                 suggestions=suggestions
             )
             print(f"[INFO] GitHub Issue #{issue_number} にレビュー結果を投稿しました: {result}")
+        except Exception as e:
+            print(f"[WARNING] GitHub投稿に失敗しました: {e}")
+
+    def post_output(
+        self,
+        output_content: str,
+        title: Optional[str] = None
+    ):
+        """
+        GitHubに成果物の内容を投稿
+
+        Args:
+            output_content: 成果物の内容（Markdown形式）
+            title: タイトル（省略可、指定しない場合はフェーズ名を使用）
+        """
+        try:
+            issue_number = int(self.metadata.data['issue_number'])
+
+            # フェーズ名の日本語マッピング
+            phase_names = {
+                'requirements': '要件定義',
+                'design': '設計',
+                'test_scenario': 'テストシナリオ',
+                'implementation': '実装',
+                'testing': 'テスト',
+                'documentation': 'ドキュメント',
+                'report': 'レポート'
+            }
+
+            phase_jp = phase_names.get(self.phase_name, self.phase_name)
+            header = title if title else f"{phase_jp}フェーズ - 成果物"
+
+            body = f"## 📄 {header}\n\n"
+            body += output_content
+            body += "\n\n---\n"
+            body += "*AI駆動開発自動化ワークフロー (Claude Agent SDK)*"
+
+            self.github.post_comment(issue_number, body)
+            print(f"[INFO] GitHub Issue #{issue_number} に成果物を投稿しました: {header}")
         except Exception as e:
             print(f"[WARNING] GitHub投稿に失敗しました: {e}")
 
@@ -502,10 +542,22 @@ class BasePhase(ABC):
             5. FAIL時は最大3回までrevise()でリトライ
             6. レビュー結果に応じてステータス更新
             7. GitHubにレビュー結果を投稿
+            8. Git自動commit & push（成功・失敗問わず実行）
         """
         MAX_RETRIES = 3
 
+        git_manager = None
+        final_status = 'failed'
+        review_result = None
+
         try:
+            # GitManagerを初期化
+            from core.git_manager import GitManager
+            git_manager = GitManager(
+                repo_path=self.working_dir.parent.parent,  # リポジトリルート
+                metadata_manager=self.metadata
+            )
+
             # フェーズ開始
             self.update_phase_status(status='in_progress')
             self.post_progress(
@@ -518,6 +570,7 @@ class BasePhase(ABC):
 
             if not execute_result.get('success', False):
                 # 実行失敗
+                final_status = 'failed'
                 self.update_phase_status(status='failed')
                 self.post_progress(
                     status='failed',
@@ -529,11 +582,11 @@ class BasePhase(ABC):
             retry_count = 0
             while retry_count <= MAX_RETRIES:
                 # レビュー実行
-                review_result = self.review()
+                review_result_dict = self.review()
 
-                result = review_result.get('result', 'FAIL')
-                feedback = review_result.get('feedback')
-                suggestions = review_result.get('suggestions', [])
+                result = review_result_dict.get('result', 'FAIL')
+                feedback = review_result_dict.get('feedback')
+                suggestions = review_result_dict.get('suggestions', [])
 
                 # レビュー結果を投稿
                 self.post_review(
@@ -545,6 +598,8 @@ class BasePhase(ABC):
                 # レビュー結果に応じて処理
                 if result == 'PASS' or result == 'PASS_WITH_SUGGESTIONS':
                     # 合格 - レビュー結果を保存
+                    final_status = 'completed'
+                    review_result = result
                     self.update_phase_status(status='completed', review_result=result)
                     self.post_progress(
                         status='completed',
@@ -555,6 +610,8 @@ class BasePhase(ABC):
                 # FAIL - リトライチェック
                 if retry_count >= MAX_RETRIES:
                     # リトライ回数上限に達した - 最終レビュー結果を保存
+                    final_status = 'failed'
+                    review_result = result
                     self.update_phase_status(status='failed', review_result=result)
                     self.post_progress(
                         status='failed',
@@ -564,6 +621,7 @@ class BasePhase(ABC):
 
                 # リトライ: revise()で修正
                 retry_count += 1
+                self.metadata.increment_retry_count(self.phase_name)
                 print(f"[INFO] レビュー不合格のため修正を実施します（{retry_count}/{MAX_RETRIES}回目）")
 
                 self.post_progress(
@@ -574,6 +632,7 @@ class BasePhase(ABC):
                 # revise()メソッドが存在するか確認
                 if not hasattr(self, 'revise'):
                     print(f"[WARNING] {self.__class__.__name__}.revise()メソッドが実装されていません。リトライできません。")
+                    final_status = 'failed'
                     self.update_phase_status(status='failed')
                     self.post_progress(
                         status='failed',
@@ -587,6 +646,7 @@ class BasePhase(ABC):
                 if not revise_result.get('success', False):
                     # 修正失敗
                     print(f"[ERROR] 修正に失敗しました: {revise_result.get('error')}")
+                    final_status = 'failed'
                     self.update_phase_status(status='failed')
                     self.post_progress(
                         status='failed',
@@ -601,9 +661,73 @@ class BasePhase(ABC):
 
         except Exception as e:
             # 予期しないエラー
+            final_status = 'failed'
             self.update_phase_status(status='failed')
             self.post_progress(
                 status='failed',
                 details=f'エラーが発生しました: {str(e)}'
             )
             raise
+
+        finally:
+            # Git自動commit & push（成功・失敗問わず実行）
+            if git_manager:
+                self._auto_commit_and_push(
+                    git_manager=git_manager,
+                    status=final_status,
+                    review_result=review_result
+                )
+
+    def _auto_commit_and_push(
+        self,
+        git_manager,
+        status: str,
+        review_result: Optional[str]
+    ):
+        """
+        Git自動commit & push
+
+        Args:
+            git_manager: GitManagerインスタンス
+            status: フェーズステータス（completed/failed）
+            review_result: レビュー結果（省略可）
+
+        Notes:
+            - エラーが発生してもPhase自体は失敗させない
+            - ログに記録して継続
+        """
+        try:
+            # Commit
+            commit_result = git_manager.commit_phase_output(
+                phase_name=self.phase_name,
+                status=status,
+                review_result=review_result
+            )
+
+            if not commit_result.get('success', False):
+                print(f"[WARNING] Git commit failed: {commit_result.get('error')}")
+                return
+
+            commit_hash = commit_result.get('commit_hash')
+            files_committed = commit_result.get('files_committed', [])
+
+            if commit_hash:
+                print(f"[INFO] Git commit successful: {commit_hash}")
+                print(f"[INFO] Files committed: {len(files_committed)} files")
+            else:
+                print("[INFO] No files to commit (clean state)")
+                return
+
+            # Push
+            push_result = git_manager.push_to_remote()
+
+            if not push_result.get('success', False):
+                print(f"[WARNING] Git push failed: {push_result.get('error')}")
+                return
+
+            retries = push_result.get('retries', 0)
+            print(f"[INFO] Git push successful (retries: {retries})")
+
+        except Exception as e:
+            print(f"[WARNING] Git auto-commit & push failed: {e}")
+            # Phase自体は失敗させない

@@ -83,6 +83,13 @@ class WorkflowState:
                     "started_at": None,
                     "completed_at": None,
                     "review_result": None
+                },
+                "report": {
+                    "status": "pending",
+                    "retry_count": 0,
+                    "started_at": None,
+                    "completed_at": None,
+                    "review_result": None
                 }
             },
             "created_at": datetime.utcnow().isoformat() + "Z",
