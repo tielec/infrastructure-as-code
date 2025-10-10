@@ -9,7 +9,7 @@ Claude Agent SDKを使った7フェーズの自動開発ワークフロー
 ### 主な特徴
 
 - **Claude Pro Max活用**: Claude Code headless modeで自律的にタスクを実行
-- **8フェーズワークフロー**: Phase 0（プロジェクト計画） → Phase 1（要件定義） → Phase 2（設計） → Phase 3（テストシナリオ） → Phase 4（実装） → Phase 5（テスト） → Phase 6（ドキュメント） → Phase 7（レポート）
+- **9フェーズワークフロー**: Phase 0（プロジェクト計画） → Phase 1（要件定義） → Phase 2（設計） → Phase 3（テストシナリオ） → Phase 4（実装） → Phase 5（テストコード実装） → Phase 6（テスト） → Phase 7（ドキュメント） → Phase 8（レポート）
 - **Phase 0 (Planning)**: プロジェクトマネージャとして実装戦略・テスト戦略を事前決定し、後続フェーズの効率を最大化
   - Jenkins統合: START_PHASEパラメータで`planning`を選択可能（デフォルト値）
   - 全Phase連携: Planning Documentが後続の全Phase（Requirements～Report）で自動参照される
@@ -140,7 +140,7 @@ GitHub IssueからPR作成まで、Claude AIが自動的に開発プロセスを
 | パラメータ | デフォルト | 説明 |
 |-----------|----------|------|
 | ISSUE_URL | (必須) | GitHub Issue URL |
-| START_PHASE | planning | 開始フェーズ（planning推奨）<br>選択肢: planning, requirements, design, test_scenario, implementation, testing, documentation, report |
+| START_PHASE | planning | 開始フェーズ（planning推奨）<br>選択肢: planning, requirements, design, test_scenario, implementation, test_implementation, testing, documentation, report |
 | DRY_RUN | false | ドライランモード |
 | SKIP_REVIEW | false | レビュースキップ |
 | MAX_RETRIES | 3 | 最大リトライ回数 |
@@ -219,6 +219,18 @@ jenkins-cli build AI_Workflow/ai_workflow_orchestrator \
 - [x] Jenkinsfile完成（全Phase実行ステージ）
 - [x] クリティカルシンキングレビュー統合
 
+### ✅ 完了（v1.7.0 Phase分離 - Issue #324）
+- [x] Phase 5（test_implementation）の新設
+  - 実装フェーズとテストコード実装フェーズの責務分離
+  - Phase 4（implementation）: 実コードのみ実装
+  - Phase 5（test_implementation）: テストコードのみ実装
+- [x] Phase番号のシフト
+  - 旧Phase 5（testing） → 新Phase 6（testing）
+  - 旧Phase 6（documentation） → 新Phase 7（documentation）
+  - 旧Phase 7（report） → 新Phase 8（report）
+- [x] 後方互換性の維持
+  - 既存ワークフロー（Phase 1-7構成）も引き続き動作
+
 ### ✅ 完了（v1.4.0 GitHub統合強化）
 - [x] 全フェーズの成果物をGitHub Issueコメントに自動投稿
 - [x] BasePhase.post_output()メソッド統合
@@ -248,9 +260,7 @@ jenkins-cli build AI_Workflow/ai_workflow_orchestrator \
   - 試行回数の可視化（`[ATTEMPT N/3]`ログ）
   - 最大3回までの自動リトライ
 
-### 🚧 開発中（v1.7.0以降）
-- [ ] Phase 7: Report実装（全体評価と残課題抽出）
-- [ ] Phase 8: Evaluation実装（進捗トラッキング、再実行機能）
+### 🚧 開発中（v1.8.0以降）
 - [ ] PR自動作成機能
 - [ ] GitHub Webhook連携
 - [ ] レビュー基準カスタマイズ
@@ -277,11 +287,15 @@ scripts/ai-workflow/
 │   │                            # - Planning Document参照ロジック追加
 │   ├── test_scenario.py         # Phase 3: テストシナリオ
 │   │                            # - Planning Document参照ロジック追加
-│   ├── implementation.py        # Phase 4: 実装
+│   ├── implementation.py        # Phase 4: 実装（実コードのみ）
 │   │                            # - Planning Document参照ロジック追加
-│   ├── testing.py               # Phase 5: テスト
+│   ├── test_implementation.py   # Phase 5: テストコード実装（新規）
+│   │                            # - テストコードのみを実装
+│   ├── testing.py               # Phase 6: テスト実行（旧Phase 5）
 │   │                            # - Planning Document参照ロジック追加
-│   └── documentation.py         # Phase 6: ドキュメント
+│   ├── documentation.py         # Phase 7: ドキュメント（旧Phase 6）
+│   │                            # - Planning Document参照ロジック追加
+│   └── report.py                # Phase 8: レポート（旧Phase 7）
 │                                # - Planning Document参照ロジック追加
 ├── prompts/
 │   ├── planning/
@@ -296,6 +310,10 @@ scripts/ai-workflow/
 │   │   ├── execute.txt          # 設計実行プロンプト（Planning Document参照セクション追加）
 │   │   ├── review.txt           # 設計レビュープロンプト
 │   │   └── revise.txt           # 設計修正プロンプト
+│   ├── test_implementation/     # Phase 5: テストコード実装プロンプト（新規）
+│   │   ├── execute.txt          # テストコード実装プロンプト
+│   │   ├── review.txt           # テストコードレビュープロンプト
+│   │   └── revise.txt           # テストコード修正プロンプト
 │   └── ...                      # 他のフェーズのプロンプト（すべてPlanning Document参照追加）
 ├── reviewers/
 │   └── critical_thinking.py     # クリティカルシンキングレビュー（未実装）
@@ -367,9 +385,11 @@ python main.py execute --phase <phase_name> --issue <issue_number>
 - `requirements`: 要件定義（Phase 1）
 - `design`: 設計（Phase 2）
 - `test_scenario`: テストシナリオ（Phase 3）
-- `implementation`: 実装（Phase 4）
-- `testing`: テスト（Phase 5）
-- `documentation`: ドキュメント（Phase 6）
+- `implementation`: 実装（Phase 4、実コードのみ）
+- `test_implementation`: テストコード実装（Phase 5、テストコードのみ）
+- `testing`: テスト実行（Phase 6）
+- `documentation`: ドキュメント（Phase 7）
+- `report`: レポート（Phase 8）
 
 **例:**
 ```bash
