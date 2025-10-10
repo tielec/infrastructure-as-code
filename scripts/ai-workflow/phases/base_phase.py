@@ -583,12 +583,12 @@ class BasePhase(ABC):
         Notes:
             1. フェーズステータスをin_progressに更新
             2. GitHubに進捗報告
-            3. execute()を実行
-            4. review()を実行
-            5. FAIL時は最大3回までrevise()でリトライ
-            6. レビュー結果に応じてステータス更新
-            7. GitHubにレビュー結果を投稿
-            8. Git自動commit & push（成功・失敗問わず実行）
+            3. リトライループ（MAX_RETRIES=3）:
+               - attempt=1: execute()を実行
+               - attempt>=2: review() → revise()を実行
+            4. 各試行の成功時、最終レビューへ進む
+            5. 最大リトライ到達時は失敗終了
+            6. Git自動commit & push（成功・失敗問わず実行）
         """
         MAX_RETRIES = 3
 
@@ -611,99 +611,162 @@ class BasePhase(ABC):
                 details=f'{self.phase_name}フェーズを開始しました。'
             )
 
-            # フェーズ実行
-            execute_result = self.execute()
+            # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+            # リトライループ（execute + revise統合）
+            # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+            for attempt in range(1, MAX_RETRIES + 1):
+                # 試行回数の可視化
+                print(f"\n{'='*80}")
+                print(f"[ATTEMPT {attempt}/{MAX_RETRIES}] Phase: {self.phase_name}")
+                print(f"{'='*80}\n")
 
-            if not execute_result.get('success', False):
-                # 実行失敗
-                final_status = 'failed'
-                self.update_phase_status(status='failed')
+                # 初回はexecute()、2回目以降はreview() → revise()
+                if attempt == 1:
+                    # 初回実行
+                    result = self.execute()
+                else:
+                    # 2回目以降: レビュー結果に基づいてrevise()
+                    review_result_dict = self.review()
+                    result_str = review_result_dict.get('result', 'FAIL')
+                    feedback = review_result_dict.get('feedback')
+                    suggestions = review_result_dict.get('suggestions', [])
+
+                    # レビュー結果をGitHubに投稿
+                    self.post_review(
+                        result=result_str,
+                        feedback=feedback,
+                        suggestions=suggestions
+                    )
+
+                    # レビュー結果がPASSの場合は終了
+                    if result_str in ['PASS', 'PASS_WITH_SUGGESTIONS']:
+                        final_status = 'completed'
+                        review_result = result_str
+                        break
+
+                    # revise()が実装されているか確認
+                    if not hasattr(self, 'revise'):
+                        print(f"[ERROR] {self.__class__.__name__}.revise()メソッドが実装されていません。")
+                        final_status = 'failed'
+                        self.update_phase_status(status='failed')
+                        self.post_progress(
+                            status='failed',
+                            details='revise()メソッドが未実装のため、修正できません。'
+                        )
+                        return False
+
+                    # revise()を実行
+                    self.metadata.increment_retry_count(self.phase_name)
+                    self.post_progress(
+                        status='in_progress',
+                        details=f'レビュー不合格のため修正を実施します（{attempt-1}/{MAX_RETRIES-1}回目）。'
+                    )
+                    result = self.revise(review_feedback=feedback)
+
+                # 結果チェック
+                if result.get('success', False):
+                    # 成功 → 次のステップへ（初回実行の場合はレビューへ進む）
+                    if attempt == 1:
+                        # 初回execute()成功 → ループを抜けてレビューへ
+                        final_status = 'in_progress'
+                        break
+                    else:
+                        # revise()成功 → 再度レビューするため次のattempへ
+                        continue
+                else:
+                    # 失敗
+                    print(f"[WARNING] Attempt {attempt} failed: {result.get('error', 'Unknown')}")
+                    if attempt == MAX_RETRIES:
+                        # 最大リトライ回数到達
+                        final_status = 'failed'
+                        self.update_phase_status(status='failed')
+                        self.post_progress(
+                            status='failed',
+                            details=f"最大リトライ回数({MAX_RETRIES})に到達しました"
+                        )
+                        return False
+                    # 次のattempへ続ける
+                    continue
+
+            # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+            # 最終レビュー（execute成功後、またはrevise成功後）
+            # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+            if final_status != 'completed':
+                # まだ最終レビューが完了していない場合
+                retry_count = 0
+                while retry_count <= MAX_RETRIES:
+                    review_result_dict = self.review()
+                    result_str = review_result_dict.get('result', 'FAIL')
+                    feedback = review_result_dict.get('feedback')
+                    suggestions = review_result_dict.get('suggestions', [])
+
+                    self.post_review(
+                        result=result_str,
+                        feedback=feedback,
+                        suggestions=suggestions
+                    )
+
+                    if result_str in ['PASS', 'PASS_WITH_SUGGESTIONS']:
+                        final_status = 'completed'
+                        review_result = result_str
+                        break
+
+                    if retry_count >= MAX_RETRIES:
+                        final_status = 'failed'
+                        review_result = result_str
+                        break
+
+                    # revise()による修正
+                    retry_count += 1
+                    self.metadata.increment_retry_count(self.phase_name)
+                    print(f"[INFO] レビュー不合格のため修正を実施します（{retry_count}/{MAX_RETRIES}回目）")
+
+                    self.post_progress(
+                        status='in_progress',
+                        details=f'レビュー不合格のため修正を実施します（{retry_count}/{MAX_RETRIES}回目）。'
+                    )
+
+                    # revise()メソッドが存在するか確認
+                    if not hasattr(self, 'revise'):
+                        print(f"[WARNING] {self.__class__.__name__}.revise()メソッドが実装されていません。リトライできません。")
+                        final_status = 'failed'
+                        self.update_phase_status(status='failed')
+                        self.post_progress(
+                            status='failed',
+                            details='revise()メソッドが未実装のため、修正できません。'
+                        )
+                        return False
+
+                    # 修正実行
+                    revise_result = self.revise(review_feedback=feedback)
+
+                    if not revise_result.get('success', False):
+                        # 修正失敗
+                        print(f"[ERROR] 修正に失敗しました: {revise_result.get('error')}")
+                        final_status = 'failed'
+                        self.update_phase_status(status='failed')
+                        self.post_progress(
+                            status='failed',
+                            details=f"修正エラー: {revise_result.get('error', 'Unknown error')}"
+                        )
+                        return False
+
+                    print(f"[INFO] 修正完了。再度レビューを実施します。")
+
+            # ステータス更新
+            self.update_phase_status(status=final_status, review_result=review_result)
+            if final_status == 'completed':
+                self.post_progress(
+                    status='completed',
+                    details=f'{self.phase_name}フェーズが完了しました。'
+                )
+            elif final_status == 'failed':
                 self.post_progress(
                     status='failed',
-                    details=f"実行エラー: {execute_result.get('error', 'Unknown error')}"
-                )
-                return False
-
-            # レビュー＆リトライループ
-            retry_count = 0
-            while retry_count <= MAX_RETRIES:
-                # レビュー実行
-                review_result_dict = self.review()
-
-                result = review_result_dict.get('result', 'FAIL')
-                feedback = review_result_dict.get('feedback')
-                suggestions = review_result_dict.get('suggestions', [])
-
-                # レビュー結果を投稿
-                self.post_review(
-                    result=result,
-                    feedback=feedback,
-                    suggestions=suggestions
+                    details=f'レビューで不合格となりました（リトライ{MAX_RETRIES}回実施）。フィードバックを確認してください。'
                 )
 
-                # レビュー結果に応じて処理
-                if result == 'PASS' or result == 'PASS_WITH_SUGGESTIONS':
-                    # 合格 - レビュー結果を保存
-                    final_status = 'completed'
-                    review_result = result
-                    self.update_phase_status(status='completed', review_result=result)
-                    self.post_progress(
-                        status='completed',
-                        details=f'{self.phase_name}フェーズが完了しました。'
-                    )
-                    return True
-
-                # FAIL - リトライチェック
-                if retry_count >= MAX_RETRIES:
-                    # リトライ回数上限に達した - 最終レビュー結果を保存
-                    final_status = 'failed'
-                    review_result = result
-                    self.update_phase_status(status='failed', review_result=result)
-                    self.post_progress(
-                        status='failed',
-                        details=f'レビューで不合格となりました（リトライ{MAX_RETRIES}回実施）。フィードバックを確認してください。'
-                    )
-                    return False
-
-                # リトライ: revise()で修正
-                retry_count += 1
-                self.metadata.increment_retry_count(self.phase_name)
-                print(f"[INFO] レビュー不合格のため修正を実施します（{retry_count}/{MAX_RETRIES}回目）")
-
-                self.post_progress(
-                    status='in_progress',
-                    details=f'レビュー不合格のため修正を実施します（{retry_count}/{MAX_RETRIES}回目）。'
-                )
-
-                # revise()メソッドが存在するか確認
-                if not hasattr(self, 'revise'):
-                    print(f"[WARNING] {self.__class__.__name__}.revise()メソッドが実装されていません。リトライできません。")
-                    final_status = 'failed'
-                    self.update_phase_status(status='failed')
-                    self.post_progress(
-                        status='failed',
-                        details='revise()メソッドが未実装のため、修正できません。'
-                    )
-                    return False
-
-                # 修正実行
-                revise_result = self.revise(review_feedback=feedback)
-
-                if not revise_result.get('success', False):
-                    # 修正失敗
-                    print(f"[ERROR] 修正に失敗しました: {revise_result.get('error')}")
-                    final_status = 'failed'
-                    self.update_phase_status(status='failed')
-                    self.post_progress(
-                        status='failed',
-                        details=f"修正エラー: {revise_result.get('error', 'Unknown error')}"
-                    )
-                    return False
-
-                print(f"[INFO] 修正完了。再度レビューを実施します。")
-
-            # ループを抜けた場合（通常は到達しない）
-            return False
+            return final_status == 'completed'
 
         except Exception as e:
             # 予期しないエラー
