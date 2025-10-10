@@ -499,20 +499,50 @@ class GitManager:
             - Gitコマンド失敗 → {'success': False, 'error': 'Git command failed: ...'}
         """
         try:
-            # ブランチ存在チェック - 既存の場合は削除
+            # ブランチ存在チェック
             if self.branch_exists(branch_name):
-                logger.warning(f"Branch {branch_name} already exists, deleting it")
-                # 現在のブランチでない場合のみ削除
-                current_branch = self.get_current_branch()
-                if current_branch == branch_name:
-                    # 別のブランチ (base_branch または main) に切り替え
-                    fallback_branch = base_branch if base_branch else 'main'
-                    self.repo.git.checkout(fallback_branch)
-                # ローカルブランチ削除
-                try:
-                    self.repo.git.branch('-D', branch_name)
-                except Exception as e:
-                    logger.warning(f"Failed to delete local branch: {e}")
+                print(f"Branch {branch_name} already exists")
+
+                # ローカルブランチが存在するか確認
+                local_branches = [ref.name for ref in self.repo.branches]
+                local_exists = branch_name in local_branches
+
+                if local_exists:
+                    # ローカルブランチが存在する場合はチェックアウトしてリモートでリベース
+                    print(f"Checking out existing local branch: {branch_name}")
+                    current_branch = self.get_current_branch()
+                    if current_branch != branch_name:
+                        self.repo.git.checkout(branch_name)
+
+                    # リモートから最新を取得してリベース
+                    try:
+                        print(f"Fetching and rebasing on remote: origin/{branch_name}")
+                        self.repo.git.fetch('origin', branch_name)
+                        self.repo.git.rebase(f'origin/{branch_name}')
+                        print(f"Successfully rebased on origin/{branch_name}")
+                    except Exception as e:
+                        print(f"Warning: Could not rebase on remote (possibly no upstream or conflicts): {e}")
+                        # リベース失敗時は中断
+                        try:
+                            self.repo.git.rebase('--abort')
+                            print("Rebase aborted due to error")
+                        except:
+                            pass
+
+                    return {
+                        'success': True,
+                        'branch_name': branch_name,
+                        'error': None
+                    }
+                else:
+                    # リモートのみ存在する場合はチェックアウト
+                    print(f"Remote branch exists, checking out: {branch_name}")
+                    self.repo.git.checkout(branch_name)
+                    return {
+                        'success': True,
+                        'branch_name': branch_name,
+                        'error': None
+                    }
 
             # 基準ブランチ指定時は、そのブランチにチェックアウト
             if base_branch:
