@@ -41,6 +41,9 @@ pipeline {
         PYTHONUNBUFFERED = '1'
         PYTHONUTF8 = '1'
 
+        // Claude Agent SDK設定（Bashコマンド承認スキップ）
+        CLAUDE_DANGEROUSLY_SKIP_PERMISSIONS = '1'
+
         // AI Workflow設定
         WORKFLOW_DIR = 'scripts/ai-workflow'
         WORKFLOW_VERSION = '1.0.0'
