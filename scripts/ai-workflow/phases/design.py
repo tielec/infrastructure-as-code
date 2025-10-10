@@ -93,6 +93,16 @@ class DesignPhase(BasePhase):
                 self.metadata.save()
                 print(f"[INFO] 戦略判断をmetadata.jsonに保存: {decisions}")
 
+            # GitHub Issueに成果物を投稿
+            try:
+                # design_content 変数を再利用（88行目で既に読み込み済み）
+                self.post_output(
+                    output_content=design_content,
+                    title="詳細設計書"
+                )
+            except Exception as e:
+                print(f"[WARNING] 成果物のGitHub投稿に失敗しました: {e}")
+
             # ステータス更新: BasePhase.run()で実行されるため不要
             # self.metadata.update_phase_status('design', 'completed', str(output_file))
             # self.post_progress('completed', f'詳細設計が完了しました: {output_file.name}')

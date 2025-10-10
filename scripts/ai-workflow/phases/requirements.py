@@ -69,6 +69,16 @@ class RequirementsPhase(BasePhase):
                     'error': f'requirements.mdが生成されませんでした: {output_file}'
                 }
 
+            # GitHub Issueに成果物を投稿
+            try:
+                output_content = output_file.read_text(encoding='utf-8')
+                self.post_output(
+                    output_content=output_content,
+                    title="要件定義書"
+                )
+            except Exception as e:
+                print(f"[WARNING] 成果物のGitHub投稿に失敗しました: {e}")
+
             return {
                 'success': True,
                 'output': str(output_file),
