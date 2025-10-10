@@ -80,6 +80,11 @@ docker run --rm \
 ### 4. 結果確認
 
 - **要件定義書**: `.ai-workflow/issue-304/01_requirements/output/requirements.md`
+- **実行ログ**: `.ai-workflow/issue-304/01_requirements/execute/`
+  - `agent_log_1.md` - エージェント実行ログ（Markdown形式）
+  - `agent_log_raw_1.txt` - エージェント実行ログ（生テキスト）
+  - `prompt_1.txt` - エージェントへの入力プロンプト
+  - ※リトライ時は連番がインクリメント（`agent_log_2.md`、`agent_log_3.md`...）
 - **GitHub Issue**:
   - 成果物（要件定義書）がコメント投稿される
   - レビュー結果とフィードバックがコメント投稿される

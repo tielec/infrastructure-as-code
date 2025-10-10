@@ -295,6 +295,44 @@ class BasePhase(ABC):
 
         return messages
 
+    def _get_next_sequence_number(self, target_dir: Path) -> int:
+        """
+        対象ディレクトリ内の既存ログファイルから次の連番を取得
+
+        Args:
+            target_dir: ログファイルを検索するディレクトリ
+
+        Returns:
+            int: 次の連番（1始まり）
+
+        Notes:
+            - agent_log_*.md パターンのファイルを検索
+            - 正規表現で連番を抽出し、最大値を取得
+            - 最大値 + 1 を返す（ファイルが存在しない場合は1）
+        """
+        import re
+
+        # agent_log_*.md パターンのファイルを検索
+        log_files = list(target_dir.glob('agent_log_*.md'))
+
+        if not log_files:
+            return 1
+
+        # 連番を抽出
+        sequence_numbers = []
+        pattern = re.compile(r'agent_log_(\d+)\.md$')
+
+        for log_file in log_files:
+            match = pattern.search(log_file.name)
+            if match:
+                sequence_numbers.append(int(match.group(1)))
+
+        if not sequence_numbers:
+            return 1
+
+        # 最大値 + 1 を返す
+        return max(sequence_numbers) + 1
+
     def _save_execution_logs(
         self,
         prompt: str,
@@ -302,12 +340,16 @@ class BasePhase(ABC):
         log_prefix: str = ''
     ):
         """
-        プロンプトとエージェントログを保存
+        プロンプトとエージェントログを保存（連番付き）
 
         Args:
             prompt: 実行したプロンプト
             messages: エージェントからのレスポンスメッセージ
-            log_prefix: ログファイル名のプレフィックス（'execute' or 'review'）
+            log_prefix: ログファイル名のプレフィックス（'execute' or 'review' or 'revise'）
+
+        Notes:
+            - 連番は _get_next_sequence_number() で自動決定
+            - ファイル名: agent_log_{N}.md, agent_log_raw_{N}.txt, prompt_{N}.txt
         """
         # log_prefixに応じてディレクトリを選択
         if log_prefix == 'execute':
@@ -320,19 +362,22 @@ class BasePhase(ABC):
             # デフォルトはフェーズディレクトリ
             target_dir = self.phase_dir
 
-        # プロンプトを保存
-        prompt_file = target_dir / 'prompt.txt'
+        # 連番を取得
+        sequence_number = self._get_next_sequence_number(target_dir)
+
+        # プロンプトを保存（連番付き）
+        prompt_file = target_dir / f'prompt_{sequence_number}.txt'
         prompt_file.write_text(prompt, encoding='utf-8')
         print(f"[INFO] プロンプトを保存: {prompt_file}")
 
-        # エージェントログをマークダウン形式で整形
+        # エージェントログをマークダウン形式で整形（連番付き）
         formatted_log = self._format_agent_log(messages)
-        agent_log_file = target_dir / 'agent_log.md'
+        agent_log_file = target_dir / f'agent_log_{sequence_number}.md'
         agent_log_file.write_text(formatted_log, encoding='utf-8')
         print(f"[INFO] エージェントログを保存: {agent_log_file}")
 
-        # 生ログも保存（デバッグ用）
-        raw_log_file = target_dir / 'agent_log_raw.txt'
+        # 生ログも保存（デバッグ用、連番付き）
+        raw_log_file = target_dir / f'agent_log_raw_{sequence_number}.txt'
         raw_log = '\n\n'.join(messages)
         raw_log_file.write_text(raw_log, encoding='utf-8')
         print(f"[INFO] 生ログを保存: {raw_log_file}")

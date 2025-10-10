@@ -1,0 +1,70 @@
+{
+  "issue_number": "317",
+  "issue_url": "https://github.com/tielec/infrastructure-as-code/issues/317",
+  "issue_title": "Issue #317",
+  "workflow_version": "1.0.0",
+  "current_phase": "report",
+  "design_decisions": {
+    "implementation_strategy": "EXTEND",
+    "test_strategy": "UNIT_INTEGRATION",
+    "test_code_strategy": "EXTEND_TEST"
+  },
+  "cost_tracking": {
+    "total_input_tokens": 0,
+    "total_output_tokens": 0,
+    "total_cost_usd": 0.0
+  },
+  "phases": {
+    "requirements": {
+      "status": "completed",
+      "retry_count": 0,
+      "started_at": "2025-10-10T03:53:02.711314Z",
+      "completed_at": "2025-10-10T03:57:01.511428Z",
+      "review_result": "PASS_WITH_SUGGESTIONS"
+    },
+    "design": {
+      "status": "completed",
+      "retry_count": 0,
+      "started_at": "2025-10-10T03:57:07.868701Z",
+      "completed_at": "2025-10-10T04:01:58.660325Z",
+      "review_result": "PASS_WITH_SUGGESTIONS"
+    },
+    "test_scenario": {
+      "status": "completed",
+      "retry_count": 2,
+      "started_at": "2025-10-10T04:02:13.090592Z",
+      "completed_at": "2025-10-10T04:13:09.666982Z",
+      "review_result": "PASS_WITH_SUGGESTIONS"
+    },
+    "implementation": {
+      "status": "completed",
+      "retry_count": 2,
+      "started_at": "2025-10-10T04:13:15.657677Z",
+      "completed_at": "2025-10-10T04:26:43.713307Z",
+      "review_result": "PASS"
+    },
+    "testing": {
+      "status": "completed",
+      "retry_count": 0,
+      "started_at": "2025-10-10T04:26:49.685760Z",
+      "completed_at": "2025-10-10T04:30:33.305427Z",
+      "review_result": "PASS"
+    },
+    "documentation": {
+      "status": "completed",
+      "retry_count": 0,
+      "started_at": "2025-10-10T04:30:39.035965Z",
+      "completed_at": "2025-10-10T04:34:38.617308Z",
+      "review_result": "PASS"
+    },
+    "report": {
+      "status": "completed",
+      "retry_count": 0,
+      "started_at": "2025-10-10T04:34:44.802749Z",
+      "completed_at": "2025-10-10T04:38:09.017726Z",
+      "review_result": "PASS"
+    }
+  },
+  "created_at": "2025-10-10T03:52:59.672591Z",
+  "updated_at": "2025-10-10T04:38:09.017736Z"
+}

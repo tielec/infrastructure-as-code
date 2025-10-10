@@ -347,11 +347,28 @@ class BasePhase(ABC):
         """GitHub Issueに成果物を投稿（v1.4.0で追加）"""
         # GitHubClient経由でIssueコメントとして成果物を投稿
         # 失敗時でもワークフローは継続（WARNING表示）
+
+    def _get_next_sequence_number(self, target_dir: Path) -> int:
+        """対象ディレクトリ内の既存ログファイルから次の連番を取得（v1.5.0で追加）"""
+        # agent_log_*.md パターンのファイルを検索
+        # 正規表現で連番を抽出し、最大値+1を返す
+        # ファイルが存在しない場合は1を返す
+
+    def _save_execution_logs(self, prompt: str, messages: List[str], log_prefix: str = ''):
+        """プロンプトとエージェントログを保存（連番付き、v1.5.0で拡張）"""
+        # 連番を自動決定してログファイルに付与
+        # agent_log_{N}.md, agent_log_raw_{N}.txt, prompt_{N}.txt
 ```
 
 **v1.4.0での変更**:
 - `post_output()`メソッドを追加し、全フェーズで成果物をGitHub Issueに自動投稿
 - エラーハンドリング強化：投稿失敗時でもワークフローを継続
+
+**v1.5.0での変更（Issue #317）**:
+- `_get_next_sequence_number()`メソッドを追加し、ログファイルの連番を自動管理
+- `_save_execution_logs()`を拡張し、リトライ時に過去のログを保持
+- ログファイル名: `agent_log_1.md` → `agent_log_2.md` → `agent_log_3.md`...
+- 成果物ファイル（`output/`配下）は従来通り上書き
 
 ### 5.4 GitManager（core/git_manager.py）
 

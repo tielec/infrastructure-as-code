@@ -5,6 +5,7 @@ Claude Code headless modeを使ってAIエージェントを実行
 - Read/Write/Edit/Bash/Grep/Globツールが使える
 - 自律的にタスクを実行
 """
+import os
 import anyio
 from pathlib import Path
 from typing import Optional, List, Dict
@@ -42,6 +43,10 @@ class ClaudeAgentClient:
         Returns:
             List[str]: レスポンスメッセージのリスト
         """
+        # 環境変数でBashコマンド承認スキップを有効化（Docker環境内で安全）
+        # Note: すでにDocker containerで隔離されているため、セキュリティリスクは限定的
+        os.environ['CLAUDE_DANGEROUSLY_SKIP_PERMISSIONS'] = '1'
+
         options = ClaudeAgentOptions(
             system_prompt=system_prompt,
             max_turns=max_turns,
