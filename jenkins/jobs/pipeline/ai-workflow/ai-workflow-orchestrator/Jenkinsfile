@@ -147,12 +147,6 @@ pipeline {
                             sh """
                                 python main.py init --issue-url ${params.ISSUE_URL}
                             """
-
-                            // metadata.json確認
-                            sh """
-                                echo "metadata.json created:"
-                                cat .ai-workflow/issue-${env.ISSUE_NUMBER}/metadata.json
-                            """
                         }
                     }
                 }

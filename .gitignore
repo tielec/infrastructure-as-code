@@ -70,6 +70,7 @@ jenkins/jobs/*/lastStable
 jenkins/jobs/*/lastSuccessful
 jenkins/jobs/*/nextBuildNumber
 jenkins/secrets/
+*@tmp/
 
 # OS files
 Thumbs.db
