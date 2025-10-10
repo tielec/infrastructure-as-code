@@ -30,7 +30,7 @@ class WorkflowState:
             "issue_url": issue_url,
             "issue_title": issue_title,
             "workflow_version": "1.0.0",
-            "current_phase": "requirements",
+            "current_phase": "planning",
             "design_decisions": {
                 "implementation_strategy": None,
                 "test_strategy": None,
@@ -42,6 +42,13 @@ class WorkflowState:
                 "total_cost_usd": 0.0
             },
             "phases": {
+                "planning": {
+                    "status": "pending",
+                    "retry_count": 0,
+                    "started_at": None,
+                    "completed_at": None,
+                    "review_result": None
+                },
                 "requirements": {
                     "status": "pending",
                     "retry_count": 0,
