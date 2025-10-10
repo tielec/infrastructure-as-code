@@ -4,10 +4,10 @@ GitHub Issue情報と要件定義書から詳細設計書を作成し、
 実装戦略・テスト戦略・テストコード戦略の判断を行う。
 """
 import json
-import re
 from pathlib import Path
 from typing import Dict, Any, List
 from .base_phase import BasePhase
+from core.content_parser import ClaudeContentParser
 
 
 class DesignPhase(BasePhase):
@@ -20,6 +20,8 @@ class DesignPhase(BasePhase):
             *args,
             **kwargs
         )
+        # Claude Messages APIベースのコンテンツパーサーを初期化
+        self.content_parser = ClaudeContentParser()
 
     def execute(self) -> Dict[str, Any]:
         """
@@ -344,7 +346,7 @@ class DesignPhase(BasePhase):
 
     def _extract_design_decisions(self, design_content: str) -> Dict[str, str]:
         """
-        設計書から戦略判断を抽出
+        設計書から戦略判断を抽出（Claude Messages API使用）
 
         Args:
             design_content: 設計書の内容
@@ -354,34 +356,9 @@ class DesignPhase(BasePhase):
                 - implementation_strategy: CREATE/EXTEND/REFACTOR
                 - test_strategy: UNIT_ONLY/INTEGRATION_ONLY/BDD_ONLY/UNIT_INTEGRATION/UNIT_BDD/INTEGRATION_BDD/ALL
                 - test_code_strategy: EXTEND_TEST/CREATE_TEST/BOTH_TEST
+
+        Notes:
+            - 正規表現ベースの抽出からClaude Messages APIベースの抽出に置き換え
+            - より高精度で柔軟な抽出が可能
         """
-        decisions = {}
-
-        # 実装戦略を抽出
-        impl_match = re.search(
-            r'###?\s*実装戦略[:：]\s*(CREATE|EXTEND|REFACTOR)',
-            design_content,
-            re.IGNORECASE | re.MULTILINE
-        )
-        if impl_match:
-            decisions['implementation_strategy'] = impl_match.group(1).upper()
-
-        # テスト戦略を抽出
-        test_match = re.search(
-            r'###?\s*テスト戦略[:：]\s*(UNIT_ONLY|INTEGRATION_ONLY|BDD_ONLY|UNIT_INTEGRATION|UNIT_BDD|INTEGRATION_BDD|ALL)',
-            design_content,
-            re.IGNORECASE | re.MULTILINE
-        )
-        if test_match:
-            decisions['test_strategy'] = test_match.group(1).upper()
-
-        # テストコード戦略を抽出
-        test_code_match = re.search(
-            r'###?\s*テストコード戦略[:：]\s*(EXTEND_TEST|CREATE_TEST|BOTH_TEST)',
-            design_content,
-            re.IGNORECASE | re.MULTILINE
-        )
-        if test_code_match:
-            decisions['test_code_strategy'] = test_code_match.group(1).upper()
-
-        return decisions
+        return self.content_parser.extract_design_decisions(design_content)

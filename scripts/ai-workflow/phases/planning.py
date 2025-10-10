@@ -8,10 +8,10 @@ GitHub Issue情報から以下を策定:
 - リスク評価とリスク軽減策
 - 実装戦略・テスト戦略の事前決定
 """
-import re
 from pathlib import Path
 from typing import Dict, Any, List
 from .base_phase import BasePhase
+from core.content_parser import ClaudeContentParser
 
 
 class PlanningPhase(BasePhase):
@@ -24,6 +24,8 @@ class PlanningPhase(BasePhase):
             *args,
             **kwargs
         )
+        # Claude Messages APIベースのコンテンツパーサーを初期化
+        self.content_parser = ClaudeContentParser()
 
     def execute(self) -> Dict[str, Any]:
         """
@@ -301,12 +303,7 @@ class PlanningPhase(BasePhase):
 
     def _extract_design_decisions(self, planning_content: str) -> Dict[str, str]:
         """
-        計画書から戦略判断を抽出
-
-        正規表現パターン:
-        - 実装戦略: r'###?\\s*実装戦略[::]\\s*(CREATE|EXTEND|REFACTOR)'
-        - テスト戦略: r'###?\\s*テスト戦略[::]\\s*(UNIT_ONLY|INTEGRATION_ONLY|BDD_ONLY|UNIT_INTEGRATION|UNIT_BDD|INTEGRATION_BDD|ALL)'
-        - テストコード戦略: r'###?\\s*テストコード戦略[::]\\s*(EXTEND_TEST|CREATE_TEST|BOTH_TEST)'
+        計画書から戦略判断を抽出（Claude Messages API使用）
 
         Args:
             planning_content: 計画書の内容
@@ -316,34 +313,9 @@ class PlanningPhase(BasePhase):
                 - implementation_strategy: CREATE/EXTEND/REFACTOR
                 - test_strategy: UNIT_ONLY/.../ALL
                 - test_code_strategy: EXTEND_TEST/CREATE_TEST/BOTH_TEST
+
+        Notes:
+            - 正規表現ベースの抽出からClaude Messages APIベースの抽出に置き換え
+            - より高精度で柔軟な抽出が可能
         """
-        decisions = {}
-
-        # 実装戦略を抽出
-        impl_match = re.search(
-            r'###?\\s*実装戦略[::]\\s*(CREATE|EXTEND|REFACTOR)',
-            planning_content,
-            re.IGNORECASE | re.MULTILINE
-        )
-        if impl_match:
-            decisions['implementation_strategy'] = impl_match.group(1).upper()
-
-        # テスト戦略を抽出
-        test_match = re.search(
-            r'###?\\s*テスト戦略[::]\\s*(UNIT_ONLY|INTEGRATION_ONLY|BDD_ONLY|UNIT_INTEGRATION|UNIT_BDD|INTEGRATION_BDD|ALL)',
-            planning_content,
-            re.IGNORECASE | re.MULTILINE
-        )
-        if test_match:
-            decisions['test_strategy'] = test_match.group(1).upper()
-
-        # テストコード戦略を抽出
-        test_code_match = re.search(
-            r'###?\\s*テストコード戦略[::]\\s*(EXTEND_TEST|CREATE_TEST|BOTH_TEST)',
-            planning_content,
-            re.IGNORECASE | re.MULTILINE
-        )
-        if test_code_match:
-            decisions['test_code_strategy'] = test_code_match.group(1).upper()
-
-        return decisions
+        return self.content_parser.extract_design_decisions(planning_content)

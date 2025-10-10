@@ -172,15 +172,79 @@ ERROR: Invalid API key · Please run /login
 
 ## Jenkins統合
 
+### 認証方式の選択
+
+Jenkins環境では、以下の2つの認証方式をサポートしています：
+
+1. **CLAUDE_CODE_OAUTH_TOKEN**: Claude Agent SDK（Claude Code headless mode）用のOAuthトークン
+   - 用途: Phase実行時のClaude Agent SDK呼び出し
+   - 取得方法: 上記の「Step 1: OAuthトークンの抽出」を参照
+
+2. **ANTHROPIC_API_KEY**: Anthropic Messages API直接呼び出し用のAPIキー
+   - 用途: `ClaudeContentParser`による戦略判断抽出とレビュー結果解析
+   - 取得方法: [Anthropic Console](https://console.anthropic.com/settings/keys)でAPIキーを作成
+   - 注意: CLAUDE_CODE_OAUTH_TOKENとは**別のキー**です
+
 ### Jenkins Credentials設定
 
-1. **Credential作成**:
-   - Kind: Secret text
-   - Secret: `sk-ant-oat01-...`（抽出したトークン）
-   - ID: `claude-code-oauth-token`
-   - Description: Claude Code OAuth Token for AI Workflow
+#### 1. Claude Code OAuth Token（必須）
 
-2. **Jenkinsfileでの使用**:
+Claude Agent SDK用のOAuthトークンを設定します。
+
+**Credential作成**:
+- Kind: Secret text
+- Secret: `sk-ant-oat01-...`（Step 1で抽出したトークン）
+- ID: `claude-code-oauth-token`
+- Description: Claude Code OAuth Token for AI Workflow
+
+#### 2. Anthropic API Key（ClaudeContentParser使用時に推奨）
+
+Anthropic Messages API直接呼び出し用のAPIキーを設定します。
+
+**Credential作成**:
+- Kind: Secret text
+- Secret: `sk-ant-api03-...`（Anthropic Consoleで作成したAPIキー）
+- ID: `anthropic-api-key`
+- Description: Anthropic API Key for ClaudeContentParser
+
+### Jenkinsfileでの使用
+
+#### パターン1: 両方の認証キーを設定（推奨）
+
+```groovy
+pipeline {
+    agent any
+
+    environment {
+        CLAUDE_CODE_OAUTH_TOKEN = credentials('claude-code-oauth-token')
+        ANTHROPIC_API_KEY = credentials('anthropic-api-key')
+        GITHUB_TOKEN = credentials('github-token')
+    }
+
+    stages {
+        stage('AI Workflow') {
+            steps {
+                script {
+                    sh '''
+                        docker run --rm \
+                          -e CLAUDE_CODE_OAUTH_TOKEN="${CLAUDE_CODE_OAUTH_TOKEN}" \
+                          -e ANTHROPIC_API_KEY="${ANTHROPIC_API_KEY}" \
+                          -e GITHUB_TOKEN="${GITHUB_TOKEN}" \
+                          -v "${WORKSPACE}/.ai-workflow:/workspace/.ai-workflow" \
+                          ai-workflow:latest \
+                          python main.py --issue ${ISSUE_NUMBER} --phase ${PHASE}
+                    '''
+                }
+            }
+        }
+    }
+}
+```
+
+#### パターン2: OAuth Tokenのみ（ClaudeContentParserがフォールバック）
+
+`ANTHROPIC_API_KEY`が設定されていない場合、`ClaudeContentParser`は自動的に`CLAUDE_CODE_OAUTH_TOKEN`をフォールバックとして使用します。
+
 ```groovy
 pipeline {
     agent any
