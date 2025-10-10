@@ -496,13 +496,20 @@ class GitManager:
             - Gitコマンド失敗 → {'success': False, 'error': 'Git command failed: ...'}
         """
         try:
-            # ブランチ存在チェック
+            # ブランチ存在チェック - 既存の場合は削除
             if self.branch_exists(branch_name):
-                return {
-                    'success': False,
-                    'branch_name': branch_name,
-                    'error': f'Branch already exists: {branch_name}'
-                }
+                logger.warning(f"Branch {branch_name} already exists, deleting it")
+                # 現在のブランチでない場合のみ削除
+                current_branch = self.get_current_branch()
+                if current_branch == branch_name:
+                    # 別のブランチ (base_branch または main) に切り替え
+                    fallback_branch = base_branch if base_branch else 'main'
+                    self.repo.git.checkout(fallback_branch)
+                # ローカルブランチ削除
+                try:
+                    self.repo.git.branch('-D', branch_name)
+                except Exception as e:
+                    logger.warning(f"Failed to delete local branch: {e}")
 
             # 基準ブランチ指定時は、そのブランチにチェックアウト
             if base_branch:
