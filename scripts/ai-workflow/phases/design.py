@@ -359,7 +359,7 @@ class DesignPhase(BasePhase):
 
         # 実装戦略を抽出
         impl_match = re.search(
-            r'###?\s*実装戦略[:：]\s*(CREATE|EXTEND|REFACTOR)',
+            r'##\s*\d+\.\s*実装戦略[:：]\s*(CREATE|EXTEND|REFACTOR)',
             design_content,
             re.IGNORECASE | re.MULTILINE
         )
@@ -368,7 +368,7 @@ class DesignPhase(BasePhase):
 
         # テスト戦略を抽出
         test_match = re.search(
-            r'###?\s*テスト戦略[:：]\s*(UNIT_ONLY|INTEGRATION_ONLY|BDD_ONLY|UNIT_INTEGRATION|UNIT_BDD|INTEGRATION_BDD|ALL)',
+            r'##\s*\d+\.\s*テスト戦略[:：]\s*(UNIT_ONLY|INTEGRATION_ONLY|BDD_ONLY|UNIT_INTEGRATION|UNIT_BDD|INTEGRATION_BDD|ALL)',
             design_content,
             re.IGNORECASE | re.MULTILINE
         )
@@ -377,7 +377,7 @@ class DesignPhase(BasePhase):
 
         # テストコード戦略を抽出
         test_code_match = re.search(
-            r'###?\s*テストコード戦略[:：]\s*(EXTEND_TEST|CREATE_TEST|BOTH_TEST)',
+            r'##\s*\d+\.\s*テストコード戦略[:：]\s*(EXTEND_TEST|CREATE_TEST|BOTH_TEST)',
             design_content,
             re.IGNORECASE | re.MULTILINE
         )
