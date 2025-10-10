@@ -11,14 +11,16 @@ AI駆動開発自動化ワークフローは、GitHub IssueからPR作成まで�
 
 ### 1.1 システムの目的
 
-- **開発プロセスの自動化**: 要件定義→設計→実装→テストを自動実行
+- **開発プロセスの自動化**: プロジェクト計画→要件定義→設計→実装→テストを自動実行
+- **事前計画の自動化**: Phase 0で実装戦略・テスト戦略を事前決定し、後続フェーズの負荷を軽減
 - **品質の担保**: 各フェーズでAIレビューを実施し、品質ゲートを設定
 - **コスト管理**: API利用料金を追跡し、予算内で実行
 - **トレーサビリティ**: すべての成果物とメタデータをGit管理
 
 ### 1.2 システムの特徴
 
-- **6フェーズワークフロー**: 要件定義 → 詳細設計 → テストシナリオ → 実装 → テスト → ドキュメント
+- **7フェーズワークフロー**: プロジェクト計画 → 要件定義 → 詳細設計 → テストシナリオ → 実装 → テスト → ドキュメント
+- **Phase 0（Planning）**: 実装戦略・テスト戦略の事前決定により、Phase 2の負荷を軽減
 - **AI批判的思考レビュー**: 各フェーズ完了後にAIがレビュー（PASS/PASS_WITH_SUGGESTIONS/FAIL）
 - **リトライ機能**: FAIL時は最大3回まで自動リトライ
 - **BDD準拠**: ユーザー行動視点のテストシナリオ（Gherkin形式）
@@ -96,14 +98,15 @@ AI駆動開発自動化ワークフローは、GitHub IssueからPR作成まで�
 │  └──────────────────────────────────────────────────────────┘  │
 │                                                                   │
 │  ┌──────────────────────────────────────────────────────────┐  │
-│  │  phases/ (フェーズ実装・未実装)                           │  │
+│  │  phases/ (フェーズ実装)                                    │  │
 │  │  - base_phase.py: フェーズ基底クラス                      │  │
-│  │  - requirements.py: 要件定義                              │  │
-│  │  - design.py: 詳細設計                                    │  │
-│  │  - test_scenario.py: テストシナリオ                       │  │
-│  │  - implementation.py: 実装                                │  │
-│  │  - testing.py: テスト実行                                 │  │
-│  │  - documentation.py: ドキュメント作成                     │  │
+│  │  - planning.py: プロジェクト計画（Phase 0）              │  │
+│  │  - requirements.py: 要件定義（Phase 1）                  │  │
+│  │  - design.py: 詳細設計（Phase 2）                        │  │
+│  │  - test_scenario.py: テストシナリオ（Phase 3）           │  │
+│  │  - implementation.py: 実装（Phase 4）                    │  │
+│  │  - testing.py: テスト実行（Phase 5）                     │  │
+│  │  - documentation.py: ドキュメント作成（Phase 6）         │  │
 │  └──────────────────────────────────────────────────────────┘  │
 │                                                                   │
 │  ┌──────────────────────────────────────────────────────────┐  │
@@ -119,8 +122,9 @@ AI駆動開発自動化ワークフローは、GitHub IssueからPR作成まで�
 │  ┌──────────────┐  ┌──────────────┐  ┌──────────────────────┐ │
 │  │ Claude API   │  │ GitHub API   │  │ Git Repository       │ │
 │  │ - Sonnet 4.5 │  │ - Issue取得  │  │ - feature/issue-XXX  │ │
-│  │ - 要件生成   │  │ - PR作成     │  │ - .ai-workflow/      │ │
-│  │ - レビュー   │  │              │  │   - metadata.json    │ │
+│  │ - 計画生成   │  │ - PR作成     │  │ - .ai-workflow/      │ │
+│  │ - 要件生成   │  │              │  │   - metadata.json    │ │
+│  │ - レビュー   │  │              │  │   - 00-planning      │ │
 │  └──────────────┘  └──────────────┘  │   - 01-requirements  │ │
 │                                       │   - 02-design        │ │
 │                                       │   - 03-test-scenario │ │
@@ -162,8 +166,8 @@ AI駆動開発自動化ワークフローは、GitHub IssueからPR作成まで�
     │ 3. 初期データ構造を生成
     │    - issue_number, issue_url, issue_title
     │    - workflow_version: "1.0.0"
-    │    - current_phase: "requirements"
-    │    - 6フェーズをpendingで初期化
+    │    - current_phase: "planning"（Phase 0から開始）
+    │    - 7フェーズをpendingで初期化
     │    - cost_tracking初期化
     │    - created_at, updated_at設定
     │
@@ -247,17 +251,24 @@ AI駆動開発自動化ワークフローは、GitHub IssueからPR作成まで�
     "total_cost_usd": 0.45
   },
   "phases": {
+    "planning": {
+      "status": "completed",
+      "retry_count": 0,
+      "started_at": "2025-10-10T09:00:00.000Z",
+      "completed_at": "2025-10-10T09:05:23.456Z",
+      "review_result": "PASS"
+    },
     "requirements": {
       "status": "completed",
       "retry_count": 0,
-      "started_at": "2025-10-07T10:00:00.000Z",
-      "completed_at": "2025-10-07T10:05:23.456Z",
+      "started_at": "2025-10-10T09:06:00.000Z",
+      "completed_at": "2025-10-10T09:11:23.456Z",
       "review_result": "PASS_WITH_SUGGESTIONS"
     },
     "design": {
       "status": "in_progress",
       "retry_count": 0,
-      "started_at": "2025-10-07T10:05:30.000Z",
+      "started_at": "2025-10-10T09:12:00.000Z",
       "completed_at": null,
       "review_result": null
     },
@@ -304,7 +315,7 @@ class WorkflowState:
 
     def set_design_decision(self, key: str, value: str) -> None:
         """設計判断を記録"""
-        # Phase 2での実装戦略などを保存
+        # Phase 0での実装戦略などを保存（Phase 2でも使用可能）
 
     def get_phase_status(self, phase: str) -> str:
         """フェーズステータスを取得"""
@@ -511,8 +522,9 @@ BasePhase.run()
 |------|--------|--------------|
 | ワークフロー初期化 | < 1秒 | 未計測 |
 | metadata.json読み込み | < 100ms | 未計測 |
-| Phase 1実行（要件定義） | < 60秒 | 未実装 |
-| 全6フェーズ完了 | < 10分 | 未実装 |
+| Phase 0実行（プロジェクト計画） | < 3分 | 実装済み |
+| Phase 1実行（要件定義） | < 60秒 | 実装済み |
+| 全7フェーズ完了 | < 15分 | 未実装 |
 
 ### 7.2 スケーラビリティ
 
@@ -569,10 +581,10 @@ BasePhase.run()
 **優先順位**:
 1. ~~**Phase 1実装**: Claude API統合、要件定義自動生成~~ ✅ 完了（v1.1.0）
 2. ~~**Phase 2実装**: 詳細設計、設計判断機能~~ ✅ 完了（v1.2.0）
-3. **Phase 3-6実装**: テストシナリオ→ドキュメント
-4. **Git操作**: ブランチ作成、コミット、PR作成
-5. **レビューエンジン**: 批判的思考アルゴリズム
-6. **Jenkins統合**: Jenkinsfileパイプライン実装
+3. ~~**Phase 0実装**: プロジェクト計画、実装戦略の事前決定~~ ✅ 完了（v1.5.0）
+4. **PR自動作成**: GitHub PR作成機能
+5. **コスト最適化**: プロンプトキャッシュ活用
+6. **レビュー基準のカスタマイズ**: プロジェクト固有の品質基準設定
 
 ---
 
@@ -585,5 +597,5 @@ BasePhase.run()
 
 ---
 
-**バージョン**: 1.4.0
+**バージョン**: 1.5.0
 **最終更新**: 2025-10-10

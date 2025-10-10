@@ -1,15 +1,16 @@
 # AI駆動開発自動化ワークフロー
 
-Claude Agent SDKを使った6フェーズの自動開発ワークフロー
+Claude Agent SDKを使った7フェーズの自動開発ワークフロー
 
 ## 概要
 
-このツールは、GitHubのIssueから要件定義、設計、テスト、実装、ドキュメント作成までを自動化します。
+このツールは、GitHubのIssueからプロジェクト計画、要件定義、設計、テスト、実装、ドキュメント作成までを自動化します。
 
 ### 主な特徴
 
 - **Claude Pro Max活用**: Claude Code headless modeで自律的にタスクを実行
-- **6フェーズワークフロー**: 要件定義 → 設計 → テストシナリオ → 実装 → テスト → ドキュメント
+- **7フェーズワークフロー**: プロジェクト計画 → 要件定義 → 設計 → テストシナリオ → 実装 → テスト → ドキュメント
+- **事前計画機能**: Phase 0で実装戦略・テスト戦略を事前決定し、後続フェーズの負荷を軽減
 - **クリティカルシンキングレビュー**: 各フェーズで品質チェック
 - **GitHub統合**: Issue情報の取得、進捗報告、レビュー結果の投稿
 - **Docker対応**: Linux環境で安定動作
@@ -63,7 +64,21 @@ docker run --rm \
   python main.py init --issue-url https://github.com/tielec/infrastructure-as-code/issues/304
 ```
 
-### 3. Phase 1（要件定義）実行
+### 3. Phase 0（プロジェクト計画）実行（推奨）
+
+```bash
+# Phase 0を実行して事前に実装戦略を決定
+docker run --rm \
+  -e CLAUDE_CODE_OAUTH_TOKEN="${CLAUDE_CODE_OAUTH_TOKEN}" \
+  -e GITHUB_TOKEN="${GITHUB_TOKEN}" \
+  -e GITHUB_REPOSITORY="${GITHUB_REPOSITORY}" \
+  -v "$(pwd):/workspace" \
+  -w /workspace/scripts/ai-workflow \
+  ai-workflow:v1.1.0 \
+  python main.py execute --phase planning --issue 304
+```
+
+### 4. Phase 1（要件定義）実行
 
 ```bash
 # Phase 1を実行
@@ -77,8 +92,13 @@ docker run --rm \
   python main.py execute --phase requirements --issue 304
 ```
 
-### 4. 結果確認
+### 5. 結果確認
 
+**Phase 0の成果物**:
+- **プロジェクト計画書**: `.ai-workflow/issue-304/00_planning/output/planning.md`
+- **実装戦略**: metadata.jsonのdesign_decisionsに保存（CREATE/EXTEND/REFACTOR、テスト戦略等）
+
+**Phase 1以降の成果物**:
 - **要件定義書**: `.ai-workflow/issue-304/01_requirements/output/requirements.md`
 - **実行ログ**: `.ai-workflow/issue-304/01_requirements/execute/`
   - `agent_log_1.md` - エージェント実行ログ（Markdown形式）
@@ -107,7 +127,7 @@ GitHub IssueからPR作成まで、Claude AIが自動的に開発プロセスを
 | パラメータ | デフォルト | 説明 |
 |-----------|----------|------|
 | ISSUE_URL | (必須) | GitHub Issue URL |
-| START_PHASE | requirements | 開始フェーズ |
+| START_PHASE | planning | 開始フェーズ（planning推奨） |
 | DRY_RUN | false | ドライランモード |
 | SKIP_REVIEW | false | レビュースキップ |
 | MAX_RETRIES | 3 | 最大リトライ回数 |
@@ -119,7 +139,7 @@ GitHub IssueからPR作成まで、Claude AIが自動的に開発プロセスを
 # Jenkins CLI経由での実行（オプション）
 jenkins-cli build AI_Workflow/ai_workflow_orchestrator \
   -p ISSUE_URL=https://github.com/tielec/infrastructure-as-code/issues/305 \
-  -p START_PHASE=requirements
+  -p START_PHASE=planning
 ```
 
 **4. Git自動commit & push**
@@ -187,7 +207,13 @@ jenkins-cli build AI_Workflow/ai_workflow_orchestrator \
 - [x] BasePhase.post_output()メソッド統合
 - [x] エラーハンドリング強化（投稿失敗時でもワークフロー継続）
 
-### 🚧 開発中（v1.5.0以降）
+### ✅ 完了（v1.5.0 Phase 0実装）
+- [x] Phase 0: プロジェクト計画フェーズ（planning.py）
+- [x] 実装戦略・テスト戦略の事前決定機能
+- [x] planning.mdとmetadata.jsonへの戦略保存
+- [x] Phase 2との連携（戦略情報の参照）
+
+### 🚧 開発中（v1.6.0以降）
 - [ ] PR自動作成機能
 - [ ] GitHub Webhook連携
 - [ ] レビュー基準カスタマイズ
@@ -205,13 +231,18 @@ scripts/ai-workflow/
 │   └── github_client.py         # GitHub API統合
 ├── phases/
 │   ├── base_phase.py            # Phase基底クラス
+│   ├── planning.py              # Phase 0: プロジェクト計画
 │   ├── requirements.py          # Phase 1: 要件定義
 │   ├── design.py                # Phase 2: 設計
-│   ├── test_scenario.py         # Phase 3: テストシナリオ（未実装）
-│   ├── implementation.py        # Phase 4: 実装（未実装）
-│   ├── testing.py               # Phase 5: テスト（未実装）
-│   └── documentation.py         # Phase 6: ドキュメント（未実装）
+│   ├── test_scenario.py         # Phase 3: テストシナリオ
+│   ├── implementation.py        # Phase 4: 実装
+│   ├── testing.py               # Phase 5: テスト
+│   └── documentation.py         # Phase 6: ドキュメント
 ├── prompts/
+│   ├── planning/
+│   │   ├── execute.txt          # 計画書生成プロンプト
+│   │   ├── review.txt           # 計画書レビュープロンプト
+│   │   └── revise.txt           # 計画書修正プロンプト
 │   ├── requirements/
 │   │   ├── execute.txt          # 要件定義実行プロンプト
 │   │   ├── review.txt           # 要件定義レビュープロンプト
@@ -220,7 +251,7 @@ scripts/ai-workflow/
 │   │   ├── execute.txt          # 設計実行プロンプト
 │   │   ├── review.txt           # 設計レビュープロンプト
 │   │   └── revise.txt           # 設計修正プロンプト
-│   └── ...                      # 他のフェーズのプロンプト（未実装）
+│   └── ...                      # 他のフェーズのプロンプト
 ├── reviewers/
 │   └── critical_thinking.py     # クリティカルシンキングレビュー（未実装）
 ├── tests/
@@ -251,15 +282,20 @@ python main.py execute --phase <phase_name> --issue <issue_number>
 ```
 
 **フェーズ名:**
-- `requirements`: 要件定義
-- `design`: 設計
-- `test_scenario`: テストシナリオ（未実装）
-- `implementation`: 実装（未実装）
-- `testing`: テスト（未実装）
-- `documentation`: ドキュメント（未実装）
+- `planning`: プロジェクト計画（Phase 0）
+- `requirements`: 要件定義（Phase 1）
+- `design`: 設計（Phase 2）
+- `test_scenario`: テストシナリオ（Phase 3）
+- `implementation`: 実装（Phase 4）
+- `testing`: テスト（Phase 5）
+- `documentation`: ドキュメント（Phase 6）
 
 **例:**
 ```bash
+# Phase 0から開始する場合（推奨）
+python main.py execute --phase planning --issue 304
+
+# Phase 1から開始する場合
 python main.py execute --phase requirements --issue 304
 ```
 
@@ -399,5 +435,5 @@ pytest tests/unit/
 
 ---
 
-**バージョン**: 1.2.0
-**最終更新**: 2025-10-09
+**バージョン**: 1.5.0
+**最終更新**: 2025-10-10
