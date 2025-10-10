@@ -8,10 +8,13 @@ Phase完了後の成果物を自動的にcommit & pushする機能を提供
 """
 import os
 import time
+import logging
 from pathlib import Path
 from typing import Optional, Dict, Any, List
 from git import Repo, GitCommandError
 from core.metadata_manager import MetadataManager
+
+logger = logging.getLogger(__name__)
 
 
 class GitManager:
