@@ -24,7 +24,7 @@ pipeline {
             label 'ec2-fleet'
             dir 'scripts/ai-workflow'
             filename 'Dockerfile'
-            args '-v ${WORKSPACE}:/workspace -w /workspace'
+            args '-v ${WORKSPACE}:/workspace -w /workspace -e CLAUDE_DANGEROUSLY_SKIP_PERMISSIONS=1'
         }
     }
 
@@ -40,6 +40,9 @@ pipeline {
         // Python実行環境
         PYTHONUNBUFFERED = '1'
         PYTHONUTF8 = '1'
+
+        // Claude Agent SDK設定（Bashコマンド承認スキップ）
+        CLAUDE_DANGEROUSLY_SKIP_PERMISSIONS = '1'
 
         // AI Workflow設定
         WORKFLOW_DIR = 'scripts/ai-workflow'

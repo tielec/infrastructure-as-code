@@ -402,3 +402,285 @@ def test_is_retriable_error_auth(temp_git_repo, mock_metadata):
 
     # 検証ポイント
     assert git_manager._is_retriable_error(error) is False
+
+
+# ━━━━━ 新規追加: ブランチ操作メソッドのUnitテスト（UT-GM-018〜UT-GM-030） ━━━━━
+
+# UT-GM-018: ブランチ作成成功（正常系）
+def test_create_branch_success(temp_git_repo, mock_metadata):
+    """ブランチが正しく作成されることを検証"""
+    temp_dir, repo = temp_git_repo
+    git_manager = GitManager(
+        repo_path=Path(temp_dir),
+        metadata_manager=mock_metadata
+    )
+
+    # ブランチ作成
+    result = git_manager.create_branch('ai-workflow/issue-999')
+
+    # 検証
+    assert result['success'] is True
+    assert result['branch_name'] == 'ai-workflow/issue-999'
+    assert result['error'] is None
+    assert git_manager.get_current_branch() == 'ai-workflow/issue-999'
+    assert git_manager.branch_exists('ai-workflow/issue-999') is True
+
+
+# UT-GM-019: ブランチ作成失敗（ブランチ既存エラー）
+def test_create_branch_already_exists(temp_git_repo, mock_metadata):
+    """既存ブランチエラーが正しく処理されることを検証"""
+    temp_dir, repo = temp_git_repo
+    git_manager = GitManager(
+        repo_path=Path(temp_dir),
+        metadata_manager=mock_metadata
+    )
+
+    # 事前にブランチを作成
+    git_manager.create_branch('ai-workflow/issue-999')
+    repo.git.checkout('master' if 'master' in [b.name for b in repo.branches] else 'main')
+
+    # 同名ブランチを再作成試行
+    result = git_manager.create_branch('ai-workflow/issue-999')
+
+    # 検証
+    assert result['success'] is False
+    assert 'Branch already exists' in result['error']
+    current = git_manager.get_current_branch()
+    assert current == 'master' or current == 'main'
+
+
+# UT-GM-020: ブランチ作成成功（基準ブランチ指定）
+def test_create_branch_with_base_branch(temp_git_repo, mock_metadata):
+    """基準ブランチ指定でブランチが作成されることを検証"""
+    temp_dir, repo = temp_git_repo
+    git_manager = GitManager(
+        repo_path=Path(temp_dir),
+        metadata_manager=mock_metadata
+    )
+
+    # developブランチを作成
+    repo.git.checkout('-b', 'develop')
+    main_branch = 'master' if 'master' in [b.name for b in repo.branches] else 'main'
+    repo.git.checkout(main_branch)
+
+    # developから新ブランチ作成
+    result = git_manager.create_branch(
+        'ai-workflow/issue-999',
+        base_branch='develop'
+    )
+
+    # 検証
+    assert result['success'] is True
+    assert git_manager.get_current_branch() == 'ai-workflow/issue-999'
+
+
+# UT-GM-021: ブランチ作成失敗（Gitコマンドエラー）
+def test_create_branch_git_command_error(temp_git_repo, mock_metadata, monkeypatch):
+    """Gitコマンドエラーが適切に処理されることを検証"""
+    temp_dir, repo = temp_git_repo
+    git_manager = GitManager(
+        repo_path=Path(temp_dir),
+        metadata_manager=mock_metadata
+    )
+
+    # git.checkout() をモック化してエラーを発生させる
+    def mock_checkout(*args, **kwargs):
+        raise GitCommandError('checkout', 'mock error')
+
+    monkeypatch.setattr(repo.git, 'checkout', mock_checkout)
+
+    # ブランチ作成試行
+    result = git_manager.create_branch('ai-workflow/issue-999')
+
+    # 検証
+    assert result['success'] is False
+    assert 'Git command failed' in result['error']
+
+
+# UT-GM-022: ブランチ切り替え成功（正常系）
+def test_switch_branch_success(temp_git_repo, mock_metadata):
+    """ブランチ切り替えが正常に動作することを検証"""
+    temp_dir, repo = temp_git_repo
+    git_manager = GitManager(
+        repo_path=Path(temp_dir),
+        metadata_manager=mock_metadata
+    )
+
+    # ブランチを作成
+    git_manager.create_branch('ai-workflow/issue-999')
+    main_branch = 'master' if 'master' in [b.name for b in repo.branches] else 'main'
+    repo.git.checkout(main_branch)
+
+    # ブランチ切り替え
+    result = git_manager.switch_branch('ai-workflow/issue-999')
+
+    # 検証
+    assert result['success'] is True
+    assert result['error'] is None
+    assert git_manager.get_current_branch() == 'ai-workflow/issue-999'
+
+
+# UT-GM-023: ブランチ切り替え失敗（ブランチ未存在エラー）
+def test_switch_branch_not_found(temp_git_repo, mock_metadata):
+    """存在しないブランチに切り替えようとした場合、エラーが返されることを検証"""
+    temp_dir, repo = temp_git_repo
+    git_manager = GitManager(
+        repo_path=Path(temp_dir),
+        metadata_manager=mock_metadata
+    )
+
+    # 存在しないブランチに切り替え試行
+    result = git_manager.switch_branch('ai-workflow/issue-999')
+
+    # 検証
+    assert result['success'] is False
+    assert 'Branch not found' in result['error']
+    assert "Please run 'init' first" in result['error']
+
+
+# UT-GM-024: ブランチ切り替え失敗（未コミット変更エラー）
+def test_switch_branch_uncommitted_changes(temp_git_repo, mock_metadata):
+    """未コミット変更がある場合のエラーを検証"""
+    temp_dir, repo = temp_git_repo
+    git_manager = GitManager(
+        repo_path=Path(temp_dir),
+        metadata_manager=mock_metadata
+    )
+
+    # ブランチを作成
+    git_manager.create_branch('ai-workflow/issue-999')
+    main_branch = 'master' if 'master' in [b.name for b in repo.branches] else 'main'
+    repo.git.checkout(main_branch)
+
+    # 未コミット変更を作成
+    test_file = Path(temp_dir) / 'test.txt'
+    test_file.write_text('modified content')
+
+    # ブランチ切り替え試行
+    result = git_manager.switch_branch('ai-workflow/issue-999')
+
+    # 検証
+    assert result['success'] is False
+    assert 'uncommitted changes' in result['error']
+    current = git_manager.get_current_branch()
+    assert current == main_branch
+
+
+# UT-GM-025: ブランチ切り替え成功（強制切り替え）
+def test_switch_branch_force(temp_git_repo, mock_metadata):
+    """force=Trueの場合、未コミット変更があってもブランチ切り替えが成功することを検証"""
+    temp_dir, repo = temp_git_repo
+    git_manager = GitManager(
+        repo_path=Path(temp_dir),
+        metadata_manager=mock_metadata
+    )
+
+    # ブランチを作成
+    git_manager.create_branch('ai-workflow/issue-999')
+    main_branch = 'master' if 'master' in [b.name for b in repo.branches] else 'main'
+    repo.git.checkout(main_branch)
+
+    # 未コミット変更を作成（新規ファイル）
+    test_file = Path(temp_dir) / 'test.txt'
+    test_file.write_text('new content')
+
+    # 強制切り替え
+    result = git_manager.switch_branch('ai-workflow/issue-999', force=True)
+
+    # 検証
+    assert result['success'] is True
+    assert git_manager.get_current_branch() == 'ai-workflow/issue-999'
+
+
+# UT-GM-026: ブランチ切り替えスキップ（同一ブランチ）
+def test_switch_branch_same_branch(temp_git_repo, mock_metadata):
+    """現在のブランチと同じブランチに切り替えようとした場合、スキップして成功を返すことを検証"""
+    temp_dir, repo = temp_git_repo
+    git_manager = GitManager(
+        repo_path=Path(temp_dir),
+        metadata_manager=mock_metadata
+    )
+
+    # ブランチを作成
+    git_manager.create_branch('ai-workflow/issue-999')
+
+    # 同じブランチに切り替え試行
+    result = git_manager.switch_branch('ai-workflow/issue-999')
+
+    # 検証
+    assert result['success'] is True
+    assert git_manager.get_current_branch() == 'ai-workflow/issue-999'
+
+
+# UT-GM-027: ブランチ存在確認（存在する）
+def test_branch_exists_true(temp_git_repo, mock_metadata):
+    """指定ブランチが存在する場合、Trueが返されることを検証"""
+    temp_dir, repo = temp_git_repo
+    git_manager = GitManager(
+        repo_path=Path(temp_dir),
+        metadata_manager=mock_metadata
+    )
+
+    # ブランチを作成
+    git_manager.create_branch('ai-workflow/issue-999')
+
+    # 存在確認
+    exists = git_manager.branch_exists('ai-workflow/issue-999')
+
+    # 検証
+    assert exists is True
+
+
+# UT-GM-028: ブランチ存在確認（存在しない）
+def test_branch_exists_false(temp_git_repo, mock_metadata):
+    """指定ブランチが存在しない場合、Falseが返されることを検証"""
+    temp_dir, repo = temp_git_repo
+    git_manager = GitManager(
+        repo_path=Path(temp_dir),
+        metadata_manager=mock_metadata
+    )
+
+    # 存在確認（未作成のブランチ）
+    exists = git_manager.branch_exists('ai-workflow/issue-999')
+
+    # 検証
+    assert exists is False
+
+
+# UT-GM-029: 現在のブランチ名取得（正常系）
+def test_get_current_branch_normal(temp_git_repo, mock_metadata):
+    """現在のブランチ名が正しく取得できることを検証"""
+    temp_dir, repo = temp_git_repo
+    git_manager = GitManager(
+        repo_path=Path(temp_dir),
+        metadata_manager=mock_metadata
+    )
+
+    # ブランチを作成して切り替え
+    git_manager.create_branch('ai-workflow/issue-999')
+
+    # ブランチ名取得
+    current_branch = git_manager.get_current_branch()
+
+    # 検証
+    assert current_branch == 'ai-workflow/issue-999'
+
+
+# UT-GM-030: 現在のブランチ名取得（デタッチHEAD状態）
+def test_get_current_branch_detached_head(temp_git_repo, mock_metadata):
+    """デタッチHEAD状態でHEADが返されることを検証"""
+    temp_dir, repo = temp_git_repo
+    git_manager = GitManager(
+        repo_path=Path(temp_dir),
+        metadata_manager=mock_metadata
+    )
+
+    # 最初のコミットを取得してデタッチ
+    first_commit = list(repo.iter_commits())[-1]
+    repo.git.checkout(first_commit.hexsha)
+
+    # ブランチ名取得
+    current_branch = git_manager.get_current_branch()
+
+    # 検証
+    assert current_branch == 'HEAD'

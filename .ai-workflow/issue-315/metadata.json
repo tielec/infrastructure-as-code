@@ -1,0 +1,70 @@
+{
+  "issue_number": "315",
+  "issue_url": "https://github.com/tielec/infrastructure-as-code/issues/315",
+  "issue_title": "Issue #315",
+  "workflow_version": "1.0.0",
+  "current_phase": "implementation",
+  "design_decisions": {
+    "implementation_strategy": "EXTEND",
+    "test_strategy": "UNIT_INTEGRATION",
+    "test_code_strategy": "EXTEND_TEST"
+  },
+  "cost_tracking": {
+    "total_input_tokens": 0,
+    "total_output_tokens": 0,
+    "total_cost_usd": 0.0
+  },
+  "phases": {
+    "requirements": {
+      "status": "completed",
+      "retry_count": 0,
+      "started_at": "2025-10-10T04:40:42.652090Z",
+      "completed_at": "2025-10-10T04:44:53.619306Z",
+      "review_result": "PASS_WITH_SUGGESTIONS"
+    },
+    "design": {
+      "status": "completed",
+      "retry_count": 0,
+      "started_at": "2025-10-10T04:45:03.364930Z",
+      "completed_at": "2025-10-10T04:52:31.651904Z",
+      "review_result": "PASS_WITH_SUGGESTIONS"
+    },
+    "test_scenario": {
+      "status": "completed",
+      "retry_count": 3,
+      "started_at": "2025-10-10T05:37:32.081986Z",
+      "completed_at": "2025-10-10T05:42:08.956009Z",
+      "review_result": "PASS"
+    },
+    "implementation": {
+      "status": "completed",
+      "retry_count": 0,
+      "started_at": "2025-10-10T05:42:15.278869Z",
+      "completed_at": "2025-10-10T05:49:15.349168Z",
+      "review_result": "PASS_WITH_SUGGESTIONS"
+    },
+    "testing": {
+      "status": "pending",
+      "retry_count": 0,
+      "started_at": null,
+      "completed_at": null,
+      "review_result": null
+    },
+    "documentation": {
+      "status": "pending",
+      "retry_count": 0,
+      "started_at": null,
+      "completed_at": null,
+      "review_result": null
+    },
+    "report": {
+      "status": "pending",
+      "retry_count": 0,
+      "started_at": null,
+      "completed_at": null,
+      "review_result": null
+    }
+  },
+  "created_at": "2025-10-10T04:40:39.741382Z",
+  "updated_at": "2025-10-10T05:49:15.349178Z"
+}

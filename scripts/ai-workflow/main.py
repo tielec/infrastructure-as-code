@@ -50,6 +50,34 @@ def init(issue_url: str):
         click.echo(f'[INFO] Metadata file: {metadata_path}')
         sys.exit(1)
 
+    # ━━━ 新規追加: ブランチ作成処理 ━━━
+    # GitManagerインスタンス生成（一時的なmetadata_managerを使用）
+    from core.git_manager import GitManager
+
+    # 一時的なMetadataManagerを作成（issue_numberのみ設定）
+    class TempMetadata:
+        def __init__(self, issue_number):
+            self.data = {'issue_number': issue_number}
+
+    temp_metadata = TempMetadata(issue_number)
+    git_manager = GitManager(
+        repo_path=repo_root,
+        metadata_manager=temp_metadata
+    )
+
+    # ブランチ名生成
+    branch_name = f'ai-workflow/issue-{issue_number}'
+
+    # ブランチ作成
+    result = git_manager.create_branch(branch_name)
+
+    if not result['success']:
+        click.echo(f"[ERROR] {result['error']}")
+        sys.exit(1)
+
+    click.echo(f"[OK] Branch created and checked out: {result['branch_name']}")
+    # ━━━ 新規追加ここまで ━━━
+
     # WorkflowState初期化
     state = WorkflowState.create_new(
         metadata_path=metadata_path,
@@ -77,6 +105,40 @@ def execute(phase: str, issue: str):
         click.echo(f'Error: Workflow not found. Run init first.')
         sys.exit(1)
 
+    # ━━━ 新規追加: ブランチ切り替え処理 ━━━
+    # クライアント初期化（metadata_managerを先に初期化）
+    metadata_manager = MetadataManager(metadata_path)
+
+    from core.git_manager import GitManager
+    git_manager = GitManager(
+        repo_path=repo_root,
+        metadata_manager=metadata_manager
+    )
+
+    # ブランチ名生成
+    branch_name = f'ai-workflow/issue-{issue}'
+
+    # ブランチ存在チェック
+    if not git_manager.branch_exists(branch_name):
+        click.echo(f"[ERROR] Branch not found: {branch_name}. Please run 'init' first.")
+        sys.exit(1)
+
+    # 現在のブランチ取得
+    current_branch = git_manager.get_current_branch()
+
+    # ブランチ切り替え（現在のブランチと異なる場合のみ）
+    if current_branch != branch_name:
+        result = git_manager.switch_branch(branch_name)
+
+        if not result['success']:
+            click.echo(f"[ERROR] {result['error']}")
+            sys.exit(1)
+
+        click.echo(f"[INFO] Switched to branch: {result['branch_name']}")
+    else:
+        click.echo(f"[INFO] Already on branch: {branch_name}")
+    # ━━━ 新規追加ここまで ━━━
+
     # 環境変数チェック
     github_token = os.getenv('GITHUB_TOKEN')
     github_repository = os.getenv('GITHUB_REPOSITORY')
@@ -88,8 +150,7 @@ def execute(phase: str, issue: str):
         click.echo('  export GITHUB_REPOSITORY="tielec/infrastructure-as-code"')
         sys.exit(1)
 
-    # クライアント初期化
-    metadata_manager = MetadataManager(metadata_path)
+    # クライアント初期化（続き）
     claude_client = ClaudeAgentClient(working_dir=repo_root)
     github_client = GitHubClient(token=github_token, repository=github_repository)
 

@@ -792,6 +792,37 @@ class BasePhase(ABC):
         """
         import re
 
+        # まずResultMessageのresultフィールドから直接抽出を試みる
+        # ResultMessage(..., result="...")の形式
+        for message in messages:
+            if 'ResultMessage' in message and 'result=' in message:
+                # result= から次の ") までを抽出
+                result_start = message.find('result=') + 8  # 'result="' の次から
+                # 次の ")を探す（ResultMessageの終端）
+                result_end = message.find('")', result_start)
+                if result_end > result_start:
+                    result_text = message[result_start:result_end]
+
+                    # エスケープシーケンスを置換
+                    result_text = result_text.replace('\\n', '\n')
+                    result_text = result_text.replace('\\t', '\t')
+                    result_text = result_text.replace('\\r', '\r')
+                    result_text = result_text.replace("\\'", "'")
+                    result_text = result_text.replace('\\\\', '\\')
+
+                    # 判定を正規表現で抽出
+                    # フォーマット: **判定: PASS** または **判定: PASS_WITH_SUGGESTIONS** または単に **判定: PASS (行末)
+                    result_match = re.search(r'\*\*判定:\s*(PASS|PASS_WITH_SUGGESTIONS|FAIL)(?:\*\*|$)', result_text, re.IGNORECASE | re.MULTILINE)
+
+                    if result_match:
+                        result_value = result_match.group(1).upper()
+                        return {
+                            'result': result_value,
+                            'feedback': result_text.strip(),
+                            'suggestions': []
+                        }
+
+        # フォールバック: TextBlockから抽出（旧ロジック）
         # テキストブロックを収集
         text_blocks = []
         for message in messages:
