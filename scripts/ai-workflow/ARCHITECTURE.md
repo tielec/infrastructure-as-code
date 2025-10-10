@@ -174,7 +174,7 @@ AI駆動開発自動化ワークフローは、GitHub IssueからPR作成まで�
     └── .ai-workflow/issue-{number}/metadata.json
 ```
 
-### 4.2 フェーズ実行フロー（将来実装）
+### 4.2 フェーズ実行フロー（v1.4.0実装済み）
 
 ```
 [Jenkins]
@@ -200,25 +200,27 @@ AI駆動開発自動化ワークフローは、GitHub IssueからPR作成まで�
 [WorkflowState]
     │
     │ 8. フェーズステータスをIN_PROGRESSに更新
-    │ 9. 成果物を01-requirements.mdに保存
-    │ 10. Gitコミット
-    │ 11. フェーズステータスをCOMPLETEDに更新
+    │ 9. 成果物を01-requirements/output/requirements.mdに保存
+    │ 10. 【v1.4.0追加】BasePhase.post_output()で成果物をGitHub Issueコメント投稿
+    │ 11. Gitコミット
+    │ 12. フェーズステータスをCOMPLETEDに更新
     ▼
 [main.py:review()]
     │
-    │ 12. レビュープロンプトを生成
-    │ 13. Claude APIでレビュー実行
+    │ 13. レビュープロンプトを生成
+    │ 14. Claude APIでレビュー実行
     ▼
 [CriticalThinkingReviewer]
     │
-    │ 14. レビュー結果判定（PASS/PASS_WITH_SUGGESTIONS/FAIL）
-    │ 15. 01-requirements-review.mdに保存
+    │ 15. レビュー結果判定（PASS/PASS_WITH_SUGGESTIONS/FAIL）
+    │ 16. レビュー結果をGitHub Issueコメント投稿
+    │ 17. 01-requirements/review/review.mdに保存
     ▼
 [WorkflowState]
     │
-    │ 16. review_resultを保存
-    │ 17. PASSなら次フェーズへ
-    │ 18. FAILならretry_count増加→再実行
+    │ 18. review_resultを保存
+    │ 19. PASSなら次フェーズへ
+    │ 20. FAILならretry_count増加→再実行
     ▼
 [metadata.json]
 ```
@@ -314,7 +316,7 @@ class WorkflowState:
 - ensure_ascii=Falseで日本語対応
 - parents=True, exist_ok=Trueで堅牢なディレクトリ作成
 
-### 5.2 ClaudeClient（core/claude_client.py）・未実装
+### 5.2 ClaudeClient（core/claude_client.py）・実装済み
 
 **責務**: Claude API通信、コスト追跡
 
@@ -324,11 +326,11 @@ class WorkflowState:
 - トークン数とコストの追跡
 - Sonnet 4.5料金: $3/1M input, $15/1M output
 
-### 5.3 BasePhase（phases/base_phase.py）・未実装
+### 5.3 BasePhase（phases/base_phase.py）・実装済み
 
 **責務**: フェーズ実行の基底クラス
 
-**インターフェース**:
+**主要メソッド**:
 ```python
 class BasePhase(ABC):
     @abstractmethod
@@ -340,7 +342,16 @@ class BasePhase(ABC):
     def review(self) -> Dict[str, Any]:
         """レビュー実行"""
         pass
+
+    def post_output(self, output_content: str, title: Optional[str] = None):
+        """GitHub Issueに成果物を投稿（v1.4.0で追加）"""
+        # GitHubClient経由でIssueコメントとして成果物を投稿
+        # 失敗時でもワークフローは継続（WARNING表示）
 ```
+
+**v1.4.0での変更**:
+- `post_output()`メソッドを追加し、全フェーズで成果物をGitHub Issueに自動投稿
+- エラーハンドリング強化：投稿失敗時でもワークフローを継続
 
 ### 5.4 GitManager（core/git_manager.py）
 
@@ -557,5 +568,5 @@ BasePhase.run()
 
 ---
 
-**バージョン**: 1.2.0
-**最終更新**: 2025-10-09
+**バージョン**: 1.4.0
+**最終更新**: 2025-10-10

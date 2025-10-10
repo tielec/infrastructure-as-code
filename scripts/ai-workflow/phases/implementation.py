@@ -114,6 +114,16 @@ class ImplementationPhase(BasePhase):
                     'error': f'implementation.mdが生成されませんでした: {output_file}'
                 }
 
+            # GitHub Issueに成果物を投稿
+            try:
+                output_content = output_file.read_text(encoding='utf-8')
+                self.post_output(
+                    output_content=output_content,
+                    title="実装ログ"
+                )
+            except Exception as e:
+                print(f"[WARNING] 成果物のGitHub投稿に失敗しました: {e}")
+
             # ステータス更新: BasePhase.run()で実行されるため不要
             # self.metadata.update_phase_status('implementation', 'completed', str(output_file))
             # self.post_progress('completed', f'実装が完了しました: {output_file.name}')
