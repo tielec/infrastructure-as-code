@@ -1,0 +1,299 @@
+# 要件定義フェーズ - 実行プロンプト
+
+## タスク概要
+
+GitHubのIssue情報から詳細な要件定義書を作成してください。
+
+## Issue情報
+
+## Issue情報
+
+- **Issue番号**: #332
+- **タイトル**: [FEATURE] Planning PhaseのJenkins統合とプロンプト修正
+- **状態**: open
+- **URL**: https://github.com/tielec/infrastructure-as-code/issues/332
+- **ラベル**: enhancement
+
+### 本文
+
+## 概要
+
+AI WorkflowのPlanning Phaseを以下2点対応する：
+1. Jenkinsジョブに統合
+2. Planning Phaseの成果物を他のPhaseでも参照できるようにプロンプトとロジックを修正
+
+## 背景
+
+現在、Planning Phaseは実装されているが：
+- Jenkinsジョブから実行できない
+- 他のPhase（requirements, design, test_scenario, implementation, testing, documentation, report）がPlanning Phaseの成果物を参照していない
+
+Planning Phaseは全体の開発計画を策定する重要なフェーズであり、その成果物（`planning.md`）を後続フェーズで活用すべき。
+
+## 対応内容
+
+### 1. Jenkinsジョブへの統合
+
+#### 1.1 Job DSLファイルの修正
+
+#### 1.2 パイプラインスクリプトの修正
+
+### 2. プロンプトとロジックの修正
+
+#### 2.1 各Phaseプロンプトの修正
+
+全てのPhaseで Planning Phase の成果物を参照できるようにする。
+
+**対象ファイル**:
+- `scripts/ai-workflow/prompts/requirements/execute.md`
+- `scripts/ai-workflow/prompts/design/execute.md`
+- `scripts/ai-workflow/prompts/test_scenario/execute.md`
+- `scripts/ai-workflow/prompts/implementation/execute.md`
+- `scripts/ai-workflow/prompts/testing/execute.md`
+- `scripts/ai-workflow/prompts/documentation/execute.md`
+- `scripts/ai-workflow/prompts/report/execute.md`
+
+**修正例** (`requirements/execute.md`):
+
+```markdown
+# Phase 1: 要件定義
+
+## 入力情報
+
+### Planning Phase成果物
+- Planning Document: {planning_document_path}
+
+### GitHub Issue情報
+- Issue URL: {issue_url}
+- Issue Title: {issue_title}
+- Issue Body: {issue_body}
+
+## タスク
+
+Planning Documentで策定された開発計画を踏まえて、以下の要件定義を実施してください：
+
+1. **Planning Documentの確認**
+   - 開発計画の全体像を把握
+   - スコープ、技術選定、リスク、スケジュールを確認
+
+2. **機能要件の定義**
+   ...
+```
+
+#### 2.2 各Phaseクラスの修正
+
+Planning Phase成果物のパスを取得し、プロンプトに埋め込むロジックを追加。
+
+**対象ファイル**:
+- `scripts/ai-workflow/phases/requirements.py`
+- `scripts/ai-workflow/phases/design.py`
+- `scripts/ai-workflow/phases/test_scenario.py`
+- `scripts/ai-workflow/phases/implementation.py`
+- `scripts/ai-workflow/phases/testing.py`
+- `scripts/ai-workflow/phases/documentation.py`
+- `scripts/ai-workflow/phases/report.py`
+
+**修正例** (`requirements.py`):
+
+```python
+def execute(self) -> Dict[str, Any]:
+    try:
+        # Issue情報を取得
+        issue_number = int(self.metadata.data['issue_number'])
+        
+        # Planning Phase成果物のパス取得
+        planning_file = self.metadata.workflow_dir.parent / f'issue-332' / '00_planning' / 'output' / 'planning.md'
+        
+        # Planning Phaseが完了していない場合の処理
+        if not planning_file.exists():
+            print("[WARNING] Planning Phase成果物が見つかりません。Planning Phaseをスキップします。")
+            planning_path_str = "Planning Phaseは実行されていません"
+        else:
+            # working_dirからの相対パスを使用
+            rel_path_planning = planning_file.relative_to(self.claude.working_dir)
+            planning_path_str = f'@{rel_path_planning}'
+        
+        # 実行プロンプトを読み込み
+        execute_prompt_template = self.load_prompt('execute')
+        
+        # プロンプトに情報を埋め込み
+        execute_prompt = execute_prompt_template.replace(
+            '{planning_document_path}',
+            planning_path_str
+        ).replace(
+            '{issue_url}',
+            self.metadata.data['issue_url']
+        ).replace(
+            '332',
+            str(issue_number)
+        )
+        
+        # 以下既存のロジック...
+```
+
+#### 2.3 BasePhaseヘルパーメソッドの追加
+
+全Phaseで共通利用できるヘルパーメソッドを追加。
+
+**ファイル**: `scripts/ai-workflow/phases/base_phase.py`
+
+```python
+def _get_planning_document_path(self, issue_number: int) -> str:
+    """
+    Planning Phase成果物のパスを取得
+    
+    Args:
+        issue_number: Issue番号
+        
+    Returns:
+        str: Planning Documentのパス（@付きまたは警告メッセージ）
+    """
+    planning_file = self.metadata.workflow_dir.parent / f'issue-332' / '00_planning' / 'output' / 'planning.md'
+    
+    if not planning_file.exists():
+        return "Planning Phaseは実行されていません"
+    
+    rel_path = planning_file.relative_to(self.claude.working_dir)
+    return f'@{rel_path}'
+```
+
+### 3. ドキュメント更新
+
+#### 3.1 jenkins/README.md
+
+Planning Phaseジョブの使用方法を追加。
+
+#### 3.2 scripts/ai-workflow/README.md
+
+Planning Phaseの位置づけと、各Phaseでの参照方法を記載。
+
+## 実装順序
+
+1. **Phase 1**: Jenkinsジョブ統合
+   - Job DSLファイル作成
+   - パイプラインスクリプト作成
+   - job-config.yaml更新
+   - シードジョブ実行
+
+2. **Phase 2**: BasePhaseヘルパーメソッド追加
+   - `_get_planning_document_path()`実装
+   - テスト実施
+
+3. **Phase 3**: 各Phaseプロンプト修正
+   - 全7フェーズのexecute.md更新
+   - review.md, revise.mdも必要に応じて更新
+
+4. **Phase 4**: 各Phaseクラスロジック修正
+   - Planning Document参照ロジック追加
+   - 全7フェーズのexecute()メソッド修正
+
+5. **Phase 5**: ドキュメント更新
+   - jenkins/README.md更新
+   - scripts/ai-workflow/README.md更新
+
+## テスト計画
+
+1. Planning Phaseジョブの単体テスト
+2. Planning Phase → Requirements Phase の連携テスト
+3. 全Phase（Planning → Report）のE2Eテスト
+4. Planning Phaseスキップ時の動作確認
+
+## 期待される効果
+
+- Planning Phaseの開発計画が全Phaseで参照可能になり、一貫性のある開発が実現
+- Jenkinsから Planning Phase を実行可能になり、ワークフロー全体が自動化
+- 各Phaseが Planning の意図を理解して作業を進められる
+
+## 関連Issue
+
+- #305: AI Workflowの全Phase E2Eテスト
+- #313: Planning Phase実装
+
+## 要件定義書の構成
+
+以下のセクションを含む要件定義書を作成してください：
+
+### 1. 概要
+- Issue本文の「## 概要」セクションを要約
+- 背景と目的を明確に記述
+- ビジネス価値・技術的価値を説明
+
+### 2. 機能要件
+- Issue本文の「## TODO」セクションから機能要件を抽出
+- 各要件を明確かつ検証可能な形で記述
+- 優先度（高/中/低）を付与
+
+### 3. 非機能要件
+- パフォーマンス要件
+- セキュリティ要件
+- 可用性・信頼性要件
+- 保守性・拡張性要件
+
+### 4. 制約事項
+- 技術的制約（使用技術、既存システムとの整合性）
+- リソース制約（時間、人員、予算）
+- ポリシー制約（セキュリティポリシー、コーディング規約）
+
+### 5. 前提条件
+- システム環境
+- 依存コンポーネント
+- 外部システム連携
+
+### 6. 受け入れ基準
+- 各機能要件の受け入れ基準（Given-When-Then形式推奨）
+- テスト可能な形で記述
+
+### 7. スコープ外
+- 明確にスコープ外とする事項
+- 将来的な拡張候補
+
+## 出力形式
+
+Markdown形式で要件定義書を作成し、以下のファイルに保存してください：
+
+```
+.ai-workflow/issue-332/01_requirements/output/requirements.md
+```
+
+## 品質ゲート（Phase 1）
+
+作成する要件定義書は、以下の品質ゲートを満たす必要があります：
+
+- [ ] **機能要件が明確に記載されている**
+- [ ] **受け入れ基準が定義されている**
+- [ ] **スコープが明確である**
+- [ ] **論理的な矛盾がない**
+
+これらの品質ゲートは**必須要件**です。作成後、クリティカルシンキングレビューが実施され、品質ゲートを満たさない場合は修正が必要になります。
+
+## 注意事項
+
+1. **具体性**: 曖昧な表現を避け、具体的かつ測定可能な要件を記述
+   - NG例: "適切に処理する"、"必要に応じて対応"
+   - OK例: "3秒以内にレスポンスを返す"、"エラー発生時は管理者に通知"
+
+2. **整合性**: 各セクション間で矛盾がないか確認
+   - 機能要件と受け入れ基準が対応しているか
+   - 非機能要件と制約事項が矛盾していないか
+
+3. **完全性**: Issue本文の情報を漏れなく反映
+   - TODOセクションの項目をすべて機能要件に反映
+   - 概要セクションの背景・目的を明確に記述
+
+4. **検証可能性**: 各要件が検証可能（テスト可能）な形で記述
+   - 受け入れ基準は Given-When-Then 形式で記述
+   - 成功条件・失敗条件が明確に識別可能
+
+5. **レビューされることを意識**: 作成した要件定義書はクリティカルシンキングレビューが実施されます
+   - 品質ゲート（4つの必須要件）を最優先で満たすこと
+   - ブロッカー（次フェーズに進めない問題）がないように注意
+   - 改善提案は歓迎されるが、ブロッカーは修正が必須
+
+## 参考情報
+
+必要に応じて以下を参照してください（存在する場合）：
+- @CLAUDE.md - プロジェクトの全体方針とコーディングガイドライン
+- @ARCHITECTURE.md - アーキテクチャ設計思想
+- @CONTRIBUTION.md - 開発ガイドライン
+- @README.md - プロジェクト概要と使用方法
+- その他、プロジェクト固有のドキュメント
