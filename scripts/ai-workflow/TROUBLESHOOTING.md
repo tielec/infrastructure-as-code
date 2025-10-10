@@ -325,6 +325,37 @@ cd C:\Users\ytaka\TIELEC\development\infrastructure-as-code\scripts\ai-workflow
 dir C:\Users\ytaka\TIELEC\development\infrastructure-as-code\.ai-workflow
 ```
 
+### Q5-3: ログファイルが上書きされて過去の実行履歴が見つからない
+
+**症状**:
+リトライ実行後、以前のログファイルが見つからない。
+
+**原因**:
+v1.5.0（Issue #317）以降、ログファイルは連番付きで保存されるため、過去のログは保持されます。
+
+**ログファイルの命名規則**:
+- **初回実行**: `agent_log_1.md`, `agent_log_raw_1.txt`, `prompt_1.txt`
+- **リトライ1回目**: `agent_log_2.md`, `agent_log_raw_2.txt`, `prompt_2.txt`
+- **リトライN回目**: `agent_log_{N+1}.md`, `agent_log_raw_{N+1}.txt`, `prompt_{N+1}.txt`
+
+**確認方法**:
+```powershell
+# execute ディレクトリ内のログファイルを確認
+dir .ai-workflow\issue-304\01_requirements\execute\
+
+# 期待される出力:
+#   agent_log_1.md
+#   agent_log_2.md
+#   agent_log_raw_1.txt
+#   agent_log_raw_2.txt
+#   prompt_1.txt
+#   prompt_2.txt
+```
+
+**注意事項**:
+- 成果物ファイル（`output/requirements.md` など）は従来通り上書きされます
+- ログファイルのみ連番付きで履歴が保持されます
+
 ### Q5-2: Permission denied でファイルが書き込めない
 
 **症状**:
