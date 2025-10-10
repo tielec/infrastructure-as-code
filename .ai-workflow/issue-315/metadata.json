@@ -30,11 +30,11 @@
       "review_result": "PASS_WITH_SUGGESTIONS"
     },
     "test_scenario": {
-      "status": "failed",
+      "status": "completed",
       "retry_count": 3,
-      "started_at": "2025-10-10T04:52:43.438799Z",
-      "completed_at": "2025-10-10T05:15:15.439980Z",
-      "review_result": "FAIL"
+      "started_at": "2025-10-10T05:37:32.081986Z",
+      "completed_at": "2025-10-10T05:42:08.956009Z",
+      "review_result": "PASS"
     },
     "implementation": {
       "status": "pending",
@@ -66,5 +66,5 @@
     }
   },
   "created_at": "2025-10-10T04:40:39.741382Z",
-  "updated_at": "2025-10-10T05:15:15.439989Z"
+  "updated_at": "2025-10-10T05:42:08.956020Z"
 }
