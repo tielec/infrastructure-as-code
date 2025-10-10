@@ -84,14 +84,23 @@ class DesignPhase(BasePhase):
                     'error': f'design.mdが生成されませんでした: {output_file}'
                 }
 
-            # 戦略判断を抽出してmetadata.jsonに保存
+            # 戦略判断の処理（Phase 0で決定済みか確認）
             design_content = output_file.read_text(encoding='utf-8')
-            decisions = self._extract_design_decisions(design_content)
+            decisions = self.metadata.data['design_decisions']
 
-            if decisions:
-                self.metadata.data['design_decisions'].update(decisions)
-                self.metadata.save()
-                print(f"[INFO] 戦略判断をmetadata.jsonに保存: {decisions}")
+            # Phase 0で戦略が決定されているか確認
+            if decisions.get('implementation_strategy') is not None:
+                # Phase 0で決定済みの場合は、そのまま使用
+                print(f"[INFO] Phase 0で決定済みの戦略を使用: {decisions}")
+            else:
+                # Phase 0がスキップされた場合は、Phase 2で決定（後方互換性）
+                print("[INFO] Phase 0がスキップされているため、Phase 2で戦略を決定します")
+                extracted_decisions = self._extract_design_decisions(design_content)
+
+                if extracted_decisions:
+                    self.metadata.data['design_decisions'].update(extracted_decisions)
+                    self.metadata.save()
+                    print(f"[INFO] 戦略判断をmetadata.jsonに保存: {extracted_decisions}")
 
             # GitHub Issueに成果物を投稿
             try:
@@ -279,14 +288,21 @@ class DesignPhase(BasePhase):
                     'error': '修正されたdesign.mdが生成されませんでした。'
                 }
 
-            # 戦略判断を再抽出してmetadata.jsonに保存
+            # 戦略判断の処理（Phase 0で決定済みの場合は抽出しない）
             design_content = output_file.read_text(encoding='utf-8')
-            decisions = self._extract_design_decisions(design_content)
+            decisions = self.metadata.data['design_decisions']
 
-            if decisions:
-                self.metadata.data['design_decisions'].update(decisions)
-                self.metadata.save()
-                print(f"[INFO] 戦略判断を更新: {decisions}")
+            # Phase 0で戦略が決定されている場合は抽出しない（Phase 0の戦略を維持）
+            if decisions.get('implementation_strategy') is None:
+                # Phase 0がスキップされた場合のみ、Phase 2で戦略を抽出
+                extracted_decisions = self._extract_design_decisions(design_content)
+
+                if extracted_decisions:
+                    self.metadata.data['design_decisions'].update(extracted_decisions)
+                    self.metadata.save()
+                    print(f"[INFO] 戦略判断を更新: {extracted_decisions}")
+            else:
+                print(f"[INFO] Phase 0で決定済みの戦略を維持: {decisions}")
 
             return {
                 'success': True,

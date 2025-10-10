@@ -20,6 +20,7 @@ class BasePhase(ABC):
 
     # フェーズ番号マッピング
     PHASE_NUMBERS = {
+        'planning': '00',
         'requirements': '01',
         'design': '02',
         'test_scenario': '03',

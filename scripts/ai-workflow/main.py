@@ -8,6 +8,7 @@ from core.workflow_state import WorkflowState, PhaseStatus
 from core.metadata_manager import MetadataManager
 from core.claude_agent_client import ClaudeAgentClient
 from core.github_client import GitHubClient
+from phases.planning import PlanningPhase
 from phases.requirements import RequirementsPhase
 from phases.design import DesignPhase
 from phases.test_scenario import TestScenarioPhase
@@ -92,7 +93,7 @@ def init(issue_url: str):
 
 @cli.command()
 @click.option('--phase', required=True,
-              type=click.Choice(['requirements', 'design', 'test_scenario',
+              type=click.Choice(['planning', 'requirements', 'design', 'test_scenario',
                                 'implementation', 'testing', 'documentation', 'report']))
 @click.option('--issue', required=True, help='Issue number')
 def execute(phase: str, issue: str):
@@ -156,6 +157,7 @@ def execute(phase: str, issue: str):
 
     # フェーズインスタンス生成
     phase_classes = {
+        'planning': PlanningPhase,
         'requirements': RequirementsPhase,
         'design': DesignPhase,
         'test_scenario': TestScenarioPhase,
