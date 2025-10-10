@@ -162,10 +162,41 @@ pipeline {
             }
         }
 
+        stage('Phase 0: Planning') {
+            when {
+                expression {
+                    def phaseOrder = ['planning', 'requirements', 'design', 'test_scenario', 'implementation', 'testing', 'documentation', 'report']
+                    def startIndex = phaseOrder.indexOf(params.START_PHASE)
+                    def currentIndex = phaseOrder.indexOf('planning')
+                    return currentIndex >= startIndex
+                }
+            }
+            steps {
+                script {
+                    echo "========================================="
+                    echo "Stage: Phase 0 - Planning"
+                    echo "========================================="
+
+                    dir(env.WORKFLOW_DIR) {
+                        if (params.DRY_RUN) {
+                            echo "[DRY RUN] Phase 0実行をスキップ"
+                        } else {
+                            // Phase実行（execute + review統合）
+                            sh """
+                                python main.py execute \
+                                    --phase planning \
+                                    --issue ${env.ISSUE_NUMBER}
+                            """
+                        }
+                    }
+                }
+            }
+        }
+
         stage('Phase 1: Requirements') {
             when {
                 expression {
-                    def phaseOrder = ['requirements', 'design', 'test_scenario', 'implementation', 'testing', 'documentation', 'report']
+                    def phaseOrder = ['planning', 'requirements', 'design', 'test_scenario', 'implementation', 'testing', 'documentation', 'report']
                     def startIndex = phaseOrder.indexOf(params.START_PHASE)
                     def currentIndex = phaseOrder.indexOf('requirements')
                     return currentIndex >= startIndex
@@ -196,7 +227,7 @@ pipeline {
         stage('Phase 2: Design') {
             when {
                 expression {
-                    def phaseOrder = ['requirements', 'design', 'test_scenario', 'implementation', 'testing', 'documentation', 'report']
+                    def phaseOrder = ['planning', 'requirements', 'design', 'test_scenario', 'implementation', 'testing', 'documentation', 'report']
                     def startIndex = phaseOrder.indexOf(params.START_PHASE)
                     def currentIndex = phaseOrder.indexOf('design')
                     return currentIndex >= startIndex
@@ -226,7 +257,7 @@ pipeline {
         stage('Phase 3: Test Scenario') {
             when {
                 expression {
-                    def phaseOrder = ['requirements', 'design', 'test_scenario', 'implementation', 'testing', 'documentation', 'report']
+                    def phaseOrder = ['planning', 'requirements', 'design', 'test_scenario', 'implementation', 'testing', 'documentation', 'report']
                     def startIndex = phaseOrder.indexOf(params.START_PHASE)
                     def currentIndex = phaseOrder.indexOf('test_scenario')
                     return currentIndex >= startIndex
@@ -256,7 +287,7 @@ pipeline {
         stage('Phase 4: Implementation') {
             when {
                 expression {
-                    def phaseOrder = ['requirements', 'design', 'test_scenario', 'implementation', 'testing', 'documentation', 'report']
+                    def phaseOrder = ['planning', 'requirements', 'design', 'test_scenario', 'implementation', 'testing', 'documentation', 'report']
                     def startIndex = phaseOrder.indexOf(params.START_PHASE)
                     def currentIndex = phaseOrder.indexOf('implementation')
                     return currentIndex >= startIndex
@@ -286,7 +317,7 @@ pipeline {
         stage('Phase 5: Testing') {
             when {
                 expression {
-                    def phaseOrder = ['requirements', 'design', 'test_scenario', 'implementation', 'testing', 'documentation', 'report']
+                    def phaseOrder = ['planning', 'requirements', 'design', 'test_scenario', 'implementation', 'testing', 'documentation', 'report']
                     def startIndex = phaseOrder.indexOf(params.START_PHASE)
                     def currentIndex = phaseOrder.indexOf('testing')
                     return currentIndex >= startIndex
@@ -316,7 +347,7 @@ pipeline {
         stage('Phase 6: Documentation') {
             when {
                 expression {
-                    def phaseOrder = ['requirements', 'design', 'test_scenario', 'implementation', 'testing', 'documentation', 'report']
+                    def phaseOrder = ['planning', 'requirements', 'design', 'test_scenario', 'implementation', 'testing', 'documentation', 'report']
                     def startIndex = phaseOrder.indexOf(params.START_PHASE)
                     def currentIndex = phaseOrder.indexOf('documentation')
                     return currentIndex >= startIndex
@@ -346,7 +377,7 @@ pipeline {
         stage('Phase 7: Report') {
             when {
                 expression {
-                    def phaseOrder = ['requirements', 'design', 'test_scenario', 'implementation', 'testing', 'documentation', 'report']
+                    def phaseOrder = ['planning', 'requirements', 'design', 'test_scenario', 'implementation', 'testing', 'documentation', 'report']
                     def startIndex = phaseOrder.indexOf(params.START_PHASE)
                     def currentIndex = phaseOrder.indexOf('report')
                     return currentIndex >= startIndex

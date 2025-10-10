@@ -11,6 +11,9 @@ Claude Agent SDKを使った7フェーズの自動開発ワークフロー
 - **Claude Pro Max活用**: Claude Code headless modeで自律的にタスクを実行
 - **8フェーズワークフロー**: Phase 0（プロジェクト計画） → Phase 1（要件定義） → Phase 2（設計） → Phase 3（テストシナリオ） → Phase 4（実装） → Phase 5（テスト） → Phase 6（ドキュメント） → Phase 7（レポート）
 - **Phase 0 (Planning)**: プロジェクトマネージャとして実装戦略・テスト戦略を事前決定し、後続フェーズの効率を最大化
+  - Jenkins統合: START_PHASEパラメータで`planning`を選択可能（デフォルト値）
+  - 全Phase連携: Planning Documentが後続の全Phase（Requirements～Report）で自動参照される
+  - Planning Phaseスキップ可能: 後方互換性を維持（警告ログのみ出力）
 - **クリティカルシンキングレビュー**: 各フェーズで品質チェック（最大3回リトライ）
 - **execute()自動リトライ**: execute()失敗時も自動的にrevise()による修正を試行し、一時的なエラーからの回復が可能
 - **GitHub統合**: Issue情報の取得、進捗報告、レビュー結果の投稿
@@ -137,11 +140,15 @@ GitHub IssueからPR作成まで、Claude AIが自動的に開発プロセスを
 | パラメータ | デフォルト | 説明 |
 |-----------|----------|------|
 | ISSUE_URL | (必須) | GitHub Issue URL |
-| START_PHASE | planning | 開始フェーズ（planning推奨） |
+| START_PHASE | planning | 開始フェーズ（planning推奨）<br>選択肢: planning, requirements, design, test_scenario, implementation, testing, documentation, report |
 | DRY_RUN | false | ドライランモード |
 | SKIP_REVIEW | false | レビュースキップ |
 | MAX_RETRIES | 3 | 最大リトライ回数 |
 | COST_LIMIT_USD | 5.0 | コスト上限（USD） |
+
+**START_PHASEの推奨設定**:
+- **planning（推奨）**: Phase 0から開始し、実装戦略・テスト戦略を事前決定することで後続フェーズの効率が向上
+- **requirements以降**: Planning Phaseをスキップし、直接要件定義から開始（後方互換性のため警告ログのみ出力）
 
 **3. 実行例**
 
@@ -261,35 +268,79 @@ scripts/ai-workflow/
 │   └── github_client.py         # GitHub API統合
 ├── phases/
 │   ├── base_phase.py            # Phase基底クラス
+│   │                            # - _get_planning_document_path(): Planning Document参照ヘルパー
 │   ├── planning.py              # Phase 0: プロジェクト計画
+│   │                            # - planning.md生成、戦略判断をmetadata.jsonに保存
 │   ├── requirements.py          # Phase 1: 要件定義
+│   │                            # - Planning Document参照ロジック追加
 │   ├── design.py                # Phase 2: 設計
+│   │                            # - Planning Document参照ロジック追加
 │   ├── test_scenario.py         # Phase 3: テストシナリオ
+│   │                            # - Planning Document参照ロジック追加
 │   ├── implementation.py        # Phase 4: 実装
+│   │                            # - Planning Document参照ロジック追加
 │   ├── testing.py               # Phase 5: テスト
+│   │                            # - Planning Document参照ロジック追加
 │   └── documentation.py         # Phase 6: ドキュメント
+│                                # - Planning Document参照ロジック追加
 ├── prompts/
 │   ├── planning/
 │   │   ├── execute.txt          # 計画書生成プロンプト
 │   │   ├── review.txt           # 計画書レビュープロンプト
 │   │   └── revise.txt           # 計画書修正プロンプト
 │   ├── requirements/
-│   │   ├── execute.txt          # 要件定義実行プロンプト
+│   │   ├── execute.txt          # 要件定義実行プロンプト（Planning Document参照セクション追加）
 │   │   ├── review.txt           # 要件定義レビュープロンプト
 │   │   └── revise.txt           # 要件定義修正プロンプト
 │   ├── design/
-│   │   ├── execute.txt          # 設計実行プロンプト
+│   │   ├── execute.txt          # 設計実行プロンプト（Planning Document参照セクション追加）
 │   │   ├── review.txt           # 設計レビュープロンプト
 │   │   └── revise.txt           # 設計修正プロンプト
-│   └── ...                      # 他のフェーズのプロンプト
+│   └── ...                      # 他のフェーズのプロンプト（すべてPlanning Document参照追加）
 ├── reviewers/
 │   └── critical_thinking.py     # クリティカルシンキングレビュー（未実装）
 ├── tests/
 │   ├── features/                # BDDテスト
-│   └── unit/                    # ユニットテスト
+│   ├── unit/                    # ユニットテスト
+│   └── integration/             # 統合テスト
+│       └── test_planning_phase_integration.py  # Planning Phase統合テスト
 ├── Dockerfile                   # Docker環境定義
 ├── requirements.txt             # Python依存パッケージ
 └── README.md                    # このファイル
+```
+
+### Planning Document参照の仕組み
+
+```
+Phase 0 (Planning)
+    │
+    ├─ planning.md生成
+    │   - Issue複雑度分析
+    │   - 実装戦略判断（CREATE/EXTEND/REFACTOR）
+    │   - テスト戦略判断（UNIT_ONLY/...ALL）
+    │   - タスク分割、見積もり、リスク評価
+    │
+    ├─ metadata.jsonに戦略保存
+    │   - design_decisions.implementation_strategy
+    │   - design_decisions.test_strategy
+    │   - design_decisions.test_code_strategy
+    │
+    ▼
+Phase 1-7 (Requirements ~ Report)
+    │
+    ├─ BasePhase._get_planning_document_path()
+    │   - Planning Document存在確認
+    │   - @{relative_path}形式で返却
+    │   - 存在しない場合: "Planning Phaseは実行されていません"
+    │
+    ├─ プロンプトに埋め込み
+    │   - {planning_document_path}プレースホルダーを置換
+    │   - Claude Agent SDKが@記法でファイル読み込み
+    │
+    └─ Planning Documentを参照して作業
+        - 実装戦略に基づいた設計・実装
+        - テスト戦略に基づいたテストシナリオ
+        - リスク軽減策の考慮
 ```
 
 ## CLIコマンド

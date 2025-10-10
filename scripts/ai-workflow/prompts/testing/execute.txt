@@ -5,6 +5,11 @@ Phase 4で実装したテストコードを実行し、結果を記録してく�
 
 ## 入力情報
 
+### Planning Phase成果物
+- Planning Document: {planning_document_path}
+
+**注意**: Planning Phaseが実行されている場合、開発計画（実装戦略、テスト戦略、リスク、スケジュール）を必ず確認してください。
+
 ### 実装ログ
 {implementation_document_path}
 

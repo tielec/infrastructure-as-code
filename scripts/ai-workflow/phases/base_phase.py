@@ -132,6 +132,42 @@ class BasePhase(ABC):
 
         return prompt_file.read_text(encoding='utf-8')
 
+    def _get_planning_document_path(self, issue_number: int) -> str:
+        """
+        Planning Phase成果物のパスを取得
+
+        Args:
+            issue_number: Issue番号
+
+        Returns:
+            str: Planning Documentのパス（@{relative_path}形式）または警告メッセージ
+
+        Notes:
+            - Planning Documentのパス: .ai-workflow/issue-{number}/00_planning/output/planning.md
+            - 存在する場合: working_dirからの相対パスを取得し、@{rel_path}形式で返す
+            - 存在しない場合: "Planning Phaseは実行されていません"を返す
+        """
+        # Planning Documentのパスを構築
+        # .ai-workflow/issue-{number}/00_planning/output/planning.md
+        planning_dir = self.metadata.workflow_dir.parent / f'issue-{issue_number}' / '00_planning' / 'output'
+        planning_file = planning_dir / 'planning.md'
+
+        # ファイル存在確認
+        if not planning_file.exists():
+            print(f"[WARNING] Planning Phase成果物が見つかりません: {planning_file}")
+            return "Planning Phaseは実行されていません"
+
+        # working_dirからの相対パスを取得
+        try:
+            rel_path = planning_file.relative_to(self.claude.working_dir)
+            planning_path_str = f'@{rel_path}'
+            print(f"[INFO] Planning Document参照: {planning_path_str}")
+            return planning_path_str
+        except ValueError:
+            # 相対パスが取得できない場合（異なるドライブなど）
+            print(f"[WARNING] Planning Documentの相対パスが取得できません: {planning_file}")
+            return "Planning Phaseは実行されていません"
+
     def update_phase_status(
         self,
         status: str,
