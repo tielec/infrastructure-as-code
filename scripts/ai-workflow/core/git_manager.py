@@ -466,6 +466,193 @@ class GitManager:
         # デフォルトはリトライ可能（ネットワークエラーの可能性）
         return True
 
+    def create_branch(
+        self,
+        branch_name: str,
+        base_branch: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """
+        ブランチを作成してチェックアウト
+
+        Args:
+            branch_name: 作成するブランチ名（例: "ai-workflow/issue-315"）
+            base_branch: 基準となるブランチ名（省略時は現在のブランチ）
+
+        Returns:
+            Dict[str, Any]:
+                - success: bool - 成功/失敗
+                - branch_name: str - 作成したブランチ名
+                - error: Optional[str] - エラーメッセージ
+
+        処理フロー:
+            1. branch_exists() でブランチが既に存在するかチェック
+               - 既存の場合はエラーを返却
+            2. base_branch指定時は、そのブランチにチェックアウト
+            3. git checkout -b {branch_name} を実行
+            4. 成功/失敗を返却
+
+        エラーハンドリング:
+            - ブランチが既に存在 → {'success': False, 'error': 'Branch already exists'}
+            - Gitコマンド失敗 → {'success': False, 'error': 'Git command failed: ...'}
+        """
+        try:
+            # ブランチ存在チェック
+            if self.branch_exists(branch_name):
+                return {
+                    'success': False,
+                    'branch_name': branch_name,
+                    'error': f'Branch already exists: {branch_name}'
+                }
+
+            # 基準ブランチ指定時は、そのブランチにチェックアウト
+            if base_branch:
+                self.repo.git.checkout(base_branch)
+
+            # ブランチ作成してチェックアウト
+            self.repo.git.checkout('-b', branch_name)
+
+            return {
+                'success': True,
+                'branch_name': branch_name,
+                'error': None
+            }
+
+        except GitCommandError as e:
+            return {
+                'success': False,
+                'branch_name': branch_name,
+                'error': f'Git command failed: {e}'
+            }
+        except Exception as e:
+            return {
+                'success': False,
+                'branch_name': branch_name,
+                'error': f'Unexpected error: {e}'
+            }
+
+    def switch_branch(
+        self,
+        branch_name: str,
+        force: bool = False
+    ) -> Dict[str, Any]:
+        """
+        指定ブランチにチェックアウト
+
+        Args:
+            branch_name: チェックアウトするブランチ名
+            force: 強制切り替え（未コミット変更を無視）
+
+        Returns:
+            Dict[str, Any]:
+                - success: bool - 成功/失敗
+                - branch_name: str - 切り替え先ブランチ名
+                - error: Optional[str] - エラーメッセージ
+
+        処理フロー:
+            1. branch_exists() でブランチの存在確認
+               - 存在しない場合はエラーを返却
+            2. 現在のブランチと同じ場合はスキップ（成功を返す）
+            3. force=False の場合、get_status() で未コミット変更をチェック
+               - 変更がある場合はエラーを返却
+            4. git checkout {branch_name} を実行
+            5. 成功/失敗を返却
+
+        エラーハンドリング:
+            - ブランチが存在しない → {'success': False, 'error': 'Branch not found'}
+            - 未コミット変更がある → {'success': False, 'error': 'Uncommitted changes'}
+            - Gitコマンド失敗 → {'success': False, 'error': 'Git command failed: ...'}
+        """
+        try:
+            # ブランチ存在チェック
+            if not self.branch_exists(branch_name):
+                return {
+                    'success': False,
+                    'branch_name': branch_name,
+                    'error': f'Branch not found: {branch_name}. Please run \'init\' first.'
+                }
+
+            # 現在のブランチと同じ場合はスキップ
+            current_branch = self.get_current_branch()
+            if current_branch == branch_name:
+                return {
+                    'success': True,
+                    'branch_name': branch_name,
+                    'error': None
+                }
+
+            # force=False の場合、未コミット変更をチェック
+            if not force:
+                status = self.get_status()
+                if status['is_dirty'] or status['untracked_files']:
+                    return {
+                        'success': False,
+                        'branch_name': branch_name,
+                        'error': 'You have uncommitted changes. Please commit or stash them before switching branches.'
+                    }
+
+            # ブランチ切り替え
+            self.repo.git.checkout(branch_name)
+
+            return {
+                'success': True,
+                'branch_name': branch_name,
+                'error': None
+            }
+
+        except GitCommandError as e:
+            return {
+                'success': False,
+                'branch_name': branch_name,
+                'error': f'Git command failed: {e}'
+            }
+        except Exception as e:
+            return {
+                'success': False,
+                'branch_name': branch_name,
+                'error': f'Unexpected error: {e}'
+            }
+
+    def branch_exists(self, branch_name: str) -> bool:
+        """
+        ブランチの存在確認
+
+        Args:
+            branch_name: ブランチ名
+
+        Returns:
+            bool: ブランチが存在する場合True
+
+        処理フロー:
+            1. git branch --list {branch_name} を実行
+            2. 結果が空文字列でない場合、ブランチが存在
+        """
+        try:
+            # ローカルブランチ一覧を取得
+            branches = [b.name for b in self.repo.branches]
+            return branch_name in branches
+        except Exception:
+            return False
+
+    def get_current_branch(self) -> str:
+        """
+        現在のブランチ名を取得
+
+        Returns:
+            str: 現在のブランチ名
+
+        処理フロー:
+            1. self.repo.active_branch.name を取得
+            2. ブランチ名を返却
+
+        エラーハンドリング:
+            - デタッチHEAD状態の場合は 'HEAD' を返却
+        """
+        try:
+            return self.repo.active_branch.name
+        except TypeError:
+            # デタッチHEAD状態の場合
+            return 'HEAD'
+
     def _setup_github_credentials(self) -> None:
         """
         GitHub Token認証の設定
