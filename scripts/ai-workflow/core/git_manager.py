@@ -536,7 +536,7 @@ class GitManager:
         force: bool = False
     ) -> Dict[str, Any]:
         """
-        指定ブランチにチェックアウト
+        指定ブランチにチェックアウト（リモートブランチにも対応）
 
         Args:
             branch_name: チェックアウトするブランチ名
@@ -549,13 +549,16 @@ class GitManager:
                 - error: Optional[str] - エラーメッセージ
 
         処理フロー:
-            1. branch_exists() でブランチの存在確認
+            1. branch_exists() でブランチの存在確認（ローカル + リモート）
                - 存在しない場合はエラーを返却
             2. 現在のブランチと同じ場合はスキップ（成功を返す）
             3. force=False の場合、get_status() で未コミット変更をチェック
                - 変更がある場合はエラーを返却
-            4. git checkout {branch_name} を実行
-            5. 成功/失敗を返却
+            4. ローカルブランチが存在しない場合、リモートブランチから作成
+               - git checkout -b {branch_name} origin/{branch_name}
+            5. ローカルブランチが存在する場合、通常のチェックアウト
+               - git checkout {branch_name}
+            6. 成功/失敗を返却
 
         エラーハンドリング:
             - ブランチが存在しない → {'success': False, 'error': 'Branch not found'}
@@ -563,8 +566,8 @@ class GitManager:
             - Gitコマンド失敗 → {'success': False, 'error': 'Git command failed: ...'}
         """
         try:
-            # ブランチ存在チェック
-            if not self.branch_exists(branch_name):
+            # ブランチ存在チェック（ローカル + リモート）
+            if not self.branch_exists(branch_name, check_remote=True):
                 return {
                     'success': False,
                     'branch_name': branch_name,
@@ -590,8 +593,17 @@ class GitManager:
                         'error': 'You have uncommitted changes. Please commit or stash them before switching branches.'
                     }
 
-            # ブランチ切り替え
-            self.repo.git.checkout(branch_name)
+            # ローカルブランチ存在確認
+            local_branch_exists = self.branch_exists(branch_name, check_remote=False)
+
+            if not local_branch_exists:
+                # ローカルブランチが存在しない場合、リモートブランチから作成
+                # git checkout -b {branch_name} origin/{branch_name}
+                self.repo.git.checkout('-b', branch_name, f'origin/{branch_name}')
+                print(f"[INFO] Created local branch '{branch_name}' from 'origin/{branch_name}'")
+            else:
+                # ローカルブランチが存在する場合、通常のチェックアウト
+                self.repo.git.checkout(branch_name)
 
             return {
                 'success': True,
@@ -612,24 +624,39 @@ class GitManager:
                 'error': f'Unexpected error: {e}'
             }
 
-    def branch_exists(self, branch_name: str) -> bool:
+    def branch_exists(self, branch_name: str, check_remote: bool = True) -> bool:
         """
-        ブランチの存在確認
+        ブランチの存在確認（ローカル + リモート）
 
         Args:
             branch_name: ブランチ名
+            check_remote: リモートブランチもチェックするか（デフォルト: True）
 
         Returns:
             bool: ブランチが存在する場合True
 
         処理フロー:
-            1. git branch --list {branch_name} を実行
-            2. 結果が空文字列でない場合、ブランチが存在
+            1. ローカルブランチ一覧をチェック
+            2. check_remote=True の場合、リモートブランチもチェック
+               - origin/{branch_name} の存在を確認
         """
         try:
             # ローカルブランチ一覧を取得
             branches = [b.name for b in self.repo.branches]
-            return branch_name in branches
+            if branch_name in branches:
+                return True
+
+            # リモートブランチもチェック
+            if check_remote:
+                try:
+                    remote_branches = [ref.name for ref in self.repo.remote('origin').refs]
+                    # origin/{branch_name} の形式でチェック
+                    if f'origin/{branch_name}' in remote_branches:
+                        return True
+                except Exception:
+                    pass
+
+            return False
         except Exception:
             return False
 
