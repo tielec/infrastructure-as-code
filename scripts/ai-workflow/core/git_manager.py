@@ -508,26 +508,20 @@ class GitManager:
                 local_exists = branch_name in local_branches
 
                 if local_exists:
-                    # ローカルブランチが存在する場合はチェックアウトしてリモートでリベース
+                    # ローカルブランチが存在する場合はリモートブランチで完全に置き換え
                     print(f"Checking out existing local branch: {branch_name}")
                     current_branch = self.get_current_branch()
                     if current_branch != branch_name:
                         self.repo.git.checkout(branch_name)
 
-                    # リモートから最新を取得してリベース
+                    # リモートから最新を取得してローカルを完全に置き換え
                     try:
-                        print(f"Fetching and rebasing on remote: origin/{branch_name}")
+                        print(f"Fetching and resetting to remote: origin/{branch_name}")
                         self.repo.git.fetch('origin', branch_name)
-                        self.repo.git.rebase(f'origin/{branch_name}')
-                        print(f"Successfully rebased on origin/{branch_name}")
+                        self.repo.git.reset('--hard', f'origin/{branch_name}')
+                        print(f"Successfully reset to origin/{branch_name}")
                     except Exception as e:
-                        print(f"Warning: Could not rebase on remote (possibly no upstream or conflicts): {e}")
-                        # リベース失敗時は中断
-                        try:
-                            self.repo.git.rebase('--abort')
-                            print("Rebase aborted due to error")
-                        except:
-                            pass
+                        print(f"Warning: Could not reset to remote: {e}")
 
                     return {
                         'success': True,
