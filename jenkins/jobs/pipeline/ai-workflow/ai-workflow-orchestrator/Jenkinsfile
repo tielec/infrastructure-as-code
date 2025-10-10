@@ -12,6 +12,11 @@
  * - COST_LIMIT_USD: コスト上限USD（デフォルト: 5.0）
  * - LOG_LEVEL: ログレベル（デフォルト: INFO）
  *
+ * 認証情報（Jenkins Credentialsで設定）:
+ * - claude-code-oauth-token: Claude Agent SDK用OAuthトークン（必須）
+ * - anthropic-api-key: ClaudeContentParser用Anthropic APIキー（必須）
+ * - github-token: GitHub API用トークン（必須）
+ *
  * 重要: パラメータ定義はこのファイルでは行いません（Job DSLで定義済み）
  */
 
@@ -24,7 +29,7 @@ pipeline {
             label 'ec2-fleet'
             dir 'scripts/ai-workflow'
             filename 'Dockerfile'
-            args '-v ${WORKSPACE}:/workspace -w /workspace -e CLAUDE_DANGEROUSLY_SKIP_PERMISSIONS=1'
+            args '-v ${WORKSPACE}:/workspace -w /workspace -e CLAUDE_DANGEROUSLY_SKIP_PERMISSIONS=1 -e CLAUDE_CODE_OAUTH_TOKEN=${CLAUDE_CODE_OAUTH_TOKEN} -e ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY} -e GITHUB_TOKEN=${GITHUB_TOKEN}'
         }
     }
 
@@ -50,6 +55,7 @@ pipeline {
 
         // 認証情報（Jenkinsクレデンシャルから取得）
         CLAUDE_CODE_OAUTH_TOKEN = credentials('claude-code-oauth-token')
+        ANTHROPIC_API_KEY = credentials('anthropic-api-key')
         GITHUB_TOKEN = credentials('github-token')
     }
 
