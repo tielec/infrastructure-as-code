@@ -9,9 +9,9 @@ Claude Agent SDKを使った7フェーズの自動開発ワークフロー
 ### 主な特徴
 
 - **Claude Pro Max活用**: Claude Code headless modeで自律的にタスクを実行
-- **7フェーズワークフロー**: プロジェクト計画 → 要件定義 → 設計 → テストシナリオ → 実装 → テスト → ドキュメント
-- **事前計画機能**: Phase 0で実装戦略・テスト戦略を事前決定し、後続フェーズの負荷を軽減
-- **クリティカルシンキングレビュー**: 各フェーズで品質チェック
+- **8フェーズワークフロー**: Phase 0（プロジェクト計画） → Phase 1（要件定義） → Phase 2（設計） → Phase 3（テストシナリオ） → Phase 4（実装） → Phase 5（テスト） → Phase 6（ドキュメント） → Phase 7（レポート）
+- **Phase 0 (Planning)**: プロジェクトマネージャとして実装戦略・テスト戦略を事前決定し、後続フェーズの効率を最大化
+- **クリティカルシンキングレビュー**: 各フェーズで品質チェック（最大3回リトライ）
 - **GitHub統合**: Issue情報の取得、進捗報告、レビュー結果の投稿
 - **Docker対応**: Linux環境で安定動作
 
@@ -94,9 +94,18 @@ docker run --rm \
 
 ### 5. 結果確認
 
-**Phase 0の成果物**:
+**Phase 0（プロジェクト計画）の成果物**:
 - **プロジェクト計画書**: `.ai-workflow/issue-304/00_planning/output/planning.md`
-- **実装戦略**: metadata.jsonのdesign_decisionsに保存（CREATE/EXTEND/REFACTOR、テスト戦略等）
+  - Issue分析（複雑度、見積もり工数、リスク評価）
+  - 実装戦略判断（CREATE/EXTEND/REFACTOR）
+  - テスト戦略判断（UNIT_ONLY/.../ALL）
+  - テストコード戦略（EXTEND_TEST/CREATE_TEST/BOTH_TEST）
+  - タスク分割とPhase別見積もり
+  - 依存関係図（Mermaid形式）
+  - リスクと軽減策
+  - 品質ゲート
+- **戦略情報**: metadata.jsonのdesign_decisionsに自動保存
+- **Phase 2での活用**: Phase 2は実装戦略決定をスキップし、Phase 0の戦略を参照
 
 **Phase 1以降の成果物**:
 - **要件定義書**: `.ai-workflow/issue-304/01_requirements/output/requirements.md`
@@ -207,13 +216,26 @@ jenkins-cli build AI_Workflow/ai_workflow_orchestrator \
 - [x] BasePhase.post_output()メソッド統合
 - [x] エラーハンドリング強化（投稿失敗時でもワークフロー継続）
 
-### ✅ 完了（v1.5.0 Phase 0実装）
-- [x] Phase 0: プロジェクト計画フェーズ（planning.py）
+### ✅ 完了（v1.5.0 Phase 0実装 - Issue #313）
+- [x] Phase 0: プロジェクト計画フェーズ（phases/planning.py）
+  - プロジェクトマネージャ役割として機能
+  - Issue複雑度分析、タスク分割、依存関係特定
+  - 各フェーズの見積もり、リスク評価と軽減策
 - [x] 実装戦略・テスト戦略の事前決定機能
+  - Implementation Strategy: CREATE/EXTEND/REFACTOR
+  - Test Strategy: UNIT_ONLY/.../ALL
+  - Test Code Strategy: EXTEND_TEST/CREATE_TEST/BOTH_TEST
 - [x] planning.mdとmetadata.jsonへの戦略保存
+  - 正規表現による戦略判断自動抽出
+  - metadata.json design_decisionsセクションへ保存
 - [x] Phase 2との連携（戦略情報の参照）
+  - Phase 2は実装戦略決定をスキップし、Phase 0の判断を優先
+  - Phase 0がスキップされた場合のフォールバック機能
+- [x] Phase 0 Unit/E2Eテスト（tests/unit/phases/test_planning.py, tests/e2e/test_phase0.py）
 
 ### 🚧 開発中（v1.6.0以降）
+- [ ] Phase 7: Report実装（全体評価と残課題抽出）
+- [ ] Phase 8: Evaluation実装（進捗トラッキング、再実行機能）
 - [ ] PR自動作成機能
 - [ ] GitHub Webhook連携
 - [ ] レビュー基準カスタマイズ
@@ -437,3 +459,4 @@ pytest tests/unit/
 
 **バージョン**: 1.5.0
 **最終更新**: 2025-10-10
+**Phase 0実装**: Issue #313で追加（プロジェクトマネージャ役割）

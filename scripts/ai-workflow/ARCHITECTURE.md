@@ -19,8 +19,12 @@ AI駆動開発自動化ワークフローは、GitHub IssueからPR作成まで�
 
 ### 1.2 システムの特徴
 
-- **7フェーズワークフロー**: プロジェクト計画 → 要件定義 → 詳細設計 → テストシナリオ → 実装 → テスト → ドキュメント
-- **Phase 0（Planning）**: 実装戦略・テスト戦略の事前決定により、Phase 2の負荷を軽減
+- **8フェーズワークフロー**: Phase 0（プロジェクト計画） → Phase 1（要件定義） → Phase 2（詳細設計） → Phase 3（テストシナリオ） → Phase 4（実装） → Phase 5（テスト） → Phase 6（ドキュメント） → Phase 7（レポート）
+- **Phase 0（Planning）**: プロジェクトマネージャとして機能
+  - 実装戦略・テスト戦略の事前決定により、Phase 2の負荷を軽減
+  - Issue複雑度分析、タスク分割、依存関係特定
+  - 各フェーズの見積もり、リスク評価と軽減策の策定
+  - planning.mdとmetadata.jsonへの戦略保存
 - **AI批判的思考レビュー**: 各フェーズ完了後にAIがレビュー（PASS/PASS_WITH_SUGGESTIONS/FAIL）
 - **リトライ機能**: FAIL時は最大3回まで自動リトライ
 - **BDD準拠**: ユーザー行動視点のテストシナリオ（Gherkin形式）
@@ -100,13 +104,17 @@ AI駆動開発自動化ワークフローは、GitHub IssueからPR作成まで�
 │  ┌──────────────────────────────────────────────────────────┐  │
 │  │  phases/ (フェーズ実装)                                    │  │
 │  │  - base_phase.py: フェーズ基底クラス                      │  │
-│  │  - planning.py: プロジェクト計画（Phase 0）              │  │
-│  │  - requirements.py: 要件定義（Phase 1）                  │  │
-│  │  - design.py: 詳細設計（Phase 2）                        │  │
-│  │  - test_scenario.py: テストシナリオ（Phase 3）           │  │
-│  │  - implementation.py: 実装（Phase 4）                    │  │
-│  │  - testing.py: テスト実行（Phase 5）                     │  │
-│  │  - documentation.py: ドキュメント作成（Phase 6）         │  │
+│  │  - planning.py: Phase 0（プロジェクト計画）              │  │
+│  │    - Issue分析、実装戦略・テスト戦略決定                 │  │
+│  │    - タスク分割、見積もり、リスク評価                     │  │
+│  │  - requirements.py: Phase 1（要件定義）                  │  │
+│  │  - design.py: Phase 2（詳細設計）                        │  │
+│  │    - Phase 0の戦略を参照し、設計に専念                   │  │
+│  │  - test_scenario.py: Phase 3（テストシナリオ）           │  │
+│  │  - implementation.py: Phase 4（実装）                    │  │
+│  │  - testing.py: Phase 5（テスト実行）                     │  │
+│  │  - documentation.py: Phase 6（ドキュメント作成）         │  │
+│  │  - report.py: Phase 7（レポート）                        │  │
 │  └──────────────────────────────────────────────────────────┘  │
 │                                                                   │
 │  ┌──────────────────────────────────────────────────────────┐  │
@@ -599,3 +607,4 @@ BasePhase.run()
 
 **バージョン**: 1.5.0
 **最終更新**: 2025-10-10
+**Phase 0実装**: Issue #313で追加（プロジェクトマネージャ役割）
