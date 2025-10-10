@@ -5,9 +5,9 @@
   "workflow_version": "1.0.0",
   "current_phase": "test_scenario",
   "design_decisions": {
-    "implementation_strategy": null,
-    "test_strategy": null,
-    "test_code_strategy": null
+    "implementation_strategy": "EXTEND",
+    "test_strategy": "INTEGRATION_ONLY",
+    "test_code_strategy": "CREATE_TEST"
   },
   "cost_tracking": {
     "total_input_tokens": 0,
