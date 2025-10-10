@@ -24,7 +24,7 @@ pipeline {
             label 'ec2-fleet'
             dir 'scripts/ai-workflow'
             filename 'Dockerfile'
-            args '-v ${WORKSPACE}:/workspace -w /workspace'
+            args '-v ${WORKSPACE}:/workspace -w /workspace -e CLAUDE_DANGEROUSLY_SKIP_PERMISSIONS=1'
         }
     }
 
