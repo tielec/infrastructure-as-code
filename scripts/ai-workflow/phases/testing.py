@@ -52,6 +52,9 @@ class TestingPhase(BasePhase):
                     'error': f'テストシナリオが見つかりません: {test_scenario_file}'
                 }
 
+            # Planning Phase成果物のパス取得
+            planning_path_str = self._get_planning_document_path(issue_number)
+
             # 実行プロンプトを読み込み
             execute_prompt_template = self.load_prompt('execute')
 
@@ -61,6 +64,9 @@ class TestingPhase(BasePhase):
 
             # プロンプトに情報を埋め込み
             execute_prompt = execute_prompt_template.replace(
+                '{planning_document_path}',
+                planning_path_str
+            ).replace(
                 '{implementation_document_path}',
                 f'@{rel_path_implementation}'
             ).replace(

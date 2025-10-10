@@ -40,11 +40,17 @@ class RequirementsPhase(BasePhase):
             # Issue情報をフォーマット
             issue_info_text = self._format_issue_info(issue_info)
 
+            # Planning Phase成果物のパス取得
+            planning_path_str = self._get_planning_document_path(issue_number)
+
             # 実行プロンプトを読み込み
             execute_prompt_template = self.load_prompt('execute')
 
-            # Issue情報をプロンプトに埋め込み
+            # プロンプトに情報を埋め込み
             execute_prompt = execute_prompt_template.replace(
+                '{planning_document_path}',
+                planning_path_str
+            ).replace(
                 '{issue_info}',
                 issue_info_text
             ).replace(
@@ -194,6 +200,9 @@ class RequirementsPhase(BasePhase):
             # Issue情報をフォーマット
             issue_info_text = self._format_issue_info(issue_info)
 
+            # Planning Phase成果物のパス取得
+            planning_path_str = self._get_planning_document_path(issue_number)
+
             # 元の要件定義書を読み込み
             requirements_file = self.output_dir / 'requirements.md'
 
@@ -212,6 +221,9 @@ class RequirementsPhase(BasePhase):
 
             # プロンプトに情報を埋め込み
             revise_prompt = revise_prompt_template.replace(
+                '{planning_document_path}',
+                planning_path_str
+            ).replace(
                 '{requirements_document_path}',
                 f'@{rel_path}'
             ).replace(

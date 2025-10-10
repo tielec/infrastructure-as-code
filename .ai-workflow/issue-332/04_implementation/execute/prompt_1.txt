@@ -5,22 +5,17 @@
 
 ## 入力情報
 
-### Planning Phase成果物
-- Planning Document: {planning_document_path}
-
-**注意**: Planning Phaseが実行されている場合、開発計画（実装戦略、テスト戦略、リスク、スケジュール）を必ず確認してください。
-
 ### 設計書
-{design_document_path}
+@.ai-workflow/issue-332/02_design/output/design.md
 
 ### テストシナリオ
-{test_scenario_document_path}
+@.ai-workflow/issue-332/03_test_scenario/output/test-scenario.md
 
 ### 要件定義書（参考）
-{requirements_document_path}
+@.ai-workflow/issue-332/01_requirements/output/requirements.md
 
 ### 実装戦略（Phase 2で決定）
-**{implementation_strategy}**
+**EXTEND**
 
 ## 実装戦略別の対応
 
@@ -90,7 +85,7 @@ Phase 2で決定された実装戦略に応じて、適切な実装を行って�
 # 実装ログ
 
 ## 実装サマリー
-- 実装戦略: {implementation_strategy}
+- 実装戦略: EXTEND
 - 変更ファイル数: X個
 - 新規作成ファイル数: Y個
 
@@ -121,7 +116,7 @@ Phase 2で決定された実装戦略に応じて、適切な実装を行って�
 - Phase 5でテストを実行
 ```
 
-このログを `.ai-workflow/issue-{issue_number}/04_implementation/output/implementation.md` として保存してください。
+このログを `.ai-workflow/issue-332/04_implementation/output/implementation.md` として保存してください。
 
 ## 品質ゲート（Phase 4）
 

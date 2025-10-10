@@ -4,13 +4,25 @@
 
 GitHubのIssue情報から詳細な要件定義書を作成してください。
 
-## Issue情報
+## 入力情報
+
+### Planning Phase成果物
+- Planning Document: {planning_document_path}
+
+**注意**: Planning Phaseが実行されている場合、開発計画（実装戦略、テスト戦略、リスク、スケジュール）を必ず確認してください。
+
+### GitHub Issue情報
 
 {issue_info}
 
 ## 要件定義書の構成
 
 以下のセクションを含む要件定義書を作成してください：
+
+### 0. Planning Documentの確認（Planning Phaseが実行されている場合）
+- 開発計画の全体像を把握
+- スコープ、技術選定、リスク、スケジュールを確認
+- Planning Documentで策定された戦略を踏まえて要件定義を実施
 
 ### 1. 概要
 - Issue本文の「## 概要」セクションを要約

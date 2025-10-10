@@ -50,13 +50,13 @@ GitHub Issue URL（必須）
 このIssueの内容を元に、要件定義から実装まで自動実行します。
         '''.stripIndent().trim())
 
-        choiceParam('START_PHASE', ['requirements', 'design', 'test_scenario', 'implementation', 'testing', 'documentation', 'report'], '''
+        choiceParam('START_PHASE', ['planning', 'requirements', 'design', 'test_scenario', 'implementation', 'testing', 'documentation', 'report'], '''
 開始フェーズ
 
 ワークフローを開始するフェーズを指定します。
 途中からジョブを再開する場合に使用します。
 
-デフォルト: requirements（最初から実行）
+デフォルト: planning（最初から実行）
         '''.stripIndent().trim())
 
         stringParam('GITHUB_REPOSITORY', 'tielec/infrastructure-as-code', '''

@@ -51,6 +51,9 @@ class DesignPhase(BasePhase):
                     'error': f'要件定義書が見つかりません: {requirements_file}'
                 }
 
+            # Planning Phase成果物のパス取得
+            planning_path_str = self._get_planning_document_path(issue_number)
+
             # 実行プロンプトを読み込み
             execute_prompt_template = self.load_prompt('execute')
 
@@ -59,6 +62,9 @@ class DesignPhase(BasePhase):
 
             # プロンプトに情報を埋め込み
             execute_prompt = execute_prompt_template.replace(
+                '{planning_document_path}',
+                planning_path_str
+            ).replace(
                 '{requirements_document_path}',
                 f'@{rel_path_requirements}'
             ).replace(
