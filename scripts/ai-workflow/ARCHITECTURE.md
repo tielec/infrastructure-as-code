@@ -26,7 +26,7 @@ AI駆動開発自動化ワークフローは、GitHub IssueからPR作成まで�
   - 各フェーズの見積もり、リスク評価と軽減策の策定
   - planning.mdとmetadata.jsonへの戦略保存
 - **AI批判的思考レビュー**: 各フェーズ完了後にAIがレビュー（PASS/PASS_WITH_SUGGESTIONS/FAIL）
-- **リトライ機能**: FAIL時は最大3回まで自動リトライ
+- **統一リトライ機能**: execute()失敗時も自動的にreview() → revise()を実行し、最大3回までリトライ
 - **BDD準拠**: ユーザー行動視点のテストシナリオ（Gherkin形式）
 
 ---
@@ -186,7 +186,7 @@ AI駆動開発自動化ワークフローは、GitHub IssueからPR作成まで�
     └── .ai-workflow/issue-{number}/metadata.json
 ```
 
-### 4.2 フェーズ実行フロー（v1.4.0実装済み）
+### 4.2 フェーズ実行フロー（v1.6.0実装済み）
 
 ```
 [Jenkins]
@@ -198,41 +198,46 @@ AI駆動開発自動化ワークフローは、GitHub IssueからPR作成まで�
     │ 1. metadata.jsonを読み込み
     │ 2. current_phaseを確認
     ▼
-[phases/requirements.py]
+[BasePhase.run()]
     │
-    │ 3. GitHub APIでIssue内容を取得
-    │ 4. プロンプトテンプレートを読み込み
-    │ 5. Claude APIで要件定義を生成
+    │ 3. 【v1.6.0追加】統一リトライループ開始（MAX_RETRIES=3）
+    │ 4. フェーズステータスをIN_PROGRESSに更新
     ▼
-[ClaudeClient]
+[リトライループ（attempt 1~3）]
     │
-    │ 6. Claude API呼び出し（messages.create）
-    │ 7. コスト追跡（input/output tokens）
+    │ 5. [ATTEMPT N/3]ログ出力
+    │ 6. attempt == 1: execute()実行
+    │    attempt >= 2: review() → revise()実行
     ▼
-[WorkflowState]
+[phases/requirements.py:execute()]
     │
-    │ 8. フェーズステータスをIN_PROGRESSに更新
-    │ 9. 成果物を01-requirements/output/requirements.mdに保存
-    │ 10. 【v1.4.0追加】BasePhase.post_output()で成果物をGitHub Issueコメント投稿
-    │ 11. Gitコミット
-    │ 12. フェーズステータスをCOMPLETEDに更新
+    │ 7. GitHub APIでIssue内容を取得
+    │ 8. プロンプトテンプレートを読み込み
+    │ 9. Claude APIで要件定義を生成
+    │ 10. コスト追跡（input/output tokens）
     ▼
-[main.py:review()]
+[BasePhase リトライ判定]
     │
-    │ 13. レビュープロンプトを生成
-    │ 14. Claude APIでレビュー実行
+    │ 11. execute()成功 → 最終レビューへ
+    │ 12. execute()失敗 → attempt >= 2でreview() → revise()
+    │ 13. 最大リトライ到達 → フェーズ失敗
     ▼
-[CriticalThinkingReviewer]
+[最終レビュー（成功時のみ）]
     │
+    │ 14. review()実行
     │ 15. レビュー結果判定（PASS/PASS_WITH_SUGGESTIONS/FAIL）
     │ 16. レビュー結果をGitHub Issueコメント投稿
-    │ 17. 01-requirements/review/review.mdに保存
     ▼
 [WorkflowState]
     │
-    │ 18. review_resultを保存
-    │ 19. PASSなら次フェーズへ
-    │ 20. FAILならretry_count増加→再実行
+    │ 17. review_resultを保存
+    │ 18. 成果物を01-requirements/output/requirements.mdに保存
+    │ 19. 【v1.4.0追加】BasePhase.post_output()で成果物をGitHub Issueコメント投稿
+    │ 20. フェーズステータスをCOMPLETEDに更新
+    ▼
+[finally: Git自動commit & push]
+    │
+    │ 21. 成功・失敗問わずGitコミット・プッシュ
     ▼
 [metadata.json]
 ```
@@ -388,6 +393,13 @@ class BasePhase(ABC):
 - `_save_execution_logs()`を拡張し、リトライ時に過去のログを保持
 - ログファイル名: `agent_log_1.md` → `agent_log_2.md` → `agent_log_3.md`...
 - 成果物ファイル（`output/`配下）は従来通り上書き
+
+**v1.6.0での変更（Issue #331）**:
+- `run()`メソッドのリトライループロジックを全面修正
+- execute()とrevise()を統一リトライループに統合
+- execute()失敗時も自動的にreview() → revise()を実行
+- 試行回数の可視化：`[ATTEMPT N/3]`形式でログ出力
+- 一時的なエラー（ネットワーク障害、API制限等）からの自動回復が可能
 
 ### 5.4 GitManager（core/git_manager.py）
 

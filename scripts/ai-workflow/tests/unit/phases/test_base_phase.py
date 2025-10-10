@@ -803,3 +803,370 @@ class TestBasePhase:
 
         # Assert
         assert result == 1
+
+    # ====================================================================
+    # execute()失敗時のリトライ機能テスト (Issue #331)
+    # ====================================================================
+
+    def test_run_execute_failure_with_retry(self, setup_phase):
+        """
+        UT-002: execute()失敗時のリトライ実行
+
+        検証項目:
+        - execute()が失敗した場合、リトライループに入ること
+        - review() → revise()が実行されること
+        - 最終的に成功すること
+        """
+        # Arrange
+        phase = setup_phase['phase']
+        metadata_manager = setup_phase['metadata_manager']
+
+        # execute()が失敗を返す
+        phase.execute = Mock(return_value={'success': False, 'error': 'Test error'})
+
+        # 1回目のreview()はFAIL、2回目はPASS
+        review_results = [
+            {'result': 'FAIL', 'feedback': 'Test feedback', 'suggestions': []},
+            {'result': 'PASS', 'feedback': '', 'suggestions': []}
+        ]
+        phase.review = Mock(side_effect=review_results)
+
+        # revise()は成功を返す
+        phase.revise = Mock(return_value={'success': True, 'output': 'revised_output'})
+
+        # Act
+        success = phase.run()
+
+        # Assert
+        assert success is True
+        assert phase.execute.call_count == 1  # execute()は1回だけ
+        assert phase.review.call_count == 2   # review()は2回（attempt=2の前と最終レビュー）
+        assert phase.revise.call_count == 1   # revise()は1回
+        assert metadata_manager.get_phase_status('requirements') == 'completed'
+
+    def test_run_execute_failure_max_retries(self, setup_phase):
+        """
+        UT-003: execute()失敗後の最大リトライ到達
+
+        検証項目:
+        - execute()失敗後、最大リトライ回数（3回）に到達すること
+        - 失敗終了すること
+        """
+        # Arrange
+        phase = setup_phase['phase']
+        metadata_manager = setup_phase['metadata_manager']
+        github_client = setup_phase['github_client']
+
+        # execute()が失敗を返す
+        phase.execute = Mock(return_value={'success': False, 'error': 'Test error'})
+
+        # review()が常にFAILを返す
+        phase.review = Mock(return_value={
+            'result': 'FAIL',
+            'feedback': 'Test feedback',
+            'suggestions': []
+        })
+
+        # revise()が常に失敗を返す
+        phase.revise = Mock(return_value={'success': False, 'error': 'Revise failed'})
+
+        # Act
+        success = phase.run()
+
+        # Assert
+        assert success is False
+        assert phase.execute.call_count == 1    # execute()は1回だけ
+        assert phase.review.call_count == 2     # review()は2回（attempt=2, 3の前）
+        assert phase.revise.call_count == 2     # revise()は2回（attempt=2, 3）
+        assert metadata_manager.get_phase_status('requirements') == 'failed'
+
+        # GitHub投稿で「最大リトライ回数(3)に到達しました」が呼ばれたか確認
+        calls = [str(call) for call in github_client.post_workflow_progress.call_args_list]
+        assert any('最大リトライ回数(3)に到達しました' in call for call in calls)
+
+    def test_run_execute_failure_then_success(self, setup_phase):
+        """
+        UT-004: execute()失敗後、revise()成功→review()合格
+
+        検証項目:
+        - execute()失敗後にrevise()が実行されること
+        - revise()成功後にreview()が実行されること
+        - 最終的にPASSになること
+        """
+        # Arrange
+        phase = setup_phase['phase']
+        metadata_manager = setup_phase['metadata_manager']
+
+        # execute()が失敗を返す
+        phase.execute = Mock(return_value={'success': False, 'error': 'Initial error'})
+
+        # 1回目のreview()はFAIL、2回目はPASS
+        review_results = [
+            {'result': 'FAIL', 'feedback': 'Need revision', 'suggestions': []},
+            {'result': 'PASS', 'feedback': '', 'suggestions': []}
+        ]
+        phase.review = Mock(side_effect=review_results)
+
+        # revise()は成功を返す
+        phase.revise = Mock(return_value={'success': True, 'output': 'revised_output'})
+
+        # Act
+        success = phase.run()
+
+        # Assert
+        assert success is True
+        assert phase.execute.call_count == 1
+        assert phase.review.call_count == 2
+        assert phase.revise.call_count == 1
+        assert metadata_manager.get_phase_status('requirements') == 'completed'
+
+    def test_run_execute_failure_review_pass_early(self, setup_phase):
+        """
+        UT-005: attempt>=2でreview()がPASSの場合の早期終了
+
+        検証項目:
+        - 2回目以降のattemptでreview()がPASSを返した場合
+        - revise()をスキップして成功終了すること
+        """
+        # Arrange
+        phase = setup_phase['phase']
+        metadata_manager = setup_phase['metadata_manager']
+
+        # execute()が失敗を返す
+        phase.execute = Mock(return_value={'success': False, 'error': 'Initial error'})
+
+        # review()が1回目でPASSを返す
+        phase.review = Mock(return_value={
+            'result': 'PASS',
+            'feedback': '',
+            'suggestions': []
+        })
+
+        # revise()は呼ばれないはず
+        phase.revise = Mock(return_value={'success': True, 'output': 'revised_output'})
+
+        # Act
+        success = phase.run()
+
+        # Assert
+        assert success is True
+        assert phase.execute.call_count == 1
+        assert phase.review.call_count == 1  # review()は1回だけ（attempt=2の前）
+        assert phase.revise.call_count == 0  # revise()は呼ばれない
+        assert metadata_manager.get_phase_status('requirements') == 'completed'
+
+    def test_run_execute_failure_no_revise_method(self, setup_phase):
+        """
+        UT-006: revise()メソッドが実装されていない場合
+
+        検証項目:
+        - revise()が実装されていない場合
+        - 適切なエラーメッセージが出力されること
+        - 失敗終了すること
+        """
+        # Arrange
+        phase = setup_phase['phase']
+        metadata_manager = setup_phase['metadata_manager']
+        github_client = setup_phase['github_client']
+
+        # execute()が失敗を返す
+        phase.execute = Mock(return_value={'success': False, 'error': 'Test error'})
+
+        # review()がFAILを返す
+        phase.review = Mock(return_value={
+            'result': 'FAIL',
+            'feedback': 'Test feedback',
+            'suggestions': []
+        })
+
+        # revise()メソッドを削除
+        delattr(phase, 'revise')
+
+        # Act
+        success = phase.run()
+
+        # Assert
+        assert success is False
+        assert metadata_manager.get_phase_status('requirements') == 'failed'
+
+        # GitHub投稿で「revise()メソッドが未実装のため、修正できません。」が呼ばれたか確認
+        calls = [str(call) for call in github_client.post_workflow_progress.call_args_list]
+        assert any('revise()メソッドが未実装' in call for call in calls)
+
+    def test_run_execute_exception(self, setup_phase):
+        """
+        UT-007: execute()が例外をスローした場合
+
+        検証項目:
+        - execute()実行中に例外が発生した場合
+        - 適切にハンドリングされること
+        - finally句でGit commit & pushが実行されること
+        """
+        # Arrange
+        phase = setup_phase['phase']
+        metadata_manager = setup_phase['metadata_manager']
+
+        # execute()が例外をスロー
+        phase.execute = Mock(side_effect=RuntimeError('Unexpected error'))
+
+        # Act & Assert
+        with pytest.raises(RuntimeError, match='Unexpected error'):
+            phase.run()
+
+        # finally句でステータスがfailedに更新されることを確認
+        assert metadata_manager.get_phase_status('requirements') == 'failed'
+
+    def test_run_revise_exception(self, setup_phase):
+        """
+        UT-008: revise()が例外をスローした場合
+
+        検証項目:
+        - revise()実行中に例外が発生した場合
+        - 適切にハンドリングされること
+        """
+        # Arrange
+        phase = setup_phase['phase']
+        metadata_manager = setup_phase['metadata_manager']
+
+        # execute()が失敗を返す
+        phase.execute = Mock(return_value={'success': False, 'error': 'Initial error'})
+
+        # review()がFAILを返す
+        phase.review = Mock(return_value={
+            'result': 'FAIL',
+            'feedback': 'Test feedback',
+            'suggestions': []
+        })
+
+        # revise()が例外をスロー
+        phase.revise = Mock(side_effect=RuntimeError('Revise error'))
+
+        # Act & Assert
+        with pytest.raises(RuntimeError, match='Revise error'):
+            phase.run()
+
+        # finally句でステータスがfailedに更新されることを確認
+        assert metadata_manager.get_phase_status('requirements') == 'failed'
+
+    def test_run_attempt_logging(self, setup_phase, capsys):
+        """
+        UT-009: 試行回数ログの出力
+
+        検証項目:
+        - 各試行の開始時に[ATTEMPT N/3]形式でログが出力されること
+        - 区切り線が表示されること
+        """
+        # Arrange
+        phase = setup_phase['phase']
+
+        # execute()が失敗を返す
+        phase.execute = Mock(return_value={'success': False, 'error': 'Test error'})
+
+        # review()がFAIL、revise()が成功を返す（2回目のreview()でPASS）
+        review_results = [
+            {'result': 'FAIL', 'feedback': 'Test feedback', 'suggestions': []},
+            {'result': 'PASS', 'feedback': '', 'suggestions': []}
+        ]
+        phase.review = Mock(side_effect=review_results)
+        phase.revise = Mock(return_value={'success': True, 'output': 'revised_output'})
+
+        # Act
+        phase.run()
+
+        # Assert - 標準出力を確認
+        captured = capsys.readouterr()
+        assert '[ATTEMPT 1/3] Phase: requirements' in captured.out
+        assert '[ATTEMPT 2/3] Phase: requirements' in captured.out
+        assert '=' * 80 in captured.out  # 区切り線
+
+    def test_run_failure_warning_log(self, setup_phase, capsys):
+        """
+        UT-010: 失敗時の警告ログ出力
+
+        検証項目:
+        - 各試行が失敗した場合、[WARNING]ログが出力されること
+        """
+        # Arrange
+        phase = setup_phase['phase']
+
+        # execute()が失敗を返す
+        phase.execute = Mock(return_value={'success': False, 'error': 'Execute failed'})
+
+        # review()が常にFAILを返す
+        phase.review = Mock(return_value={
+            'result': 'FAIL',
+            'feedback': 'Test feedback',
+            'suggestions': []
+        })
+
+        # revise()が常に失敗を返す
+        phase.revise = Mock(return_value={'success': False, 'error': 'Revise failed'})
+
+        # Act
+        phase.run()
+
+        # Assert - 標準出力を確認
+        captured = capsys.readouterr()
+        assert '[WARNING] Attempt 1 failed: Execute failed' in captured.out
+        assert '[WARNING] Attempt 2 failed: Revise failed' in captured.out
+        assert '[WARNING] Attempt 3 failed: Revise failed' in captured.out
+
+    def test_run_metadata_retry_count_increment(self, setup_phase):
+        """
+        UT-011: メタデータのretry_count更新
+
+        検証項目:
+        - revise()実行時にメタデータのretry_countが正しくインクリメントされること
+        """
+        # Arrange
+        phase = setup_phase['phase']
+        metadata_manager = setup_phase['metadata_manager']
+
+        # execute()が失敗を返す
+        phase.execute = Mock(return_value={'success': False, 'error': 'Test error'})
+
+        # review()がFAIL、revise()が成功を返す（2回目のreview()でPASS）
+        review_results = [
+            {'result': 'FAIL', 'feedback': 'Test feedback', 'suggestions': []},
+            {'result': 'PASS', 'feedback': '', 'suggestions': []}
+        ]
+        phase.review = Mock(side_effect=review_results)
+        phase.revise = Mock(return_value={'success': True, 'output': 'revised_output'})
+
+        # Act
+        phase.run()
+
+        # Assert - retry_countが1増加していることを確認
+        retry_count = metadata_manager.data['phases']['requirements'].get('retry_count', 0)
+        assert retry_count == 1
+
+    def test_run_phase_status_transitions(self, setup_phase):
+        """
+        UT-012: phase statusの更新（成功ケース）
+
+        検証項目:
+        - run()開始時にstatus='in_progress'になること
+        - run()成功終了時にstatus='completed'になること
+        """
+        # Arrange
+        phase = setup_phase['phase']
+        metadata_manager = setup_phase['metadata_manager']
+
+        # execute()とreview()は成功を返す
+        phase.execute = Mock(return_value={'success': True, 'output': 'test_output'})
+        phase.review = Mock(return_value={
+            'result': 'PASS',
+            'feedback': '',
+            'suggestions': []
+        })
+
+        # Act
+        # run()開始前は未設定
+        initial_status = metadata_manager.get_phase_status('requirements')
+
+        success = phase.run()
+
+        # Assert
+        assert success is True
+        final_status = metadata_manager.get_phase_status('requirements')
+        assert final_status == 'completed'

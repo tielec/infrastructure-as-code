@@ -12,6 +12,7 @@ Claude Agent SDKを使った7フェーズの自動開発ワークフロー
 - **8フェーズワークフロー**: Phase 0（プロジェクト計画） → Phase 1（要件定義） → Phase 2（設計） → Phase 3（テストシナリオ） → Phase 4（実装） → Phase 5（テスト） → Phase 6（ドキュメント） → Phase 7（レポート）
 - **Phase 0 (Planning)**: プロジェクトマネージャとして実装戦略・テスト戦略を事前決定し、後続フェーズの効率を最大化
 - **クリティカルシンキングレビュー**: 各フェーズで品質チェック（最大3回リトライ）
+- **execute()自動リトライ**: execute()失敗時も自動的にrevise()による修正を試行し、一時的なエラーからの回復が可能
 - **GitHub統合**: Issue情報の取得、進捗報告、レビュー結果の投稿
 - **Docker対応**: Linux環境で安定動作
 
@@ -233,7 +234,14 @@ jenkins-cli build AI_Workflow/ai_workflow_orchestrator \
   - Phase 0がスキップされた場合のフォールバック機能
 - [x] Phase 0 Unit/E2Eテスト（tests/unit/phases/test_planning.py, tests/e2e/test_phase0.py）
 
-### 🚧 開発中（v1.6.0以降）
+### ✅ 完了（v1.6.0 リトライ機能強化 - Issue #331）
+- [x] execute()失敗時の自動リトライ機能
+  - execute()とrevise()を統一リトライループに統合
+  - 一時的なエラー（ネットワーク障害、API制限等）からの自動回復
+  - 試行回数の可視化（`[ATTEMPT N/3]`ログ）
+  - 最大3回までの自動リトライ
+
+### 🚧 開発中（v1.7.0以降）
 - [ ] Phase 7: Report実装（全体評価と残課題抽出）
 - [ ] Phase 8: Evaluation実装（進捗トラッキング、再実行機能）
 - [ ] PR自動作成機能
