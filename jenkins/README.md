@@ -123,6 +123,7 @@ aws ssm get-parameter --name /jenkins-infra/dev/jenkins/admin-password \
 |---------|------|-----------|
 | **Admin_Jobs** | システム管理 | backup-config（設定バックアップ）<br>restore-config（設定リストア）<br>ssm-parameter-backup（SSMパラメータバックアップ）<br>ssm-parameter-restore（SSMパラメータリストア）<br>github-webhooks-setting（GitHub Webhook設定）<br>github-deploykeys-setting（デプロイキー設定）<br>user-management（ユーザー管理） |
 | **Account_Setup** | アカウント管理 | account-self-activation（アカウント自己有効化） |
+| **AI_Workflow** | AI駆動開発自動化 | ai_workflow_orchestrator（8フェーズ自動開発ワークフロー） |
 | **Code_Quality_Checker** | コード品質分析 | pr-complexity-analyzer（PR複雑度分析）<br>rust-code-analysis（Rustコード解析） |
 | **Document_Generator** | ドキュメント生成 | auto-insert-doxygen-comment（Doxygenコメント自動挿入）<br>generate-doxygen-html（DoxygenHTML生成）<br>technical-docs-writer（技術文書作成）<br>pr-comment-builder（PRコメントビルダー） |
 | **Infrastructure_Management** | インフラ管理 | shutdown-jenkins-environment（Jenkins環境停止）<br>terminate-lambda-nat（Lambda NAT削除）<br>Ansible Playbook実行、Pulumi Stack管理 |
@@ -461,6 +462,62 @@ Jenkins UI > Infrastructure_Management > Shutdown-Environment-Scheduler > 設定
 # 手動実行
 Jenkins UI > Infrastructure_Management > Shutdown-Environment-Scheduler > "Build Now"をクリック
 ```
+
+#### AI_Workflow/ai_workflow_orchestrator
+
+**目的**: GitHub IssueからClaude AIが自動的に開発プロセスを実行（8フェーズワークフロー）
+
+**主な機能**:
+- Phase 0（Planning）: プロジェクト計画、実装戦略・テスト戦略の事前決定
+- Phase 1（Requirements）: 要件定義書の自動生成
+- Phase 2（Design）: 詳細設計書の自動生成
+- Phase 3（Test Scenario）: テストシナリオの自動生成
+- Phase 4（Implementation）: コード実装の自動実行
+- Phase 5（Testing）: テスト実行と結果レポート
+- Phase 6（Documentation）: ドキュメント更新
+- Phase 7（Report）: 全体レポート生成
+
+**パラメータ**:
+- `ISSUE_URL`: GitHub Issue URL（必須）
+- `START_PHASE`: 開始フェーズ（デフォルト: planning）
+  - 選択肢: planning, requirements, design, test_scenario, implementation, testing, documentation, report
+  - 推奨: `planning`（Phase 0から開始することで、後続フェーズの効率が向上）
+- `DRY_RUN`: ドライラン実行（デフォルト: false）
+- `SKIP_REVIEW`: レビュースキップ（デフォルト: false）
+- `MAX_RETRIES`: 最大リトライ回数（デフォルト: 3）
+- `COST_LIMIT_USD`: コスト上限USD（デフォルト: 5.0）
+
+**実行例**:
+```bash
+# Planning Phaseから全フェーズを実行（推奨）
+START_PHASE: planning
+ISSUE_URL: https://github.com/tielec/infrastructure-as-code/issues/332
+
+# Requirements Phaseから実行（Planning Phaseをスキップ）
+START_PHASE: requirements
+ISSUE_URL: https://github.com/tielec/infrastructure-as-code/issues/332
+```
+
+**Planning Phase（Phase 0）の重要性**:
+- **実装戦略の事前決定**: CREATE/EXTEND/REFACTORを判断し、Phase 2以降の負荷を軽減
+- **テスト戦略の事前決定**: UNIT_ONLY/INTEGRATION_ONLY/ALL等を判断し、Phase 3の方針を明確化
+- **Issue複雑度分析**: 工数見積もり、リスク評価、タスク分割を実施
+- **開発計画書の生成**: planning.mdとして保存され、全フェーズで参照可能
+
+**Phase間の連携**:
+- Planning Phaseの成果物（planning.md）は後続の全Phase（Requirements～Report）で自動的に参照される
+- Planning Phaseをスキップした場合でも、各Phaseは正常に動作する（警告ログのみ出力）
+
+**成果物の自動投稿**:
+- 各Phase完了後、成果物がGitHub Issueコメントとして自動投稿される
+- レビュー結果とフィードバックもIssueコメントとして記録される
+
+**Git自動commit & push**:
+- 各Phase完了後、成果物が自動的にGitにcommit & pushされる
+- ブランチ: `ai-workflow/issue-{番号}`
+- コミットメッセージフォーマット: `[ai-workflow] Phase X (phase_name) - completed/failed`
+
+**詳細ドキュメント**: [scripts/ai-workflow/README.md](../scripts/ai-workflow/README.md)
 
 #### Infrastructure_Management/Terminate_Lambda_NAT
 
