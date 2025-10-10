@@ -196,11 +196,32 @@ class GitManager:
             try:
                 # 現在のブランチを取得
                 current_branch = self.repo.active_branch.name
+                print(f"[DEBUG] Attempting to push branch: {current_branch}")
+
+                # リモートURL確認
+                origin = self.repo.remote(name='origin')
+                origin_url = origin.url
+                # トークンを隠して表示
+                safe_url = origin_url.replace(os.getenv('GITHUB_TOKEN', ''), '***TOKEN***') if os.getenv('GITHUB_TOKEN') else origin_url
+                print(f"[DEBUG] Remote URL: {safe_url}")
 
                 # git push origin HEAD
-                origin = self.repo.remote(name='origin')
-                origin.push(refspec=f'HEAD:{current_branch}')
+                print(f"[DEBUG] Executing: git push origin HEAD:{current_branch}")
+                push_info = origin.push(refspec=f'HEAD:{current_branch}')
 
+                # push結果を詳細ログ
+                print(f"[DEBUG] Push result count: {len(push_info)}")
+                for info in push_info:
+                    print(f"[DEBUG] Push info - flags: {info.flags}, summary: {info.summary}")
+                    if info.flags & info.ERROR:
+                        print(f"[ERROR] Push failed with error flag")
+                        return {
+                            'success': False,
+                            'retries': retries,
+                            'error': f'Push error: {info.summary}'
+                        }
+
+                print(f"[INFO] Git push successful")
                 return {
                     'success': True,
                     'retries': retries,
@@ -209,10 +230,12 @@ class GitManager:
 
             except GitCommandError as e:
                 error_message = str(e)
+                print(f"[ERROR] GitCommandError during push: {error_message}")
 
                 # リトライ可能なエラーかチェック
                 if not self._is_retriable_error(e):
                     # リトライ不可能なエラー（権限エラー等）
+                    print(f"[ERROR] Non-retriable error detected")
                     return {
                         'success': False,
                         'retries': retries,
@@ -222,6 +245,7 @@ class GitManager:
                 # リトライ可能なエラー
                 if retries >= max_retries:
                     # 最大リトライ回数に達した
+                    print(f"[ERROR] Max retries reached")
                     return {
                         'success': False,
                         'retries': retries,
@@ -235,6 +259,9 @@ class GitManager:
 
             except Exception as e:
                 # その他のエラー
+                print(f"[ERROR] Unexpected error during push: {e}")
+                import traceback
+                traceback.print_exc()
                 return {
                     'success': False,
                     'retries': retries,
@@ -242,6 +269,7 @@ class GitManager:
                 }
 
         # ループを抜けた場合（通常は到達しない）
+        print(f"[ERROR] Unexpected loop exit")
         return {
             'success': False,
             'retries': retries,
