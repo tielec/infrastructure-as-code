@@ -15,7 +15,8 @@
 - Phase 2: {design_document_path}
 - Phase 3: {test_scenario_document_path}
 - Phase 4: {implementation_document_path}
-- Phase 5: {test_result_document_path}
+- Phase 5: {test_implementation_document_path}
+- Phase 6: {test_result_document_path}
 
 ## ドキュメント更新手順
 
@@ -80,7 +81,7 @@ Phase 2（設計）とPhase 4（実装）から、以下を抽出してくださ
 
 ### ステップ5: 更新結果の記録
 
-documentation-update-log.mdを `.ai-workflow/issue-{issue_number}/06_documentation/output/documentation-update-log.md` として作成し、以下の内容を記載してください：
+documentation-update-log.mdを `.ai-workflow/issue-{issue_number}/07_documentation/output/documentation-update-log.md` として作成し、以下の内容を記載してください：
 
 ```markdown
 # プロジェクトドキュメント更新ログ
@@ -112,7 +113,7 @@ documentation-update-log.mdを `.ai-workflow/issue-{issue_number}/06_documentati
 - ...
 ```
 
-## 品質ゲート（Phase 6: Documentation）
+## 品質ゲート（Phase 7: Documentation）
 
 ドキュメント更新は以下の品質ゲートを満たす必要があります：
 
@@ -125,7 +126,7 @@ documentation-update-log.mdを `.ai-workflow/issue-{issue_number}/06_documentati
 ## 出力形式
 
 1. プロジェクトドキュメントを直接更新（README.md、ARCHITECTURE.md等）
-2. 更新ログを `.ai-workflow/issue-{issue_number}/06_documentation/output/documentation-update-log.md` として保存
+2. 更新ログを `.ai-workflow/issue-{issue_number}/07_documentation/output/documentation-update-log.md` として保存
 
 ## 注意事項
 

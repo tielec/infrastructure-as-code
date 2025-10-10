@@ -6,21 +6,21 @@
 ## 入力情報
 
 ### Planning Phase成果物
-- Planning Document: {planning_document_path}
+- Planning Document: @.ai-workflow/issue-324/00_planning/output/planning.md
 
 **注意**: Planning Phaseが実行されている場合、開発計画（実装戦略、テスト戦略、リスク、スケジュール）を必ず確認してください。
 
 ### 設計書
-{design_document_path}
+@.ai-workflow/issue-324/02_design/output/design.md
 
 ### テストシナリオ
-{test_scenario_document_path}
+@.ai-workflow/issue-324/03_test_scenario/output/test-scenario.md
 
 ### 要件定義書（参考）
-{requirements_document_path}
+@.ai-workflow/issue-324/01_requirements/output/requirements.md
 
 ### 実装戦略（Phase 2で決定）
-**{implementation_strategy}**
+**EXTEND**
 
 ## 実装戦略別の対応
 
@@ -69,11 +69,12 @@ Phase 2で決定された実装戦略に応じて、適切な実装を行って�
 - 適切なエラーハンドリングを追加
 - コメント・ドキュメント文字列を記載
 
-#### 3.2 テストコード実装（Phase 5に移行）
-
-**Phase 4では実コード（ビジネスロジック、API、データモデル等）のみを実装し、テストコードは Phase 5（test_implementation）で実装します。**
-
-Phase 3で作成されたテストシナリオは参照しますが、テストコード自体の実装は行いません。
+#### 3.2 テストコード実装
+- テストシナリオに基づいてテストコードを実装
+- Phase 2で決定されたテスト戦略に従う
+  - UNIT_ONLY: Unitテストのみ
+  - INTEGRATION_BDD: Integration + BDDテスト
+  - 等
 
 #### 3.3 ファイル操作
 以下のツールを使用してファイルを操作してください：
@@ -89,7 +90,7 @@ Phase 3で作成されたテストシナリオは参照しますが、テスト�
 # 実装ログ
 
 ## 実装サマリー
-- 実装戦略: {implementation_strategy}
+- 実装戦略: EXTEND
 - 変更ファイル数: X個
 - 新規作成ファイル数: Y個
 
@@ -111,12 +112,16 @@ Phase 3で作成されたテストシナリオは参照しますが、テスト�
 
 （以下、各ファイルについて記載）
 
+## テストコード
+
+### 実装したテスト
+- `tests/test_xxx.py`: （テスト内容）
+
 ## 次のステップ
-- Phase 5（test_implementation）でテストコードを実装
-- Phase 6（testing）でテストを実行
+- Phase 5でテストを実行
 ```
 
-このログを `.ai-workflow/issue-{issue_number}/04_implementation/output/implementation.md` として保存してください。
+このログを `.ai-workflow/issue-324/04_implementation/output/implementation.md` として保存してください。
 
 ## 品質ゲート（Phase 4）
 
@@ -125,9 +130,8 @@ Phase 3で作成されたテストシナリオは参照しますが、テスト�
 - [ ] **Phase 2の設計に沿った実装である**
 - [ ] **既存コードの規約に準拠している**
 - [ ] **基本的なエラーハンドリングがある**
+- [ ] **テストコードが実装されている**
 - [ ] **明らかなバグがない**
-
-**注意**: テストコードの実装は Phase 5（test_implementation）で行います。Phase 4では実コードのみを実装してください。
 
 これらの品質ゲートは**必須要件**です。実装後、クリティカルシンキングレビューが実施され、品質ゲートを満たさない場合は修正が必要になります。
 

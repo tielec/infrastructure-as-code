@@ -77,6 +77,13 @@ class WorkflowState:
                     "completed_at": None,
                     "review_result": None
                 },
+                "test_implementation": {
+                    "status": "pending",
+                    "retry_count": 0,
+                    "started_at": None,
+                    "completed_at": None,
+                    "review_result": None
+                },
                 "testing": {
                     "status": "pending",
                     "retry_count": 0,
