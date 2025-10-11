@@ -178,8 +178,8 @@ class ImplementationPhase(BasePhase):
             design_file = self.metadata.workflow_dir.parent / f'issue-{issue_number}' / '02_design' / 'output' / 'design.md'
             test_scenario_file = self.metadata.workflow_dir.parent / f'issue-{issue_number}' / '03_test_scenario' / 'output' / 'test-scenario.md'
 
-            # 実装戦略を取得
-            implementation_strategy = self.metadata.data['design_decisions'].get('implementation_strategy', 'UNKNOWN')
+            # 実装戦略を取得（Noneの場合もUNKNOWNを使用）
+            implementation_strategy = self.metadata.data['design_decisions'].get('implementation_strategy') or 'UNKNOWN'
 
             # レビュープロンプトを読み込み
             review_prompt_template = self.load_prompt('review')
@@ -264,8 +264,8 @@ class ImplementationPhase(BasePhase):
             design_file = self.metadata.workflow_dir.parent / f'issue-{issue_number}' / '02_design' / 'output' / 'design.md'
             test_scenario_file = self.metadata.workflow_dir.parent / f'issue-{issue_number}' / '03_test_scenario' / 'output' / 'test-scenario.md'
 
-            # 実装戦略を取得
-            implementation_strategy = self.metadata.data['design_decisions'].get('implementation_strategy', 'UNKNOWN')
+            # 実装戦略を取得（Noneの場合もUNKNOWNを使用）
+            implementation_strategy = self.metadata.data['design_decisions'].get('implementation_strategy') or 'UNKNOWN'
 
             # 修正プロンプトを読み込み
             revise_prompt_template = self.load_prompt('revise')
