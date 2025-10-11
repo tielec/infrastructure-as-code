@@ -57,6 +57,11 @@ class DocumentationPhase(BasePhase):
             for phase_name, phase_path in phase_outputs.items():
                 rel_paths[phase_name] = phase_path.relative_to(self.claude.working_dir)
 
+            # test_implementationの安全な処理（存在しない場合は空文字列）
+            test_impl_path = ''
+            if 'test_implementation' in rel_paths and phase_outputs.get('test_implementation', Path()).exists():
+                test_impl_path = f'@{rel_paths["test_implementation"]}'
+
             # プロンプトに情報を埋め込み
             execute_prompt = execute_prompt_template.replace(
                 '{planning_document_path}',
@@ -75,7 +80,7 @@ class DocumentationPhase(BasePhase):
                 f'@{rel_paths["implementation"]}'
             ).replace(
                 '{test_implementation_document_path}',
-                f'@{rel_paths["test_implementation"]}'
+                test_impl_path
             ).replace(
                 '{test_result_document_path}',
                 f'@{rel_paths["test_result"]}'
@@ -167,6 +172,11 @@ class DocumentationPhase(BasePhase):
             for phase_name, phase_path in phase_outputs.items():
                 rel_paths[phase_name] = phase_path.relative_to(self.claude.working_dir)
 
+            # test_implementationの安全な処理（存在しない場合は空文字列）
+            test_impl_path = ''
+            if 'test_implementation' in rel_paths and phase_outputs.get('test_implementation', Path()).exists():
+                test_impl_path = f'@{rel_paths["test_implementation"]}'
+
             # プロンプトに情報を埋め込み
             review_prompt = review_prompt_template.replace(
                 '{documentation_update_log_path}',
@@ -185,7 +195,7 @@ class DocumentationPhase(BasePhase):
                 f'@{rel_paths["implementation"]}'
             ).replace(
                 '{test_implementation_document_path}',
-                f'@{rel_paths["test_implementation"]}'
+                test_impl_path
             ).replace(
                 '{test_result_document_path}',
                 f'@{rel_paths["test_result"]}'
@@ -259,6 +269,11 @@ class DocumentationPhase(BasePhase):
             for phase_name, phase_path in phase_outputs.items():
                 rel_paths[phase_name] = phase_path.relative_to(self.claude.working_dir)
 
+            # test_implementationの安全な処理（存在しない場合は空文字列）
+            test_impl_path = ''
+            if 'test_implementation' in rel_paths and phase_outputs.get('test_implementation', Path()).exists():
+                test_impl_path = f'@{rel_paths["test_implementation"]}'
+
             # プロンプトに情報を埋め込み
             revise_prompt = revise_prompt_template.replace(
                 '{documentation_update_log_path}',
@@ -280,7 +295,7 @@ class DocumentationPhase(BasePhase):
                 f'@{rel_paths["implementation"]}'
             ).replace(
                 '{test_implementation_document_path}',
-                f'@{rel_paths["test_implementation"]}'
+                test_impl_path
             ).replace(
                 '{test_result_document_path}',
                 f'@{rel_paths["test_result"]}'
@@ -331,7 +346,8 @@ class DocumentationPhase(BasePhase):
         """
         base_dir = self.metadata.workflow_dir.parent / f'issue-{issue_number}'
 
-        return {
+        # 新しいディレクトリ構造（test_implementation追加後）
+        new_paths = {
             'requirements': base_dir / '01_requirements' / 'output' / 'requirements.md',
             'design': base_dir / '02_design' / 'output' / 'design.md',
             'test_scenario': base_dir / '03_test_scenario' / 'output' / 'test-scenario.md',
@@ -339,3 +355,21 @@ class DocumentationPhase(BasePhase):
             'test_implementation': base_dir / '05_test_implementation' / 'output' / 'test-implementation.md',
             'test_result': base_dir / '06_testing' / 'output' / 'test-result.md'
         }
+
+        # 古いディレクトリ構造（test_implementation追加前）
+        old_paths = {
+            'test_result': base_dir / '05_testing' / 'output' / 'test-result.md'
+        }
+
+        # 新しいパスを優先し、存在しない場合は古いパスにフォールバック
+        result = {}
+        for phase_name, new_path in new_paths.items():
+            if new_path.exists():
+                result[phase_name] = new_path
+            elif phase_name in old_paths and old_paths[phase_name].exists():
+                result[phase_name] = old_paths[phase_name]
+                print(f"[INFO] レガシーパスを使用: {phase_name} -> {old_paths[phase_name]}")
+            else:
+                result[phase_name] = new_path
+
+        return result
