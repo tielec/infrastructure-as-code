@@ -146,9 +146,38 @@ class ClaudeContentParser:
             >>> result['result']
             'PASS'
         """
-        # AssistantMessageのTextBlockを抽出
+        # AssistantMessageのTextBlockとResultMessageのresultを抽出
         text_blocks = []
+        import re
+
         for message in messages:
+            # ResultMessageのresultフィールドを優先的に抽出
+            if 'ResultMessage' in message and 'result="' in message:
+                result_start = message.find('result="') + 8
+                # 最後の"を見つける（エスケープされた\"は除外）
+                result_end = -1
+                i = result_start
+                while i < len(message):
+                    if message[i] == '"' and (i == result_start or message[i-1] != '\\'):
+                        result_end = i
+                        break
+                    i += 1
+
+                if result_end != -1:
+                    result_content = message[result_start:result_end]
+                    # エスケープシーケンスを置換
+                    result_content = result_content.replace('\\n', '\n')
+                    result_content = result_content.replace('\\t', '\t')
+                    result_content = result_content.replace('\\r', '\r')
+                    result_content = result_content.replace('\\"', '"')
+                    result_content = result_content.replace("\\'", "'")
+                    result_content = result_content.replace('\\\\', '\\')
+
+                    # ResultMessageのresultは完全なレビュー結果なので、そのまま使用
+                    text_blocks.append(result_content)
+                    continue
+
+            # AssistantMessageのTextBlockを抽出（従来の処理）
             if 'AssistantMessage' in message and 'TextBlock(text=' in message:
                 text_start = message.find('TextBlock(text=') + 16
                 text_end = message.find('\')', text_start)
@@ -175,7 +204,6 @@ class ClaudeContentParser:
                 ]
 
                 should_skip = False
-                import re
                 for skip_pattern in skip_patterns:
                     if re.match(skip_pattern, text_content.strip(), re.IGNORECASE):
                         should_skip = True
