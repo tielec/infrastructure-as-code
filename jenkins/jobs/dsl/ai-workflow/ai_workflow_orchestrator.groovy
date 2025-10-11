@@ -2,7 +2,7 @@
  * AI Workflow Orchestrator - Job DSL定義
  *
  * GitHub IssueからPR作成まで、Claude AIによる自動開発を実行する
- * 6フェーズワークフロー（要件定義→詳細設計→テストシナリオ→実装→テスト→ドキュメント）
+ * 8フェーズワークフロー（計画→要件定義→詳細設計→テストシナリオ→実装→テスト実装→テスト→ドキュメント）
  */
 
 pipelineJob('AI_Workflow/ai_workflow_orchestrator') {
@@ -12,13 +12,16 @@ AI駆動開発自動化ワークフロー
 GitHub IssueからPR作成まで、Claude AIが自動的に開発プロセスを実行します。
 
 【ワークフロー】
+0. Phase 0: 計画 (Planning)
 1. Phase 1: 要件定義 (Requirements)
 2. Phase 2: 詳細設計 (Design)
 3. Phase 3: テストシナリオ (Test Scenario)
 4. Phase 4: 実装 (Implementation)
-5. Phase 5: テスト実行 (Testing)
-6. Phase 6: ドキュメント作成 (Documentation)
-7. PR作成
+5. Phase 5: テスト実装 (Test Implementation)
+6. Phase 6: テスト実行 (Testing)
+7. Phase 7: ドキュメント作成 (Documentation)
+8. Phase 8: レポート生成 (Report)
+9. PR作成
 
 【レビュー】
 各フェーズ完了後、AIが批判的思考レビューを実施：
@@ -50,7 +53,7 @@ GitHub Issue URL（必須）
 このIssueの内容を元に、要件定義から実装まで自動実行します。
         '''.stripIndent().trim())
 
-        choiceParam('START_PHASE', ['planning', 'requirements', 'design', 'test_scenario', 'implementation', 'testing', 'documentation', 'report'], '''
+        choiceParam('START_PHASE', ['planning', 'requirements', 'design', 'test_scenario', 'implementation', 'test_implementation', 'testing', 'documentation', 'report'], '''
 開始フェーズ
 
 ワークフローを開始するフェーズを指定します。
