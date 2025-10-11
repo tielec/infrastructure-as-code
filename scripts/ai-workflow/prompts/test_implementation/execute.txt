@@ -3,6 +3,13 @@
 ## タスク概要
 Phase 3のテストシナリオとPhase 4の実装に基づいて、テストコードを実装してください。
 
+**🚨 最重要タスク: 実際のテストファイルの作成が最優先です**
+- テスト実装ログ（test-implementation.md）だけでなく、**実際に実行可能なテストファイル**を必ず作成してください
+- テストファイルを作成せずにログだけ書いても、Phase 6でテストが実行できず失敗します
+- テストファイルの配置場所: プロジェクト構造に応じた適切なテストディレクトリ
+- 対応言語: Python (.py), JavaScript (.test.js), TypeScript (.test.ts), Go (_test.go), Java (Test*.java) など
+- 例: `tests/unit/test_xxx.py`、`src/tests/test_xxx.py`、`scripts/ai-workflow/tests/test_xxx.py` など
+
 ## 入力情報
 
 ### Planning Phase成果物
@@ -67,10 +74,16 @@ Phase 4で実装された実コードを確認してください：
 
 テストシナリオに基づいて、以下を実装してください：
 
-#### 3.1 テストファイル作成
-- 命名規則: test_*.py または *_test.py
-- 配置場所: tests/ ディレクトリ配下
-- テスト戦略に応じた適切なディレクトリ構造（tests/unit/、tests/integration/等）
+#### 3.1 テストファイル作成（最優先タスク）
+- 命名規則（言語により異なる）:
+  - Python: test_*.py, *_test.py
+  - JavaScript/TypeScript: *.test.js, *.spec.js, *.test.ts, *.spec.ts
+  - Go: *_test.go
+  - Java: Test*.java, *Test.java
+  - Shell: test_*.sh
+- 配置場所: プロジェクト構造に応じた適切なテストディレクトリ
+- テスト戦略に応じた適切なディレクトリ構造（例: tests/unit/、tests/integration/等）
+- **注意**: プロジェクトの既存のテストディレクトリ構造を確認し、それに合わせて配置してください
 
 #### 3.2 テストケース実装
 - Given-When-Then構造でテストを記述

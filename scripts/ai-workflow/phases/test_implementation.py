@@ -126,6 +126,52 @@ class TestImplementationPhase(BasePhase):
                     'error': f'test-implementation.mdが生成されませんでした: {output_file}'
                 }
 
+            # 実際のテストファイルの存在確認（言語非依存）
+            # リポジトリルート全体から検索（特定ディレクトリに限定しない）
+            repo_root = Path(self.claude.working_dir)
+
+            # 除外すべきディレクトリ
+            exclude_dirs = {'.git', 'node_modules', 'venv', '.venv', '__pycache__', '.pytest_cache', 'dist', 'build', '.tox'}
+
+            # 複数の言語のテストファイルパターンをチェック
+            test_patterns = [
+                'test_*.py',      # Python
+                '*_test.py',      # Python (別形式)
+                '*.test.js',      # JavaScript
+                '*.test.ts',      # TypeScript
+                '*.spec.js',      # JavaScript (spec形式)
+                '*.spec.ts',      # TypeScript (spec形式)
+                '*_test.go',      # Go
+                'Test*.java',     # Java
+                '*Test.java',     # Java (別形式)
+                'test_*.sh',      # Shell script
+            ]
+
+            test_files = []
+            for pattern in test_patterns:
+                for file_path in repo_root.rglob(pattern):
+                    # 除外ディレクトリに含まれていないかチェック
+                    if not any(excluded in file_path.parts for excluded in exclude_dirs):
+                        test_files.append(file_path)
+
+            # 重複除去
+            test_files = list(set(test_files))
+
+            if not test_files:
+                return {
+                    'success': False,
+                    'output': None,
+                    'error': f'実際のテストファイルが作成されていません。\n'
+                           f'test-implementation.mdだけでなく、実行可能なテストファイルを作成してください。\n'
+                           f'対応パターン: test_*.py, *.test.js, *.test.ts, *_test.go, Test*.java など\n'
+                           f'プロジェクト構造に応じた適切な場所にテストファイルを配置してください。'
+                }
+
+            print(f"[INFO] テストファイルを検出しました: {len(test_files)}個")
+            for test_file in test_files:
+                rel_path = test_file.relative_to(repo_root)
+                print(f"  - {rel_path}")
+
             # GitHub Issueに成果物を投稿
             try:
                 output_content = output_file.read_text(encoding='utf-8')
@@ -172,6 +218,55 @@ class TestImplementationPhase(BasePhase):
                     'feedback': 'test-implementation.mdが存在しません。',
                     'suggestions': ['execute()を実行してtest-implementation.mdを生成してください。']
                 }
+
+            # 実際のテストファイルの存在確認（言語非依存）
+            # リポジトリルート全体から検索（特定ディレクトリに限定しない）
+            repo_root = Path(self.claude.working_dir)
+
+            # 除外すべきディレクトリ
+            exclude_dirs = {'.git', 'node_modules', 'venv', '.venv', '__pycache__', '.pytest_cache', 'dist', 'build', '.tox'}
+
+            # 複数の言語のテストファイルパターンをチェック
+            test_patterns = [
+                'test_*.py',      # Python
+                '*_test.py',      # Python (別形式)
+                '*.test.js',      # JavaScript
+                '*.test.ts',      # TypeScript
+                '*.spec.js',      # JavaScript (spec形式)
+                '*.spec.ts',      # TypeScript (spec形式)
+                '*_test.go',      # Go
+                'Test*.java',     # Java
+                '*Test.java',     # Java (別形式)
+                'test_*.sh',      # Shell script
+            ]
+
+            test_files = []
+            for pattern in test_patterns:
+                for file_path in repo_root.rglob(pattern):
+                    # 除外ディレクトリに含まれていないかチェック
+                    if not any(excluded in file_path.parts for excluded in exclude_dirs):
+                        test_files.append(file_path)
+
+            # 重複除去
+            test_files = list(set(test_files))
+
+            if not test_files:
+                return {
+                    'result': 'FAIL',
+                    'feedback': '実際のテストファイルが作成されていません。\n'
+                               'test-implementation.mdだけでなく、実行可能なテストファイルを作成する必要があります。\n'
+                               '対応パターン: test_*.py, *.test.js, *.test.ts, *_test.go, Test*.java など\n'
+                               'プロジェクト構造に応じた適切な場所にテストファイルを配置してください。',
+                    'suggestions': [
+                        'execute()またはrevise()を実行してテストファイルを作成してください。',
+                        'テストファイルをプロジェクトの適切なテストディレクトリに配置してください。'
+                    ]
+                }
+
+            print(f"[INFO] テストファイルを検出しました: {len(test_files)}個")
+            for test_file in test_files:
+                rel_path = test_file.relative_to(repo_root)
+                print(f"  - {rel_path}")
 
             # 設計書、テストシナリオ、実装ログのパス
             issue_number = int(self.metadata.data['issue_number'])
