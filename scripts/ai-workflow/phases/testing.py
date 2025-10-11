@@ -34,9 +34,17 @@ class TestingPhase(BasePhase):
             # Issue情報を取得
             issue_number = int(self.metadata.data['issue_number'])
 
-            # 実装ログとテストシナリオを読み込み
+            # 必要なファイルのパスを定義
+            test_implementation_file = self.metadata.workflow_dir.parent / f'issue-{issue_number}' / '05_test_implementation' / 'output' / 'test-implementation.md'
             implementation_file = self.metadata.workflow_dir.parent / f'issue-{issue_number}' / '04_implementation' / 'output' / 'implementation.md'
             test_scenario_file = self.metadata.workflow_dir.parent / f'issue-{issue_number}' / '03_test_scenario' / 'output' / 'test-scenario.md'
+
+            if not test_implementation_file.exists():
+                return {
+                    'success': False,
+                    'output': None,
+                    'error': f'テスト実装ログが見つかりません: {test_implementation_file}'
+                }
 
             if not implementation_file.exists():
                 return {
@@ -59,6 +67,7 @@ class TestingPhase(BasePhase):
             execute_prompt_template = self.load_prompt('execute')
 
             # working_dirからの相対パスを使用
+            rel_path_test_implementation = test_implementation_file.relative_to(self.claude.working_dir)
             rel_path_implementation = implementation_file.relative_to(self.claude.working_dir)
             rel_path_test_scenario = test_scenario_file.relative_to(self.claude.working_dir)
 
@@ -66,6 +75,9 @@ class TestingPhase(BasePhase):
             execute_prompt = execute_prompt_template.replace(
                 '{planning_document_path}',
                 planning_path_str
+            ).replace(
+                '{test_implementation_document_path}',
+                f'@{rel_path_test_implementation}'
             ).replace(
                 '{implementation_document_path}',
                 f'@{rel_path_implementation}'
@@ -77,6 +89,12 @@ class TestingPhase(BasePhase):
                 str(issue_number)
             )
 
+            # test-result.mdのパスを取得
+            output_file = self.output_dir / 'test-result.md'
+
+            # 既存ファイルの最終更新時刻を記録（上書き確認用）
+            old_mtime = output_file.stat().st_mtime if output_file.exists() else None
+
             # Claude Agent SDKでタスクを実行
             messages = self.execute_with_claude(
                 prompt=execute_prompt,
@@ -84,14 +102,21 @@ class TestingPhase(BasePhase):
                 log_prefix='execute'
             )
 
-            # test-result.mdのパスを取得
-            output_file = self.output_dir / 'test-result.md'
-
+            # test-result.mdが存在するか確認
             if not output_file.exists():
                 return {
                     'success': False,
                     'output': None,
                     'error': f'test-result.mdが生成されませんでした: {output_file}'
+                }
+
+            # ファイルが更新されたか確認（タイムスタンプチェック）
+            new_mtime = output_file.stat().st_mtime
+            if old_mtime is not None and new_mtime == old_mtime:
+                return {
+                    'success': False,
+                    'output': None,
+                    'error': f'test-result.mdが更新されませんでした（古いファイルのまま）: {output_file}'
                 }
 
             # GitHub Issueに成果物を投稿
@@ -217,7 +242,7 @@ class TestingPhase(BasePhase):
                 - error: Optional[str]
         """
         try:
-            # 元のテスト結果を読み込み
+            # 元のテスト結果のパス
             test_result_file = self.output_dir / 'test-result.md'
 
             if not test_result_file.exists():
@@ -227,8 +252,9 @@ class TestingPhase(BasePhase):
                     'error': 'test-result.mdが存在しません。'
                 }
 
-            # 実装ログとテストシナリオのパス
+            # 必要なファイルのパスを定義
             issue_number = int(self.metadata.data['issue_number'])
+            test_implementation_file = self.metadata.workflow_dir.parent / f'issue-{issue_number}' / '05_test_implementation' / 'output' / 'test-implementation.md'
             implementation_file = self.metadata.workflow_dir.parent / f'issue-{issue_number}' / '04_implementation' / 'output' / 'implementation.md'
             test_scenario_file = self.metadata.workflow_dir.parent / f'issue-{issue_number}' / '03_test_scenario' / 'output' / 'test-scenario.md'
 
@@ -237,6 +263,7 @@ class TestingPhase(BasePhase):
 
             # working_dirからの相対パスを使用
             rel_path_test_result = test_result_file.relative_to(self.claude.working_dir)
+            rel_path_test_implementation = test_implementation_file.relative_to(self.claude.working_dir)
             rel_path_implementation = implementation_file.relative_to(self.claude.working_dir)
             rel_path_test_scenario = test_scenario_file.relative_to(self.claude.working_dir)
 
@@ -248,6 +275,9 @@ class TestingPhase(BasePhase):
                 '{review_feedback}',
                 review_feedback
             ).replace(
+                '{test_implementation_document_path}',
+                f'@{rel_path_test_implementation}'
+            ).replace(
                 '{implementation_document_path}',
                 f'@{rel_path_implementation}'
             ).replace(
@@ -258,6 +288,9 @@ class TestingPhase(BasePhase):
                 str(issue_number)
             )
 
+            # 既存ファイルの最終更新時刻を記録（上書き確認用）
+            old_mtime = test_result_file.stat().st_mtime if test_result_file.exists() else None
+
             # Claude Agent SDKでタスクを実行
             messages = self.execute_with_claude(
                 prompt=revise_prompt,
@@ -265,7 +298,7 @@ class TestingPhase(BasePhase):
                 log_prefix='revise'
             )
 
-            # test-result.mdのパスを取得
+            # test-result.mdが存在するか確認
             output_file = self.output_dir / 'test-result.md'
 
             if not output_file.exists():
@@ -273,6 +306,15 @@ class TestingPhase(BasePhase):
                     'success': False,
                     'output': None,
                     'error': '修正されたtest-result.mdが生成されませんでした。'
+                }
+
+            # ファイルが更新されたか確認（タイムスタンプチェック）
+            new_mtime = output_file.stat().st_mtime
+            if old_mtime is not None and new_mtime == old_mtime:
+                return {
+                    'success': False,
+                    'output': None,
+                    'error': f'test-result.mdが更新されませんでした（古いファイルのまま）: {output_file}'
                 }
 
             return {
