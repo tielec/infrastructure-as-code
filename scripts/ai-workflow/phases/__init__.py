@@ -3,5 +3,6 @@
 各フェーズの実装とベースクラスを提供
 """
 from .base_phase import BasePhase
+from .test_implementation import TestImplementationPhase
 
-__all__ = ['BasePhase']
+__all__ = ['BasePhase', 'TestImplementationPhase']

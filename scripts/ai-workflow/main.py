@@ -13,6 +13,7 @@ from phases.requirements import RequirementsPhase
 from phases.design import DesignPhase
 from phases.test_scenario import TestScenarioPhase
 from phases.implementation import ImplementationPhase
+from phases.test_implementation import TestImplementationPhase
 from phases.testing import TestingPhase
 from phases.documentation import DocumentationPhase
 from phases.report import ReportPhase
@@ -105,7 +106,8 @@ def init(issue_url: str):
 @cli.command()
 @click.option('--phase', required=True,
               type=click.Choice(['planning', 'requirements', 'design', 'test_scenario',
-                                'implementation', 'testing', 'documentation', 'report']))
+                                'implementation', 'test_implementation', 'testing',
+                                'documentation', 'report']))
 @click.option('--issue', required=True, help='Issue number')
 def execute(phase: str, issue: str):
     """フェーズ実行"""
@@ -173,6 +175,7 @@ def execute(phase: str, issue: str):
         'design': DesignPhase,
         'test_scenario': TestScenarioPhase,
         'implementation': ImplementationPhase,
+        'test_implementation': TestImplementationPhase,
         'testing': TestingPhase,
         'documentation': DocumentationPhase,
         'report': ReportPhase
