@@ -807,11 +807,13 @@ class BasePhase(ABC):
                     details=f'レビューで不合格となりました（リトライ{MAX_RETRIES}回実施）。フィードバックを確認してください。'
                 )
 
-            return final_status == 'completed'
+            # return の前に success フラグを設定
+            success = final_status == 'completed'
 
         except Exception as e:
             # 予期しないエラー
             final_status = 'failed'
+            success = False
             self.update_phase_status(status='failed')
             self.post_progress(
                 status='failed',
@@ -822,11 +824,23 @@ class BasePhase(ABC):
         finally:
             # Git自動commit & push（成功・失敗問わず実行）
             if git_manager:
-                self._auto_commit_and_push(
+                git_push_ok = self._auto_commit_and_push(
                     git_manager=git_manager,
                     status=final_status,
                     review_result=review_result
                 )
+
+                # push 失敗時、Phase が completed だった場合は failed に変更
+                if not git_push_ok and final_status == 'completed':
+                    print("[ERROR] Git push failed. Changing phase status to 'failed'")
+                    self.update_phase_status(status='failed', review_result='FAIL')
+                    self.post_progress(
+                        status='failed',
+                        details='Git push に失敗したため、Phase を失敗としました。'
+                    )
+                    return False
+
+            return final_status == 'completed'
 
     def _auto_commit_and_push(
         self,
@@ -872,15 +886,17 @@ class BasePhase(ABC):
             push_result = git_manager.push_to_remote()
 
             if not push_result.get('success', False):
-                print(f"[WARNING] Git push failed: {push_result.get('error')}")
-                return
+                error_msg = push_result.get('error', 'Unknown error')
+                print(f"[ERROR] Git push failed: {error_msg}")
+                return False
 
             retries = push_result.get('retries', 0)
             print(f"[INFO] Git push successful (retries: {retries})")
+            return True
 
         except Exception as e:
-            print(f"[WARNING] Git auto-commit & push failed: {e}")
-            # Phase自体は失敗させない
+            print(f"[ERROR] Git auto-commit & push failed: {e}")
+            return False
 
     def _parse_review_result(self, messages: List[str]) -> Dict[str, Any]:
         """
