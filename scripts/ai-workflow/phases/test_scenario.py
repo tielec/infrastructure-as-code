@@ -170,8 +170,8 @@ class TestScenarioPhase(BasePhase):
             requirements_file = self.metadata.workflow_dir.parent / f'issue-{issue_number}' / '01_requirements' / 'output' / 'requirements.md'
             design_file = self.metadata.workflow_dir.parent / f'issue-{issue_number}' / '02_design' / 'output' / 'design.md'
 
-            # テスト戦略を取得
-            test_strategy = self.metadata.data['design_decisions'].get('test_strategy', 'UNKNOWN')
+            # テスト戦略を取得（Noneの場合もUNKNOWNを使用）
+            test_strategy = self.metadata.data['design_decisions'].get('test_strategy') or 'UNKNOWN'
 
             # レビュープロンプトを読み込み
             review_prompt_template = self.load_prompt('review')
@@ -256,8 +256,8 @@ class TestScenarioPhase(BasePhase):
             requirements_file = self.metadata.workflow_dir.parent / f'issue-{issue_number}' / '01_requirements' / 'output' / 'requirements.md'
             design_file = self.metadata.workflow_dir.parent / f'issue-{issue_number}' / '02_design' / 'output' / 'design.md'
 
-            # テスト戦略を取得
-            test_strategy = self.metadata.data['design_decisions'].get('test_strategy', 'UNKNOWN')
+            # テスト戦略を取得（Noneの場合もUNKNOWNを使用）
+            test_strategy = self.metadata.data['design_decisions'].get('test_strategy') or 'UNKNOWN'
 
             # 修正プロンプトを読み込み
             revise_prompt_template = self.load_prompt('revise')
