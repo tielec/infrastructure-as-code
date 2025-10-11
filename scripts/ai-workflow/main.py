@@ -151,6 +151,16 @@ def execute(phase: str, issue: str):
         click.echo(f"[INFO] Switched to branch: {result['branch_name']}")
     else:
         click.echo(f"[INFO] Already on branch: {branch_name}")
+
+    # リモートの最新状態を取り込む（non-fast-forward エラーを防ぐため）
+    click.echo(f"[INFO] Pulling latest changes from origin/{branch_name}...")
+    try:
+        git_manager.repo.git.pull('origin', branch_name)
+        click.echo(f"[OK] Successfully pulled latest changes")
+    except Exception as e:
+        click.echo(f"[WARNING] Failed to pull latest changes: {e}")
+        click.echo(f"[WARNING] Continuing workflow execution...")
+        # pull失敗してもワークフローは続行（conflict等の可能性があるため手動対応が必要）
     # ━━━ 新規追加ここまで ━━━
 
     # 環境変数チェック
