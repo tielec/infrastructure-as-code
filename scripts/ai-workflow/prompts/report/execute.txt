@@ -1,7 +1,7 @@
 # レポート作成フェーズ - 実行プロンプト
 
 ## タスク概要
-Phase 1-6の全成果物をまとめて、マージ判断用の最終レポートを作成してください。このレポートは、人間がPRをマージするかどうかを判断するための情報をすべて含みます。
+Phase 1-7の全成果物をまとめて、マージ判断用の最終レポートを作成してください。このレポートは、人間がPRをマージするかどうかを判断するための情報をすべて含みます。
 
 ## 入力情報
 
@@ -15,8 +15,9 @@ Phase 1-6の全成果物をまとめて、マージ判断用の最終レポー�
 - Phase 2: {design_document_path}
 - Phase 3: {test_scenario_document_path}
 - Phase 4: {implementation_document_path}
-- Phase 5: {test_result_document_path}
-- Phase 6: {documentation_update_log_path}
+- Phase 5: {test_implementation_document_path}
+- Phase 6: {test_result_document_path}
+- Phase 7: {documentation_update_log_path}
 
 ## レポート作成手順
 
@@ -88,7 +89,18 @@ Phase 1-6の全成果物をまとめて、マージ判断用の最終レポー�
 ### 主要な実装内容
 （コア機能の実装内容を簡潔に説明）
 
-## テスト結果（Phase 5）
+## テストコード実装（Phase 5）
+（テスト実装ログから実装内容を抜粋）
+
+### テストファイル
+- `tests/test_xxx.py`: （説明）
+
+### テストケース数
+- ユニットテスト: X個
+- インテグレーションテスト: Y個
+- 合計: Z個
+
+## テスト結果（Phase 6）
 （テスト結果から重要な情報を抜粋）
 
 - 総テスト数: X個
@@ -99,7 +111,7 @@ Phase 1-6の全成果物をまとめて、マージ判断用の最終レポー�
 ### 失敗したテスト
 （失敗があれば記載、なければ「すべて成功」）
 
-## ドキュメント更新（Phase 6）
+## ドキュメント更新（Phase 7）
 （ドキュメント更新ログから重要な情報を抜粋）
 
 ### 更新されたドキュメント
@@ -194,7 +206,7 @@ Phase 1-6の全成果物をまとめて、マージ判断用の最終レポー�
 - （改善提案として記録されたタスク）
 ```
 
-## 品質ゲート（Phase 7: Report）
+## 品質ゲート（Phase 8: Report）
 
 レポートは以下の品質ゲートを満たす必要があります：
 
@@ -206,7 +218,7 @@ Phase 1-6の全成果物をまとめて、マージ判断用の最終レポー�
 
 ## 出力形式
 
-最終レポートを `.ai-workflow/issue-{issue_number}/07_report/output/report.md` として保存してください。
+最終レポートを `.ai-workflow/issue-{issue_number}/08_report/output/report.md` として保存してください。
 
 Markdown形式で、見出しを適切に使用し、可読性の高いレポートを作成してください。
 

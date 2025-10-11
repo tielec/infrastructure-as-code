@@ -6,17 +6,17 @@
 ## 入力情報
 
 ### Planning Phase成果物
-- Planning Document: {planning_document_path}
+- Planning Document: @.ai-workflow/issue-324/00_planning/output/planning.md
 
 **注意**: Planning Phaseが実行されている場合、開発計画（実装戦略、テスト戦略、リスク、スケジュール）を必ず確認してください。
 
 ### 各フェーズの成果物
-- Phase 1: {requirements_document_path}
-- Phase 2: {design_document_path}
-- Phase 3: {test_scenario_document_path}
-- Phase 4: {implementation_document_path}
+- Phase 1: @.ai-workflow/issue-324/01_requirements/output/requirements.md
+- Phase 2: @.ai-workflow/issue-324/02_design/output/design.md
+- Phase 3: @.ai-workflow/issue-324/03_test_scenario/output/test-scenario.md
+- Phase 4: @.ai-workflow/issue-324/04_implementation/output/implementation.md
 - Phase 5: {test_implementation_document_path}
-- Phase 6: {test_result_document_path}
+- Phase 6: @.ai-workflow/issue-324/05_testing/output/test-result.md
 
 ## ドキュメント更新手順
 
@@ -81,7 +81,7 @@ Phase 2（設計）とPhase 4（実装）から、以下を抽出してくださ
 
 ### ステップ5: 更新結果の記録
 
-documentation-update-log.mdを `.ai-workflow/issue-{issue_number}/07_documentation/output/documentation-update-log.md` として作成し、以下の内容を記載してください：
+documentation-update-log.mdを `.ai-workflow/issue-324/07_documentation/output/documentation-update-log.md` として作成し、以下の内容を記載してください：
 
 ```markdown
 # プロジェクトドキュメント更新ログ
@@ -126,7 +126,7 @@ documentation-update-log.mdを `.ai-workflow/issue-{issue_number}/07_documentati
 ## 出力形式
 
 1. プロジェクトドキュメントを直接更新（README.md、ARCHITECTURE.md等）
-2. 更新ログを `.ai-workflow/issue-{issue_number}/07_documentation/output/documentation-update-log.md` として保存
+2. 更新ログを `.ai-workflow/issue-324/07_documentation/output/documentation-update-log.md` として保存
 
 ## 注意事項
 

@@ -6,7 +6,7 @@ Phase 5で実装したテストコードを実行し、結果を記録してく�
 ## 入力情報
 
 ### Planning Phase成果物
-- Planning Document: {planning_document_path}
+- Planning Document: @.ai-workflow/issue-324/00_planning/output/planning.md
 
 **注意**: Planning Phaseが実行されている場合、開発計画（実装戦略、テスト戦略、リスク、スケジュール）を必ず確認してください。
 
@@ -14,10 +14,10 @@ Phase 5で実装したテストコードを実行し、結果を記録してく�
 {test_implementation_document_path}
 
 ### 実装ログ（参考）
-{implementation_document_path}
+@.ai-workflow/issue-324/04_implementation/output/implementation.md
 
 ### テストシナリオ（参考）
-{test_scenario_document_path}
+@.ai-workflow/issue-324/03_test_scenario/output/test-scenario.md
 
 ## テスト実行手順
 
@@ -106,7 +106,7 @@ behave tests/features/
 - 実行失敗: テスト環境の確認が必要
 ```
 
-このログを `.ai-workflow/issue-{issue_number}/06_testing/output/test-result.md` として保存してください。
+このログを `.ai-workflow/issue-324/06_testing/output/test-result.md` として保存してください。
 
 ## 品質ゲート（Phase 6）
 

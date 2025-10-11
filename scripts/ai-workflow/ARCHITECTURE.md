@@ -19,12 +19,16 @@ AI駆動開発自動化ワークフローは、GitHub IssueからPR作成まで�
 
 ### 1.2 システムの特徴
 
-- **8フェーズワークフロー**: Phase 0（プロジェクト計画） → Phase 1（要件定義） → Phase 2（詳細設計） → Phase 3（テストシナリオ） → Phase 4（実装） → Phase 5（テスト） → Phase 6（ドキュメント） → Phase 7（レポート）
+- **9フェーズワークフロー**: Phase 0（プロジェクト計画） → Phase 1（要件定義） → Phase 2（詳細設計） → Phase 3（テストシナリオ） → Phase 4（実装：実コードのみ） → **Phase 5（テストコード実装：テストコードのみ）** → Phase 6（テスト実行） → Phase 7（ドキュメント） → Phase 8（レポート）
 - **Phase 0（Planning）**: プロジェクトマネージャとして機能
   - 実装戦略・テスト戦略の事前決定により、Phase 2の負荷を軽減
   - Issue複雑度分析、タスク分割、依存関係特定
   - 各フェーズの見積もり、リスク評価と軽減策の策定
   - planning.mdとmetadata.jsonへの戦略保存
+- **Phase 4/5の責務分離（v1.7.0）**: 実装とテストの明確な分離
+  - Phase 4: 実コード（ビジネスロジック、API等）のみを実装
+  - Phase 5: テストコード（ユニット/統合テスト等）のみを実装
+  - テスト戦略に応じた柔軟なテストコード生成
 - **AI批判的思考レビュー**: 各フェーズ完了後にAIがレビュー（PASS/PASS_WITH_SUGGESTIONS/FAIL）
 - **統一リトライ機能**: execute()失敗時も自動的にreview() → revise()を実行し、最大3回までリトライ
 - **BDD準拠**: ユーザー行動視点のテストシナリオ（Gherkin形式）
@@ -112,9 +116,16 @@ AI駆動開発自動化ワークフローは、GitHub IssueからPR作成まで�
 │  │    - Phase 0の戦略を参照し、設計に専念                   │  │
 │  │  - test_scenario.py: Phase 3（テストシナリオ）           │  │
 │  │  - implementation.py: Phase 4（実装）                    │  │
-│  │  - testing.py: Phase 5（テスト実行）                     │  │
-│  │  - documentation.py: Phase 6（ドキュメント作成）         │  │
-│  │  - report.py: Phase 7（レポート）                        │  │
+│  │    - 実コード（ビジネスロジック、API等）のみを実装      │  │
+│  │    - テストコードは実装しない（Phase 5で実施）          │  │
+│  │  - test_implementation.py: Phase 5（テストコード実装）   │  │
+│  │    - テストコード（ユニット/統合テスト等）のみを実装    │  │
+│  │    - Phase 3のシナリオとPhase 4の実装を参照             │  │
+│  │    - 実コードは変更しない（v1.7.0で新規追加）           │  │
+│  │  - testing.py: Phase 6（テスト実行）                     │  │
+│  │    - Phase 5で実装されたテストコードを実行              │  │
+│  │  - documentation.py: Phase 7（ドキュメント作成）         │  │
+│  │  - report.py: Phase 8（レポート）                        │  │
 │  └──────────────────────────────────────────────────────────┘  │
 │                                                                   │
 │  ┌──────────────────────────────────────────────────────────┐  │
@@ -132,14 +143,16 @@ AI駆動開発自動化ワークフローは、GitHub IssueからPR作成まで�
 │  │ - Sonnet 4.5 │  │ - Issue取得  │  │ - feature/issue-XXX  │ │
 │  │ - 計画生成   │  │ - PR作成     │  │ - .ai-workflow/      │ │
 │  │ - 要件生成   │  │              │  │   - metadata.json    │ │
-│  │ - レビュー   │  │              │  │   - 00-planning      │ │
-│  └──────────────┘  └──────────────┘  │   - 01-requirements  │ │
-│                                       │   - 02-design        │ │
-│                                       │   - 03-test-scenario │ │
-│                                       │   - 04-implementation│ │
-│                                       │   - 05-testing       │ │
-│                                       │   - 06-documentation │ │
-│                                       └──────────────────────┘ │
+│  │ - レビュー   │  │              │  │   - 00-planning          │ │
+│  └──────────────┘  └──────────────┘  │   - 01-requirements      │ │
+│                                       │   - 02-design            │ │
+│                                       │   - 03-test-scenario     │ │
+│                                       │   - 04-implementation    │ │
+│                                       │   - 05-test-implementation│ │
+│                                       │   - 06-testing           │ │
+│                                       │   - 07-documentation     │ │
+│                                       │   - 08-report            │ │
+│                                       └──────────────────────────┘ │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
@@ -175,7 +188,7 @@ AI駆動開発自動化ワークフローは、GitHub IssueからPR作成まで�
     │    - issue_number, issue_url, issue_title
     │    - workflow_version: "1.0.0"
     │    - current_phase: "planning"（Phase 0から開始）
-    │    - 7フェーズをpendingで初期化
+    │    - 9フェーズをpendingで初期化
     │    - cost_tracking初期化
     │    - created_at, updated_at設定
     │
@@ -617,6 +630,7 @@ BasePhase.run()
 
 ---
 
-**バージョン**: 1.5.0
+**バージョン**: 1.7.0
 **最終更新**: 2025-10-10
 **Phase 0実装**: Issue #313で追加（プロジェクトマネージャ役割）
+**Phase 5実装**: Issue #324で追加（実装フェーズとテストコード実装フェーズの分離）
