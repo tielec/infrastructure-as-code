@@ -25,90 +25,19 @@ class WorkflowState:
     def create_new(cls, metadata_path: Path, issue_number: str,
                    issue_url: str, issue_title: str) -> 'WorkflowState':
         """新規ワークフローを作成"""
-        initial_data = {
-            "issue_number": issue_number,
-            "issue_url": issue_url,
-            "issue_title": issue_title,
-            "workflow_version": "1.0.0",
-            "current_phase": "planning",
-            "design_decisions": {
-                "implementation_strategy": None,
-                "test_strategy": None,
-                "test_code_strategy": None
-            },
-            "cost_tracking": {
-                "total_input_tokens": 0,
-                "total_output_tokens": 0,
-                "total_cost_usd": 0.0
-            },
-            "phases": {
-                "planning": {
-                    "status": "pending",
-                    "retry_count": 0,
-                    "started_at": None,
-                    "completed_at": None,
-                    "review_result": None
-                },
-                "requirements": {
-                    "status": "pending",
-                    "retry_count": 0,
-                    "started_at": None,
-                    "completed_at": None,
-                    "review_result": None
-                },
-                "design": {
-                    "status": "pending",
-                    "retry_count": 0,
-                    "started_at": None,
-                    "completed_at": None,
-                    "review_result": None
-                },
-                "test_scenario": {
-                    "status": "pending",
-                    "retry_count": 0,
-                    "started_at": None,
-                    "completed_at": None,
-                    "review_result": None
-                },
-                "implementation": {
-                    "status": "pending",
-                    "retry_count": 0,
-                    "started_at": None,
-                    "completed_at": None,
-                    "review_result": None
-                },
-                "test_implementation": {
-                    "status": "pending",
-                    "retry_count": 0,
-                    "started_at": None,
-                    "completed_at": None,
-                    "review_result": None
-                },
-                "testing": {
-                    "status": "pending",
-                    "retry_count": 0,
-                    "started_at": None,
-                    "completed_at": None,
-                    "review_result": None
-                },
-                "documentation": {
-                    "status": "pending",
-                    "retry_count": 0,
-                    "started_at": None,
-                    "completed_at": None,
-                    "review_result": None
-                },
-                "report": {
-                    "status": "pending",
-                    "retry_count": 0,
-                    "started_at": None,
-                    "completed_at": None,
-                    "review_result": None
-                }
-            },
-            "created_at": datetime.utcnow().isoformat() + "Z",
-            "updated_at": datetime.utcnow().isoformat() + "Z"
-        }
+        # テンプレートファイルを読み込み
+        template_path = Path(__file__).parent.parent / 'metadata.json.template'
+        if not template_path.exists():
+            raise FileNotFoundError(f"Template file not found: {template_path}")
+
+        initial_data = json.loads(template_path.read_text(encoding='utf-8'))
+
+        # パラメータを設定
+        initial_data['issue_number'] = issue_number
+        initial_data['issue_url'] = issue_url
+        initial_data['issue_title'] = issue_title
+        initial_data['created_at'] = datetime.utcnow().isoformat() + "Z"
+        initial_data['updated_at'] = datetime.utcnow().isoformat() + "Z"
 
         # ディレクトリ作成
         metadata_path.parent.mkdir(parents=True, exist_ok=True)
@@ -169,3 +98,70 @@ class WorkflowState:
     def get_phase_status(self, phase: str) -> str:
         """フェーズのステータスを取得"""
         return self.data['phases'][phase]['status']
+
+    def migrate(self) -> bool:
+        """metadata.jsonを最新のスキーマにマイグレーション
+
+        Returns:
+            bool: マイグレーションを実行した場合True
+        """
+        migrated = False
+
+        # テンプレートファイルを読み込み
+        template_path = self.metadata_path.parent.parent.parent.parent / 'scripts' / 'ai-workflow' / 'metadata.json.template'
+        if not template_path.exists():
+            print(f"[WARNING] Template file not found: {template_path}")
+            return False
+
+        template = json.loads(template_path.read_text(encoding='utf-8'))
+
+        # 欠けているフェーズをチェック
+        missing_phases = []
+        for phase_name in template['phases'].keys():
+            if phase_name not in self.data['phases']:
+                print(f"[INFO] Migrating metadata.json: Adding {phase_name} phase")
+                missing_phases.append(phase_name)
+                migrated = True
+
+        # フェーズを正しい順序で再構築
+        if missing_phases:
+            new_phases = {}
+            for phase_name in template['phases'].keys():
+                if phase_name in self.data['phases']:
+                    # 既存のフェーズデータを保持
+                    new_phases[phase_name] = self.data['phases'][phase_name]
+                else:
+                    # 新しいフェーズをテンプレートから追加
+                    new_phases[phase_name] = template['phases'][phase_name].copy()
+            self.data['phases'] = new_phases
+
+        # design_decisionsの構造チェック
+        if 'design_decisions' not in self.data:
+            print("[INFO] Migrating metadata.json: Adding design_decisions")
+            self.data['design_decisions'] = template['design_decisions'].copy()
+            migrated = True
+        else:
+            # 各キーの存在チェック
+            for key in template['design_decisions'].keys():
+                if key not in self.data['design_decisions']:
+                    print(f"[INFO] Migrating metadata.json: Adding design_decisions.{key}")
+                    self.data['design_decisions'][key] = None
+                    migrated = True
+
+        # cost_trackingの構造チェック
+        if 'cost_tracking' not in self.data:
+            print("[INFO] Migrating metadata.json: Adding cost_tracking")
+            self.data['cost_tracking'] = template['cost_tracking'].copy()
+            migrated = True
+
+        # workflow_versionの追加
+        if 'workflow_version' not in self.data:
+            print("[INFO] Migrating metadata.json: Adding workflow_version")
+            self.data['workflow_version'] = template['workflow_version']
+            migrated = True
+
+        if migrated:
+            self.save()
+            print(f"[OK] metadata.json migrated successfully")
+
+        return migrated

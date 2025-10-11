@@ -47,9 +47,20 @@ def init(issue_url: str):
     metadata_path = workflow_dir / 'metadata.json'
 
     if metadata_path.exists():
-        click.echo(f'[ERROR] Workflow already exists for issue {issue_number}')
+        click.echo(f'[INFO] Workflow already exists for issue {issue_number}')
         click.echo(f'[INFO] Metadata file: {metadata_path}')
-        sys.exit(1)
+
+        # マイグレーション実行
+        click.echo(f'[INFO] Checking metadata.json schema...')
+        state = WorkflowState(metadata_path)
+        migrated = state.migrate()
+
+        if migrated:
+            click.echo(f'[OK] Metadata schema updated successfully')
+        else:
+            click.echo(f'[INFO] Metadata schema is already up to date')
+
+        return
 
     # ━━━ 新規追加: ブランチ作成処理 ━━━
     # GitManagerインスタンス生成（一時的なmetadata_managerを使用）
