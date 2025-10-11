@@ -74,6 +74,9 @@ class DocumentationPhase(BasePhase):
                 '{implementation_document_path}',
                 f'@{rel_paths["implementation"]}'
             ).replace(
+                '{test_implementation_document_path}',
+                f'@{rel_paths["test_implementation"]}'
+            ).replace(
                 '{test_result_document_path}',
                 f'@{rel_paths["test_result"]}'
             ).replace(
@@ -181,6 +184,9 @@ class DocumentationPhase(BasePhase):
                 '{implementation_document_path}',
                 f'@{rel_paths["implementation"]}'
             ).replace(
+                '{test_implementation_document_path}',
+                f'@{rel_paths["test_implementation"]}'
+            ).replace(
                 '{test_result_document_path}',
                 f'@{rel_paths["test_result"]}'
             )
@@ -273,6 +279,9 @@ class DocumentationPhase(BasePhase):
                 '{implementation_document_path}',
                 f'@{rel_paths["implementation"]}'
             ).replace(
+                '{test_implementation_document_path}',
+                f'@{rel_paths["test_implementation"]}'
+            ).replace(
                 '{test_result_document_path}',
                 f'@{rel_paths["test_result"]}'
             ).replace(
@@ -327,5 +336,6 @@ class DocumentationPhase(BasePhase):
             'design': base_dir / '02_design' / 'output' / 'design.md',
             'test_scenario': base_dir / '03_test_scenario' / 'output' / 'test-scenario.md',
             'implementation': base_dir / '04_implementation' / 'output' / 'implementation.md',
-            'test_result': base_dir / '05_testing' / 'output' / 'test-result.md'
+            'test_implementation': base_dir / '05_test_implementation' / 'output' / 'test-implementation.md',
+            'test_result': base_dir / '06_testing' / 'output' / 'test-result.md'
         }
