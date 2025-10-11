@@ -114,6 +114,13 @@ class GitManager:
             # .ai-workflow/issue-XXX/ 配下のファイルのみフィルタリング
             target_files = self._filter_phase_files(changed_files, issue_number)
 
+            # フェーズ固有の成果物ディレクトリを追加スキャン
+            phase_specific_files = self._get_phase_specific_files(phase_name)
+            target_files.extend(phase_specific_files)
+
+            # 重複除去
+            target_files = list(set(target_files))
+
             if not target_files:
                 # コミット対象ファイルが0件
                 return {
@@ -396,6 +403,126 @@ class GitManager:
             # 3. プロジェクト本体のファイルは含める
             else:
                 result.append(f)
+
+        return result
+
+    def _get_phase_specific_files(self, phase_name: str) -> List[str]:
+        """
+        フェーズ固有の成果物ディレクトリから未追跡・変更ファイルを取得
+
+        各フェーズで作成される成果物の配置場所：
+        - implementation: scripts/, pulumi/, ansible/, jenkins/ など
+        - test_implementation: tests/, scripts/ai-workflow/tests/ など
+        - documentation: *.md ファイル
+
+        Args:
+            phase_name: フェーズ名
+
+        Returns:
+            List[str]: フェーズ固有のファイル一覧
+        """
+        phase_files = []
+
+        if phase_name == 'implementation':
+            # implementation phaseで作成される可能性のあるディレクトリ
+            target_dirs = ['scripts', 'pulumi', 'ansible', 'jenkins']
+            phase_files.extend(self._scan_directories(target_dirs))
+
+        elif phase_name == 'test_implementation':
+            # test_implementation phaseで作成されるテストファイル
+            # リポジトリ全体から test_*.py などのパターンを検索
+            test_patterns = [
+                'test_*.py', '*_test.py',           # Python
+                '*.test.js', '*.spec.js',           # JavaScript
+                '*.test.ts', '*.spec.ts',           # TypeScript
+                '*_test.go',                        # Go
+                'Test*.java', '*Test.java',         # Java
+                'test_*.sh',                        # Shell
+            ]
+            phase_files.extend(self._scan_by_patterns(test_patterns))
+
+        elif phase_name == 'documentation':
+            # documentation phaseで更新される可能性のあるドキュメント
+            doc_patterns = ['*.md', '*.MD']
+            phase_files.extend(self._scan_by_patterns(doc_patterns))
+
+        return phase_files
+
+    def _scan_directories(self, directories: List[str]) -> List[str]:
+        """
+        指定ディレクトリ配下の未追跡・変更ファイルを取得
+
+        Args:
+            directories: スキャン対象ディレクトリ一覧
+
+        Returns:
+            List[str]: 見つかったファイル一覧
+        """
+        from pathlib import Path
+
+        result = []
+        repo_root = Path(self.repo_path)
+
+        # 未追跡ファイル
+        untracked_files = set(self.repo.untracked_files)
+
+        # 変更ファイル
+        modified_files = set(item.a_path for item in self.repo.index.diff(None))
+
+        # ステージングエリアの変更ファイル
+        staged_files = set(item.a_path for item in self.repo.index.diff('HEAD'))
+
+        all_changed_files = untracked_files | modified_files | staged_files
+
+        for directory in directories:
+            dir_path = repo_root / directory
+            if not dir_path.exists():
+                continue
+
+            # ディレクトリ配下のファイルをチェック
+            for file_path in all_changed_files:
+                if file_path.startswith(f"{directory}/"):
+                    # Jenkins一時ディレクトリは除外
+                    if '@tmp' not in file_path:
+                        result.append(file_path)
+
+        return result
+
+    def _scan_by_patterns(self, patterns: List[str]) -> List[str]:
+        """
+        パターンマッチングで未追跡・変更ファイルを取得
+
+        Args:
+            patterns: ファイルパターン一覧（例: ['*.md', 'test_*.py']）
+
+        Returns:
+            List[str]: 見つかったファイル一覧
+        """
+        import fnmatch
+
+        result = []
+
+        # 未追跡ファイル
+        untracked_files = set(self.repo.untracked_files)
+
+        # 変更ファイル
+        modified_files = set(item.a_path for item in self.repo.index.diff(None))
+
+        # ステージングエリアの変更ファイル
+        staged_files = set(item.a_path for item in self.repo.index.diff('HEAD'))
+
+        all_changed_files = untracked_files | modified_files | staged_files
+
+        for file_path in all_changed_files:
+            # Jenkins一時ディレクトリは除外
+            if '@tmp' in file_path:
+                continue
+
+            # パターンマッチング
+            for pattern in patterns:
+                if fnmatch.fnmatch(file_path, pattern) or fnmatch.fnmatch(file_path, f"**/{pattern}"):
+                    result.append(file_path)
+                    break  # 一度マッチしたら次のファイルへ
 
         return result
 
