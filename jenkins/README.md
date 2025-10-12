@@ -123,7 +123,7 @@ aws ssm get-parameter --name /jenkins-infra/dev/jenkins/admin-password \
 |---------|------|-----------|
 | **Admin_Jobs** | システム管理 | backup-config（設定バックアップ）<br>restore-config（設定リストア）<br>ssm-parameter-backup（SSMパラメータバックアップ）<br>ssm-parameter-restore（SSMパラメータリストア）<br>github-webhooks-setting（GitHub Webhook設定）<br>github-deploykeys-setting（デプロイキー設定）<br>user-management（ユーザー管理） |
 | **Account_Setup** | アカウント管理 | account-self-activation（アカウント自己有効化） |
-| **AI_Workflow** | AI駆動開発自動化 | ai_workflow_orchestrator（8フェーズ自動開発ワークフロー） |
+| **AI_Workflow** | AI駆動開発自動化 | ai_workflow_orchestrator（9フェーズ自動開発ワークフロー） |
 | **Code_Quality_Checker** | コード品質分析 | pr-complexity-analyzer（PR複雑度分析）<br>rust-code-analysis（Rustコード解析） |
 | **Document_Generator** | ドキュメント生成 | auto-insert-doxygen-comment（Doxygenコメント自動挿入）<br>generate-doxygen-html（DoxygenHTML生成）<br>technical-docs-writer（技術文書作成）<br>pr-comment-builder（PRコメントビルダー） |
 | **Infrastructure_Management** | インフラ管理 | shutdown-jenkins-environment（Jenkins環境停止）<br>terminate-lambda-nat（Lambda NAT削除）<br>Ansible Playbook実行、Pulumi Stack管理 |
@@ -465,22 +465,23 @@ Jenkins UI > Infrastructure_Management > Shutdown-Environment-Scheduler > "Build
 
 #### AI_Workflow/ai_workflow_orchestrator
 
-**目的**: GitHub IssueからClaude AIが自動的に開発プロセスを実行（8フェーズワークフロー）
+**目的**: GitHub IssueからClaude AIが自動的に開発プロセスを実行（9フェーズワークフロー）
 
 **主な機能**:
 - Phase 0（Planning）: プロジェクト計画、実装戦略・テスト戦略の事前決定
 - Phase 1（Requirements）: 要件定義書の自動生成
 - Phase 2（Design）: 詳細設計書の自動生成
 - Phase 3（Test Scenario）: テストシナリオの自動生成
-- Phase 4（Implementation）: コード実装の自動実行
-- Phase 5（Testing）: テスト実行と結果レポート
-- Phase 6（Documentation）: ドキュメント更新
-- Phase 7（Report）: 全体レポート生成
+- Phase 4（Implementation）: 本番コード実装の自動実行
+- Phase 5（Test Implementation）: テストコード実装の自動実行
+- Phase 6（Testing）: テスト実行と結果レポート
+- Phase 7（Documentation）: ドキュメント更新
+- Phase 8（Report）: 全体レポート生成
 
 **パラメータ**:
 - `ISSUE_URL`: GitHub Issue URL（必須）
 - `START_PHASE`: 開始フェーズ（デフォルト: planning）
-  - 選択肢: planning, requirements, design, test_scenario, implementation, testing, documentation, report
+  - 選択肢: planning, requirements, design, test_scenario, implementation, test_implementation, testing, documentation, report
   - 推奨: `planning`（Phase 0から開始することで、後続フェーズの効率が向上）
 - `DRY_RUN`: ドライラン実行（デフォルト: false）
 - `SKIP_REVIEW`: レビュースキップ（デフォルト: false）
