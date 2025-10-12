@@ -6,6 +6,7 @@ GitHub APIを使ってIssue情報を取得・更新
 - ワークフロー進捗報告
 """
 import os
+from pathlib import Path
 from typing import Optional, List, Dict, Any
 from github import Github, GithubException
 from github.Issue import Issue
