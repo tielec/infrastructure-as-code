@@ -1,0 +1,349 @@
+# 詳細設計フェーズ - 実行プロンプト
+
+## タスク概要
+要件定義書とGitHub Issueの内容から、詳細な設計書を作成してください。このフェーズでは、**実装戦略・テスト戦略・テストコード戦略の判断**も行います。
+
+## 入力情報
+
+### Planning Phase成果物
+- Planning Document: Planning Phaseは実行されていません
+
+**注意**: Planning Phaseが実行されている場合、開発計画（実装戦略、テスト戦略、リスク、スケジュール）を必ず確認してください。
+
+### 要件定義書
+@.ai-workflow/issue-319/01_requirements/output/requirements.md
+
+### GitHub Issue情報
+## Issue情報
+
+- **Issue番号**: #319
+- **タイトル**: [FEATURE] AIワークフロー: フェーズ依存関係の柔軟化と選択的実行機能
+- **状態**: open
+- **URL**: https://github.com/tielec/infrastructure-as-code/issues/319
+- **ラベル**: なし
+
+### 本文
+
+## 概要
+
+現在のAIワークフローは全フェーズが順次実行される前提で、各フェーズが前フェーズの成果物に依存しています。
+開発規模やタスクの種類に応じて、必要なフェーズだけを選択的に実行できる機能を追加したいです。
+
+## 背景
+
+### 現在の問題点
+- **Phase 1-7の強制的な依存関係**: 各フェーズは前フェーズの成果物を前提としている
+- **小規模タスクでのオーバーヘッド**: 簡単な不具合修正でも全フェーズ実行が必要
+- **柔軟性の欠如**: 要件定義だけレビューしたい、実装だけ実行したいなどの要望に対応できない
+
+### ユースケース例
+
+1. **要件定義のみ実行**: Issue内容を整理してドキュメント化だけ行いたい
+2. **実装のみ実行**: 既存の要件定義書・設計書がある状態で実装だけ行いたい
+3. **テストのみ実行**: 既存実装に対してテストケース追加だけ行いたい
+4. **部分フェーズ実行**: Phase 1-3だけ実行して設計レビューで止めたい
+
+## 提案機能
+
+### 1. フェーズ依存関係の明示化
+
+各フェーズの依存関係をメタデータとして定義:
+
+```python
+PHASE_DEPENDENCIES = {
+    'requirements': [],  # 依存なし
+    'design': ['requirements'],  # 要件定義が必要
+    'test_scenario': ['requirements', 'design'],
+    'implementation': ['requirements', 'design', 'test_scenario'],
+    'testing': ['implementation'],
+    'documentation': ['implementation'],
+    'report': ['requirements', 'design', 'implementation', 'testing', 'documentation']
+}
+```
+
+### 2. 依存関係チェック機能
+
+フェーズ実行前に依存関係を検証:
+
+```python
+def validate_phase_dependencies(phase_name: str, metadata: MetadataManager) -> bool:
+    """
+    フェーズ実行前に依存関係をチェック
+    
+    Returns:
+        bool: 依存関係が満たされている場合True
+    """
+    required_phases = PHASE_DEPENDENCIES.get(phase_name, [])
+    for required_phase in required_phases:
+        status = metadata.get_phase_status(required_phase)
+        if status != 'completed':
+            raise DependencyError(f"Phase '{required_phase}' must be completed before '{phase_name}'")
+    return True
+```
+
+### 3. CLIオプションの追加
+
+```bash
+# 依存関係チェックをスキップして強制実行
+python main.py execute --phase implementation --issue 305 --skip-dependency-check
+
+# 依存関係を無視して実行（警告のみ表示）
+python main.py execute --phase implementation --issue 305 --ignore-dependencies
+
+# 特定フェーズの成果物を手動で指定
+python main.py execute --phase implementation --issue 305   --requirements-doc /path/to/requirements.md   --design-doc /path/to/design.md   --test-scenario-doc /path/to/test-scenario.md
+```
+
+### 4. プリセット実行モード
+
+よくあるパターンをプリセットとして提供:
+
+```bash
+# 要件定義のみ
+python main.py execute --preset requirements-only --issue 305
+
+# 設計まで（Phase 1-2）
+python main.py execute --preset design-phase --issue 305
+
+# 実装まで（Phase 1-4）
+python main.py execute --preset implementation-phase --issue 305
+
+# フルワークフロー（Phase 1-7、デフォルト）
+python main.py execute --preset full-workflow --issue 305
+```
+
+## 実装方針
+
+### Phase 1: 依存関係管理の実装
+- [ ] `PHASE_DEPENDENCIES` 定義の追加
+- [ ] `validate_phase_dependencies()` 関数の実装
+- [ ] `BasePhase.run()` に依存関係チェックを統合
+
+### Phase 2: CLIオプションの追加
+- [ ] `--skip-dependency-check` フラグの追加
+- [ ] `--ignore-dependencies` フラグの追加（警告表示）
+- [ ] `--{phase}-doc` オプションの追加（外部ドキュメント指定）
+
+### Phase 3: プリセット機能の実装
+- [ ] `--preset` オプションの追加
+- [ ] プリセット定義（requirements-only, design-phase, implementation-phase, full-workflow）
+- [ ] プリセットに応じた自動フェーズ選択
+
+### Phase 4: ドキュメント更新
+- [ ] README.md に使用例を追加
+- [ ] プリセット一覧のドキュメント化
+- [ ] 依存関係図の追加
+
+## 期待される効果
+
+1. **柔軟性の向上**: タスクの規模に応じた最適なフェーズ選択が可能
+2. **時間短縮**: 不要なフェーズをスキップして効率化
+3. **段階的レビュー**: 要件定義や設計段階でのレビューが容易
+4. **既存資産の活用**: 既存ドキュメントを活用した部分実行が可能
+
+## 検討事項
+
+### セキュリティ
+- `--skip-dependency-check` 使用時の警告表示
+- 依存関係違反時のエラーメッセージの明確化
+
+### 互換性
+- 既存のフル実行モードをデフォルト動作として維持
+- 新規オプションは明示的に指定した場合のみ有効化
+
+### エラーハンドリング
+- 依存フェーズ未完了時のエラーメッセージ
+- 外部ドキュメント指定時のバリデーション
+
+## 関連Issue
+
+- #305 AI Workflow: Jenkins統合完成とPhase終了後の自動commit & push機能
+
+## タスク
+
+- [ ] Phase 1: 依存関係管理の実装
+- [ ] Phase 2: CLIオプションの追加
+- [ ] Phase 3: プリセット機能の実装
+- [ ] Phase 4: ドキュメント更新
+- [ ] E2Eテストの追加
+- [ ] 既存テストの修正（依存関係チェック対応）
+
+### 既存コードベースの理解
+
+このリポジトリのプロジェクト構造、アーキテクチャ、コーディング規約を理解するため、以下のドキュメントを参照してください：
+
+- プロジェクト全体のガイドライン: @CLAUDE.md（存在する場合）
+- アーキテクチャ設計: @ARCHITECTURE.md（存在する場合）
+- プロジェクトREADME: @README.md
+- その他、関連するREADME、CONTRIBUTION.md等のドキュメント
+
+上記ドキュメントから以下を把握してください：
+- プロジェクトの目的とアーキテクチャ
+- ディレクトリ構造とコンポーネント構成
+- 既存のコーディング規約やパターン
+- 開発ワークフロー
+
+## 設計書作成手順
+
+### 1. 既存コードベース分析
+
+要件定義書とIssue内容から、以下を分析してください：
+
+1. **影響範囲の特定**
+   - どのコンポーネント（Ansible/Pulumi/Jenkins/Scripts）が影響を受けるか
+   - 既存ファイルの修正が必要か、新規ファイルの作成が必要か
+   - 依存関係のあるコンポーネントは何か
+
+2. **既存パターンの調査**
+   - 類似の機能実装がないか調査
+   - 既存のコーディング規約やパターンを確認
+   - 再利用可能なコンポーネントの特定
+
+### 2. 実装戦略の判断（必須）
+
+以下の3つから選択し、**判断根拠を明記**してください：
+
+- **CREATE（新規作成）**: 既存コードとの依存関係がなく、完全に新しい機能
+- **EXTEND（拡張）**: 既存コードを拡張・修正する必要がある
+- **REFACTOR（リファクタリング）**: 既存コードの構造改善が主目的
+
+**判断基準**：
+- 既存ファイルへの影響範囲
+- 新規ファイルの作成数
+- 既存機能との統合度
+
+**出力形式**：
+```markdown
+### 実装戦略: CREATE / EXTEND / REFACTOR
+
+**判断根拠**:
+- （理由1）
+- （理由2）
+```
+
+### 3. テスト戦略の判断（必須）
+
+以下から選択し、**判断根拠を明記**してください：
+
+- **UNIT_ONLY**: Unitテストのみ
+- **INTEGRATION_ONLY**: Integrationテストのみ
+- **BDD_ONLY**: BDDテストのみ
+- **UNIT_INTEGRATION**: Unit + Integration
+- **UNIT_BDD**: Unit + BDD
+- **INTEGRATION_BDD**: Integration + BDD
+- **ALL**: すべて
+
+**判断基準**：
+- 機能の複雑度
+- ユーザーストーリーの有無
+- 既存テストとの整合性
+
+**出力形式**：
+```markdown
+### テスト戦略: UNIT_ONLY / INTEGRATION_ONLY / BDD_ONLY / UNIT_INTEGRATION / UNIT_BDD / INTEGRATION_BDD / ALL
+
+**判断根拠**:
+- （理由1）
+- （理由2）
+```
+
+### 4. テストコード戦略の判断（必須）
+
+以下から選択し、**判断根拠を明記**してください：
+
+- **EXTEND_TEST（既存テストの拡張）**: 既存テストファイルに追加
+- **CREATE_TEST（新規テスト作成）**: 新しいテストファイルを作成
+- **BOTH_TEST（両方）**: 既存テストの拡張と新規テストの作成
+
+**判断基準**：
+- 既存テストファイルの有無
+- 既存テストとの関連性
+
+**出力形式**：
+```markdown
+### テストコード戦略: EXTEND_TEST / CREATE_TEST / BOTH_TEST
+
+**判断根拠**:
+- （理由1）
+- （理由2）
+```
+
+### 5. 設計書の構成
+
+以下のセクションを含む設計書を作成してください：
+
+#### 必須セクション：
+
+1. **アーキテクチャ設計**
+   - システム全体図
+   - コンポーネント間の関係
+   - データフロー
+
+2. **実装戦略判断**（セクション2で記載）
+
+3. **テスト戦略判断**（セクション3で記載）
+
+4. **テストコード戦略判断**（セクション4で記載）
+
+5. **影響範囲分析**
+   - 既存コードへの影響
+   - 依存関係の変更
+   - マイグレーション要否
+
+6. **変更・追加ファイルリスト**
+   - 新規作成ファイル（相対パス）
+   - 修正が必要な既存ファイル（相対パス）
+   - 削除が必要なファイル（相対パス）
+
+7. **詳細設計**
+   - クラス設計（必要な場合）
+   - 関数設計（主要な関数のみ）
+   - データ構造設計
+   - インターフェース設計
+
+8. **セキュリティ考慮事項**
+   - 認証・認可
+   - データ保護
+   - セキュリティリスクと対策
+
+9. **非機能要件への対応**
+   - パフォーマンス
+   - スケーラビリティ
+   - 保守性
+
+10. **実装の順序**
+    - 実装順序の推奨
+    - 依存関係の考慮
+
+## 品質ゲート（Phase 2）
+
+設計書は以下の品質ゲートを満たす必要があります：
+
+- [ ] **実装戦略の判断根拠が明記されている**
+- [ ] **テスト戦略の判断根拠が明記されている**
+- [ ] **既存コードへの影響範囲が分析されている**
+- [ ] **変更が必要なファイルがリストアップされている**
+- [ ] **設計が実装可能である**
+
+これらの品質ゲートは**必須要件**です。作成後、クリティカルシンキングレビューが実施され、品質ゲートを満たさない場合は修正が必要になります。
+
+## 注意事項
+
+1. **既存プロジェクト構造を尊重**: 既存のディレクトリ構造やコーディング規約に従ってください
+2. **トレーサビリティ**: 要件定義書の各要件に対応する設計を明示してください
+3. **実装可能性**: 実装できない設計や曖昧な設計は避けてください
+4. **判断の明示**: 3つの戦略判断（実装・テスト・テストコード）は必ず明記してください
+5. **レビューされることを意識**: 設計書はクリティカルシンキングレビューが実施されます
+   - 品質ゲート（5つの必須要件）を最優先で満たすこと
+   - ブロッカー（次フェーズに進めない問題）がないように注意
+   - 判断根拠は具体的かつ論理的に記載すること
+
+## 出力形式
+
+設計書は `.ai-workflow/issue-319/02_design/output/design.md` として保存してください。
+
+Markdown形式で、見出しを適切に使用し、可読性の高いドキュメントを作成してください。図表が必要な場合はMarkdownのコードブロックやテーブルを活用してください。
+
+## 実装開始
+
+上記を踏まえ、詳細設計書を作成してください。
