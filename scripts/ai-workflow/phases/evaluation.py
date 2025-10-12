@@ -55,6 +55,12 @@ class EvaluationPhase(BasePhase):
             # Planning Phase成果物のパス取得
             planning_path_str = self._get_planning_document_path(issue_number)
 
+            # Issue情報を取得
+            issue_title = self.metadata.data.get('issue_title', f'Issue #{issue_number}')
+            repo_name = self.metadata.data.get('repository', 'unknown')
+            branch_name = f'ai-workflow/issue-{issue_number}'
+            workflow_dir = str(self.metadata.workflow_dir)
+
             # 実行プロンプトを読み込み
             execute_prompt_template = self.load_prompt('execute')
 
@@ -63,8 +69,32 @@ class EvaluationPhase(BasePhase):
             for phase_name, phase_path in phase_outputs.items():
                 rel_paths[phase_name] = phase_path.relative_to(self.claude.working_dir)
 
+            # フェーズ成果物のパス一覧を生成
+            phase_outputs_list = '\n'.join([
+                f'- **{phase_name.capitalize()}**: @{rel_path}'
+                for phase_name, rel_path in rel_paths.items()
+            ])
+
             # プロンプトに情報を埋め込み
             execute_prompt = execute_prompt_template.replace(
+                '{issue_number}',
+                str(issue_number)
+            ).replace(
+                '{issue_title}',
+                issue_title
+            ).replace(
+                '{repo_name}',
+                repo_name
+            ).replace(
+                '{branch_name}',
+                branch_name
+            ).replace(
+                '{workflow_dir}',
+                workflow_dir
+            ).replace(
+                '{phase_outputs}',
+                phase_outputs_list
+            ).replace(
                 '{planning_document_path}',
                 planning_path_str
             ).replace(
@@ -91,9 +121,6 @@ class EvaluationPhase(BasePhase):
             ).replace(
                 '{report_document_path}',
                 f'@{rel_paths["report"]}'
-            ).replace(
-                '{issue_number}',
-                str(issue_number)
             )
 
             # Claude Agent SDKでタスクを実行
