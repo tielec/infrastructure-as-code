@@ -388,7 +388,80 @@ AI駆動開発自動化ワークフローは、GitHub IssueからPR作成まで�
 3. **全フェーズcompleted**: is_completed() → True → メッセージ表示して終了
 4. **--force-reset指定**: clear()実行 → Phase 0から強制再開
 
-### 4.4 データ永続化
+### 4.4 PR本文自動更新フロー（v2.3.0で追加 - Issue #363）
+
+```
+[Phase 8: Report完了]
+    │
+    │ Phase 8のexecute()メソッド内でPR更新処理を実行
+    ▼
+[ReportPhase.execute()]
+    │
+    │ 1. Phase 8のレポート生成が完了
+    │ 2. metadata.jsonからPR番号を取得
+    ▼
+    │
+    ├─ PR番号が存在しない場合
+    │    ▼
+    │ [WARNING] PR番号が見つかりません、PR更新をスキップ
+    │ [Phase 8は成功として完了]
+    │
+    └─ PR番号が存在する場合
+         ▼
+    [GitHubClient._extract_phase_outputs()]
+         │
+         │ 3. 各Phase成果物から情報を抽出
+         │    - Issue概要: _extract_summary_from_issue()でIssue本文から抽出
+         │    - 実装内容: implementation.md（Phase 4）の## 実装内容セクション
+         │    - テスト結果: test-result.md（Phase 6）の## テスト結果セクション
+         │    - ドキュメント更新: documentation-update-log.md（Phase 7）
+         │    - レビューポイント: design.md（Phase 2）の## レビューポイントセクション
+         ▼
+    [GitHubClient._generate_pr_body_detailed()]
+         │
+         │ 4. テンプレートファイルを読み込み
+         │    - templates/pr_body_detailed_template.md
+         │ 5. プレースホルダーを置換
+         │    - {issue_number}, {issue_summary}, {implementation_details}
+         │    - {test_results}, {documentation_updates}, {review_points}
+         │ 6. 詳細なPR本文を生成（Markdown形式）
+         ▼
+    [GitHubClient.update_pull_request()]
+         │
+         │ 7. PyGitHub経由でPR取得
+         │    - repository.get_pull(pr_number)
+         │ 8. PR本文を更新
+         │    - pr.edit(body=detailed_body)
+         ▼
+         │
+         ├─ PR更新成功
+         │    ▼
+         │ [OK] PR body updated: {pr_url}
+         │ [Phase 8は成功として完了]
+         │
+         └─ PR更新失敗
+              ▼
+         [WARNING] PR更新に失敗しましたが、Phase 8自体は成功として処理
+         [Phase 8は成功として完了]
+```
+
+**設計判断**:
+- PR更新失敗時でもPhase 8自体は成功扱い（警告ログのみ出力）
+- PR番号はmetadata.jsonの`github_integration.pr_number`から自動取得
+- テンプレートシステムによる統一フォーマット
+- 各Phase成果物からの情報抽出は`_extract_section()`ヘルパーを使用
+- エラーハンドリング: PR番号不在、Phase成果物ファイル不在、GitHub API エラーに対応
+
+**抽出される情報とソース**:
+| 情報カテゴリ | ソースファイル | 抽出メソッド |
+|------------|------------|------------|
+| Issue概要 | GitHub Issue本文 | `_extract_summary_from_issue()` |
+| 実装内容 | `.ai-workflow/issue-XXX/04_implementation/output/implementation.md` | `_extract_section(content, "実装内容")` |
+| テスト結果 | `.ai-workflow/issue-XXX/06_testing/output/test-result.md` | `_extract_section(content, "テスト結果")` |
+| ドキュメント更新 | `.ai-workflow/issue-XXX/07_documentation/output/documentation-update-log.md` | ファイル全文 |
+| レビューポイント | `.ai-workflow/issue-XXX/02_design/output/design.md` | `_extract_section(content, "レビューポイント")` |
+
+### 4.5 データ永続化
 
 **metadata.json 構造**:
 
@@ -581,6 +654,38 @@ class GitHubClient:
         """PR本文テンプレートを生成（v1.8.0で追加）"""
         # Markdown形式のPR本文を生成
         # Closes #{issue_number}、ワークフロー進捗チェックリスト、実行環境情報
+
+    def update_pull_request(self, pr_number: int, body: str) -> Dict[str, Any]:
+        """Pull Request本文を更新（v2.3.0で追加 - Issue #363）"""
+        # PyGitHubでPR取得 → pr.edit(body=body)
+        # 戻り値: {'success': bool, 'pr_url': str, 'error': str}
+
+    def _generate_pr_body_detailed(self, issue_number: int, branch_name: str,
+                                   extracted_info: Dict[str, Any]) -> str:
+        """詳細なPR本文を生成（v2.3.0で追加 - Issue #363）"""
+        # テンプレートファイル（pr_body_detailed_template.md）を読み込み
+        # extracted_infoからプレースホルダーを置換
+        # Markdown形式の詳細PR本文を返却
+
+    def _extract_phase_outputs(self, issue_number: int,
+                               phase_outputs: Dict[str, Path]) -> Dict[str, Any]:
+        """Phase成果物から情報を抽出（v2.3.0で追加 - Issue #363）"""
+        # 各Phase成果物（planning.md, requirements.md等）から必要情報を抽出
+        # implementation.md: ## 実装内容セクション
+        # test-result.md: ## テスト結果セクション
+        # documentation-update-log.md: ドキュメント更新ログ
+        # design.md: ## レビューポイントセクション
+        # 戻り値: Dict[str, Any]（抽出された情報）
+
+    def _extract_section(self, content: str, section_title: str) -> str:
+        """Markdownドキュメントからセクションを抽出（v2.3.0で追加 - Issue #363）"""
+        # 正規表現でMarkdownセクション（## section_title）を抽出
+        # 次のセクション（## 〜）までの内容を返却
+
+    def _extract_summary_from_issue(self, issue_number: int) -> str:
+        """Issue本文から概要を抽出（v2.3.0で追加 - Issue #363）"""
+        # GitHub APIでIssue本文を取得
+        # Issue本文の最初の段落または全文を返却
 ```
 
 **v1.8.0での変更（Issue #355）**:
@@ -596,11 +701,20 @@ class GitHubClient:
 - コメント数を最大90コメント → 1コメントに削減（98.9%削減）
 - Issueページ読み込み時間を大幅改善（3秒 → 1秒以下）
 
+**v2.3.0での変更（Issue #363）**:
+- `update_pull_request()`メソッドを追加し、Phase 8完了後にPR本文を詳細情報に自動更新
+- `_generate_pr_body_detailed()`メソッドを追加し、テンプレートから詳細PR本文を生成
+- `_extract_phase_outputs()`メソッドを追加し、各Phase成果物から情報を抽出
+- `_extract_section()`ヘルパーメソッドを追加し、Markdownセクションを抽出
+- `_extract_summary_from_issue()`メソッドを追加し、Issue本文から概要を抽出
+- PR本文内容: Issue概要、実装内容（Phase 4）、テスト結果（Phase 6）、ドキュメント更新（Phase 7）、レビューポイント（Phase 2）
+
 **設計方針**:
 - PyGithubライブラリを使用
 - GitHub Token `repo` スコープ必須（PR作成権限）
 - エラー時は例外をraiseせず辞書で返却（呼び出し側でのハンドリングを簡素化）
 - 進捗コメントはMarkdownフォーマット（全体進捗、現在フェーズ詳細、完了フェーズ折りたたみ）
+- PR本文更新は`templates/pr_body_detailed_template.md`テンプレートを使用
 
 ### 5.4 BasePhase（phases/base_phase.py）・実装済み
 
@@ -920,7 +1034,7 @@ class ResumeManager:
 
 ---
 
-**バージョン**: 2.2.0
+**バージョン**: 2.3.0
 **最終更新**: 2025-10-12
 **Phase 0実装**: Issue #313で追加（プロジェクトマネージャ役割）
 **Phase 5実装**: Issue #324で追加（実装フェーズとテストコード実装フェーズの分離）
@@ -928,3 +1042,4 @@ class ResumeManager:
 **レジューム機能**: Issue #360で追加（`--phase all`実行時の自動レジューム、`--force-reset`フラグ追加）
 **Phase 9実装**: Issue #362で追加（プロジェクト評価フェーズ、4つの判定タイプによる後続処理自動決定）
 **進捗コメント最適化**: Issue #370で追加（GitHub Issue進捗コメントを1つに統合、98.9%削減）
+**PR本文自動更新**: Issue #363で追加（Phase 8完了後、PR本文を詳細情報に自動更新）
