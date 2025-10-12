@@ -13,21 +13,21 @@ Phase 3のテストシナリオとPhase 4の実装に基づいて、テストコ
 ## 入力情報
 
 ### Planning Phase成果物
-- Planning Document: {planning_document_path}
+- Planning Document: @.ai-workflow/issue-320/00_planning/output/planning.md
 
 **注意**: Planning Phaseが実行されている場合、開発計画（実装戦略、テスト戦略、リスク、スケジュール）を必ず確認してください。
 
 ### テストシナリオ
-{test_scenario_document_path}
+@.ai-workflow/issue-320/03_test_scenario/output/test-scenario.md
 
 ### 実装ログ
-{implementation_document_path}
+@.ai-workflow/issue-320/04_implementation/output/implementation.md
 
 ### 設計書（参考）
-{design_document_path}
+@.ai-workflow/issue-320/02_design/output/design.md
 
 ### テスト戦略（Phase 2で決定）
-**{test_strategy}**
+**UNIT_INTEGRATION**
 
 ## テスト戦略別の対応
 
@@ -103,7 +103,7 @@ Phase 4で実装された実コードを確認してください：
 # テストコード実装ログ
 
 ## 実装サマリー
-- テスト戦略: {test_strategy}
+- テスト戦略: UNIT_INTEGRATION
 - テストファイル数: X個
 - テストケース数: Y個
 
@@ -122,7 +122,7 @@ Phase 4で実装された実コードを確認してください：
 - Phase 6でテストを実行
 ```
 
-このログを `.ai-workflow/issue-{issue_number}/05_test_implementation/output/test-implementation.md` として保存してください。
+このログを `.ai-workflow/issue-320/05_test_implementation/output/test_implementation.md` として保存してください。
 
 ## 品質ゲート（Phase 5）
 
