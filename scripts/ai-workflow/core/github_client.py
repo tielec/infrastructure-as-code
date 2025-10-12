@@ -750,6 +750,91 @@ class GitHubClient:
             print(f"[WARNING] PR番号の取得に失敗: {e}")
             return None
 
+    def create_or_update_progress_comment(
+        self,
+        issue_number: int,
+        content: str,
+        metadata_manager
+    ) -> Dict[str, Any]:
+        """
+        進捗コメントを作成または更新
+
+        Args:
+            issue_number: Issue番号
+            content: コメント本文（Markdown形式）
+            metadata_manager: MetadataManagerインスタンス
+
+        Returns:
+            Dict[str, Any]:
+                - comment_id (int): コメントID
+                - comment_url (str): コメントURL
+
+        Raises:
+            GithubException: GitHub API呼び出しエラー
+
+        処理フロー:
+            1. メタデータから既存コメントIDを取得
+            2. コメントIDが存在する場合:
+               - repository.get_issue_comment(comment_id)でコメント取得
+               - comment.edit(content)でコメント編集
+            3. コメントIDが存在しない場合:
+               - issue.create_comment(content)で新規コメント作成
+               - メタデータにコメントIDを保存
+            4. コメントIDとURLを返却
+
+        エラーハンドリング:
+            - Edit Comment API失敗時: ログ出力してから新規コメント作成にフォールバック
+            - コメントIDが無効な場合: 新規コメント作成としてリトライ
+        """
+        try:
+            # メタデータから既存コメントIDを取得
+            existing_comment_id = metadata_manager.get_progress_comment_id()
+
+            if existing_comment_id:
+                # コメントIDが存在する場合 → 既存コメントを編集
+                try:
+                    print(f"[INFO] 既存進捗コメント (ID: {existing_comment_id}) を更新します")
+                    comment = self.repository.get_issue_comment(existing_comment_id)
+                    comment.edit(content)
+                    print(f"[INFO] 進捗コメント更新成功: {comment.html_url}")
+
+                    return {
+                        'comment_id': comment.id,
+                        'comment_url': comment.html_url
+                    }
+
+                except GithubException as e:
+                    # Edit Comment API失敗時 → フォールバックで新規コメント作成
+                    print(f"[WARNING] GitHub Edit Comment APIエラー: {e.status} - {e.data.get('message', 'Unknown')} (コメントID: {existing_comment_id})")
+                    print(f"[INFO] フォールバック: 新規コメント作成")
+                    # 以下の処理で新規コメント作成に進む
+
+            # コメントIDが存在しない場合、またはEdit失敗時 → 新規コメント作成
+            issue = self.get_issue(issue_number)
+            new_comment = issue.create_comment(content)
+            print(f"[INFO] 新規進捗コメント作成成功: {new_comment.html_url}")
+
+            # メタデータにコメントIDを保存
+            metadata_manager.save_progress_comment_id(
+                comment_id=new_comment.id,
+                comment_url=new_comment.html_url
+            )
+            print(f"[INFO] コメントIDをメタデータに保存: {new_comment.id}")
+
+            return {
+                'comment_id': new_comment.id,
+                'comment_url': new_comment.html_url
+            }
+
+        except GithubException as e:
+            error_msg = f"GitHub API error: {e.status} - {e.data.get('message', 'Unknown error')}"
+            print(f"[ERROR] 進捗コメント作成/更新に失敗: {error_msg}")
+            raise RuntimeError(f"Failed to create or update progress comment: {error_msg}")
+
+        except Exception as e:
+            print(f"[ERROR] 予期しないエラー: {e}")
+            raise RuntimeError(f"Unexpected error while creating or updating progress comment: {e}")
+
     def close(self):
         """
         GitHub APIクライアントをクローズ

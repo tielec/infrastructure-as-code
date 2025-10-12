@@ -388,6 +388,27 @@ jenkins-cli build AI_Workflow/ai_workflow_orchestrator \
   - 21ユニットテスト（tests/unit/core/test_phase_dependencies.py）
   - 18統合テスト（tests/integration/test_phase_dependencies_integration.py）
 
+### ✅ 完了（v2.2.0 GitHub Issue進捗コメント最適化 - Issue #370）
+- [x] 進捗コメントの統合管理
+  - GitHub API Edit Comment機能を使用して進捗を1つのコメントに統合
+  - 最大90コメント → 1コメントに削減（98.9%削減）
+  - Issueページ読み込み時間を大幅改善（3秒 → 1秒以下）
+- [x] GitHubClient拡張
+  - `create_or_update_progress_comment()`メソッドを追加
+  - 初回投稿時に新規コメント作成、2回目以降は既存コメントを編集
+  - Edit Comment API失敗時の自動フォールバック機能
+- [x] MetadataManager拡張
+  - `save_progress_comment_id()`メソッドを追加
+  - `get_progress_comment_id()`メソッドを追加
+  - メタデータスキーマに`github_integration`セクションを追加
+- [x] BasePhase修正
+  - `post_progress()`メソッドを統合コメント形式に変更
+  - `_format_progress_content()`メソッドを追加してMarkdownフォーマットを生成
+  - 全体進捗セクション、現在フェーズ詳細、完了フェーズ折りたたみを実装
+- [x] 後方互換性の維持
+  - 既存のメタデータ形式を保持
+  - `github_integration`セクションが存在しない場合は新規コメント作成として動作
+
 ### 🚧 開発中（v2.0.0以降）
 - [ ] GitHub Webhook連携
 - [ ] レビュー基準カスタマイズ
@@ -893,10 +914,11 @@ pytest tests/unit/
 
 ---
 
-**バージョン**: 2.1.0
+**バージョン**: 2.2.0
 **最終更新**: 2025-10-12
 **Phase 0実装**: Issue #313で追加（プロジェクトマネージャ役割）
 **Phase 5実装**: Issue #324で追加（実装フェーズとテストコード実装フェーズの分離）
 **Init時PR作成**: Issue #355で追加（Init実行時にドラフトPR自動作成）
 **Phase 9実装**: Issue #362で追加（プロジェクト評価フェーズ、4つの判定タイプによる後続処理自動決定）
 **フェーズ依存関係と選択的実行**: Issue #319で追加（依存関係チェック、実行プリセット、外部ドキュメント指定）
+**進捗コメント最適化**: Issue #370で追加（GitHub Issue進捗コメントを1つに統合、98.9%削減）

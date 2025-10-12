@@ -286,3 +286,50 @@ class MetadataManager:
             self._state.data['phases']['evaluation']['abort_reason'] = abort_reason
 
         self._state.save()
+
+    def save_progress_comment_id(
+        self,
+        comment_id: int,
+        comment_url: str
+    ) -> None:
+        """
+        進捗コメントIDをメタデータに保存
+
+        Args:
+            comment_id: GitHub コメントID
+            comment_url: GitHub コメントURL
+
+        処理フロー:
+            1. self._state.data に 'github_integration' セクションを追加（存在しない場合）
+            2. 'progress_comment_id' と 'progress_comment_url' を保存
+            3. self._state.save() で保存
+        """
+        # github_integrationセクションが存在しない場合は作成
+        if 'github_integration' not in self._state.data:
+            self._state.data['github_integration'] = {}
+
+        # コメントIDとURLを保存
+        self._state.data['github_integration']['progress_comment_id'] = comment_id
+        self._state.data['github_integration']['progress_comment_url'] = comment_url
+
+        # 保存
+        self._state.save()
+
+    def get_progress_comment_id(self) -> Optional[int]:
+        """
+        進捗コメントIDをメタデータから取得
+
+        Returns:
+            Optional[int]: コメントID（存在しない場合はNone）
+
+        処理フロー:
+            1. self._state.data['github_integration']の存在確認
+            2. 存在する場合: 'progress_comment_id' を返却
+            3. 存在しない場合: None を返却
+        """
+        # github_integrationセクションの存在確認
+        if 'github_integration' not in self._state.data:
+            return None
+
+        # progress_comment_idを返却（存在しない場合はNone）
+        return self._state.data['github_integration'].get('progress_comment_id')

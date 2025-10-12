@@ -219,7 +219,7 @@ class BasePhase(ABC):
         details: Optional[str] = None
     ):
         """
-        GitHubに進捗報告
+        GitHubに進捗報告（統合コメント形式）
 
         Args:
             status: ステータス（pending, in_progress, completed, failed）
@@ -228,15 +228,177 @@ class BasePhase(ABC):
         try:
             issue_number = int(self.metadata.data['issue_number'])
 
-            self.github.post_workflow_progress(
+            # 統合コメント形式のMarkdownを生成
+            content = self._format_progress_content(status, details)
+
+            # コメント作成または更新
+            result = self.github.create_or_update_progress_comment(
                 issue_number=issue_number,
-                phase=self.phase_name,
-                status=status,
-                details=details
+                content=content,
+                metadata_manager=self.metadata
             )
-            print(f"[INFO] GitHub Issue #{issue_number} に進捗を投稿しました: {status}")
+
+            print(f"[INFO] 進捗コメント更新: {result['comment_url']}")
         except Exception as e:
             print(f"[WARNING] GitHub投稿に失敗しました: {e}")
+
+    def _format_progress_content(
+        self,
+        status: str,
+        details: Optional[str] = None
+    ) -> str:
+        """
+        進捗コメントのMarkdownフォーマットを生成
+
+        Args:
+            status: 現在のフェーズステータス
+            details: 詳細情報
+
+        Returns:
+            str: Markdown形式のコメント本文
+
+        処理フロー:
+            1. ヘッダーセクション（"## 🤖 AI Workflow - 進捗状況"）
+            2. 全体進捗セクション（Phase 0-9のステータス一覧）
+            3. 現在フェーズの詳細セクション
+            4. 完了フェーズの折りたたみセクション（<details>タグ使用）
+            5. フッターセクション（最終更新日時、署名）
+
+        ステータスアイコンマッピング:
+            - pending: ⏸️
+            - in_progress: 🔄
+            - completed: ✅
+            - failed: ❌
+
+        フェーズ名マッピング:
+            - planning: Phase 0 - Planning
+            - requirements: Phase 1 - Requirements
+            - design: Phase 2 - Design
+            - test_scenario: Phase 3 - Test Scenario
+            - implementation: Phase 4 - Implementation
+            - test_implementation: Phase 5 - Test Implementation
+            - testing: Phase 6 - Testing
+            - documentation: Phase 7 - Documentation
+            - report: Phase 8 - Report
+            - evaluation: Phase 9 - Evaluation
+        """
+        from datetime import datetime
+
+        # ステータスアイコンマッピング
+        status_emoji = {
+            'pending': '⏸️',
+            'in_progress': '🔄',
+            'completed': '✅',
+            'failed': '❌'
+        }
+
+        # フェーズ名マッピング
+        phase_names = {
+            'planning': ('Phase 0', 'Planning'),
+            'requirements': ('Phase 1', 'Requirements'),
+            'design': ('Phase 2', 'Design'),
+            'test_scenario': ('Phase 3', 'Test Scenario'),
+            'implementation': ('Phase 4', 'Implementation'),
+            'test_implementation': ('Phase 5', 'Test Implementation'),
+            'testing': ('Phase 6', 'Testing'),
+            'documentation': ('Phase 7', 'Documentation'),
+            'report': ('Phase 8', 'Report'),
+            'evaluation': ('Phase 9', 'Evaluation')
+        }
+
+        # 全フェーズのステータスを取得
+        phases_status = self.metadata.get_all_phases_status()
+
+        # ヘッダー
+        content_parts = []
+        content_parts.append("## 🤖 AI Workflow - 進捗状況\n")
+        content_parts.append("\n### 全体進捗\n\n")
+
+        # 全体進捗セクション（Phase 0-9）
+        completed_phases_details = []
+        current_phase_info = None
+
+        for phase_key in ['planning', 'requirements', 'design', 'test_scenario',
+                          'implementation', 'test_implementation', 'testing',
+                          'documentation', 'report', 'evaluation']:
+            phase_status = phases_status.get(phase_key, 'pending')
+            phase_number, phase_name = phase_names.get(phase_key, ('Phase X', phase_key))
+            emoji = status_emoji.get(phase_status, '📝')
+
+            # メタデータから詳細情報を取得
+            phase_data = self.metadata.data['phases'].get(phase_key, {})
+            started_at = phase_data.get('started_at')
+            completed_at = phase_data.get('completed_at')
+
+            # ステータス行を作成
+            status_line = f"- {emoji} {phase_number}: {phase_name} - **{phase_status.upper()}**"
+
+            if phase_status == 'completed' and completed_at:
+                status_line += f" ({completed_at})"
+            elif phase_status == 'in_progress' and started_at:
+                status_line += f" (開始: {started_at})"
+
+            content_parts.append(status_line + "\n")
+
+            # 完了したフェーズの詳細を記録
+            if phase_status == 'completed':
+                completed_phases_details.append({
+                    'phase_number': phase_number,
+                    'phase_name': phase_name,
+                    'phase_data': phase_data
+                })
+
+            # 現在のフェーズ情報を記録
+            if phase_key == self.phase_name:
+                current_phase_info = {
+                    'phase_number': phase_number,
+                    'phase_name': phase_name,
+                    'phase_status': phase_status,
+                    'phase_data': phase_data
+                }
+
+        # 現在のフェーズの詳細セクション
+        if current_phase_info:
+            content_parts.append(f"\n### 現在のフェーズ: {current_phase_info['phase_number']} ({current_phase_info['phase_name']})\n\n")
+            content_parts.append(f"**ステータス**: {current_phase_info['phase_status'].upper()}\n")
+
+            phase_data = current_phase_info['phase_data']
+            if phase_data.get('started_at'):
+                content_parts.append(f"**開始時刻**: {phase_data.get('started_at')}\n")
+
+            retry_count = phase_data.get('retry_count', 0)
+            content_parts.append(f"**試行回数**: {retry_count + 1}/3\n")
+
+            if details:
+                content_parts.append(f"\n{details}\n")
+
+        # 完了フェーズの折りたたみセクション
+        if completed_phases_details:
+            content_parts.append("\n<details>\n")
+            content_parts.append("<summary>完了したフェーズの詳細</summary>\n\n")
+
+            for phase_info in completed_phases_details:
+                content_parts.append(f"### {phase_info['phase_number']}: {phase_info['phase_name']}\n\n")
+                content_parts.append(f"**ステータス**: COMPLETED\n")
+
+                phase_data = phase_info['phase_data']
+                if phase_data.get('review_result'):
+                    content_parts.append(f"**レビュー結果**: {phase_data['review_result']}\n")
+                if phase_data.get('started_at') and phase_data.get('completed_at'):
+                    # 実行時間を計算（簡易版）
+                    content_parts.append(f"**完了時刻**: {phase_data['completed_at']}\n")
+
+                content_parts.append("\n")
+
+            content_parts.append("</details>\n")
+
+        # フッター
+        current_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        content_parts.append("\n---\n")
+        content_parts.append(f"*最終更新: {current_time}*\n")
+        content_parts.append("*AI駆動開発自動化ワークフロー (Claude Agent SDK)*\n")
+
+        return ''.join(content_parts)
 
     def post_review(
         self,
