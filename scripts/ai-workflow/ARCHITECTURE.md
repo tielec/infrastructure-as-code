@@ -170,7 +170,7 @@ AI駆動開発自動化ワークフローは、GitHub IssueからPR作成まで�
 
 ## 4. データフロー
 
-### 4.1 ワークフロー初期化フロー
+### 4.1 ワークフロー初期化フロー（v1.8.0で拡張）
 
 ```
 [ユーザー]
@@ -197,6 +197,43 @@ AI駆動開発自動化ワークフローは、GitHub IssueからPR作成まで�
 [ファイルシステム]
     │
     └── .ai-workflow/issue-{number}/metadata.json
+
+    ▼【v1.8.0で追加】
+[GitManager.commit_phase_output()]
+    │
+    │ 5. metadata.jsonをGitコミット
+    │    - コミットメッセージ: "[ai-workflow] Phase 0 (planning) - completed"
+    ▼
+[GitManager.push_to_remote()]
+    │
+    │ 6. リモートブランチにpush（最大3回リトライ）
+    │    - ブランチ: ai-workflow/issue-{number}
+    ▼
+[GitHubClient.check_existing_pr()]
+    │
+    │ 7. 既存PR確認
+    │    - head: ai-workflow/issue-{number}
+    │    - base: main
+    ▼
+    │
+    ├─ 既存PR存在 → [WARNING] PR already exists: {pr_url}
+    │
+    └─ 既存PR不在
+         │
+         ▼
+    [GitHubClient.create_pull_request()]
+         │
+         │ 8. ドラフトPR作成
+         │    - title: "[AI-Workflow] Issue #{issue_number}"
+         │    - body: ワークフロー進捗チェックリスト
+         │    - draft: True
+         ▼
+    [GitHub API]
+         │
+         └── Pull Request作成完了
+              │
+              ▼
+         [ログ出力] [OK] Draft PR created: {pr_url}
 ```
 
 ### 4.2 フェーズ実行フロー（v1.6.0実装済み）
@@ -363,7 +400,47 @@ class WorkflowState:
 - トークン数とコストの追跡
 - Sonnet 4.5料金: $3/1M input, $15/1M output
 
-### 5.3 BasePhase（phases/base_phase.py）・実装済み
+### 5.3 GitHubClient（core/github_client.py）・実装済み
+
+**責務**: GitHub API通信、Issue/PR操作
+
+**主要メソッド**:
+```python
+class GitHubClient:
+    def get_issue(self, issue_number: int) -> Dict[str, Any]:
+        """Issue情報を取得"""
+        # PyGitHubでIssue取得
+        # タイトル、本文、コメント、ラベルを返却
+
+    def create_pull_request(self, title: str, body: str, head: str,
+                           base: str = 'main', draft: bool = True) -> Dict[str, Any]:
+        """Pull Requestを作成（v1.8.0で追加）"""
+        # PyGitHubでPR作成
+        # 戻り値: {'success': bool, 'pr_url': str, 'pr_number': int, 'error': str}
+
+    def check_existing_pr(self, head: str, base: str = 'main') -> Optional[Dict[str, Any]]:
+        """既存Pull Requestの確認（v1.8.0で追加）"""
+        # repository.get_pulls(head=head, base=base, state='open')
+        # 戻り値: {'pr_number': int, 'pr_url': str, 'state': str} or None
+
+    def _generate_pr_body_template(self, issue_number: int, branch_name: str) -> str:
+        """PR本文テンプレートを生成（v1.8.0で追加）"""
+        # Markdown形式のPR本文を生成
+        # Closes #{issue_number}、ワークフロー進捗チェックリスト、実行環境情報
+```
+
+**v1.8.0での変更（Issue #355）**:
+- `create_pull_request()`メソッドを追加し、Init時にドラフトPR自動作成
+- `check_existing_pr()`メソッドを追加し、既存PR重複を防止
+- `_generate_pr_body_template()`ヘルパーメソッドを追加
+- エラーハンドリング: 401/403（権限エラー）、422（既存PR重複）を特別に処理
+
+**設計方針**:
+- PyGithubライブラリを使用
+- GitHub Token `repo` スコープ必須（PR作成権限）
+- エラー時は例外をraiseせず辞書で返却（呼び出し側でのハンドリングを簡素化）
+
+### 5.4 BasePhase（phases/base_phase.py）・実装済み
 
 **責務**: フェーズ実行の基底クラス
 
@@ -414,7 +491,7 @@ class BasePhase(ABC):
 - 試行回数の可視化：`[ATTEMPT N/3]`形式でログ出力
 - 一時的なエラー（ネットワーク障害、API制限等）からの自動回復が可能
 
-### 5.4 GitManager（core/git_manager.py）
+### 5.5 GitManager（core/git_manager.py）
 
 **責務**: Git操作の管理、Phase完了後の自動commit & push
 
@@ -510,7 +587,7 @@ BasePhase.run()
 2. **権限エラー**: リトライせず即座にエラー返却
 3. **Phase失敗時**: 失敗時もcommit実行（トラブルシューティング用）
 
-### 5.5 CriticalThinkingReviewer（reviewers/critical_thinking.py）
+### 5.6 CriticalThinkingReviewer（reviewers/critical_thinking.py）
 
 **責務**: AI批判的思考レビュー
 
@@ -527,6 +604,7 @@ BasePhase.run()
 
 - **Claude API Key**: 環境変数 `CLAUDE_API_KEY`
 - **GitHub Token**: 環境変数 `GITHUB_TOKEN`
+  - **必須スコープ**: `repo`（PR作成権限、v1.8.0で必須化）
 - **ハードコーディング禁止**: すべて環境変数またはSSM Parameter Storeで管理
 
 ### 6.2 エラーハンドリング戦略
@@ -615,7 +693,7 @@ BasePhase.run()
 1. ~~**Phase 1実装**: Claude API統合、要件定義自動生成~~ ✅ 完了（v1.1.0）
 2. ~~**Phase 2実装**: 詳細設計、設計判断機能~~ ✅ 完了（v1.2.0）
 3. ~~**Phase 0実装**: プロジェクト計画、実装戦略の事前決定~~ ✅ 完了（v1.5.0）
-4. **PR自動作成**: GitHub PR作成機能
+4. ~~**PR自動作成**: Init時ドラフトPR自動作成機能~~ ✅ 完了（v1.8.0）
 5. **コスト最適化**: プロンプトキャッシュ活用
 6. **レビュー基準のカスタマイズ**: プロジェクト固有の品質基準設定
 
@@ -630,7 +708,8 @@ BasePhase.run()
 
 ---
 
-**バージョン**: 1.7.0
-**最終更新**: 2025-10-10
+**バージョン**: 1.8.0
+**最終更新**: 2025-10-12
 **Phase 0実装**: Issue #313で追加（プロジェクトマネージャ役割）
 **Phase 5実装**: Issue #324で追加（実装フェーズとテストコード実装フェーズの分離）
+**Init時PR作成**: Issue #355で追加（Init実行時にドラフトPR自動作成）
