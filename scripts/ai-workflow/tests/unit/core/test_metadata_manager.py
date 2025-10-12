@@ -351,3 +351,303 @@ class TestMetadataManager:
                     metadata_path.parent.rmdir()
             except:
                 pass  # クリーンアップのエラーは無視
+
+
+class TestMetadataManagerEvaluationExtensions:
+    """Issue #362: Evaluation Phase 用のMetadataManager拡張機能のテスト"""
+
+    def test_rollback_to_phase_implementation(self, tmp_path):
+        """
+        TC-MM-001: rollback_to_phase() - Phase 4への巻き戻し（正常系）
+
+        Given: Phase 1-8がすべてcompletedである
+        When: rollback_to_phase('implementation')が呼ばれる
+        Then: Phase 4-8がpendingにリセットされる
+        """
+        # Arrange
+        metadata_path = tmp_path / 'metadata.json'
+        WorkflowState.create_new(
+            metadata_path=metadata_path,
+            issue_number='362',
+            issue_url='https://github.com/tielec/infrastructure-as-code/issues/362',
+            issue_title='Test Issue #362'
+        )
+        manager = MetadataManager(metadata_path)
+
+        # Phase 1-8をcompletedに設定
+        for phase_name in ['requirements', 'design', 'test_scenario', 'implementation',
+                           'test_implementation', 'testing', 'documentation', 'report']:
+            manager.update_phase_status(phase_name, 'completed')
+
+        # Act
+        result = manager.rollback_to_phase('implementation')
+
+        # Assert
+        assert result['success'] is True
+        assert 'backup_path' in result
+        assert Path(result['backup_path']).exists()
+
+        # Phase 4-8がpendingにリセットされている
+        assert manager.get_phase_status('implementation') == 'pending'
+        assert manager.get_phase_status('test_implementation') == 'pending'
+        assert manager.get_phase_status('testing') == 'pending'
+        assert manager.get_phase_status('documentation') == 'pending'
+        assert manager.get_phase_status('report') == 'pending'
+
+        # Phase 1-3はcompletedのまま
+        assert manager.get_phase_status('requirements') == 'completed'
+        assert manager.get_phase_status('design') == 'completed'
+        assert manager.get_phase_status('test_scenario') == 'completed'
+
+    def test_rollback_to_phase_requirements(self, tmp_path):
+        """
+        TC-MM-002: rollback_to_phase() - Phase 1への巻き戻し
+
+        Given: Phase 1-8がすべてcompletedである
+        When: rollback_to_phase('requirements')が呼ばれる
+        Then: Phase 1-8すべてがpendingにリセットされる
+        """
+        # Arrange
+        metadata_path = tmp_path / 'metadata.json'
+        WorkflowState.create_new(
+            metadata_path=metadata_path,
+            issue_number='362',
+            issue_url='https://github.com/tielec/infrastructure-as-code/issues/362',
+            issue_title='Test Issue #362'
+        )
+        manager = MetadataManager(metadata_path)
+
+        # Phase 1-8をcompletedに設定
+        for phase_name in ['requirements', 'design', 'test_scenario', 'implementation',
+                           'test_implementation', 'testing', 'documentation', 'report']:
+            manager.update_phase_status(phase_name, 'completed')
+
+        # Act
+        result = manager.rollback_to_phase('requirements')
+
+        # Assert
+        assert result['success'] is True
+
+        # すべてのフェーズがpendingにリセットされている
+        for phase_name in ['requirements', 'design', 'test_scenario', 'implementation',
+                           'test_implementation', 'testing', 'documentation', 'report']:
+            assert manager.get_phase_status(phase_name) == 'pending'
+
+    def test_rollback_to_phase_invalid_phase(self, tmp_path):
+        """
+        TC-MM-003: rollback_to_phase() - 不正なフェーズ名（異常系）
+
+        Given: 不正なフェーズ名を指定する
+        When: rollback_to_phase('invalid_phase')が呼ばれる
+        Then: エラーが返される
+        """
+        # Arrange
+        metadata_path = tmp_path / 'metadata.json'
+        WorkflowState.create_new(
+            metadata_path=metadata_path,
+            issue_number='362',
+            issue_url='https://github.com/tielec/infrastructure-as-code/issues/362',
+            issue_title='Test Issue #362'
+        )
+        manager = MetadataManager(metadata_path)
+
+        # Act
+        result = manager.rollback_to_phase('invalid_phase')
+
+        # Assert
+        assert result['success'] is False
+        assert 'error' in result
+
+    def test_get_all_phases_status(self, tmp_path):
+        """
+        TC-MM-004: get_all_phases_status() - 全フェーズステータス取得
+
+        Given: Phase 1-3がcompleted、Phase 4がin_progress、Phase 5-8がpending
+        When: get_all_phases_status()が呼ばれる
+        Then: すべてのフェーズのステータスが返される
+        """
+        # Arrange
+        metadata_path = tmp_path / 'metadata.json'
+        WorkflowState.create_new(
+            metadata_path=metadata_path,
+            issue_number='362',
+            issue_url='https://github.com/tielec/infrastructure-as-code/issues/362',
+            issue_title='Test Issue #362'
+        )
+        manager = MetadataManager(metadata_path)
+
+        # Phase 1-3をcompleted、Phase 4をin_progressに設定
+        manager.update_phase_status('requirements', 'completed')
+        manager.update_phase_status('design', 'completed')
+        manager.update_phase_status('test_scenario', 'completed')
+        manager.update_phase_status('implementation', 'in_progress')
+
+        # Act
+        result = manager.get_all_phases_status()
+
+        # Assert
+        assert isinstance(result, dict)
+        assert result['requirements'] == 'completed'
+        assert result['design'] == 'completed'
+        assert result['test_scenario'] == 'completed'
+        assert result['implementation'] == 'in_progress'
+        assert result['test_implementation'] == 'pending'
+        assert result['testing'] == 'pending'
+
+    def test_backup_metadata(self, tmp_path):
+        """
+        TC-MM-005: backup_metadata() - メタデータバックアップ作成
+
+        Given: metadata.jsonが存在する
+        When: backup_metadata()が呼ばれる
+        Then: タイムスタンプ付きバックアップファイルが作成される
+        """
+        # Arrange
+        metadata_path = tmp_path / 'metadata.json'
+        WorkflowState.create_new(
+            metadata_path=metadata_path,
+            issue_number='362',
+            issue_url='https://github.com/tielec/infrastructure-as-code/issues/362',
+            issue_title='Test Issue #362'
+        )
+        manager = MetadataManager(metadata_path)
+
+        # Act
+        backup_path = manager.backup_metadata()
+
+        # Assert
+        assert backup_path is not None
+        assert Path(backup_path).exists()
+        assert 'metadata.json.backup_' in backup_path
+        assert Path(backup_path).parent == tmp_path
+
+    def test_set_evaluation_decision_pass(self, tmp_path):
+        """
+        TC-MM-006: set_evaluation_decision() - PASS判定の記録
+
+        Given: Evaluation Phaseが実行された
+        When: set_evaluation_decision('PASS', ...)が呼ばれる
+        Then: metadata.jsonにPASS判定が記録される
+        """
+        # Arrange
+        metadata_path = tmp_path / 'metadata.json'
+        WorkflowState.create_new(
+            metadata_path=metadata_path,
+            issue_number='362',
+            issue_url='https://github.com/tielec/infrastructure-as-code/issues/362',
+            issue_title='Test Issue #362'
+        )
+        manager = MetadataManager(metadata_path)
+
+        # Act
+        manager.set_evaluation_decision(
+            decision='PASS',
+            failed_phase=None,
+            remaining_tasks=[],
+            created_issue_url=None,
+            abort_reason=None
+        )
+
+        # Assert
+        assert 'evaluation' in manager.data['phases']
+        assert manager.data['phases']['evaluation']['decision'] == 'PASS'
+        assert manager.data['phases']['evaluation']['failed_phase'] is None
+        assert manager.data['phases']['evaluation']['remaining_tasks'] == []
+
+    def test_set_evaluation_decision_pass_with_issues(self, tmp_path):
+        """
+        TC-MM-007: set_evaluation_decision() - PASS_WITH_ISSUES判定の記録
+
+        Given: Evaluation Phaseで残タスクが発見された
+        When: set_evaluation_decision('PASS_WITH_ISSUES', ...)が呼ばれる
+        Then: 残タスクとIssue URLが記録される
+        """
+        # Arrange
+        metadata_path = tmp_path / 'metadata.json'
+        WorkflowState.create_new(
+            metadata_path=metadata_path,
+            issue_number='362',
+            issue_url='https://github.com/tielec/infrastructure-as-code/issues/362',
+            issue_title='Test Issue #362'
+        )
+        manager = MetadataManager(metadata_path)
+
+        # Act
+        remaining_tasks = [
+            {'task': 'Performance optimization', 'phase': 'implementation', 'priority': 'Medium'},
+            {'task': 'Additional tests', 'phase': 'testing', 'priority': 'Low'}
+        ]
+        manager.set_evaluation_decision(
+            decision='PASS_WITH_ISSUES',
+            failed_phase=None,
+            remaining_tasks=remaining_tasks,
+            created_issue_url='https://github.com/tielec/infrastructure-as-code/issues/363',
+            abort_reason=None
+        )
+
+        # Assert
+        assert manager.data['phases']['evaluation']['decision'] == 'PASS_WITH_ISSUES'
+        assert len(manager.data['phases']['evaluation']['remaining_tasks']) == 2
+        assert manager.data['phases']['evaluation']['created_issue_url'] == 'https://github.com/tielec/infrastructure-as-code/issues/363'
+
+    def test_set_evaluation_decision_fail_phase_x(self, tmp_path):
+        """
+        TC-MM-008: set_evaluation_decision() - FAIL_PHASE_X判定の記録
+
+        Given: Evaluation PhaseでPhase 4に問題が発見された
+        When: set_evaluation_decision('FAIL_PHASE_4', ...)が呼ばれる
+        Then: failed_phaseが記録される
+        """
+        # Arrange
+        metadata_path = tmp_path / 'metadata.json'
+        WorkflowState.create_new(
+            metadata_path=metadata_path,
+            issue_number='362',
+            issue_url='https://github.com/tielec/infrastructure-as-code/issues/362',
+            issue_title='Test Issue #362'
+        )
+        manager = MetadataManager(metadata_path)
+
+        # Act
+        manager.set_evaluation_decision(
+            decision='FAIL_PHASE_4',
+            failed_phase='implementation',
+            remaining_tasks=[],
+            created_issue_url=None,
+            abort_reason=None
+        )
+
+        # Assert
+        assert manager.data['phases']['evaluation']['decision'] == 'FAIL_PHASE_4'
+        assert manager.data['phases']['evaluation']['failed_phase'] == 'implementation'
+
+    def test_set_evaluation_decision_abort(self, tmp_path):
+        """
+        TC-MM-009: set_evaluation_decision() - ABORT判定の記録
+
+        Given: Evaluation Phaseで致命的な問題が発見された
+        When: set_evaluation_decision('ABORT', ...)が呼ばれる
+        Then: abort_reasonが記録される
+        """
+        # Arrange
+        metadata_path = tmp_path / 'metadata.json'
+        WorkflowState.create_new(
+            metadata_path=metadata_path,
+            issue_number='362',
+            issue_url='https://github.com/tielec/infrastructure-as-code/issues/362',
+            issue_title='Test Issue #362'
+        )
+        manager = MetadataManager(metadata_path)
+
+        # Act
+        manager.set_evaluation_decision(
+            decision='ABORT',
+            failed_phase=None,
+            remaining_tasks=[],
+            created_issue_url=None,
+            abort_reason='Fundamental architectural flaw discovered'
+        )
+
+        # Assert
+        assert manager.data['phases']['evaluation']['decision'] == 'ABORT'
+        assert manager.data['phases']['evaluation']['abort_reason'] == 'Fundamental architectural flaw discovered'
