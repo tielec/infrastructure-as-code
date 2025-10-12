@@ -4,14 +4,22 @@
 
 ## コンテキスト
 
-- **Issue**: #{issue_number} - {issue_title}
-- **リポジトリ**: {repo_name}
-- **ブランチ**: {branch_name}
-- **ワークフローディレクトリ**: {workflow_dir}
+- **Issue**: #319 - Issue #319
+- **リポジトリ**: unknown
+- **ブランチ**: ai-workflow/issue-319
+- **ワークフローディレクトリ**: /tmp/jenkins-56a667ea/workspace/AI_Workflow/ai_workflow_orchestrator/.ai-workflow/issue-319
 
 ## 評価対象のフェーズ成果物
 
-{phase_outputs}
+- **Planning**: @.ai-workflow/issue-319/00_planning/output/planning.md
+- **Requirements**: @.ai-workflow/issue-319/01_requirements/output/requirements.md
+- **Design**: @.ai-workflow/issue-319/02_design/output/design.md
+- **Test_scenario**: @.ai-workflow/issue-319/03_test_scenario/output/test-scenario.md
+- **Implementation**: @.ai-workflow/issue-319/04_implementation/output/implementation.md
+- **Test_implementation**: @.ai-workflow/issue-319/05_test_implementation/output/test-implementation.md
+- **Testing**: @.ai-workflow/issue-319/06_testing/output/test-result.md
+- **Documentation**: @.ai-workflow/issue-319/07_documentation/output/documentation-update-log.md
+- **Report**: @.ai-workflow/issue-319/08_report/output/report.md
 
 ## 評価基準
 
@@ -149,7 +157,7 @@ RECOMMENDED_ACTIONS:
 4. **決定**: 上記で指定された正確なフォーマットでの最終決定
 5. **推奨事項**: 追加の推奨事項（オプション）
 
-**重要**: 評価レポートは必ず `.ai-workflow/issue-{issue_number}/09_evaluation/output/evaluation_report.md` として保存してください。
+**重要**: 評価レポートは必ず `.ai-workflow/issue-319/09_evaluation/output/evaluation_report.md` として保存してください。
 
 ## 重要な注意事項
 

@@ -39,7 +39,9 @@ class BasePhase(ABC):
         working_dir: Path,
         metadata_manager: MetadataManager,
         claude_client: ClaudeAgentClient,
-        github_client: GitHubClient
+        github_client: GitHubClient,
+        skip_dependency_check: bool = False,
+        ignore_dependencies: bool = False
     ):
         """
         初期化
@@ -50,12 +52,18 @@ class BasePhase(ABC):
             metadata_manager: メタデータマネージャー
             claude_client: Claude Agent SDKクライアント
             github_client: GitHub APIクライアント
+            skip_dependency_check: 依存関係チェックをスキップするか（デフォルト: False）
+            ignore_dependencies: 依存関係違反を警告のみで許可するか（デフォルト: False）
         """
         self.phase_name = phase_name
         self.working_dir = working_dir
         self.metadata = metadata_manager
         self.claude = claude_client
         self.github = github_client
+
+        # 依存関係チェック設定
+        self.skip_dependency_check = skip_dependency_check
+        self.ignore_dependencies = ignore_dependencies
 
         # OpenAI APIベースのコンテンツパーサーを初期化
         self.content_parser = ContentParser()
@@ -623,14 +631,15 @@ class BasePhase(ABC):
             bool: 成功/失敗
 
         Notes:
-            1. フェーズステータスをin_progressに更新
-            2. GitHubに進捗報告
-            3. リトライループ（MAX_RETRIES=3）:
+            1. 依存関係チェック（新規追加）
+            2. フェーズステータスをin_progressに更新
+            3. GitHubに進捗報告
+            4. リトライループ（MAX_RETRIES=3）:
                - attempt=1: execute()を実行
                - attempt>=2: review() → revise()を実行
-            4. 各試行の成功時、最終レビューへ進む
-            5. 最大リトライ到達時は失敗終了
-            6. Git自動commit & push（成功・失敗問わず実行）
+            5. 各試行の成功時、最終レビューへ進む
+            6. 最大リトライ到達時は失敗終了
+            7. Git自動commit & push（成功・失敗問わず実行）
         """
         MAX_RETRIES = 3
 
@@ -639,6 +648,58 @@ class BasePhase(ABC):
         review_result = None
 
         try:
+            # ━━━ 新規追加: 依存関係チェック ━━━
+            from core.phase_dependencies import validate_phase_dependencies
+
+            validation_result = validate_phase_dependencies(
+                phase_name=self.phase_name,
+                metadata_manager=self.metadata,
+                skip_check=self.skip_dependency_check,
+                ignore_violations=self.ignore_dependencies
+            )
+
+            if not validation_result['valid']:
+                if not validation_result.get('ignored', False):
+                    # 依存関係違反でエラー終了
+                    error_msg = validation_result['error']
+                    missing_phases = validation_result.get('missing_phases', [])
+
+                    # エラーメッセージを整形
+                    error_details = f"[ERROR] Dependency check failed for phase '{self.phase_name}'\n"
+                    error_details += f"[ERROR] The following phases must be completed first:\n"
+
+                    # 各依存フェーズのステータスを表示
+                    phases_status = self.metadata.get_all_phases_status()
+                    for phase in missing_phases:
+                        status = phases_status.get(phase, 'pending')
+                        error_details += f"[ERROR]   - {phase}: {status}\n"
+
+                    error_details += f"[ERROR]\n"
+                    error_details += f"[ERROR] To bypass this check, use one of the following options:\n"
+                    error_details += f"[ERROR]   --skip-dependency-check    (skip all dependency checks)\n"
+                    error_details += f"[ERROR]   --ignore-dependencies      (show warnings but continue)"
+
+                    print(error_details)
+
+                    self.update_phase_status(status='failed')
+                    self.post_progress(
+                        status='failed',
+                        details=error_details
+                    )
+                    return False
+                else:
+                    # 警告のみ表示して実行継続
+                    warning_msg = validation_result['warning']
+                    print(f"[WARNING] {warning_msg}")
+
+            # skip_dependency_check が有効な場合の警告
+            if self.skip_dependency_check:
+                warning_msg = "[WARNING] Dependency check has been skipped!\n"
+                warning_msg += "[WARNING] This may result in inconsistent workflow execution.\n"
+                warning_msg += "[WARNING] Use this option only if you understand the implications."
+                print(warning_msg)
+            # ━━━ 新規追加ここまで ━━━
+
             # GitManagerを初期化
             from core.git_manager import GitManager
             git_manager = GitManager(

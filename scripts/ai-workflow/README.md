@@ -363,6 +363,31 @@ jenkins-cli build AI_Workflow/ai_workflow_orchestrator \
 - [x] GitHubClient拡張（Issue自動作成、クローズ処理）
 - [x] 評価レポート生成（evaluation_report.md）
 
+### ✅ 完了（v2.1.0 フェーズ依存関係の柔軟化と選択的実行 - Issue #319）
+- [x] フェーズ依存関係チェック機能（core/phase_dependencies.py）
+  - 全10フェーズの依存関係を定義したPHASE_DEPENDENCIES
+  - validate_phase_dependencies()による依存関係検証
+  - detect_circular_dependencies()による循環参照検出
+- [x] 依存関係制御フラグ
+  - `--skip-dependency-check`: 依存関係チェックを完全にスキップ
+  - `--ignore-dependencies`: 依存関係エラーを警告に変換して実行継続
+- [x] 実行プリセット機能
+  - requirements-only: Phase 1のみ実行
+  - design-phase: Phase 0-2実行
+  - implementation-phase: Phase 0-4実行
+  - full-workflow: Phase 0-9全実行
+- [x] 外部ドキュメント指定機能
+  - `--requirements-doc`: 外部要件定義書を指定してPhase 1スキップ
+  - `--design-doc`: 外部設計書を指定してPhase 2スキップ
+  - `--test-scenario-doc`: 外部テストシナリオを指定してPhase 3スキップ
+  - validate_external_document()によるドキュメント存在確認
+- [x] BasePhase統合
+  - run()メソッドでの依存関係自動チェック
+  - フェーズスキップ時の適切なステータス管理
+- [x] 包括的テスト実装
+  - 21ユニットテスト（tests/unit/core/test_phase_dependencies.py）
+  - 18統合テスト（tests/integration/test_phase_dependencies_integration.py）
+
 ### 🚧 開発中（v2.0.0以降）
 - [ ] GitHub Webhook連携
 - [ ] レビュー基準カスタマイズ
@@ -377,10 +402,16 @@ scripts/ai-workflow/
 │   ├── workflow_state.py        # ワークフロー状態管理
 │   ├── metadata_manager.py      # メタデータ管理
 │   ├── claude_agent_client.py   # Claude Agent SDK統合
-│   └── github_client.py         # GitHub API統合
-│       ├── get_issue()          # Issue情報取得
-│       ├── create_pull_request() # PR作成（v1.8.0で追加）
-│       └── check_existing_pr()  # 既存PRチェック（v1.8.0で追加）
+│   ├── github_client.py         # GitHub API統合
+│   │   ├── get_issue()          # Issue情報取得
+│   │   ├── create_pull_request() # PR作成（v1.8.0で追加）
+│   │   └── check_existing_pr()  # 既存PRチェック（v1.8.0で追加）
+│   └── phase_dependencies.py    # フェーズ依存関係管理（v2.1.0で追加）
+│       ├── PHASE_DEPENDENCIES   # フェーズ依存関係定義
+│       ├── PHASE_PRESETS        # 実行プリセット定義
+│       ├── validate_phase_dependencies() # 依存関係検証
+│       ├── detect_circular_dependencies() # 循環参照検出
+│       └── validate_external_document()   # 外部ドキュメント検証
 ├── phases/
 │   ├── base_phase.py            # Phase基底クラス
 │   │                            # - _get_planning_document_path(): Planning Document参照ヘルパー
@@ -513,6 +544,12 @@ python main.py execute --phase <phase_name> --issue <issue_number> [--git-user <
 **オプション:**
 - `--git-user <username>`: Gitコミット時のユーザー名（オプション）
 - `--git-email <email>`: Gitコミット時のメールアドレス（オプション）
+- `--skip-dependency-check`: フェーズ依存関係のチェックをスキップ（オプション、v2.1.0で追加）
+- `--ignore-dependencies`: 依存関係エラーを無視して実行を継続（オプション、v2.1.0で追加）
+- `--preset <preset_name>`: 事前定義された実行プリセットを使用（オプション、v2.1.0で追加）
+- `--requirements-doc <path>`: 外部要件定義書を指定してPhase 1をスキップ（オプション、v2.1.0で追加）
+- `--design-doc <path>`: 外部設計書を指定してPhase 2をスキップ（オプション、v2.1.0で追加）
+- `--test-scenario-doc <path>`: 外部テストシナリオを指定してPhase 3をスキップ（オプション、v2.1.0で追加）
 
 **フェーズ名:**
 - `all`: **全フェーズ一括実行（Phase 1-9）** ← 新機能（v1.8.0）
@@ -542,6 +579,93 @@ python main.py execute --phase requirements --issue 304
 python main.py execute --phase requirements --issue 304 \
   --git-user "AI Workflow Bot" \
   --git-email "ai-workflow@example.com"
+```
+
+### フェーズ依存関係と選択的実行（v2.1.0で追加 - Issue #319）
+
+#### 依存関係チェック
+
+各フェーズには必要な前提フェーズが定義されており、デフォルトで自動的に依存関係をチェックします。
+
+**依存関係の例:**
+- Phase 2（design）: Phase 1（requirements）が完了している必要がある
+- Phase 4（implementation）: Phase 2（design）とPhase 3（test_scenario）が完了している必要がある
+- Phase 6（testing）: Phase 4（implementation）とPhase 5（test_implementation）が完了している必要がある
+
+**依存関係チェックをスキップ:**
+```bash
+# 依存関係チェックを完全にスキップ（上級ユーザー向け）
+python main.py execute --phase design --issue 304 --skip-dependency-check
+```
+
+**依存関係エラーを無視:**
+```bash
+# 依存関係エラーがあっても実行を継続（警告のみ表示）
+python main.py execute --phase design --issue 304 --ignore-dependencies
+```
+
+#### 実行プリセット
+
+よく使われるフェーズの組み合わせをプリセットとして提供します。
+
+**利用可能なプリセット:**
+
+1. **requirements-only**: 要件定義のみ実行
+   ```bash
+   python main.py execute --phase requirements --issue 304 --preset requirements-only
+   ```
+   - 実行フェーズ: Phase 1（requirements）のみ
+   - 用途: 要件定義書だけ作成したい場合
+
+2. **design-phase**: 設計フェーズまで実行
+   ```bash
+   python main.py execute --phase design --issue 304 --preset design-phase
+   ```
+   - 実行フェーズ: Phase 0（planning）→ Phase 1（requirements）→ Phase 2（design）
+   - 用途: 設計書まで作成し、実装は手動で行う場合
+
+3. **implementation-phase**: 実装フェーズまで実行
+   ```bash
+   python main.py execute --phase implementation --issue 304 --preset implementation-phase
+   ```
+   - 実行フェーズ: Phase 0-4（planning → requirements → design → test_scenario → implementation）
+   - 用途: 実装コードまで自動生成し、テストは手動で行う場合
+
+4. **full-workflow**: 全フェーズ実行（`--phase all`と同等）
+   ```bash
+   python main.py execute --phase all --issue 304 --preset full-workflow
+   ```
+   - 実行フェーズ: Phase 0-9（全フェーズ）
+   - 用途: 完全自動化されたワークフロー
+
+#### 外部ドキュメント指定
+
+既存のドキュメントを使用してフェーズをスキップできます。
+
+**要件定義書を指定してPhase 1をスキップ:**
+```bash
+python main.py execute --phase design --issue 304 \
+  --requirements-doc ./docs/requirements.md
+```
+
+**設計書を指定してPhase 2をスキップ:**
+```bash
+python main.py execute --phase implementation --issue 304 \
+  --design-doc ./docs/design.md
+```
+
+**テストシナリオを指定してPhase 3をスキップ:**
+```bash
+python main.py execute --phase implementation --issue 304 \
+  --test-scenario-doc ./docs/test-scenario.md
+```
+
+**複数のドキュメントを同時に指定:**
+```bash
+python main.py execute --phase implementation --issue 304 \
+  --requirements-doc ./docs/requirements.md \
+  --design-doc ./docs/design.md \
+  --test-scenario-doc ./docs/test-scenario.md
 ```
 
 **`--phase all` の特徴:**
@@ -769,9 +893,10 @@ pytest tests/unit/
 
 ---
 
-**バージョン**: 2.0.0
+**バージョン**: 2.1.0
 **最終更新**: 2025-10-12
 **Phase 0実装**: Issue #313で追加（プロジェクトマネージャ役割）
 **Phase 5実装**: Issue #324で追加（実装フェーズとテストコード実装フェーズの分離）
 **Init時PR作成**: Issue #355で追加（Init実行時にドラフトPR自動作成）
 **Phase 9実装**: Issue #362で追加（プロジェクト評価フェーズ、4つの判定タイプによる後続処理自動決定）
+**フェーズ依存関係と選択的実行**: Issue #319で追加（依存関係チェック、実行プリセット、外部ドキュメント指定）

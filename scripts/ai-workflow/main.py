@@ -5,7 +5,7 @@ import os
 import sys
 import time
 from pathlib import Path
-from typing import Dict, Any
+from typing import Dict, Any, List, Optional
 from git import Repo
 from core.workflow_state import WorkflowState, PhaseStatus
 from core.metadata_manager import MetadataManager
@@ -33,13 +33,125 @@ def _get_repo_root() -> Path:
         return Path.cwd()
 
 
+def _get_preset_phases(preset_name: str) -> List[str]:
+    """
+    プリセット名からフェーズリストを取得
+
+    Args:
+        preset_name: プリセット名（例: 'requirements-only'）
+
+    Returns:
+        List[str]: フェーズリスト
+
+    Raises:
+        ValueError: 不正なプリセット名の場合
+
+    Example:
+        >>> phases = _get_preset_phases('design-phase')
+        ['requirements', 'design']
+    """
+    from core.phase_dependencies import PHASE_PRESETS
+
+    if preset_name not in PHASE_PRESETS:
+        available_presets = ', '.join(PHASE_PRESETS.keys())
+        raise ValueError(
+            f"Invalid preset: '{preset_name}'\n"
+            f"Available presets: {available_presets}"
+        )
+
+    return PHASE_PRESETS[preset_name]
+
+
+def _load_external_documents(
+    requirements_doc: Optional[str],
+    design_doc: Optional[str],
+    test_scenario_doc: Optional[str],
+    metadata_manager: MetadataManager,
+    repo_root: Path
+) -> Dict[str, str]:
+    """
+    外部ドキュメントを読み込みメタデータに記録
+
+    Args:
+        requirements_doc: 要件定義書のパス
+        design_doc: 設計書のパス
+        test_scenario_doc: テストシナリオのパス
+        metadata_manager: MetadataManagerインスタンス
+        repo_root: リポジトリルートパス
+
+    Returns:
+        Dict[str, str]: フェーズ名 → ファイルパスのマッピング
+
+    Raises:
+        ValueError: バリデーションエラーの場合
+
+    Example:
+        >>> docs = _load_external_documents(
+        ...     requirements_doc='path/to/requirements.md',
+        ...     design_doc=None,
+        ...     test_scenario_doc=None,
+        ...     metadata_manager=metadata_manager,
+        ...     repo_root=repo_root
+        ... )
+        {'requirements': 'path/to/requirements.md'}
+    """
+    from core.phase_dependencies import validate_external_document
+
+    external_docs = {}
+    doc_mapping = {
+        'requirements': requirements_doc,
+        'design': design_doc,
+        'test_scenario': test_scenario_doc
+    }
+
+    for phase_name, doc_path in doc_mapping.items():
+        if doc_path:
+            # バリデーション
+            result = validate_external_document(doc_path, repo_root)
+
+            if not result['valid']:
+                error_msg = f"[ERROR] Invalid external document for {phase_name}: {doc_path}\n"
+                error_msg += f"[ERROR] Reason: {result['error']}\n"
+                error_msg += f"[ERROR]\n"
+                error_msg += f"[ERROR] Please ensure:\n"
+                error_msg += f"[ERROR]   - File exists and is readable\n"
+                error_msg += f"[ERROR]   - File format is .md or .txt\n"
+                error_msg += f"[ERROR]   - File size is less than 10MB\n"
+                error_msg += f"[ERROR]   - File is within the repository"
+                raise ValueError(error_msg)
+
+            external_docs[phase_name] = result['absolute_path']
+
+            # メタデータに記録
+            if 'external_documents' not in metadata_manager.data:
+                metadata_manager.data['external_documents'] = {}
+
+            metadata_manager.data['external_documents'][phase_name] = result['absolute_path']
+
+            # フェーズステータスを completed に変更
+            metadata_manager.update_phase_status(
+                phase_name=phase_name,
+                status='completed',
+                output_file=doc_path
+            )
+
+            click.echo(f"[INFO] External document for {phase_name}: {doc_path}")
+
+    # メタデータ保存
+    metadata_manager.save()
+
+    return external_docs
+
+
 def _execute_single_phase(
     phase: str,
     issue: str,
     repo_root: Path,
     metadata_manager: MetadataManager,
     claude_client: ClaudeAgentClient,
-    github_client: GitHubClient
+    github_client: GitHubClient,
+    skip_dependency_check: bool = False,
+    ignore_dependencies: bool = False
 ) -> Dict[str, Any]:
     """
     個別フェーズを実行
@@ -51,6 +163,8 @@ def _execute_single_phase(
         metadata_manager: メタデータマネージャー
         claude_client: Claude Agent SDKクライアント
         github_client: GitHub APIクライアント
+        skip_dependency_check: 依存関係チェックをスキップするか（デフォルト: False）
+        ignore_dependencies: 依存関係違反を警告のみで許可するか（デフォルト: False）
 
     Returns:
         Dict[str, Any]: 実行結果
@@ -87,7 +201,9 @@ def _execute_single_phase(
         working_dir=working_dir,
         metadata_manager=metadata_manager,
         claude_client=claude_client,
-        github_client=github_client
+        github_client=github_client,
+        skip_dependency_check=skip_dependency_check,
+        ignore_dependencies=ignore_dependencies
     )
 
     # run()メソッド実行
@@ -234,7 +350,9 @@ def execute_phases_from(
     repo_root: Path,
     metadata_manager: MetadataManager,
     claude_client: ClaudeAgentClient,
-    github_client: GitHubClient
+    github_client: GitHubClient,
+    skip_dependency_check: bool = False,
+    ignore_dependencies: bool = False
 ) -> Dict[str, Any]:
     """
     指定フェーズから全フェーズを順次実行（レジューム用）
@@ -297,7 +415,9 @@ def execute_phases_from(
                 repo_root=repo_root,
                 metadata_manager=metadata_manager,
                 claude_client=claude_client,
-                github_client=github_client
+                github_client=github_client,
+                skip_dependency_check=skip_dependency_check,
+                ignore_dependencies=ignore_dependencies
             )
 
             # 結果記録
@@ -344,7 +464,9 @@ def execute_all_phases(
     repo_root: Path,
     metadata_manager: MetadataManager,
     claude_client: ClaudeAgentClient,
-    github_client: GitHubClient
+    github_client: GitHubClient,
+    skip_dependency_check: bool = False,
+    ignore_dependencies: bool = False
 ) -> Dict[str, Any]:
     """
     全フェーズを順次実行
@@ -405,7 +527,9 @@ def execute_all_phases(
                 repo_root=repo_root,
                 metadata_manager=metadata_manager,
                 claude_client=claude_client,
-                github_client=github_client
+                github_client=github_client,
+                skip_dependency_check=skip_dependency_check,
+                ignore_dependencies=ignore_dependencies
             )
 
             # 結果記録
@@ -610,7 +734,7 @@ def init(issue_url: str):
 
 
 @cli.command()
-@click.option('--phase', required=True,
+@click.option('--phase', required=False,
               type=click.Choice(['all', 'planning', 'requirements', 'design', 'test_scenario',
                                 'implementation', 'test_implementation', 'testing',
                                 'documentation', 'report', 'evaluation']))
@@ -619,9 +743,41 @@ def init(issue_url: str):
 @click.option('--git-email', help='Git commit user email')
 @click.option('--force-reset', is_flag=True, default=False,
               help='Clear metadata and restart from Phase 1')
+@click.option('--skip-dependency-check', is_flag=True, default=False,
+              help='Skip all dependency checks')
+@click.option('--ignore-dependencies', is_flag=True, default=False,
+              help='Show warnings but continue when dependencies are not met')
+@click.option('--preset', type=click.Choice(['requirements-only', 'design-phase',
+                                             'implementation-phase', 'full-workflow']),
+              help='Execute preset workflow')
+@click.option('--requirements-doc', type=str, help='External requirements document path')
+@click.option('--design-doc', type=str, help='External design document path')
+@click.option('--test-scenario-doc', type=str, help='External test scenario document path')
 def execute(phase: str, issue: str, git_user: str = None, git_email: str = None,
-            force_reset: bool = False):
+            force_reset: bool = False, skip_dependency_check: bool = False,
+            ignore_dependencies: bool = False, preset: Optional[str] = None,
+            requirements_doc: Optional[str] = None, design_doc: Optional[str] = None,
+            test_scenario_doc: Optional[str] = None):
     """フェーズ実行"""
+    # ━━━ 新規追加: オプションの排他性チェック ━━━
+    # --preset と --phase の排他性
+    if preset and phase:
+        click.echo("[ERROR] Options '--preset' and '--phase' are mutually exclusive")
+        click.echo("[ERROR] Please specify only one of them")
+        sys.exit(1)
+
+    # --skip-dependency-check と --ignore-dependencies の排他性
+    if skip_dependency_check and ignore_dependencies:
+        click.echo("[ERROR] Options '--skip-dependency-check' and '--ignore-dependencies' are mutually exclusive")
+        click.echo("[ERROR] Please specify only one of them")
+        sys.exit(1)
+
+    # --preset または --phase のどちらかが必須
+    if not preset and not phase:
+        click.echo("[ERROR] Either '--preset' or '--phase' option is required")
+        sys.exit(1)
+    # ━━━ 新規追加ここまで ━━━
+
     # CLIオプションが指定されている場合、環境変数に設定（最優先）
     if git_user:
         os.environ['GIT_COMMIT_USER_NAME'] = git_user
@@ -698,6 +854,33 @@ def execute(phase: str, issue: str, git_user: str = None, git_email: str = None,
     claude_client = ClaudeAgentClient(working_dir=repo_root)
     github_client = GitHubClient(token=github_token, repository=github_repository)
 
+    # ━━━ 新規追加: 外部ドキュメント処理 ━━━
+    if requirements_doc or design_doc or test_scenario_doc:
+        try:
+            _load_external_documents(
+                requirements_doc=requirements_doc,
+                design_doc=design_doc,
+                test_scenario_doc=test_scenario_doc,
+                metadata_manager=metadata_manager,
+                repo_root=repo_root
+            )
+        except ValueError as e:
+            click.echo(str(e))
+            sys.exit(1)
+    # ━━━ 新規追加ここまで ━━━
+
+    # ━━━ 新規追加: プリセット処理 ━━━
+    if preset:
+        try:
+            phase_list = _get_preset_phases(preset)
+            click.echo(f'[INFO] Preset "{preset}" selected: {", ".join(phase_list)}')
+            # プリセットの場合、phase を 'all' として扱い、phase_list を使用
+            phase = 'all'
+        except ValueError as e:
+            click.echo(str(e))
+            sys.exit(1)
+    # ━━━ 新規追加ここまで ━━━
+
     # ━━━ 新規追加: レジューム機能統合 ━━━
     if phase == 'all':
         click.echo('[INFO] Starting all phases execution')
@@ -718,7 +901,9 @@ def execute(phase: str, issue: str, git_user: str = None, git_email: str = None,
                     repo_root=repo_root,
                     metadata_manager=metadata_manager,
                     claude_client=claude_client,
-                    github_client=github_client
+                    github_client=github_client,
+                    skip_dependency_check=skip_dependency_check,
+                    ignore_dependencies=ignore_dependencies
                 )
 
                 if result['success']:
@@ -778,7 +963,9 @@ def execute(phase: str, issue: str, git_user: str = None, git_email: str = None,
                     repo_root=repo_root,
                     metadata_manager=metadata_manager,
                     claude_client=claude_client,
-                    github_client=github_client
+                    github_client=github_client,
+                    skip_dependency_check=skip_dependency_check,
+                    ignore_dependencies=ignore_dependencies
                 )
 
                 if result['success']:
@@ -850,7 +1037,9 @@ def execute(phase: str, issue: str, git_user: str = None, git_email: str = None,
             working_dir=working_dir,
             metadata_manager=metadata_manager,
             claude_client=claude_client,
-            github_client=github_client
+            github_client=github_client,
+            skip_dependency_check=skip_dependency_check,
+            ignore_dependencies=ignore_dependencies
         )
 
         click.echo(f'[INFO] Starting phase: {phase}')

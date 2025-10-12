@@ -218,6 +218,104 @@ notepad $PROFILE
 $env:PYTHONUTF8 = "1"
 ```
 
+### Q3-4: フェーズ依存関係エラー（v2.1.0で追加 - Issue #319）
+
+**症状**:
+```bash
+$ python main.py execute --phase implementation --issue 304
+ERROR: Phase dependency check failed
+Missing required phases: design, test_scenario
+```
+
+**原因**:
+実行しようとしているフェーズは、前提となるフェーズが完了していない状態では実行できません。
+
+**解決方法**:
+
+#### オプション1: 依存フェーズを先に実行
+```powershell
+# 必要なフェーズを順番に実行
+python main.py execute --phase design --issue 304
+python main.py execute --phase test_scenario --issue 304
+python main.py execute --phase implementation --issue 304
+```
+
+#### オプション2: 依存関係チェックをスキップ（上級ユーザー向け）
+```powershell
+# 依存関係チェックを完全にスキップして実行
+python main.py execute --phase implementation --issue 304 --skip-dependency-check
+```
+
+**注意**: 依存関係チェックをスキップすると、必要な情報（設計書、テストシナリオ等）が参照できずに失敗する可能性があります。
+
+#### オプション3: 依存関係エラーを無視して継続
+```powershell
+# 依存関係エラーを警告に変換して実行を継続
+python main.py execute --phase implementation --issue 304 --ignore-dependencies
+```
+
+**使い分け**:
+- `--skip-dependency-check`: 依存関係チェック自体を実行しない（高速だが危険）
+- `--ignore-dependencies`: 依存関係チェックは実行するが、エラーを警告に変換（安全性と柔軟性のバランス）
+
+### Q3-5: 外部ドキュメント指定エラー（v2.1.0で追加 - Issue #319）
+
+**症状**:
+```bash
+$ python main.py execute --phase design --issue 304 --requirements-doc ./docs/requirements.md
+ERROR: External document not found: ./docs/requirements.md
+```
+
+**原因**:
+指定されたドキュメントファイルが存在しないか、パスが正しくありません。
+
+**解決方法**:
+
+1. **ファイルの存在を確認**:
+```powershell
+# ファイルが存在するか確認
+Test-Path ./docs/requirements.md
+```
+
+2. **絶対パスを使用**:
+```powershell
+# 相対パスではなく絶対パスで指定
+python main.py execute --phase design --issue 304 `
+  --requirements-doc "C:\Users\...\docs\requirements.md"
+```
+
+3. **ファイル名の確認**:
+```powershell
+# ディレクトリ内のファイル一覧を確認
+dir ./docs
+```
+
+### Q3-6: プリセット実行エラー（v2.1.0で追加 - Issue #319）
+
+**症状**:
+```bash
+$ python main.py execute --phase all --issue 304 --preset invalid-preset
+ERROR: Unknown preset: invalid-preset
+```
+
+**原因**:
+存在しないプリセット名を指定しています。
+
+**解決方法**:
+
+利用可能なプリセット名を確認して使用してください：
+
+```powershell
+# 利用可能なプリセット
+# - requirements-only: Phase 1のみ実行
+# - design-phase: Phase 0-2実行
+# - implementation-phase: Phase 0-4実行
+# - full-workflow: Phase 0-9全実行
+
+# 正しい例
+python main.py execute --phase all --issue 304 --preset design-phase
+```
+
 ---
 
 ## 4. BDDテストに関する問題
@@ -638,6 +736,7 @@ type .ai-workflow\issue-XXX\metadata.json
 
 ---
 
-**バージョン**: 1.9.0
+**バージョン**: 2.1.0
 **最終更新**: 2025-10-12
 **v1.9.0追加**: レジューム機能関連のトラブルシューティング（Q5-5, Q5-6, Q5-7）
+**v2.1.0追加**: フェーズ依存関係関連のトラブルシューティング（Q3-4, Q3-5, Q3-6）
