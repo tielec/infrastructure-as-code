@@ -123,7 +123,7 @@ aws ssm get-parameter --name /jenkins-infra/dev/jenkins/admin-password \
 |---------|------|-----------|
 | **Admin_Jobs** | システム管理 | backup-config（設定バックアップ）<br>restore-config（設定リストア）<br>ssm-parameter-backup（SSMパラメータバックアップ）<br>ssm-parameter-restore（SSMパラメータリストア）<br>github-webhooks-setting（GitHub Webhook設定）<br>github-deploykeys-setting（デプロイキー設定）<br>user-management（ユーザー管理） |
 | **Account_Setup** | アカウント管理 | account-self-activation（アカウント自己有効化） |
-| **AI_Workflow** | AI駆動開発自動化 | ai_workflow_orchestrator（9フェーズ自動開発ワークフロー） |
+| **AI_Workflow** | AI駆動開発自動化 | ai_workflow_orchestrator（10フェーズ自動開発ワークフロー） |
 | **Code_Quality_Checker** | コード品質分析 | pr-complexity-analyzer（PR複雑度分析）<br>rust-code-analysis（Rustコード解析） |
 | **Document_Generator** | ドキュメント生成 | auto-insert-doxygen-comment（Doxygenコメント自動挿入）<br>generate-doxygen-html（DoxygenHTML生成）<br>technical-docs-writer（技術文書作成）<br>pr-comment-builder（PRコメントビルダー） |
 | **Infrastructure_Management** | インフラ管理 | shutdown-jenkins-environment（Jenkins環境停止）<br>terminate-lambda-nat（Lambda NAT削除）<br>Ansible Playbook実行、Pulumi Stack管理 |
@@ -465,7 +465,7 @@ Jenkins UI > Infrastructure_Management > Shutdown-Environment-Scheduler > "Build
 
 #### AI_Workflow/ai_workflow_orchestrator
 
-**目的**: GitHub IssueからClaude AIが自動的に開発プロセスを実行（9フェーズワークフロー）
+**目的**: GitHub IssueからClaude AIが自動的に開発プロセスを実行（10フェーズワークフロー）
 
 **主な機能**:
 - Phase 0（Planning）: プロジェクト計画、実装戦略・テスト戦略の事前決定
@@ -477,12 +477,24 @@ Jenkins UI > Infrastructure_Management > Shutdown-Environment-Scheduler > "Build
 - Phase 6（Testing）: テスト実行と結果レポート
 - Phase 7（Documentation）: ドキュメント更新
 - Phase 8（Report）: 全体レポート生成
+- Phase 9（Evaluation）: プロジェクト評価
+
+**実行モード**:
+- **all_phases（推奨）**: 全フェーズを1つのステージで一括実行
+  - resume機能により、失敗したフェーズから自動再開
+  - 実行時間とコストを最適化
+- **single_phase（デバッグ用）**: 特定のフェーズのみ実行
 
 **パラメータ**:
 - `ISSUE_URL`: GitHub Issue URL（必須）
-- `START_PHASE`: 開始フェーズ（デフォルト: planning）
-  - 選択肢: planning, requirements, design, test_scenario, implementation, test_implementation, testing, documentation, report
-  - 推奨: `planning`（Phase 0から開始することで、後続フェーズの効率が向上）
+- `EXECUTION_MODE`: 実行モード（デフォルト: all_phases）
+  - `all_phases`: 全フェーズを一括実行（推奨）
+  - `single_phase`: 特定フェーズのみ実行（デバッグ用）
+- `START_PHASE`: 開始フェーズ（single_phaseモード時のみ有効、デフォルト: planning）
+  - 選択肢: planning, requirements, design, test_scenario, implementation, test_implementation, testing, documentation, report, evaluation
+- `FORCE_RESET`: 強制リセット（デフォルト: false）
+  - `true`: メタデータをクリアして最初から実行
+  - `false`: 通常実行（resume機能により途中から再開）
 - `GIT_COMMIT_USER_NAME`: Gitコミット時のユーザー名（デフォルト: AI Workflow Bot）
 - `GIT_COMMIT_USER_EMAIL`: Gitコミット時のメールアドレス（デフォルト: ai-workflow@example.com）
 - `DRY_RUN`: ドライラン実行（デフォルト: false）
@@ -492,14 +504,26 @@ Jenkins UI > Infrastructure_Management > Shutdown-Environment-Scheduler > "Build
 
 **実行例**:
 ```bash
-# Planning Phaseから全フェーズを実行（推奨）
-START_PHASE: planning
+# 全フェーズを一括実行（推奨）
+EXECUTION_MODE: all_phases
 ISSUE_URL: https://github.com/tielec/infrastructure-as-code/issues/332
 
-# Requirements Phaseから実行（Planning Phaseをスキップ）
+# 特定フェーズのみ実行（デバッグ用）
+EXECUTION_MODE: single_phase
 START_PHASE: requirements
 ISSUE_URL: https://github.com/tielec/infrastructure-as-code/issues/332
+
+# 失敗したワークフローを最初から実行し直す
+EXECUTION_MODE: all_phases
+FORCE_RESET: true
+ISSUE_URL: https://github.com/tielec/infrastructure-as-code/issues/332
 ```
+
+**resume機能**:
+- 途中で失敗した場合、次回実行時に失敗したフェーズから自動再開
+- メタデータ（.ai-workflow/issue-XXX/metadata.json）に記録された進捗を活用
+- 無駄な実行を避け、コストを削減
+- `FORCE_RESET=true` で最初から実行し直すことも可能
 
 **Planning Phase（Phase 0）の重要性**:
 - **実装戦略の事前決定**: CREATE/EXTEND/REFACTORを判断し、Phase 2以降の負荷を軽減

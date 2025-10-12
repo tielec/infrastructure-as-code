@@ -5,7 +5,11 @@
  *
  * パラメータ（Job DSLで定義）:
  * - ISSUE_URL: GitHub Issue URL（必須）
- * - START_PHASE: 開始フェーズ（デフォルト: requirements）
+ * - EXECUTION_MODE: 実行モード（デフォルト: all_phases）
+ *   - all_phases: 全フェーズを一括実行（推奨）
+ *   - single_phase: 特定フェーズのみ実行（デバッグ用）
+ * - START_PHASE: 開始フェーズ（single_phaseモード時のみ有効、デフォルト: planning）
+ * - FORCE_RESET: 強制リセット（デフォルト: false）
  * - DRY_RUN: ドライランモード（デフォルト: false）
  * - SKIP_REVIEW: レビュースキップ（デフォルト: false）
  * - MAX_RETRIES: 最大リトライ回数（デフォルト: 3）
@@ -20,6 +24,14 @@
  * - github-token: GitHub API用トークン（必須）
  *
  * 重要: パラメータ定義はこのファイルでは行いません（Job DSLで定義済み）
+ *
+ * 実行モードの説明:
+ * - all_phases: main.py execute --phase all を実行
+ *   - Phase 0-9を順次実行（planning → requirements → ... → evaluation）
+ *   - resume機能により、失敗したフェーズから自動再開
+ *   - --force-resetフラグで最初から実行し直すことも可能
+ * - single_phase: main.py execute --phase {START_PHASE} を実行
+ *   - 指定されたフェーズのみ実行（デバッグ用）
  */
 
 // Jenkins共有ライブラリ（将来実装）
@@ -165,30 +177,31 @@ pipeline {
             }
         }
 
-        stage('Phase 0: Planning') {
+        stage('Execute All Phases') {
             when {
-                expression {
-                    def phaseOrder = ['planning', 'requirements', 'design', 'test_scenario', 'implementation', 'test_implementation', 'testing', 'documentation', 'report']
-                    def startIndex = phaseOrder.indexOf(params.START_PHASE)
-                    def currentIndex = phaseOrder.indexOf('planning')
-                    return currentIndex >= startIndex
-                }
+                expression { params.EXECUTION_MODE == 'all_phases' }
             }
             steps {
                 script {
                     echo "========================================="
-                    echo "Stage: Phase 0 - Planning"
+                    echo "Stage: Execute All Phases"
                     echo "========================================="
+                    echo "Execution Mode: ${params.EXECUTION_MODE}"
+                    echo "Force Reset: ${params.FORCE_RESET}"
 
                     dir(env.WORKFLOW_DIR) {
                         if (params.DRY_RUN) {
-                            echo "[DRY RUN] Phase 0実行をスキップ"
+                            echo "[DRY RUN] 全フェーズ実行をスキップ"
                         } else {
-                            // Phase実行（execute + review統合）
+                            // main.py の --phase all を実行
+                            // resume機能により、失敗したフェーズから自動再開
+                            def forceResetFlag = params.FORCE_RESET ? '--force-reset' : ''
+
                             sh """
                                 python main.py execute \
-                                    --phase planning \
-                                    --issue ${env.ISSUE_NUMBER}
+                                    --phase all \
+                                    --issue ${env.ISSUE_NUMBER} \
+                                    ${forceResetFlag}
                             """
                         }
                     }
@@ -196,239 +209,26 @@ pipeline {
             }
         }
 
-        stage('Phase 1: Requirements') {
+        stage('Execute Single Phase') {
             when {
-                expression {
-                    def phaseOrder = ['planning', 'requirements', 'design', 'test_scenario', 'implementation', 'test_implementation', 'testing', 'documentation', 'report']
-                    def startIndex = phaseOrder.indexOf(params.START_PHASE)
-                    def currentIndex = phaseOrder.indexOf('requirements')
-                    return currentIndex >= startIndex
-                }
+                expression { params.EXECUTION_MODE == 'single_phase' }
             }
             steps {
                 script {
                     echo "========================================="
-                    echo "Stage: Phase 1 - Requirements Definition"
+                    echo "Stage: Execute Single Phase - ${params.START_PHASE}"
                     echo "========================================="
+                    echo "Execution Mode: ${params.EXECUTION_MODE}"
+                    echo "Target Phase: ${params.START_PHASE}"
 
                     dir(env.WORKFLOW_DIR) {
                         if (params.DRY_RUN) {
-                            echo "[DRY RUN] Phase 1実行をスキップ"
+                            echo "[DRY RUN] Phase ${params.START_PHASE}実行をスキップ"
                         } else {
-                            // Phase実行（execute + review統合）
+                            // 指定されたフェーズのみ実行
                             sh """
                                 python main.py execute \
-                                    --phase requirements \
-                                    --issue ${env.ISSUE_NUMBER}
-                            """
-                        }
-                    }
-                }
-            }
-        }
-
-        stage('Phase 2: Design') {
-            when {
-                expression {
-                    def phaseOrder = ['planning', 'requirements', 'design', 'test_scenario', 'implementation', 'test_implementation', 'testing', 'documentation', 'report']
-                    def startIndex = phaseOrder.indexOf(params.START_PHASE)
-                    def currentIndex = phaseOrder.indexOf('design')
-                    return currentIndex >= startIndex
-                }
-            }
-            steps {
-                script {
-                    echo "========================================="
-                    echo "Stage: Phase 2 - Detailed Design"
-                    echo "========================================="
-
-                    dir(env.WORKFLOW_DIR) {
-                        if (params.DRY_RUN) {
-                            echo "[DRY RUN] Phase 2実行をスキップ"
-                        } else {
-                            sh """
-                                python main.py execute \
-                                    --phase design \
-                                    --issue ${env.ISSUE_NUMBER}
-                            """
-                        }
-                    }
-                }
-            }
-        }
-
-        stage('Phase 3: Test Scenario') {
-            when {
-                expression {
-                    def phaseOrder = ['planning', 'requirements', 'design', 'test_scenario', 'implementation', 'test_implementation', 'testing', 'documentation', 'report']
-                    def startIndex = phaseOrder.indexOf(params.START_PHASE)
-                    def currentIndex = phaseOrder.indexOf('test_scenario')
-                    return currentIndex >= startIndex
-                }
-            }
-            steps {
-                script {
-                    echo "========================================="
-                    echo "Stage: Phase 3 - Test Scenario"
-                    echo "========================================="
-
-                    dir(env.WORKFLOW_DIR) {
-                        if (params.DRY_RUN) {
-                            echo "[DRY RUN] Phase 3実行をスキップ"
-                        } else {
-                            sh """
-                                python main.py execute \
-                                    --phase test_scenario \
-                                    --issue ${env.ISSUE_NUMBER}
-                            """
-                        }
-                    }
-                }
-            }
-        }
-
-        stage('Phase 4: Implementation') {
-            when {
-                expression {
-                    def phaseOrder = ['planning', 'requirements', 'design', 'test_scenario', 'implementation', 'test_implementation', 'testing', 'documentation', 'report']
-                    def startIndex = phaseOrder.indexOf(params.START_PHASE)
-                    def currentIndex = phaseOrder.indexOf('implementation')
-                    return currentIndex >= startIndex
-                }
-            }
-            steps {
-                script {
-                    echo "========================================="
-                    echo "Stage: Phase 4 - Implementation"
-                    echo "========================================="
-
-                    dir(env.WORKFLOW_DIR) {
-                        if (params.DRY_RUN) {
-                            echo "[DRY RUN] Phase 4実行をスキップ"
-                        } else {
-                            sh """
-                                python main.py execute \
-                                    --phase implementation \
-                                    --issue ${env.ISSUE_NUMBER}
-                            """
-                        }
-                    }
-                }
-            }
-        }
-
-        stage('Phase 5: Test Implementation') {
-            when {
-                expression {
-                    def phaseOrder = ['planning', 'requirements', 'design', 'test_scenario', 'implementation', 'test_implementation', 'testing', 'documentation', 'report']
-                    def startIndex = phaseOrder.indexOf(params.START_PHASE)
-                    def currentIndex = phaseOrder.indexOf('test_implementation')
-                    return currentIndex >= startIndex
-                }
-            }
-            steps {
-                script {
-                    echo "========================================="
-                    echo "Stage: Phase 5 - Test Implementation"
-                    echo "========================================="
-
-                    dir(env.WORKFLOW_DIR) {
-                        if (params.DRY_RUN) {
-                            echo "[DRY RUN] Phase 5実行をスキップ"
-                        } else {
-                            sh """
-                                python main.py execute \
-                                    --phase test_implementation \
-                                    --issue ${env.ISSUE_NUMBER}
-                            """
-                        }
-                    }
-                }
-            }
-        }
-
-        stage('Phase 6: Testing') {
-            when {
-                expression {
-                    def phaseOrder = ['planning', 'requirements', 'design', 'test_scenario', 'implementation', 'test_implementation', 'testing', 'documentation', 'report']
-                    def startIndex = phaseOrder.indexOf(params.START_PHASE)
-                    def currentIndex = phaseOrder.indexOf('testing')
-                    return currentIndex >= startIndex
-                }
-            }
-            steps {
-                script {
-                    echo "========================================="
-                    echo "Stage: Phase 6 - Testing"
-                    echo "========================================="
-
-                    dir(env.WORKFLOW_DIR) {
-                        if (params.DRY_RUN) {
-                            echo "[DRY RUN] Phase 6実行をスキップ"
-                        } else {
-                            sh """
-                                python main.py execute \
-                                    --phase testing \
-                                    --issue ${env.ISSUE_NUMBER}
-                            """
-                        }
-                    }
-                }
-            }
-        }
-
-        stage('Phase 7: Documentation') {
-            when {
-                expression {
-                    def phaseOrder = ['planning', 'requirements', 'design', 'test_scenario', 'implementation', 'test_implementation', 'testing', 'documentation', 'report']
-                    def startIndex = phaseOrder.indexOf(params.START_PHASE)
-                    def currentIndex = phaseOrder.indexOf('documentation')
-                    return currentIndex >= startIndex
-                }
-            }
-            steps {
-                script {
-                    echo "========================================="
-                    echo "Stage: Phase 7 - Documentation"
-                    echo "========================================="
-
-                    dir(env.WORKFLOW_DIR) {
-                        if (params.DRY_RUN) {
-                            echo "[DRY RUN] Phase 7実行をスキップ"
-                        } else {
-                            sh """
-                                python main.py execute \
-                                    --phase documentation \
-                                    --issue ${env.ISSUE_NUMBER}
-                            """
-                        }
-                    }
-                }
-            }
-        }
-
-        stage('Phase 8: Report') {
-            when {
-                expression {
-                    def phaseOrder = ['planning', 'requirements', 'design', 'test_scenario', 'implementation', 'test_implementation', 'testing', 'documentation', 'report']
-                    def startIndex = phaseOrder.indexOf(params.START_PHASE)
-                    def currentIndex = phaseOrder.indexOf('report')
-                    return currentIndex >= startIndex
-                }
-            }
-            steps {
-                script {
-                    echo "========================================="
-                    echo "Stage: Phase 8 - Report Generation"
-                    echo "========================================="
-
-                    dir(env.WORKFLOW_DIR) {
-                        if (params.DRY_RUN) {
-                            echo "[DRY RUN] Phase 8実行をスキップ"
-                        } else {
-                            sh """
-                                python main.py execute \
-                                    --phase report \
+                                    --phase ${params.START_PHASE} \
                                     --issue ${env.ISSUE_NUMBER}
                             """
                         }

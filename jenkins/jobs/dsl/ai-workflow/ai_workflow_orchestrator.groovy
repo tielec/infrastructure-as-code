@@ -21,7 +21,13 @@ GitHub IssueからPR作成まで、Claude AIが自動的に開発プロセスを
 6. Phase 6: テスト実行 (Testing)
 7. Phase 7: ドキュメント作成 (Documentation)
 8. Phase 8: レポート生成 (Report)
-9. PR作成
+9. Phase 9: プロジェクト評価 (Evaluation)
+
+【実行モード】
+- all_phases（推奨）: 全フェーズを1つのステージで一括実行
+  - resume機能により、失敗したフェーズから自動再開
+  - 実行時間とコストを最適化
+- single_phase（デバッグ用）: 特定のフェーズのみ実行
 
 【レビュー】
 各フェーズ完了後、AIが批判的思考レビューを実施：
@@ -29,13 +35,15 @@ GitHub IssueからPR作成まで、Claude AIが自動的に開発プロセスを
 - PASS_WITH_SUGGESTIONS: 改善提案あり、次フェーズへ進行
 - FAIL: リトライ（最大3回）
 
+【resume機能】
+途中で失敗した場合、次回実行時に失敗したフェーズから自動再開：
+- メタデータ（.ai-workflow/issue-XXX/metadata.json）に記録された進捗を活用
+- 無駄な実行を避け、コストを削減
+- --force-resetフラグで最初から実行し直すことも可能
+
 【コスト管理】
 - 1ワークフローあたり最大 $5.00 USD
 - 超過時は自動停止
-
-【現在の実装状況】
-MVP v1.0.0: ワークフロー基盤のみ実装
-Phase 1-6の自動実行は今後の拡張で実装予定
 
 【ドキュメント】
 - README: scripts/ai-workflow/README.md
@@ -53,13 +61,28 @@ GitHub Issue URL（必須）
 このIssueの内容を元に、要件定義から実装まで自動実行します。
         '''.stripIndent().trim())
 
-        choiceParam('START_PHASE', ['planning', 'requirements', 'design', 'test_scenario', 'implementation', 'test_implementation', 'testing', 'documentation', 'report'], '''
+        choiceParam('EXECUTION_MODE', ['all_phases', 'single_phase'], '''
+実行モード
+
+- all_phases: 全フェーズを一括実行（planning → report）（デフォルト、推奨）
+- single_phase: START_PHASEで指定したフェーズのみ実行（デバッグ用）
+
+デフォルト: all_phases
+
+【all_phasesモードの特徴】
+- resume機能: 途中で失敗した場合、次回実行時に失敗したフェーズから自動再開
+- コスト効率: 無駄な実行を避け、必要なフェーズのみ実行
+- Phase 0-9を順次実行（planning → requirements → ... → evaluation）
+        '''.stripIndent().trim())
+
+        choiceParam('START_PHASE', ['planning', 'requirements', 'design', 'test_scenario', 'implementation', 'test_implementation', 'testing', 'documentation', 'report', 'evaluation'], '''
 開始フェーズ
 
-ワークフローを開始するフェーズを指定します。
-途中からジョブを再開する場合に使用します。
+EXECUTION_MODEに応じて動作が変わります：
+- all_phases: 無視される（常にplanningから開始、resume機能により自動再開）
+- single_phase: このフェーズのみ実行
 
-デフォルト: planning（最初から実行）
+デフォルト: planning
         '''.stripIndent().trim())
 
         stringParam('GITHUB_REPOSITORY', 'tielec/infrastructure-as-code', '''
@@ -83,6 +106,18 @@ false: 通常実行（デフォルト）
 
 true: 各フェーズのAIレビューをスキップして次へ進む
 false: レビュー実施（デフォルト、本番推奨）
+        '''.stripIndent().trim())
+
+        booleanParam('FORCE_RESET', false, '''
+強制リセット
+
+全フェーズを最初から実行し直します。
+既存のメタデータとワークフロー成果物を削除して新規実行します。
+
+true: メタデータをクリアして最初から実行
+false: 通常実行（resume機能により途中から再開）（デフォルト）
+
+注意: 破壊的操作です。既存の進捗はすべて失われます。
         '''.stripIndent().trim())
 
         choiceParam('MAX_RETRIES', ['3', '1', '5', '10'], '''
