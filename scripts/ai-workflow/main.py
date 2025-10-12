@@ -1,5 +1,6 @@
 """AI Workflow - CLIエントリーポイント"""
 import click
+import json
 import os
 import sys
 import time
@@ -222,6 +223,115 @@ def _generate_failure_summary(
         'results': results,
         'total_duration': total_duration
     }
+
+
+def execute_phases_from(
+    start_phase: str,
+    issue: str,
+    repo_root: Path,
+    metadata_manager: MetadataManager,
+    claude_client: ClaudeAgentClient,
+    github_client: GitHubClient
+) -> Dict[str, Any]:
+    """
+    指定フェーズから全フェーズを順次実行（レジューム用）
+
+    Args:
+        start_phase: 開始フェーズ名
+        issue: Issue番号（文字列）
+        repo_root: リポジトリルートパス
+        metadata_manager: メタデータマネージャー
+        claude_client: Claude Agent SDKクライアント
+        github_client: GitHub APIクライアント
+
+    Returns:
+        Dict[str, Any]: 実行結果サマリー（execute_all_phases()と同じ形式）
+    """
+    # フェーズリスト定義
+    all_phases = [
+        'requirements',
+        'design',
+        'test_scenario',
+        'implementation',
+        'test_implementation',
+        'testing',
+        'documentation',
+        'report'
+    ]
+
+    # 開始フェーズのインデックス取得
+    if start_phase not in all_phases:
+        raise ValueError(f"Unknown phase: {start_phase}")
+
+    start_index = all_phases.index(start_phase)
+    phases = all_phases[start_index:]  # 開始フェーズから最後まで
+
+    # 初期化
+    results = {}
+    start_time = time.time()
+    total_phases = len(phases)
+
+    # ヘッダー表示
+    click.echo(f"\n{'='*60}")
+    click.echo(f"AI Workflow Resume Execution - Issue #{issue}")
+    click.echo(f"Starting from: {start_phase}")
+    click.echo(f"{'='*60}\n")
+
+    # フェーズループ（execute_all_phases()と同じロジック）
+    for i, phase in enumerate(phases, 1):
+        # 進捗表示
+        click.echo(f"\n{'='*60}")
+        click.echo(f"Progress: [{i}/{total_phases}] Phase: {phase}")
+        click.echo(f"{'='*60}\n")
+
+        try:
+            # フェーズ実行
+            phase_result = _execute_single_phase(
+                phase=phase,
+                issue=issue,
+                repo_root=repo_root,
+                metadata_manager=metadata_manager,
+                claude_client=claude_client,
+                github_client=github_client
+            )
+
+            # 結果記録
+            results[phase] = phase_result
+
+            # 成功チェック
+            if not phase_result.get('success', False):
+                # フェーズ失敗 → 停止
+                click.echo(f"\n[ERROR] Phase '{phase}' failed. Stopping workflow.")
+                return _generate_failure_summary(
+                    completed_phases=list(results.keys()),
+                    failed_phase=phase,
+                    error=phase_result.get('error', 'Unknown error'),
+                    results=results,
+                    start_time=start_time
+                )
+
+        except Exception as e:
+            # 例外発生 → 停止
+            click.echo(f"\n[ERROR] Exception in phase '{phase}': {e}")
+            import traceback
+            traceback.print_exc()
+
+            results[phase] = {'success': False, 'error': str(e)}
+            return _generate_failure_summary(
+                completed_phases=list(results.keys()),
+                failed_phase=phase,
+                error=str(e),
+                results=results,
+                start_time=start_time
+            )
+
+    # 成功サマリー生成
+    return _generate_success_summary(
+        phases=phases,
+        results=results,
+        start_time=start_time,
+        metadata_manager=metadata_manager
+    )
 
 
 def execute_all_phases(
@@ -500,7 +610,10 @@ def init(issue_url: str):
 @click.option('--issue', required=True, help='Issue number')
 @click.option('--git-user', help='Git commit user name')
 @click.option('--git-email', help='Git commit user email')
-def execute(phase: str, issue: str, git_user: str = None, git_email: str = None):
+@click.option('--force-reset', is_flag=True, default=False,
+              help='Clear metadata and restart from Phase 1')
+def execute(phase: str, issue: str, git_user: str = None, git_email: str = None,
+            force_reset: bool = False):
     """フェーズ実行"""
     # CLIオプションが指定されている場合、環境変数に設定（最優先）
     if git_user:
@@ -578,31 +691,128 @@ def execute(phase: str, issue: str, git_user: str = None, git_email: str = None)
     claude_client = ClaudeAgentClient(working_dir=repo_root)
     github_client = GitHubClient(token=github_token, repository=github_repository)
 
-    # ━━━ 新規追加: 全フェーズ実行の分岐 ━━━
+    # ━━━ 新規追加: レジューム機能統合 ━━━
     if phase == 'all':
         click.echo('[INFO] Starting all phases execution')
-        try:
-            result = execute_all_phases(
-                issue=issue,
-                repo_root=repo_root,
-                metadata_manager=metadata_manager,
-                claude_client=claude_client,
-                github_client=github_client
-            )
 
-            if result['success']:
-                click.echo('[OK] All phases completed successfully')
-                sys.exit(0)
-            else:
-                click.echo(f"[ERROR] Workflow failed at phase: {result['failed_phase']}")
-                click.echo(f"[ERROR] Error: {result['error']}")
+        # ResumeManagerインスタンス生成
+        from utils.resume import ResumeManager
+        resume_manager = ResumeManager(metadata_manager)
+
+        # --force-reset フラグチェック
+        if force_reset:
+            click.echo('[INFO] --force-reset specified. Restarting from Phase 1...')
+            resume_manager.reset()
+
+            # 新規ワークフローとして実行
+            try:
+                result = execute_all_phases(
+                    issue=issue,
+                    repo_root=repo_root,
+                    metadata_manager=metadata_manager,
+                    claude_client=claude_client,
+                    github_client=github_client
+                )
+
+                if result['success']:
+                    click.echo('[OK] All phases completed successfully')
+                    sys.exit(0)
+                else:
+                    click.echo(f"[ERROR] Workflow failed at phase: {result['failed_phase']}")
+                    click.echo(f"[ERROR] Error: {result['error']}")
+                    sys.exit(1)
+
+            except Exception as e:
+                click.echo(f'[ERROR] {e}')
+                import traceback
+                traceback.print_exc()
                 sys.exit(1)
 
+        # レジューム可能性チェック
+        try:
+            can_resume = resume_manager.can_resume()
+        except json.JSONDecodeError as e:
+            # メタデータJSON破損
+            click.echo('[WARNING] metadata.json is corrupted. Starting as new workflow.')
+            click.echo(f'[DEBUG] Error: {e}')
+            can_resume = False
         except Exception as e:
-            click.echo(f'[ERROR] {e}')
+            # その他のエラー
+            click.echo(f'[ERROR] Failed to check resume status: {e}')
             import traceback
             traceback.print_exc()
             sys.exit(1)
+
+        if can_resume:
+            resume_phase = resume_manager.get_resume_phase()
+
+            if resume_phase is None:
+                # 全フェーズ完了済み
+                click.echo('[INFO] All phases are already completed.')
+                click.echo('[INFO] To re-run, use --force-reset flag.')
+                sys.exit(0)
+
+            # レジューム実行
+            status = resume_manager.get_status_summary()
+            click.echo('[INFO] Existing workflow detected.')
+            if status['completed']:
+                click.echo(f"[INFO] Completed phases: {', '.join(status['completed'])}")
+            if status['failed']:
+                click.echo(f"[INFO] Failed phases: {', '.join(status['failed'])}")
+            if status['in_progress']:
+                click.echo(f"[INFO] In-progress phases: {', '.join(status['in_progress'])}")
+            click.echo(f"[INFO] Resuming from phase: {resume_phase}")
+
+            # レジューム開始フェーズから実行
+            try:
+                result = execute_phases_from(
+                    start_phase=resume_phase,
+                    issue=issue,
+                    repo_root=repo_root,
+                    metadata_manager=metadata_manager,
+                    claude_client=claude_client,
+                    github_client=github_client
+                )
+
+                if result['success']:
+                    click.echo('[OK] All phases completed successfully')
+                    sys.exit(0)
+                else:
+                    click.echo(f"[ERROR] Workflow failed at phase: {result['failed_phase']}")
+                    click.echo(f"[ERROR] Error: {result['error']}")
+                    sys.exit(1)
+
+            except Exception as e:
+                click.echo(f'[ERROR] {e}')
+                import traceback
+                traceback.print_exc()
+                sys.exit(1)
+
+        else:
+            # 新規ワークフロー（メタデータ不存在 or 全フェーズpending）
+            click.echo('[INFO] Starting new workflow.')
+            try:
+                result = execute_all_phases(
+                    issue=issue,
+                    repo_root=repo_root,
+                    metadata_manager=metadata_manager,
+                    claude_client=claude_client,
+                    github_client=github_client
+                )
+
+                if result['success']:
+                    click.echo('[OK] All phases completed successfully')
+                    sys.exit(0)
+                else:
+                    click.echo(f"[ERROR] Workflow failed at phase: {result['failed_phase']}")
+                    click.echo(f"[ERROR] Error: {result['error']}")
+                    sys.exit(1)
+
+            except Exception as e:
+                click.echo(f'[ERROR] {e}')
+                import traceback
+                traceback.print_exc()
+                sys.exit(1)
     # ━━━ 新規追加ここまで ━━━
 
     # ━━━ 既存の個別フェーズ実行 ━━━
