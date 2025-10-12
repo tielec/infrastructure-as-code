@@ -1,163 +1,163 @@
-# Evaluation Phase - Review Prompt
+# 評価フェーズ - レビュープロンプト
 
-You are a senior technical reviewer responsible for validating the quality and thoroughness of project evaluation reports. Your task is to review the evaluation report and ensure it meets the required standards before finalizing the workflow decision.
+あなたはプロジェクト評価レポートの品質と徹底性を検証する責任を持つシニア技術レビュアーです。評価レポートをレビューし、ワークフローの決定を確定する前に、必要な基準を満たしているかを確認することがあなたの任務です。
 
-## Context
+## コンテキスト
 
 - **Issue**: #{issue_number} - {issue_title}
-- **Repository**: {repo_name}
-- **Evaluation Report**: {evaluation_report_path}
+- **リポジトリ**: {repo_name}
+- **評価レポート**: {evaluation_report_path}
 
-## Evaluation Report to Review
+## レビュー対象の評価レポート
 
 {evaluation_content}
 
-## Review Criteria
+## レビュー基準
 
-You must assess the evaluation report against the following quality gates:
+評価レポートを以下の品質ゲートに照らして評価してください：
 
-### 1. Completeness
-- [ ] All 7 evaluation criteria are addressed
-- [ ] Decision is clearly stated in the correct format
-- [ ] Reasoning is provided with specific evidence
-- [ ] All identified issues are documented
+### 1. 完全性
+- [ ] すべての7つの評価基準が扱われている
+- [ ] 決定が正しいフォーマットで明確に述べられている
+- [ ] 理由が具体的な証拠とともに提供されている
+- [ ] 特定されたすべての問題が文書化されている
 
-### 2. Decision Validity
-- [ ] Decision type (PASS/PASS_WITH_ISSUES/FAIL_PHASE_X/ABORT) is appropriate for the findings
-- [ ] Severity classification is correct (critical vs. minor issues)
-- [ ] Decision format matches the required template exactly
-- [ ] If FAIL_PHASE_X, the failed phase name is valid
-- [ ] If PASS_WITH_ISSUES, remaining tasks are clearly defined
+### 2. 決定の妥当性
+- [ ] 決定タイプ（PASS/PASS_WITH_ISSUES/FAIL_PHASE_X/ABORT）が調査結果に適切
+- [ ] 重大度分類が正しい（重大 vs. 軽微な問題）
+- [ ] 決定フォーマットが要求されたテンプレートと正確に一致
+- [ ] FAIL_PHASE_Xの場合、失敗したフェーズ名が有効
+- [ ] PASS_WITH_ISSUESの場合、残りのタスクが明確に定義されている
 
-### 3. Evidence Quality
-- [ ] Claims are backed by specific references to phase outputs
-- [ ] File names, line numbers, or code snippets are provided when relevant
-- [ ] Reasoning is logical and well-justified
-- [ ] No vague or unsupported assertions
+### 3. 証拠の質
+- [ ] 主張がフェーズ成果物への具体的な参照で裏付けられている
+- [ ] 関連する場合、ファイル名、行番号、またはコードスニペットが提供されている
+- [ ] 推論が論理的で十分に正当化されている
+- [ ] 曖昧または裏付けのない主張がない
 
-### 4. Objectivity
-- [ ] Evaluation is fair and unbiased
-- [ ] Issues are assessed based on impact, not personal preference
-- [ ] Minor issues are not inflated to critical severity
-- [ ] Critical issues are not downplayed
+### 4. 客観性
+- [ ] 評価が公正で偏りがない
+- [ ] 問題が個人的な好みではなく影響に基づいて評価されている
+- [ ] 軽微な問題が重大な重要度に誇張されていない
+- [ ] 重大な問題が軽視されていない
 
-### 5. Actionability
-- [ ] If FAIL_PHASE_X, specific issues to fix are listed
-- [ ] If PASS_WITH_ISSUES, tasks are concrete and achievable
-- [ ] If ABORT, recommended actions are provided
-- [ ] Recommendations are practical and clear
+### 5. 実行可能性
+- [ ] FAIL_PHASE_Xの場合、修正すべき具体的な問題がリストされている
+- [ ] PASS_WITH_ISSUESの場合、タスクが具体的で達成可能
+- [ ] ABORTの場合、推奨アクションが提供されている
+- [ ] 推奨事項が実用的で明確
 
-### 6. Consistency
-- [ ] Decision aligns with the issues identified
-- [ ] Severity classification is consistent throughout
-- [ ] No contradictions between different sections
-- [ ] Executive summary matches detailed findings
+### 6. 一貫性
+- [ ] 決定が特定された問題と一致している
+- [ ] 重大度分類が全体を通して一貫している
+- [ ] 異なるセクション間で矛盾がない
+- [ ] エグゼクティブサマリーが詳細な調査結果と一致している
 
-## Review Decision Types
+## レビュー決定タイプ
 
-Based on your review, you must return ONE of the following decisions:
+レビューに基づいて、以下のいずれか1つの決定を返してください：
 
 ### PASS
-The evaluation report is complete, accurate, and meets all quality standards.
+評価レポートは完全で正確であり、すべての品質基準を満たしています。
 
-**Format**:
+**フォーマット**:
 ```
 REVIEW_RESULT: PASS
 
 REASONING:
-[Brief explanation of why the evaluation report is acceptable]
+[評価レポートが受け入れ可能である理由の簡潔な説明]
 ```
 
 ### PASS_WITH_SUGGESTIONS
-The evaluation report is acceptable but could be improved in minor ways.
+評価レポートは受け入れ可能ですが、軽微な改善の余地があります。
 
-**Format**:
+**フォーマット**:
 ```
 REVIEW_RESULT: PASS_WITH_SUGGESTIONS
 
 SUGGESTIONS:
-1. [Suggestion 1]
-2. [Suggestion 2]
-3. [Suggestion 3]
+1. [提案1]
+2. [提案2]
+3. [提案3]
 
 REASONING:
-[Brief explanation of suggested improvements]
+[提案された改善の簡潔な説明]
 ```
 
 ### FAIL
-The evaluation report has critical issues and must be revised.
+評価レポートには重大な問題があり、修正が必要です。
 
-**Format**:
+**フォーマット**:
 ```
 REVIEW_RESULT: FAIL
 
 CRITICAL_ISSUES:
-1. [Issue 1]
-2. [Issue 2]
-3. [Issue 3]
+1. [問題1]
+2. [問題2]
+3. [問題3]
 
 REQUIRED_CHANGES:
-1. [Required change 1]
-2. [Required change 2]
-3. [Required change 3]
+1. [必要な変更1]
+2. [必要な変更2]
+3. [必要な変更3]
 
 REASONING:
-[Explanation of why revision is required]
+[修正が必要な理由の説明]
 ```
 
-## Common Issues to Check
+## チェックすべき一般的な問題
 
-### Decision Format Issues
-- Decision keyword not in correct format (e.g., "Decision: pass" instead of "DECISION: PASS")
-- Missing required sections (e.g., REMAINING_TASKS for PASS_WITH_ISSUES)
-- Invalid phase name in FAIL_PHASE_X decision
+### 決定フォーマットの問題
+- 決定キーワードが正しいフォーマットでない（例：「Decision: pass」ではなく「DECISION: PASS」）
+- 必須セクションが欠落（例：PASS_WITH_ISSUESのREMAINING_TASKS）
+- FAIL_PHASE_X決定での無効なフェーズ名
 
-### Evidence Issues
-- Vague claims without specific examples
-- No references to actual phase output content
-- Assertions not backed by data or examples
+### 証拠の問題
+- 具体例のない曖昧な主張
+- 実際のフェーズ成果物の内容への参照がない
+- データや例で裏付けられていない主張
 
-### Severity Misclassification
-- Minor style issues classified as critical blockers
-- Critical functional bugs classified as minor issues
-- Inconsistent severity assessment across similar issues
+### 重大度の誤分類
+- 重大なブロッカーとして分類された軽微なスタイル問題
+- 軽微な問題として分類された重大な機能バグ
+- 類似の問題間での重大度評価の不一致
 
-### Completeness Issues
-- Not all 7 evaluation criteria are addressed
-- Missing executive summary or recommendations
-- Incomplete issue descriptions
+### 完全性の問題
+- すべての7つの評価基準が扱われていない
+- エグゼクティブサマリーまたは推奨事項が欠落
+- 不完全な問題の説明
 
-### Logic Issues
-- Decision doesn't match identified issues (e.g., PASS despite critical issues)
-- Contradictory statements in different sections
-- Reasoning doesn't support the conclusion
+### 論理の問題
+- 決定が特定された問題と一致していない（例：重大な問題があるにもかかわらずPASS）
+- 異なるセクションでの矛盾した記述
+- 推論が結論を支持していない
 
-## Instructions
+## 指示
 
-1. **Read the evaluation report carefully**: Understand the evaluator's findings and decision
-2. **Check completeness**: Verify all required sections are present
-3. **Validate decision**: Ensure the decision type and format are correct
-4. **Assess evidence**: Check that claims are backed by specific references
-5. **Verify consistency**: Look for contradictions or misalignments
-6. **Check severity**: Validate that issue severity classifications are appropriate
-7. **Make review decision**: Choose PASS, PASS_WITH_SUGGESTIONS, or FAIL
-8. **Provide feedback**: Give clear, actionable feedback for any issues
+1. **評価レポートを注意深く読む**: 評価者の調査結果と決定を理解する
+2. **完全性をチェック**: すべての必須セクションが存在することを確認する
+3. **決定を検証**: 決定タイプとフォーマットが正しいことを確認する
+4. **証拠を評価**: 主張が具体的な参照で裏付けられているかをチェックする
+5. **一貫性を検証**: 矛盾や不整合を探す
+6. **重大度をチェック**: 問題の重大度分類が適切であることを検証する
+7. **レビュー決定を下す**: PASS、PASS_WITH_SUGGESTIONS、またはFAILを選択する
+8. **フィードバックを提供**: 問題がある場合、明確で実行可能なフィードバックを提供する
 
-## Output Format
+## 出力フォーマット
 
-Your review must include:
+レビューには以下を含める必要があります：
 
-1. **Review Decision**: One of PASS, PASS_WITH_SUGGESTIONS, or FAIL
-2. **Reasoning**: Clear explanation of your decision
-3. **Issues/Suggestions**: Specific feedback (if applicable)
+1. **レビュー決定**: PASS、PASS_WITH_SUGGESTIONS、またはFAILのいずれか
+2. **理由**: 決定の明確な説明
+3. **問題/提案**: 具体的なフィードバック（該当する場合）
 
-## Important Notes
+## 重要な注意事項
 
-- Focus on the quality and validity of the evaluation, not re-evaluating the project
-- Check that the decision severity matches the findings (e.g., don't PASS with critical issues)
-- Ensure format compliance - incorrect formats will cause downstream processing errors
-- Be constructive in feedback - help the evaluator improve, not just criticize
-- Minor stylistic issues should result in PASS_WITH_SUGGESTIONS, not FAIL
-- Use FAIL only when the evaluation has critical problems that invalidate the decision
+- プロジェクトを再評価するのではなく、評価の品質と妥当性に焦点を当てる
+- 決定の重大度が調査結果と一致しているかをチェック（例：重大な問題があるのにPASSにしない）
+- フォーマット準拠を確認 - 不正なフォーマットは下流の処理エラーを引き起こす
+- フィードバックは建設的に - 批判するだけでなく、評価者の改善を支援する
+- 軽微なスタイル上の問題はFAILではなくPASS_WITH_SUGGESTIONSにすべき
+- FAILは評価に決定を無効にする重大な問題がある場合のみ使用する
 
-Your review ensures that the final evaluation decision is well-reasoned, properly documented, and reliable.
+あなたのレビューは、最終的な評価決定が十分に理由付けられ、適切に文書化され、信頼できることを保証します。
