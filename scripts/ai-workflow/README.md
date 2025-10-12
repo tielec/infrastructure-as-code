@@ -9,7 +9,7 @@ Claude Agent SDKを使った7フェーズの自動開発ワークフロー
 ### 主な特徴
 
 - **Claude Pro Max活用**: Claude Code headless modeで自律的にタスクを実行
-- **9フェーズワークフロー**: Phase 0（プロジェクト計画） → Phase 1（要件定義） → Phase 2（設計） → Phase 3（テストシナリオ） → Phase 4（実装：実コードのみ） → **Phase 5（テストコード実装：テストコードのみ）** → Phase 6（テスト実行） → Phase 7（ドキュメント） → Phase 8（レポート）
+- **10フェーズワークフロー**: Phase 0（プロジェクト計画） → Phase 1（要件定義） → Phase 2（設計） → Phase 3（テストシナリオ） → Phase 4（実装：実コードのみ） → **Phase 5（テストコード実装：テストコードのみ）** → Phase 6（テスト実行） → Phase 7（ドキュメント） → Phase 8（レポート） → **Phase 9（プロジェクト評価）**
 - **Phase 0 (Planning)**: プロジェクトマネージャとして実装戦略・テスト戦略を事前決定し、後続フェーズの効率を最大化
   - Jenkins統合: START_PHASEパラメータで`planning`を選択可能（デフォルト値）
   - 全Phase連携: Planning Documentが後続の全Phase（Requirements～Report）で自動参照される
@@ -160,7 +160,7 @@ docker run --rm \
 - **戦略情報**: metadata.jsonのdesign_decisionsに自動保存
 - **Phase 2での活用**: Phase 2は実装戦略決定をスキップし、Phase 0の戦略を参照
 
-**Phase 1以降の成果物**:
+**Phase 1-8の成果物**:
 - **要件定義書**: `.ai-workflow/issue-304/01_requirements/output/requirements.md`
 - **実行ログ**: `.ai-workflow/issue-304/01_requirements/execute/`
   - `agent_log_1.md` - エージェント実行ログ（Markdown形式）
@@ -171,6 +171,16 @@ docker run --rm \
   - 成果物（要件定義書）がコメント投稿される
   - レビュー結果とフィードバックがコメント投稿される
 - **メタデータ**: `.ai-workflow/issue-304/metadata.json`
+
+**Phase 9（プロジェクト評価）の成果物**:
+- **評価レポート**: `.ai-workflow/issue-304/09_evaluation/output/evaluation_report.md`
+  - Phase 1-8の全成果物を総合評価
+  - 4つの判定タイプ（PASS/PASS_WITH_ISSUES/FAIL_PHASE_X/ABORT）のいずれかを決定
+- **判定別のアクション**:
+  - **PASS**: ワークフロー完了、成功サマリーをGitHub Issueに投稿
+  - **PASS_WITH_ISSUES**: 残タスクを新しいGitHub Issueとして自動作成、ワークフロー完了
+  - **FAIL_PHASE_X**: metadata.jsonをPhase Xに巻き戻し、Phase Xから再実行可能な状態にする
+  - **ABORT**: GitHub IssueとPull Requestをクローズし、ワークフロー中止
 
 ## Jenkins統合
 
@@ -340,6 +350,19 @@ jenkins-cli build AI_Workflow/ai_workflow_orchestrator \
   - 完了済みフェーズ、失敗フェーズ、進行中フェーズ、未実行フェーズを明示
   - レジューム開始フェーズを明確に表示
 
+### ✅ 完了（v2.0.0 Phase 9実装 - Issue #362）
+- [x] Phase 9: プロジェクト評価フェーズ（phases/evaluation.py）
+  - Phase 1-8の全成果物を統合評価
+  - 4つの判定タイプ（PASS/PASS_WITH_ISSUES/FAIL_PHASE_X/ABORT）による後続処理の自動決定
+- [x] 判定別アクション実装
+  - **PASS**: ワークフロー正常完了
+  - **PASS_WITH_ISSUES**: 残タスクを新GitHub Issueとして自動作成
+  - **FAIL_PHASE_X**: metadata.jsonをPhase Xに巻き戻し、再実行準備
+  - **ABORT**: Issue/PRクローズ、ワークフロー中止
+- [x] MetadataManager拡張（rollback_to_phase, backup_metadata等）
+- [x] GitHubClient拡張（Issue自動作成、クローズ処理）
+- [x] 評価レポート生成（evaluation_report.md）
+
 ### 🚧 開発中（v2.0.0以降）
 - [ ] GitHub Webhook連携
 - [ ] レビュー基準カスタマイズ
@@ -380,8 +403,11 @@ scripts/ai-workflow/
 │   │                            # - Phase 5で実装されたテストコードを実行
 │   ├── documentation.py         # Phase 7: ドキュメント（旧Phase 6）
 │   │                            # - Planning Document参照ロジック追加
-│   └── report.py                # Phase 8: レポート（旧Phase 7）
-│                                # - Planning Document参照ロジック追加
+│   ├── report.py                # Phase 8: レポート（旧Phase 7）
+│   │                            # - Planning Document参照ロジック追加
+│   └── evaluation.py            # Phase 9: プロジェクト評価（v2.0.0で追加）
+│                                # - Phase 1-8の全成果物を統合評価
+│                                # - 4つの判定タイプによる後続処理の自動決定
 ├── prompts/
 │   ├── planning/
 │   │   ├── execute.txt          # 計画書生成プロンプト
@@ -399,6 +425,10 @@ scripts/ai-workflow/
 │   │   ├── execute.txt          # テストコード実装プロンプト
 │   │   ├── review.txt           # テストコードレビュープロンプト
 │   │   └── revise.txt           # テストコード修正プロンプト
+│   ├── evaluation/              # Phase 9: プロジェクト評価プロンプト（v2.0.0で追加）
+│   │   ├── execute.txt          # 評価実行プロンプト
+│   │   ├── review.txt           # 評価レビュープロンプト
+│   │   └── revise.txt           # 評価修正プロンプト
 │   └── ...                      # 他のフェーズのプロンプト（すべてPlanning Document参照追加）
 ├── reviewers/
 │   └── critical_thinking.py     # クリティカルシンキングレビュー（未実装）
@@ -485,7 +515,7 @@ python main.py execute --phase <phase_name> --issue <issue_number> [--git-user <
 - `--git-email <email>`: Gitコミット時のメールアドレス（オプション）
 
 **フェーズ名:**
-- `all`: **全フェーズ一括実行（Phase 1-8）** ← 新機能（v1.8.0）
+- `all`: **全フェーズ一括実行（Phase 1-9）** ← 新機能（v1.8.0）
 - `planning`: プロジェクト計画（Phase 0）
 - `requirements`: 要件定義（Phase 1）
 - `design`: 設計（Phase 2）
@@ -495,6 +525,7 @@ python main.py execute --phase <phase_name> --issue <issue_number> [--git-user <
 - `testing`: テスト実行（Phase 6）
 - `documentation`: ドキュメント（Phase 7）
 - `report`: レポート（Phase 8）
+- `evaluation`: プロジェクト評価（Phase 9）
 
 **例:**
 ```bash
@@ -514,12 +545,13 @@ python main.py execute --phase requirements --issue 304 \
 ```
 
 **`--phase all` の特徴:**
-- Phase 1（requirements）からPhase 8（report）まで順次自動実行
+- Phase 1（requirements）からPhase 9（evaluation）まで順次自動実行
 - 各フェーズ完了後、自動的に次フェーズに進行
 - 途中でフェーズが失敗した場合、それ以降のフェーズは実行されず停止
 - 実行サマリーで全フェーズの結果、総実行時間、総コストを表示
 - Phase 0（planning）は含まれない（事前に個別実行を推奨）
 - **レジューム機能**: 途中で失敗した場合、次回実行時に失敗したフェーズから自動的に再開
+- **Phase 9（evaluation）**: Phase 1-8完了後に自動実行され、プロジェクト全体を評価
 
 ### レジューム機能（v1.9.0で追加 - Issue #360）
 
@@ -737,8 +769,9 @@ pytest tests/unit/
 
 ---
 
-**バージョン**: 1.8.0
+**バージョン**: 2.0.0
 **最終更新**: 2025-10-12
 **Phase 0実装**: Issue #313で追加（プロジェクトマネージャ役割）
 **Phase 5実装**: Issue #324で追加（実装フェーズとテストコード実装フェーズの分離）
 **Init時PR作成**: Issue #355で追加（Init実行時にドラフトPR自動作成）
+**Phase 9実装**: Issue #362で追加（プロジェクト評価フェーズ、4つの判定タイプによる後続処理自動決定）
