@@ -20,13 +20,13 @@ from typing import Dict, Any, List, Optional
 class ClaudeContentParser:
     """Claude Messages APIを使用したコンテンツ解析"""
 
-    def __init__(self, api_key: Optional[str] = None, model: str = "claude-sonnet-4-20250514"):
+    def __init__(self, api_key: Optional[str] = None, model: str = "claude-3-5-haiku-20241022"):
         """
         初期化
 
         Args:
             api_key: Anthropic API Key（省略時は環境変数から取得）
-            model: 使用するClaudeモデル（デフォルト: claude-sonnet-4-20250514）
+            model: 使用するClaudeモデル（デフォルト: claude-3-5-haiku-20241022）
 
         Raises:
             ValueError: API キーが指定されず、環境変数も設定されていない場合

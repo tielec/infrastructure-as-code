@@ -2,7 +2,7 @@
 
 # Claude API設定
 claude:
-  model: "claude-sonnet-4-5-20250929"
+  model: "claude-3-5-haiku-20241022"
   max_tokens_per_request: 4096
   temperature: 1.0
   timeout: 120

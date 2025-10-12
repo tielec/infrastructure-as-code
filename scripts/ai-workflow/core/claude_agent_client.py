@@ -15,14 +15,16 @@ from claude_agent_sdk import query, ClaudeAgentOptions
 class ClaudeAgentClient:
     """Claude Agent SDK クライアント"""
 
-    def __init__(self, working_dir: Optional[Path] = None):
+    def __init__(self, working_dir: Optional[Path] = None, model: str = "claude-3-5-haiku-20241022"):
         """
         初期化
 
         Args:
             working_dir: 作業ディレクトリ（省略時はカレントディレクトリ）
+            model: 使用するClaudeモデル（デフォルト: claude-3-5-haiku-20241022）
         """
         self.working_dir = working_dir or Path.cwd()
+        self.model = model
 
     async def execute_task(
         self,
@@ -51,7 +53,8 @@ class ClaudeAgentClient:
             system_prompt=system_prompt,
             max_turns=max_turns,
             cwd=str(self.working_dir),
-            permission_mode='acceptEdits'  # 編集を自動的に受け入れる
+            permission_mode='acceptEdits',  # 編集を自動的に受け入れる
+            model=self.model  # モデルを指定
         )
 
         messages = []

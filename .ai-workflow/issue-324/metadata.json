@@ -1,0 +1,84 @@
+{
+  "issue_number": "324",
+  "issue_url": "https://github.com/tielec/infrastructure-as-code/issues/324",
+  "issue_title": "Issue #324",
+  "workflow_version": "1.0.0",
+  "current_phase": "report",
+  "design_decisions": {
+    "implementation_strategy": "EXTEND",
+    "test_strategy": "INTEGRATION_BDD",
+    "test_code_strategy": "CREATE_TEST"
+  },
+  "cost_tracking": {
+    "total_input_tokens": 0,
+    "total_output_tokens": 0,
+    "total_cost_usd": 0.0
+  },
+  "phases": {
+    "planning": {
+      "status": "completed",
+      "retry_count": 0,
+      "started_at": "2025-10-12T00:35:11.589527Z",
+      "completed_at": "2025-10-12T00:40:25.113037Z",
+      "review_result": "PASS"
+    },
+    "requirements": {
+      "status": "completed",
+      "retry_count": 0,
+      "started_at": "2025-10-12T00:40:32.080178Z",
+      "completed_at": "2025-10-12T00:45:32.129139Z",
+      "review_result": "PASS_WITH_SUGGESTIONS"
+    },
+    "design": {
+      "status": "completed",
+      "retry_count": 0,
+      "started_at": "2025-10-12T00:45:38.829884Z",
+      "completed_at": "2025-10-12T00:51:32.690013Z",
+      "review_result": "PASS_WITH_SUGGESTIONS"
+    },
+    "test_scenario": {
+      "status": "completed",
+      "retry_count": 0,
+      "started_at": "2025-10-12T00:51:42.738243Z",
+      "completed_at": "2025-10-12T00:57:03.674744Z",
+      "review_result": "PASS_WITH_SUGGESTIONS"
+    },
+    "implementation": {
+      "status": "completed",
+      "retry_count": 0,
+      "started_at": "2025-10-12T00:57:10.279072Z",
+      "completed_at": "2025-10-12T01:01:18.944833Z",
+      "review_result": "PASS_WITH_SUGGESTIONS"
+    },
+    "test_implementation": {
+      "status": "completed",
+      "retry_count": 0,
+      "started_at": "2025-10-12T01:01:25.359990Z",
+      "completed_at": "2025-10-12T01:11:22.449245Z",
+      "review_result": "PASS_WITH_SUGGESTIONS"
+    },
+    "testing": {
+      "status": "completed",
+      "retry_count": 0,
+      "started_at": "2025-10-12T01:11:28.875171Z",
+      "completed_at": "2025-10-12T01:16:12.920039Z",
+      "review_result": "PASS"
+    },
+    "documentation": {
+      "status": "completed",
+      "retry_count": 0,
+      "started_at": "2025-10-12T01:16:19.418284Z",
+      "completed_at": "2025-10-12T01:22:14.726326Z",
+      "review_result": "PASS"
+    },
+    "report": {
+      "status": "completed",
+      "retry_count": 0,
+      "started_at": "2025-10-12T01:22:21.203784Z",
+      "completed_at": "2025-10-12T01:26:09.287284Z",
+      "review_result": "PASS_WITH_SUGGESTIONS"
+    }
+  },
+  "created_at": "2025-10-12T00:35:07.948216Z",
+  "updated_at": "2025-10-12T01:26:09.287294Z"
+}
