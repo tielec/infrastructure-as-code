@@ -623,6 +623,7 @@ class BasePhase(ABC):
             bool: 成功/失敗
 
         Notes:
+            0. ━━━ 新規追加: 依存関係チェック ━━━
             1. フェーズステータスをin_progressに更新
             2. GitHubに進捗報告
             3. リトライループ（MAX_RETRIES=3）:
@@ -639,6 +640,35 @@ class BasePhase(ABC):
         review_result = None
 
         try:
+            # ━━━ 新規追加: 依存関係チェック ━━━
+            from utils.dependency_validator import validate_phase_dependencies, DependencyError
+
+            # CLIで指定されたフラグをメタデータから取得（将来拡張用）
+            # 現時点では、main.pyでCLI実行前にチェック済みのため、ここでは再チェックしない
+            # ただし、BasePhase.run()が直接呼ばれる場合（テスト等）に備えて防御的にチェック
+            try:
+                # デフォルトでは依存関係チェックを実施（CLIでスキップされていない限り）
+                # メタデータに skip_dependency_check フラグが記録されているか確認
+                skip_check = self.metadata.data.get('skip_dependency_check', False)
+                ignore_violations = self.metadata.data.get('ignore_dependencies', False)
+
+                validate_phase_dependencies(
+                    phase_name=self.phase_name,
+                    metadata=self.metadata,
+                    skip_check=skip_check,
+                    ignore_violations=ignore_violations
+                )
+            except DependencyError as e:
+                # 依存関係違反
+                print(f"[ERROR] {e.message}")
+                self.update_phase_status(status='failed')
+                self.post_progress(
+                    status='failed',
+                    details=f'Dependency check failed: {e.message}'
+                )
+                return False
+            # ━━━ 新規追加ここまで ━━━
+
             # GitManagerを初期化
             from core.git_manager import GitManager
             git_manager = GitManager(

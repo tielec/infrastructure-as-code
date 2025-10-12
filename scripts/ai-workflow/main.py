@@ -614,9 +614,42 @@ def init(issue_url: str):
 @click.option('--git-email', help='Git commit user email')
 @click.option('--force-reset', is_flag=True, default=False,
               help='Clear metadata and restart from Phase 1')
+@click.option('--skip-dependency-check', is_flag=True, default=False,
+              help='Skip dependency check and force phase execution')
+@click.option('--ignore-dependencies', is_flag=True, default=False,
+              help='Show warnings for dependency violations but continue execution')
+@click.option('--preset', type=click.Choice(['requirements-only', 'design-phase',
+                                              'implementation-phase', 'full-workflow']),
+              help='Execute predefined phase preset')
 def execute(phase: str, issue: str, git_user: str = None, git_email: str = None,
-            force_reset: bool = False):
+            force_reset: bool = False,
+            skip_dependency_check: bool = False,
+            ignore_dependencies: bool = False,
+            preset: str = None):
     """フェーズ実行"""
+    # ━━━ 新規追加: オプション排他性チェック ━━━
+    if preset and phase != 'all':
+        click.echo('[ERROR] --preset and --phase cannot be used together. Please use only one.')
+        sys.exit(1)
+
+    if skip_dependency_check and ignore_dependencies:
+        click.echo('[ERROR] --skip-dependency-check and --ignore-dependencies are mutually exclusive.')
+        sys.exit(1)
+    # ━━━ 新規追加ここまで ━━━
+
+    # ━━━ 新規追加: プリセット処理 ━━━
+    if preset:
+        # プリセットに応じてphaseを上書き
+        preset_mapping = {
+            'requirements-only': 'requirements',
+            'design-phase': 'design',
+            'implementation-phase': 'implementation',
+            'full-workflow': 'all'
+        }
+        phase = preset_mapping[preset]
+        click.echo(f'[INFO] Using preset: {preset} (executing phase: {phase})')
+    # ━━━ 新規追加ここまで ━━━
+
     # CLIオプションが指定されている場合、環境変数に設定（最優先）
     if git_user:
         os.environ['GIT_COMMIT_USER_NAME'] = git_user
@@ -815,6 +848,31 @@ def execute(phase: str, issue: str, git_user: str = None, git_email: str = None,
                 import traceback
                 traceback.print_exc()
                 sys.exit(1)
+    # ━━━ 新規追加ここまで ━━━
+
+    # ━━━ 新規追加: 個別フェーズ実行時の依存関係チェック ━━━
+    # (phase != 'all' の場合)
+    if phase != 'all':
+        from utils.dependency_validator import validate_phase_dependencies, DependencyError
+
+        try:
+            # 依存関係チェック
+            validate_phase_dependencies(
+                phase_name=phase,
+                metadata=metadata_manager,
+                skip_check=skip_dependency_check,
+                ignore_violations=ignore_dependencies
+            )
+        except DependencyError as e:
+            # 依存関係違反
+            click.echo(f'[ERROR] {e.message}')
+            click.echo('[INFO] Hint: Use --skip-dependency-check to bypass this check.')
+            click.echo('[INFO] Hint: Use --ignore-dependencies to show warnings only.')
+            sys.exit(1)
+        except Exception as e:
+            # その他のエラー
+            click.echo(f'[ERROR] Dependency check failed: {e}')
+            sys.exit(1)
     # ━━━ 新規追加ここまで ━━━
 
     # ━━━ 既存の個別フェーズ実行 ━━━
