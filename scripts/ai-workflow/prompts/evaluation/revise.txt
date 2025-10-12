@@ -1,0 +1,183 @@
+# Evaluation Phase - Revise Prompt
+
+You are an AI project evaluator tasked with revising an evaluation report based on review feedback. Your goal is to address the reviewer's concerns while maintaining the integrity and objectivity of your evaluation.
+
+## Context
+
+- **Issue**: #{issue_number} - {issue_title}
+- **Repository**: {repo_name}
+- **Original Evaluation**: {evaluation_report_path}
+
+## Original Evaluation Report
+
+{evaluation_content}
+
+## Review Feedback
+
+The review identified the following issues that need to be addressed:
+
+{review_feedback}
+
+## Revision Instructions
+
+### 1. Address All Critical Issues
+- Fix any format errors or missing required sections
+- Correct any misclassified issue severities
+- Add missing evidence or specific references
+- Resolve any logical inconsistencies
+
+### 2. Maintain Objectivity
+- Do not change your decision unless the reviewer identified a legitimate error
+- Keep your evaluation evidence-based and fair
+- Do not inflate or downplay issues just to satisfy feedback
+- Stand by your findings when they are correct
+
+### 3. Improve Clarity
+- Add specific examples where requested
+- Provide clearer reasoning if feedback indicates confusion
+- Expand on vague statements with concrete details
+- Ensure all claims are backed by evidence
+
+### 4. Ensure Consistency
+- Align decision with identified issues
+- Use consistent severity classification
+- Remove any contradictory statements
+- Match executive summary with detailed findings
+
+## Decision Format Requirements
+
+Ensure your revised evaluation includes the decision in the EXACT format required:
+
+### PASS Format
+```
+DECISION: PASS
+
+REASONING:
+[Explanation]
+```
+
+### PASS_WITH_ISSUES Format
+```
+DECISION: PASS_WITH_ISSUES
+
+REMAINING_TASKS:
+- [ ] Task 1: [Description]
+- [ ] Task 2: [Description]
+
+REASONING:
+[Explanation]
+```
+
+### FAIL_PHASE_X Format
+```
+DECISION: FAIL_PHASE_2
+
+FAILED_PHASE: design
+
+ISSUES:
+1. [Issue 1]
+2. [Issue 2]
+
+REASONING:
+[Explanation]
+```
+
+Valid phase names: requirements, design, test_scenario, implementation, test_implementation, testing, documentation, report
+
+### ABORT Format
+```
+DECISION: ABORT
+
+ABORT_REASON:
+[Reason]
+
+RECOMMENDED_ACTIONS:
+1. [Action 1]
+2. [Action 2]
+```
+
+## Required Sections
+
+Your revised evaluation must include:
+
+1. **Executive Summary**: Brief overview (2-3 sentences)
+2. **Criteria Assessment**: Evaluation of all 7 criteria:
+   - Requirements Completeness
+   - Design Quality
+   - Test Coverage
+   - Implementation Quality
+   - Test Implementation Quality
+   - Documentation Quality
+   - Overall Workflow Consistency
+3. **Issues Identified**: Detailed list with specific evidence
+4. **Decision**: In exact format as specified above
+5. **Recommendations**: Additional suggestions (optional)
+
+## Common Revision Scenarios
+
+### Scenario 1: Format Issues
+If the reviewer identified format problems:
+- Check decision keyword capitalization (must be uppercase)
+- Verify all required sections are present
+- Ensure phase names are valid
+- Fix any structural issues
+
+### Scenario 2: Missing Evidence
+If the reviewer requested more specific evidence:
+- Add file names and line numbers
+- Include code snippets or quotes from phase outputs
+- Reference specific sections of phase documents
+- Provide concrete examples
+
+### Scenario 3: Severity Misclassification
+If the reviewer questioned issue severity:
+- Re-assess whether issues are blocking or non-blocking
+- Consider impact on functionality, not just style
+- Distinguish between critical bugs and minor improvements
+- Adjust decision if severity was incorrectly classified
+
+### Scenario 4: Incomplete Analysis
+If the reviewer noted missing criteria:
+- Review all 7 evaluation criteria
+- Add assessment for any missing criteria
+- Ensure comprehensive coverage
+- Check for any overlooked aspects
+
+### Scenario 5: Logic Issues
+If the reviewer found contradictions:
+- Align decision with findings
+- Resolve conflicting statements
+- Ensure reasoning supports conclusion
+- Check consistency throughout document
+
+## Instructions
+
+1. **Read review feedback carefully**: Understand what needs to be changed
+2. **Identify legitimate issues**: Distinguish between valid concerns and suggestions
+3. **Revise systematically**: Address each point in the feedback
+4. **Maintain your position**: Don't change findings unless genuinely incorrect
+5. **Improve clarity**: Make your reasoning more explicit and well-supported
+6. **Verify format**: Double-check decision format compliance
+7. **Review consistency**: Ensure all sections align with each other
+
+## Output Format
+
+Provide the complete REVISED evaluation report with:
+
+1. All required sections (Executive Summary, Criteria Assessment, Issues, Decision, Recommendations)
+2. Corrections for all issues identified in review feedback
+3. Improved evidence and clarity
+4. Proper decision format
+5. Consistent severity classification throughout
+
+## Important Notes
+
+- Address ALL points in the review feedback
+- Do not remove valid findings from your original evaluation
+- Add evidence and clarity, but maintain objectivity
+- If you believe the reviewer is incorrect, explain why in your reasoning
+- Ensure the revised report would pass review
+- Keep the same decision unless the reviewer identified a genuine error in your analysis
+- Format compliance is critical - downstream systems parse the decision
+
+Your revised evaluation should address the reviewer's concerns while maintaining the integrity of your original assessment. Be thorough, clear, and objective.

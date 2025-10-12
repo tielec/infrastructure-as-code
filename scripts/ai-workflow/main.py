@@ -20,6 +20,7 @@ from phases.test_implementation import TestImplementationPhase
 from phases.testing import TestingPhase
 from phases.documentation import DocumentationPhase
 from phases.report import ReportPhase
+from phases.evaluation import EvaluationPhase
 
 
 def _get_repo_root() -> Path:
@@ -66,7 +67,8 @@ def _execute_single_phase(
         'test_implementation': TestImplementationPhase,
         'testing': TestingPhase,
         'documentation': DocumentationPhase,
-        'report': ReportPhase
+        'report': ReportPhase,
+        'evaluation': EvaluationPhase
     }
 
     phase_class = phase_classes.get(phase)
@@ -606,7 +608,7 @@ def init(issue_url: str):
 @click.option('--phase', required=True,
               type=click.Choice(['all', 'planning', 'requirements', 'design', 'test_scenario',
                                 'implementation', 'test_implementation', 'testing',
-                                'documentation', 'report']))
+                                'documentation', 'report', 'evaluation']))
 @click.option('--issue', required=True, help='Issue number')
 @click.option('--git-user', help='Git commit user name')
 @click.option('--git-email', help='Git commit user email')
@@ -826,7 +828,8 @@ def execute(phase: str, issue: str, git_user: str = None, git_email: str = None,
         'test_implementation': TestImplementationPhase,
         'testing': TestingPhase,
         'documentation': DocumentationPhase,
-        'report': ReportPhase
+        'report': ReportPhase,
+        'evaluation': EvaluationPhase
     }
 
     phase_class = phase_classes.get(phase)

@@ -29,7 +29,8 @@ class BasePhase(ABC):
         'test_implementation': '05',
         'testing': '06',
         'documentation': '07',
-        'report': '08'
+        'report': '08',
+        'evaluation': '09'
     }
 
     def __init__(

@@ -511,6 +511,245 @@ class GitHubClient:
         # プレースホルダーを置換
         return template.format(issue_number=issue_number, branch_name=branch_name)
 
+    def create_issue_from_evaluation(
+        self,
+        issue_number: int,
+        remaining_tasks: List[Dict[str, Any]],
+        evaluation_report_path: str
+    ) -> Dict[str, Any]:
+        """
+        評価結果から新しい Issue を作成
+
+        Args:
+            issue_number: 元の Issue 番号
+            remaining_tasks: 残タスクリスト
+                - task: str - タスク内容
+                - phase: str - 発見されたフェーズ
+                - priority: str - 優先度（高/中/低）
+            evaluation_report_path: 評価レポートのパス
+
+        Returns:
+            Dict[str, Any]:
+                - success: bool
+                - issue_url: Optional[str]
+                - issue_number: Optional[int]
+                - error: Optional[str]
+        """
+        try:
+            # Issue タイトル
+            title = f"[FOLLOW-UP] Issue #{issue_number} - 残タスク"
+
+            # Issue 本文を生成
+            body_parts = []
+            body_parts.append("## 概要\n")
+            body_parts.append(f"AI Workflow Issue #{issue_number} の実装完了後に発見された残タスクです。\n")
+            body_parts.append("\n## 残タスク一覧\n")
+
+            for task in remaining_tasks:
+                task_text = task.get('task', '')
+                phase = task.get('phase', 'unknown')
+                priority = task.get('priority', '中')
+                body_parts.append(f"- [ ] {task_text}（Phase: {phase}、優先度: {priority}）\n")
+
+            body_parts.append("\n## 関連\n")
+            body_parts.append(f"- 元Issue: #{issue_number}\n")
+            body_parts.append(f"- Evaluation Report: `{evaluation_report_path}`\n")
+            body_parts.append("\n---\n")
+            body_parts.append("*自動生成: AI Workflow Phase 9 (Evaluation)*\n")
+
+            body = ''.join(body_parts)
+
+            # Issue 作成
+            new_issue = self.repository.create_issue(
+                title=title,
+                body=body,
+                labels=['enhancement', 'ai-workflow-follow-up']
+            )
+
+            return {
+                'success': True,
+                'issue_url': new_issue.html_url,
+                'issue_number': new_issue.number,
+                'error': None
+            }
+
+        except GithubException as e:
+            error_message = f"GitHub API error: {e.status} - {e.data.get('message', 'Unknown error')}"
+            print(f"[ERROR] Issue作成失敗: {error_message}")
+
+            return {
+                'success': False,
+                'issue_url': None,
+                'issue_number': None,
+                'error': error_message
+            }
+
+        except Exception as e:
+            print(f"[ERROR] Issue作成中に予期しないエラー: {e}")
+            return {
+                'success': False,
+                'issue_url': None,
+                'issue_number': None,
+                'error': str(e)
+            }
+
+    def close_issue_with_reason(
+        self,
+        issue_number: int,
+        reason: str
+    ) -> Dict[str, Any]:
+        """
+        Issue をクローズ理由付きでクローズ
+
+        Args:
+            issue_number: Issue番号
+            reason: クローズ理由
+
+        Returns:
+            Dict[str, Any]:
+                - success: bool
+                - error: Optional[str]
+        """
+        try:
+            issue = self.get_issue(issue_number)
+
+            # コメントを投稿
+            comment_body = "## ⚠️ ワークフロー中止\n\n"
+            comment_body += "プロジェクト評価の結果、致命的な問題が発見されたため、ワークフローを中止します。\n\n"
+            comment_body += "### 中止理由\n\n"
+            comment_body += f"{reason}\n\n"
+            comment_body += "### 推奨アクション\n\n"
+            comment_body += "- アーキテクチャの再設計\n"
+            comment_body += "- スコープの見直し\n"
+            comment_body += "- 技術選定の再検討\n\n"
+            comment_body += "---\n"
+            comment_body += "*AI Workflow Phase 9 (Evaluation) - ABORT*\n"
+
+            issue.create_comment(comment_body)
+
+            # Issue をクローズ
+            issue.edit(state='closed')
+
+            print(f"[INFO] Issue #{issue_number} をクローズしました")
+
+            return {
+                'success': True,
+                'error': None
+            }
+
+        except GithubException as e:
+            error_message = f"GitHub API error: {e.status} - {e.data.get('message', 'Unknown error')}"
+            print(f"[ERROR] Issueクローズ失敗: {error_message}")
+
+            return {
+                'success': False,
+                'error': error_message
+            }
+
+        except Exception as e:
+            print(f"[ERROR] Issueクローズ中に予期しないエラー: {e}")
+            return {
+                'success': False,
+                'error': str(e)
+            }
+
+    def close_pull_request(
+        self,
+        pr_number: int,
+        comment: str
+    ) -> Dict[str, Any]:
+        """
+        Pull Request をクローズ
+
+        Args:
+            pr_number: PR番号
+            comment: クローズコメント
+
+        Returns:
+            Dict[str, Any]:
+                - success: bool
+                - error: Optional[str]
+        """
+        try:
+            pr = self.repository.get_pull(pr_number)
+
+            # コメントを投稿
+            pr.create_issue_comment(comment)
+
+            # PR をクローズ
+            pr.edit(state='closed')
+
+            print(f"[INFO] PR #{pr_number} をクローズしました")
+
+            return {
+                'success': True,
+                'error': None
+            }
+
+        except GithubException as e:
+            error_message = f"GitHub API error: {e.status} - {e.data.get('message', 'Unknown error')}"
+            print(f"[ERROR] PRクローズ失敗: {error_message}")
+
+            return {
+                'success': False,
+                'error': error_message
+            }
+
+        except Exception as e:
+            print(f"[ERROR] PRクローズ中に予期しないエラー: {e}")
+            return {
+                'success': False,
+                'error': str(e)
+            }
+
+    def get_pull_request_number(
+        self,
+        issue_number: int
+    ) -> Optional[int]:
+        """
+        Issue番号から関連するPR番号を取得
+
+        Args:
+            issue_number: Issue番号
+
+        Returns:
+            Optional[int]: PR番号（見つからない場合は None）
+        """
+        try:
+            # Issue を取得
+            issue = self.get_issue(issue_number)
+
+            # Issue のタイムライン情報から PR を検索
+            timeline = issue.get_timeline()
+            for event in timeline:
+                if event.event == 'cross-referenced' and hasattr(event.source, 'issue'):
+                    # PRが見つかった場合
+                    source_issue = event.source.issue
+                    if hasattr(source_issue, 'pull_request') and source_issue.pull_request:
+                        return source_issue.number
+
+            # ブランチ名から PR を検索
+            branch_name = f"ai-workflow/issue-{issue_number}"
+            owner = self.repository.owner.login
+            full_head = f"{owner}:{branch_name}"
+
+            pulls = self.repository.get_pulls(
+                state='all',
+                head=full_head,
+                base='main'
+            )
+
+            for pr in pulls:
+                return pr.number
+
+            # 見つからない場合
+            print(f"[WARNING] Issue #{issue_number} に関連するPRが見つかりませんでした")
+            return None
+
+        except Exception as e:
+            print(f"[WARNING] PR番号の取得に失敗: {e}")
+            return None
+
     def close(self):
         """
         GitHub APIクライアントをクローズ
