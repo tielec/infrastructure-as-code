@@ -423,8 +423,12 @@ python main.py init --issue-url https://github.com/tielec/infrastructure-as-code
 ### `execute` - フェーズ実行
 
 ```bash
-python main.py execute --phase <phase_name> --issue <issue_number>
+python main.py execute --phase <phase_name> --issue <issue_number> [--git-user <username>] [--git-email <email>]
 ```
+
+**オプション:**
+- `--git-user <username>`: Gitコミット時のユーザー名（オプション）
+- `--git-email <email>`: Gitコミット時のメールアドレス（オプション）
 
 **フェーズ名:**
 - `all`: **全フェーズ一括実行（Phase 1-8）** ← 新機能（v1.8.0）
@@ -448,6 +452,11 @@ python main.py execute --phase planning --issue 304
 
 # Phase 1から開始する場合
 python main.py execute --phase requirements --issue 304
+
+# Gitコミット時のユーザー名とメールアドレスを指定して実行
+python main.py execute --phase requirements --issue 304 \
+  --git-user "AI Workflow Bot" \
+  --git-email "ai-workflow@example.com"
 ```
 
 **`--phase all` の特徴:**

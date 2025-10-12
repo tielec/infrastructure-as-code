@@ -483,6 +483,8 @@ Jenkins UI > Infrastructure_Management > Shutdown-Environment-Scheduler > "Build
 - `START_PHASE`: 開始フェーズ（デフォルト: planning）
   - 選択肢: planning, requirements, design, test_scenario, implementation, test_implementation, testing, documentation, report
   - 推奨: `planning`（Phase 0から開始することで、後続フェーズの効率が向上）
+- `GIT_COMMIT_USER_NAME`: Gitコミット時のユーザー名（デフォルト: AI Workflow Bot）
+- `GIT_COMMIT_USER_EMAIL`: Gitコミット時のメールアドレス（デフォルト: ai-workflow@example.com）
 - `DRY_RUN`: ドライラン実行（デフォルト: false）
 - `SKIP_REVIEW`: レビュースキップ（デフォルト: false）
 - `MAX_RETRIES`: 最大リトライ回数（デフォルト: 3）
