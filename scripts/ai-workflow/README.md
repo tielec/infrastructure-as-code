@@ -94,7 +94,30 @@ docker run --rm \
   python main.py execute --phase planning --issue 304
 ```
 
-### 4. Phase 1（要件定義）実行
+### 4. 全フェーズ一括実行（オプション）
+
+```bash
+# 全フェーズ（Phase 1-8）を一括実行
+docker run --rm \
+  -e CLAUDE_CODE_OAUTH_TOKEN="${CLAUDE_CODE_OAUTH_TOKEN}" \
+  -e GITHUB_TOKEN="${GITHUB_TOKEN}" \
+  -e GITHUB_REPOSITORY="${GITHUB_REPOSITORY}" \
+  -e OPENAI_API_KEY="${OPENAI_API_KEY}" \
+  -v "$(pwd):/workspace" \
+  -w /workspace/scripts/ai-workflow \
+  ai-workflow:v1.1.0 \
+  python main.py execute --phase all --issue 304
+```
+
+**推奨実行順序:**
+1. Phase 0（planning）を個別実行して実装戦略を決定
+2. `--phase all`で全フェーズを一括実行
+
+**注意:**
+- 全フェーズ実行には30-60分程度かかります
+- Phase 0（planning）は`--phase all`に含まれないため、事前に個別実行を推奨
+
+### 5. Phase 1（要件定義）実行（個別実行の場合）
 
 ```bash
 # Phase 1を実行
@@ -108,7 +131,7 @@ docker run --rm \
   python main.py execute --phase requirements --issue 304
 ```
 
-### 5. 結果確認
+### 6. 結果確認
 
 **Phase 0（プロジェクト計画）の成果物**:
 - **プロジェクト計画書**: `.ai-workflow/issue-304/00_planning/output/planning.md`
@@ -404,6 +427,7 @@ python main.py execute --phase <phase_name> --issue <issue_number>
 ```
 
 **フェーズ名:**
+- `all`: **全フェーズ一括実行（Phase 1-8）** ← 新機能（v1.8.0）
 - `planning`: プロジェクト計画（Phase 0）
 - `requirements`: 要件定義（Phase 1）
 - `design`: 設計（Phase 2）
@@ -416,12 +440,22 @@ python main.py execute --phase <phase_name> --issue <issue_number>
 
 **例:**
 ```bash
+# 全フェーズを一括実行（Phase 1-8を順次自動実行）
+python main.py execute --phase all --issue 304
+
 # Phase 0から開始する場合（推奨）
 python main.py execute --phase planning --issue 304
 
 # Phase 1から開始する場合
 python main.py execute --phase requirements --issue 304
 ```
+
+**`--phase all` の特徴:**
+- Phase 1（requirements）からPhase 8（report）まで順次自動実行
+- 各フェーズ完了後、自動的に次フェーズに進行
+- 途中でフェーズが失敗した場合、それ以降のフェーズは実行されず停止
+- 実行サマリーで全フェーズの結果、総実行時間、総コストを表示
+- Phase 0（planning）は含まれない（事前に個別実行を推奨）
 
 ## Docker環境
 
