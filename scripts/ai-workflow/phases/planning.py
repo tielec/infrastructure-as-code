@@ -11,7 +11,7 @@ GitHub Issue情報から以下を策定:
 from pathlib import Path
 from typing import Dict, Any, List
 from .base_phase import BasePhase
-from core.content_parser import ClaudeContentParser
+from core.content_parser import ContentParser
 
 
 class PlanningPhase(BasePhase):
@@ -24,8 +24,8 @@ class PlanningPhase(BasePhase):
             *args,
             **kwargs
         )
-        # Claude Messages APIベースのコンテンツパーサーを初期化
-        self.content_parser = ClaudeContentParser()
+        # OpenAI APIベースのコンテンツパーサーを初期化
+        self.content_parser = ContentParser()
 
     def execute(self) -> Dict[str, Any]:
         """

@@ -1,13 +1,12 @@
 """content_parser.pyのテストコード
 
 外部ファイル化されたプロンプトが正しく読み込まれ、
-Claude Messages APIが正常に動作することを検証します。
+OpenAI APIが正常に動作することを検証します。
 
 環境変数の要件:
-- ANTHROPIC_API_KEY: Anthropic Messages API用のAPIキー（必須）
+- OPENAI_API_KEY: OpenAI API用のAPIキー（必須）
 
-注意: CLAUDE_CODE_OAUTH_TOKEN (OAuth トークン) は使用できません。
-Anthropic API Key は https://console.anthropic.com/settings/keys で取得できます。
+OpenAI API Key は https://platform.openai.com/api-keys で取得できます。
 """
 import sys
 import os
@@ -16,7 +15,7 @@ from pathlib import Path
 # プロジェクトルートをパスに追加
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from core.content_parser import ClaudeContentParser
+from core.content_parser import ContentParser
 
 
 def test_extract_design_decisions():
@@ -31,8 +30,8 @@ def test_extract_design_decisions():
 
 ## 実装戦略: CREATE
 
-新規機能として`ClaudeContentParser`クラスを作成します。
-正規表現ベースの脆弱な判定を、Claude Messages APIによる自然言語理解に置き換えます。
+新規機能として`ContentParser`クラスを作成します。
+正規表現ベースの脆弱な判定を、OpenAI APIによる自然言語理解に置き換えます。
 
 ## テスト戦略: UNIT_INTEGRATION
 
@@ -45,9 +44,9 @@ def test_extract_design_decisions():
     """
 
     try:
-        # ClaudeContentParserインスタンス作成
-        parser = ClaudeContentParser()
-        print(f"[OK] ClaudeContentParser初期化成功")
+        # ContentParserインスタンス作成
+        parser = ContentParser()
+        print(f"[OK] ContentParser初期化成功")
 
         # 戦略判断を抽出
         print(f"\n[INFO] 戦略判断の抽出を開始...")
@@ -100,9 +99,9 @@ def test_parse_review_result():
     ]
 
     try:
-        # ClaudeContentParserインスタンス作成
-        parser = ClaudeContentParser()
-        print(f"[OK] ClaudeContentParser初期化成功")
+        # ContentParserインスタンス作成
+        parser = ContentParser()
+        print(f"[OK] ContentParser初期化成功")
 
         # レビュー結果を解析
         print(f"\n[INFO] レビュー結果の解析を開始...")
@@ -135,7 +134,7 @@ def test_prompt_file_loading():
     print("="*60)
 
     try:
-        parser = ClaudeContentParser()
+        parser = ContentParser()
 
         # プロンプトファイルのパスを確認
         prompt_dir = parser.prompt_dir
@@ -184,25 +183,24 @@ def test_prompt_file_loading():
 def main():
     """全テストを実行"""
     print("\n" + "="*60)
-    print("ClaudeContentParser テストスイート")
+    print("ContentParser テストスイート")
     print("="*60)
 
     # 環境変数の確認
-    api_key = os.environ.get("ANTHROPIC_API_KEY")
+    api_key = os.environ.get("OPENAI_API_KEY")
 
     print("\n[INFO] 環境変数の確認:")
     if api_key:
-        print(f"  ✓ ANTHROPIC_API_KEY: 設定済み (先頭10文字: {api_key[:10]}...)")
+        print(f"  ✓ OPENAI_API_KEY: 設定済み (先頭10文字: {api_key[:10]}...)")
     else:
-        print(f"  ✗ ANTHROPIC_API_KEY: 未設定")
+        print(f"  ✗ OPENAI_API_KEY: 未設定")
 
     if not api_key:
-        print("\n[ERROR] 環境変数 ANTHROPIC_API_KEY が設定されていません！")
-        print("Anthropic API Key は https://console.anthropic.com/settings/keys で取得できます。")
-        print("\n注意: CLAUDE_CODE_OAUTH_TOKEN (OAuth トークン) は使用できません。")
+        print("\n[ERROR] 環境変数 OPENAI_API_KEY が設定されていません！")
+        print("OpenAI API Key は https://platform.openai.com/api-keys で取得できます。")
         sys.exit(1)
 
-    print(f"\n[INFO] ANTHROPIC_API_KEY が使用されます")
+    print(f"\n[INFO] OPENAI_API_KEY が使用されます")
 
     results = []
 

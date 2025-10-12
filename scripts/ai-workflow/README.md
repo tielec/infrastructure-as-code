@@ -37,7 +37,14 @@ Claude Agent SDKを使った7フェーズの自動開発ワークフロー
 
 ```bash
 # Claude Code OAuth Token（~/.claude/.credentials.jsonから抽出）
+# 用途: Claude Agent SDK（メインタスク - design.md生成など）
+# モデル: Claude Code Pro Max デフォルト（Sonnet 4.5）
 export CLAUDE_CODE_OAUTH_TOKEN="sk-ant-oat01-..."
+
+# OpenAI API Key
+# 用途: ContentParser（軽量タスク - レビュー結果パース、戦略抽出）
+# モデル: gpt-4o-mini（安価・高速）
+export OPENAI_API_KEY="sk-proj-..."
 
 # GitHub Personal Access Token
 export GITHUB_TOKEN="ghp_..."
@@ -47,6 +54,11 @@ export GITHUB_REPOSITORY="tielec/infrastructure-as-code"
 ```
 
 **OAuth Token取得方法**: [DOCKER_AUTH_SETUP.md](DOCKER_AUTH_SETUP.md) を参照
+
+**OpenAI API Key取得方法**:
+1. [OpenAI Platform](https://platform.openai.com/api-keys) にアクセス
+2. "Create new secret key" をクリック
+3. キーをコピーして`OPENAI_API_KEY`に設定
 
 **GitHub Token作成方法**:
 1. GitHub Settings → Developer settings → Personal access tokens → Tokens (classic)

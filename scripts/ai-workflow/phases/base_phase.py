@@ -13,7 +13,7 @@ from typing import Optional, Dict, Any, List
 from core.metadata_manager import MetadataManager
 from core.claude_agent_client import ClaudeAgentClient
 from core.github_client import GitHubClient
-from core.content_parser import ClaudeContentParser
+from core.content_parser import ContentParser
 
 
 class BasePhase(ABC):
@@ -56,8 +56,8 @@ class BasePhase(ABC):
         self.claude = claude_client
         self.github = github_client
 
-        # Claude Messages APIベースのコンテンツパーサーを初期化
-        self.content_parser = ClaudeContentParser()
+        # OpenAI APIベースのコンテンツパーサーを初期化
+        self.content_parser = ContentParser()
 
         # プロンプトディレクトリ（scripts/ai-workflow/prompts/{phase_name}/）
         self.prompts_dir = working_dir / 'prompts' / phase_name

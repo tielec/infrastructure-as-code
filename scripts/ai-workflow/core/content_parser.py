@@ -1,56 +1,51 @@
-"""Claude APIベースのコンテンツ解析モジュール
+"""OpenAI APIベースのコンテンツ解析モジュール
 
-正規表現による脆弱な判定を、Claude Messages APIによる
+正規表現による脆弱な判定を、OpenAI GPT-4o miniによる
 自然言語理解ベースの高精度な抽出に置き換える。
 
 使用例:
-    >>> from core.content_parser import ClaudeContentParser
-    >>> parser = ClaudeContentParser()
+    >>> from core.content_parser import ContentParser
+    >>> parser = ContentParser()
     >>> decisions = parser.extract_design_decisions(planning_content)
     >>> print(decisions)
     {'implementation_strategy': 'CREATE', 'test_strategy': 'UNIT_INTEGRATION', ...}
 """
 import os
 import json
-import anthropic
+from openai import OpenAI
 from pathlib import Path
 from typing import Dict, Any, List, Optional
 
 
-class ClaudeContentParser:
-    """Claude Messages APIを使用したコンテンツ解析"""
+class ContentParser:
+    """OpenAI GPT-4o miniを使用したコンテンツ解析"""
 
-    def __init__(self, api_key: Optional[str] = None, model: str = "claude-3-5-haiku-20241022"):
+    def __init__(self, api_key: Optional[str] = None, model: str = "gpt-4o-mini"):
         """
         初期化
 
         Args:
-            api_key: Anthropic API Key（省略時は環境変数から取得）
-            model: 使用するClaudeモデル（デフォルト: claude-3-5-haiku-20241022）
+            api_key: OpenAI API Key（省略時は環境変数から取得）
+            model: 使用するOpenAIモデル（デフォルト: gpt-4o-mini）
 
         Raises:
             ValueError: API キーが指定されず、環境変数も設定されていない場合
         """
         # API キーの優先順位:
         # 1. 引数で明示的に指定されたキー
-        # 2. ANTHROPIC_API_KEY 環境変数
-        #
-        # 注意: CLAUDE_CODE_OAUTH_TOKEN (OAuth トークン) は使用できません。
-        # ClaudeContentParser は anthropic.Anthropic() クライアントを使用しており、
-        # これは Anthropic API Key (sk-ant-api03-...) を必要とします。
-        resolved_api_key = api_key or os.environ.get("ANTHROPIC_API_KEY")
+        # 2. OPENAI_API_KEY 環境変数
+        resolved_api_key = api_key or os.environ.get("OPENAI_API_KEY")
 
         if not resolved_api_key:
             raise ValueError(
-                "Anthropic API キーが設定されていません。以下のいずれかの方法で設定してください:\n"
-                "1. ClaudeContentParser(api_key='your-key') で明示的に指定\n"
-                "2. 環境変数 ANTHROPIC_API_KEY を設定\n"
+                "OpenAI API キーが設定されていません。以下のいずれかの方法で設定してください:\n"
+                "1. ContentParser(api_key='your-key') で明示的に指定\n"
+                "2. 環境変数 OPENAI_API_KEY を設定\n"
                 "\n"
-                "注意: CLAUDE_CODE_OAUTH_TOKEN (OAuth トークン) は使用できません。\n"
-                "Anthropic API Key は https://console.anthropic.com/settings/keys で取得できます。"
+                "OpenAI API Key は https://platform.openai.com/api-keys で取得できます。"
             )
 
-        self.client = anthropic.Anthropic(api_key=resolved_api_key)
+        self.client = OpenAI(api_key=resolved_api_key)
         self.model = model
 
         # プロンプトディレクトリのパスを設定
@@ -83,7 +78,7 @@ class ClaudeContentParser:
                 - test_code_strategy: EXTEND_TEST/CREATE_TEST/BOTH_TEST
 
         Example:
-            >>> parser = ClaudeContentParser()
+            >>> parser = ContentParser()
             >>> doc = '''
             ... ## 実装戦略: CREATE
             ... 新規機能として実装します。
@@ -101,16 +96,17 @@ class ClaudeContentParser:
         prompt = prompt_template.replace('{document_content}', document_content)
 
         try:
-            response = self.client.messages.create(
+            response = self.client.chat.completions.create(
                 model=self.model,
-                max_tokens=1024,
                 messages=[
                     {"role": "user", "content": prompt}
-                ]
+                ],
+                max_tokens=1024,
+                temperature=0.0  # 決定論的な出力のため
             )
 
             # レスポンスからテキストを取得
-            response_text = response.content[0].text.strip()
+            response_text = response.choices[0].message.content.strip()
 
             # JSONをパース
             decisions = json.loads(response_text)
@@ -140,7 +136,7 @@ class ClaudeContentParser:
                 - suggestions: List[str] - 改善提案一覧
 
         Example:
-            >>> parser = ClaudeContentParser()
+            >>> parser = ContentParser()
             >>> messages = ["AssistantMessage(TextBlock(text='**判定: PASS**\\n\\n素晴らしい実装です。'))"]
             >>> result = parser.parse_review_result(messages)
             >>> result['result']
@@ -231,16 +227,17 @@ class ClaudeContentParser:
         prompt = prompt_template.replace('{full_text}', full_text)
 
         try:
-            response = self.client.messages.create(
+            response = self.client.chat.completions.create(
                 model=self.model,
-                max_tokens=256,
                 messages=[
                     {"role": "user", "content": prompt}
-                ]
+                ],
+                max_tokens=256,
+                temperature=0.0  # 決定論的な出力のため
             )
 
             # レスポンスからテキストを取得
-            response_text = response.content[0].text.strip()
+            response_text = response.choices[0].message.content.strip()
 
             # JSONをパース
             parsed = json.loads(response_text)
