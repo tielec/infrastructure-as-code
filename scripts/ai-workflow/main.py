@@ -5,7 +5,7 @@ import os
 import sys
 import time
 from pathlib import Path
-from typing import Dict, Any
+from typing import Dict, Any, List, Optional
 from git import Repo
 from core.workflow_state import WorkflowState, PhaseStatus
 from core.metadata_manager import MetadataManager
