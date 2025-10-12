@@ -1,11 +1,20 @@
 # AI Workflow - 設定ファイル
 
-# Claude API設定
-claude:
-  model: "claude-3-5-haiku-20241022"
+# Claude Agent SDK 設定
+# 環境変数: CLAUDE_CODE_OAUTH_TOKEN (必須)
+# モデル: デフォルト（Claude Code Pro Max の Sonnet 4.5）
+claude_agent_sdk:
+  model: null  # null の場合は Claude Code Pro Max のデフォルトモデルを使用
   max_tokens_per_request: 4096
-  temperature: 1.0
   timeout: 120
+
+# ContentParser 設定（レビュー結果パース、戦略抽出）
+# 環境変数: OPENAI_API_KEY (必須)
+# モデル: gpt-4o-mini（安価・高速）
+content_parser:
+  model: "gpt-4o-mini"
+  max_tokens: 1024
+  temperature: 0.0  # 決定論的な出力
 
 # コスト制限
 cost_limits:

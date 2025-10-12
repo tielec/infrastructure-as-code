@@ -15,15 +15,19 @@ from claude_agent_sdk import query, ClaudeAgentOptions
 class ClaudeAgentClient:
     """Claude Agent SDK クライアント"""
 
-    def __init__(self, working_dir: Optional[Path] = None, model: str = "claude-3-5-haiku-20241022"):
+    def __init__(self, working_dir: Optional[Path] = None, model: Optional[str] = None):
         """
         初期化
 
         Args:
             working_dir: 作業ディレクトリ（省略時はカレントディレクトリ）
-            model: 使用するClaudeモデル（デフォルト: claude-3-5-haiku-20241022）
+            model: 使用するClaudeモデル（省略時はClaude Code Pro Maxのデフォルトモデルを使用）
+                  - CLAUDE_CODE_OAUTH_TOKEN 使用時: デフォルトで claude-sonnet-4-5-20250929（最新Sonnet）
+                  - ANTHROPIC_API_KEY 使用時: 明示的に指定が必要
         """
         self.working_dir = working_dir or Path.cwd()
+        # CLAUDE_CODE_OAUTH_TOKEN を使う場合は強力なモデルを使用
+        # model が指定されていない場合は、Claude Code Pro Max のデフォルトモデルを使用
         self.model = model
 
     async def execute_task(
@@ -44,18 +48,39 @@ class ClaudeAgentClient:
 
         Returns:
             List[str]: レスポンスメッセージのリスト
+
+        Raises:
+            ValueError: CLAUDE_CODE_OAUTH_TOKEN が設定されていない場合
         """
+        # CLAUDE_CODE_OAUTH_TOKEN が設定されているか確認
+        if not os.environ.get('CLAUDE_CODE_OAUTH_TOKEN'):
+            raise ValueError(
+                "CLAUDE_CODE_OAUTH_TOKEN が設定されていません。\n"
+                "Claude Agent SDK は CLAUDE_CODE_OAUTH_TOKEN (Claude Code Pro Max) を使用します。\n"
+                "設定方法: export CLAUDE_CODE_OAUTH_TOKEN='sk-ant-oat01-...'\n"
+                "詳細は DOCKER_AUTH_SETUP.md を参照してください。"
+            )
+
         # 環境変数でBashコマンド承認スキップを有効化（Docker環境内で安全）
         # Note: すでにDocker containerで隔離されているため、セキュリティリスクは限定的
         os.environ['CLAUDE_DANGEROUSLY_SKIP_PERMISSIONS'] = '1'
 
-        options = ClaudeAgentOptions(
-            system_prompt=system_prompt,
-            max_turns=max_turns,
-            cwd=str(self.working_dir),
-            permission_mode='acceptEdits',  # 編集を自動的に受け入れる
-            model=self.model  # モデルを指定
-        )
+        print("[INFO] Using CLAUDE_CODE_OAUTH_TOKEN for Claude Agent SDK (Claude Code Pro Max)")
+
+        # ClaudeAgentOptions の設定
+        options_kwargs = {
+            'system_prompt': system_prompt,
+            'max_turns': max_turns,
+            'cwd': str(self.working_dir),
+            'permission_mode': 'acceptEdits',  # 編集を自動的に受け入れる
+        }
+
+        # model が指定されている場合のみ追加
+        # デフォルト（model=None）の場合は Claude Code Pro Max のデフォルトモデル（Sonnet 4.5）を使用
+        if self.model is not None:
+            options_kwargs['model'] = self.model
+
+        options = ClaudeAgentOptions(**options_kwargs)
 
         messages = []
         async for message in query(prompt=prompt, options=options):
