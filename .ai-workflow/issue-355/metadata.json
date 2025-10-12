@@ -23,11 +23,11 @@
       "review_result": null
     },
     "requirements": {
-      "status": "failed",
-      "retry_count": 2,
-      "started_at": "2025-10-12T06:40:47.575653Z",
-      "completed_at": "2025-10-12T06:41:14.556347Z",
-      "review_result": null
+      "status": "completed",
+      "retry_count": 0,
+      "started_at": "2025-10-12T07:09:20.012943Z",
+      "completed_at": "2025-10-12T07:17:10.340126Z",
+      "review_result": "PASS_WITH_SUGGESTIONS"
     },
     "design": {
       "status": "pending",
@@ -79,6 +79,6 @@
       "review_result": null
     }
   },
-  "created_at": "2025-10-12T06:40:43.259348Z",
-  "updated_at": "2025-10-12T06:41:14.556356Z"
+  "created_at": "2025-10-12T07:09:16.001874Z",
+  "updated_at": "2025-10-12T07:17:10.340136Z"
 }
