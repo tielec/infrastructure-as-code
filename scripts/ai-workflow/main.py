@@ -410,8 +410,19 @@ def init(issue_url: str):
                                 'implementation', 'test_implementation', 'testing',
                                 'documentation', 'report']))
 @click.option('--issue', required=True, help='Issue number')
-def execute(phase: str, issue: str):
+@click.option('--git-user', help='Git commit user name')
+@click.option('--git-email', help='Git commit user email')
+def execute(phase: str, issue: str, git_user: str = None, git_email: str = None):
     """フェーズ実行"""
+    # CLIオプションが指定されている場合、環境変数に設定（最優先）
+    if git_user:
+        os.environ['GIT_COMMIT_USER_NAME'] = git_user
+        click.echo(f'[INFO] Git user name set from CLI option: {git_user}')
+
+    if git_email:
+        os.environ['GIT_COMMIT_USER_EMAIL'] = git_email
+        click.echo(f'[INFO] Git user email set from CLI option: {git_email}')
+
     repo_root = _get_repo_root()
     workflow_dir = repo_root / '.ai-workflow' / f'issue-{issue}'
     metadata_path = workflow_dir / 'metadata.json'
