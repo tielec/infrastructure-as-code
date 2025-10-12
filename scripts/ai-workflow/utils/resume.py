@@ -27,9 +27,10 @@ class ResumeManager:
         """
         self.metadata_manager = metadata_manager
 
-        # フェーズリスト（Phase 1-8の順序）
-        # Planning（Phase 0）は含まない（README.mdの記載に従う）
+        # フェーズリスト（Phase 0-9の順序）
+        # Planning（Phase 0）とEvaluation（Phase 9）を含む全フェーズ
         self.phases = [
+            'planning',
             'requirements',
             'design',
             'test_scenario',
@@ -37,7 +38,8 @@ class ResumeManager:
             'test_implementation',
             'testing',
             'documentation',
-            'report'
+            'report',
+            'evaluation'
         ]
 
     def can_resume(self) -> bool:

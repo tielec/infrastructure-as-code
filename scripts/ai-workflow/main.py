@@ -60,6 +60,7 @@ def _execute_single_phase(
     """
     # フェーズインスタンス生成
     phase_classes = {
+        'planning': PlanningPhase,
         'requirements': RequirementsPhase,
         'design': DesignPhase,
         'test_scenario': TestScenarioPhase,
@@ -193,11 +194,11 @@ def _generate_failure_summary(
     click.echo(f"Total Phases: {total_phases}")
     click.echo(f"✓ Completed: {completed_count}")
     click.echo(f"✗ Failed: 1")
-    click.echo(f"⊘ Skipped: {8 - total_phases}\n")
+    click.echo(f"⊘ Skipped: {10 - total_phases}\n")
 
     click.echo("Phase Results:")
-    all_phases = ['requirements', 'design', 'test_scenario', 'implementation',
-                  'test_implementation', 'testing', 'documentation', 'report']
+    all_phases = ['planning', 'requirements', 'design', 'test_scenario', 'implementation',
+                  'test_implementation', 'testing', 'documentation', 'report', 'evaluation']
 
     for i, phase in enumerate(all_phases, 1):
         if phase in results:
@@ -251,6 +252,7 @@ def execute_phases_from(
     """
     # フェーズリスト定義
     all_phases = [
+        'planning',
         'requirements',
         'design',
         'test_scenario',
@@ -258,7 +260,8 @@ def execute_phases_from(
         'test_implementation',
         'testing',
         'documentation',
-        'report'
+        'report',
+        'evaluation'
     ]
 
     # 開始フェーズのインデックス取得
@@ -365,6 +368,7 @@ def execute_all_phases(
     """
     # フェーズリスト定義
     phases = [
+        'planning',
         'requirements',
         'design',
         'test_scenario',
@@ -372,7 +376,8 @@ def execute_all_phases(
         'test_implementation',
         'testing',
         'documentation',
-        'report'
+        'report',
+        'evaluation'
     ]
 
     # 初期化
