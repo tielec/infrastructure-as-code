@@ -30,11 +30,11 @@
       "review_result": "PASS_WITH_SUGGESTIONS"
     },
     "design": {
-      "status": "failed",
+      "status": "completed",
       "retry_count": 2,
-      "started_at": "2025-10-12T22:01:01.824969Z",
-      "completed_at": "2025-10-12T22:08:36.852711Z",
-      "review_result": null
+      "started_at": "2025-10-12T22:15:23.323947Z",
+      "completed_at": "2025-10-12T22:25:12.276764Z",
+      "review_result": "PASS_WITH_SUGGESTIONS"
     },
     "test_scenario": {
       "status": "pending",
@@ -92,7 +92,7 @@
     }
   },
   "created_at": "2025-10-12T21:50:24.605401Z",
-  "updated_at": "2025-10-12T22:08:36.852716Z",
+  "updated_at": "2025-10-12T22:25:12.276774Z",
   "github_integration": {
     "progress_comment_id": 3395392946,
     "progress_comment_url": "https://github.com/tielec/infrastructure-as-code/issues/376#issuecomment-3395392946"
