@@ -530,15 +530,25 @@ class GitManager:
         """
         Git設定を確認し、未設定の場合は環境変数から設定
 
-        環境変数:
-            - GIT_AUTHOR_NAME: コミットユーザー名（デフォルト: AI Workflow）
-            - GIT_AUTHOR_EMAIL: コミットユーザーメール（デフォルト: ai-workflow@tielec.local）
+        環境変数の優先順位:
+            1. GIT_COMMIT_USER_NAME / GIT_COMMIT_USER_EMAIL（最優先、新規）
+            2. GIT_AUTHOR_NAME / GIT_AUTHOR_EMAIL（互換性のため継続サポート）
+            3. デフォルト値（'AI Workflow' / 'ai-workflow@tielec.local'）
+
+        バリデーション:
+            - ユーザー名: 1-100文字
+            - メールアドレス: '@'の存在確認（RFC 5322準拠の厳密チェックは不要）
+
+        ログ出力:
+            - [INFO] Git設定完了: user.name=..., user.email=...
+            - [WARN] バリデーションエラー時の警告
 
         処理フロー:
             1. 現在のuser.name、user.emailを取得
-            2. 未設定の場合、環境変数から取得
-            3. 環境変数も未設定の場合、デフォルト値を使用
+            2. 未設定の場合、環境変数から優先順位で取得
+            3. バリデーション実施（エラー時は警告ログ、デフォルト値使用）
             4. git config --local user.name/user.emailで設定
+            5. ログ出力
         """
         import os
 
@@ -559,13 +569,33 @@ class GitManager:
                 user_email = None
 
             # 未設定の場合、環境変数またはデフォルト値を使用
+            # 優先順位: GIT_COMMIT_USER_NAME > GIT_AUTHOR_NAME > デフォルト
             if not user_name:
-                user_name = os.environ.get('GIT_AUTHOR_NAME', 'AI Workflow')
+                user_name = (
+                    os.environ.get('GIT_COMMIT_USER_NAME') or
+                    os.environ.get('GIT_AUTHOR_NAME') or
+                    'AI Workflow'
+                )
 
+            # 優先順位: GIT_COMMIT_USER_EMAIL > GIT_AUTHOR_EMAIL > デフォルト
             if not user_email:
-                user_email = os.environ.get('GIT_AUTHOR_EMAIL', 'ai-workflow@tielec.local')
+                user_email = (
+                    os.environ.get('GIT_COMMIT_USER_EMAIL') or
+                    os.environ.get('GIT_AUTHOR_EMAIL') or
+                    'ai-workflow@tielec.local'
+                )
 
-            # config_writerで設定
+            # バリデーション: ユーザー名長さチェック（1-100文字）
+            if len(user_name) < 1 or len(user_name) > 100:
+                print(f"[WARN] User name length is invalid ({len(user_name)} chars), using default")
+                user_name = 'AI Workflow'
+
+            # バリデーション: メールアドレス形式チェック（基本的な'@'の存在確認のみ）
+            if '@' not in user_email:
+                print(f"[WARN] Invalid email format: {user_email}, using default")
+                user_email = 'ai-workflow@tielec.local'
+
+            # config_writerで設定（ローカルリポジトリのみ）
             with self.repo.config_writer() as config_writer:
                 config_writer.set_value('user', 'name', user_name)
                 config_writer.set_value('user', 'email', user_email)

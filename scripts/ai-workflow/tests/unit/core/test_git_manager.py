@@ -684,3 +684,287 @@ def test_get_current_branch_detached_head(temp_git_repo, mock_metadata):
 
     # 検証
     assert current_branch == 'HEAD'
+
+
+# ━━━━━ 新規追加: Issue #322 Git環境変数設定のUnitテスト（UT-GM-031〜UT-GM-037） ━━━━━
+
+# UT-GM-031: 環境変数 GIT_COMMIT_USER_NAME / GIT_COMMIT_USER_EMAIL 設定時
+@patch.dict('os.environ', {
+    'GIT_COMMIT_USER_NAME': 'Test User',
+    'GIT_COMMIT_USER_EMAIL': 'test@example.com'
+})
+def test_ensure_git_config_with_git_commit_env(temp_git_repo, mock_metadata):
+    """UT-GM-031: GIT_COMMIT_USER_NAME/EMAIL環境変数設定時のGit設定
+
+    目的: 新しい環境変数 GIT_COMMIT_USER_NAME と GIT_COMMIT_USER_EMAIL が
+          設定されている場合、その値がGit設定に反映されることを検証
+
+    Given:
+        - Gitリポジトリが初期化されている
+        - git config user.name と git config user.email が未設定
+        - 環境変数 GIT_COMMIT_USER_NAME="Test User" が設定されている
+        - 環境変数 GIT_COMMIT_USER_EMAIL="test@example.com" が設定されている
+
+    When: _ensure_git_config()を呼び出し
+
+    Then:
+        - git config user.name の値が "Test User" になる
+        - git config user.email の値が "test@example.com" になる
+    """
+    temp_dir, repo = temp_git_repo
+    git_manager = GitManager(
+        repo_path=Path(temp_dir),
+        metadata_manager=mock_metadata
+    )
+
+    # _ensure_git_config()を呼び出し
+    git_manager._ensure_git_config()
+
+    # Git設定を確認
+    config_reader = git_manager.repo.config_reader()
+    user_name = config_reader.get_value('user', 'name')
+    user_email = config_reader.get_value('user', 'email')
+
+    # 検証
+    assert user_name == 'Test User', "GIT_COMMIT_USER_NAMEの値が設定される"
+    assert user_email == 'test@example.com', "GIT_COMMIT_USER_EMAILの値が設定される"
+
+
+# UT-GM-032: 環境変数 GIT_AUTHOR_NAME / GIT_AUTHOR_EMAIL 設定時（既存互換性）
+@patch.dict('os.environ', {
+    'GIT_AUTHOR_NAME': 'Legacy User',
+    'GIT_AUTHOR_EMAIL': 'legacy@example.com'
+}, clear=True)
+def test_ensure_git_config_with_git_author_env(temp_git_repo, mock_metadata):
+    """UT-GM-032: GIT_AUTHOR_NAME/EMAIL環境変数設定時のGit設定（既存互換性）
+
+    目的: 既存の環境変数 GIT_AUTHOR_NAME と GIT_AUTHOR_EMAIL が設定されている場合、
+          その値がGit設定に反映されることを検証（後方互換性）
+
+    Given:
+        - Gitリポジトリが初期化されている
+        - git config user.name と git config user.email が未設定
+        - 環境変数 GIT_AUTHOR_NAME="Legacy User" が設定されている
+        - 環境変数 GIT_AUTHOR_EMAIL="legacy@example.com" が設定されている
+        - 環境変数 GIT_COMMIT_USER_NAME と GIT_COMMIT_USER_EMAIL は未設定
+
+    When: _ensure_git_config()を呼び出し
+
+    Then:
+        - git config user.name の値が "Legacy User" になる
+        - git config user.email の値が "legacy@example.com" になる
+    """
+    temp_dir, repo = temp_git_repo
+    git_manager = GitManager(
+        repo_path=Path(temp_dir),
+        metadata_manager=mock_metadata
+    )
+
+    git_manager._ensure_git_config()
+
+    config_reader = git_manager.repo.config_reader()
+    user_name = config_reader.get_value('user', 'name')
+    user_email = config_reader.get_value('user', 'email')
+
+    # 検証
+    assert user_name == 'Legacy User', "GIT_AUTHOR_NAMEの値が設定される（後方互換性）"
+    assert user_email == 'legacy@example.com', "GIT_AUTHOR_EMAILの値が設定される（後方互換性）"
+
+
+# UT-GM-033: 環境変数の優先順位確認
+@patch.dict('os.environ', {
+    'GIT_COMMIT_USER_NAME': 'Primary User',
+    'GIT_AUTHOR_NAME': 'Secondary User',
+    'GIT_COMMIT_USER_EMAIL': 'primary@example.com',
+    'GIT_AUTHOR_EMAIL': 'secondary@example.com'
+})
+def test_ensure_git_config_priority(temp_git_repo, mock_metadata):
+    """UT-GM-033: 環境変数の優先順位確認
+
+    目的: 環境変数の優先順位が正しく機能することを検証
+          (GIT_COMMIT_USER_NAME > GIT_AUTHOR_NAME > デフォルト値)
+
+    Given:
+        - Gitリポジトリが初期化されている
+        - git config user.name と git config user.email が未設定
+        - 環境変数 GIT_COMMIT_USER_NAME="Primary User" が設定されている
+        - 環境変数 GIT_AUTHOR_NAME="Secondary User" も設定されている（優先度2位）
+        - 同様に、GIT_COMMIT_USER_EMAIL と GIT_AUTHOR_EMAIL の両方が設定されている
+
+    When: _ensure_git_config()を呼び出し
+
+    Then:
+        - git config user.name の値が "Primary User" になる（優先度1が使用される）
+        - git config user.email の値が "primary@example.com" になる（優先度1が使用される）
+        - "Secondary User" や "secondary@example.com" は使用されない
+    """
+    temp_dir, repo = temp_git_repo
+    git_manager = GitManager(
+        repo_path=Path(temp_dir),
+        metadata_manager=mock_metadata
+    )
+
+    git_manager._ensure_git_config()
+
+    config_reader = git_manager.repo.config_reader()
+    user_name = config_reader.get_value('user', 'name')
+    user_email = config_reader.get_value('user', 'email')
+
+    # 優先度1（GIT_COMMIT_USER_NAME/EMAIL）が使用される
+    assert user_name == 'Primary User', "GIT_COMMIT_USER_NAMEが優先される"
+    assert user_email == 'primary@example.com', "GIT_COMMIT_USER_EMAILが優先される"
+
+    # 優先度2（GIT_AUTHOR_NAME/EMAIL）は使用されない
+    assert user_name != 'Secondary User', "GIT_AUTHOR_NAMEは使用されない"
+    assert user_email != 'secondary@example.com', "GIT_AUTHOR_EMAILは使用されない"
+
+
+# UT-GM-034: 環境変数未設定時のデフォルト値
+@patch.dict('os.environ', {}, clear=True)
+def test_ensure_git_config_default(temp_git_repo, mock_metadata):
+    """UT-GM-034: 環境変数未設定時のデフォルト値
+
+    目的: すべての環境変数が未設定の場合、デフォルト値が使用されることを検証
+
+    Given:
+        - Gitリポジトリが初期化されている
+        - git config user.name と git config user.email が未設定
+        - すべてのGit関連環境変数が未設定
+          (GIT_COMMIT_USER_NAME, GIT_COMMIT_USER_EMAIL, GIT_AUTHOR_NAME, GIT_AUTHOR_EMAIL)
+
+    When: _ensure_git_config()を呼び出し
+
+    Then:
+        - git config user.name の値が "AI Workflow" になる（デフォルト値）
+        - git config user.email の値が "ai-workflow@tielec.local" になる（デフォルト値）
+    """
+    temp_dir, repo = temp_git_repo
+    git_manager = GitManager(
+        repo_path=Path(temp_dir),
+        metadata_manager=mock_metadata
+    )
+
+    git_manager._ensure_git_config()
+
+    config_reader = git_manager.repo.config_reader()
+    user_name = config_reader.get_value('user', 'name')
+    user_email = config_reader.get_value('user', 'email')
+
+    # デフォルト値が使用される
+    assert user_name == 'AI Workflow', "デフォルトユーザー名が使用される"
+    assert user_email == 'ai-workflow@tielec.local', "デフォルトメールアドレスが使用される"
+
+
+# UT-GM-035: バリデーション - メールアドレス形式エラー
+@patch.dict('os.environ', {'GIT_COMMIT_USER_EMAIL': 'invalid-email'})
+@patch('builtins.print')
+def test_ensure_git_config_validation_email(mock_print, temp_git_repo, mock_metadata):
+    """UT-GM-035: バリデーション - メールアドレス形式エラー
+
+    目的: 不正なメールアドレス形式（@なし）の場合、警告ログを出力し、
+          デフォルト値が使用されることを検証
+
+    Given:
+        - Gitリポジトリが初期化されている
+        - git config user.name と git config user.email が未設定
+        - 環境変数 GIT_COMMIT_USER_EMAIL="invalid-email" が設定されている（@なし）
+
+    When: _ensure_git_config()を呼び出し
+
+    Then:
+        - 警告ログ出力: "[WARN] Invalid email format: invalid-email, using default"
+        - git config user.email の値が "ai-workflow@tielec.local" になる
+          （デフォルト値にフォールバック）
+        - 処理は継続される（エラーで停止しない）
+    """
+    temp_dir, repo = temp_git_repo
+    git_manager = GitManager(
+        repo_path=Path(temp_dir),
+        metadata_manager=mock_metadata
+    )
+
+    git_manager._ensure_git_config()
+
+    # 警告ログが出力されることを確認
+    mock_print.assert_any_call('[WARN] Invalid email format: invalid-email, using default')
+
+    # デフォルト値が使用される
+    config_reader = git_manager.repo.config_reader()
+    user_email = config_reader.get_value('user', 'email')
+    assert user_email == 'ai-workflow@tielec.local', "不正なメールアドレス時はデフォルト値が使用される"
+
+
+# UT-GM-036: バリデーション - ユーザー名長さエラー
+@patch.dict('os.environ', {'GIT_COMMIT_USER_NAME': 'A' * 101})
+@patch('builtins.print')
+def test_ensure_git_config_validation_username_length(mock_print, temp_git_repo, mock_metadata):
+    """UT-GM-036: バリデーション - ユーザー名長さエラー
+
+    目的: ユーザー名が100文字を超える場合、警告ログを出力し、
+          デフォルト値が使用されることを検証
+
+    Given:
+        - Gitリポジトリが初期化されている
+        - git config user.name と git config user.email が未設定
+        - 環境変数 GIT_COMMIT_USER_NAME に101文字の文字列が設定されている
+
+    When: _ensure_git_config()を呼び出し
+
+    Then:
+        - 警告ログ出力: "[WARN] User name length is invalid (101 chars), using default"
+        - git config user.name の値が "AI Workflow" になる
+          （デフォルト値にフォールバック）
+        - 処理は継続される（エラーで停止しない）
+    """
+    temp_dir, repo = temp_git_repo
+    git_manager = GitManager(
+        repo_path=Path(temp_dir),
+        metadata_manager=mock_metadata
+    )
+
+    git_manager._ensure_git_config()
+
+    # 警告ログが出力されることを確認
+    mock_print.assert_any_call('[WARN] User name length is invalid (101 chars), using default')
+
+    # デフォルト値が使用される
+    config_reader = git_manager.repo.config_reader()
+    user_name = config_reader.get_value('user', 'name')
+    assert user_name == 'AI Workflow', "ユーザー名長さ超過時はデフォルト値が使用される"
+
+
+# UT-GM-037: ログ出力の確認
+@patch.dict('os.environ', {
+    'GIT_COMMIT_USER_NAME': 'Log Test User',
+    'GIT_COMMIT_USER_EMAIL': 'logtest@example.com'
+})
+@patch('builtins.print')
+def test_ensure_git_config_log_output(mock_print, temp_git_repo, mock_metadata):
+    """UT-GM-037: ログ出力の確認
+
+    目的: Git設定完了時に正しいログメッセージが出力されることを検証
+
+    Given:
+        - Gitリポジトリが初期化されている
+        - git config user.name と git config user.email が未設定
+        - 環境変数 GIT_COMMIT_USER_NAME="Log Test User" が設定されている
+        - 環境変数 GIT_COMMIT_USER_EMAIL="logtest@example.com" が設定されている
+
+    When: _ensure_git_config()を呼び出し
+
+    Then:
+        - ログ出力: "[INFO] Git設定完了: user.name=Log Test User, user.email=logtest@example.com"
+        - ログメッセージが標準出力に出力される
+    """
+    temp_dir, repo = temp_git_repo
+    git_manager = GitManager(
+        repo_path=Path(temp_dir),
+        metadata_manager=mock_metadata
+    )
+
+    git_manager._ensure_git_config()
+
+    # INFOログが出力されることを確認
+    mock_print.assert_any_call(
+        '[INFO] Git設定完了: user.name=Log Test User, user.email=logtest@example.com'
+    )

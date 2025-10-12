@@ -11,6 +11,8 @@
  * - MAX_RETRIES: 最大リトライ回数（デフォルト: 3）
  * - COST_LIMIT_USD: コスト上限USD（デフォルト: 5.0）
  * - LOG_LEVEL: ログレベル（デフォルト: INFO）
+ * - GIT_COMMIT_USER_NAME: Gitコミット時のユーザー名（デフォルト: AI Workflow Bot）
+ * - GIT_COMMIT_USER_EMAIL: Gitコミット時のメールアドレス（デフォルト: ai-workflow@example.com）
  *
  * 認証情報（Jenkins Credentialsで設定）:
  * - claude-code-oauth-token: Claude Agent SDK用OAuthトークン（必須）
@@ -53,6 +55,10 @@ pipeline {
         WORKFLOW_DIR = 'scripts/ai-workflow'
         WORKFLOW_VERSION = '1.0.0'
 
+        // Git設定（Job DSLパラメータから環境変数に設定）
+        GIT_COMMIT_USER_NAME = "${params.GIT_COMMIT_USER_NAME}"
+        GIT_COMMIT_USER_EMAIL = "${params.GIT_COMMIT_USER_EMAIL}"
+
         // 認証情報（Jenkinsクレデンシャルから取得）
         CLAUDE_CODE_OAUTH_TOKEN = credentials('claude-code-oauth-token')
         OPENAI_API_KEY = credentials('openai-api-key')
@@ -89,6 +95,8 @@ pipeline {
                     echo "Max Retries: ${params.MAX_RETRIES}"
                     echo "Cost Limit: \$${params.COST_LIMIT_USD} USD"
                     echo "Log Level: ${params.LOG_LEVEL}"
+                    echo "Git Commit User Name: ${params.GIT_COMMIT_USER_NAME}"
+                    echo "Git Commit User Email: ${params.GIT_COMMIT_USER_EMAIL}"
                 }
             }
         }

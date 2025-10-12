@@ -1,0 +1,386 @@
+# プロジェクト計画フェーズ - 実行プロンプト
+
+## タスク概要
+
+GitHubのIssue情報から詳細なプロジェクト計画書を作成してください。
+Phase 0はプロジェクトマネージャの役割を担い、開発作業を計画的かつ効率的に進められるようにします。
+
+## Issue情報
+
+## Issue情報
+
+- **Issue番号**: #322
+- **タイトル**: [FEATURE] AIワークフローのGitコミット時のユーザー名とメールアドレスを設定可能に
+- **状態**: open
+- **URL**: https://github.com/tielec/infrastructure-as-code/issues/322
+- **ラベル**: なし
+
+### 本文
+
+## 概要
+
+AIワークフローでGitコミットを実行する際のユーザー名とメールアドレスを、環境変数やJenkinsパラメータで設定できるようにしたい。
+
+現在はGitの設定がそのまま使用されているが、CI/CD環境では明示的にコミット者情報を指定したい場合がある。
+
+## 要件
+
+### 機能要件
+
+**FR-001: 環境変数でのGit設定**
+- `GIT_COMMIT_USER_NAME`: コミット時のユーザー名
+- `GIT_COMMIT_USER_EMAIL`: コミット時のメールアドレス
+- 環境変数が未設定の場合はデフォルトのGit設定を使用
+
+**FR-002: Jenkinsパラメータでの設定**
+- Jenkinsfileの`ai_workflow_orchestrator`ジョブにパラメータを追加
+  - `GIT_COMMIT_USER_NAME`: デフォルト `AI Workflow Bot`
+  - `GIT_COMMIT_USER_EMAIL`: デフォルト `ai-workflow@example.com`
+- パラメータは環境変数として子プロセスに渡される
+
+**FR-003: GitManagerでの適用**
+- `GitManager.commit_and_push()`メソッド内で環境変数を読み取り
+- コミット実行前に`git config user.name`と`git config user.email`を設定（ローカルリポジトリのみ）
+- グローバル設定は変更しない
+
+**FR-004: Python CLIでの設定**
+- `main.py execute`コマンドに`--git-user`と`--git-email`オプションを追加（オプション）
+- 優先順位: CLIオプション > 環境変数 > デフォルトGit設定
+
+### 非機能要件
+
+**NFR-001: 後方互換性**
+- 環境変数が未設定の場合は従来通り動作
+- 既存のワークフローに影響を与えない
+
+**NFR-002: セキュリティ**
+- メールアドレスのバリデーション（基本的な形式チェック）
+- ユーザー名の長さ制限（1-100文字）
+
+**NFR-003: ログ出力**
+- 使用されているGit設定をログに出力
+- デバッグ時の追跡を容易にする
+
+## 実装ガイド
+
+### 1. GitManagerの修正
+
+```python
+# scripts/ai-workflow/core/git_manager.py
+
+def commit_and_push(self, message: str, files: List[str] = None):
+    """
+    ファイルをコミットしてリモートにプッシュ
+    
+    環境変数からGit設定を読み取り:
+    - GIT_COMMIT_USER_NAME: コミット時のユーザー名
+    - GIT_COMMIT_USER_EMAIL: コミット時のメールアドレス
+    """
+    # 環境変数からGit設定を取得
+    git_user_name = os.getenv('GIT_COMMIT_USER_NAME')
+    git_user_email = os.getenv('GIT_COMMIT_USER_EMAIL')
+    
+    # Git設定を一時的に設定（ローカルリポジトリのみ）
+    if git_user_name:
+        self._run_git_command(['config', 'user.name', git_user_name])
+        print(f"[INFO] Git user.name set to: {git_user_name}")
+    
+    if git_user_email:
+        self._run_git_command(['config', 'user.email', git_user_email])
+        print(f"[INFO] Git user.email set to: {git_user_email}")
+    
+    # 既存のコミット処理...
+```
+
+### 2. Jenkinsfileの修正
+
+```groovy
+// jenkins/jobs/pipeline/AI_Workflow/ai-workflow-orchestrator/Jenkinsfile
+
+parameters {
+    string(
+        name: 'ISSUE_URL',
+        description: 'GitHub Issue URL'
+    )
+    string(
+        name: 'GIT_COMMIT_USER_NAME',
+        defaultValue: 'AI Workflow Bot',
+        description: 'Git commit user name'
+    )
+    string(
+        name: 'GIT_COMMIT_USER_EMAIL',
+        defaultValue: 'ai-workflow@example.com',
+        description: 'Git commit user email'
+    )
+    // 既存のパラメータ...
+}
+
+environment {
+    GIT_COMMIT_USER_NAME = "${params.GIT_COMMIT_USER_NAME}"
+    GIT_COMMIT_USER_EMAIL = "${params.GIT_COMMIT_USER_EMAIL}"
+}
+```
+
+### 3. Job DSLの修正
+
+```groovy
+// jenkins/jobs/dsl/ai_workflow/ai_workflow_orchestrator.groovy
+
+parameters {
+    stringParam('ISSUE_URL', '', 'GitHub Issue URL (required)')
+    stringParam('GIT_COMMIT_USER_NAME', 'AI Workflow Bot', 'Git commit user name')
+    stringParam('GIT_COMMIT_USER_EMAIL', 'ai-workflow@example.com', 'Git commit user email')
+    // 既存のパラメータ...
+}
+```
+
+### 4. CLIオプションの追加（オプション）
+
+```python
+# scripts/ai-workflow/main.py
+
+@click.command()
+@click.option('--phase', required=True, help='Phase name')
+@click.option('--issue', required=True, type=int, help='GitHub Issue number')
+@click.option('--git-user', help='Git commit user name')
+@click.option('--git-email', help='Git commit user email')
+def execute(phase: str, issue: int, git_user: str = None, git_email: str = None):
+    """Execute a specific phase"""
+    # 環境変数に設定（優先度: CLI > 環境変数）
+    if git_user:
+        os.environ['GIT_COMMIT_USER_NAME'] = git_user
+    if git_email:
+        os.environ['GIT_COMMIT_USER_EMAIL'] = git_email
+    
+    # 既存の処理...
+```
+
+## テストケース
+
+### TC-001: 環境変数での設定
+- **前提条件**: 環境変数 `GIT_COMMIT_USER_NAME` と `GIT_COMMIT_USER_EMAIL` が設定されている
+- **実行**: `python main.py execute --phase requirements --issue 123`
+- **期待結果**: コミットのAuthorが環境変数の値になる
+
+### TC-002: Jenkinsパラメータでの設定
+- **前提条件**: Jenkinsジョブでパラメータを指定して実行
+- **実行**: `ai_workflow_orchestrator` ジョブを実行
+- **期待結果**: コミットのAuthorがJenkinsパラメータの値になる
+
+### TC-003: 環境変数未設定時のデフォルト動作
+- **前提条件**: 環境変数が未設定
+- **実行**: `python main.py execute --phase requirements --issue 123`
+- **期待結果**: 既存のGit設定（`git config user.name`）が使用される
+
+### TC-004: バリデーションエラー
+- **前提条件**: 不正なメールアドレスを設定
+- **実行**: `GIT_COMMIT_USER_EMAIL=invalid-email python main.py execute --phase requirements --issue 123`
+- **期待結果**: 警告ログが出力されるが処理は継続（またはエラーで停止）
+
+## 受け入れ基準
+
+- [ ] 環境変数 `GIT_COMMIT_USER_NAME` と `GIT_COMMIT_USER_EMAIL` でGit設定を変更できる
+- [ ] Jenkinsパラメータでコミット者情報を指定できる
+- [ ] 環境変数未設定時は既存のGit設定が使用される
+- [ ] グローバルGit設定は変更されない（ローカルリポジトリのみ）
+- [ ] 使用されているGit設定がログに出力される
+- [ ] 既存のワークフローに影響を与えない（後方互換性）
+
+## 優先度
+
+Medium
+
+## ラベル
+
+enhancement, ai-workflow, git
+
+## 関連Issue
+
+なし
+
+## プロジェクト計画書の構成
+
+以下のセクションを含むプロジェクト計画書を作成してください：
+
+### 1. Issue分析
+- **複雑度**: 簡単/中程度/複雑を判定
+  - 簡単: 単一ファイルの修正、シンプルな機能追加（見積もり: ~4時間）
+  - 中程度: 複数ファイルの修正、既存機能の拡張（見積もり: 4~16時間）
+  - 複雑: アーキテクチャ変更、新規サブシステム追加（見積もり: 16時間~）
+- **見積もり工数**: X時間（根拠を記載）
+- **リスク評価**: 低/中/高
+
+### 2. 実装戦略判断
+
+**重要**: このセクションは最も重要です。Phase 2（Design）で使用されるため、必ず明記してください。
+
+#### 実装戦略: CREATE / EXTEND / REFACTOR
+
+**判断根拠**:
+- CREATE: 新規ファイル・クラス・モジュールの作成が中心
+- EXTEND: 既存コードの拡張（機能追加）が中心
+- REFACTOR: 既存コードのリファクタリング（構造改善）が中心
+
+（判断理由を具体的に記載）
+
+#### テスト戦略: UNIT_ONLY / INTEGRATION_ONLY / BDD_ONLY / UNIT_INTEGRATION / UNIT_BDD / INTEGRATION_BDD / ALL
+
+**判断根拠**:
+- UNIT_ONLY: ユニットテストのみ（単純なロジック、外部依存なし）
+- INTEGRATION_ONLY: インテグレーションテストのみ（外部システム連携中心）
+- BDD_ONLY: BDDテストのみ（ユーザーストーリー中心）
+- UNIT_INTEGRATION: ユニット + インテグレーション（一般的な機能開発）
+- UNIT_BDD: ユニット + BDD（エンドユーザー向け機能）
+- INTEGRATION_BDD: インテグレーション + BDD（システム間連携＋ユーザーストーリー）
+- ALL: すべてのテストレベル（大規模な変更、高リスク）
+
+（判断理由を具体的に記載）
+
+#### テストコード戦略: EXTEND_TEST / CREATE_TEST / BOTH_TEST
+
+**判断根拠**:
+- EXTEND_TEST: 既存テストファイルに追加（既存機能の拡張時）
+- CREATE_TEST: 新規テストファイル作成（新規機能追加時）
+- BOTH_TEST: 両方（既存テスト拡張 + 新規テスト作成）
+
+（判断理由を具体的に記載）
+
+### 3. 影響範囲分析
+- **既存コードへの影響**: 変更が必要なファイル・モジュール
+- **依存関係の変更**: 新規依存の追加、既存依存の変更
+- **マイグレーション要否**: データベーススキーマ変更、設定ファイル変更等
+
+### 4. タスク分割
+
+各フェーズについて、サブタスクを洗い出してください：
+
+#### Phase 1: 要件定義 (見積もり: Xh)
+- サブタスク1
+- サブタスク2
+...
+
+#### Phase 2: 設計 (見積もり: Xh)
+...
+
+#### Phase 3: テストシナリオ (見積もり: Xh)
+...
+
+#### Phase 4: 実装 (見積もり: Xh)
+...
+
+#### Phase 5: テスト (見積もり: Xh)
+...
+
+#### Phase 6: ドキュメント (見積もり: Xh)
+...
+
+#### Phase 7: レポート (見積もり: Xh)
+...
+
+**タスク粒度基準**:
+- 1タスク = 1~4時間程度で完了可能な作業単位
+- 明確な完了条件（Done criteria）を持つ
+- 他のタスクから独立して実装・テスト可能
+
+### 5. 依存関係
+
+タスク間の依存関係をMermaid形式で図示してください：
+
+```mermaid
+graph TD
+    P1[Phase 1] --> P2[Phase 2]
+    P2 --> P3[Phase 3]
+    P3 --> P4[Phase 4]
+    P4 --> P5[Phase 5]
+    P5 --> P6[Phase 6]
+    P6 --> P7[Phase 7]
+```
+
+### 6. リスクと軽減策
+
+潜在的なリスクを洗い出し、各リスクに対する軽減策を記載してください：
+
+#### リスク1: （リスク名）
+- **影響度**: 低/中/高
+- **確率**: 低/中/高
+- **軽減策**: （具体的な対策）
+
+#### リスク2: （リスク名）
+...
+
+**リスクカテゴリ**:
+- 技術的リスク: 新技術の学習コスト、既存システムとの統合問題
+- スコープリスク: 要件の曖昧さ、スコープクリープ
+- リソースリスク: 工数不足、スキル不足
+- 依存リスク: 外部システム依存、ブロッキング問題
+
+### 7. 品質ゲート
+
+各フェーズの合格基準を定義してください：
+
+#### Phase 1: 要件定義
+- [ ] 機能要件が明確に記載されている
+- [ ] 受け入れ基準が定義されている
+...
+
+#### Phase 2: 設計
+- [ ] 実装戦略の判断根拠が明記されている
+- [ ] テスト戦略の判断根拠が明記されている
+...
+
+（以下、Phase 3~7についても記載）
+
+## 出力形式
+
+Markdown形式でプロジェクト計画書を作成し、以下のファイルに保存してください：
+
+```
+.ai-workflow/issue-322/00_planning/output/planning.md
+```
+
+## 品質ゲート（Phase 0）
+
+作成するプロジェクト計画書は、以下の品質ゲートを満たす必要があります：
+
+- [ ] **実装戦略が明確に決定されている**（CREATE/EXTEND/REFACTOR）
+- [ ] **テスト戦略が明確に決定されている**（UNIT_ONLY/.../ALL）
+- [ ] **テストコード戦略が明確に決定されている**（EXTEND_TEST/CREATE_TEST/BOTH_TEST）
+- [ ] **影響範囲が分析されている**
+- [ ] **タスク分割が適切な粒度である**（1タスク = 1~4時間）
+- [ ] **リスクが洗い出されている**
+
+これらの品質ゲートは**必須要件**です。作成後、クリティカルシンキングレビューが実施され、品質ゲートを満たさない場合は修正が必要になります。
+
+## 注意事項
+
+1. **実装戦略の判断**: Phase 2で使用されるため、必ず明記してください
+   - 実装戦略: CREATE/EXTEND/REFACTOR
+   - テスト戦略: UNIT_ONLY/.../ALL
+   - テストコード戦略: EXTEND_TEST/CREATE_TEST/BOTH_TEST
+
+2. **具体性**: 曖昧な表現を避け、具体的かつ測定可能な計画を記述
+   - NG例: "適切に対応する"、"必要に応じて実施"
+   - OK例: "Phase 2で詳細設計を実施"、"最大3回のリトライを実施"
+
+3. **実現可能性**: 見積もりが現実的か、リソースは十分か確認
+   - タスク粒度が大きすぎないか（1タスク = 1~4時間）
+   - 依存関係が正確に記載されているか
+
+4. **リスク分析の網羅性**: 重要なリスクが見逃されていないか確認
+   - 技術的リスク、スコープリスク、リソースリスク、依存リスク
+
+5. **レビューされることを意識**: 作成した計画書はクリティカルシンキングレビューが実施されます
+   - 品質ゲート（6つの必須要件）を最優先で満たすこと
+   - ブロッカー（次フェーズに進めない問題）がないように注意
+   - 改善提案は歓迎されるが、ブロッカーは修正が必須
+
+## 参考情報
+
+必要に応じて以下を参照してください（存在する場合）：
+- @CLAUDE.md - プロジェクトの全体方針とコーディングガイドライン
+- @ARCHITECTURE.md - アーキテクチャ設計思想
+- @CONTRIBUTION.md - 開発ガイドライン
+- @README.md - プロジェクト概要と使用方法
+- その他、プロジェクト固有のドキュメント
+
+## プロジェクト計画書の作成を開始してください

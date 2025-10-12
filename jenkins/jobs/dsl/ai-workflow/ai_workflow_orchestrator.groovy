@@ -109,6 +109,22 @@ INFO: 通常ログ（デフォルト）
 WARNING: 警告以上
 ERROR: エラーのみ
         '''.stripIndent().trim())
+
+        stringParam('GIT_COMMIT_USER_NAME', 'AI Workflow Bot', '''
+Gitコミット時のユーザー名
+
+AIワークフローがコミットを作成する際のGitユーザー名を指定します。
+
+デフォルト: AI Workflow Bot
+        '''.stripIndent().trim())
+
+        stringParam('GIT_COMMIT_USER_EMAIL', 'ai-workflow@example.com', '''
+Gitコミット時のメールアドレス
+
+AIワークフローがコミットを作成する際のGitメールアドレスを指定します。
+
+デフォルト: ai-workflow@example.com
+        '''.stripIndent().trim())
     }
 
     // ビルド保持設定
