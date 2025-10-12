@@ -1,23 +1,23 @@
 #!/usr/bin/env python3
-"""Simple test runner to execute GitManager tests and capture results"""
+"""Test runner for GitHub progress comment integration tests (Issue #370)"""
 import subprocess
 import sys
 import os
 
 # Change to the correct directory
-os.chdir('/workspace/scripts/ai-workflow')
+os.chdir('/tmp/jenkins-56a667ea/workspace/AI_Workflow/ai_workflow_orchestrator/scripts/ai-workflow')
 
 # Run pytest with specific options
 cmd = [
     sys.executable, '-m', 'pytest',
-    'tests/unit/core/test_git_manager.py',
+    'tests/integration/test_github_progress_comment.py',
     '-v',
     '--tb=short',
     '--no-header'
 ]
 
 print("=" * 80)
-print("Running GitManager Unit Tests")
+print("Running GitHub Progress Comment Integration Tests (Issue #370)")
 print("=" * 80)
 print(f"Command: {' '.join(cmd)}")
 print("=" * 80)
