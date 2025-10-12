@@ -835,6 +835,266 @@ class GitHubClient:
             print(f"[ERROR] 予期しないエラー: {e}")
             raise RuntimeError(f"Unexpected error while creating or updating progress comment: {e}")
 
+    def update_pull_request(
+        self,
+        pr_number: int,
+        body: str
+    ) -> Dict[str, Any]:
+        """
+        Pull Requestの本文を更新
+
+        Args:
+            pr_number: PR番号
+            body: 新しいPR本文（Markdown形式）
+
+        Returns:
+            Dict[str, Any]:
+                - success: bool - 成功/失敗
+                - error: Optional[str] - エラーメッセージ（成功時はNone）
+
+        処理フロー:
+            1. repository.get_pull(pr_number)でPRを取得
+            2. pr.edit(body=body)でPR本文を更新
+            3. 成功時は {'success': True, 'error': None}を返却
+            4. 失敗時はエラーメッセージを返却
+
+        エラーハンドリング:
+            - PR未存在（404 Not Found）: エラーメッセージを返却
+            - 権限不足（401/403）: 権限エラーメッセージを返却
+            - API制限到達（429 Rate Limit Exceeded）: rate limit警告メッセージを返却
+        """
+        try:
+            # PRを取得
+            pr = self.repository.get_pull(pr_number)
+
+            # PR本文を更新
+            pr.edit(body=body)
+
+            return {
+                'success': True,
+                'error': None
+            }
+
+        except GithubException as e:
+            # エラーの種類に応じてメッセージを設定
+            if e.status == 404:
+                error_message = f'PR #{pr_number} not found'
+            elif e.status == 401 or e.status == 403:
+                error_message = 'GitHub Token lacks PR edit permissions'
+            elif e.status == 429:
+                error_message = 'GitHub API rate limit exceeded'
+            else:
+                error_message = f'GitHub API error: {e.status} - {e.data.get("message", "Unknown")}'
+
+            return {
+                'success': False,
+                'error': error_message
+            }
+
+        except Exception as e:
+            return {
+                'success': False,
+                'error': f'Unexpected error: {e}'
+            }
+
+    def _generate_pr_body_detailed(
+        self,
+        issue_number: int,
+        branch_name: str,
+        extracted_info: Dict[str, Any]
+    ) -> str:
+        """
+        詳細版PR本文を生成
+
+        Args:
+            issue_number: Issue番号
+            branch_name: ブランチ名
+            extracted_info: 抽出された成果物情報
+                - summary: 変更サマリー
+                - implementation_details: 実装詳細
+                - test_results: テスト結果
+                - documentation_updates: ドキュメント更新リスト
+                - review_points: レビューポイント
+
+        Returns:
+            str: 詳細版PR本文（Markdown形式）
+
+        処理フロー:
+            1. テンプレートファイル pr_body_detailed_template.md を読み込み
+            2. プレースホルダーを置換
+            3. 生成されたPR本文を返却
+
+        エラーハンドリング:
+            - FileNotFoundError: テンプレートファイルが存在しない
+            - KeyError: 必須プレースホルダーが欠落している
+        """
+        from pathlib import Path
+
+        try:
+            # テンプレートファイルのパスを取得
+            template_path = Path(__file__).parent.parent / 'templates' / 'pr_body_detailed_template.md'
+
+            # テンプレートを読み込み
+            with open(template_path, 'r', encoding='utf-8') as f:
+                template = f.read()
+
+            # プレースホルダーを置換
+            return template.format(
+                issue_number=issue_number,
+                branch_name=branch_name,
+                **extracted_info
+            )
+
+        except FileNotFoundError:
+            raise FileNotFoundError(f"Template file not found: {template_path}")
+
+        except KeyError as e:
+            raise KeyError(f"Missing placeholder in template: {e}")
+
+    def _extract_phase_outputs(
+        self,
+        issue_number: int,
+        phase_outputs: Dict[str, Path]
+    ) -> Dict[str, Any]:
+        """
+        各フェーズの成果物から情報を抽出
+
+        Args:
+            issue_number: Issue番号
+            phase_outputs: フェーズ名 → 成果物パス
+
+        Returns:
+            Dict[str, Any]:
+                - summary: 変更サマリー（Issueから抽出）
+                - implementation_details: 実装詳細（Phase 4から抽出）
+                - test_results: テスト結果（Phase 6から抽出）
+                - documentation_updates: ドキュメント更新リスト（Phase 7から抽出）
+                - review_points: レビューポイント（設計書から抽出）
+
+        処理フロー:
+            1. Issue本文から概要を抽出
+            2. Phase 4の implementation.md から実装詳細を抽出
+            3. Phase 6の test-result.md からテスト結果を抽出
+            4. Phase 7の documentation-update-log.md からドキュメント更新リストを抽出
+            5. Phase 2の design.md からレビューポイントを抽出
+
+        エラーハンドリング:
+            - 情報抽出に失敗した場合は警告ログを出力し、デフォルト値を使用
+        """
+        try:
+            # Issue本文から概要を抽出
+            issue = self.get_issue(issue_number)
+            summary = self._extract_summary_from_issue(issue.body or '')
+
+            # Phase 4から実装詳細を抽出
+            impl_path = phase_outputs.get('implementation')
+            if impl_path and impl_path.exists():
+                content = impl_path.read_text(encoding='utf-8')
+                implementation_details = self._extract_section(content, '## 実装内容')
+                if not implementation_details:
+                    implementation_details = '（実装詳細の記載なし）'
+            else:
+                implementation_details = '（実装詳細の記載なし）'
+
+            # Phase 6からテスト結果を抽出
+            test_path = phase_outputs.get('test_result')
+            if test_path and test_path.exists():
+                content = test_path.read_text(encoding='utf-8')
+                test_results = self._extract_section(content, '## テスト結果サマリー')
+                if not test_results:
+                    test_results = '（テスト結果の記載なし）'
+            else:
+                test_results = '（テスト結果の記載なし）'
+
+            # Phase 7からドキュメント更新リストを抽出
+            doc_path = phase_outputs.get('documentation')
+            if doc_path and doc_path.exists():
+                content = doc_path.read_text(encoding='utf-8')
+                documentation_updates = self._extract_section(content, '## 更新されたドキュメント')
+                if not documentation_updates:
+                    documentation_updates = '（ドキュメント更新の記載なし）'
+            else:
+                documentation_updates = '（ドキュメント更新の記載なし）'
+
+            # Phase 2からレビューポイントを抽出
+            design_path = phase_outputs.get('design')
+            if design_path and design_path.exists():
+                content = design_path.read_text(encoding='utf-8')
+                review_points = self._extract_section(content, '## レビューポイント')
+                if not review_points:
+                    review_points = '（レビューポイントの記載なし）'
+            else:
+                review_points = '（レビューポイントの記載なし）'
+
+            return {
+                'summary': summary,
+                'implementation_details': implementation_details,
+                'test_results': test_results,
+                'documentation_updates': documentation_updates,
+                'review_points': review_points
+            }
+
+        except Exception as e:
+            print(f"[WARNING] 成果物抽出中にエラー: {e}")
+            # デフォルト値を返却
+            return {
+                'summary': '（情報抽出エラー）',
+                'implementation_details': '（情報抽出エラー）',
+                'test_results': '（情報抽出エラー）',
+                'documentation_updates': '（情報抽出エラー）',
+                'review_points': '（情報抽出エラー）'
+            }
+
+    def _extract_section(self, content: str, section_header: str) -> str:
+        """
+        Markdown文書から特定セクションを抽出
+
+        Args:
+            content: Markdown文書全体
+            section_header: 抽出したいセクションのヘッダー（例: "## 実装内容"）
+
+        Returns:
+            str: 抽出されたセクションの内容（ヘッダー以降、次のヘッダーまで）
+        """
+        lines = content.split('\n')
+        section_lines = []
+        in_section = False
+
+        for line in lines:
+            if line.strip().startswith(section_header):
+                in_section = True
+                continue
+            elif line.strip().startswith('##') and in_section:
+                # 次のセクションに到達したら終了
+                break
+            elif in_section:
+                section_lines.append(line)
+
+        return '\n'.join(section_lines).strip()
+
+    def _extract_summary_from_issue(self, issue_body: str) -> str:
+        """
+        Issue本文から概要を抽出
+
+        Args:
+            issue_body: Issue本文
+
+        Returns:
+            str: 抽出された概要
+        """
+        # "## 概要"セクションを抽出
+        summary = self._extract_section(issue_body, '## 概要')
+
+        if not summary:
+            # 概要セクションがない場合は、最初の段落を使用
+            lines = issue_body.strip().split('\n')
+            for line in lines:
+                if line.strip() and not line.strip().startswith('#'):
+                    return line.strip()
+            return '（概要の記載なし）'
+
+        return summary
+
     def close(self):
         """
         GitHub APIクライアントをクローズ

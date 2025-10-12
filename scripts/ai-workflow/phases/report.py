@@ -114,6 +114,54 @@ class ReportPhase(BasePhase):
             except Exception as e:
                 print(f"[WARNING] 成果物のGitHub投稿に失敗しました: {e}")
 
+            # PR本文を詳細版に更新（Phase 8完了時）
+            try:
+                print("[INFO] PR本文を詳細版に更新します")
+
+                # メタデータからPR番号を取得
+                pr_number = self.metadata.data.get('pr_number')
+
+                if not pr_number:
+                    print("[WARNING] メタデータにpr_numberが保存されていません。既存PRを検索します。")
+                    branch_name = self.metadata.data.get('branch_name', f'ai-workflow/issue-{issue_number}')
+                    existing_pr = self.github_client.check_existing_pr(head=branch_name)
+                    if existing_pr:
+                        pr_number = existing_pr['pr_number']
+                        print(f"[INFO] 既存PRが見つかりました: #{pr_number}")
+                    else:
+                        print("[WARNING] PRが見つかりませんでした。PR更新をスキップします。")
+                        pr_number = None
+
+                if pr_number:
+                    # 成果物情報を抽出
+                    extracted_info = self.github_client._extract_phase_outputs(
+                        issue_number=issue_number,
+                        phase_outputs=phase_outputs
+                    )
+
+                    # 詳細版PR本文を生成
+                    branch_name = self.metadata.data.get('branch_name', f'ai-workflow/issue-{issue_number}')
+                    pr_body_detailed = self.github_client._generate_pr_body_detailed(
+                        issue_number=issue_number,
+                        branch_name=branch_name,
+                        extracted_info=extracted_info
+                    )
+
+                    # PR本文を更新
+                    result = self.github_client.update_pull_request(
+                        pr_number=pr_number,
+                        body=pr_body_detailed
+                    )
+
+                    if result['success']:
+                        print(f"[INFO] PR本文の更新に成功しました: PR #{pr_number}")
+                    else:
+                        print(f"[WARNING] PR本文の更新に失敗しました: {result['error']}")
+
+            except Exception as e:
+                print(f"[WARNING] PR更新処理でエラーが発生しました: {e}")
+                print("[INFO] Phase 8は成功として継続します")
+
             # ステータス更新: BasePhase.run()で実行されるため不要
             # self.metadata.update_phase_status('report', 'completed', str(output_file))
             # self.post_progress('completed', f'レポートが完了しました: {output_file.name}')
