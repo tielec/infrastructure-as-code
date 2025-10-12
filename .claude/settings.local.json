@@ -2,9 +2,10 @@
   "permissions": {
     "allow": [
       "Bash(gh issue view:*)",
-      "Bash(while read -r comment_id)",
-      "Bash(do echo \"Deleting comment ID: $comment_id\" gh api \"repos/tielec/infrastructure-as-code/issues/comments/$comment_id\" -X DELETE done)",
-      "Bash(gh api:*)"
+      "Bash(gh api:*)",
+      "Bash(pytest:*)",
+      "Bash(python3 -m pytest:*)",
+      "Bash(cd:*)"
     ],
     "deny": [],
     "ask": []
