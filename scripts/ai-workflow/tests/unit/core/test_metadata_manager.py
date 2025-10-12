@@ -258,3 +258,96 @@ class TestMetadataManager:
         # Assert
         loaded_manager = MetadataManager(metadata_path)
         assert loaded_manager.data['test_field'] == 'test_value'
+
+    def test_clear_removes_metadata_and_directory(self, tmp_path):
+        """
+        UT-MM-CLEAR-001: 正常系 - メタデータファイル削除
+
+        検証項目:
+        - メタデータファイルが正しく削除されること
+        - ワークフローディレクトリが正しく削除されること
+        """
+        # Arrange
+        metadata_path = tmp_path / 'test_workflow' / 'metadata.json'
+        metadata_path.parent.mkdir(parents=True, exist_ok=True)
+        WorkflowState.create_new(
+            metadata_path=metadata_path,
+            issue_number='360',
+            issue_url='https://github.com/tielec/infrastructure-as-code/issues/360',
+            issue_title='Test Issue'
+        )
+        manager = MetadataManager(metadata_path)
+
+        # メタデータファイルが存在することを確認
+        assert metadata_path.exists()
+        assert metadata_path.parent.exists()
+
+        # Act
+        manager.clear()
+
+        # Assert
+        assert not metadata_path.exists()
+        assert not metadata_path.parent.exists()
+
+    def test_clear_handles_nonexistent_files(self, tmp_path):
+        """
+        UT-MM-CLEAR-002: 正常系 - ファイル不存在時のエラーなし
+
+        検証項目:
+        - メタデータファイルが存在しない場合でもエラーが発生しないこと
+        """
+        # Arrange
+        metadata_path = tmp_path / 'nonexistent_workflow' / 'metadata.json'
+        manager = MetadataManager.__new__(MetadataManager)
+        manager.metadata_path = metadata_path
+        manager.workflow_dir = metadata_path.parent
+
+        # ファイルが存在しないことを確認
+        assert not metadata_path.exists()
+        assert not metadata_path.parent.exists()
+
+        # Act & Assert - エラーが発生しないことを確認
+        try:
+            manager.clear()
+        except Exception as e:
+            pytest.fail(f"clear() should not raise exception for nonexistent files: {e}")
+
+    def test_clear_handles_permission_error(self, tmp_path):
+        """
+        UT-MM-CLEAR-003: 異常系 - 権限エラー
+
+        検証項目:
+        - 削除権限がない場合に適切にエラーが発生すること
+        """
+        # Arrange
+        metadata_path = tmp_path / 'readonly_workflow' / 'metadata.json'
+        metadata_path.parent.mkdir(parents=True, exist_ok=True)
+        WorkflowState.create_new(
+            metadata_path=metadata_path,
+            issue_number='360',
+            issue_url='https://github.com/tielec/infrastructure-as-code/issues/360',
+            issue_title='Test Issue'
+        )
+
+        # ファイルを読み取り専用にする
+        import os
+        os.chmod(metadata_path, 0o444)
+        os.chmod(metadata_path.parent, 0o555)
+
+        manager = MetadataManager(metadata_path)
+
+        # Act & Assert
+        try:
+            with pytest.raises(PermissionError):
+                manager.clear()
+        finally:
+            # クリーンアップ: 権限を戻して削除
+            try:
+                os.chmod(metadata_path, 0o644)
+                os.chmod(metadata_path.parent, 0o755)
+                if metadata_path.exists():
+                    metadata_path.unlink()
+                if metadata_path.parent.exists():
+                    metadata_path.parent.rmdir()
+            except:
+                pass  # クリーンアップのエラーは無視

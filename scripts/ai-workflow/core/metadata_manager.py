@@ -120,3 +120,38 @@ class MetadataManager:
         count = self._state.increment_retry_count(phase_name)
         self._state.save()
         return count
+
+    def clear(self) -> None:
+        """
+        メタデータとワークフローディレクトリをクリア
+
+        破壊的操作のため、--force-resetフラグが明示的に指定された
+        場合のみ呼び出してください。
+
+        Note:
+            - metadata.jsonファイルを削除
+            - ワークフローディレクトリ全体を削除
+            - 削除前にログで警告を表示
+            - 削除対象が存在しない場合はスキップ（エラーなし）
+        """
+        import shutil
+        import click
+
+        try:
+            # メタデータファイル削除
+            if self.metadata_path.exists():
+                click.echo(f"[INFO] Clearing metadata: {self.metadata_path}")
+                self.metadata_path.unlink()
+
+            # ワークフローディレクトリ削除
+            if self.workflow_dir.exists():
+                click.echo(f"[INFO] Removing workflow directory: {self.workflow_dir}")
+                shutil.rmtree(self.workflow_dir)
+                click.echo(f"[OK] Workflow directory removed successfully")
+
+        except PermissionError as e:
+            click.echo(f"[ERROR] Permission denied: {e}")
+            raise
+        except OSError as e:
+            click.echo(f"[ERROR] Failed to remove directory: {e}")
+            raise

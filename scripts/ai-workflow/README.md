@@ -324,7 +324,23 @@ jenkins-cli build AI_Workflow/ai_workflow_orchestrator \
   - 既存PRチェック機能
   - GitHub Token `repo` スコープ必須
 
-### 🚧 開発中（v1.9.0以降）
+### ✅ 完了（v1.9.0 レジューム機能 - Issue #360）
+- [x] `--phase all`実行時の自動レジューム機能
+  - 失敗したフェーズから自動的に再開
+  - メタデータJSON（`.ai-workflow/issue-XXX/metadata.json`）に記録されたフェーズステータスを活用
+  - レジューム開始フェーズの優先順位決定（failed > in_progress > pending）
+- [x] `--force-reset`フラグの追加
+  - メタデータとワークフローディレクトリをクリアして最初から実行
+  - `MetadataManager.clear()`メソッドの実装
+- [x] エッジケース対応
+  - メタデータ不存在時: 新規ワークフローとして実行
+  - メタデータ破損時: 警告表示して新規ワークフローとして実行
+  - 全フェーズ完了時: 完了メッセージ表示、`--force-reset`で再実行可能
+- [x] レジューム状態のログ出力
+  - 完了済みフェーズ、失敗フェーズ、進行中フェーズ、未実行フェーズを明示
+  - レジューム開始フェーズを明確に表示
+
+### 🚧 開発中（v2.0.0以降）
 - [ ] GitHub Webhook連携
 - [ ] レビュー基準カスタマイズ
 - [ ] コスト最適化とモニタリング
@@ -503,6 +519,87 @@ python main.py execute --phase requirements --issue 304 \
 - 途中でフェーズが失敗した場合、それ以降のフェーズは実行されず停止
 - 実行サマリーで全フェーズの結果、総実行時間、総コストを表示
 - Phase 0（planning）は含まれない（事前に個別実行を推奨）
+- **レジューム機能**: 途中で失敗した場合、次回実行時に失敗したフェーズから自動的に再開
+
+### レジューム機能（v1.9.0で追加 - Issue #360）
+
+`--phase all`実行時、途中でフェーズが失敗した場合、次回実行時に**自動的に失敗したフェーズから再開**します。
+
+#### デフォルト動作: 自動レジューム
+
+```bash
+# 初回実行（Phase 5で失敗したとする）
+python main.py execute --phase all --issue 304
+
+# 次回実行時、自動的にPhase 5から再開
+python main.py execute --phase all --issue 304
+
+# ログ例:
+# [INFO] Existing workflow detected.
+# [INFO] Completed phases: requirements, design, test_scenario, implementation
+# [INFO] Failed phases: test_implementation
+# [INFO] Resuming from phase: test_implementation
+```
+
+#### レジューム開始フェーズの決定ルール
+
+以下の優先順位でレジューム開始フェーズを決定します：
+
+1. **failedフェーズ**: 最初に失敗したフェーズから再開（最優先）
+2. **in_progressフェーズ**: 異常終了したフェーズから再開
+3. **pendingフェーズ**: 最初の未実行フェーズから再開
+4. **全フェーズcompleted**: 既に完了済みメッセージを表示して終了
+
+#### 強制リセット: --force-reset
+
+最初から実行し直したい場合は`--force-reset`フラグを使用します。
+
+```bash
+# メタデータをクリアして最初から実行
+python main.py execute --phase all --issue 304 --force-reset
+
+# ログ例:
+# [INFO] --force-reset specified. Restarting from Phase 1...
+# [INFO] Clearing metadata: .ai-workflow/issue-304/metadata.json
+# [INFO] Removing workflow directory: .ai-workflow/issue-304
+# [OK] Workflow directory removed successfully
+# [INFO] Starting new workflow.
+```
+
+**注意:**
+- `--force-reset`は破壊的操作です。既存のメタデータとワークフローディレクトリ全体が削除されます。
+- 全フェーズが完了している場合、レジュームは行われず、完了メッセージが表示されます。この場合も`--force-reset`で再実行可能です。
+
+#### エッジケース
+
+**メタデータ不存在時:**
+```bash
+# 初回実行（メタデータが存在しない場合）
+python main.py execute --phase all --issue 304
+
+# ログ例:
+# [INFO] Starting new workflow.
+```
+
+**メタデータ破損時:**
+```bash
+# metadata.jsonが破損している場合
+python main.py execute --phase all --issue 304
+
+# ログ例:
+# [WARNING] metadata.json is corrupted. Starting as new workflow.
+# [INFO] Starting new workflow.
+```
+
+**全フェーズ完了時:**
+```bash
+# 全フェーズが既に完了している場合
+python main.py execute --phase all --issue 304
+
+# ログ例:
+# [INFO] All phases are already completed.
+# [INFO] To re-run, use --force-reset flag.
+```
 
 ## Docker環境
 

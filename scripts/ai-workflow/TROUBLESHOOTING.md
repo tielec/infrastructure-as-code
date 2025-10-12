@@ -413,6 +413,110 @@ attrib -r ..\..\..\.ai-workflow\issue-123\metadata.json
 3. **管理者権限で実行**:
    PowerShellを管理者として実行してください。
 
+### Q5-5: レジュームが期待通り動作しない（v1.9.0で追加）
+
+**症状**:
+`--phase all`実行時に、失敗したフェーズから再開されず、Phase 0から再実行される。
+
+**原因**:
+metadata.jsonの状態が正しく保存されていないか、期待と異なるステータスになっています。
+
+**解決方法**:
+
+1. **metadata.jsonの状態を確認**:
+```powershell
+# metadata.jsonの内容を確認
+type .ai-workflow\issue-304\metadata.json
+
+# phasesセクションを確認し、各フェーズのstatusを確認
+# status値: "pending", "in_progress", "completed", "failed"
+```
+
+2. **レジューム判定をテスト**:
+```powershell
+# 詳細ログを有効化して実行
+python main.py execute --phase all --issue 304
+
+# 期待されるログ:
+# [INFO] Resuming from first failed phase: design
+# または
+# [INFO] Resuming from first in_progress phase: implementation
+```
+
+3. **強制リセットして再実行**:
+```powershell
+# metadata.jsonをクリアして最初から実行
+python main.py execute --phase all --issue 304 --force-reset
+```
+
+### Q5-6: `--force-reset`を使っても状態がリセットされない
+
+**症状**:
+`--force-reset`フラグを指定しても、前回の実行状態が残っている。
+
+**原因**:
+- metadata.jsonが読み取り専用になっている
+- 書き込み権限がない
+- ファイルが他のプロセスで開かれている
+
+**解決方法**:
+
+1. **ファイルアクセス権限を確認**:
+```powershell
+# 読み取り専用を解除
+attrib -r .ai-workflow\issue-304\metadata.json
+
+# 書き込み可能か確認
+echo "test" >> .ai-workflow\issue-304\metadata.json
+```
+
+2. **手動でメタデータを削除**:
+```powershell
+# metadata.jsonを削除して再初期化
+Remove-Item .ai-workflow\issue-304\metadata.json
+python main.py init --issue-url https://github.com/.../issues/304
+```
+
+3. **ワークフローディレクトリ全体を削除して再作成**:
+```powershell
+# 完全にクリーンな状態から開始
+Remove-Item -Recurse -Force .ai-workflow\issue-304
+python main.py init --issue-url https://github.com/.../issues/304
+python main.py execute --phase all --issue 304
+```
+
+### Q5-7: "All phases already completed" と表示されるが実行したい
+
+**症状**:
+```bash
+$ python main.py execute --phase all --issue 304
+[INFO] All phases already completed. Nothing to resume.
+```
+
+**原因**:
+全フェーズがすでに完了しているため、`--phase all`では実行されません。
+
+**解決方法**:
+
+#### オプション1: 特定フェーズのみ再実行
+```powershell
+# 特定のフェーズを指定して再実行
+python main.py execute --phase design --issue 304
+```
+
+#### オプション2: `--force-reset`で最初から再実行
+```powershell
+# 全フェーズをリセットして最初から実行
+python main.py execute --phase all --issue 304 --force-reset
+```
+
+#### オプション3: メタデータを手動で編集（非推奨）
+```powershell
+# metadata.jsonを開いて特定フェーズのstatusを"pending"に変更
+# 注意: 手動編集は非推奨。--force-resetを使用することを推奨
+notepad .ai-workflow\issue-304\metadata.json
+```
+
 ---
 
 ## 6. その他の問題
@@ -534,5 +638,6 @@ type .ai-workflow\issue-XXX\metadata.json
 
 ---
 
-**バージョン**: 1.0.0 (MVP)
-**最終更新**: 2025-10-07
+**バージョン**: 1.9.0
+**最終更新**: 2025-10-12
+**v1.9.0追加**: レジューム機能関連のトラブルシューティング（Q5-5, Q5-6, Q5-7）
