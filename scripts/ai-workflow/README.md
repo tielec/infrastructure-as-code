@@ -409,6 +409,22 @@ jenkins-cli build AI_Workflow/ai_workflow_orchestrator \
   - 既存のメタデータ形式を保持
   - `github_integration`セクションが存在しない場合は新規コメント作成として動作
 
+### ✅ 完了（v2.3.0 PR本文自動更新機能 - Issue #363）
+- [x] Phase 8完了時のPR本文自動更新
+  - Phase 8（report）完了後、Pull Request本文を詳細な情報に自動更新
+  - PR本文に含まれる情報: Issue概要、実装内容、テスト結果、ドキュメント更新、レビューポイント
+  - テンプレートシステム（`pr_body_detailed_template.md`）による統一フォーマット
+- [x] GitHubClient拡張（5つの新メソッド）
+  - `update_pull_request()`: PR本文をGitHub API経由で更新
+  - `_generate_pr_body_detailed()`: テンプレートから詳細なPR本文を生成
+  - `_extract_phase_outputs()`: 各Phase成果物から情報を抽出
+  - `_extract_section()`: Markdownセクションを抽出するヘルパーメソッド
+  - `_extract_summary_from_issue()`: Issue本文からサマリーを抽出
+- [x] ReportPhase統合
+  - Phase 8のexecute()メソッドにPR更新ロジックを統合
+  - PR番号はmetadata.jsonから自動取得
+  - PR更新失敗時でもPhase 8自体は成功扱い（警告ログのみ）
+
 ### 🚧 開発中（v2.0.0以降）
 - [ ] GitHub Webhook連携
 - [ ] レビュー基準カスタマイズ
@@ -426,7 +442,12 @@ scripts/ai-workflow/
 │   ├── github_client.py         # GitHub API統合
 │   │   ├── get_issue()          # Issue情報取得
 │   │   ├── create_pull_request() # PR作成（v1.8.0で追加）
-│   │   └── check_existing_pr()  # 既存PRチェック（v1.8.0で追加）
+│   │   ├── check_existing_pr()  # 既存PRチェック（v1.8.0で追加）
+│   │   ├── update_pull_request() # PR本文更新（v2.3.0で追加）
+│   │   ├── _generate_pr_body_detailed() # 詳細PR本文生成（v2.3.0で追加）
+│   │   ├── _extract_phase_outputs() # Phase成果物情報抽出（v2.3.0で追加）
+│   │   ├── _extract_section()   # Markdownセクション抽出（v2.3.0で追加）
+│   │   └── _extract_summary_from_issue() # Issue概要抽出（v2.3.0で追加）
 │   └── phase_dependencies.py    # フェーズ依存関係管理（v2.1.0で追加）
 │       ├── PHASE_DEPENDENCIES   # フェーズ依存関係定義
 │       ├── PHASE_PRESETS        # 実行プリセット定義
@@ -457,6 +478,7 @@ scripts/ai-workflow/
 │   │                            # - Planning Document参照ロジック追加
 │   ├── report.py                # Phase 8: レポート（旧Phase 7）
 │   │                            # - Planning Document参照ロジック追加
+│   │                            # - Phase 8完了後、PR本文を自動更新（v2.3.0で追加）
 │   └── evaluation.py            # Phase 9: プロジェクト評価（v2.0.0で追加）
 │                                # - Phase 1-8の全成果物を統合評価
 │                                # - 4つの判定タイプによる後続処理の自動決定
@@ -482,6 +504,8 @@ scripts/ai-workflow/
 │   │   ├── review.txt           # 評価レビュープロンプト
 │   │   └── revise.txt           # 評価修正プロンプト
 │   └── ...                      # 他のフェーズのプロンプト（すべてPlanning Document参照追加）
+├── templates/
+│   └── pr_body_detailed_template.md  # PR本文詳細テンプレート（v2.3.0で追加）
 ├── reviewers/
 │   └── critical_thinking.py     # クリティカルシンキングレビュー（未実装）
 ├── tests/
@@ -914,7 +938,7 @@ pytest tests/unit/
 
 ---
 
-**バージョン**: 2.2.0
+**バージョン**: 2.3.0
 **最終更新**: 2025-10-12
 **Phase 0実装**: Issue #313で追加（プロジェクトマネージャ役割）
 **Phase 5実装**: Issue #324で追加（実装フェーズとテストコード実装フェーズの分離）
@@ -922,3 +946,4 @@ pytest tests/unit/
 **Phase 9実装**: Issue #362で追加（プロジェクト評価フェーズ、4つの判定タイプによる後続処理自動決定）
 **フェーズ依存関係と選択的実行**: Issue #319で追加（依存関係チェック、実行プリセット、外部ドキュメント指定）
 **進捗コメント最適化**: Issue #370で追加（GitHub Issue進捗コメントを1つに統合、98.9%削減）
+**PR本文自動更新**: Issue #363で追加（Phase 8完了後、PR本文を詳細情報に自動更新）
