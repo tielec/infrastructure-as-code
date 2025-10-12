@@ -63,7 +63,7 @@ export GITHUB_REPOSITORY="tielec/infrastructure-as-code"
 **GitHub Token作成方法**:
 1. GitHub Settings → Developer settings → Personal access tokens → Tokens (classic)
 2. Generate new token (classic)
-3. Scopes: `repo` (Full control of private repositories)
+3. Scopes: `repo` (Full control of private repositories) - **PR作成に必須**
 4. トークンをコピーして`GITHUB_TOKEN`に設定
 
 ### 2. ワークフロー初期化
@@ -72,13 +72,27 @@ export GITHUB_REPOSITORY="tielec/infrastructure-as-code"
 # リポジトリルートに移動
 cd C:\Users\ytaka\TIELEC\development\infrastructure-as-code
 
-# Issue URLを指定してワークフロー初期化
+# Issue URLを指定してワークフロー初期化（ドラフトPR自動作成）
 docker run --rm \
+  -e GITHUB_TOKEN="${GITHUB_TOKEN}" \
+  -e GITHUB_REPOSITORY="${GITHUB_REPOSITORY}" \
   -v "$(pwd):/workspace" \
   -w /workspace/scripts/ai-workflow \
   ai-workflow:v1.1.0 \
   python main.py init --issue-url https://github.com/tielec/infrastructure-as-code/issues/304
 ```
+
+**init コマンドの動作**:
+1. `.ai-workflow/issue-XXX/metadata.json` を作成
+2. ブランチ `ai-workflow/issue-XXX` を作成またはチェックアウト
+3. metadata.json を Git コミット
+4. リモートブランチに push（最大3回リトライ）
+5. **ドラフトPRを自動作成**（既存PRがある場合はスキップ）
+
+**注意事項**:
+- `GITHUB_TOKEN` 未設定の場合、PR作成はスキップされます（警告表示）
+- 既存PRが存在する場合、新規作成はスキップされます
+- PR作成失敗時でも init 自体は成功として扱われます
 
 ### 3. Phase 0（プロジェクト計画）実行（推奨）
 
@@ -303,8 +317,14 @@ jenkins-cli build AI_Workflow/ai_workflow_orchestrator \
   - 試行回数の可視化（`[ATTEMPT N/3]`ログ）
   - 最大3回までの自動リトライ
 
-### 🚧 開発中（v1.8.0以降）
-- [ ] PR自動作成機能
+### ✅ 完了（v1.8.0 Init時PR自動作成）
+- [x] Init時ドラフトPR自動作成機能（Issue #355）
+  - metadata.json作成後、自動commit → push → PR作成
+  - GitHubClient拡張（create_pull_request, check_existing_pr）
+  - 既存PRチェック機能
+  - GitHub Token `repo` スコープ必須
+
+### 🚧 開発中（v1.9.0以降）
 - [ ] GitHub Webhook連携
 - [ ] レビュー基準カスタマイズ
 - [ ] コスト最適化とモニタリング
@@ -319,6 +339,9 @@ scripts/ai-workflow/
 │   ├── metadata_manager.py      # メタデータ管理
 │   ├── claude_agent_client.py   # Claude Agent SDK統合
 │   └── github_client.py         # GitHub API統合
+│       ├── get_issue()          # Issue情報取得
+│       ├── create_pull_request() # PR作成（v1.8.0で追加）
+│       └── check_existing_pr()  # 既存PRチェック（v1.8.0で追加）
 ├── phases/
 │   ├── base_phase.py            # Phase基底クラス
 │   │                            # - _get_planning_document_path(): Planning Document参照ヘルパー
@@ -419,6 +442,21 @@ python main.py init --issue-url <GitHub Issue URL>
 ```bash
 python main.py init --issue-url https://github.com/tielec/infrastructure-as-code/issues/304
 ```
+
+**動作内容（v1.8.0で拡張）**:
+1. `.ai-workflow/issue-XXX/` ディレクトリと metadata.json を作成
+2. ブランチ `ai-workflow/issue-XXX` を作成またはチェックアウト
+3. metadata.json を自動コミット
+4. リモートブランチに自動 push（最大3回リトライ）
+5. **ドラフトPRを自動作成**（新機能）
+   - PRタイトル: `[AI-Workflow] Issue #XXX`
+   - PR本文: ワークフロー進捗チェックリストを含む
+   - 既存PRがある場合はスキップ
+   - PR作成失敗時は警告のみ（init 自体は成功）
+
+**環境変数要件**:
+- `GITHUB_TOKEN`: PR作成に必須（`repo` スコープ）
+- `GITHUB_REPOSITORY`: リポジトリ名（例: `owner/repo`）
 
 ### `execute` - フェーズ実行
 
@@ -602,7 +640,8 @@ pytest tests/unit/
 
 ---
 
-**バージョン**: 1.7.0
-**最終更新**: 2025-10-10
+**バージョン**: 1.8.0
+**最終更新**: 2025-10-12
 **Phase 0実装**: Issue #313で追加（プロジェクトマネージャ役割）
 **Phase 5実装**: Issue #324で追加（実装フェーズとテストコード実装フェーズの分離）
+**Init時PR作成**: Issue #355で追加（Init実行時にドラフトPR自動作成）
