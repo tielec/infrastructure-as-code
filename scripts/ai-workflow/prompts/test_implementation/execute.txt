@@ -122,7 +122,7 @@ Phase 4で実装された実コードを確認してください：
 - Phase 6でテストを実行
 ```
 
-このログを `.ai-workflow/issue-{issue_number}/05_test_implementation/output/test_implementation.md` として保存してください。
+このログを `.ai-workflow/issue-{issue_number}/05_test_implementation/output/test-implementation.md` として保存してください。
 
 ## 品質ゲート（Phase 5）
 
