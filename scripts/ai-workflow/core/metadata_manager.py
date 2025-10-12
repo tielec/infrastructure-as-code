@@ -3,7 +3,7 @@
 Phase実装で使いやすいインターフェースを提供
 """
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Dict, Any, List
 from .workflow_state import WorkflowState, PhaseStatus
 
 
@@ -155,3 +155,134 @@ class MetadataManager:
         except OSError as e:
             click.echo(f"[ERROR] Failed to remove directory: {e}")
             raise
+
+    def rollback_to_phase(self, phase_name: str) -> Dict[str, Any]:
+        """
+        指定フェーズにメタデータを巻き戻し
+
+        Args:
+            phase_name: 巻き戻し先フェーズ名（例: 'implementation'）
+
+        Returns:
+            Dict[str, Any]:
+                - success: bool
+                - backup_path: str - バックアップファイルパス
+                - rolled_back_phases: List[str] - 巻き戻されたフェーズ一覧
+                - error: Optional[str]
+        """
+        from datetime import datetime
+        import shutil
+
+        try:
+            # フェーズ名のバリデーション
+            all_phases = list(self._state.data['phases'].keys())
+            if phase_name not in all_phases:
+                return {
+                    'success': False,
+                    'error': f'Invalid phase name: {phase_name}'
+                }
+
+            # バックアップ作成
+            timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+            backup_path = str(self.metadata_path.parent / f'metadata.json.backup_{timestamp}')
+            shutil.copy(str(self.metadata_path), backup_path)
+            print(f"[INFO] メタデータバックアップ作成: {backup_path}")
+
+            # 巻き戻し先フェーズのインデックスを取得
+            start_index = all_phases.index(phase_name)
+            rolled_back_phases = all_phases[start_index:]
+
+            # Phase X 以降のフェーズステータスを pending に変更
+            for phase in rolled_back_phases:
+                self._state.data['phases'][phase]['status'] = 'pending'
+                self._state.data['phases'][phase]['started_at'] = None
+                self._state.data['phases'][phase]['completed_at'] = None
+                self._state.data['phases'][phase]['review_result'] = None
+                self._state.data['phases'][phase]['retry_count'] = 0
+
+            # 保存
+            self._state.save()
+
+            print(f"[INFO] メタデータを {phase_name} フェーズに巻き戻しました")
+            print(f"[INFO] 巻き戻されたフェーズ: {', '.join(rolled_back_phases)}")
+
+            return {
+                'success': True,
+                'backup_path': backup_path,
+                'rolled_back_phases': rolled_back_phases,
+                'error': None
+            }
+
+        except Exception as e:
+            return {
+                'success': False,
+                'backup_path': None,
+                'rolled_back_phases': [],
+                'error': str(e)
+            }
+
+    def get_all_phases_status(self) -> Dict[str, str]:
+        """
+        全フェーズのステータスを取得
+
+        Returns:
+            Dict[str, str]: フェーズ名 → ステータス
+        """
+        return {
+            phase_name: phase_data['status']
+            for phase_name, phase_data in self._state.data['phases'].items()
+        }
+
+    def backup_metadata(self) -> str:
+        """
+        metadata.json のバックアップを作成
+
+        Returns:
+            str: バックアップファイルパス
+        """
+        from datetime import datetime
+        import shutil
+
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        backup_path = str(self.metadata_path.parent / f'metadata.json.backup_{timestamp}')
+        shutil.copy(str(self.metadata_path), backup_path)
+        print(f"[INFO] メタデータバックアップ作成: {backup_path}")
+
+        return backup_path
+
+    def set_evaluation_decision(
+        self,
+        decision: str,
+        failed_phase: Optional[str] = None,
+        remaining_tasks: Optional[List[Dict]] = None,
+        created_issue_url: Optional[str] = None,
+        abort_reason: Optional[str] = None
+    ):
+        """
+        評価判定結果を metadata.json に記録
+
+        Args:
+            decision: 判定タイプ（PASS/PASS_WITH_ISSUES/FAIL_PHASE_X/ABORT）
+            failed_phase: FAIL_PHASE_X の場合のフェーズ名
+            remaining_tasks: PASS_WITH_ISSUES の場合の残タスクリスト
+            created_issue_url: PASS_WITH_ISSUES の場合の作成されたIssue URL
+            abort_reason: ABORT の場合の中止理由
+        """
+        if 'evaluation' not in self._state.data['phases']:
+            raise ValueError("Evaluation phase not found in metadata")
+
+        self._state.data['phases']['evaluation']['decision'] = decision
+
+        if failed_phase:
+            self._state.data['phases']['evaluation']['failed_phase'] = failed_phase
+
+        if remaining_tasks:
+            self._state.data['phases']['evaluation']['remaining_tasks'] = remaining_tasks
+
+        if created_issue_url:
+            self._state.data['phases']['evaluation']['created_issue_url'] = created_issue_url
+
+        if abort_reason:
+            self._state.data['phases']['evaluation']['abort_reason'] = abort_reason
+
+        self._state.save()
