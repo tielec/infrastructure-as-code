@@ -404,6 +404,10 @@ AI駆動開発自動化ワークフローは、GitHub IssueからPR作成まで�
     "test_strategy": "INTEGRATION_BDD",
     "test_code_strategy": null
   },
+  "github_integration": {
+    "progress_comment_id": 123456789,
+    "progress_comment_url": "https://github.com/.../issues/123#issuecomment-123456789"
+  },
   "cost_tracking": {
     "total_input_tokens": 12345,
     "total_output_tokens": 6789,
@@ -454,6 +458,12 @@ AI駆動開発自動化ワークフローは、GitHub IssueからPR作成まで�
 }
 ```
 
+**v2.2.0での追加（Issue #370）**:
+- `github_integration`セクション: 進捗コメントIDとURLを管理
+  - `progress_comment_id` (int): GitHub APIから取得したコメントID
+  - `progress_comment_url` (str): コメントのURL（ユーザーが直接アクセス可能）
+- 後方互換性: セクションが存在しない場合は新規コメント作成として動作
+
 ---
 
 ## 5. コンポーネント詳細
@@ -499,6 +509,32 @@ class WorkflowState:
 - ensure_ascii=Falseで日本語対応
 - parents=True, exist_ok=Trueで堅牢なディレクトリ作成
 
+### 5.1.1 MetadataManager（core/metadata_manager.py）・実装済み
+
+**責務**: metadata.jsonの高度な管理機能
+
+**v2.2.0での追加メソッド（Issue #370）**:
+
+```python
+class MetadataManager:
+    def save_progress_comment_id(self, comment_id: int, comment_url: str) -> None:
+        """進捗コメントIDをメタデータに保存"""
+        # self._state.data に 'github_integration' セクションを追加（存在しない場合）
+        # 'progress_comment_id' と 'progress_comment_url' を保存
+        # self._state.save() で保存
+
+    def get_progress_comment_id(self) -> Optional[int]:
+        """進捗コメントIDをメタデータから取得"""
+        # self._state.data['github_integration']の存在確認
+        # 存在する場合: 'progress_comment_id' を返却
+        # 存在しない場合: None を返却（後方互換性）
+```
+
+**設計判断**:
+- 後方互換性を保つため、`github_integration`セクションが存在しない場合は`None`を返却
+- 既存のメタデータフィールドには影響を与えない設計
+- `get_progress_comment_id()`はKeyErrorを発生させず、存在しない場合は`None`を返す安全な実装
+
 ### 5.2 ClaudeClient（core/claude_client.py）・実装済み
 
 **責務**: Claude API通信、コスト追跡
@@ -532,6 +568,15 @@ class GitHubClient:
         # repository.get_pulls(head=head, base=base, state='open')
         # 戻り値: {'pr_number': int, 'pr_url': str, 'state': str} or None
 
+    def create_or_update_progress_comment(self, issue_number: int, content: str,
+                                         metadata_manager) -> Dict[str, Any]:
+        """進捗コメントを作成または更新（v2.2.0で追加 - Issue #370）"""
+        # メタデータから既存コメントIDを取得
+        # コメントIDが存在する場合: repository.get_issue_comment() → comment.edit()
+        # コメントIDが存在しない場合: issue.create_comment() → metadata_manager.save_progress_comment_id()
+        # Edit Comment API失敗時: 新規コメント作成にフォールバック
+        # 戻り値: {'comment_id': int, 'comment_url': str}
+
     def _generate_pr_body_template(self, issue_number: int, branch_name: str) -> str:
         """PR本文テンプレートを生成（v1.8.0で追加）"""
         # Markdown形式のPR本文を生成
@@ -544,10 +589,18 @@ class GitHubClient:
 - `_generate_pr_body_template()`ヘルパーメソッドを追加
 - エラーハンドリング: 401/403（権限エラー）、422（既存PR重複）を特別に処理
 
+**v2.2.0での変更（Issue #370）**:
+- `create_or_update_progress_comment()`メソッドを追加し、進捗コメントを1つに統合
+- GitHub API Edit Comment機能を使用して既存コメントを編集
+- Edit Comment API失敗時の自動フォールバック機能を実装
+- コメント数を最大90コメント → 1コメントに削減（98.9%削減）
+- Issueページ読み込み時間を大幅改善（3秒 → 1秒以下）
+
 **設計方針**:
 - PyGithubライブラリを使用
 - GitHub Token `repo` スコープ必須（PR作成権限）
 - エラー時は例外をraiseせず辞書で返却（呼び出し側でのハンドリングを簡素化）
+- 進捗コメントはMarkdownフォーマット（全体進捗、現在フェーズ詳細、完了フェーズ折りたたみ）
 
 ### 5.4 BasePhase（phases/base_phase.py）・実装済み
 
@@ -599,6 +652,15 @@ class BasePhase(ABC):
 - execute()失敗時も自動的にreview() → revise()を実行
 - 試行回数の可視化：`[ATTEMPT N/3]`形式でログ出力
 - 一時的なエラー（ネットワーク障害、API制限等）からの自動回復が可能
+
+**v2.2.0での変更（Issue #370）**:
+- `post_progress()`メソッドを修正し、統合コメント形式に変更
+- `_format_progress_content()`メソッドを追加してMarkdownフォーマットを生成
+  - 全体進捗セクション（Phase 0-9のステータス一覧、アイコン付き）
+  - 現在フェーズの詳細セクション（ステータス、開始時刻、試行回数）
+  - 完了フェーズの折りたたみセクション（`<details>`タグ使用）
+- `create_or_update_progress_comment()`を呼び出して進捗をGitHub Issueに投稿
+- 既存の`post_progress()`呼び出し元は変更不要（シグネチャ維持）
 
 ### 5.5 GitManager（core/git_manager.py）
 
@@ -858,10 +920,11 @@ class ResumeManager:
 
 ---
 
-**バージョン**: 2.0.0
+**バージョン**: 2.2.0
 **最終更新**: 2025-10-12
 **Phase 0実装**: Issue #313で追加（プロジェクトマネージャ役割）
 **Phase 5実装**: Issue #324で追加（実装フェーズとテストコード実装フェーズの分離）
 **Init時PR作成**: Issue #355で追加（Init実行時にドラフトPR自動作成）
 **レジューム機能**: Issue #360で追加（`--phase all`実行時の自動レジューム、`--force-reset`フラグ追加）
 **Phase 9実装**: Issue #362で追加（プロジェクト評価フェーズ、4つの判定タイプによる後続処理自動決定）
+**進捗コメント最適化**: Issue #370で追加（GitHub Issue進捗コメントを1つに統合、98.9%削減）
