@@ -3,7 +3,7 @@
   "issue_url": "https://github.com/tielec/infrastructure-as-code/issues/362",
   "issue_title": "Issue #362",
   "workflow_version": "1.0.0",
-  "current_phase": "requirements",
+  "current_phase": "design",
   "design_decisions": {
     "implementation_strategy": "CREATE",
     "test_strategy": "ALL",
@@ -30,11 +30,11 @@
       "review_result": "PASS_WITH_SUGGESTIONS"
     },
     "design": {
-      "status": "pending",
+      "status": "completed",
       "retry_count": 0,
-      "started_at": null,
-      "completed_at": null,
-      "review_result": null
+      "started_at": "2025-10-12T09:48:56.442197Z",
+      "completed_at": "2025-10-12T09:55:30.379169Z",
+      "review_result": "PASS_WITH_SUGGESTIONS"
     },
     "test_scenario": {
       "status": "pending",
@@ -80,5 +80,5 @@
     }
   },
   "created_at": "2025-10-12T09:38:37.419766Z",
-  "updated_at": "2025-10-12T09:48:49.584373Z"
+  "updated_at": "2025-10-12T09:55:30.379178Z"
 }
