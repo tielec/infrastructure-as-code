@@ -576,5 +576,176 @@ class TestMainExecuteCommand:
         pass
 
 
+class TestCLIGitOptions:
+    """main.py executeコマンドのCLI Git オプションのテストクラス（Issue #322）"""
+
+    def test_main_cli_git_options(self):
+        """UT-MAIN-001: CLIオプション --git-user / --git-email の環境変数設定
+
+        目的: --git-user と --git-email オプションが指定された場合、
+              環境変数 GIT_COMMIT_USER_NAME と GIT_COMMIT_USER_EMAIL に
+              設定されることを検証
+
+        Given:
+            - Gitリポジトリが初期化されている
+            - metadata.jsonが存在する
+            - 環境変数 GIT_COMMIT_USER_NAME と GIT_COMMIT_USER_EMAIL は未設定
+
+        When:
+            - CLIオプション: --git-user "CLI User"
+            - CLIオプション: --git-email "cli@example.com"
+
+        Then:
+            - 環境変数 GIT_COMMIT_USER_NAME の値が "CLI User" になる
+            - 環境変数 GIT_COMMIT_USER_EMAIL の値が "cli@example.com" になる
+            - ログ出力: "[INFO] Git user name set from CLI option: CLI User"
+            - ログ出力: "[INFO] Git user email set from CLI option: cli@example.com"
+        """
+        from click.testing import CliRunner
+        from main import execute
+        import tempfile
+        import shutil
+        from pathlib import Path
+        from git import Repo
+
+        # 一時ディレクトリ作成
+        temp_dir = tempfile.mkdtemp()
+        try:
+            # Gitリポジトリ初期化
+            repo = Repo.init(temp_dir)
+            test_file = Path(temp_dir) / 'README.md'
+            test_file.write_text('# Test')
+            repo.index.add(['README.md'])
+            repo.index.commit('Initial commit')
+
+            # metadata.json作成
+            metadata_dir = Path(temp_dir) / '.ai-workflow' / 'issue-322'
+            metadata_dir.mkdir(parents=True, exist_ok=True)
+            metadata_file = metadata_dir / 'metadata.json'
+            metadata_file.write_text('{"issue_number": "322", "phases": {}, "cost_tracking": {"total_cost_usd": 0.0}}')
+
+            # ブランチ作成
+            repo.git.checkout('-b', 'ai-workflow/issue-322')
+
+            # CLIテスト
+            runner = CliRunner()
+
+            # GitHubクライアントとClaudeクライアントをモック
+            with patch.dict(os.environ, {
+                'GITHUB_TOKEN': 'test-token',
+                'GITHUB_REPOSITORY': 'test/repo'
+            }, clear=True):
+                with patch('main.RequirementsPhase') as mock_phase:
+                    mock_phase_instance = Mock()
+                    mock_phase_instance.run.return_value = True
+                    mock_phase.return_value = mock_phase_instance
+
+                    # executeコマンド実行
+                    result = runner.invoke(execute, [
+                        '--phase', 'requirements',
+                        '--issue', '322',
+                        '--git-user', 'CLI User',
+                        '--git-email', 'cli@example.com'
+                    ], catch_exceptions=False, obj={}, standalone_mode=False)
+
+                    # 環境変数が設定されることを確認
+                    assert os.environ.get('GIT_COMMIT_USER_NAME') == 'CLI User', \
+                        "CLIオプション --git-user が環境変数に設定される"
+                    assert os.environ.get('GIT_COMMIT_USER_EMAIL') == 'cli@example.com', \
+                        "CLIオプション --git-email が環境変数に設定される"
+
+                    # ログ出力確認
+                    assert '[INFO] Git user name set from CLI option: CLI User' in result.output, \
+                        "ユーザー名設定のログが出力される"
+                    assert '[INFO] Git user email set from CLI option: cli@example.com' in result.output, \
+                        "メールアドレス設定のログが出力される"
+
+        finally:
+            # クリーンアップ
+            shutil.rmtree(temp_dir)
+
+    def test_main_cli_git_options_priority(self):
+        """UT-MAIN-002: CLIオプションが環境変数より優先される
+
+        目的: CLIオプションが環境変数より優先されることを検証
+
+        Given:
+            - Gitリポジトリが初期化されている
+            - metadata.jsonが存在する
+            - 環境変数 GIT_COMMIT_USER_NAME="Env User" が設定されている
+            - 環境変数 GIT_COMMIT_USER_EMAIL="env@example.com" が設定されている
+
+        When:
+            - 環境変数: GIT_COMMIT_USER_NAME="Env User" (優先度2)
+            - 環境変数: GIT_COMMIT_USER_EMAIL="env@example.com" (優先度2)
+            - CLIオプション: --git-user "CLI User" (優先度1)
+            - CLIオプション: --git-email "cli@example.com" (優先度1)
+
+        Then:
+            - 環境変数 GIT_COMMIT_USER_NAME の値が "CLI User" に上書きされる
+              （CLIオプションが優先）
+            - 環境変数 GIT_COMMIT_USER_EMAIL の値が "cli@example.com" に上書きされる
+              （CLIオプションが優先）
+        """
+        from click.testing import CliRunner
+        from main import execute
+        import tempfile
+        import shutil
+        from pathlib import Path
+        from git import Repo
+
+        # 一時ディレクトリ作成
+        temp_dir = tempfile.mkdtemp()
+        try:
+            # Gitリポジトリ初期化
+            repo = Repo.init(temp_dir)
+            test_file = Path(temp_dir) / 'README.md'
+            test_file.write_text('# Test')
+            repo.index.add(['README.md'])
+            repo.index.commit('Initial commit')
+
+            # metadata.json作成
+            metadata_dir = Path(temp_dir) / '.ai-workflow' / 'issue-322'
+            metadata_dir.mkdir(parents=True, exist_ok=True)
+            metadata_file = metadata_dir / 'metadata.json'
+            metadata_file.write_text('{"issue_number": "322", "phases": {}, "cost_tracking": {"total_cost_usd": 0.0}}')
+
+            # ブランチ作成
+            repo.git.checkout('-b', 'ai-workflow/issue-322')
+
+            # CLIテスト
+            runner = CliRunner()
+
+            # 環境変数を設定
+            with patch.dict(os.environ, {
+                'GITHUB_TOKEN': 'test-token',
+                'GITHUB_REPOSITORY': 'test/repo',
+                'GIT_COMMIT_USER_NAME': 'Env User',
+                'GIT_COMMIT_USER_EMAIL': 'env@example.com'
+            }):
+                with patch('main.RequirementsPhase') as mock_phase:
+                    mock_phase_instance = Mock()
+                    mock_phase_instance.run.return_value = True
+                    mock_phase.return_value = mock_phase_instance
+
+                    # executeコマンド実行（CLIオプションを指定）
+                    result = runner.invoke(execute, [
+                        '--phase', 'requirements',
+                        '--issue', '322',
+                        '--git-user', 'CLI User',
+                        '--git-email', 'cli@example.com'
+                    ], catch_exceptions=False, obj={}, standalone_mode=False)
+
+                    # CLIオプションが優先される
+                    assert os.environ.get('GIT_COMMIT_USER_NAME') == 'CLI User', \
+                        "CLIオプションが環境変数を上書き"
+                    assert os.environ.get('GIT_COMMIT_USER_EMAIL') == 'cli@example.com', \
+                        "CLIオプションが環境変数を上書き"
+
+        finally:
+            # クリーンアップ
+            shutil.rmtree(temp_dir)
+
+
 if __name__ == '__main__':
     pytest.main([__file__, '-v'])
