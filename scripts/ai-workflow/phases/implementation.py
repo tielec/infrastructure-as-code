@@ -104,9 +104,10 @@ class ImplementationPhase(BasePhase):
 
             # Claude Agent SDKでタスクを実行
             # 実装フェーズは時間がかかる可能性があるため、max_turnsを多めに
+            # 大規模リファクタリング（Issue #376等）では150ターンに設定
             messages = self.execute_with_claude(
                 prompt=execute_prompt,
-                max_turns=50,
+                max_turns=150,
                 log_prefix='execute'
             )
 
@@ -297,9 +298,10 @@ class ImplementationPhase(BasePhase):
             )
 
             # Claude Agent SDKでタスクを実行
+            # 大規模リファクタリング（Issue #376等）では150ターンに設定
             messages = self.execute_with_claude(
                 prompt=revise_prompt,
-                max_turns=50,
+                max_turns=150,
                 log_prefix='revise'
             )
 
