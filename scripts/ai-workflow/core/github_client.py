@@ -333,6 +333,197 @@ class GitHubClient:
 
         return requirements
 
+    def create_pull_request(
+        self,
+        title: str,
+        body: str,
+        head: str,
+        base: str = 'main',
+        draft: bool = True
+    ) -> Dict[str, Any]:
+        """
+        Pull Requestを作成
+
+        Args:
+            title: PRタイトル
+            body: PR本文（Markdown形式）
+            head: ヘッドブランチ名（例: "ai-workflow/issue-355"）
+            base: ベースブランチ名（デフォルト: "main"）
+            draft: ドラフトフラグ（デフォルト: True）
+
+        Returns:
+            Dict[str, Any]:
+                - success: bool - 成功/失敗
+                - pr_url: Optional[str] - PRのURL
+                - pr_number: Optional[int] - PR番号
+                - error: Optional[str] - エラーメッセージ
+
+        Raises:
+            GithubException: GitHub API呼び出しエラー
+
+        処理フロー:
+            1. repository.create_pull()を呼び出し
+            2. draft=Trueの場合、PR作成後に draft ステータスを設定
+            3. 成功時はPR URLとPR番号を返却
+            4. 失敗時はエラーメッセージを返却
+
+        エラーハンドリング:
+            - 認証エラー: 401 Unauthorized → GITHUB_TOKENの権限不足
+            - 既存PR重複: 422 Unprocessable Entity → 既存PRが存在
+            - その他のエラー: 例外メッセージを返却
+        """
+        try:
+            # Pull Request作成
+            pr = self.repository.create_pull(
+                title=title,
+                body=body,
+                head=head,
+                base=base,
+                draft=draft
+            )
+
+            return {
+                'success': True,
+                'pr_url': pr.html_url,
+                'pr_number': pr.number,
+                'error': None
+            }
+
+        except GithubException as e:
+            error_message = f"GitHub API error: {e.status} - {e.data.get('message', 'Unknown error')}"
+
+            # 権限エラーの判定
+            if e.status == 401 or e.status == 403:
+                error_message = "GitHub Token lacks 'repo' scope. Please regenerate token with appropriate permissions."
+
+            # 既存PR重複エラーの判定
+            elif e.status == 422:
+                error_message = "A pull request already exists for this branch."
+
+            return {
+                'success': False,
+                'pr_url': None,
+                'pr_number': None,
+                'error': error_message
+            }
+
+        except Exception as e:
+            return {
+                'success': False,
+                'pr_url': None,
+                'pr_number': None,
+                'error': f'Unexpected error: {e}'
+            }
+
+    def check_existing_pr(
+        self,
+        head: str,
+        base: str = 'main'
+    ) -> Optional[Dict[str, Any]]:
+        """
+        既存Pull Requestの確認
+
+        Args:
+            head: ヘッドブランチ名（例: "ai-workflow/issue-355"）
+            base: ベースブランチ名（デフォルト: "main"）
+
+        Returns:
+            Optional[Dict[str, Any]]:
+                - PRが存在する場合:
+                    - pr_number: int - PR番号
+                    - pr_url: str - PRのURL
+                    - state: str - PRの状態（open/closed）
+                - PRが存在しない場合: None
+
+        処理フロー:
+            1. repository.get_pulls(head=head, base=base, state='open')を呼び出し
+            2. 結果が存在する場合、最初のPRを返却
+            3. 結果が存在しない場合、Noneを返却
+
+        エラーハンドリング:
+            - GitHub API呼び出しエラー → 例外をraiseしない、Noneを返却
+        """
+        try:
+            # repository.nameは"owner/repo"形式なので、ownerを取得
+            owner = self.repository.owner.login
+            full_head = f"{owner}:{head}"
+
+            # open状態のPRを検索
+            pulls = self.repository.get_pulls(
+                state='open',
+                head=full_head,
+                base=base
+            )
+
+            # イテレータから最初の要素を取得
+            for pr in pulls:
+                return {
+                    'pr_number': pr.number,
+                    'pr_url': pr.html_url,
+                    'state': pr.state
+                }
+
+            # PRが存在しない場合
+            return None
+
+        except GithubException as e:
+            # エラーが発生した場合はNoneを返却（存在しないとみなす）
+            print(f"[WARNING] Failed to check existing PR: {e}")
+            return None
+
+        except Exception as e:
+            print(f"[WARNING] Unexpected error while checking existing PR: {e}")
+            return None
+
+    def _generate_pr_body_template(
+        self,
+        issue_number: int,
+        branch_name: str
+    ) -> str:
+        """
+        PR本文テンプレートを生成
+
+        Args:
+            issue_number: Issue番号
+            branch_name: ブランチ名
+
+        Returns:
+            str: PR本文（Markdown形式）
+
+        テンプレート内容:
+            - 関連Issue（Closes #XXX）
+            - ワークフロー進捗チェックリスト（Phase 0のみ完了状態）
+            - 成果物ディレクトリの説明
+            - 実行環境情報（Claude Code Pro Max、ContentParser）
+        """
+        return f"""## AI Workflow自動生成PR
+
+### 📋 関連Issue
+Closes #{issue_number}
+
+### 🔄 ワークフロー進捗
+
+- [x] Phase 0: Planning
+- [ ] Phase 1: Requirements
+- [ ] Phase 2: Design
+- [ ] Phase 3: Test Scenario
+- [ ] Phase 4: Implementation
+- [ ] Phase 5: Test Implementation
+- [ ] Phase 6: Testing
+- [ ] Phase 7: Documentation
+- [ ] Phase 8: Report
+
+### 📁 成果物
+
+`.ai-workflow/issue-{issue_number}/` ディレクトリに各フェーズの成果物が格納されています。
+
+### ⚙️ 実行環境
+
+- **モデル**: Claude Code Pro Max (Sonnet 4.5)
+- **ContentParser**: OpenAI GPT-4o mini
+- **ブランチ**: {branch_name}
+"""
+
     def close(self):
         """
         GitHub APIクライアントをクローズ

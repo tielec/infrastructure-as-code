@@ -403,6 +403,94 @@ def init(issue_url: str):
     click.echo(f'[OK] Workflow initialized: {workflow_dir}')
     click.echo(f'[OK] metadata.json created')
 
+    # ━━━ 新規追加: commit & push & PR作成 ━━━
+    try:
+        # GitManagerインスタンス生成（metadata_managerを使用）
+        from core.metadata_manager import MetadataManager
+
+        metadata_manager = MetadataManager(metadata_path)
+        git_manager = GitManager(
+            repo_path=repo_root,
+            metadata_manager=metadata_manager
+        )
+
+        # metadata.jsonをcommit
+        click.echo('[INFO] Committing metadata.json...')
+        commit_result = git_manager.commit_phase_output(
+            phase_name='planning',  # Phase 0 = planning
+            status='completed',
+            review_result='N/A'
+        )
+
+        if not commit_result.get('success'):
+            click.echo(f"[WARNING] Commit failed. PR will not be created: {commit_result.get('error')}")
+            return
+
+        click.echo(f"[OK] Commit successful: {commit_result.get('commit_hash', 'N/A')[:7]}")
+
+        # リモートにpush
+        click.echo('[INFO] Pushing to remote...')
+        push_result = git_manager.push_to_remote()
+
+        if not push_result.get('success'):
+            click.echo(f"[WARNING] Push failed. PR will not be created: {push_result.get('error')}")
+            return
+
+        click.echo(f"[OK] Push successful")
+
+        # GitHubClientインスタンス生成
+        github_token = os.getenv('GITHUB_TOKEN')
+        github_repository = os.getenv('GITHUB_REPOSITORY')
+
+        if not github_token or not github_repository:
+            click.echo('[WARNING] GITHUB_TOKEN or GITHUB_REPOSITORY not set. PR creation skipped.')
+            click.echo('[INFO] You can create PR manually: gh pr create --draft')
+            return
+
+        github_client = GitHubClient(token=github_token, repository=github_repository)
+
+        # 既存PRチェック
+        click.echo('[INFO] Checking for existing PR...')
+        existing_pr = github_client.check_existing_pr(
+            head=branch_name,
+            base='main'
+        )
+
+        if existing_pr:
+            click.echo(f"[WARNING] PR already exists: {existing_pr['pr_url']}")
+            click.echo('[INFO] Workflow initialization completed (PR creation skipped)')
+            return
+
+        # ドラフトPR作成
+        click.echo('[INFO] Creating draft PR...')
+        pr_title = f"[AI-Workflow] Issue #{issue_number}"
+        pr_body = github_client._generate_pr_body_template(
+            issue_number=int(issue_number),
+            branch_name=branch_name
+        )
+
+        pr_result = github_client.create_pull_request(
+            title=pr_title,
+            body=pr_body,
+            head=branch_name,
+            base='main',
+            draft=True
+        )
+
+        if pr_result.get('success'):
+            click.echo(f"[OK] Draft PR created: {pr_result['pr_url']}")
+            click.echo(f"[OK] Workflow initialization completed successfully")
+        else:
+            click.echo(f"[WARNING] PR creation failed: {pr_result.get('error')}")
+            click.echo('[INFO] Workflow initialization completed (PR creation failed)')
+
+    except Exception as e:
+        click.echo(f"[ERROR] Unexpected error during PR creation: {e}")
+        import traceback
+        traceback.print_exc()
+        click.echo('[INFO] Workflow initialization completed (PR creation failed)')
+    # ━━━ 新規追加ここまで ━━━
+
 
 @cli.command()
 @click.option('--phase', required=True,
