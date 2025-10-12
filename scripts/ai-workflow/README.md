@@ -938,7 +938,7 @@ pytest tests/unit/
 
 ---
 
-**バージョン**: 2.3.0
+**バージョン**: 2.4.0
 **最終更新**: 2025-10-12
 **Phase 0実装**: Issue #313で追加（プロジェクトマネージャ役割）
 **Phase 5実装**: Issue #324で追加（実装フェーズとテストコード実装フェーズの分離）
@@ -947,3 +947,10 @@ pytest tests/unit/
 **フェーズ依存関係と選択的実行**: Issue #319で追加（依存関係チェック、実行プリセット、外部ドキュメント指定）
 **進捗コメント最適化**: Issue #370で追加（GitHub Issue進捗コメントを1つに統合、98.9%削減）
 **PR本文自動更新**: Issue #363で追加（Phase 8完了後、PR本文を詳細情報に自動更新）
+**モジュール分割リファクタリング**: Issue #376で追加（BasePhase/GitManager/GitHubClientを単一責任クラスに分割、Clean Architecture適用）
+
+**アーキテクチャの詳細**: 詳細なアーキテクチャドキュメントは [ARCHITECTURE.md](ARCHITECTURE.md) を参照してください。v2.4.0でClean Architectureに基づくモジュール分割が行われ、以下の層に整理されました：
+- **インフラストラクチャ層（common/）**: logger, error_handler, retry, file_handler
+- **ドメイン層 - Git操作（core/git/）**: GitRepository, GitBranch, GitCommit（従来のGitManagerを分割）
+- **ドメイン層 - GitHub操作（core/github/）**: IssueClient, PRClient, CommentClient（従来のGitHubClientを分割）
+- **ドメイン層 - Phase基底（phases/base/）**: AbstractPhase, PhaseExecutor, PhaseValidator, PhaseReporter（従来のBasePhaseを分割）
