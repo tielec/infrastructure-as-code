@@ -236,7 +236,7 @@ AI駆動開発自動化ワークフローは、GitHub IssueからPR作成まで�
          [ログ出力] [OK] Draft PR created: {pr_url}
 ```
 
-### 4.2 フェーズ実行フロー（v1.6.0実装済み）
+### 4.2 フェーズ実行フロー（v1.9.0で拡張）
 
 ```
 [Jenkins]
@@ -246,7 +246,12 @@ AI駆動開発自動化ワークフローは、GitHub IssueからPR作成まで�
 [main.py:execute()]
     │
     │ 1. metadata.jsonを読み込み
-    │ 2. current_phaseを確認
+    │ 2. --phase all指定時【v1.9.0追加】
+    │    ├─ --force-reset指定 → MetadataManager.clear()実行
+    │    │                     → 全フェーズをpendingにリセット
+    │    └─ 通常実行 → ResumeManager.get_resume_phase()
+    │                 → レジューム開始フェーズを決定
+    │ 3. current_phaseを確認
     ▼
 [BasePhase.run()]
     │
@@ -292,7 +297,94 @@ AI駆動開発自動化ワークフローは、GitHub IssueからPR作成まで�
 [metadata.json]
 ```
 
-### 4.3 データ永続化
+### 4.3 レジュームフロー（v1.9.0で追加 - Issue #360）
+
+```
+[ユーザー]
+    │
+    │ python main.py execute --phase all --issue 304
+    ▼
+[main.py:execute()]
+    │
+    │ 1. MetadataManagerを初期化
+    │ 2. ResumeManagerを初期化
+    ▼
+[--force-reset判定]
+    │
+    ├─ --force-reset指定
+    │    ▼
+    │ [MetadataManager.clear()]
+    │    │
+    │    │ 3. 全フェーズをpendingに戻す
+    │    │ 4. retry_count, timestamps, review_resultをクリア
+    │    │ 5. metadata.jsonを保存
+    │    ▼
+    │ [レジューム開始フェーズ] → "planning"（Phase 0）
+    │
+    └─ 通常実行
+         ▼
+    [ResumeManager.can_resume()]
+         │
+         │ 6. metadata.jsonが存在するか確認
+         │ 7. 少なくとも1フェーズがpending以外か確認
+         ▼
+         │
+         ├─ can_resume() == False
+         │    ▼
+         │ [レジューム開始フェーズ] → "planning"（Phase 0）
+         │
+         └─ can_resume() == True
+              ▼
+         [ResumeManager.is_completed()]
+              │
+              │ 8. 全フェーズのstatusがcompletedか確認
+              ▼
+              │
+              ├─ is_completed() == True
+              │    ▼
+              │ [ログ出力] All phases already completed
+              │ [ワークフロー終了]
+              │
+              └─ is_completed() == False
+                   ▼
+              [ResumeManager.get_resume_phase()]
+                   │
+                   │ 9. フェーズを優先順位で走査
+                   │    優先順位: failed > in_progress > pending
+                   ▼
+                   │
+                   ├─ failedフェーズ存在
+                   │    ▼
+                   │ [レジューム開始フェーズ] → 最初のfailedフェーズ
+                   │ [ログ] Resuming from first failed phase: design
+                   │
+                   ├─ in_progressフェーズ存在
+                   │    ▼
+                   │ [レジューム開始フェーズ] → 最初のin_progressフェーズ
+                   │ [ログ] Resuming from first in_progress phase: implementation
+                   │
+                   └─ pendingフェーズ存在
+                        ▼
+                   [レジューム開始フェーズ] → 最初のpendingフェーズ
+                   [ログ] Resuming from first pending phase: test_scenario
+    ▼
+[execute_phases_from()]
+    │
+    │ 10. 決定されたフェーズから全フェーズを順次実行
+    │ 11. フェーズ完了後、次フェーズへ
+    ▼
+[各BasePhase.run()]
+    │
+    └── フェーズ実行ループ（4.2参照）
+```
+
+**エッジケース対応**:
+1. **metadata.json不在**: can_resume() → False → Phase 0から開始
+2. **metadata.json破損**: JSONDecodeError → エラーログ出力 → ワークフロー停止
+3. **全フェーズcompleted**: is_completed() → True → メッセージ表示して終了
+4. **--force-reset指定**: clear()実行 → Phase 0から強制再開
+
+### 4.4 データ永続化
 
 **metadata.json 構造**:
 
@@ -587,7 +679,48 @@ BasePhase.run()
 2. **権限エラー**: リトライせず即座にエラー返却
 3. **Phase失敗時**: 失敗時もcommit実行（トラブルシューティング用）
 
-### 5.6 CriticalThinkingReviewer（reviewers/critical_thinking.py）
+### 5.6 ResumeManager（utils/resume.py）・v1.9.0で追加
+
+**責務**: ワークフロー状態の分析とレジューム判定（Issue #360）
+
+**主要メソッド**:
+```python
+class ResumeManager:
+    def __init__(self, metadata_manager: MetadataManager):
+        """初期化"""
+
+    def can_resume(self) -> bool:
+        """レジューム可能か判定"""
+        # metadata.jsonが存在し、少なくとも1フェーズが開始されていればTrue
+
+    def is_completed(self) -> bool:
+        """全フェーズが完了しているか判定"""
+        # 全フェーズのstatusがcompletedならTrue
+
+    def get_resume_phase(self) -> Optional[str]:
+        """レジューム開始フェーズを決定"""
+        # 優先順位:
+        # 1. failed: 最初の失敗フェーズ
+        # 2. in_progress: 最初の進行中フェーズ
+        # 3. pending: 最初の未実行フェーズ
+        # 4. すべてcompleted: None
+
+    def get_status_summary(self) -> Dict[str, Any]:
+        """現在のフェーズ状態サマリーを取得"""
+        # フェーズごとのステータス一覧を返却
+
+    def reset(self):
+        """ワークフロー状態をリセット"""
+        # metadata_manager.clear()を呼び出し
+```
+
+**設計判断**:
+- MetadataManagerに依存し、metadata.jsonから状態を読み取る
+- 優先順位に基づくレジューム判定（failed > in_progress > pending）
+- ステートレス: メソッド呼び出しごとにmetadata.jsonを参照
+- エッジケース対応: metadata不在、破損時の適切なエラーハンドリング
+
+### 5.7 CriticalThinkingReviewer（reviewers/critical_thinking.py）
 
 **責務**: AI批判的思考レビュー
 
@@ -708,8 +841,9 @@ BasePhase.run()
 
 ---
 
-**バージョン**: 1.8.0
+**バージョン**: 1.9.0
 **最終更新**: 2025-10-12
 **Phase 0実装**: Issue #313で追加（プロジェクトマネージャ役割）
 **Phase 5実装**: Issue #324で追加（実装フェーズとテストコード実装フェーズの分離）
 **Init時PR作成**: Issue #355で追加（Init実行時にドラフトPR自動作成）
+**レジューム機能**: Issue #360で追加（`--phase all`実行時の自動レジューム、`--force-reset`フラグ追加）
