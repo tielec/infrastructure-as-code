@@ -25,8 +25,8 @@
     "requirements": {
       "status": "failed",
       "retry_count": 2,
-      "started_at": "2025-10-12T06:37:45.070994Z",
-      "completed_at": "2025-10-12T06:38:12.804675Z",
+      "started_at": "2025-10-12T06:40:47.575653Z",
+      "completed_at": "2025-10-12T06:41:14.556347Z",
       "review_result": null
     },
     "design": {
@@ -79,6 +79,6 @@
       "review_result": null
     }
   },
-  "created_at": "2025-10-12T06:37:40.885097Z",
-  "updated_at": "2025-10-12T06:38:12.804684Z"
+  "created_at": "2025-10-12T06:40:43.259348Z",
+  "updated_at": "2025-10-12T06:41:14.556356Z"
 }
