@@ -6,11 +6,11 @@ GitHub Issue情報と要件定義書から詳細設計書を作成し、
 import json
 from pathlib import Path
 from typing import Dict, Any, List
-from .base_phase import BasePhase
+from phases.base.abstract_phase import AbstractPhase
 from core.content_parser import ContentParser
 
 
-class DesignPhase(BasePhase):
+class DesignPhase(AbstractPhase):
     """詳細設計フェーズ"""
 
     def __init__(self, *args, **kwargs):

@@ -139,6 +139,14 @@ class MetadataError(WorkflowError):
     pass
 
 
+class ConfigValidationError(WorkflowError):
+    """設定バリデーションエラー
+
+    config.yamlの読み込み・検証で発生したエラー。
+    """
+    pass
+
+
 class ErrorHandler:
     """エラーハンドリングユーティリティクラス
 

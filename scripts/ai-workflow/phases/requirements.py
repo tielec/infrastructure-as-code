@@ -8,10 +8,10 @@ GitHubのIssue情報から詳細な要件定義書を作成
 import json
 from pathlib import Path
 from typing import Dict, Any, List
-from .base_phase import BasePhase
+from phases.base.abstract_phase import AbstractPhase
 
 
-class RequirementsPhase(BasePhase):
+class RequirementsPhase(AbstractPhase):
     """要件定義フェーズ"""
 
     def __init__(self, *args, **kwargs):

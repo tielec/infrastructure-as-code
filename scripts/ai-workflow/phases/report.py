@@ -5,10 +5,10 @@ Phase 1-7の成果物を統合し、最終レポートを作成する。
 """
 from pathlib import Path
 from typing import Dict, Any, List
-from .base_phase import BasePhase
+from phases.base.abstract_phase import AbstractPhase
 
 
-class ReportPhase(BasePhase):
+class ReportPhase(AbstractPhase):
     """レポート作成フェーズ"""
 
     def __init__(self, *args, **kwargs):

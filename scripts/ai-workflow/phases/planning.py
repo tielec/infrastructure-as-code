@@ -10,11 +10,11 @@ GitHub Issue情報から以下を策定:
 """
 from pathlib import Path
 from typing import Dict, Any, List
-from .base_phase import BasePhase
+from phases.base.abstract_phase import AbstractPhase
 from core.content_parser import ContentParser
 
 
-class PlanningPhase(BasePhase):
+class PlanningPhase(AbstractPhase):
     """プロジェクト計画フェーズ"""
 
     def __init__(self, *args, **kwargs):

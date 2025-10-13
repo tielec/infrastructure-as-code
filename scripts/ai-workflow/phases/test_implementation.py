@@ -6,10 +6,10 @@ Phase 3で作成されたテストシナリオとPhase 4で実装された実コ
 import re
 from pathlib import Path
 from typing import Dict, Any, List
-from .base_phase import BasePhase
+from phases.base.abstract_phase import AbstractPhase
 
 
-class TestImplementationPhase(BasePhase):
+class TestImplementationPhase(AbstractPhase):
     """テストコード実装フェーズ"""
 
     def __init__(self, *args, **kwargs):

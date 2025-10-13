@@ -6,10 +6,10 @@ Phase 4で実装したテストコードを実行し、結果を記録する。
 import re
 from pathlib import Path
 from typing import Dict, Any, List
-from .base_phase import BasePhase
+from phases.base.abstract_phase import AbstractPhase
 
 
-class TestingPhase(BasePhase):
+class TestingPhase(AbstractPhase):
     """テスト実行フェーズ"""
 
     def __init__(self, *args, **kwargs):

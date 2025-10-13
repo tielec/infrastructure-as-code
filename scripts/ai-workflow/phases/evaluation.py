@@ -6,10 +6,10 @@ Phase 1-8の成果物を統合評価し、次のアクションを判定する�
 from pathlib import Path
 from typing import Dict, Any, List, Optional
 import re
-from .base_phase import BasePhase
+from phases.base.abstract_phase import AbstractPhase
 
 
-class EvaluationPhase(BasePhase):
+class EvaluationPhase(AbstractPhase):
     """プロジェクト評価フェーズ"""
 
     def __init__(self, *args, **kwargs):

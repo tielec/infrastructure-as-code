@@ -6,10 +6,10 @@
 import re
 from pathlib import Path
 from typing import Dict, Any, List
-from .base_phase import BasePhase
+from phases.base.abstract_phase import AbstractPhase
 
 
-class TestScenarioPhase(BasePhase):
+class TestScenarioPhase(AbstractPhase):
     """テストシナリオフェーズ"""
 
     def __init__(self, *args, **kwargs):

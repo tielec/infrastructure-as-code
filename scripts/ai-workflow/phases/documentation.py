@@ -5,10 +5,10 @@ Phase 1-5の変更内容に基づいて、プロジェクトドキュメント�
 """
 from pathlib import Path
 from typing import Dict, Any, List
-from .base_phase import BasePhase
+from phases.base.abstract_phase import AbstractPhase
 
 
-class DocumentationPhase(BasePhase):
+class DocumentationPhase(AbstractPhase):
     """ドキュメント更新フェーズ"""
 
     def __init__(self, *args, **kwargs):

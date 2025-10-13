@@ -6,10 +6,10 @@ Claude Agent SDKを使用して、コード生成・編集を実行する。
 import re
 from pathlib import Path
 from typing import Dict, Any, List
-from .base_phase import BasePhase
+from phases.base.abstract_phase import AbstractPhase
 
 
-class ImplementationPhase(BasePhase):
+class ImplementationPhase(AbstractPhase):
     """実装フェーズ"""
 
     def __init__(self, *args, **kwargs):
