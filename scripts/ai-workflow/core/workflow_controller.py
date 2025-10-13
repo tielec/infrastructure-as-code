@@ -144,7 +144,9 @@ class WorkflowController:
 
             # 3. 作業ブランチ作成
             branch_name = f'ai-workflow/issue-{issue_number}'
-            self.git_branch.create_and_checkout(branch_name)
+            result = self.git_branch.create(branch_name)
+            if not result['success']:
+                raise GitOperationError(f"Failed to create branch: {result['error']}")
 
             # 4. 初期状態を記録
             self.metadata.save()
