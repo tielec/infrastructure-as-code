@@ -1,0 +1,293 @@
+# 要件定義フェーズ - 実行プロンプト
+
+## タスク概要
+
+GitHubのIssue情報から詳細な要件定義書を作成してください。
+
+## 入力情報
+
+### Planning Phase成果物
+- Planning Document: @.ai-workflow/issue-380/00_planning/output/planning.md
+
+**注意**: Planning Phaseが実行されている場合、開発計画（実装戦略、テスト戦略、リスク、スケジュール）を必ず確認してください。
+
+### GitHub Issue情報
+
+## Issue情報
+
+- **Issue番号**: #380
+- **タイトル**: [TASK] Issue #376の続き - Application/CLI層の実装
+- **状態**: open
+- **URL**: https://github.com/tielec/infrastructure-as-code/issues/380
+- **ラベル**: なし
+
+### 本文
+
+## 親Issue
+
+#376
+
+## 概要
+
+Issue #376の大規模リファクタリングにて、Phase 4（実装フェーズ）で基盤レイヤー（Infrastructure層、Domain層）の実装が完了しましたが、上位レイヤー（Application層、CLI層）および既存ファイルの修正が未完了のままとなっています。
+
+本issueでは、残りの実装を完了させます。
+
+## 背景
+
+### 完了済み（Issue #376）
+- ✅ Infrastructure層（5ファイル）
+  - common/logger.py
+  - common/error_handler.py
+  - common/file_handler.py
+  - common/retry.py
+- ✅ Domain層 - Git Operations（4ファイル）
+  - core/git/repository.py
+  - core/git/branch.py
+  - core/git/commit.py
+- ✅ Domain層 - GitHub Operations（4ファイル）
+  - core/github/issue_client.py
+  - core/github/pr_client.py
+  - core/github/comment_client.py
+- ✅ Domain層 - Phases（5ファイル）
+  - phases/base/abstract_phase.py
+  - phases/base/phase_executor.py
+  - phases/base/phase_validator.py
+  - phases/base/phase_reporter.py
+
+### 未完了（本issueで実装）
+
+## タスク
+
+### 1. Application層の実装（優先度: 高）
+
+#### 1.1 core/workflow_controller.py
+- [ ] ワークフロー全体の制御クラスを実装
+- [ ] ワークフロー初期化（`initialize()`）
+- [ ] フェーズ実行制御（`execute_phase()`, `execute_all_phases()`）
+- [ ] 依存関係管理
+- [ ] エラーハンドリング
+
+**依存**:
+- PhaseExecutor
+- MetadataManager
+- GitRepository, GitBranch, GitCommit
+- IssueClient, PRClient, CommentClient
+
+**見積もり**: 24-40時間
+
+#### 1.2 core/config_manager.py
+- [ ] 設定管理クラスを実装
+- [ ] `config.yaml` の読み込み
+- [ ] 環境変数の読み込み
+- [ ] 設定のバリデーション
+- [ ] デフォルト値の管理
+
+**見積もり**: 8-16時間
+
+### 2. CLI層の実装（優先度: 高）
+
+#### 2.1 cli/commands.py
+- [ ] CLIコマンド定義クラスを実装
+- [ ] `@click.group()` によるCLIグループ定義
+- [ ] `init` コマンド: ワークフロー初期化
+- [ ] `execute` コマンド: フェーズ実行
+- [ ] `resume` コマンド: ワークフロー再開（既存機能）
+- [ ] `status` コマンド: ステータス確認（既存機能）
+
+**依存**:
+- WorkflowController
+- ConfigManager
+
+**見積もり**: 8-16時間
+
+### 3. 既存ファイルの修正（優先度: 中）
+
+#### 3.1 main.py
+- [ ] CLI層を `cli/commands.py` に分離
+- [ ] インポートパスの修正
+- [ ] `WorkflowController` の呼び出しに変更
+
+**見積もり**: 4-8時間
+
+#### 3.2 phases/*.py（10ファイル）
+- [ ] `BasePhase` → `AbstractPhase` への継承変更
+- [ ] インポートパスの修正
+  - `from phases.base_phase import BasePhase` → `from phases.base.abstract_phase import AbstractPhase`
+  - `from core.git_manager import GitManager` → `from core.git.* import ...`
+  - `from core.github_client import GitHubClient` → `from core.github.* import ...`
+
+**対象ファイル**:
+- phases/planning.py
+- phases/requirements.py
+- phases/design.py
+- phases/test_scenario.py
+- phases/implementation.py
+- phases/test_implementation.py
+- phases/testing.py
+- phases/documentation.py
+- phases/report.py
+- phases/evaluation.py
+
+**見積もり**: 8-16時間
+
+#### 3.3 core/metadata_manager.py
+- [ ] 新しい例外クラスのインポート（`from common.error_handler import MetadataError`）
+- [ ] エラーハンドリングの統一
+
+**見積もり**: 2-4時間
+
+#### 3.4 core/claude_agent_client.py
+- [ ] 新しい例外クラスのインポート（`from common.error_handler import ClaudeAPIError`）
+- [ ] エラーハンドリングの統一
+
+**見積もり**: 2-4時間
+
+### 4. 既存テストの修正（優先度: 高）
+
+#### 4.1 既存テストの失敗修正
+- [ ] 116件の失敗テストを修正
+- [ ] 61件のエラーを修正
+- [ ] テストが新しいアーキテクチャに対応するように更新
+
+**見積もり**: 16-32時間
+
+### 5. 削除予定ファイル（優先度: 低）
+
+**段階的削除が必要**:
+- [ ] `phases/base_phase.py` - 4ファイルに分割後、削除
+- [ ] `core/git_manager.py` - 3ファイルに分割後、削除
+- [ ] `core/github_client.py` - 3ファイルに分割後、削除
+
+**削除手順**:
+1. 新規クラスの動作確認
+2. すべてのテストが通過することを確認
+3. インポート参照がないことを確認
+4. 削除実行
+
+**見積もり**: 4-8時間
+
+## 総見積もり時間
+
+**最小**: 72時間（約9日）  
+**最大**: 140時間（約17.5日）  
+**平均**: 106時間（約13日）
+
+## 関連ドキュメント
+
+- Planning Document: `.ai-workflow/issue-376/00_planning/output/planning.md`
+- Design Document: `.ai-workflow/issue-376/02_design/output/design.md`
+- Implementation Log: `.ai-workflow/issue-376/04_implementation/output/implementation.md`
+- Evaluation Report: `.ai-workflow/issue-376/09_evaluation/output/evaluation_report.md`
+
+## 注意事項
+
+1. **設計準拠**: Phase 2の設計書（design.md）に従って実装
+2. **既存コードの尊重**: 既存のスタイルを維持
+3. **段階的実装**: 一度にすべて実装せず、段階的に
+4. **テスト**: 各ステップで既存テストが通過することを確認
+5. **後方互換性**: CLIコマンド、メタデータフォーマット、設定ファイル構造を維持
+
+## 実施順序（推奨）
+
+1. Application層の実装（WorkflowController, ConfigManager）
+2. CLI層の実装（cli/commands.py）
+3. main.pyの修正
+4. phases/*.pyの修正
+5. 既存テストの修正
+6. 旧ファイルの削除
+7. 統合テスト実行
+
+## 要件定義書の構成
+
+以下のセクションを含む要件定義書を作成してください：
+
+### 0. Planning Documentの確認（Planning Phaseが実行されている場合）
+- 開発計画の全体像を把握
+- スコープ、技術選定、リスク、スケジュールを確認
+- Planning Documentで策定された戦略を踏まえて要件定義を実施
+
+### 1. 概要
+- Issue本文の「## 概要」セクションを要約
+- 背景と目的を明確に記述
+- ビジネス価値・技術的価値を説明
+
+### 2. 機能要件
+- Issue本文の「## TODO」セクションから機能要件を抽出
+- 各要件を明確かつ検証可能な形で記述
+- 優先度（高/中/低）を付与
+
+### 3. 非機能要件
+- パフォーマンス要件
+- セキュリティ要件
+- 可用性・信頼性要件
+- 保守性・拡張性要件
+
+### 4. 制約事項
+- 技術的制約（使用技術、既存システムとの整合性）
+- リソース制約（時間、人員、予算）
+- ポリシー制約（セキュリティポリシー、コーディング規約）
+
+### 5. 前提条件
+- システム環境
+- 依存コンポーネント
+- 外部システム連携
+
+### 6. 受け入れ基準
+- 各機能要件の受け入れ基準（Given-When-Then形式推奨）
+- テスト可能な形で記述
+
+### 7. スコープ外
+- 明確にスコープ外とする事項
+- 将来的な拡張候補
+
+## 出力形式
+
+Markdown形式で要件定義書を作成し、以下のファイルに保存してください：
+
+```
+.ai-workflow/issue-380/01_requirements/output/requirements.md
+```
+
+## 品質ゲート（Phase 1）
+
+作成する要件定義書は、以下の品質ゲートを満たす必要があります：
+
+- [ ] **機能要件が明確に記載されている**
+- [ ] **受け入れ基準が定義されている**
+- [ ] **スコープが明確である**
+- [ ] **論理的な矛盾がない**
+
+これらの品質ゲートは**必須要件**です。作成後、クリティカルシンキングレビューが実施され、品質ゲートを満たさない場合は修正が必要になります。
+
+## 注意事項
+
+1. **具体性**: 曖昧な表現を避け、具体的かつ測定可能な要件を記述
+   - NG例: "適切に処理する"、"必要に応じて対応"
+   - OK例: "3秒以内にレスポンスを返す"、"エラー発生時は管理者に通知"
+
+2. **整合性**: 各セクション間で矛盾がないか確認
+   - 機能要件と受け入れ基準が対応しているか
+   - 非機能要件と制約事項が矛盾していないか
+
+3. **完全性**: Issue本文の情報を漏れなく反映
+   - TODOセクションの項目をすべて機能要件に反映
+   - 概要セクションの背景・目的を明確に記述
+
+4. **検証可能性**: 各要件が検証可能（テスト可能）な形で記述
+   - 受け入れ基準は Given-When-Then 形式で記述
+   - 成功条件・失敗条件が明確に識別可能
+
+5. **レビューされることを意識**: 作成した要件定義書はクリティカルシンキングレビューが実施されます
+   - 品質ゲート（4つの必須要件）を最優先で満たすこと
+   - ブロッカー（次フェーズに進めない問題）がないように注意
+   - 改善提案は歓迎されるが、ブロッカーは修正が必須
+
+## 参考情報
+
+必要に応じて以下を参照してください（存在する場合）：
+- @CLAUDE.md - プロジェクトの全体方針とコーディングガイドライン
+- @ARCHITECTURE.md - アーキテクチャ設計思想
+- @CONTRIBUTION.md - 開発ガイドライン
+- @README.md - プロジェクト概要と使用方法
+- その他、プロジェクト固有のドキュメント
