@@ -149,7 +149,7 @@ RECOMMENDED_ACTIONS:
 4. **決定**: 上記で指定された正確なフォーマットでの最終決定
 5. **推奨事項**: 追加の推奨事項（オプション）
 
-**重要**: 評価レポートは必ず `.ai-workflow/issue-{issue_number}/09_evaluation/output/evaluation_report.md` として保存してください。
+評価レポートを `.ai-workflow/issue-{issue_number}/09_evaluation/output/evaluation_report.md` としてWriteツールで保存してください。
 
 ## 重要な注意事項
 
