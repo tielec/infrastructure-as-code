@@ -290,6 +290,21 @@ export class GitManager {
     }
   }
 
+  public async pullLatest(
+    branchName?: string,
+  ): Promise<{ success: boolean; error?: string | null }> {
+    try {
+      const targetBranch = branchName ?? (await this.getCurrentBranch());
+      await this.git.pull('origin', targetBranch);
+      return { success: true };
+    } catch (error) {
+      return {
+        success: false,
+        error: (error as Error).message ?? 'Unknown git pull error',
+      };
+    }
+  }
+
   private async getChangedFiles(): Promise<string[]> {
     const status = await this.git.status();
     const aggregated = new Set<string>();

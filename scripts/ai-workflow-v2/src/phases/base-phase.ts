@@ -9,8 +9,15 @@ import { GitManager } from '../core/git-manager.js';
 import { validatePhaseDependencies } from '../core/phase-dependencies.js';
 import { PhaseExecutionResult, PhaseName, PhaseStatus, PhaseMetadata } from '../types.js';
 
+type UsageMetrics = {
+  inputTokens: number;
+  outputTokens: number;
+  totalCostUsd: number;
+};
+
 const moduleDir = path.dirname(fileURLToPath(import.meta.url));
 const promptsRoot = path.resolve(moduleDir, '..', 'prompts');
+const MAX_RETRIES = 3;
 
 export interface PhaseRunOptions {
   gitManager?: GitManager | null;
@@ -44,6 +51,7 @@ export abstract class BasePhase {
   protected readonly executeDir: string;
   protected readonly reviewDir: string;
   protected readonly reviseDir: string;
+  protected lastExecutionMetrics: UsageMetrics | null = null;
 
   constructor(params: BasePhaseConstructorParams) {
     this.phaseName = params.phaseName;
@@ -75,7 +83,6 @@ export abstract class BasePhase {
 
   public async run(options: PhaseRunOptions = {}): Promise<boolean> {
     const gitManager = options.gitManager ?? null;
-    const issueNumber = parseInt(this.metadata.data.issue_number, 10);
 
     const dependencyResult = validatePhaseDependencies(this.phaseName, this.metadata, {
       skipCheck: this.skipDependencyCheck,
@@ -97,6 +104,8 @@ export abstract class BasePhase {
     this.updatePhaseStatus('in_progress');
     await this.postProgress('in_progress', `${this.phaseName} フェーズを開始します。`);
 
+    let currentOutputFile: string | null = null;
+
     try {
       const executeResult = await this.execute();
       if (!executeResult.success) {
@@ -104,16 +113,23 @@ export abstract class BasePhase {
         return false;
       }
 
+      currentOutputFile = executeResult.output ?? null;
+
       let reviewResult: PhaseExecutionResult | null = null;
       if (!options.skipReview && (await this.shouldRunReview())) {
-        reviewResult = await this.review();
-        if (!reviewResult.success) {
-          await this.handleFailure(reviewResult.error ?? 'Review failed');
+        const reviewOutcome = await this.performReviewCycle(currentOutputFile, MAX_RETRIES);
+        if (!reviewOutcome.success) {
+          await this.handleFailure(reviewOutcome.error ?? 'Review failed');
           return false;
         }
+        reviewResult = reviewOutcome.reviewResult;
+        currentOutputFile = reviewOutcome.outputFile ?? currentOutputFile;
       }
 
-      this.updatePhaseStatus('completed');
+      this.updatePhaseStatus('completed', {
+        reviewResult: reviewResult?.output ?? null,
+        outputFile: currentOutputFile ?? undefined,
+      });
       await this.postProgress('completed', `${this.phaseName} フェーズが完了しました。`);
 
       if (gitManager) {
@@ -179,6 +195,9 @@ export abstract class BasePhase {
     if (error) {
       throw error;
     }
+
+    const usage = this.extractUsageMetrics(messages);
+    this.recordUsageMetrics(usage);
 
     return messages;
   }
@@ -272,8 +291,19 @@ export abstract class BasePhase {
     );
   }
 
-  protected updatePhaseStatus(status: PhaseStatus, reviewResult?: string | null) {
-    this.metadata.updatePhaseStatus(this.phaseName, status, { reviewResult: reviewResult ?? undefined });
+  protected updatePhaseStatus(
+    status: PhaseStatus,
+    options: { reviewResult?: string | null; outputFile?: string | null } = {},
+  ) {
+    const payload: { reviewResult?: string; outputFile?: string } = {};
+    if (options.reviewResult) {
+      payload.reviewResult = options.reviewResult;
+    }
+    if (options.outputFile) {
+      payload.outputFile = options.outputFile;
+    }
+
+    this.metadata.updatePhaseStatus(this.phaseName, status, payload);
   }
 
   protected getPhaseOutputFile(
@@ -556,6 +586,172 @@ export abstract class BasePhase {
     } catch (error) {
       const message = (error as Error).message ?? String(error);
       console.warn(`[WARNING] Auto commit & push failed: ${message}`);
+    }
+  }
+
+  private async performReviewCycle(
+    initialOutputFile: string | null,
+    maxRetries: number,
+  ): Promise<{
+    success: boolean;
+    reviewResult: PhaseExecutionResult | null;
+    outputFile: string | null;
+    error?: string;
+  }> {
+    let revisionAttempts = 0;
+    let currentOutputFile = initialOutputFile;
+
+    while (true) {
+      const reviewResult = await this.review();
+      if (reviewResult.success) {
+        return {
+          success: true,
+          reviewResult,
+          outputFile: currentOutputFile,
+        };
+      }
+
+      if (revisionAttempts >= maxRetries) {
+        return {
+          success: false,
+          reviewResult,
+          outputFile: currentOutputFile,
+          error: reviewResult.error ?? 'Review failed.',
+        };
+      }
+
+      const reviseFn = this.getReviseFunction();
+      if (!reviseFn) {
+        return {
+          success: false,
+          reviewResult,
+          outputFile: currentOutputFile,
+          error: reviewResult.error ?? 'Review failed and revise() is not implemented.',
+        };
+      }
+
+      revisionAttempts += 1;
+
+      let retryCount: number;
+      try {
+        retryCount = this.metadata.incrementRetryCount(this.phaseName);
+      } catch (error) {
+        return {
+          success: false,
+          reviewResult,
+          outputFile: currentOutputFile,
+          error: (error as Error).message,
+        };
+      }
+
+      await this.postProgress(
+        'in_progress',
+        `レビュー不合格のため修正を実施します（${retryCount}/${maxRetries}回目）。`,
+      );
+
+      const feedback =
+        reviewResult.error ?? 'レビューで不合格となりました。フィードバックをご確認ください。';
+      const reviseResult = await reviseFn(feedback);
+
+      if (!reviseResult.success) {
+        return {
+          success: false,
+          reviewResult,
+          outputFile: currentOutputFile,
+          error: reviseResult.error ?? 'Revise failed.',
+        };
+      }
+
+      if (reviseResult.output) {
+        currentOutputFile = reviseResult.output;
+      }
+    }
+  }
+
+  private getReviseFunction():
+    | ((feedback: string) => Promise<PhaseExecutionResult>)
+    | null {
+    const candidate = (this as unknown as Record<string, unknown>).revise;
+    if (typeof candidate === 'function') {
+      return candidate.bind(this);
+    }
+    return null;
+  }
+
+  private extractUsageMetrics(messages: string[]): UsageMetrics | null {
+    let inputTokens = 0;
+    let outputTokens = 0;
+    let totalCostUsd = 0;
+    let found = false;
+
+    for (const raw of messages) {
+      try {
+        const parsed = JSON.parse(raw) as Record<string, unknown>;
+        const usage =
+          (parsed.usage as Record<string, unknown> | undefined) ??
+          ((parsed.result as Record<string, unknown> | undefined)?.usage as Record<string, unknown> | undefined);
+
+        if (usage) {
+          if (typeof usage.input_tokens === 'number') {
+            inputTokens = usage.input_tokens;
+            found = true;
+          }
+          if (typeof usage.output_tokens === 'number') {
+            outputTokens = usage.output_tokens;
+            found = true;
+          }
+        }
+
+        const cost =
+          (parsed.total_cost_usd as number | undefined) ??
+          ((parsed.result as Record<string, unknown> | undefined)?.total_cost_usd as number | undefined);
+
+        if (typeof cost === 'number') {
+          totalCostUsd = cost;
+          found = true;
+        }
+      } catch {
+        const inputMatch =
+          raw.match(/"input_tokens"\s*:\s*(\d+)/) ?? raw.match(/'input_tokens':\s*(\d+)/);
+        const outputMatch =
+          raw.match(/"output_tokens"\s*:\s*(\d+)/) ?? raw.match(/'output_tokens':\s*(\d+)/);
+        const costMatch =
+          raw.match(/"total_cost_usd"\s*:\s*([\d.]+)/) ?? raw.match(/total_cost_usd=([\d.]+)/);
+
+        if (inputMatch) {
+          inputTokens = Number.parseInt(inputMatch[1], 10);
+          found = true;
+        }
+        if (outputMatch) {
+          outputTokens = Number.parseInt(outputMatch[1], 10);
+          found = true;
+        }
+        if (costMatch) {
+          totalCostUsd = Number.parseFloat(costMatch[1]);
+          found = true;
+        }
+      }
+    }
+
+    if (!found) {
+      return null;
+    }
+
+    return {
+      inputTokens,
+      outputTokens,
+      totalCostUsd,
+    };
+  }
+
+  private recordUsageMetrics(metrics: UsageMetrics | null) {
+    this.lastExecutionMetrics = metrics;
+    if (!metrics) {
+      return;
+    }
+
+    if (metrics.inputTokens > 0 || metrics.outputTokens > 0 || metrics.totalCostUsd > 0) {
+      this.metadata.addCost(metrics.inputTokens, metrics.outputTokens, metrics.totalCostUsd);
     }
   }
 }

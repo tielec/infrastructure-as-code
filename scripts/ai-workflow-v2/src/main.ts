@@ -250,6 +250,11 @@ async function handleExecuteCommand(options: any): Promise<void> {
     process.exit(1);
   }
 
+  if (skipDependencyCheck && ignoreDependencies) {
+    console.error("[ERROR] Options '--skip-dependency-check' and '--ignore-dependencies' are mutually exclusive.");
+    process.exit(1);
+  }
+
   const repoRoot = await getRepoRoot();
   const metadataPath = path.join(repoRoot, '.ai-workflow', `issue-${issueNumber}`, 'metadata.json');
 
@@ -292,6 +297,11 @@ async function handleExecuteCommand(options: any): Promise<void> {
   if (repoName) {
     metadataManager.data.repository = repoName;
   }
+  const branchName =
+    metadataManager.data.branch_name ?? `ai-workflow/issue-${issueNumber}`;
+  if (!metadataManager.data.branch_name) {
+    metadataManager.data.branch_name = branchName;
+  }
   metadataManager.save();
 
   if (!githubToken || !repoName) {
@@ -301,6 +311,34 @@ async function handleExecuteCommand(options: any): Promise<void> {
   const githubClient = new GitHubClient(githubToken, repoName);
 
   const gitManager = new GitManager(repoRoot, metadataManager);
+
+  const branchExists = await gitManager.branchExists(branchName);
+  if (!branchExists) {
+    console.error(`[ERROR] Branch not found: ${branchName}. Please run init first.`);
+    process.exit(1);
+  }
+
+  const currentBranch = await gitManager.getCurrentBranch();
+  if (currentBranch !== branchName) {
+    const switchResult = await gitManager.switchBranch(branchName);
+    if (!switchResult.success) {
+      console.error(`[ERROR] ${switchResult.error ?? 'Failed to switch branch.'}`);
+      process.exit(1);
+    }
+    console.info(`[INFO] Switched to branch: ${switchResult.branch_name}`);
+  } else {
+    console.info(`[INFO] Already on branch: ${branchName}`);
+  }
+
+  const pullResult = await gitManager.pullLatest(branchName);
+  if (!pullResult.success) {
+    console.warn(
+      `[WARNING] Failed to pull latest changes: ${pullResult.error ?? 'unknown error'}`,
+    );
+    console.warn('[WARNING] Continuing workflow execution...');
+  } else {
+    console.info('[OK] Successfully pulled latest changes.');
+  }
 
   const context: PhaseContext = {
     workingDir,
