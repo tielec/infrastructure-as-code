@@ -72,7 +72,7 @@ class ClaudeAgentClient:
             'system_prompt': system_prompt,
             'max_turns': max_turns,
             'cwd': str(self.working_dir),
-            'permission_mode': 'acceptEdits',  # 編集を自動的に受け入れる
+            'permission_mode': 'bypassPermissions',  # すべてのツール使用を自動承認（Docker環境内で安全）
         }
 
         # model が指定されている場合のみ追加

@@ -434,89 +434,94 @@ jenkins-cli build AI_Workflow/ai_workflow_orchestrator \
 
 ```
 scripts/ai-workflow/
-├── main.py                      # CLIエントリーポイント
-├── core/
+├── main.py                      # CLIエントリーポイント（今後cli/commands.pyに移行予定）
+├── cli/                         # 【v2.4.0】Presentation Layer - CLI層（未実装）
+│   ├── __init__.py
+│   └── commands.py              # CLIコマンド定義（未実装）
+├── core/                        # Application/Domain Layer
+│   ├── workflow_controller.py   # 【v2.4.0】Application層: ワークフロー制御（未実装）
+│   ├── config_manager.py        # 【v2.4.0】Application層: 設定管理（未実装）
 │   ├── workflow_state.py        # ワークフロー状態管理
 │   ├── metadata_manager.py      # メタデータ管理
 │   ├── claude_agent_client.py   # Claude Agent SDK統合
-│   ├── github_client.py         # GitHub API統合
-│   │   ├── get_issue()          # Issue情報取得
-│   │   ├── create_pull_request() # PR作成（v1.8.0で追加）
-│   │   ├── check_existing_pr()  # 既存PRチェック（v1.8.0で追加）
-│   │   ├── update_pull_request() # PR本文更新（v2.3.0で追加）
-│   │   ├── _generate_pr_body_detailed() # 詳細PR本文生成（v2.3.0で追加）
-│   │   ├── _extract_phase_outputs() # Phase成果物情報抽出（v2.3.0で追加）
-│   │   ├── _extract_section()   # Markdownセクション抽出（v2.3.0で追加）
-│   │   └── _extract_summary_from_issue() # Issue概要抽出（v2.3.0で追加）
-│   └── phase_dependencies.py    # フェーズ依存関係管理（v2.1.0で追加）
-│       ├── PHASE_DEPENDENCIES   # フェーズ依存関係定義
-│       ├── PHASE_PRESETS        # 実行プリセット定義
-│       ├── validate_phase_dependencies() # 依存関係検証
-│       ├── detect_circular_dependencies() # 循環参照検出
-│       └── validate_external_document()   # 外部ドキュメント検証
-├── phases/
-│   ├── base_phase.py            # Phase基底クラス
-│   │                            # - _get_planning_document_path(): Planning Document参照ヘルパー
+│   ├── phase_dependencies.py    # フェーズ依存関係管理（v2.1.0で追加）
+│   │   ├── PHASE_DEPENDENCIES   # フェーズ依存関係定義
+│   │   ├── PHASE_PRESETS        # 実行プリセット定義
+│   │   ├── validate_phase_dependencies() # 依存関係検証
+│   │   ├── detect_circular_dependencies() # 循環参照検出
+│   │   └── validate_external_document()   # 外部ドキュメント検証
+│   ├── git/                     # 【v2.4.0】Domain層: Git Operations（GitManagerを3クラスに分割）
+│   │   ├── __init__.py
+│   │   ├── repository.py        # GitRepository: リポジトリ管理
+│   │   ├── branch.py            # GitBranch: ブランチ操作
+│   │   └── commit.py            # GitCommit: コミット操作
+│   └── github/                  # 【v2.4.0】Domain層: GitHub Operations（GitHubClientを3クラスに分割）
+│       ├── __init__.py
+│       ├── issue_client.py      # IssueClient: Issue操作
+│       ├── pr_client.py         # PRClient: Pull Request操作
+│       └── comment_client.py    # CommentClient: Comment操作
+├── phases/                      # Domain Layer - Phase Execution
+│   ├── base/                    # 【v2.4.0】Phase基底モジュール（BasePhaseを4クラスに分割）
+│   │   ├── __init__.py
+│   │   ├── abstract_phase.py    # AbstractPhase: 抽象基底クラス
+│   │   ├── phase_executor.py    # PhaseExecutor: 実行制御
+│   │   ├── phase_validator.py   # PhaseValidator: 検証ロジック
+│   │   └── phase_reporter.py    # PhaseReporter: 報告生成
 │   ├── planning.py              # Phase 0: プロジェクト計画
-│   │                            # - planning.md生成、戦略判断をmetadata.jsonに保存
 │   ├── requirements.py          # Phase 1: 要件定義
-│   │                            # - Planning Document参照ロジック追加
 │   ├── design.py                # Phase 2: 設計
-│   │                            # - Planning Document参照ロジック追加
 │   ├── test_scenario.py         # Phase 3: テストシナリオ
-│   │                            # - Planning Document参照ロジック追加
 │   ├── implementation.py        # Phase 4: 実装（実コードのみ）
-│   │                            # - ビジネスロジック、API、データモデル等を実装
-│   │                            # - テストコードは実装しない（Phase 5で実装）
 │   ├── test_implementation.py   # Phase 5: テストコード実装（新規 v1.7.0）
-│   │                            # - ユニットテスト、統合テストを実装
-│   │                            # - Phase 3（テストシナリオ）とPhase 4（実装）を参照
-│   │                            # - 実コードは変更しない
-│   ├── testing.py               # Phase 6: テスト実行（旧Phase 5）
-│   │                            # - Phase 5で実装されたテストコードを実行
-│   ├── documentation.py         # Phase 7: ドキュメント（旧Phase 6）
-│   │                            # - Planning Document参照ロジック追加
-│   ├── report.py                # Phase 8: レポート（旧Phase 7）
-│   │                            # - Planning Document参照ロジック追加
-│   │                            # - Phase 8完了後、PR本文を自動更新（v2.3.0で追加）
+│   ├── testing.py               # Phase 6: テスト実行
+│   ├── documentation.py         # Phase 7: ドキュメント
+│   ├── report.py                # Phase 8: レポート
 │   └── evaluation.py            # Phase 9: プロジェクト評価（v2.0.0で追加）
-│                                # - Phase 1-8の全成果物を統合評価
-│                                # - 4つの判定タイプによる後続処理の自動決定
-├── prompts/
+├── common/                      # 【v2.4.0】Infrastructure Layer - 共通処理
+│   ├── __init__.py
+│   ├── logger.py                # 統一ロガー、構造化ログ出力
+│   ├── error_handler.py         # エラーハンドリング、カスタム例外階層
+│   ├── retry.py                 # リトライ機構、指数バックオフ
+│   └── file_handler.py          # ファイル操作ヘルパー
+├── prompts/                     # プロンプトテンプレート
 │   ├── planning/
 │   │   ├── execute.txt          # 計画書生成プロンプト
 │   │   ├── review.txt           # 計画書レビュープロンプト
 │   │   └── revise.txt           # 計画書修正プロンプト
 │   ├── requirements/
-│   │   ├── execute.txt          # 要件定義実行プロンプト（Planning Document参照セクション追加）
+│   │   ├── execute.txt          # 要件定義実行プロンプト
 │   │   ├── review.txt           # 要件定義レビュープロンプト
 │   │   └── revise.txt           # 要件定義修正プロンプト
-│   ├── design/
-│   │   ├── execute.txt          # 設計実行プロンプト（Planning Document参照セクション追加）
-│   │   ├── review.txt           # 設計レビュープロンプト
-│   │   └── revise.txt           # 設計修正プロンプト
-│   ├── test_implementation/     # Phase 5: テストコード実装プロンプト（新規）
-│   │   ├── execute.txt          # テストコード実装プロンプト
-│   │   ├── review.txt           # テストコードレビュープロンプト
-│   │   └── revise.txt           # テストコード修正プロンプト
-│   ├── evaluation/              # Phase 9: プロジェクト評価プロンプト（v2.0.0で追加）
-│   │   ├── execute.txt          # 評価実行プロンプト
-│   │   ├── review.txt           # 評価レビュープロンプト
-│   │   └── revise.txt           # 評価修正プロンプト
-│   └── ...                      # 他のフェーズのプロンプト（すべてPlanning Document参照追加）
+│   ├── design/, test_scenario/, implementation/, test_implementation/, testing/, documentation/, report/, evaluation/
+│   │   └── (execute.txt, review.txt, revise.txt)
+│   └── ...
 ├── templates/
 │   └── pr_body_detailed_template.md  # PR本文詳細テンプレート（v2.3.0で追加）
 ├── reviewers/
 │   └── critical_thinking.py     # クリティカルシンキングレビュー（未実装）
-├── tests/
+├── tests/                       # テストスイート
 │   ├── features/                # BDDテスト
 │   ├── unit/                    # ユニットテスト
+│   │   ├── core/
+│   │   │   ├── git/            # 【v2.4.0】Git Operations テスト
+│   │   │   ├── github/         # 【v2.4.0】GitHub Operations テスト
+│   │   │   └── ...
+│   │   ├── phases/
+│   │   │   └── base/           # 【v2.4.0】Phase基底クラステスト
+│   │   └── common/             # 【v2.4.0】共通処理テスト
 │   └── integration/             # 統合テスト
-│       └── test_planning_phase_integration.py  # Planning Phase統合テスト
 ├── Dockerfile                   # Docker環境定義
 ├── requirements.txt             # Python依存パッケージ
 └── README.md                    # このファイル
 ```
+
+**【v2.4.0の主な変更点】**:
+- **Clean Architecture適用**: 4層構造（Presentation / Application / Domain / Infrastructure）
+- **GitManager分割**: repository.py, branch.py, commit.py
+- **GitHubClient分割**: issue_client.py, pr_client.py, comment_client.py
+- **BasePhase分割**: abstract_phase.py, phase_executor.py, phase_validator.py, phase_reporter.py
+- **Infrastructure層追加**: common/ ディレクトリ（logger, error_handler, retry, file_handler）
+- **SOLID原則**: 単一責任原則、依存性注入パターンの徹底
 
 ### Planning Document参照の仕組み
 
@@ -938,7 +943,7 @@ pytest tests/unit/
 
 ---
 
-**バージョン**: 2.3.0
+**バージョン**: 2.4.0
 **最終更新**: 2025-10-12
 **Phase 0実装**: Issue #313で追加（プロジェクトマネージャ役割）
 **Phase 5実装**: Issue #324で追加（実装フェーズとテストコード実装フェーズの分離）
@@ -947,3 +952,36 @@ pytest tests/unit/
 **フェーズ依存関係と選択的実行**: Issue #319で追加（依存関係チェック、実行プリセット、外部ドキュメント指定）
 **進捗コメント最適化**: Issue #370で追加（GitHub Issue進捗コメントを1つに統合、98.9%削減）
 **PR本文自動更新**: Issue #363で追加（Phase 8完了後、PR本文を詳細情報に自動更新）
+**モジュール分割リファクタリング**: Issue #376で追加（BasePhase/GitManager/GitHubClientを単一責任クラスに分割、Clean Architecture適用）
+
+**アーキテクチャの詳細**: 詳細なアーキテクチャドキュメントは [ARCHITECTURE.md](ARCHITECTURE.md) を参照してください。
+
+v2.4.0でClean Architectureに基づくモジュール分割が行われ、以下の4層構造に整理されました：
+
+1. **Presentation Layer（CLI層）**:
+   - `cli/commands.py`: CLIコマンド定義（未実装）
+
+2. **Application Layer（アプリケーション層）**:
+   - `core/workflow_controller.py`: ワークフロー制御（未実装）
+   - `core/config_manager.py`: 設定管理（未実装）
+
+3. **Domain Layer（ドメイン層）**:
+   - **Git操作（core/git/）**: GitRepository, GitBranch, GitCommit（従来のGitManagerを3クラスに分割）
+   - **GitHub操作（core/github/）**: IssueClient, PRClient, CommentClient（従来のGitHubClientを3クラスに分割）
+   - **Phase基底（phases/base/）**: AbstractPhase, PhaseExecutor, PhaseValidator, PhaseReporter（従来のBasePhaseを4クラスに分割）
+
+4. **Infrastructure Layer（インフラ層）**:
+   - `common/logger.py`: 統一ロガー、構造化ログ出力
+   - `common/error_handler.py`: エラーハンドリング、カスタム例外階層
+   - `common/retry.py`: リトライ機構、指数バックオフ
+   - `common/file_handler.py`: ファイル操作ヘルパー
+
+**実装状況（Phase 4完了時点）**:
+- ✅ Infrastructure層: 5ファイル完了
+- ✅ Domain層 - Git Operations: 4ファイル完了
+- ✅ Domain層 - GitHub Operations: 4ファイル完了
+- ✅ Domain層 - Phases: 5ファイル完了
+- ⏸️ Application層: 未実装（workflow_controller.py, config_manager.py）
+- ⏸️ CLI層: 未実装（cli/commands.py）
+
+**設計原則**: SOLID原則の適用、依存性注入による疎結合化、単一責任原則の徹底

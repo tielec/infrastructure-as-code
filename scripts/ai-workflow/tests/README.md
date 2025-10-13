@@ -13,14 +13,37 @@ tests/
 ├── unit/                    # ユニットテスト（高速、モック使用）
 │   ├── core/
 │   │   ├── test_claude_agent_client.py
-│   │   └── test_github_client.py
-│   └── phases/
+│   │   ├── test_github_client.py（旧版、非推奨）
+│   │   ├── git/            # 【v2.4.0】Git Operations テスト
+│   │   │   ├── test_repository.py
+│   │   │   ├── test_branch.py
+│   │   │   └── test_commit.py
+│   │   └── github/         # 【v2.4.0】GitHub Operations テスト
+│   │       ├── test_issue_client.py
+│   │       ├── test_pr_client.py
+│   │       └── test_comment_client.py
+│   ├── phases/
+│   │   └── base/           # 【v2.4.0】Phase基底クラステスト
+│   │       ├── test_abstract_phase.py
+│   │       ├── test_phase_executor.py
+│   │       ├── test_phase_validator.py
+│   │       └── test_phase_reporter.py
+│   └── common/             # 【v2.4.0】共通処理テスト
+│       ├── test_logger.py
+│       ├── test_error_handler.py
+│       ├── test_retry.py
+│       └── test_file_handler.py
 ├── integration/             # 統合テスト（中速、実ファイルI/O）
 │   ├── test_docker_environment.py
 │   └── test_phase1_review.py
 ├── e2e/                     # E2Eテスト（低速、外部API使用）
 └── fixtures/                # テストデータ・フィクスチャ
 ```
+
+**【v2.4.0の変更点】**:
+- **新規テストディレクトリ**: unit/core/git/, unit/core/github/, unit/phases/base/, unit/common/
+- **テストファイル追加**: Issue #376のリファクタリングに伴い、分割された各クラス用のテストファイルを追加
+- **Phase 5で実装**: これらのテストファイルはPhase 5（テストコード実装）で作成される予定
 
 ## テスト種別
 
