@@ -197,13 +197,11 @@ def _execute_single_phase(
     working_dir = repo_root / 'scripts' / 'ai-workflow'
 
     # フェーズインスタンス生成
+    # Issue #376対応: AbstractPhaseが受け取るパラメータのみを渡す
     phase_instance = phase_class(
         working_dir=working_dir,
         metadata_manager=metadata_manager,
-        claude_client=claude_client,
-        github_client=github_client,
-        skip_dependency_check=skip_dependency_check,
-        ignore_dependencies=ignore_dependencies
+        claude_client=claude_client
     )
 
     # run()メソッド実行
@@ -1033,13 +1031,11 @@ def execute(phase: str, issue: str, git_user: str = None, git_email: str = None,
     try:
         # working_dirはscripts/ai-workflowディレクトリ（プロンプトファイルの基準パス）
         working_dir = repo_root / 'scripts' / 'ai-workflow'
+        # Issue #376対応: AbstractPhaseが受け取るパラメータのみを渡す
         phase_instance = phase_class(
             working_dir=working_dir,
             metadata_manager=metadata_manager,
-            claude_client=claude_client,
-            github_client=github_client,
-            skip_dependency_check=skip_dependency_check,
-            ignore_dependencies=ignore_dependencies
+            claude_client=claude_client
         )
 
         click.echo(f'[INFO] Starting phase: {phase}')
