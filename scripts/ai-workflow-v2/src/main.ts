@@ -284,7 +284,7 @@ async function handleExecuteCommand(options: any): Promise<void> {
     metadataManager = await resetMetadata(metadataManager, metadataPath, issueNumber);
   }
 
-  const workingDir = path.join(repoRoot, 'scripts', 'ai-workflow-v2');
+  const workingDir = repoRoot;
   const claudeClient = new ClaudeAgentClient({ workingDir });
 
   const githubToken = process.env.GITHUB_TOKEN ?? null;
