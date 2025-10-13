@@ -69,7 +69,7 @@ class ConfigManager:
             config_path: config.yamlのパス（デフォルト: カレントディレクトリ）
         """
         self.config_path = config_path or Path('config.yaml')
-        self.logger = Logger(__name__)
+        self.logger = Logger.get_logger(__name__)
         self._config: Dict[str, Any] = {}
 
     def load_config(self) -> Dict[str, Any]:
