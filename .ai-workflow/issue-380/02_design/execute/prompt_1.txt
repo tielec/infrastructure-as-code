@@ -1,0 +1,380 @@
+# 詳細設計フェーズ - 実行プロンプト
+
+## タスク概要
+要件定義書とGitHub Issueの内容から、詳細な設計書を作成してください。このフェーズでは、**実装戦略・テスト戦略・テストコード戦略の判断**も行います。
+
+## 入力情報
+
+### Planning Phase成果物
+- Planning Document: @.ai-workflow/issue-380/00_planning/output/planning.md
+
+**注意**: Planning Phaseが実行されている場合、開発計画（実装戦略、テスト戦略、リスク、スケジュール）を必ず確認してください。
+
+### 要件定義書
+@.ai-workflow/issue-380/01_requirements/output/requirements.md
+
+### GitHub Issue情報
+## Issue情報
+
+- **Issue番号**: #380
+- **タイトル**: [TASK] Issue #376の続き - Application/CLI層の実装
+- **状態**: open
+- **URL**: https://github.com/tielec/infrastructure-as-code/issues/380
+- **ラベル**: なし
+
+### 本文
+
+## 親Issue
+
+#376
+
+## 概要
+
+Issue #376の大規模リファクタリングにて、Phase 4（実装フェーズ）で基盤レイヤー（Infrastructure層、Domain層）の実装が完了しましたが、上位レイヤー（Application層、CLI層）および既存ファイルの修正が未完了のままとなっています。
+
+本issueでは、残りの実装を完了させます。
+
+## 背景
+
+### 完了済み（Issue #376）
+- ✅ Infrastructure層（5ファイル）
+  - common/logger.py
+  - common/error_handler.py
+  - common/file_handler.py
+  - common/retry.py
+- ✅ Domain層 - Git Operations（4ファイル）
+  - core/git/repository.py
+  - core/git/branch.py
+  - core/git/commit.py
+- ✅ Domain層 - GitHub Operations（4ファイル）
+  - core/github/issue_client.py
+  - core/github/pr_client.py
+  - core/github/comment_client.py
+- ✅ Domain層 - Phases（5ファイル）
+  - phases/base/abstract_phase.py
+  - phases/base/phase_executor.py
+  - phases/base/phase_validator.py
+  - phases/base/phase_reporter.py
+
+### 未完了（本issueで実装）
+
+## タスク
+
+### 1. Application層の実装（優先度: 高）
+
+#### 1.1 core/workflow_controller.py
+- [ ] ワークフロー全体の制御クラスを実装
+- [ ] ワークフロー初期化（`initialize()`）
+- [ ] フェーズ実行制御（`execute_phase()`, `execute_all_phases()`）
+- [ ] 依存関係管理
+- [ ] エラーハンドリング
+
+**依存**:
+- PhaseExecutor
+- MetadataManager
+- GitRepository, GitBranch, GitCommit
+- IssueClient, PRClient, CommentClient
+
+**見積もり**: 24-40時間
+
+#### 1.2 core/config_manager.py
+- [ ] 設定管理クラスを実装
+- [ ] `config.yaml` の読み込み
+- [ ] 環境変数の読み込み
+- [ ] 設定のバリデーション
+- [ ] デフォルト値の管理
+
+**見積もり**: 8-16時間
+
+### 2. CLI層の実装（優先度: 高）
+
+#### 2.1 cli/commands.py
+- [ ] CLIコマンド定義クラスを実装
+- [ ] `@click.group()` によるCLIグループ定義
+- [ ] `init` コマンド: ワークフロー初期化
+- [ ] `execute` コマンド: フェーズ実行
+- [ ] `resume` コマンド: ワークフロー再開（既存機能）
+- [ ] `status` コマンド: ステータス確認（既存機能）
+
+**依存**:
+- WorkflowController
+- ConfigManager
+
+**見積もり**: 8-16時間
+
+### 3. 既存ファイルの修正（優先度: 中）
+
+#### 3.1 main.py
+- [ ] CLI層を `cli/commands.py` に分離
+- [ ] インポートパスの修正
+- [ ] `WorkflowController` の呼び出しに変更
+
+**見積もり**: 4-8時間
+
+#### 3.2 phases/*.py（10ファイル）
+- [ ] `BasePhase` → `AbstractPhase` への継承変更
+- [ ] インポートパスの修正
+  - `from phases.base_phase import BasePhase` → `from phases.base.abstract_phase import AbstractPhase`
+  - `from core.git_manager import GitManager` → `from core.git.* import ...`
+  - `from core.github_client import GitHubClient` → `from core.github.* import ...`
+
+**対象ファイル**:
+- phases/planning.py
+- phases/requirements.py
+- phases/design.py
+- phases/test_scenario.py
+- phases/implementation.py
+- phases/test_implementation.py
+- phases/testing.py
+- phases/documentation.py
+- phases/report.py
+- phases/evaluation.py
+
+**見積もり**: 8-16時間
+
+#### 3.3 core/metadata_manager.py
+- [ ] 新しい例外クラスのインポート（`from common.error_handler import MetadataError`）
+- [ ] エラーハンドリングの統一
+
+**見積もり**: 2-4時間
+
+#### 3.4 core/claude_agent_client.py
+- [ ] 新しい例外クラスのインポート（`from common.error_handler import ClaudeAPIError`）
+- [ ] エラーハンドリングの統一
+
+**見積もり**: 2-4時間
+
+### 4. 既存テストの修正（優先度: 高）
+
+#### 4.1 既存テストの失敗修正
+- [ ] 116件の失敗テストを修正
+- [ ] 61件のエラーを修正
+- [ ] テストが新しいアーキテクチャに対応するように更新
+
+**見積もり**: 16-32時間
+
+### 5. 削除予定ファイル（優先度: 低）
+
+**段階的削除が必要**:
+- [ ] `phases/base_phase.py` - 4ファイルに分割後、削除
+- [ ] `core/git_manager.py` - 3ファイルに分割後、削除
+- [ ] `core/github_client.py` - 3ファイルに分割後、削除
+
+**削除手順**:
+1. 新規クラスの動作確認
+2. すべてのテストが通過することを確認
+3. インポート参照がないことを確認
+4. 削除実行
+
+**見積もり**: 4-8時間
+
+## 総見積もり時間
+
+**最小**: 72時間（約9日）  
+**最大**: 140時間（約17.5日）  
+**平均**: 106時間（約13日）
+
+## 関連ドキュメント
+
+- Planning Document: `.ai-workflow/issue-376/00_planning/output/planning.md`
+- Design Document: `.ai-workflow/issue-376/02_design/output/design.md`
+- Implementation Log: `.ai-workflow/issue-376/04_implementation/output/implementation.md`
+- Evaluation Report: `.ai-workflow/issue-376/09_evaluation/output/evaluation_report.md`
+
+## 注意事項
+
+1. **設計準拠**: Phase 2の設計書（design.md）に従って実装
+2. **既存コードの尊重**: 既存のスタイルを維持
+3. **段階的実装**: 一度にすべて実装せず、段階的に
+4. **テスト**: 各ステップで既存テストが通過することを確認
+5. **後方互換性**: CLIコマンド、メタデータフォーマット、設定ファイル構造を維持
+
+## 実施順序（推奨）
+
+1. Application層の実装（WorkflowController, ConfigManager）
+2. CLI層の実装（cli/commands.py）
+3. main.pyの修正
+4. phases/*.pyの修正
+5. 既存テストの修正
+6. 旧ファイルの削除
+7. 統合テスト実行
+
+### 既存コードベースの理解
+
+このリポジトリのプロジェクト構造、アーキテクチャ、コーディング規約を理解するため、以下のドキュメントを参照してください：
+
+- プロジェクト全体のガイドライン: @CLAUDE.md（存在する場合）
+- アーキテクチャ設計: @ARCHITECTURE.md（存在する場合）
+- プロジェクトREADME: @README.md
+- その他、関連するREADME、CONTRIBUTION.md等のドキュメント
+
+上記ドキュメントから以下を把握してください：
+- プロジェクトの目的とアーキテクチャ
+- ディレクトリ構造とコンポーネント構成
+- 既存のコーディング規約やパターン
+- 開発ワークフロー
+
+## 設計書作成手順
+
+### 1. 既存コードベース分析
+
+要件定義書とIssue内容から、以下を分析してください：
+
+1. **影響範囲の特定**
+   - どのコンポーネント（Ansible/Pulumi/Jenkins/Scripts）が影響を受けるか
+   - 既存ファイルの修正が必要か、新規ファイルの作成が必要か
+   - 依存関係のあるコンポーネントは何か
+
+2. **既存パターンの調査**
+   - 類似の機能実装がないか調査
+   - 既存のコーディング規約やパターンを確認
+   - 再利用可能なコンポーネントの特定
+
+### 2. 実装戦略の判断（必須）
+
+以下の3つから選択し、**判断根拠を明記**してください：
+
+- **CREATE（新規作成）**: 既存コードとの依存関係がなく、完全に新しい機能
+- **EXTEND（拡張）**: 既存コードを拡張・修正する必要がある
+- **REFACTOR（リファクタリング）**: 既存コードの構造改善が主目的
+
+**判断基準**：
+- 既存ファイルへの影響範囲
+- 新規ファイルの作成数
+- 既存機能との統合度
+
+**出力形式**：
+```markdown
+### 実装戦略: CREATE / EXTEND / REFACTOR
+
+**判断根拠**:
+- （理由1）
+- （理由2）
+```
+
+### 3. テスト戦略の判断（必須）
+
+以下から選択し、**判断根拠を明記**してください：
+
+- **UNIT_ONLY**: Unitテストのみ
+- **INTEGRATION_ONLY**: Integrationテストのみ
+- **BDD_ONLY**: BDDテストのみ
+- **UNIT_INTEGRATION**: Unit + Integration
+- **UNIT_BDD**: Unit + BDD
+- **INTEGRATION_BDD**: Integration + BDD
+- **ALL**: すべて
+
+**判断基準**：
+- 機能の複雑度
+- ユーザーストーリーの有無
+- 既存テストとの整合性
+
+**出力形式**：
+```markdown
+### テスト戦略: UNIT_ONLY / INTEGRATION_ONLY / BDD_ONLY / UNIT_INTEGRATION / UNIT_BDD / INTEGRATION_BDD / ALL
+
+**判断根拠**:
+- （理由1）
+- （理由2）
+```
+
+### 4. テストコード戦略の判断（必須）
+
+以下から選択し、**判断根拠を明記**してください：
+
+- **EXTEND_TEST（既存テストの拡張）**: 既存テストファイルに追加
+- **CREATE_TEST（新規テスト作成）**: 新しいテストファイルを作成
+- **BOTH_TEST（両方）**: 既存テストの拡張と新規テストの作成
+
+**判断基準**：
+- 既存テストファイルの有無
+- 既存テストとの関連性
+
+**出力形式**：
+```markdown
+### テストコード戦略: EXTEND_TEST / CREATE_TEST / BOTH_TEST
+
+**判断根拠**:
+- （理由1）
+- （理由2）
+```
+
+### 5. 設計書の構成
+
+以下のセクションを含む設計書を作成してください：
+
+#### 必須セクション：
+
+1. **アーキテクチャ設計**
+   - システム全体図
+   - コンポーネント間の関係
+   - データフロー
+
+2. **実装戦略判断**（セクション2で記載）
+
+3. **テスト戦略判断**（セクション3で記載）
+
+4. **テストコード戦略判断**（セクション4で記載）
+
+5. **影響範囲分析**
+   - 既存コードへの影響
+   - 依存関係の変更
+   - マイグレーション要否
+
+6. **変更・追加ファイルリスト**
+   - 新規作成ファイル（相対パス）
+   - 修正が必要な既存ファイル（相対パス）
+   - 削除が必要なファイル（相対パス）
+
+7. **詳細設計**
+   - クラス設計（必要な場合）
+   - 関数設計（主要な関数のみ）
+   - データ構造設計
+   - インターフェース設計
+
+8. **セキュリティ考慮事項**
+   - 認証・認可
+   - データ保護
+   - セキュリティリスクと対策
+
+9. **非機能要件への対応**
+   - パフォーマンス
+   - スケーラビリティ
+   - 保守性
+
+10. **実装の順序**
+    - 実装順序の推奨
+    - 依存関係の考慮
+
+## 品質ゲート（Phase 2）
+
+設計書は以下の品質ゲートを満たす必要があります：
+
+- [ ] **実装戦略の判断根拠が明記されている**
+- [ ] **テスト戦略の判断根拠が明記されている**
+- [ ] **既存コードへの影響範囲が分析されている**
+- [ ] **変更が必要なファイルがリストアップされている**
+- [ ] **設計が実装可能である**
+
+これらの品質ゲートは**必須要件**です。作成後、クリティカルシンキングレビューが実施され、品質ゲートを満たさない場合は修正が必要になります。
+
+## 注意事項
+
+1. **既存プロジェクト構造を尊重**: 既存のディレクトリ構造やコーディング規約に従ってください
+2. **トレーサビリティ**: 要件定義書の各要件に対応する設計を明示してください
+3. **実装可能性**: 実装できない設計や曖昧な設計は避けてください
+4. **判断の明示**: 3つの戦略判断（実装・テスト・テストコード）は必ず明記してください
+5. **レビューされることを意識**: 設計書はクリティカルシンキングレビューが実施されます
+   - 品質ゲート（5つの必須要件）を最優先で満たすこと
+   - ブロッカー（次フェーズに進めない問題）がないように注意
+   - 判断根拠は具体的かつ論理的に記載すること
+
+## 出力形式
+
+設計書は `.ai-workflow/issue-380/02_design/output/design.md` として保存してください。
+
+Markdown形式で、見出しを適切に使用し、可読性の高いドキュメントを作成してください。図表が必要な場合はMarkdownのコードブロックやテーブルを活用してください。
+
+## 実装開始
+
+上記を踏まえ、詳細設計書を作成してください。
