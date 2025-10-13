@@ -1,7 +1,7 @@
 # AI駆動開発自動化ワークフロー アーキテクチャ
 
-**バージョン**: 2.4.0
-**最終更新**: 2025-10-12
+**バージョン**: 1.0.0
+**最終更新**: 2025-10-07
 
 ---
 
@@ -166,109 +166,9 @@ AI駆動開発自動化ワークフローは、GitHub IssueからPR作成まで�
 |----------|------|-------------------|
 | **オーケストレーション層** | ジョブ管理、パイプライン制御 | Jenkins Jenkinsfile |
 | **CLI層** | ユーザーインターフェース | main.py |
-| **アプリケーション層** | フェーズ実行、レビュー | phases/, reviewers/ |
-| **ドメイン層** | ビジネスロジック、Git/GitHub操作、フェーズ基底 | core/git/, core/github/, phases/base/ |
-| **インフラストラクチャ層** | 共通ユーティリティ | common/ (logger, error_handler, retry, file_handler) |
+| **ビジネスロジック層** | フェーズ実行、レビュー | phases/, reviewers/ |
+| **コア層** | 状態管理、API通信、Git操作 | core/ |
 | **外部連携層** | API通信、Git操作 | Claude API, GitHub API |
-
-#### レイヤー詳細（v2.4.0で追加 - Issue #376）
-
-**Presentation Layer（CLI層）** - 未実装:
-- `cli/commands.py`: CLIコマンド定義
-  - ユーザー入力の受付とコマンド実行
-  - Application層（WorkflowController）への委譲
-  - clickライブラリを使用したコマンド定義
-
-**Application Layer（アプリケーション層）** - 未実装:
-- `core/workflow_controller.py`: ワークフロー制御
-  - ワークフロー全体の制御とオーケストレーション
-  - フェーズ実行の調整
-  - 依存関係管理とエラーハンドリング
-- `core/config_manager.py`: 設定管理
-  - config.yamlの読み込み
-  - 環境変数の管理
-  - 設定のバリデーション
-
-**Domain Layer（ドメイン層）** - 実装完了:
-
-*Git操作（core/git/）*:
-- `repository.py`: Gitリポジトリ管理（GitRepository）
-  - リポジトリの初期化と状態確認
-  - 変更ファイルの収集とフィルタリング
-  - GitHub認証設定
-- `branch.py`: ブランチ操作（GitBranch）
-  - ブランチの作成・切り替え・削除
-  - 現在のブランチ取得
-  - リモートへのpush（リトライ機能付き）
-- `commit.py`: コミット操作（GitCommit）
-  - Phase成果物の自動コミット
-  - コミットメッセージ生成
-  - ファイルのステージング
-
-*GitHub操作（core/github/）*:
-- `issue_client.py`: Issue操作（IssueClient）
-  - Issue情報の取得
-  - Issueのクローズ
-  - Issue概要の抽出
-- `pr_client.py`: Pull Request操作（PRClient）
-  - Pull Requestの作成・更新
-  - 既存Pull Requestの確認
-  - PR本文の生成（テンプレート使用）
-- `comment_client.py`: コメント操作（CommentClient）
-  - Issueコメントの投稿
-  - 進捗コメントの作成・更新（統合コメント形式）
-  - レビューコメントの投稿
-
-*フェーズ基底（phases/base/）*:
-- `abstract_phase.py`: フェーズ抽象基底クラス（AbstractPhase）
-  - フェーズの基本構造定義
-  - execute(), review()の抽象メソッド
-  - プロンプトファイル読み込み機能
-- `phase_executor.py`: フェーズ実行ロジック（PhaseExecutor）
-  - リトライループ（最大3回）
-  - 依存関係チェック
-  - Git自動commit & push
-  - 進捗・レビュー結果のGitHub報告
-- `phase_validator.py`: フェーズ検証ロジック（PhaseValidator）
-  - フェーズ依存関係の検証
-  - レビュー結果のパース
-  - 実行可能性の判定
-- `phase_reporter.py`: フェーズレポート生成（PhaseReporter）
-  - GitHubへの進捗報告（統合コメント形式）
-  - レビュー結果の投稿
-  - Markdown形式のレポート生成
-
-**Infrastructure Layer（インフラ層）** - 実装完了:
-- `common/logger.py`: 統一ロガー
-  - ロガーインスタンスの管理
-  - 統一されたログフォーマット
-  - コンソール出力とファイル出力の両対応
-- `common/error_handler.py`: エラーハンドリング
-  - カスタム例外の階層構造
-  - WorkflowError, GitOperationError, GitHubAPIError等
-  - エラー詳細情報と元の例外の保持
-- `common/retry.py`: リトライ機構
-  - retry()デコレータ（指数バックオフ）
-  - retry_with_callback()デコレータ
-  - リトライ対象例外の指定
-- `common/file_handler.py`: ファイル操作ヘルパー
-  - ファイル読み書き操作の統一
-  - パストラバーサル対策
-  - エラーハンドリング
-
-**実装状況**:
-- ✅ Infrastructure層: 5ファイル完了
-- ✅ Domain層 - Git Operations: 4ファイル完了
-- ✅ Domain層 - GitHub Operations: 4ファイル完了
-- ✅ Domain層 - Phases: 5ファイル完了
-- ⏸️ Application層: 未実装（workflow_controller.py, config_manager.py）
-- ⏸️ CLI層: 未実装（cli/commands.py）
-
-**設計原則**:
-- **SOLID原則の適用**: 特に単一責任原則（SRP）を徹底
-- **依存性注入**: すべてのクラスで依存性注入パターンを採用
-- **疎結合**: レイヤー間の依存は明確に定義
-- **テスタビリティ**: モック化が容易な設計
 
 ---
 
@@ -718,43 +618,18 @@ class MetadataManager:
 - トークン数とコストの追跡
 - Sonnet 4.5料金: $3/1M input, $15/1M output
 
-### 5.3 GitHub操作モジュール（core/github/）・実装済み（v2.4.0でモジュール分割 - Issue #376）
+### 5.3 GitHubClient（core/github_client.py）・実装済み
 
-**責務**: GitHub API通信、Issue/PR/Comment操作
-
-**v2.4.0での変更（Issue #376）**:
-- 従来の`GitHubClient`を3つの単一責任クラスに分割
-  - `IssueClient`: Issue操作に特化
-  - `PRClient`: Pull Request操作に特化
-  - `CommentClient`: コメント操作に特化
-- SOLID原則の適用（Single Responsibility Principle）
-- 依存性注入によるテスタビリティ向上
-
-#### 5.3.1 IssueClient（core/github/issue_client.py）
-
-**責務**: GitHub Issue操作
+**責務**: GitHub API通信、Issue/PR操作
 
 **主要メソッド**:
 ```python
-class IssueClient:
+class GitHubClient:
     def get_issue(self, issue_number: int) -> Dict[str, Any]:
         """Issue情報を取得"""
         # PyGitHubでIssue取得
         # タイトル、本文、コメント、ラベルを返却
 
-    def _extract_summary_from_issue(self, issue_number: int) -> str:
-        """Issue本文から概要を抽出（v2.3.0で追加 - Issue #363）"""
-        # GitHub APIでIssue本文を取得
-        # Issue本文の最初の段落または全文を返却
-```
-
-#### 5.3.2 PRClient（core/github/pr_client.py）
-
-**責務**: GitHub Pull Request操作
-
-**主要メソッド**:
-```python
-class PRClient:
     def create_pull_request(self, title: str, body: str, head: str,
                            base: str = 'main', draft: bool = True) -> Dict[str, Any]:
         """Pull Requestを作成（v1.8.0で追加）"""
@@ -766,15 +641,24 @@ class PRClient:
         # repository.get_pulls(head=head, base=base, state='open')
         # 戻り値: {'pr_number': int, 'pr_url': str, 'state': str} or None
 
-    def update_pull_request(self, pr_number: int, body: str) -> Dict[str, Any]:
-        """Pull Request本文を更新（v2.3.0で追加 - Issue #363）"""
-        # PyGitHubでPR取得 → pr.edit(body=body)
-        # 戻り値: {'success': bool, 'pr_url': str, 'error': str}
+    def create_or_update_progress_comment(self, issue_number: int, content: str,
+                                         metadata_manager) -> Dict[str, Any]:
+        """進捗コメントを作成または更新（v2.2.0で追加 - Issue #370）"""
+        # メタデータから既存コメントIDを取得
+        # コメントIDが存在する場合: repository.get_issue_comment() → comment.edit()
+        # コメントIDが存在しない場合: issue.create_comment() → metadata_manager.save_progress_comment_id()
+        # Edit Comment API失敗時: 新規コメント作成にフォールバック
+        # 戻り値: {'comment_id': int, 'comment_url': str}
 
     def _generate_pr_body_template(self, issue_number: int, branch_name: str) -> str:
         """PR本文テンプレートを生成（v1.8.0で追加）"""
         # Markdown形式のPR本文を生成
         # Closes #{issue_number}、ワークフロー進捗チェックリスト、実行環境情報
+
+    def update_pull_request(self, pr_number: int, body: str) -> Dict[str, Any]:
+        """Pull Request本文を更新（v2.3.0で追加 - Issue #363）"""
+        # PyGitHubでPR取得 → pr.edit(body=body)
+        # 戻り値: {'success': bool, 'pr_url': str, 'error': str}
 
     def _generate_pr_body_detailed(self, issue_number: int, branch_name: str,
                                    extracted_info: Dict[str, Any]) -> str:
@@ -797,26 +681,12 @@ class PRClient:
         """Markdownドキュメントからセクションを抽出（v2.3.0で追加 - Issue #363）"""
         # 正規表現でMarkdownセクション（## section_title）を抽出
         # 次のセクション（## 〜）までの内容を返却
+
+    def _extract_summary_from_issue(self, issue_number: int) -> str:
+        """Issue本文から概要を抽出（v2.3.0で追加 - Issue #363）"""
+        # GitHub APIでIssue本文を取得
+        # Issue本文の最初の段落または全文を返却
 ```
-
-#### 5.3.3 CommentClient（core/github/comment_client.py）
-
-**責務**: GitHub Issueコメント操作
-
-**主要メソッド**:
-```python
-class CommentClient:
-    def create_or_update_progress_comment(self, issue_number: int, content: str,
-                                         metadata_manager) -> Dict[str, Any]:
-        """進捗コメントを作成または更新（v2.2.0で追加 - Issue #370）"""
-        # メタデータから既存コメントIDを取得
-        # コメントIDが存在する場合: repository.get_issue_comment() → comment.edit()
-        # コメントIDが存在しない場合: issue.create_comment() → metadata_manager.save_progress_comment_id()
-        # Edit Comment API失敗時: 新規コメント作成にフォールバック
-        # 戻り値: {'comment_id': int, 'comment_url': str}
-```
-
-**変更履歴**:
 
 **v1.8.0での変更（Issue #355）**:
 - `create_pull_request()`メソッドを追加し、Init時にドラフトPR自動作成
@@ -839,11 +709,6 @@ class CommentClient:
 - `_extract_summary_from_issue()`メソッドを追加し、Issue本文から概要を抽出
 - PR本文内容: Issue概要、実装内容（Phase 4）、テスト結果（Phase 6）、ドキュメント更新（Phase 7）、レビューポイント（Phase 2）
 
-**v2.4.0での変更（Issue #376）**:
-- GitHubClientを3つの単一責任クラスに分割（IssueClient, PRClient, CommentClient）
-- 各クラスは独立してテスト可能
-- 依存性注入による疎結合化
-
 **設計方針**:
 - PyGithubライブラリを使用
 - GitHub Token `repo` スコープ必須（PR作成権限）
@@ -851,26 +716,13 @@ class CommentClient:
 - 進捗コメントはMarkdownフォーマット（全体進捗、現在フェーズ詳細、完了フェーズ折りたたみ）
 - PR本文更新は`templates/pr_body_detailed_template.md`テンプレートを使用
 
-### 5.4 Phase基底モジュール（phases/base/）・実装済み（v2.4.0でモジュール分割 - Issue #376）
+### 5.4 BasePhase（phases/base_phase.py）・実装済み
 
-**責務**: フェーズ実行の基底機能
-
-**v2.4.0での変更（Issue #376）**:
-- 従来の`BasePhase`を4つの単一責任クラスに分割
-  - `AbstractPhase`: 抽象基底クラス（インターフェース定義）
-  - `PhaseExecutor`: フェーズ実行ロジック（execute, revise, run）
-  - `PhaseValidator`: フェーズ検証ロジック（review）
-  - `PhaseReporter`: フェーズレポート生成（post_output, post_progress）
-- SOLID原則の適用（Single Responsibility Principle）
-- 各クラスは独立してテスト可能
-
-#### 5.4.1 AbstractPhase（phases/base/abstract_phase.py）
-
-**責務**: フェーズの抽象インターフェース定義
+**責務**: フェーズ実行の基底クラス
 
 **主要メソッド**:
 ```python
-class AbstractPhase(ABC):
+class BasePhase(ABC):
     @abstractmethod
     def execute(self, retry_count: int = 0) -> Dict[str, Any]:
         """フェーズ実行"""
@@ -880,19 +732,11 @@ class AbstractPhase(ABC):
     def review(self) -> Dict[str, Any]:
         """レビュー実行"""
         pass
-```
 
-#### 5.4.2 PhaseExecutor（phases/base/phase_executor.py）
-
-**責務**: フェーズ実行ロジック
-
-**主要メソッド**:
-```python
-class PhaseExecutor:
-    def run(self, phase: AbstractPhase) -> Dict[str, Any]:
-        """フェーズ実行メインロジック（v1.6.0で統一リトライループ実装）"""
-        # リトライループ（最大3回）
-        # execute() → review() → revise()の制御
+    def post_output(self, output_content: str, title: Optional[str] = None):
+        """GitHub Issueに成果物を投稿（v1.4.0で追加）"""
+        # GitHubClient経由でIssueコメントとして成果物を投稿
+        # 失敗時でもワークフローは継続（WARNING表示）
 
     def _get_next_sequence_number(self, target_dir: Path) -> int:
         """対象ディレクトリ内の既存ログファイルから次の連番を取得（v1.5.0で追加）"""
@@ -905,44 +749,6 @@ class PhaseExecutor:
         # 連番を自動決定してログファイルに付与
         # agent_log_{N}.md, agent_log_raw_{N}.txt, prompt_{N}.txt
 ```
-
-#### 5.4.3 PhaseValidator（phases/base/phase_validator.py）
-
-**責務**: フェーズ検証ロジック
-
-**主要メソッド**:
-```python
-class PhaseValidator:
-    def validate(self, phase_result: Dict[str, Any]) -> Dict[str, Any]:
-        """フェーズ結果を検証"""
-        # レビュー実行
-        # PASS/PASS_WITH_SUGGESTIONS/FAIL判定
-```
-
-#### 5.4.4 PhaseReporter（phases/base/phase_reporter.py）
-
-**責務**: フェーズレポート生成
-
-**主要メソッド**:
-```python
-class PhaseReporter:
-    def post_output(self, output_content: str, title: Optional[str] = None):
-        """GitHub Issueに成果物を投稿（v1.4.0で追加）"""
-        # GitHubClient経由でIssueコメントとして成果物を投稿
-        # 失敗時でもワークフローは継続（WARNING表示）
-
-    def post_progress(self, metadata_manager):
-        """GitHub Issueに進捗を投稿（v2.2.0で統合コメント形式に変更）"""
-        # 統合コメント形式で進捗を投稿
-
-    def _format_progress_content(self, metadata_manager) -> str:
-        """Markdown形式の進捗コンテンツを生成（v2.2.0で追加）"""
-        # 全体進捗セクション（Phase 0-9のステータス一覧、アイコン付き）
-        # 現在フェーズの詳細セクション（ステータス、開始時刻、試行回数）
-        # 完了フェーズの折りたたみセクション（`<details>`タグ使用）
-```
-
-**変更履歴**:
 
 **v1.4.0での変更**:
 - `post_output()`メソッドを追加し、全フェーズで成果物をGitHub Issueに自動投稿
@@ -970,60 +776,28 @@ class PhaseReporter:
 - `create_or_update_progress_comment()`を呼び出して進捗をGitHub Issueに投稿
 - 既存の`post_progress()`呼び出し元は変更不要（シグネチャ維持）
 
-**v2.4.0での変更（Issue #376）**:
-- BasePhaseを4つの単一責任クラスに分割（AbstractPhase, PhaseExecutor, PhaseValidator, PhaseReporter）
-- 各責務が明確に分離され、テスタビリティが向上
-- 依存性注入による疎結合化
-
-### 5.5 Git操作モジュール（core/git/）・実装済み（v2.4.0でモジュール分割 - Issue #376）
+### 5.5 GitManager（core/git_manager.py）
 
 **責務**: Git操作の管理、Phase完了後の自動commit & push
 
-**v2.4.0での変更（Issue #376）**:
-- 従来の`GitManager`を3つの単一責任クラスに分割
-  - `GitRepository`: リポジトリ管理に特化
-  - `GitBranch`: ブランチ操作に特化
-  - `GitCommit`: コミット操作に特化
-- SOLID原則の適用（Single Responsibility Principle）
-- 依存性注入によるテスタビリティ向上
-
-#### 5.5.1 GitRepository（core/git/repository.py）
-
-**責務**: Gitリポジトリ管理
-
 **主要メソッド**:
 
 ```python
-class GitRepository:
-    def __init__(self, repo_path: Path):
+class GitManager:
+    def __init__(self, repo_path: Path, metadata_manager: MetadataManager,
+                 config: Optional[Dict] = None):
         """初期化"""
 
-    def get_changed_files(self) -> List[str]:
-        """変更ファイルを収集（untracked + modified + staged）"""
-
-    def _filter_phase_files(self, files: List[str], issue_number: int) -> List[str]:
-        """Phaseファイルのフィルタリング"""
-        # Include: .ai-workflow/issue-XXX/*（対象Issue）
-        # Include: プロジェクト本体ファイル（.ai-workflow/以外）
-        # Exclude: .ai-workflow/issue-YYY/*（他のIssue）
-        # Exclude: *@tmp/*（Jenkins一時ディレクトリ）
-
-    def _setup_github_credentials(self) -> None:
-        """GitHub Token認証設定"""
-        # 環境変数GITHUB_TOKENを使用してremote URLを更新
-        # https://github.com/owner/repo.git → https://{token}@github.com/owner/repo.git
-```
-
-#### 5.5.2 GitBranch（core/git/branch.py）
-
-**責務**: ブランチ操作
-
-**主要メソッド**:
-
-```python
-class GitBranch:
-    def get_current_branch(self) -> str:
-        """現在のブランチを取得"""
+    def commit_phase_output(self, phase_name: str, status: str,
+                            review_result: Optional[str] = None) -> Dict[str, Any]:
+        """Phase成果物をcommit"""
+        # 1. Issue番号を取得
+        # 2. 変更ファイルを収集（untracked + modified + staged）
+        # 3. _filter_phase_files()でフィルタリング
+        # 4. git add {files}
+        # 5. create_commit_message()でメッセージ生成
+        # 6. git commit
+        # 戻り値: {'success': bool, 'commit_hash': str, 'files_committed': List[str], 'error': str}
 
     def push_to_remote(self, max_retries: int = 3,
                       retry_delay: float = 2.0) -> Dict[str, Any]:
@@ -1033,31 +807,6 @@ class GitBranch:
         # 3. ネットワークエラー時はリトライ（最大max_retries回）
         # 4. 権限エラー時はリトライせず即座に失敗
         # 戻り値: {'success': bool, 'retries': int, 'error': str}
-
-    def _is_retriable_error(self, error: Exception) -> bool:
-        """リトライ可能エラー判定"""
-        # リトライ可能: timeout, connection refused, network is unreachable
-        # リトライ不可: permission denied, authentication failed
-```
-
-#### 5.5.3 GitCommit（core/git/commit.py）
-
-**責務**: コミット操作
-
-**主要メソッド**:
-
-```python
-class GitCommit:
-    def commit_phase_output(self, phase_name: str, status: str,
-                            review_result: Optional[str] = None) -> Dict[str, Any]:
-        """Phase成果物をcommit"""
-        # 1. Issue番号を取得
-        # 2. 変更ファイルを収集（GitRepositoryに委譲）
-        # 3. _filter_phase_files()でフィルタリング（GitRepositoryに委譲）
-        # 4. git add {files}
-        # 5. create_commit_message()でメッセージ生成
-        # 6. git commit
-        # 戻り値: {'success': bool, 'commit_hash': str, 'files_committed': List[str], 'error': str}
 
     def create_commit_message(self, phase_name: str, status: str,
                              review_result: Optional[str] = None) -> str:
@@ -1071,31 +820,48 @@ class GitCommit:
         # Review: PASS/PASS_WITH_SUGGESTIONS/FAIL/N/A
         #
         # Auto-generated by AI Workflow
+
+    def _filter_phase_files(self, files: List[str], issue_number: int) -> List[str]:
+        """Phaseファイルのフィルタリング"""
+        # Include: .ai-workflow/issue-XXX/*（対象Issue）
+        # Include: プロジェクト本体ファイル（.ai-workflow/以外）
+        # Exclude: .ai-workflow/issue-YYY/*（他のIssue）
+        # Exclude: *@tmp/*（Jenkins一時ディレクトリ）
+
+    def _setup_github_credentials(self) -> None:
+        """GitHub Token認証設定"""
+        # 環境変数GITHUB_TOKENを使用してremote URLを更新
+        # https://github.com/owner/repo.git → https://{token}@github.com/owner/repo.git
+
+    def _is_retriable_error(self, error: Exception) -> bool:
+        """リトライ可能エラー判定"""
+        # リトライ可能: timeout, connection refused, network is unreachable
+        # リトライ不可: permission denied, authentication failed
 ```
 
 **設計判断**:
 - GitPythonライブラリを使用
-- finally句で確実に実行（PhaseExecutor.run()と統合）
+- finally句で確実に実行（BasePhase.run()と統合）
 - ファイルフィルタリングで他Issueへの影響を防止
 - リトライロジックでネットワークエラーに対応
 
 **シーケンス図：Git自動commit & push**
 
 ```
-PhaseExecutor.run()
+BasePhase.run()
     ├─ execute()
     ├─ review()
     └─ finally:
-         ├─ GitCommit.commit_phase_output()
-         │    ├─ GitRepository.get_changed_files()
-         │    ├─ GitRepository._filter_phase_files()
+         ├─ GitManager.commit_phase_output()
+         │    ├─ 変更ファイル収集
+         │    ├─ _filter_phase_files()
          │    │    ├─ Include: .ai-workflow/issue-XXX/*
          │    │    └─ Exclude: issue-YYY/*, @tmp/*
          │    ├─ git add
          │    ├─ create_commit_message()
          │    └─ git commit
          │
-         └─ GitBranch.push_to_remote()
+         └─ GitManager.push_to_remote()
               ├─ git push origin HEAD:{branch}
               ├─ Retry on network errors (max 3)
               └─ No retry on permission errors
@@ -1105,11 +871,6 @@ PhaseExecutor.run()
 1. **ネットワークエラー**: 自動リトライ（最大3回、2秒間隔）
 2. **権限エラー**: リトライせず即座にエラー返却
 3. **Phase失敗時**: 失敗時もcommit実行（トラブルシューティング用）
-
-**v2.4.0での変更（Issue #376）**:
-- GitManagerを3つの単一責任クラスに分割（GitRepository, GitBranch, GitCommit）
-- 各責務が明確に分離され、テスタビリティが向上
-- 依存性注入による疎結合化
 
 ### 5.6 ResumeManager（utils/resume.py）・v1.9.0で追加
 
@@ -1273,7 +1034,7 @@ class ResumeManager:
 
 ---
 
-**バージョン**: 2.4.0
+**バージョン**: 2.3.0
 **最終更新**: 2025-10-12
 **Phase 0実装**: Issue #313で追加（プロジェクトマネージャ役割）
 **Phase 5実装**: Issue #324で追加（実装フェーズとテストコード実装フェーズの分離）
@@ -1282,4 +1043,3 @@ class ResumeManager:
 **Phase 9実装**: Issue #362で追加（プロジェクト評価フェーズ、4つの判定タイプによる後続処理自動決定）
 **進捗コメント最適化**: Issue #370で追加（GitHub Issue進捗コメントを1つに統合、98.9%削減）
 **PR本文自動更新**: Issue #363で追加（Phase 8完了後、PR本文を詳細情報に自動更新）
-**モジュール分割リファクタリング**: Issue #376で追加（BasePhase/GitManager/GitHubClientを単一責任クラスに分割、Clean Architecture適用）
