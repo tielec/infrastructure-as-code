@@ -75,7 +75,7 @@ def _initialize_workflow_controller(
     # Git関連インスタンス初期化
     git_repository = GitRepository(repo_root)
     git_branch = GitBranch(repo_root)
-    git_commit = GitCommit(repo_root, metadata_manager)
+    git_commit = GitCommit(git_repository.repo, metadata_manager)
 
     # GitHub関連インスタンス初期化
     github_token = config_manager.get('github_token')
