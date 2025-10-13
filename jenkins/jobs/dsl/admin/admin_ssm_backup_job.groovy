@@ -48,6 +48,7 @@ pipelineJob(fullJobName) {
     // パラメータ設定
     parameters {
         choiceParam('ENVIRONMENT', ['dev', 'prod'], '環境を選択')
+        choiceParam('AWS_REGION', ['ap-northeast-1', 'us-west-2'], 'バックアップ対象のAWSリージョン')
         booleanParam('DRY_RUN', false, 'ドライランモード（実際のバックアップは実行しない）')
         stringParam('JENKINSFILE_BRANCH', 'main', 'Jenkinsfileが格納されているブランチ')
     }

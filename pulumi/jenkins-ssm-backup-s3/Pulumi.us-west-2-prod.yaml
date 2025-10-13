@@ -1,0 +1,4 @@
+config:
+  jenkins-ssm-backup-s3:projectName: jenkins-infra
+  jenkins-ssm-backup-s3:environment: prod
+  aws:region: us-west-2

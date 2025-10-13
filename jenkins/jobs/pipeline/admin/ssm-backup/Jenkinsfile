@@ -18,17 +18,17 @@ pipeline {
     
     environment {
         // AWS設定
-        AWS_REGION = 'ap-northeast-1'
-        
+        AWS_REGION = params.AWS_REGION ?: 'ap-northeast-1'
+
         // タイムスタンプ
         BACKUP_DATE = sh(script: "date '+%Y-%m-%d'", returnStdout: true).trim()
         BACKUP_TIMESTAMP = sh(script: "date '+%Y%m%d_%H%M%S'", returnStdout: true).trim()
-        
+
         // ディレクトリ構造
         WORK_DIR = "${WORKSPACE}/backup-work"
         DATA_DIR = "${WORK_DIR}/data"
         SCRIPT_DIR = "${WORKSPACE}/scripts"
-        
+
         // 環境フィルタ（環境に含まれる文字列）
         ENV_FILTER = "/${params.ENVIRONMENT}/"
     }
@@ -38,14 +38,15 @@ pipeline {
             steps {
                 script {
                     // ビルド表示名を設定
-                    currentBuild.displayName = "#${env.BUILD_NUMBER} - ${params.ENVIRONMENT} Backup"
+                    currentBuild.displayName = "#${env.BUILD_NUMBER} - ${params.ENVIRONMENT} (${params.AWS_REGION}) Backup"
                     currentBuild.description = "Backup at ${env.BACKUP_TIMESTAMP}"
-                    
+
                     echo """
                     =============================================
                     SSM Parameter Store Backup
                     =============================================
                     Environment: ${params.ENVIRONMENT}
+                    Region: ${params.AWS_REGION}
                     Filter: Parameters containing '${env.ENV_FILTER}'
                     Dry Run: ${params.DRY_RUN}
                     Timestamp: ${env.BACKUP_TIMESTAMP}
@@ -73,7 +74,7 @@ pipeline {
                     ).trim()
                     
                     if (!env.BACKUP_BUCKET) {
-                        error("バックアップ用S3バケットが見つかりません。Pulumiスタックがデプロイされていることを確認してください。")
+                        error("バックアップ用S3バケットが見つかりません（リージョン: ${params.AWS_REGION}）。Pulumiスタックがデプロイされていることを確認してください。")
                     }
                     
                     echo "Backup S3 Bucket: ${env.BACKUP_BUCKET}"
@@ -214,19 +215,20 @@ pipeline {
                     =============================================
                     DRY RUN - バックアップ実行レポート
                     =============================================
-                    
+
                     このドライランでは実際のS3アップロードは行われませんでした。
-                    
+
                     バックアップ対象:
                     - 環境: ${params.ENVIRONMENT}
+                    - リージョン: ${params.AWS_REGION}
                     - パラメータ数: ${paramCount}
                     - バックアップ日時: ${env.BACKUP_TIMESTAMP}
-                    
+
                     実行時の動作:
                     - S3バケット: ${env.BACKUP_BUCKET}
                     - S3パス: ${env.BACKUP_DATE}/
                     - ファイル名: ssm-backup-${params.ENVIRONMENT}-${env.BACKUP_TIMESTAMP}.json
-                    
+
                     =============================================
                     """.stripIndent()
                     
