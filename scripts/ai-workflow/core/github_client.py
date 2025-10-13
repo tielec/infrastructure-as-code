@@ -795,8 +795,7 @@ class GitHubClient:
                 # コメントIDが存在する場合 → 既存コメントを編集
                 try:
                     print(f"[INFO] 既存進捗コメント (ID: {existing_comment_id}) を更新します")
-                    issue = self.get_issue(issue_number)
-                    comment = issue.get_comment(existing_comment_id)
+                    comment = self.repository.get_issue_comment(existing_comment_id)
                     comment.edit(content)
                     print(f"[INFO] 進捗コメント更新成功: {comment.html_url}")
 
@@ -808,12 +807,6 @@ class GitHubClient:
                 except GithubException as e:
                     # Edit Comment API失敗時 → フォールバックで新規コメント作成
                     print(f"[WARNING] GitHub Edit Comment APIエラー: {e.status} - {e.data.get('message', 'Unknown')} (コメントID: {existing_comment_id})")
-                    print(f"[INFO] フォールバック: 新規コメント作成")
-                    # 以下の処理で新規コメント作成に進む
-
-                except Exception as e:
-                    # その他のエラー（コメントが存在しない等）もフォールバック
-                    print(f"[WARNING] コメント取得/更新エラー: {e}")
                     print(f"[INFO] フォールバック: 新規コメント作成")
                     # 以下の処理で新規コメント作成に進む
 
