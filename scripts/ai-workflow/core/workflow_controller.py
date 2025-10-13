@@ -133,7 +133,7 @@ class WorkflowController:
             self.logger.info(f'Initializing workflow for Issue #{issue_number}')
 
             # 1. GitHub Issue情報を取得
-            issue_info = self.issue_client.get_issue_info(issue_number)
+            issue_info = self.issue_client.get_info(issue_number)
 
             # 2. メタデータファイル作成
             self.metadata.create_new(
