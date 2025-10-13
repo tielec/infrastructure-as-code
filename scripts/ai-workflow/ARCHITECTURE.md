@@ -173,27 +173,102 @@ AI駆動開発自動化ワークフローは、GitHub IssueからPR作成まで�
 
 #### レイヤー詳細（v2.4.0で追加 - Issue #376）
 
-**インフラストラクチャ層（common/）**:
-- `logger.py`: 統一ロガー、構造化ログ出力
-- `error_handler.py`: エラーハンドリング、例外の統一処理
-- `retry.py`: リトライ機構、指数バックオフ
-- `file_handler.py`: ファイル操作ヘルパー
+**Presentation Layer（CLI層）** - 未実装:
+- `cli/commands.py`: CLIコマンド定義
+  - ユーザー入力の受付とコマンド実行
+  - Application層（WorkflowController）への委譲
+  - clickライブラリを使用したコマンド定義
 
-**ドメイン層 - Git操作（core/git/）**:
+**Application Layer（アプリケーション層）** - 未実装:
+- `core/workflow_controller.py`: ワークフロー制御
+  - ワークフロー全体の制御とオーケストレーション
+  - フェーズ実行の調整
+  - 依存関係管理とエラーハンドリング
+- `core/config_manager.py`: 設定管理
+  - config.yamlの読み込み
+  - 環境変数の管理
+  - 設定のバリデーション
+
+**Domain Layer（ドメイン層）** - 実装完了:
+
+*Git操作（core/git/）*:
 - `repository.py`: Gitリポジトリ管理（GitRepository）
+  - リポジトリの初期化と状態確認
+  - 変更ファイルの収集とフィルタリング
+  - GitHub認証設定
 - `branch.py`: ブランチ操作（GitBranch）
+  - ブランチの作成・切り替え・削除
+  - 現在のブランチ取得
+  - リモートへのpush（リトライ機能付き）
 - `commit.py`: コミット操作（GitCommit）
+  - Phase成果物の自動コミット
+  - コミットメッセージ生成
+  - ファイルのステージング
 
-**ドメイン層 - GitHub操作（core/github/）**:
+*GitHub操作（core/github/）*:
 - `issue_client.py`: Issue操作（IssueClient）
+  - Issue情報の取得
+  - Issueのクローズ
+  - Issue概要の抽出
 - `pr_client.py`: Pull Request操作（PRClient）
+  - Pull Requestの作成・更新
+  - 既存Pull Requestの確認
+  - PR本文の生成（テンプレート使用）
 - `comment_client.py`: コメント操作（CommentClient）
+  - Issueコメントの投稿
+  - 進捗コメントの作成・更新（統合コメント形式）
+  - レビューコメントの投稿
 
-**ドメイン層 - フェーズ基底（phases/base/）**:
+*フェーズ基底（phases/base/）*:
 - `abstract_phase.py`: フェーズ抽象基底クラス（AbstractPhase）
+  - フェーズの基本構造定義
+  - execute(), review()の抽象メソッド
+  - プロンプトファイル読み込み機能
 - `phase_executor.py`: フェーズ実行ロジック（PhaseExecutor）
+  - リトライループ（最大3回）
+  - 依存関係チェック
+  - Git自動commit & push
+  - 進捗・レビュー結果のGitHub報告
 - `phase_validator.py`: フェーズ検証ロジック（PhaseValidator）
+  - フェーズ依存関係の検証
+  - レビュー結果のパース
+  - 実行可能性の判定
 - `phase_reporter.py`: フェーズレポート生成（PhaseReporter）
+  - GitHubへの進捗報告（統合コメント形式）
+  - レビュー結果の投稿
+  - Markdown形式のレポート生成
+
+**Infrastructure Layer（インフラ層）** - 実装完了:
+- `common/logger.py`: 統一ロガー
+  - ロガーインスタンスの管理
+  - 統一されたログフォーマット
+  - コンソール出力とファイル出力の両対応
+- `common/error_handler.py`: エラーハンドリング
+  - カスタム例外の階層構造
+  - WorkflowError, GitOperationError, GitHubAPIError等
+  - エラー詳細情報と元の例外の保持
+- `common/retry.py`: リトライ機構
+  - retry()デコレータ（指数バックオフ）
+  - retry_with_callback()デコレータ
+  - リトライ対象例外の指定
+- `common/file_handler.py`: ファイル操作ヘルパー
+  - ファイル読み書き操作の統一
+  - パストラバーサル対策
+  - エラーハンドリング
+
+**実装状況**:
+- ✅ Infrastructure層: 5ファイル完了
+- ✅ Domain層 - Git Operations: 4ファイル完了
+- ✅ Domain層 - GitHub Operations: 4ファイル完了
+- ✅ Domain層 - Phases: 5ファイル完了
+- ⏸️ Application層: 未実装（workflow_controller.py, config_manager.py）
+- ⏸️ CLI層: 未実装（cli/commands.py）
+
+**設計原則**:
+- **SOLID原則の適用**: 特に単一責任原則（SRP）を徹底
+- **依存性注入**: すべてのクラスで依存性注入パターンを採用
+- **疎結合**: レイヤー間の依存は明確に定義
+- **テスタビリティ**: モック化が容易な設計
 
 ---
 
