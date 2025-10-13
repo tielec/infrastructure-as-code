@@ -350,7 +350,7 @@ python -m behave tests/features/workflow.feature
 ```bash
 Scenario: ワークフロー初期化とメタデータ作成
   ...
-  ならば ワークフローディレクトリ ".ai-workflow/issue-999" が作成される  FAILED
+  ならば ワークフローディレクトリ ".ai-workflow/issue-123" が作成される  FAILED
 ```
 
 **デバッグ方法**:
@@ -364,18 +364,18 @@ behave --no-capture --no-capture-stderr tests/features/workflow.feature
 ```powershell
 # 手動で各ステップを実行
 cd C:\Users\ytaka\TIELEC\development\infrastructure-as-code\scripts\ai-workflow
-python main.py init --issue-url https://github.com/tielec/infrastructure-as-code/issues/999
+python main.py init --issue-url https://github.com/tielec/infrastructure-as-code/issues/123
 
 # ディレクトリ確認
-dir ..\..\..\.ai-workflow\issue-999
+dir ..\..\..\.ai-workflow\issue-123
 
 # metadata.json確認
-type ..\..\..\.ai-workflow\issue-999\metadata.json
+type ..\..\..\.ai-workflow\issue-123\metadata.json
 ```
 
 3. **前回のテストファイルをクリーンアップ**:
 ```powershell
-Remove-Item -Recurse -Force ..\..\..\.ai-workflow\issue-999
+Remove-Item -Recurse -Force ..\..\..\.ai-workflow\issue-123
 ```
 
 ### Q4-3: AssertionError: Field not found
@@ -391,7 +391,7 @@ metadata.jsonの構造が期待と異なります。
 **解決方法**:
 ```powershell
 # metadata.jsonの内容を確認
-type ..\..\..\.ai-workflow\issue-999\metadata.json
+type ..\..\..\.ai-workflow\issue-123\metadata.json
 
 # 期待される構造と比較（README.md参照）
 ```

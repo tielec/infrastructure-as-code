@@ -51,11 +51,11 @@ pip install -r requirements.txt
 pip install -r requirements-test.txt
 
 # 4. ワークフロー初期化
-python main.py init --issue-url https://github.com/tielec/infrastructure-as-code/issues/999
+python main.py init --issue-url https://github.com/tielec/infrastructure-as-code/issues/123
 
 # 5. 結果確認
-dir ..\..\..\.ai-workflow\issue-999
-type ..\..\..\.ai-workflow\issue-999\metadata.json
+dir ..\..\..\.ai-workflow\issue-123
+type ..\..\..\.ai-workflow\issue-123\metadata.json
 
 # 6. BDDテスト実行
 behave tests/features/workflow.feature
@@ -106,12 +106,12 @@ Python環境がセットアップできたら:
 
 2. **MVP実行**:
    ```powershell
-   python main.py init --issue-url https://github.com/tielec/infrastructure-as-code/issues/999
+   python main.py init --issue-url https://github.com/tielec/infrastructure-as-code/issues/123
    ```
 
 3. **結果確認**:
    ```powershell
-   type ..\..\..\.ai-workflow\issue-999\metadata.json
+   type ..\..\..\.ai-workflow\issue-123\metadata.json
    ```
 
 4. **BDDテスト実行**:
