@@ -26,11 +26,11 @@
  * 重要: パラメータ定義はこのファイルでは行いません（Job DSLで定義済み）
  *
  * 実行モードの説明:
- * - all_phases: main.py execute --phase all を実行
+ * - all_phases: node dist/index.js execute --phase all を実行
  *   - Phase 0-9を順次実行（planning → requirements → ... → evaluation）
  *   - resume機能により、失敗したフェーズから自動再開
  *   - --force-resetフラグで最初から実行し直すことも可能
- * - single_phase: main.py execute --phase {START_PHASE} を実行
+ * - single_phase: node dist/index.js execute --phase {START_PHASE} を実行
  *   - 指定されたフェーズのみ実行（デバッグ用）
  */
 
@@ -41,7 +41,7 @@ pipeline {
     agent {
         dockerfile {
             label 'ec2-fleet'
-            dir 'scripts/ai-workflow'
+            dir 'scripts/ai-workflow-v2'
             filename 'Dockerfile'
             args '-v ${WORKSPACE}:/workspace -w /workspace -e CLAUDE_DANGEROUSLY_SKIP_PERMISSIONS=1 -e CLAUDE_CODE_OAUTH_TOKEN=${CLAUDE_CODE_OAUTH_TOKEN} -e OPENAI_API_KEY=${OPENAI_API_KEY} -e GITHUB_TOKEN=${GITHUB_TOKEN}'
         }
@@ -56,16 +56,15 @@ pipeline {
     }
 
     environment {
-        // Python実行環境
-        PYTHONUNBUFFERED = '1'
-        PYTHONUTF8 = '1'
+        // Node.js実行環境
+        NODE_ENV = 'production'
 
         // Claude Agent SDK設定（Bashコマンド承認スキップ）
         CLAUDE_DANGEROUSLY_SKIP_PERMISSIONS = '1'
 
         // AI Workflow設定
-        WORKFLOW_DIR = 'scripts/ai-workflow'
-        WORKFLOW_VERSION = '1.0.0'
+        WORKFLOW_DIR = 'scripts/ai-workflow-v2'
+        WORKFLOW_VERSION = '2.0.0'
 
         // Git設定（Job DSLパラメータから環境変数に設定）
         GIT_COMMIT_USER_NAME = "${params.GIT_COMMIT_USER_NAME}"
@@ -133,23 +132,29 @@ pipeline {
                         fi
                     """
 
-                    // Python環境確認（Dockerコンテナに含まれる環境を確認のみ）
-                    sh """
-                        echo "Python version:"
-                        python --version
+                    // Node.js環境確認（コンテナ内の実行環境を確認）
+                    dir(env.WORKFLOW_DIR) {
+                        sh """
+                            echo "Node version:"
+                            node --version
 
-                        echo ""
-                        echo "pip version:"
-                        python -m pip --version
+                            echo ""
+                            echo "npm version:"
+                            npm --version
 
-                        echo ""
-                        echo "Current user: \$(whoami)"
-                        echo "HOME directory: \$HOME"
+                            echo ""
+                            echo "Current user: \$(whoami)"
+                            echo "HOME directory: \$HOME"
 
-                        echo ""
-                        echo "Claude Code CLI version:"
-                        claude --version
-                    """
+                            echo ""
+                            echo "Installing dependencies (including dev)..."
+                            npm install --include=dev
+
+                            echo ""
+                            echo "Building TypeScript sources..."
+                            npm run build
+                        """
+                    }
                 }
             }
         }
@@ -169,7 +174,7 @@ pipeline {
                             // - metadata.jsonが存在しない場合: 新規作成
                             // - metadata.jsonが存在する場合: スキーママイグレーション実行
                             sh """
-                                python main.py init --issue-url ${params.ISSUE_URL}
+                                node dist/index.js init --issue-url ${params.ISSUE_URL}
                             """
                         }
                     }
@@ -193,12 +198,12 @@ pipeline {
                         if (params.DRY_RUN) {
                             echo "[DRY RUN] 全フェーズ実行をスキップ"
                         } else {
-                            // main.py の --phase all を実行
+                            // TypeScript版 CLI の --phase all を実行
                             // resume機能により、失敗したフェーズから自動再開
                             def forceResetFlag = params.FORCE_RESET ? '--force-reset' : ''
 
                             sh """
-                                python main.py execute \
+                                node dist/index.js execute \
                                     --phase all \
                                     --issue ${env.ISSUE_NUMBER} \
                                     ${forceResetFlag}
@@ -227,7 +232,7 @@ pipeline {
                         } else {
                             // 指定されたフェーズのみ実行
                             sh """
-                                python main.py execute \
+                                node dist/index.js execute \
                                     --phase ${params.START_PHASE} \
                                     --issue ${env.ISSUE_NUMBER}
                             """
