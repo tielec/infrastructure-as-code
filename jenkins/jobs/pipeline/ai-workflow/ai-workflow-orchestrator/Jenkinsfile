@@ -147,8 +147,8 @@ pipeline {
                             echo "HOME directory: \$HOME"
 
                             echo ""
-                            echo "Installing dependencies..."
-                            npm install
+                            echo "Installing dependencies (including dev)..."
+                            npm install --include=dev
 
                             echo ""
                             echo "Building TypeScript sources..."
