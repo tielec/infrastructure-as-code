@@ -311,12 +311,35 @@ Jenkins全体で使用される環境変数（JCaSCで定義）：
 - JSON形式でS3バケットに保存
 - 日付ベースのディレクトリ構造で整理
 - S3ライフサイクルポリシーにより30日経過後に自動削除
+- **マルチリージョン対応**: ap-northeast-1およびus-west-2リージョンをサポート
+- リージョンごとに独立したS3バケットへ保存
 
 **パラメータ**:
 - `ENVIRONMENT`: バックアップ対象の環境（dev/prod）
+- `AWS_REGION`: バックアップ対象のAWSリージョン（ap-northeast-1/us-west-2、デフォルト: ap-northeast-1）
 - `DRY_RUN`: 実際のバックアップを行わず確認のみ（デフォルト: false）
 
+**S3バケット名の形式**:
+- `jenkins-infra-ssm-backup-{環境}-{アカウントID}-{リージョン}`
+- 例: `jenkins-infra-ssm-backup-dev-123456789012-us-west-2`
+
 **実行スケジュール**: 毎日 JST 03:00（UTC 18:00）
+
+**使用例**:
+```bash
+# ap-northeast-1リージョンのdev環境をバックアップ（デフォルト）
+ENVIRONMENT: dev
+AWS_REGION: ap-northeast-1
+
+# us-west-2リージョンのprod環境をバックアップ
+ENVIRONMENT: prod
+AWS_REGION: us-west-2
+
+# ドライランモードでus-west-2リージョンを確認
+ENVIRONMENT: dev
+AWS_REGION: us-west-2
+DRY_RUN: true
+```
 
 #### Admin_Jobs/SSM_Parameter_Restore
 
