@@ -128,7 +128,7 @@ async function handleInitCommand(issueUrl: string): Promise<void> {
   const metadataPath = path.join(workflowDir, 'metadata.json');
   const branchName = `ai-workflow/issue-${issueNumber}`;
 
-  await ensureBranch(repoRoot, branchName);
+  await ensureBranch(repoRoot, branchName, workflowDir);
 
   fs.ensureDirSync(workflowDir);
 
@@ -504,12 +504,30 @@ async function getRepoRoot(): Promise<string> {
   }
 }
 
-async function ensureBranch(repoRoot: string, branchName: string): Promise<void> {
+async function ensureBranch(
+  repoRoot: string,
+  branchName: string,
+  cleanupDir?: string,
+): Promise<void> {
   const git = simpleGit(repoRoot);
   const branches = await git.branch();
   if (branches.all.includes(branchName)) {
-    await git.checkout(branchName);
-    console.info(`[INFO] Switched to existing branch: ${branchName}`);
+    try {
+      await git.checkout(branchName);
+      console.info(`[INFO] Switched to existing branch: ${branchName}`);
+    } catch (error) {
+      const message = (error as Error).message ?? '';
+      if (message.includes('untracked working tree files would be overwritten')) {
+        if (cleanupDir && fs.existsSync(cleanupDir)) {
+          console.warn('[WARNING] Untracked workflow files detected. Cleaning up and retrying checkout...');
+          fs.removeSync(cleanupDir);
+        }
+        await git.checkout(branchName);
+        console.info(`[INFO] Switched to existing branch after cleanup: ${branchName}`);
+      } else {
+        throw error;
+      }
+    }
   } else {
     await git.checkoutLocalBranch(branchName);
     console.info(`[INFO] Created and switched to branch: ${branchName}`);
