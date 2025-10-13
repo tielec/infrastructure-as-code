@@ -71,30 +71,49 @@ export class ContentParser {
 
   public async parseReviewResult(messages: string[]): Promise<ReviewParseResult> {
     const textBlocks: string[] = [];
-    const resultRegex = /result="([^"]*)"/;
 
     for (const rawMessage of messages) {
-      const message = rawMessage ?? '';
+      try {
+        const message = JSON.parse(rawMessage);
 
-      const resultMatch = message.includes('ResultMessage')
-        ? message.match(resultRegex)
-        : null;
-      if (resultMatch) {
-        const normalized = this.normalizeEscapedText(resultMatch[1]);
-        textBlocks.push(normalized);
-        continue;
-      }
+        // Extract text from assistant messages
+        if (message.type === 'assistant' && message.message?.content) {
+          for (const block of message.message.content) {
+            if (block.type === 'text' && block.text) {
+              textBlocks.push(block.text);
+            }
+          }
+        }
 
-      if (message.includes('AssistantMessage') && message.includes('TextBlock(text=')) {
-        const start = message.indexOf('TextBlock(text=') + 'TextBlock(text='.length;
-        const end = message.indexOf("')", start);
-        if (end === -1) {
+        // Extract text from result messages
+        if (message.type === 'result' && message.result) {
+          textBlocks.push(message.result);
+        }
+      } catch (parseError) {
+        // Not JSON, try legacy Python-style parsing
+        const message = rawMessage ?? '';
+        const resultRegex = /result="([^"]*)"/;
+
+        const resultMatch = message.includes('ResultMessage')
+          ? message.match(resultRegex)
+          : null;
+        if (resultMatch) {
+          const normalized = this.normalizeEscapedText(resultMatch[1]);
+          textBlocks.push(normalized);
           continue;
         }
 
-        const extracted = this.normalizeEscapedText(message.slice(start, end));
-        if (this.shouldKeepAssistantText(extracted)) {
-          textBlocks.push(extracted);
+        if (message.includes('AssistantMessage') && message.includes('TextBlock(text=')) {
+          const start = message.indexOf('TextBlock(text=') + 'TextBlock(text='.length;
+          const end = message.indexOf("')", start);
+          if (end === -1) {
+            continue;
+          }
+
+          const extracted = this.normalizeEscapedText(message.slice(start, end));
+          if (this.shouldKeepAssistantText(extracted)) {
+            textBlocks.push(extracted);
+          }
         }
       }
     }
