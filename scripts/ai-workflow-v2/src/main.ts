@@ -126,6 +126,9 @@ async function handleInitCommand(issueUrl: string): Promise<void> {
   const repoRoot = await getRepoRoot();
   const workflowDir = path.join(repoRoot, '.ai-workflow', `issue-${issueNumber}`);
   const metadataPath = path.join(workflowDir, 'metadata.json');
+  const branchName = `ai-workflow/issue-${issueNumber}`;
+
+  await ensureBranch(repoRoot, branchName);
 
   fs.ensureDirSync(workflowDir);
 
@@ -133,6 +136,9 @@ async function handleInitCommand(issueUrl: string): Promise<void> {
     console.info('[INFO] Workflow already exists. Migrating metadata schema if required...');
     const state = WorkflowState.load(metadataPath);
     const migrated = state.migrate();
+    const metadataManager = new MetadataManager(metadataPath);
+    metadataManager.data.branch_name = branchName;
+    metadataManager.save();
     console.info(
       migrated
         ? '[OK] Metadata schema updated successfully.'
@@ -151,8 +157,6 @@ async function handleInitCommand(issueUrl: string): Promise<void> {
 
   const metadataManager = new MetadataManager(metadataPath);
 
-  const branchName = `ai-workflow/issue-${issueNumber}`;
-  await ensureBranch(repoRoot, branchName);
   metadataManager.data.branch_name = branchName;
 
   const repoName = process.env.GITHUB_REPOSITORY ?? null;
