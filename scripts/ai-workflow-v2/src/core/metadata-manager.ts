@@ -5,6 +5,7 @@ import {
   PhaseName,
   PhaseStatus,
   WorkflowMetadata,
+  RemainingTask,
 } from '../types.js';
 
 const formatTimestampForFilename = (date = new Date()): string => {
@@ -164,7 +165,7 @@ export class MetadataManager {
   public setEvaluationDecision(options: {
     decision: string;
     failedPhase?: PhaseName | null;
-    remainingTasks?: Array<Record<string, unknown>> | null;
+    remainingTasks?: RemainingTask[] | null;
     createdIssueUrl?: string | null;
     abortReason?: string | null;
   }): void {

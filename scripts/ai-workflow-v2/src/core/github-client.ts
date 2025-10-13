@@ -2,6 +2,7 @@ import fs from 'fs-extra';
 import { Octokit } from '@octokit/rest';
 import { RequestError } from '@octokit/request-error';
 import { MetadataManager } from './metadata-manager.js';
+import { RemainingTask } from '../types.js';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -328,7 +329,7 @@ export class GitHubClient {
 
   public async createIssueFromEvaluation(
     issueNumber: number,
-    remainingTasks: Array<Record<string, unknown>>,
+    remainingTasks: RemainingTask[],
     evaluationReportPath: string,
   ): Promise<IssueCreationResult> {
     try {
