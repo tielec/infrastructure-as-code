@@ -117,7 +117,7 @@ export class DesignPhase extends BasePhase {
       .replace('{issue_info}', this.formatIssueInfo(issueInfo))
       .replace('{issue_number}', String(issueInfo.number));
 
-    const messages = await this.executeWithClaude(reviewPrompt, { maxTurns: 40 });
+    const messages = await this.executeWithClaude(reviewPrompt, { maxTurns: 40, logDir: this.reviewDir });
     const reviewResult = await this.contentParser.parseReviewResult(messages);
 
     await this.github.postReviewResult(
@@ -174,7 +174,7 @@ export class DesignPhase extends BasePhase {
       .replace('{issue_info}', this.formatIssueInfo(issueInfo))
       .replace('{issue_number}', String(issueInfo.number));
 
-    await this.executeWithClaude(revisePrompt, { maxTurns: 40 });
+    await this.executeWithClaude(revisePrompt, { maxTurns: 40, logDir: this.reviseDir });
 
     if (!fs.existsSync(designFile)) {
       return {

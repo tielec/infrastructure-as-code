@@ -77,7 +77,7 @@ export class RequirementsPhase extends BasePhase {
       .replace('{issue_info}', this.formatIssueInfo(issueInfo))
       .replace('{issue_number}', String(issueInfo.number));
 
-    const messages = await this.executeWithClaude(reviewPrompt, { maxTurns: 30 });
+    const messages = await this.executeWithClaude(reviewPrompt, { maxTurns: 30, logDir: this.reviewDir });
 
     const reviewResult = await this.contentParser.parseReviewResult(messages);
 
@@ -126,7 +126,7 @@ export class RequirementsPhase extends BasePhase {
       .replace('{issue_info}', this.formatIssueInfo(issueInfo))
       .replace('{issue_number}', String(issueInfo.number));
 
-    await this.executeWithClaude(revisePrompt, { maxTurns: 30 });
+    await this.executeWithClaude(revisePrompt, { maxTurns: 30, logDir: this.reviseDir });
 
     if (!fs.existsSync(requirementsFile)) {
       return {

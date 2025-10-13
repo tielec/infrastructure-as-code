@@ -136,13 +136,64 @@ export abstract class BasePhase {
     return fs.readFileSync(promptPath, 'utf-8');
   }
 
-  protected async executeWithClaude(prompt: string, options?: { maxTurns?: number; verbose?: boolean }) {
-    return this.claude.executeTask({
-      prompt,
-      maxTurns: options?.maxTurns ?? 50,
-      workingDirectory: this.workingDir,
-      verbose: options?.verbose,
-    });
+  protected async executeWithClaude(
+    prompt: string,
+    options?: { maxTurns?: number; verbose?: boolean; logDir?: string },
+  ) {
+    const logDir = options?.logDir ?? this.executeDir;
+    const promptFile = path.join(logDir, 'prompt.txt');
+    const outputFile = path.join(logDir, 'output.json');
+    const logFile = path.join(logDir, 'log.txt');
+
+    // Save prompt
+    fs.writeFileSync(promptFile, prompt, 'utf-8');
+    console.info(`[INFO] Prompt saved to: ${promptFile}`);
+
+    const startTime = Date.now();
+    let messages: string[] = [];
+    let error: Error | null = null;
+
+    try {
+      messages = await this.claude.executeTask({
+        prompt,
+        maxTurns: options?.maxTurns ?? 50,
+        workingDirectory: this.workingDir,
+        verbose: options?.verbose,
+      });
+    } catch (e) {
+      error = e as Error;
+    }
+
+    const endTime = Date.now();
+    const duration = endTime - startTime;
+
+    // Save output
+    fs.writeFileSync(outputFile, JSON.stringify(messages, null, 2), 'utf-8');
+    console.info(`[INFO] Output saved to: ${outputFile}`);
+
+    // Save log
+    const logContent = [
+      `Execution Log`,
+      `=============`,
+      `Start Time: ${new Date(startTime).toISOString()}`,
+      `End Time: ${new Date(endTime).toISOString()}`,
+      `Duration: ${duration}ms`,
+      `Max Turns: ${options?.maxTurns ?? 50}`,
+      `Messages Count: ${messages.length}`,
+      `Status: ${error ? 'FAILED' : 'SUCCESS'}`,
+      error ? `Error: ${error.message}` : '',
+    ]
+      .filter(Boolean)
+      .join('\n');
+
+    fs.writeFileSync(logFile, logContent, 'utf-8');
+    console.info(`[INFO] Log saved to: ${logFile}`);
+
+    if (error) {
+      throw error;
+    }
+
+    return messages;
   }
 
   protected getIssueInfo() {

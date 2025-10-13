@@ -128,7 +128,7 @@ export class TestScenarioPhase extends BasePhase {
       .replace('{requirements_document_path}', requirementsReference)
       .replace('{test_strategy}', testStrategy);
 
-    const messages = await this.executeWithClaude(reviewPrompt, { maxTurns: 30 });
+    const messages = await this.executeWithClaude(reviewPrompt, { maxTurns: 30, logDir: this.reviewDir });
     const reviewResult = await this.contentParser.parseReviewResult(messages);
 
     const reviewFile = path.join(this.reviewDir, 'result.md');
@@ -191,7 +191,7 @@ export class TestScenarioPhase extends BasePhase {
       .replace('{review_feedback}', reviewFeedback)
       .replace('{issue_number}', String(issueInfo.number));
 
-    await this.executeWithClaude(revisePrompt, { maxTurns: 40 });
+    await this.executeWithClaude(revisePrompt, { maxTurns: 40, logDir: this.reviseDir });
 
     if (!fs.existsSync(scenarioFile)) {
       return {

@@ -84,7 +84,7 @@ export class DocumentationPhase extends BasePhase {
     const outputs = this.getPhaseOutputs(issueNumber);
     const reviewPrompt = this.buildPrompt('review', issueNumber, documentationFile, outputs);
 
-    const messages = await this.executeWithClaude(reviewPrompt, { maxTurns: 30 });
+    const messages = await this.executeWithClaude(reviewPrompt, { maxTurns: 30, logDir: this.reviewDir });
     const reviewResult = await this.contentParser.parseReviewResult(messages);
 
     const reviewFile = path.join(this.reviewDir, 'result.md');
@@ -122,7 +122,7 @@ export class DocumentationPhase extends BasePhase {
       reviewFeedback,
     );
 
-    await this.executeWithClaude(revisePrompt, { maxTurns: 30 });
+    await this.executeWithClaude(revisePrompt, { maxTurns: 30, logDir: this.reviseDir });
 
     if (!fs.existsSync(documentationFile)) {
       return {

@@ -113,7 +113,7 @@ export class ImplementationPhase extends BasePhase {
       .replace('{test_scenario_document_path}', scenarioReference)
       .replace('{implementation_strategy}', implementationStrategy);
 
-    const messages = await this.executeWithClaude(reviewPrompt, { maxTurns: 30 });
+    const messages = await this.executeWithClaude(reviewPrompt, { maxTurns: 30, logDir: this.reviewDir });
     const reviewResult = await this.contentParser.parseReviewResult(messages);
 
     const reviewFile = path.join(this.reviewDir, 'result.md');
@@ -175,7 +175,7 @@ export class ImplementationPhase extends BasePhase {
       .replace('{review_feedback}', reviewFeedback)
       .replace('{issue_number}', String(issueNumber));
 
-    await this.executeWithClaude(revisePrompt, { maxTurns: 50 });
+    await this.executeWithClaude(revisePrompt, { maxTurns: 50, logDir: this.reviseDir });
 
     if (!fs.existsSync(implementationFile)) {
       return {
