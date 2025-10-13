@@ -70,6 +70,9 @@ export class PlanningPhase extends BasePhase {
       parsed.suggestions,
     );
 
+    const reviewFile = path.join(this.reviewDir, 'result.md');
+    fs.writeFileSync(reviewFile, parsed.feedback, 'utf-8');
+
     return {
       success: parsed.result !== 'FAIL',
       output: parsed.result,

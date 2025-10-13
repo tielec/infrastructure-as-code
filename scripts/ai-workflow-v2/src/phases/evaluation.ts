@@ -237,6 +237,12 @@ export class EvaluationPhase extends BasePhase {
   }
 
   protected async review(): Promise<PhaseExecutionResult> {
+    // Evaluation phase does not require review
+    // But we save a placeholder result.md for consistency
+    const reviewFile = path.join(this.reviewDir, 'result.md');
+    const content = '# 評価フェーズレビュー\n\n評価フェーズにはレビューは不要です。\n\n**判定**: PASS\n';
+    fs.writeFileSync(reviewFile, content, 'utf-8');
+
     return {
       success: true,
       output: null,

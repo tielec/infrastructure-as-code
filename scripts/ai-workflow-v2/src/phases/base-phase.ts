@@ -142,8 +142,8 @@ export abstract class BasePhase {
   ) {
     const logDir = options?.logDir ?? this.executeDir;
     const promptFile = path.join(logDir, 'prompt.txt');
-    const outputFile = path.join(logDir, 'output.json');
-    const logFile = path.join(logDir, 'log.txt');
+    const rawLogFile = path.join(logDir, 'agent_log_raw.txt');
+    const agentLogFile = path.join(logDir, 'agent_log.md');
 
     // Save prompt
     fs.writeFileSync(promptFile, prompt, 'utf-8');
@@ -167,33 +167,91 @@ export abstract class BasePhase {
     const endTime = Date.now();
     const duration = endTime - startTime;
 
-    // Save output
-    fs.writeFileSync(outputFile, JSON.stringify(messages, null, 2), 'utf-8');
-    console.info(`[INFO] Output saved to: ${outputFile}`);
+    // Save raw output (Python version compatible)
+    fs.writeFileSync(rawLogFile, messages.join('\n\n'), 'utf-8');
+    console.info(`[INFO] Raw log saved to: ${rawLogFile}`);
 
-    // Save log
-    const logContent = [
-      `Execution Log`,
-      `=============`,
-      `Start Time: ${new Date(startTime).toISOString()}`,
-      `End Time: ${new Date(endTime).toISOString()}`,
-      `Duration: ${duration}ms`,
-      `Max Turns: ${options?.maxTurns ?? 50}`,
-      `Messages Count: ${messages.length}`,
-      `Status: ${error ? 'FAILED' : 'SUCCESS'}`,
-      error ? `Error: ${error.message}` : '',
-    ]
-      .filter(Boolean)
-      .join('\n');
-
-    fs.writeFileSync(logFile, logContent, 'utf-8');
-    console.info(`[INFO] Log saved to: ${logFile}`);
+    // Save human-readable markdown log
+    const agentLogContent = this.formatAgentLog(messages, startTime, endTime, duration, error);
+    fs.writeFileSync(agentLogFile, agentLogContent, 'utf-8');
+    console.info(`[INFO] Agent log saved to: ${agentLogFile}`);
 
     if (error) {
       throw error;
     }
 
     return messages;
+  }
+
+  private formatAgentLog(
+    messages: string[],
+    startTime: number,
+    endTime: number,
+    duration: number,
+    error: Error | null,
+  ): string {
+    const lines: string[] = [];
+    lines.push('# Claude Agent 実行ログ\n');
+    lines.push(`生成日時: ${new Date(startTime).toLocaleString('ja-JP')}\n`);
+    lines.push('---\n');
+
+    let turnNumber = 1;
+    for (const rawMessage of messages) {
+      try {
+        const message = JSON.parse(rawMessage);
+
+        if (message.type === 'system' && message.subtype === 'init') {
+          lines.push(`## Turn ${turnNumber++}: システム初期化\n`);
+          lines.push(`**セッションID**: \`${message.session_id || 'N/A'}\``);
+          lines.push(`**モデル**: ${message.model || 'N/A'}`);
+          lines.push(`**権限モード**: ${message.permissionMode || 'N/A'}`);
+          const tools = Array.isArray(message.tools) ? message.tools.join(', ') : '不明';
+          lines.push(`**利用可能ツール**: ${tools}\n`);
+        } else if (message.type === 'assistant') {
+          const content = message.message?.content || [];
+          for (const block of content) {
+            if (block.type === 'text' && block.text) {
+              lines.push(`## Turn ${turnNumber++}: AI応答\n`);
+              lines.push(`${block.text}\n`);
+            } else if (block.type === 'tool_use') {
+              lines.push(`## Turn ${turnNumber++}: ツール使用\n`);
+              lines.push(`**ツール**: \`${block.name}\`\n`);
+              if (block.input) {
+                lines.push('**パラメータ**:');
+                for (const [key, value] of Object.entries(block.input)) {
+                  const valueStr = typeof value === 'string' && value.length > 100
+                    ? `${value.substring(0, 100)}...`
+                    : String(value);
+                  lines.push(`- \`${key}\`: \`${valueStr}\``);
+                }
+                lines.push('');
+              }
+            }
+          }
+        } else if (message.type === 'result') {
+          lines.push(`## Turn ${turnNumber++}: 実行完了\n`);
+          lines.push(`**ステータス**: ${message.subtype || 'success'}`);
+          lines.push(`**所要時間**: ${message.duration_ms || duration}ms`);
+          lines.push(`**ターン数**: ${message.num_turns || 'N/A'}`);
+          if (message.result) {
+            lines.push(`\n${message.result}\n`);
+          }
+        }
+      } catch (parseError) {
+        // JSON parse error - skip this message
+        continue;
+      }
+    }
+
+    lines.push('\n---\n');
+    lines.push(`**実行時間**: ${duration}ms`);
+    lines.push(`**開始**: ${new Date(startTime).toISOString()}`);
+    lines.push(`**終了**: ${new Date(endTime).toISOString()}`);
+    if (error) {
+      lines.push(`\n**エラー**: ${error.message}`);
+    }
+
+    return lines.join('\n');
   }
 
   protected getIssueInfo() {
