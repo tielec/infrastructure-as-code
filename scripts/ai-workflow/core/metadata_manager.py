@@ -21,16 +21,51 @@ class MetadataManager:
         """
         self.metadata_path = metadata_path
         self.workflow_dir = metadata_path.parent
-        self._state = WorkflowState(metadata_path)
         self.logger = Logger.get_logger(__name__)
+
+        # メタデータファイルが存在する場合のみ読み込み
+        # 新規作成の場合は create_new() を呼び出す必要がある
+        if metadata_path.exists():
+            self._state = WorkflowState(metadata_path)
+        else:
+            self._state = None
+
+    def create_new(self, issue_number: int, issue_url: str, issue_title: str):
+        """
+        新規ワークフローメタデータを作成
+
+        Args:
+            issue_number: Issue番号
+            issue_url: Issue URL
+            issue_title: Issueタイトル
+        """
+        self._state = WorkflowState.create_new(
+            metadata_path=self.metadata_path,
+            issue_number=str(issue_number),
+            issue_url=issue_url,
+            issue_title=issue_title
+        )
+        self.logger.info(f"Created new workflow metadata for Issue #{issue_number}")
+
+    def load(self):
+        """
+        既存のメタデータファイルを読み込み
+        """
+        if self._state is None:
+            self._state = WorkflowState(self.metadata_path)
+            self.logger.info(f"Loaded workflow metadata from {self.metadata_path}")
 
     @property
     def data(self):
         """メタデータの生データ"""
+        if self._state is None:
+            raise MetadataError("Metadata not loaded. Call create_new() or load() first.")
         return self._state.data
 
     def save(self):
         """メタデータを保存"""
+        if self._state is None:
+            raise MetadataError("Metadata not loaded. Call create_new() or load() first.")
         self._state.save()
 
     def update_phase_status(
