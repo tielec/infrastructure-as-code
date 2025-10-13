@@ -1,0 +1,361 @@
+# テストシナリオフェーズ - 実行プロンプト
+
+## タスク概要
+要件定義書と設計書から、詳細なテストシナリオを作成してください。**Phase 2で決定されたテスト戦略に基づいて**、適切なテスト種別のシナリオを作成します。
+
+## 入力情報
+
+### Planning Phase成果物
+- Planning Document: @.ai-workflow/issue-380/00_planning/output/planning.md
+
+**注意**: Planning Phaseが実行されている場合、開発計画（実装戦略、テスト戦略、リスク、スケジュール）を必ず確認してください。
+
+### 要件定義書
+@.ai-workflow/issue-380/01_requirements/output/requirements.md
+
+### 設計書
+@.ai-workflow/issue-380/02_design/output/design.md
+
+### テスト戦略（Phase 2で決定）
+**UNIT_INTEGRATION**
+
+### GitHub Issue情報（参考）
+## Issue情報
+
+- **Issue番号**: #380
+- **タイトル**: [TASK] Issue #376の続き - Application/CLI層の実装
+- **状態**: open
+- **URL**: https://github.com/tielec/infrastructure-as-code/issues/380
+- **ラベル**: なし
+
+### 本文
+
+## 親Issue
+
+#376
+
+## 概要
+
+Issue #376の大規模リファクタリングにて、Phase 4（実装フェーズ）で基盤レイヤー（Infrastructure層、Domain層）の実装が完了しましたが、上位レイヤー（Application層、CLI層）および既存ファイルの修正が未完了のままとなっています。
+
+本issueでは、残りの実装を完了させます。
+
+## 背景
+
+### 完了済み（Issue #376）
+- ✅ Infrastructure層（5ファイル）
+  - common/logger.py
+  - common/error_handler.py
+  - common/file_handler.py
+  - common/retry.py
+- ✅ Domain層 - Git Operations（4ファイル）
+  - core/git/repository.py
+  - core/git/branch.py
+  - core/git/commit.py
+- ✅ Domain層 - GitHub Operations（4ファイル）
+  - core/github/issue_client.py
+  - core/github/pr_client.py
+  - core/github/comment_client.py
+- ✅ Domain層 - Phases（5ファイル）
+  - phases/base/abstract_phase.py
+  - phases/base/phase_executor.py
+  - phases/base/phase_validator.py
+  - phases/base/phase_reporter.py
+
+### 未完了（本issueで実装）
+
+## タスク
+
+### 1. Application層の実装（優先度: 高）
+
+#### 1.1 core/workflow_controller.py
+- [ ] ワークフロー全体の制御クラスを実装
+- [ ] ワークフロー初期化（`initialize()`）
+- [ ] フェーズ実行制御（`execute_phase()`, `execute_all_phases()`）
+- [ ] 依存関係管理
+- [ ] エラーハンドリング
+
+**依存**:
+- PhaseExecutor
+- MetadataManager
+- GitRepository, GitBranch, GitCommit
+- IssueClient, PRClient, CommentClient
+
+**見積もり**: 24-40時間
+
+#### 1.2 core/config_manager.py
+- [ ] 設定管理クラスを実装
+- [ ] `config.yaml` の読み込み
+- [ ] 環境変数の読み込み
+- [ ] 設定のバリデーション
+- [ ] デフォルト値の管理
+
+**見積もり**: 8-16時間
+
+### 2. CLI層の実装（優先度: 高）
+
+#### 2.1 cli/commands.py
+- [ ] CLIコマンド定義クラスを実装
+- [ ] `@click.group()` によるCLIグループ定義
+- [ ] `init` コマンド: ワークフロー初期化
+- [ ] `execute` コマンド: フェーズ実行
+- [ ] `resume` コマンド: ワークフロー再開（既存機能）
+- [ ] `status` コマンド: ステータス確認（既存機能）
+
+**依存**:
+- WorkflowController
+- ConfigManager
+
+**見積もり**: 8-16時間
+
+### 3. 既存ファイルの修正（優先度: 中）
+
+#### 3.1 main.py
+- [ ] CLI層を `cli/commands.py` に分離
+- [ ] インポートパスの修正
+- [ ] `WorkflowController` の呼び出しに変更
+
+**見積もり**: 4-8時間
+
+#### 3.2 phases/*.py（10ファイル）
+- [ ] `BasePhase` → `AbstractPhase` への継承変更
+- [ ] インポートパスの修正
+  - `from phases.base_phase import BasePhase` → `from phases.base.abstract_phase import AbstractPhase`
+  - `from core.git_manager import GitManager` → `from core.git.* import ...`
+  - `from core.github_client import GitHubClient` → `from core.github.* import ...`
+
+**対象ファイル**:
+- phases/planning.py
+- phases/requirements.py
+- phases/design.py
+- phases/test_scenario.py
+- phases/implementation.py
+- phases/test_implementation.py
+- phases/testing.py
+- phases/documentation.py
+- phases/report.py
+- phases/evaluation.py
+
+**見積もり**: 8-16時間
+
+#### 3.3 core/metadata_manager.py
+- [ ] 新しい例外クラスのインポート（`from common.error_handler import MetadataError`）
+- [ ] エラーハンドリングの統一
+
+**見積もり**: 2-4時間
+
+#### 3.4 core/claude_agent_client.py
+- [ ] 新しい例外クラスのインポート（`from common.error_handler import ClaudeAPIError`）
+- [ ] エラーハンドリングの統一
+
+**見積もり**: 2-4時間
+
+### 4. 既存テストの修正（優先度: 高）
+
+#### 4.1 既存テストの失敗修正
+- [ ] 116件の失敗テストを修正
+- [ ] 61件のエラーを修正
+- [ ] テストが新しいアーキテクチャに対応するように更新
+
+**見積もり**: 16-32時間
+
+### 5. 削除予定ファイル（優先度: 低）
+
+**段階的削除が必要**:
+- [ ] `phases/base_phase.py` - 4ファイルに分割後、削除
+- [ ] `core/git_manager.py` - 3ファイルに分割後、削除
+- [ ] `core/github_client.py` - 3ファイルに分割後、削除
+
+**削除手順**:
+1. 新規クラスの動作確認
+2. すべてのテストが通過することを確認
+3. インポート参照がないことを確認
+4. 削除実行
+
+**見積もり**: 4-8時間
+
+## 総見積もり時間
+
+**最小**: 72時間（約9日）  
+**最大**: 140時間（約17.5日）  
+**平均**: 106時間（約13日）
+
+## 関連ドキュメント
+
+- Planning Document: `.ai-workflow/issue-376/00_planning/output/planning.md`
+- Design Document: `.ai-workflow/issue-376/02_design/output/design.md`
+- Implementation Log: `.ai-workflow/issue-376/04_implementation/output/implementation.md`
+- Evaluation Report: `.ai-workflow/issue-376/09_evaluation/output/evaluation_report.md`
+
+## 注意事項
+
+1. **設計準拠**: Phase 2の設計書（design.md）に従って実装
+2. **既存コードの尊重**: 既存のスタイルを維持
+3. **段階的実装**: 一度にすべて実装せず、段階的に
+4. **テスト**: 各ステップで既存テストが通過することを確認
+5. **後方互換性**: CLIコマンド、メタデータフォーマット、設定ファイル構造を維持
+
+## 実施順序（推奨）
+
+1. Application層の実装（WorkflowController, ConfigManager）
+2. CLI層の実装（cli/commands.py）
+3. main.pyの修正
+4. phases/*.pyの修正
+5. 既存テストの修正
+6. 旧ファイルの削除
+7. 統合テスト実行
+
+## テスト戦略別の対応
+
+Phase 2で決定されたテスト戦略に応じて、以下のテストシナリオを作成してください：
+
+### UNIT_ONLY: Unitテストのみ
+- 各関数・メソッド単位のテストケース
+- 正常系・異常系・境界値テスト
+- モック/スタブを使用した単体テスト
+
+### INTEGRATION_ONLY: Integrationテストのみ
+- コンポーネント間の連携テスト
+- 外部システムとの統合テスト
+- データフローの検証
+
+### BDD_ONLY: BDDテストのみ
+- ユーザーストーリーベースのシナリオ
+- Given-When-Then形式
+- ビジネス要件との対応
+
+### UNIT_INTEGRATION: Unit + Integration
+- Unitテストシナリオ（上記）
+- Integrationテストシナリオ（上記）
+
+### UNIT_BDD: Unit + BDD
+- Unitテストシナリオ（上記）
+- BDDシナリオ（上記）
+
+### INTEGRATION_BDD: Integration + BDD
+- Integrationテストシナリオ（上記）
+- BDDシナリオ（上記）
+
+### ALL: すべて
+- Unitテストシナリオ（上記）
+- Integrationテストシナリオ（上記）
+- BDDシナリオ（上記）
+
+## テストシナリオの構成
+
+### 1. テスト戦略サマリー
+- 選択されたテスト戦略（Phase 2から引用）
+- テスト対象の範囲
+- テストの目的
+
+### 2. Unitテストシナリオ（該当する場合）
+
+各関数・メソッドについて：
+
+**テストケース名**: （関数名_正常系/異常系/境界値）
+
+- **目的**: このテストで検証すること
+- **前提条件**: テスト実行前の状態
+- **入力**: 関数への入力パラメータ
+- **期待結果**: 期待される出力・状態変化
+- **テストデータ**: 使用するテストデータ
+
+**例**:
+```
+テストケース名: calculate_total_正常系
+目的: 合計金額が正しく計算されることを検証
+前提条件: 商品リストが存在する
+入力: items = [{price: 100, quantity: 2}, {price: 200, quantity: 1}]
+期待結果: 400が返される
+テストデータ: 上記items
+```
+
+### 3. Integrationテストシナリオ（該当する場合）
+
+各統合ポイントについて：
+
+**シナリオ名**: （統合する2つのコンポーネント名）
+
+- **目的**: この統合で検証すること
+- **前提条件**: 統合テスト実行前の状態
+- **テスト手順**: ステップバイステップの手順
+- **期待結果**: 統合後の期待される動作
+- **確認項目**: 確認すべきポイントのチェックリスト
+
+### 4. BDDシナリオ（該当する場合）
+
+ユーザーストーリーごとに：
+
+**Feature**: （機能名）
+
+**Scenario**: （シナリオ名）
+
+- **Given** (前提条件): システムの初期状態
+- **When** (操作): ユーザーが実行するアクション
+- **Then** (結果): 期待される結果
+
+**例**:
+```gherkin
+Feature: ユーザー登録機能
+
+Scenario: 新規ユーザーが正常に登録できる
+  Given ユーザーがログインしていない
+  When ユーザーが有効なメールアドレスとパスワードで登録フォームを送信する
+  Then ユーザーアカウントが作成される
+  And 確認メールが送信される
+  And ユーザーがログイン画面にリダイレクトされる
+```
+
+### 5. テストデータ
+- 各テストシナリオで使用するテストデータ
+- 正常データ、異常データ、境界値データ
+
+### 6. テスト環境要件
+- 必要なテスト環境（ローカル、CI/CD等）
+- 必要な外部サービス・データベース
+- モック/スタブの必要性
+
+## 品質ゲート（Phase 3）
+
+テストシナリオは以下の品質ゲートを満たす必要があります：
+
+- [ ] **Phase 2の戦略に沿ったテストシナリオである**
+- [ ] **主要な正常系がカバーされている**
+- [ ] **主要な異常系がカバーされている**
+- [ ] **期待結果が明確である**
+
+これらの品質ゲートは**必須要件**です。作成後、クリティカルシンキングレビューが実施され、品質ゲートを満たさない場合は修正が必要になります。
+
+## 注意事項
+
+1. **戦略準拠**: Phase 2のテスト戦略を厳守してください
+   - 戦略に含まれないテスト種別は作成不要
+   - 例: UNIT_ONLYの場合、Integration/BDDシナリオは不要
+
+2. **要件との対応**: 要件定義書の各要件がテストでカバーされていることを確認
+   - 受け入れ基準がテストシナリオに反映されているか
+   - 機能要件がすべてテスト対象に含まれているか
+
+3. **実行可能性**: 実際に実行可能なテストシナリオを記述
+   - 曖昧な表現を避ける
+   - 具体的な入力・出力を記載
+   - 検証可能な期待結果
+
+4. **優先度**: すべてのエッジケースではなく、主要なケースに注目
+   - 80点で十分（完璧を目指さない）
+   - クリティカルパス優先
+   - 高リスク領域を優先的にカバー
+
+5. **レビューされることを意識**: テストシナリオはクリティカルシンキングレビューが実施されます
+   - 品質ゲート（4つの必須要件）を最優先で満たすこと
+   - ブロッカー（次フェーズに進めない問題）がないように注意
+
+## 出力形式
+
+テストシナリオを `.ai-workflow/issue-380/03_test_scenario/output/test-scenario.md` として保存してください。
+
+Markdown形式で、見出しを適切に使用し、可読性の高いドキュメントを作成してください。
+
+## 実装開始
+
+上記を踏まえ、テストシナリオを作成してください。
