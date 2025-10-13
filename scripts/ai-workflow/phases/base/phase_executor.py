@@ -150,12 +150,12 @@ class PhaseExecutor:
             claude_client=claude_client
         )
 
-        # CommentClientをIssueClientから取得（または別途生成）
+        # CommentClientを生成（環境変数から自動取得）
         from core.github.comment_client import CommentClient
-        # IssueClientと同じGithub/repositoryインスタンスを使用
+        import os
         comment_client = CommentClient(
-            github=issue_client.github,
-            repository_name=issue_client.repository.full_name
+            token=os.getenv('GITHUB_TOKEN'),
+            repository=os.getenv('GITHUB_REPOSITORY')
         )
 
         # Validator, Reporter生成
