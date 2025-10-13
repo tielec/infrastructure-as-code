@@ -3,16 +3,16 @@
   "issue_url": "https://github.com/tielec/infrastructure-as-code/issues/385",
   "issue_title": "Issue #385",
   "workflow_version": "1.0.0",
-  "current_phase": "requirements",
+  "current_phase": "design",
   "design_decisions": {
     "implementation_strategy": "EXTEND",
     "test_strategy": "INTEGRATION_ONLY",
     "test_code_strategy": "NONE"
   },
   "cost_tracking": {
-    "total_input_tokens": 58,
-    "total_output_tokens": 30785,
-    "total_cost_usd": 1.2243768000000002
+    "total_input_tokens": 16638,
+    "total_output_tokens": 47426,
+    "total_cost_usd": 2.1334737
   },
   "phases": {
     "planning": {
@@ -36,11 +36,14 @@
       ]
     },
     "design": {
-      "status": "pending",
+      "status": "completed",
       "retry_count": 0,
-      "started_at": null,
-      "completed_at": null,
-      "review_result": null
+      "started_at": "2025-10-13T15:06:55.914Z",
+      "completed_at": "2025-10-13T15:11:46.475Z",
+      "review_result": "PASS_WITH_SUGGESTIONS",
+      "output_files": [
+        "/tmp/jenkins-deda45f4/workspace/AI_Workflow/ai_workflow_orchestrator_v2/.ai-workflow/issue-385/02_design/output/design.md"
+      ]
     },
     "test_scenario": {
       "status": "pending",
@@ -98,7 +101,7 @@
     }
   },
   "created_at": "2025-10-13T14:57:51.143Z",
-  "updated_at": "2025-10-13T15:06:54.502Z",
+  "updated_at": "2025-10-13T15:11:47.264Z",
   "branch_name": "ai-workflow/issue-385",
   "repository": "tielec/infrastructure-as-code",
   "pr_number": 388,
