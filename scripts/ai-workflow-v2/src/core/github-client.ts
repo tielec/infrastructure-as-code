@@ -30,6 +30,11 @@ export interface GenericResult {
   error?: string | null;
 }
 
+export interface ProgressCommentResult {
+  comment_id: number;
+  comment_url: string | null;
+}
+
 const moduleDir = path.dirname(fileURLToPath(import.meta.url));
 const PR_TEMPLATE_PATH = path.resolve(moduleDir, '..', 'templates', 'pr_body_template.md');
 const PR_DETAILED_TEMPLATE_PATH = path.resolve(
@@ -138,8 +143,8 @@ export class GitHubClient {
     details?: string,
   ) {
     const statusEmoji: Record<string, string> = {
-      pending: '⏳',
-      in_progress: '🚧',
+      pending: '⏸️',
+      in_progress: '🔄',
       completed: '✅',
       failed: '❌',
     };
@@ -150,30 +155,24 @@ export class GitHubClient {
       design: '設計',
       test_scenario: 'テストシナリオ',
       implementation: '実装',
-      test_implementation: 'テストコード実装',
-      testing: 'テスト実行',
-      documentation: 'ドキュメント整備',
-      report: '報告',
-      evaluation: '評価',
+      testing: 'テスト',
+      documentation: 'ドキュメント',
     };
 
-    const emoji = statusEmoji[status] ?? 'ℹ️';
+    const emoji = statusEmoji[status] ?? '📝';
     const phaseLabel = phaseNames[phase] ?? phase;
 
-    const contentLines = [
-      `${emoji} **${phaseLabel} フェーズの進捗更新**`,
-      '',
-      `- フェーズ: \`${phase}\``,
-      `- ステータス: \`${status}\``,
-    ];
+    let body = `## ${emoji} AI Workflow - ${phaseLabel}フェーズ\n\n`;
+    body += `**ステータス**: ${status.toUpperCase()}\n\n`;
 
     if (details) {
-      contentLines.push('', '### 詳細', '', details);
+      body += `${details}\n\n`;
     }
 
-    contentLines.push('', '---', '*posted by AI Workflow*');
+    body += '---\n';
+    body += '*AI駆動開発自動化ワークフロー (Claude Agent SDK)*';
 
-    return this.postComment(issueNumber, contentLines.join('\n'));
+    return this.postComment(issueNumber, body);
   }
 
   public async postReviewResult(
@@ -189,24 +188,37 @@ export class GitHubClient {
       FAIL: '❌',
     };
 
-    const emoji = emojiMap[result] ?? 'ℹ️';
-    const lines = [
-      `${emoji} **${phase} フェーズのレビュー結果**`,
-      '',
-      `- 結果: \`${result}\``,
-      '',
-      '### フィードバック',
-      '',
-      feedback || '（フィードバックなし）',
-    ];
+    const phaseNames: Record<string, string> = {
+      requirements: '要件定義',
+      design: '設計',
+      test_scenario: 'テストシナリオ',
+      implementation: '実装',
+      testing: 'テスト',
+      documentation: 'ドキュメント',
+    };
 
-    if (suggestions.length) {
-      lines.push('', '### 改善提案', '', ...suggestions.map((item) => `- ${item}`));
+    const emoji = emojiMap[result] ?? '📝';
+    const phaseLabel = phaseNames[phase] ?? phase;
+
+    let body = `## ${emoji} レビュー結果 - ${phaseLabel}フェーズ\n\n`;
+    body += `**判定**: ${result}\n\n`;
+
+    if (feedback) {
+      body += `### フィードバック\n\n${feedback}\n\n`;
     }
 
-    lines.push('', '---', '*posted by AI Workflow reviewer*');
+    if (suggestions.length) {
+      body += '### 改善提案\n\n';
+      suggestions.forEach((item, index) => {
+        body += `${index + 1}. ${item}\n`;
+      });
+      body += '\n';
+    }
 
-    return this.postComment(issueNumber, lines.join('\n'));
+    body += '---\n';
+    body += '*AI駆動開発自動化ワークフロー - クリティカルシンキングレビュー*';
+
+    return this.postComment(issueNumber, body);
   }
 
   public async createPullRequest(
@@ -471,7 +483,7 @@ export class GitHubClient {
     issueNumber: number,
     content: string,
     metadataManager: MetadataManager,
-  ) {
+  ): Promise<ProgressCommentResult> {
     try {
       const existingId = metadataManager.getProgressCommentId();
 
@@ -484,9 +496,12 @@ export class GitHubClient {
             body: content,
           });
 
+          const commentId = data.id ?? existingId;
+          metadataManager.saveProgressCommentId(commentId, data.html_url ?? '');
+
           return {
-            comment_id: data.id,
-            comment_url: data.html_url ?? '',
+            comment_id: commentId,
+            comment_url: data.html_url ?? null,
           };
         } catch (error) {
           const message =
@@ -507,8 +522,8 @@ export class GitHubClient {
       metadataManager.saveProgressCommentId(data.id, data.html_url ?? '');
 
       return {
-        comment_id: data.id,
-        comment_url: data.html_url ?? '',
+        comment_id: data.id ?? 0,
+        comment_url: data.html_url ?? null,
       };
     } catch (error) {
       const message =
