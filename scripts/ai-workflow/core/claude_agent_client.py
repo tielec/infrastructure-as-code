@@ -10,6 +10,8 @@ import anyio
 from pathlib import Path
 from typing import Optional, List, Dict
 from claude_agent_sdk import query, ClaudeAgentOptions
+from common.error_handler import ClaudeAPIError
+from common.logger import Logger
 
 
 class ClaudeAgentClient:
@@ -29,6 +31,7 @@ class ClaudeAgentClient:
         # CLAUDE_CODE_OAUTH_TOKEN を使う場合は強力なモデルを使用
         # model が指定されていない場合は、Claude Code Pro Max のデフォルトモデルを使用
         self.model = model
+        self.logger = Logger.get_logger(__name__)
 
     async def execute_task(
         self,
@@ -50,21 +53,24 @@ class ClaudeAgentClient:
             List[str]: レスポンスメッセージのリスト
 
         Raises:
-            ValueError: CLAUDE_CODE_OAUTH_TOKEN が設定されていない場合
+            ClaudeAPIError: CLAUDE_CODE_OAUTH_TOKEN が設定されていない場合
         """
         # CLAUDE_CODE_OAUTH_TOKEN が設定されているか確認
         if not os.environ.get('CLAUDE_CODE_OAUTH_TOKEN'):
-            raise ValueError(
+            error_msg = (
                 "CLAUDE_CODE_OAUTH_TOKEN が設定されていません。\n"
                 "Claude Agent SDK は CLAUDE_CODE_OAUTH_TOKEN (Claude Code Pro Max) を使用します。\n"
                 "設定方法: export CLAUDE_CODE_OAUTH_TOKEN='sk-ant-oat01-...'\n"
                 "詳細は DOCKER_AUTH_SETUP.md を参照してください。"
             )
+            self.logger.error(error_msg)
+            raise ClaudeAPIError(error_msg)
 
         # 環境変数でBashコマンド承認スキップを有効化（Docker環境内で安全）
         # Note: すでにDocker containerで隔離されているため、セキュリティリスクは限定的
         os.environ['CLAUDE_DANGEROUSLY_SKIP_PERMISSIONS'] = '1'
 
+        self.logger.info("Using CLAUDE_CODE_OAUTH_TOKEN for Claude Agent SDK (Claude Code Pro Max)")
         print("[INFO] Using CLAUDE_CODE_OAUTH_TOKEN for Claude Agent SDK (Claude Code Pro Max)")
 
         # ClaudeAgentOptions の設定
@@ -97,6 +103,7 @@ class ClaudeAgentClient:
                         end = message_str.find('\')', start)
                         if end > start:
                             text = message_str[start:end]
+                            self.logger.debug(f"[AGENT THINKING] {text}")
                             print(f"[AGENT THINKING] {text}")
                     # ToolUseBlockを抽出して表示（詳細情報含む）
                     elif 'ToolUseBlock' in message_str:
@@ -107,6 +114,7 @@ class ClaudeAgentClient:
                             tool_name = message_str[name_start:name_end]
 
                             # 詳細ログを出力
+                            self.logger.debug(f"[AGENT ACTION] Using tool: {tool_name}")
                             print(f"[AGENT ACTION] Using tool: {tool_name}")
 
                             # ツールパラメータを抽出（input=以降、次のフィールドの手前まで）
@@ -131,6 +139,7 @@ class ClaudeAgentClient:
                                 if len(params_str) > 500:
                                     params_str = params_str[:500] + "..."
 
+                                self.logger.debug(f"[AGENT ACTION] Parameters: {params_str}")
                                 print(f"[AGENT ACTION] Parameters: {params_str}")
 
         return messages

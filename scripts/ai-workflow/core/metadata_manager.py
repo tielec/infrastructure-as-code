@@ -5,6 +5,8 @@ Phase実装で使いやすいインターフェースを提供
 from pathlib import Path
 from typing import Optional, Dict, Any, List
 from .workflow_state import WorkflowState, PhaseStatus
+from common.error_handler import MetadataError
+from common.logger import Logger
 
 
 class MetadataManager:
@@ -20,6 +22,7 @@ class MetadataManager:
         self.metadata_path = metadata_path
         self.workflow_dir = metadata_path.parent
         self._state = WorkflowState(metadata_path)
+        self.logger = Logger.get_logger(__name__)
 
     @property
     def data(self):
@@ -140,20 +143,27 @@ class MetadataManager:
         try:
             # メタデータファイル削除
             if self.metadata_path.exists():
+                self.logger.info(f"Clearing metadata: {self.metadata_path}")
                 click.echo(f"[INFO] Clearing metadata: {self.metadata_path}")
                 self.metadata_path.unlink()
 
             # ワークフローディレクトリ削除
             if self.workflow_dir.exists():
+                self.logger.info(f"Removing workflow directory: {self.workflow_dir}")
                 click.echo(f"[INFO] Removing workflow directory: {self.workflow_dir}")
                 shutil.rmtree(self.workflow_dir)
+                self.logger.info("Workflow directory removed successfully")
                 click.echo(f"[OK] Workflow directory removed successfully")
 
         except PermissionError as e:
-            click.echo(f"[ERROR] Permission denied: {e}")
+            error_msg = f"Permission denied: {e}"
+            self.logger.error(error_msg)
+            click.echo(f"[ERROR] {error_msg}")
             raise
         except OSError as e:
-            click.echo(f"[ERROR] Failed to remove directory: {e}")
+            error_msg = f"Failed to remove directory: {e}"
+            self.logger.error(error_msg)
+            click.echo(f"[ERROR] {error_msg}")
             raise
 
     def rollback_to_phase(self, phase_name: str) -> Dict[str, Any]:
@@ -177,16 +187,18 @@ class MetadataManager:
             # フェーズ名のバリデーション
             all_phases = list(self._state.data['phases'].keys())
             if phase_name not in all_phases:
+                error_msg = f'Invalid phase name: {phase_name}'
+                self.logger.error(error_msg)
                 return {
                     'success': False,
-                    'error': f'Invalid phase name: {phase_name}'
+                    'error': error_msg
                 }
 
             # バックアップ作成
             timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
             backup_path = str(self.metadata_path.parent / f'metadata.json.backup_{timestamp}')
             shutil.copy(str(self.metadata_path), backup_path)
-            print(f"[INFO] メタデータバックアップ作成: {backup_path}")
+            self.logger.info(f"メタデータバックアップ作成: {backup_path}")
 
             # 巻き戻し先フェーズのインデックスを取得
             start_index = all_phases.index(phase_name)
@@ -203,8 +215,8 @@ class MetadataManager:
             # 保存
             self._state.save()
 
-            print(f"[INFO] メタデータを {phase_name} フェーズに巻き戻しました")
-            print(f"[INFO] 巻き戻されたフェーズ: {', '.join(rolled_back_phases)}")
+            self.logger.info(f"メタデータを {phase_name} フェーズに巻き戻しました")
+            self.logger.info(f"巻き戻されたフェーズ: {', '.join(rolled_back_phases)}")
 
             return {
                 'success': True,
@@ -246,7 +258,7 @@ class MetadataManager:
         timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
         backup_path = str(self.metadata_path.parent / f'metadata.json.backup_{timestamp}')
         shutil.copy(str(self.metadata_path), backup_path)
-        print(f"[INFO] メタデータバックアップ作成: {backup_path}")
+        self.logger.info(f"メタデータバックアップ作成: {backup_path}")
 
         return backup_path
 
@@ -269,7 +281,9 @@ class MetadataManager:
             abort_reason: ABORT の場合の中止理由
         """
         if 'evaluation' not in self._state.data['phases']:
-            raise ValueError("Evaluation phase not found in metadata")
+            error_msg = "Evaluation phase not found in metadata"
+            self.logger.error(error_msg)
+            raise MetadataError(error_msg)
 
         self._state.data['phases']['evaluation']['decision'] = decision
 
