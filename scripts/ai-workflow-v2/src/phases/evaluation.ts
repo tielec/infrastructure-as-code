@@ -1,7 +1,7 @@
 import fs from 'fs-extra';
 import path from 'node:path';
 import { BasePhase, type PhaseInitializationParams } from './base-phase.js';
-import { PhaseExecutionResult, PhaseName } from '../types.js';
+import { PhaseExecutionResult, RemainingTask, PhaseName } from '../types.js';
 
 type PhaseOutputInfo = {
   path: string;
@@ -9,20 +9,6 @@ type PhaseOutputInfo = {
 };
 
 type PhaseOutputMap = Record<string, PhaseOutputInfo>;
-
-type DecisionResult = {
-  success: boolean;
-  decision?: string;
-  failedPhase?: PhaseName;
-  abortReason?: string;
-  error?: string;
-};
-
-type RemainingTask = {
-  task: string;
-  phase: string;
-  priority: string;
-};
 
 export class EvaluationPhase extends BasePhase {
   constructor(params: PhaseInitializationParams) {
@@ -107,8 +93,13 @@ export class EvaluationPhase extends BasePhase {
       const content = fs.readFileSync(evaluationFile, 'utf-8');
       await this.postOutput(content, 'プロジェクト評価レポート');
 
-      const decisionResult = this.determineDecision(content);
+      const decisionResult = await this.contentParser.parseEvaluationDecision(content);
+
+      console.info(`[DEBUG] Decision extraction result: ${JSON.stringify(decisionResult)}`);
+
       if (!decisionResult.success || !decisionResult.decision) {
+        console.error(`[ERROR] Failed to determine decision: ${decisionResult.error}`);
+        console.error(`[ERROR] Content snippet: ${content.substring(0, 500)}`);
         return {
           success: false,
           output: evaluationFile,
@@ -130,7 +121,7 @@ export class EvaluationPhase extends BasePhase {
       }
 
       if (decision === 'PASS_WITH_ISSUES') {
-        const remainingTasks = this.extractRemainingTasks(content);
+        const remainingTasks = decisionResult.remainingTasks ?? [];
         const passResult = await this.handlePassWithIssues(remainingTasks, issueNumber, evaluationFile);
 
         if (!passResult.success) {
@@ -219,11 +210,14 @@ export class EvaluationPhase extends BasePhase {
         };
       }
 
+      console.error(`[ERROR] Invalid decision type: ${decision}`);
+      console.error(`[ERROR] Valid decisions: PASS, PASS_WITH_ISSUES, FAIL_PHASE_*, ABORT`);
+      console.error(`[ERROR] Content snippet for debugging: ${content.substring(0, 1000)}`);
       return {
         success: false,
         output: evaluationFile,
         decision,
-        error: `不正な判定タイプ: ${decision}`,
+        error: `不正な判定タイプ: ${decision}. 有効な判定: PASS, PASS_WITH_ISSUES, FAIL_PHASE_*, ABORT`,
       };
     } catch (error) {
       const message = (error as Error).message ?? String(error);
@@ -283,132 +277,6 @@ export class EvaluationPhase extends BasePhase {
         },
       ]),
     );
-  }
-
-  private determineDecision(content: string): DecisionResult {
-    try {
-      const decisionPattern1 = /##\s*決定.*?\n.*?(?:判定|決定|結果)[:：]\s*\**([A-Z_]+)\**/is;
-      const decisionPattern2 = /\*\*(?:判定|決定|結果)\*\*[:：]\s*\**([A-Z_]+)\**/i;
-
-      let match = content.match(decisionPattern1) ?? content.match(decisionPattern2);
-
-      if (!match) {
-        return {
-          success: false,
-          decision: undefined,
-          error: '判定セクションを特定できませんでした',
-        };
-      }
-
-      const decision = match[1].trim();
-      const validDecisions = ['PASS', 'PASS_WITH_ISSUES', 'ABORT'];
-
-      if (decision.startsWith('FAIL_PHASE_')) {
-        const phaseKey = decision.replace('FAIL_PHASE_', '').toLowerCase();
-        const mapping: Record<string, PhaseName> = {
-          planning: 'planning',
-          '0': 'planning',
-          requirements: 'requirements',
-          '1': 'requirements',
-          design: 'design',
-          '2': 'design',
-          test_scenario: 'test_scenario',
-          testscenario: 'test_scenario',
-          '3': 'test_scenario',
-          implementation: 'implementation',
-          '4': 'implementation',
-          test_implementation: 'test_implementation',
-          testimplementation: 'test_implementation',
-          '5': 'test_implementation',
-          testing: 'testing',
-          '6': 'testing',
-          documentation: 'documentation',
-          '7': 'documentation',
-          report: 'report',
-          '8': 'report',
-        };
-
-        const failedPhase = mapping[phaseKey];
-        if (!failedPhase) {
-          return {
-            success: false,
-            decision,
-            error: `無効なフェーズ名: ${phaseKey}`,
-          };
-        }
-
-        return {
-          success: true,
-          decision,
-          failedPhase,
-        };
-      }
-
-      if (validDecisions.includes(decision)) {
-        let abortReason: string | undefined;
-        if (decision === 'ABORT') {
-          const reasonMatch = content.match(
-            /(?:中止|ABORT)理由[:：]\s*(.+?)(?:\n\n|\n##|$)/is,
-          );
-          abortReason = reasonMatch ? reasonMatch[1].trim() : 'プロジェクトを継続できません。';
-        }
-
-        return {
-          success: true,
-          decision,
-          abortReason,
-        };
-      }
-
-      return {
-        success: false,
-        decision,
-        error: `無効な判定タイプ: ${decision}`,
-      };
-    } catch (error) {
-      const message = (error as Error).message ?? String(error);
-      return {
-        success: false,
-        decision: undefined,
-        error: `判定解析中にエラー: ${message}`,
-      };
-    }
-  }
-
-  private extractRemainingTasks(content: string): RemainingTask[] {
-    const tasks: RemainingTask[] = [];
-
-    try {
-      const sectionMatch = content.match(/##\s*残タスク(?:一覧)?\s*\n([\s\S]*?)(?:\n##|$)/i);
-      if (!sectionMatch) {
-        return tasks;
-      }
-
-      const sectionText = sectionMatch[1];
-      const taskMatches = sectionText.match(/- \[ \]\s*.+/g) ?? [];
-
-      for (const taskLine of taskMatches) {
-        const phaseMatch = taskLine.match(/(?:Phase|phase)[:：]\s*([^、,\n]+)/);
-        const priorityMatch = taskLine.match(/優先度[:：]\s*([高中低])/);
-
-        const cleanTask = taskLine
-          .replace(/- \[ \]\s*/, '')
-          .replace(/（.*?）/g, '')
-          .replace(/\(.*?\)/g, '')
-          .trim();
-
-        tasks.push({
-          task: cleanTask,
-          phase: phaseMatch ? phaseMatch[1].trim() : 'unknown',
-          priority: priorityMatch ? priorityMatch[1] : '中',
-        });
-      }
-    } catch (error) {
-      const message = (error as Error).message ?? String(error);
-      console.warn(`[WARNING] 残タスクの抽出に失敗しました: ${message}`);
-    }
-
-    return tasks;
   }
 
   private async handlePassWithIssues(
