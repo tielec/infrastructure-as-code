@@ -125,15 +125,29 @@ export class GitManager {
     retryDelay = 2000,
   ): Promise<PushSummary> {
     let retries = 0;
+    const status = await this.git.status();
+    const branchName =
+      status.current ?? this.metadata.data.branch_name ?? null;
+    const needsUpstream = !status.tracking;
 
     while (retries <= maxRetries) {
       try {
-        const result = (await this.git.push()) as PushResult;
+        const result = needsUpstream && retries === 0 && branchName
+          ? ((await this.git.push(['--set-upstream', 'origin', branchName])) as PushResult)
+          : ((await this.git.push()) as PushResult);
         if (result.pushed?.length) {
           return { success: true, retries };
         }
         return { success: true, retries };
       } catch (error) {
+        if (!branchName) {
+          return {
+            success: false,
+            retries,
+            error: `Unable to determine branch name for push: ${(error as Error).message}`,
+          };
+        }
+
         if (!this.isRetriableError(error) || retries === maxRetries) {
           return {
             success: false,
