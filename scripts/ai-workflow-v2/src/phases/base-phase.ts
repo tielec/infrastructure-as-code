@@ -167,8 +167,8 @@ export abstract class BasePhase {
     const endTime = Date.now();
     const duration = endTime - startTime;
 
-    // Save raw output (Python version compatible)
-    fs.writeFileSync(rawLogFile, messages.join('\n\n'), 'utf-8');
+    // Save raw output as JSONL (JSON Lines format)
+    fs.writeFileSync(rawLogFile, messages.join('\n'), 'utf-8');
     console.info(`[INFO] Raw log saved to: ${rawLogFile}`);
 
     // Save human-readable markdown log
