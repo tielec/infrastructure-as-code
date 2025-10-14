@@ -324,9 +324,14 @@ async function handleExecuteCommand(options: any): Promise<void> {
   }
 
   let claudeClient: ClaudeAgentClient | null = null;
-  if (!codexClient && claudeCredentialsPath) {
-    console.info('[INFO] Codex credentials not found. Falling back to Claude Code.');
+  if (claudeCredentialsPath) {
+    if (!codexClient) {
+      console.info('[INFO] Codex credentials not found. Using Claude Code.');
+    } else {
+      console.info('[INFO] Claude Code credentials detected. Fallback available.');
+    }
     claudeClient = new ClaudeAgentClient({ workingDir, credentialsPath: claudeCredentialsPath });
+    process.env.CLAUDE_CODE_CREDENTIALS_PATH = claudeCredentialsPath;
   }
 
   if (!codexClient && !claudeClient) {
