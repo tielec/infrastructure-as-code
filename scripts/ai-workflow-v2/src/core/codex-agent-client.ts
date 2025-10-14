@@ -125,9 +125,17 @@ export class CodexAgentClient {
   ): Promise<string[]> {
     return new Promise((resolve, reject) => {
       const messages: string[] = [];
+      const childEnv = { ...process.env };
+
+      if (childEnv.CODEX_API_KEY) {
+        childEnv.OPENAI_API_KEY = childEnv.CODEX_API_KEY;
+      } else if (childEnv.CODEX_AUTH_FILE) {
+        delete childEnv.OPENAI_API_KEY;
+      }
+
       const child = spawn(this.binaryPath, args, {
         cwd: options.cwd,
-        env: process.env,
+        env: childEnv,
         stdio: ['pipe', 'pipe', 'pipe'],
       });
 
