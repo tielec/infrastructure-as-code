@@ -239,6 +239,13 @@ export abstract class BasePhase {
     fs.writeFileSync(rawLogFile, messages.join('\n'), 'utf-8');
     console.info(`[INFO] Raw log saved to: ${rawLogFile}`);
 
+    if (agentName === 'Codex Agent') {
+      console.info('[DEBUG] Codex agent emitted messages:');
+      messages.slice(0, 10).forEach((line, index) => {
+        console.info(`[DEBUG][Codex][${index}] ${line}`);
+      });
+    }
+
     const agentLogContent = this.formatAgentLog(messages, startTime, endTime, duration, error, agentName);
     fs.writeFileSync(agentLogFile, agentLogContent, 'utf-8');
     console.info(`[INFO] Agent log saved to: ${agentLogFile}`);
