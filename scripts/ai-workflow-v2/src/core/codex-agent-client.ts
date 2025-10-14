@@ -65,6 +65,8 @@ export class CodexAgentClient {
       args.push('--cd', cwd);
     }
 
+    args.push('-');
+
     const finalPrompt =
       options.systemPrompt && options.systemPrompt.trim().length > 0
         ? `${options.systemPrompt.trim()}\n\n${options.prompt}`
