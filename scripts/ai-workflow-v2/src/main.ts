@@ -675,6 +675,85 @@ async function loadExternalDocuments(
 }
 
 function extractCodexToken(authPath: string): string | null {
+  const PREFERRED_HINTS = [
+    'api_key',
+    'apikey',
+    'openai_api_key',
+    'secret',
+    'codex_api_key',
+  ];
+  const SECONDARY_HINTS = ['access_token', 'bearer', 'authorization'];
+  const TERTIARY_HINTS = ['token', 'key'];
+
+  const looksLikeToken = (value: string): boolean => {
+    const trimmed = value.trim();
+    if (!trimmed) {
+      return false;
+    }
+    if (trimmed.length < 20) {
+      return false;
+    }
+    if (/\s/.test(trimmed)) {
+      return false;
+    }
+    const lower = trimmed.toLowerCase();
+    if (lower.startsWith('http://') || lower.startsWith('https://')) {
+      return false;
+    }
+    return true;
+  };
+
+  const searchToken = (
+    value: unknown,
+    hints: string[],
+    allowLoose = false,
+  ): string | null => {
+    if (typeof value === 'string') {
+      return allowLoose && looksLikeToken(value) ? value.trim() : null;
+    }
+
+    if (Array.isArray(value)) {
+      for (const item of value) {
+        const found = searchToken(item, hints, allowLoose);
+        if (found) {
+          return found;
+        }
+      }
+      return null;
+    }
+
+    if (value && typeof value === 'object') {
+      const record = value as Record<string, unknown>;
+
+      for (const [key, candidate] of Object.entries(record)) {
+        const normalizedKey = key.toLowerCase();
+        const matchesHint = hints.some((hint) => normalizedKey.includes(hint));
+
+        if (matchesHint) {
+          if (typeof candidate === 'string') {
+            if (looksLikeToken(candidate)) {
+              return candidate.trim();
+            }
+          } else {
+            const nested = searchToken(candidate, hints, true);
+            if (nested) {
+              return nested;
+            }
+          }
+        }
+      }
+
+      for (const nested of Object.values(record)) {
+        const found = searchToken(nested, hints, allowLoose);
+        if (found) {
+          return found;
+        }
+      }
+    }
+
+    return null;
+  };
+
   try {
     if (!fs.existsSync(authPath)) {
       return null;
@@ -684,55 +763,22 @@ function extractCodexToken(authPath: string): string | null {
       return null;
     }
 
-    const candidateKeys = ['token', 'access_token', 'api_key', 'key', 'bearer_token'];
-    const searchToken = (value: unknown): string | null => {
-      if (typeof value === 'string') {
-        const trimmed = value.trim();
-        return trimmed.length > 0 ? trimmed : null;
-      }
-
-      if (Array.isArray(value)) {
-        for (const item of value) {
-          const token = searchToken(item);
-          if (token) {
-            return token;
-          }
-        }
-        return null;
-      }
-
-      if (value && typeof value === 'object') {
-        const record = value as Record<string, unknown>;
-        for (const [key, candidate] of Object.entries(record)) {
-          if (candidateKeys.includes(key.toLowerCase())) {
-            const token = searchToken(candidate);
-            if (token) {
-              return token;
-            }
-          }
-        }
-        for (const nested of Object.values(record)) {
-          const token = searchToken(nested);
-          if (token) {
-            return token;
-          }
-        }
-      }
-
-      return null;
-    };
-
     try {
       const parsed = JSON.parse(raw);
-      const parsedToken = searchToken(parsed);
-      if (parsedToken) {
-        return parsedToken;
+      const tokenFromPreferred =
+        searchToken(parsed, PREFERRED_HINTS) ??
+        searchToken(parsed, SECONDARY_HINTS) ??
+        searchToken(parsed, TERTIARY_HINTS) ??
+        searchToken(parsed, [], true);
+
+      if (tokenFromPreferred) {
+        return tokenFromPreferred;
       }
     } catch {
       // Not JSON, treat as plain string below.
     }
 
-    return searchToken(raw);
+    return looksLikeToken(raw) ? raw : null;
   } catch (error) {
     const message = (error as Error).message ?? String(error);
     console.warn(`[WARNING] Failed to extract Codex token from ${authPath}: ${message}`);
