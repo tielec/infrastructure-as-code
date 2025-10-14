@@ -26,7 +26,7 @@ export class RequirementsPhase extends BasePhase {
       .replace('{issue_info}', this.formatIssueInfo(issueInfo))
       .replace('{issue_number}', String(issueInfo.number));
 
-    await this.executeWithClaude(executePrompt, { maxTurns: 30 });
+    await this.executeWithAgent(executePrompt, { maxTurns: 30 });
 
     const outputFile = path.join(this.outputDir, 'requirements.md');
     if (!fs.existsSync(outputFile)) {
@@ -62,7 +62,7 @@ export class RequirementsPhase extends BasePhase {
     }
 
     const planningReference = this.getPlanningDocumentReference(issueInfo.number);
-    const requirementsReference = this.getClaudeFileReference(requirementsFile);
+    const requirementsReference = this.getAgentFileReference(requirementsFile);
 
     if (!requirementsReference) {
       return {
@@ -77,7 +77,7 @@ export class RequirementsPhase extends BasePhase {
       .replace('{issue_info}', this.formatIssueInfo(issueInfo))
       .replace('{issue_number}', String(issueInfo.number));
 
-    const messages = await this.executeWithClaude(reviewPrompt, { maxTurns: 30, logDir: this.reviewDir });
+    const messages = await this.executeWithAgent(reviewPrompt, { maxTurns: 30, logDir: this.reviewDir });
 
     const reviewResult = await this.contentParser.parseReviewResult(messages);
 
@@ -111,7 +111,7 @@ export class RequirementsPhase extends BasePhase {
       };
     }
 
-    const requirementsReference = this.getClaudeFileReference(requirementsFile);
+    const requirementsReference = this.getAgentFileReference(requirementsFile);
     if (!requirementsReference) {
       return {
         success: false,
@@ -126,7 +126,7 @@ export class RequirementsPhase extends BasePhase {
       .replace('{issue_info}', this.formatIssueInfo(issueInfo))
       .replace('{issue_number}', String(issueInfo.number));
 
-    await this.executeWithClaude(revisePrompt, { maxTurns: 30, logDir: this.reviseDir });
+    await this.executeWithAgent(revisePrompt, { maxTurns: 30, logDir: this.reviseDir });
 
     if (!fs.existsSync(requirementsFile)) {
       return {

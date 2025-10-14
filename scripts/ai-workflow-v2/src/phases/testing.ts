@@ -27,9 +27,9 @@ export class TestingPhase extends BasePhase {
       };
     }
 
-    const testImplementationRef = this.getClaudeFileReference(testImplementationFile);
-    const implementationRef = this.getClaudeFileReference(implementationFile);
-    const scenarioRef = this.getClaudeFileReference(scenarioFile);
+    const testImplementationRef = this.getAgentFileReference(testImplementationFile);
+    const implementationRef = this.getAgentFileReference(implementationFile);
+    const scenarioRef = this.getAgentFileReference(scenarioFile);
 
     if (!testImplementationRef || !implementationRef || !scenarioRef) {
       return {
@@ -48,7 +48,7 @@ export class TestingPhase extends BasePhase {
       .replace('{test_scenario_document_path}', scenarioRef)
       .replace('{issue_number}', String(issueNumber));
 
-    await this.executeWithClaude(executePrompt, { maxTurns: 30 });
+    await this.executeWithAgent(executePrompt, { maxTurns: 30 });
 
     if (!fs.existsSync(testResultFile)) {
       return {
@@ -97,10 +97,10 @@ export class TestingPhase extends BasePhase {
       };
     }
 
-    const testResultRef = this.getClaudeFileReference(testResultFile);
-    const testImplementationRef = this.getClaudeFileReference(testImplementationFile);
-    const implementationRef = this.getClaudeFileReference(implementationFile);
-    const scenarioRef = this.getClaudeFileReference(scenarioFile);
+    const testResultRef = this.getAgentFileReference(testResultFile);
+    const testImplementationRef = this.getAgentFileReference(testImplementationFile);
+    const implementationRef = this.getAgentFileReference(implementationFile);
+    const scenarioRef = this.getAgentFileReference(scenarioFile);
 
     if (!testResultRef || !testImplementationRef || !implementationRef || !scenarioRef) {
       return {
@@ -115,7 +115,7 @@ export class TestingPhase extends BasePhase {
       .replace('{implementation_document_path}', implementationRef)
       .replace('{test_scenario_document_path}', scenarioRef);
 
-    const messages = await this.executeWithClaude(reviewPrompt, { maxTurns: 30, logDir: this.reviewDir });
+    const messages = await this.executeWithAgent(reviewPrompt, { maxTurns: 30, logDir: this.reviewDir });
     const reviewResult = await this.contentParser.parseReviewResult(messages);
 
     const reviewFile = path.join(this.reviewDir, 'result.md');
@@ -162,10 +162,10 @@ export class TestingPhase extends BasePhase {
       };
     }
 
-    const testResultRef = this.getClaudeFileReference(testResultFile);
-    const testImplementationRef = this.getClaudeFileReference(testImplementationFile);
-    const implementationRef = this.getClaudeFileReference(implementationFile);
-    const scenarioRef = this.getClaudeFileReference(scenarioFile);
+    const testResultRef = this.getAgentFileReference(testResultFile);
+    const testImplementationRef = this.getAgentFileReference(testImplementationFile);
+    const implementationRef = this.getAgentFileReference(implementationFile);
+    const scenarioRef = this.getAgentFileReference(scenarioFile);
 
     if (!testResultRef || !testImplementationRef || !implementationRef || !scenarioRef) {
       return {
@@ -184,7 +184,7 @@ export class TestingPhase extends BasePhase {
 
     const oldMtime = fs.existsSync(testResultFile) ? fs.statSync(testResultFile).mtimeMs : null;
 
-    await this.executeWithClaude(revisePrompt, { maxTurns: 30, logDir: this.reviseDir });
+    await this.executeWithAgent(revisePrompt, { maxTurns: 30, logDir: this.reviseDir });
 
     if (!fs.existsSync(testResultFile)) {
       return {

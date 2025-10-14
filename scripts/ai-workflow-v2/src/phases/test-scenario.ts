@@ -38,8 +38,8 @@ export class TestScenarioPhase extends BasePhase {
       };
     }
 
-    const requirementsReference = this.getClaudeFileReference(requirementsFile);
-    const designReference = this.getClaudeFileReference(designFile);
+    const requirementsReference = this.getAgentFileReference(requirementsFile);
+    const designReference = this.getAgentFileReference(designFile);
 
     if (!requirementsReference || !designReference) {
       return {
@@ -64,7 +64,7 @@ export class TestScenarioPhase extends BasePhase {
       .replace('{issue_info}', this.formatIssueInfo(issueInfo))
       .replace('{issue_number}', String(issueInfo.number));
 
-    await this.executeWithClaude(executePrompt, { maxTurns: 40 });
+    await this.executeWithAgent(executePrompt, { maxTurns: 40 });
 
     const scenarioFile = path.join(this.outputDir, 'test-scenario.md');
     if (!fs.existsSync(scenarioFile)) {
@@ -109,9 +109,9 @@ export class TestScenarioPhase extends BasePhase {
       };
     }
 
-    const scenarioReference = this.getClaudeFileReference(scenarioFile);
-    const requirementsReference = this.getClaudeFileReference(requirementsFile);
-    const designReference = this.getClaudeFileReference(designFile);
+    const scenarioReference = this.getAgentFileReference(scenarioFile);
+    const requirementsReference = this.getAgentFileReference(requirementsFile);
+    const designReference = this.getAgentFileReference(designFile);
 
     if (!scenarioReference || !requirementsReference || !designReference) {
       return {
@@ -128,7 +128,7 @@ export class TestScenarioPhase extends BasePhase {
       .replace('{requirements_document_path}', requirementsReference)
       .replace('{test_strategy}', testStrategy);
 
-    const messages = await this.executeWithClaude(reviewPrompt, { maxTurns: 30, logDir: this.reviewDir });
+    const messages = await this.executeWithAgent(reviewPrompt, { maxTurns: 30, logDir: this.reviewDir });
     const reviewResult = await this.contentParser.parseReviewResult(messages);
 
     const reviewFile = path.join(this.reviewDir, 'result.md');
@@ -170,9 +170,9 @@ export class TestScenarioPhase extends BasePhase {
       };
     }
 
-    const scenarioReference = this.getClaudeFileReference(scenarioFile);
-    const requirementsReference = this.getClaudeFileReference(requirementsFile);
-    const designReference = this.getClaudeFileReference(designFile);
+    const scenarioReference = this.getAgentFileReference(scenarioFile);
+    const requirementsReference = this.getAgentFileReference(requirementsFile);
+    const designReference = this.getAgentFileReference(designFile);
 
     if (!scenarioReference || !requirementsReference || !designReference) {
       return {
@@ -191,7 +191,7 @@ export class TestScenarioPhase extends BasePhase {
       .replace('{review_feedback}', reviewFeedback)
       .replace('{issue_number}', String(issueInfo.number));
 
-    await this.executeWithClaude(revisePrompt, { maxTurns: 40, logDir: this.reviseDir });
+    await this.executeWithAgent(revisePrompt, { maxTurns: 40, logDir: this.reviseDir });
 
     if (!fs.existsSync(scenarioFile)) {
       return {

@@ -8,6 +8,7 @@ import { WorkflowState } from './core/workflow-state.js';
 import { MetadataManager } from './core/metadata-manager.js';
 import { GitManager } from './core/git-manager.js';
 import { ClaudeAgentClient } from './core/claude-agent-client.js';
+import { CodexAgentClient } from './core/codex-agent-client.js';
 import { GitHubClient } from './core/github-client.js';
 import {
   PHASE_PRESETS,
@@ -43,7 +44,8 @@ const PHASE_ORDER: PhaseName[] = [
 type PhaseContext = {
   workingDir: string;
   metadataManager: MetadataManager;
-  claudeClient: ClaudeAgentClient;
+  codexClient: CodexAgentClient | null;
+  claudeClient: ClaudeAgentClient | null;
   githubClient: GitHubClient;
   skipDependencyCheck: boolean;
   ignoreDependencies: boolean;
@@ -290,7 +292,25 @@ async function handleExecuteCommand(options: any): Promise<void> {
   }
 
   const workingDir = repoRoot;
-  const claudeClient = new ClaudeAgentClient({ workingDir });
+  const codexAuthPath = process.env.CODEX_AUTH_FILE ?? path.join(repoRoot, '.codex', 'auth.json');
+  const claudeCredentialsPath =
+    process.env.CLAUDE_CODE_CREDENTIALS_PATH ?? path.join(repoRoot, '.claude-code', 'credentials.json');
+
+  let codexClient: CodexAgentClient | null = null;
+  if (fs.existsSync(codexAuthPath)) {
+    codexClient = new CodexAgentClient({ workingDir });
+    process.env.CODEX_AUTH_FILE = codexAuthPath;
+  }
+
+  let claudeClient: ClaudeAgentClient | null = null;
+  if (!codexClient && fs.existsSync(claudeCredentialsPath)) {
+    claudeClient = new ClaudeAgentClient({ workingDir, credentialsPath: claudeCredentialsPath });
+  }
+
+  if (!codexClient && !claudeClient) {
+    console.error('[ERROR] Neither Codex auth.json nor Claude Code credentials.json is available. Aborting execution.');
+    process.exit(1);
+  }
 
   const githubToken = process.env.GITHUB_TOKEN ?? null;
   const repoName = metadataManager.data.repository ?? process.env.GITHUB_REPOSITORY ?? null;
@@ -343,6 +363,7 @@ async function handleExecuteCommand(options: any): Promise<void> {
   const context: PhaseContext = {
     workingDir,
     metadataManager,
+    codexClient,
     claudeClient,
     githubClient,
     skipDependencyCheck,
@@ -486,6 +507,7 @@ function createPhaseInstance(phaseName: PhaseName, context: PhaseContext) {
   const baseParams = {
     workingDir: context.workingDir,
     metadataManager: context.metadataManager,
+    codexClient: context.codexClient,
     claudeClient: context.claudeClient,
     githubClient: context.githubClient,
     skipDependencyCheck: context.skipDependencyCheck,

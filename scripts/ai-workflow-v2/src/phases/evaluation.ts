@@ -48,11 +48,11 @@ export class EvaluationPhase extends BasePhase {
     const branchName =
       this.metadata.data.branch_name ?? `ai-workflow/issue-${this.metadata.data.issue_number}`;
     const workflowDir = this.metadata.workflowDir;
-    const claudeWorkingDir = this.claude.getWorkingDirectory();
+    const agentWorkingDir = this.getAgentWorkingDirectory();
 
     const relPaths: Record<string, string> = {};
     for (const [phase, info] of Object.entries(outputs)) {
-      const relative = this.getClaudeFileReference(info.path);
+      const relative = this.getAgentFileReference(info.path);
       relPaths[phase] = relative ?? info.path;
     }
 
@@ -77,7 +77,7 @@ export class EvaluationPhase extends BasePhase {
       .replace('{documentation_update_log_path}', relPaths.documentation)
       .replace('{report_document_path}', relPaths.report);
 
-    await this.executeWithClaude(executePrompt, { maxTurns: 50 });
+    await this.executeWithAgent(executePrompt, { maxTurns: 50 });
 
     const evaluationFile = path.join(this.outputDir, 'evaluation_report.md');
     if (!fs.existsSync(evaluationFile)) {
@@ -289,8 +289,8 @@ export class EvaluationPhase extends BasePhase {
     }
 
     try {
-      const claudeDir = this.claude.getWorkingDirectory();
-      const repoRoot = path.resolve(claudeDir, '..', '..');
+      const agentWorkingDir = this.getAgentWorkingDirectory();
+      const repoRoot = path.resolve(agentWorkingDir, '..', '..');
       const relativeReportPath = path.relative(repoRoot, evaluationFile);
 
       const result = await this.github.createIssueFromEvaluation(

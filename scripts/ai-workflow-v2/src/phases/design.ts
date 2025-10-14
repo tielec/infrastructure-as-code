@@ -29,7 +29,7 @@ export class DesignPhase extends BasePhase {
       };
     }
 
-    const requirementsReference = this.getClaudeFileReference(requirementsFile);
+    const requirementsReference = this.getAgentFileReference(requirementsFile);
     if (!requirementsReference) {
       return {
         success: false,
@@ -43,7 +43,7 @@ export class DesignPhase extends BasePhase {
       .replace('{issue_info}', this.formatIssueInfo(issueInfo))
       .replace('{issue_number}', String(issueInfo.number));
 
-    await this.executeWithClaude(executePrompt, { maxTurns: 40 });
+    await this.executeWithAgent(executePrompt, { maxTurns: 40 });
 
     const designFile = path.join(this.outputDir, 'design.md');
     if (!fs.existsSync(designFile)) {
@@ -99,8 +99,8 @@ export class DesignPhase extends BasePhase {
       };
     }
 
-    const designReference = this.getClaudeFileReference(designFile);
-    const requirementsReference = this.getClaudeFileReference(requirementsFile);
+    const designReference = this.getAgentFileReference(designFile);
+    const requirementsReference = this.getAgentFileReference(requirementsFile);
     const planningReference = this.getPlanningDocumentReference(issueInfo.number);
 
     if (!designReference || !requirementsReference) {
@@ -117,7 +117,7 @@ export class DesignPhase extends BasePhase {
       .replace('{issue_info}', this.formatIssueInfo(issueInfo))
       .replace('{issue_number}', String(issueInfo.number));
 
-    const messages = await this.executeWithClaude(reviewPrompt, { maxTurns: 40, logDir: this.reviewDir });
+    const messages = await this.executeWithAgent(reviewPrompt, { maxTurns: 40, logDir: this.reviewDir });
     const reviewResult = await this.contentParser.parseReviewResult(messages);
 
     await this.github.postReviewResult(
@@ -157,8 +157,8 @@ export class DesignPhase extends BasePhase {
       };
     }
 
-    const designReference = this.getClaudeFileReference(designFile);
-    const requirementsReference = this.getClaudeFileReference(requirementsFile);
+    const designReference = this.getAgentFileReference(designFile);
+    const requirementsReference = this.getAgentFileReference(requirementsFile);
 
     if (!designReference || !requirementsReference) {
       return {
@@ -174,7 +174,7 @@ export class DesignPhase extends BasePhase {
       .replace('{issue_info}', this.formatIssueInfo(issueInfo))
       .replace('{issue_number}', String(issueInfo.number));
 
-    await this.executeWithClaude(revisePrompt, { maxTurns: 40, logDir: this.reviseDir });
+    await this.executeWithAgent(revisePrompt, { maxTurns: 40, logDir: this.reviseDir });
 
     if (!fs.existsSync(designFile)) {
       return {
