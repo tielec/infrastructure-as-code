@@ -43,7 +43,7 @@ pipeline {
             label 'ec2-fleet'
             dir 'scripts/ai-workflow-v2'
             filename 'Dockerfile'
-            args '-v ${WORKSPACE}:/workspace -w /workspace -e CLAUDE_DANGEROUSLY_SKIP_PERMISSIONS=1 -e OPENAI_API_KEY=${OPENAI_API_KEY} -e GITHUB_TOKEN=${GITHUB_TOKEN} -e CODEX_AUTH_FILE=/root/.codex/auth.json -e CLAUDE_CODE_CREDENTIALS_PATH=/root/.claude-code/credentials.json'
+            args '-v ${WORKSPACE}:/workspace -w /workspace -e CLAUDE_DANGEROUSLY_SKIP_PERMISSIONS=1 -e OPENAI_API_KEY=${OPENAI_API_KEY} -e GITHUB_TOKEN=${GITHUB_TOKEN} -e CODEX_AUTH_FILE=/home/node/.codex/auth.json -e CLAUDE_CODE_CREDENTIALS_PATH=/home/node/.claude-code/credentials.json'
         }
     }
 
