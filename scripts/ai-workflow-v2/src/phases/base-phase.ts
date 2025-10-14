@@ -185,22 +185,53 @@ export abstract class BasePhase {
 
     const primaryName = this.codex && primaryAgent === this.codex ? 'Codex Agent' : 'Claude Agent';
     console.info(`[INFO] Using ${primaryName} for phase ${this.phaseName}`);
-    const primaryResult = await this.runAgentTask(primaryAgent, primaryName, prompt, options);
 
-    if (primaryResult.authFailed && primaryAgent === this.codex && this.claude) {
+    let primaryResult: { messages: string[]; authFailed: boolean } | null = null;
+
+    try {
+      primaryResult = await this.runAgentTask(primaryAgent, primaryName, prompt, options);
+    } catch (error) {
+      if (primaryAgent === this.codex && this.claude) {
+        const err = error as NodeJS.ErrnoException & { code?: string };
+        const message = err?.message ?? String(error);
+        const binaryPath = this.codex?.getBinaryPath?.();
+
+        if (err?.code === 'CODEX_CLI_NOT_FOUND') {
+          console.warn(
+            `[WARNING] Codex CLI not found at ${binaryPath ?? 'codex'}: ${message}`,
+          );
+        } else {
+          console.warn(`[WARNING] Codex agent failed: ${message}`);
+        }
+
+        console.warn('[WARNING] Falling back to Claude Code agent.');
+        this.codex = null;
+        const fallbackResult = await this.runAgentTask(this.claude, 'Claude Agent', prompt, options);
+        return fallbackResult.messages;
+      }
+      throw error;
+    }
+
+    if (!primaryResult) {
+      throw new Error('Codex agent returned no result.');
+    }
+
+    const finalResult = primaryResult;
+
+    if (finalResult.authFailed && primaryAgent === this.codex && this.claude) {
       console.warn('[WARNING] Codex authentication failed. Falling back to Claude Code agent.');
       this.codex = null;
       const fallbackResult = await this.runAgentTask(this.claude, 'Claude Agent', prompt, options);
       return fallbackResult.messages;
     }
 
-    if (primaryResult.messages.length === 0 && this.claude && primaryAgent === this.codex) {
+    if (finalResult.messages.length === 0 && this.claude && primaryAgent === this.codex) {
       console.warn('[WARNING] Codex agent produced no output. Trying Claude Code agent as fallback.');
       const fallbackResult = await this.runAgentTask(this.claude, 'Claude Agent', prompt, options);
       return fallbackResult.messages;
     }
 
-    return primaryResult.messages;
+    return finalResult.messages;
   }
 
   private async runAgentTask(

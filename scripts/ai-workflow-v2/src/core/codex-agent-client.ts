@@ -42,6 +42,10 @@ export class CodexAgentClient {
     return this.workingDir;
   }
 
+  public getBinaryPath(): string {
+    return this.binaryPath;
+  }
+
   public async executeTask(options: ExecuteTaskOptions): Promise<string[]> {
     const cwd = options.workingDirectory ?? this.workingDir;
     const args: string[] = ['exec', '--json', '--skip-git-repo-check'];
@@ -72,11 +76,33 @@ export class CodexAgentClient {
         ? `${options.systemPrompt.trim()}\n\n${options.prompt}`
         : options.prompt;
 
-    return this.runCodexProcess(args, {
-      cwd,
-      verbose: options.verbose ?? true,
-      stdinPayload: finalPrompt,
-    });
+    try {
+      return await this.runCodexProcess(args, {
+        cwd,
+        verbose: options.verbose ?? true,
+        stdinPayload: finalPrompt,
+      });
+    } catch (error) {
+      const err = error as NodeJS.ErrnoException;
+      const message = err?.message ?? '';
+      const missingBinary =
+        err?.code === 'ENOENT' ||
+        message.includes('ENOENT') ||
+        message.includes('spawn codex ENOENT');
+
+      if (missingBinary) {
+        const helpMessage = [
+          `Codex CLI binary not found at "${this.binaryPath}".`,
+          'Install the Codex CLI or set CODEX_CLI_PATH to the executable path before running the workflow.',
+        ].join(' ');
+        const wrapped = new Error(helpMessage) as NodeJS.ErrnoException & { cause?: unknown };
+        wrapped.code = 'CODEX_CLI_NOT_FOUND';
+        wrapped.cause = error;
+        throw wrapped;
+      }
+
+      throw error;
+    }
   }
 
   public async executeTaskFromFile(
