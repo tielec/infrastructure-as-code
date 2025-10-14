@@ -184,23 +184,15 @@ export abstract class BasePhase {
     }
 
     const primaryName = this.codex && primaryAgent === this.codex ? 'Codex Agent' : 'Claude Agent';
-    const primaryMessages = await this.runAgentTask(primaryAgent, primaryName, prompt, options);
+    const primaryResult = await this.runAgentTask(primaryAgent, primaryName, prompt, options);
 
-    if (primaryAgent === this.codex && this.claude) {
-      const needsFallback = primaryMessages.some((line) => {
-        const normalized = line.toLowerCase();
-        return normalized.includes('invalid bearer token') ||
-          normalized.includes('authentication_error') ||
-          normalized.includes('please run /login');
-      });
-
-      if (needsFallback) {
-        console.warn('[WARNING] Codex authentication failed. Falling back to Claude Code agent.');
-        return this.runAgentTask(this.claude, 'Claude Agent', prompt, options);
-      }
+    if (primaryResult.authFailed && primaryAgent === this.codex && this.claude) {
+      console.warn('[WARNING] Codex authentication failed. Falling back to Claude Code agent.');
+      const fallbackResult = await this.runAgentTask(this.claude, 'Claude Agent', prompt, options);
+      return fallbackResult.messages;
     }
 
-    return primaryMessages;
+    return primaryResult.messages;
   }
 
   private async runAgentTask(
@@ -208,7 +200,7 @@ export abstract class BasePhase {
     agentName: string,
     prompt: string,
     options?: { maxTurns?: number; verbose?: boolean; logDir?: string },
-  ): Promise<string[]> {
+  ): Promise<{ messages: string[]; authFailed: boolean }> {
     const logDir = options?.logDir ?? this.executeDir;
     const promptFile = path.join(logDir, 'prompt.txt');
     const rawLogFile = path.join(logDir, 'agent_log_raw.txt');
@@ -249,7 +241,16 @@ export abstract class BasePhase {
     const usage = this.extractUsageMetrics(messages);
     this.recordUsageMetrics(usage);
 
-    return messages;
+    const authFailed = messages.some((line) => {
+      const normalized = line.toLowerCase();
+      return (
+        normalized.includes('invalid bearer token') ||
+        normalized.includes('authentication_error') ||
+        normalized.includes('please run /login')
+      );
+    });
+
+    return { messages, authFailed };
   }
 
   private formatAgentLog(
