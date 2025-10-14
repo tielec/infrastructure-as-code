@@ -194,6 +194,12 @@ export abstract class BasePhase {
       return fallbackResult.messages;
     }
 
+    if (primaryResult.messages.length === 0 && this.claude && primaryAgent === this.codex) {
+      console.warn('[WARNING] Codex agent produced no output. Trying Claude Code agent as fallback.');
+      const fallbackResult = await this.runAgentTask(this.claude, 'Claude Agent', prompt, options);
+      return fallbackResult.messages;
+    }
+
     return primaryResult.messages;
   }
 
