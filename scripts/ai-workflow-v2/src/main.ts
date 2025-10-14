@@ -703,6 +703,20 @@ function extractCodexToken(authPath: string): string | null {
     return true;
   };
 
+  const isLikelyApiKey = (value: string): boolean => {
+    if (!looksLikeToken(value)) {
+      return false;
+    }
+    const trimmed = value.trim();
+    if (/^sk-[A-Za-z0-9]{20,}$/.test(trimmed)) {
+      return true;
+    }
+    if (/^codex-[A-Za-z0-9_-]{10,}$/.test(trimmed)) {
+      return true;
+    }
+    return false;
+  };
+
   const searchToken = (
     value: unknown,
     hints: string[],
@@ -731,7 +745,7 @@ function extractCodexToken(authPath: string): string | null {
 
         if (matchesHint) {
           if (typeof candidate === 'string') {
-            if (looksLikeToken(candidate)) {
+            if (isLikelyApiKey(candidate)) {
               return candidate.trim();
             }
           } else {
@@ -768,8 +782,7 @@ function extractCodexToken(authPath: string): string | null {
       const tokenFromPreferred =
         searchToken(parsed, PREFERRED_HINTS) ??
         searchToken(parsed, SECONDARY_HINTS) ??
-        searchToken(parsed, TERTIARY_HINTS) ??
-        searchToken(parsed, [], true);
+        searchToken(parsed, TERTIARY_HINTS);
 
       if (tokenFromPreferred) {
         return tokenFromPreferred;
@@ -778,7 +791,7 @@ function extractCodexToken(authPath: string): string | null {
       // Not JSON, treat as plain string below.
     }
 
-    return looksLikeToken(raw) ? raw : null;
+    return isLikelyApiKey(raw) ? raw.trim() : null;
   } catch (error) {
     const message = (error as Error).message ?? String(error);
     console.warn(`[WARNING] Failed to extract Codex token from ${authPath}: ${message}`);
