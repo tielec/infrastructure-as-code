@@ -155,6 +155,7 @@ export class ClaudeAgentClient {
 
     if (resolvedPath) {
       const token = this.readTokenFromCredentials(resolvedPath);
+      console.info(`[INFO] Loaded Claude Code credentials from ${resolvedPath} (token length=${token.length})`);
       process.env.CLAUDE_CODE_OAUTH_TOKEN = token;
       return;
     }
@@ -180,35 +181,23 @@ export class ClaudeAgentClient {
       throw new Error(`Claude Code credentials file is empty: ${credentialsPath}`);
     }
 
-    let token = raw;
+    let token: string | null = null;
     try {
       const parsed = JSON.parse(raw);
-      if (typeof parsed === 'string' && parsed.trim()) {
+      if (typeof parsed === 'string') {
         token = parsed.trim();
-      } else if (parsed && typeof parsed === 'object') {
-        const obj = parsed as Record<string, unknown>;
-        if (typeof obj.token === 'string') {
-          token = (obj.token as string).trim();
-        } else if (typeof obj.access_token === 'string') {
-          token = (obj.access_token as string).trim();
-        } else if (obj.credentials && typeof obj.credentials === 'object') {
-          const credObj = obj.credentials as Record<string, unknown>;
-          if (typeof credObj.token === 'string') {
-            token = (credObj.token as string).trim();
-          } else if (typeof credObj.accessToken === 'string') {
-            token = (credObj.accessToken as string).trim();
-          }
-        } else if (obj.credential && typeof obj.credential === 'object') {
-          const singleCred = obj.credential as Record<string, unknown>;
-          if (typeof singleCred.accessToken === 'string') {
-            token = (singleCred.accessToken as string).trim();
-          } else if (typeof singleCred.token === 'string') {
-            token = (singleCred.token as string).trim();
-          }
-        }
+      } else {
+        token = this.extractToken(parsed);
       }
     } catch {
       // Not JSON – treat as raw token string.
+    }
+
+    if (!token) {
+      const trimmed = raw.trim();
+      if (trimmed) {
+        token = trimmed;
+      }
     }
 
     if (!token) {
@@ -217,4 +206,51 @@ export class ClaudeAgentClient {
 
     return token;
   }
+
+  private extractToken(value: unknown): string | null {
+    if (typeof value === 'string') {
+      const trimmed = value.trim();
+      if (trimmed && trimmed.length > 20 && !trimmed.includes(' ')) {
+        return trimmed;
+      }
+      return null;
+    }
+
+    if (Array.isArray(value)) {
+      for (const item of value) {
+        const token = this.extractToken(item);
+        if (token) {
+          return token;
+        }
+      }
+      return null;
+    }
+
+    if (value && typeof value === 'object') {
+      const obj = value as Record<string, unknown>;
+      const directKeys = ['token', 'access_token', 'accesstoken', 'oauth_token'];
+      for (const key of Object.keys(obj)) {
+        const candidate = obj[key];
+        if (typeof candidate === 'string') {
+          const lower = key.toLowerCase();
+          if (directKeys.includes(lower)) {
+            const trimmed = candidate.trim();
+            if (trimmed) {
+              return trimmed;
+            }
+          }
+        }
+      }
+
+      for (const nested of Object.values(obj)) {
+        const token = this.extractToken(nested);
+        if (token) {
+          return token;
+        }
+      }
+    }
+
+    return null;
+  }
+
 }
