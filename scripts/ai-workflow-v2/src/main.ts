@@ -292,18 +292,39 @@ async function handleExecuteCommand(options: any): Promise<void> {
   }
 
   const workingDir = repoRoot;
-  const codexAuthPath = process.env.CODEX_AUTH_FILE ?? path.join(repoRoot, '.codex', 'auth.json');
+  const homeDir = process.env.HOME ?? null;
+
+  const codexCandidatePaths: string[] = [];
+  if (process.env.CODEX_AUTH_FILE) {
+    codexCandidatePaths.push(process.env.CODEX_AUTH_FILE);
+  }
+  if (homeDir) {
+    codexCandidatePaths.push(path.join(homeDir, '.codex', 'auth.json'));
+  }
+  codexCandidatePaths.push(path.join(repoRoot, '.codex', 'auth.json'));
+
+  const codexAuthPath = codexCandidatePaths.find((candidate) => candidate && fs.existsSync(candidate)) ?? null;
+
+  const claudeCandidatePaths: string[] = [];
+  if (process.env.CLAUDE_CODE_CREDENTIALS_PATH) {
+    claudeCandidatePaths.push(process.env.CLAUDE_CODE_CREDENTIALS_PATH);
+  }
+  if (homeDir) {
+    claudeCandidatePaths.push(path.join(homeDir, '.claude-code', 'credentials.json'));
+  }
+  claudeCandidatePaths.push(path.join(repoRoot, '.claude-code', 'credentials.json'));
+
   const claudeCredentialsPath =
-    process.env.CLAUDE_CODE_CREDENTIALS_PATH ?? path.join(repoRoot, '.claude-code', 'credentials.json');
+    claudeCandidatePaths.find((candidate) => candidate && fs.existsSync(candidate)) ?? null;
 
   let codexClient: CodexAgentClient | null = null;
-  if (fs.existsSync(codexAuthPath)) {
+  if (codexAuthPath) {
     codexClient = new CodexAgentClient({ workingDir });
     process.env.CODEX_AUTH_FILE = codexAuthPath;
   }
 
   let claudeClient: ClaudeAgentClient | null = null;
-  if (!codexClient && fs.existsSync(claudeCredentialsPath)) {
+  if (!codexClient && claudeCredentialsPath) {
     claudeClient = new ClaudeAgentClient({ workingDir, credentialsPath: claudeCredentialsPath });
   }
 
