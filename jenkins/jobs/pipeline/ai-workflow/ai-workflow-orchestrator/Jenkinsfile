@@ -43,7 +43,7 @@ pipeline {
             label 'ec2-fleet'
             dir 'scripts/ai-workflow-v2'
             filename 'Dockerfile'
-            args '-v ${WORKSPACE}:/workspace -w /workspace -e CLAUDE_DANGEROUSLY_SKIP_PERMISSIONS=1 -e OPENAI_API_KEY=${OPENAI_API_KEY} -e GITHUB_TOKEN=${GITHUB_TOKEN} -e CODEX_AUTH_FILE=/workspace/.codex/auth.json -e CLAUDE_CODE_CREDENTIALS_PATH=/workspace/.claude-code/credentials.json'
+            args '-v ${WORKSPACE}:/workspace -w /workspace -e CLAUDE_DANGEROUSLY_SKIP_PERMISSIONS=1 -e OPENAI_API_KEY=${OPENAI_API_KEY} -e GITHUB_TOKEN=${GITHUB_TOKEN} -e CODEX_AUTH_FILE=/root/.codex/auth.json -e CLAUDE_CODE_CREDENTIALS_PATH=/root/.claude-code/credentials.json'
         }
     }
 
@@ -61,7 +61,7 @@ pipeline {
 
         // Claude Agent SDK設定（Bashコマンド承認スキップ）
         CLAUDE_DANGEROUSLY_SKIP_PERMISSIONS = '1'
-        CLAUDE_CODE_CREDENTIALS_PATH = "/workspace/.claude-code/credentials.json"
+        CLAUDE_CODE_CREDENTIALS_PATH = "/root/.claude-code/credentials.json"
 
         // AI Workflow設定
         WORKFLOW_DIR = 'scripts/ai-workflow-v2'
@@ -72,7 +72,7 @@ pipeline {
         GIT_COMMIT_USER_EMAIL = "${params.GIT_COMMIT_USER_EMAIL}"
 
         // Codex CLI�p�F�؃t�@�C���̃p�X
-        CODEX_AUTH_FILE = "/workspace/.codex/auth.json"
+        CODEX_AUTH_FILE = "/root/.codex/auth.json"
 
         // 認証情報（Jenkinsクレデンシャルから取得）
         OPENAI_API_KEY = credentials('openai-api-key')
@@ -87,10 +87,12 @@ pipeline {
                     echo "Stage: Prepare Agent Credentials"
                     echo "========================================="
 
-                    sh 'mkdir -p .codex .claude-code'
+                    def homeDir = env.HOME ?: '/root'
+                    def codexTarget = "${homeDir}/.codex/auth.json"
+                    def claudeTarget = "${homeDir}/.claude-code/credentials.json"
 
-                    def needCodex = !fileExists('.codex/auth.json')
-                    def needClaude = !fileExists('.claude-code/credentials.json')
+                    def needCodex = !fileExists(codexTarget)
+                    def needClaude = !fileExists(claudeTarget)
 
                     if (needCodex || needClaude) {
                         echo '[INFO] Requesting agent credential files from user...'
@@ -103,17 +105,21 @@ pipeline {
                             ]
                         )
 
-                        def codexPayload = uploadParams instanceof Map ? uploadParams['codexAuthB64'] : uploadParams
-                        def claudePayload = uploadParams instanceof Map ? uploadParams['claudeCredsB64'] : null
-
-                        def codexValue = (codexPayload instanceof CharSequence) ? codexPayload.toString().trim() : ''
-                        def claudeValue = (claudePayload instanceof CharSequence) ? claudePayload.toString().trim() : ''
+                        def codexValue = ''
+                        def claudeValue = ''
+                        if (uploadParams instanceof Map) {
+                            codexValue = (uploadParams['codexAuthB64'] ?: '').toString().trim()
+                            claudeValue = (uploadParams['claudeCredsB64'] ?: '').toString().trim()
+                        } else if (uploadParams) {
+                            codexValue = uploadParams.toString().trim()
+                        }
 
                         if (codexValue) {
                             withEnv(["CODEX_FILE_B64=${codexValue}"]) {
                                 sh '''
-                                    printf "%s" "$CODEX_FILE_B64" | base64 -d > .codex/auth.json
-                                    chmod 600 .codex/auth.json
+                                    mkdir -p ~/.codex
+                                    printf "%s" "$CODEX_FILE_B64" | base64 -d > ~/.codex/auth.json
+                                    chmod 600 ~/.codex/auth.json
                                 '''
                             }
                         }
@@ -121,31 +127,17 @@ pipeline {
                         if (claudeValue) {
                             withEnv(["CLAUDE_FILE_B64=${claudeValue}"]) {
                                 sh '''
-                                    printf "%s" "$CLAUDE_FILE_B64" | base64 -d > .claude-code/credentials.json
-                                    chmod 600 .claude-code/credentials.json
+                                    mkdir -p ~/.claude-code
+                                    printf "%s" "$CLAUDE_FILE_B64" | base64 -d > ~/.claude-code/credentials.json
+                                    chmod 600 ~/.claude-code/credentials.json
                                 '''
                             }
                         }
-
                     } else {
                         echo '[INFO] Reusing previously uploaded agent credential files.'
                     }
 
-                    sh '''
-                        mkdir -p ~/.codex
-                        if [ -f .codex/auth.json ]; then
-                          cp .codex/auth.json ~/.codex/auth.json
-                          chmod 600 ~/.codex/auth.json
-                        fi
-                    '''
-
-                    sh '''
-                        mkdir -p ~/.claude-code
-                        if [ -f .claude-code/credentials.json ]; then
-                          cp .claude-code/credentials.json ~/.claude-code/credentials.json
-                          chmod 600 ~/.claude-code/credentials.json
-                        fi
-                    '''
+                    sh 'mkdir -p ~/.codex ~/.claude-code'
                 }
             }
         }
