@@ -184,6 +184,47 @@ export abstract class BasePhase {
     }
 
     const agentName = this.codex ? 'Codex Agent' : 'Claude Agent';
+    const messages = await this.runAgentTask(agent, agentName, prompt, options);
+
+    if (this.codex && agent === this.codex && this.claude) {
+      const requiresFallback = messages.some((line) => {
+        const normalized = line.toLowerCase();
+        return normalized.includes('invalid bearer token') || normalized.includes('authentication_error') || normalized.includes('please run /login');
+      });
+
+      if (requiresFallback) {
+        console.warn('[WARNING] Codex authentication failed. Falling back to Claude Code agent.');
+        return this.runAgentTask(this.claude, 'Claude Agent', prompt, options);
+      }
+    }
+
+    return messages;
+  }
+    options?: { maxTurns?: number; verbose?: boolean; logDir?: string },
+  ) {
+    const agent = this.codex ?? this.claude;
+    if (!agent) {
+      throw new Error('No agent client configured for this phase.');
+    }
+
+    const messages = await this.runAgentTask(agent, this.codex ? 'Codex Agent' : 'Claude Agent', prompt, options);
+
+    if (this.codex && agent === this.codex && this.claude) {
+      const requiresFallback = messages.some((line) => {
+        const normalized = line.toLowerCase();
+        return normalized.includes('invalid bearer token') || normalized.includes('authentication_error') || normalized.includes('please run /login');
+      });
+
+      if (requiresFallback) {
+        console.warn('[WARNING] Codex authentication failed. Falling back to Claude Code agent.');
+        return this.runAgentTask(this.claude, 'Claude Agent', prompt, options);
+      }
+    }
+
+    return messages;
+  }
+
+    const agentName = this.codex ? 'Codex Agent' : 'Claude Agent';
     const logDir = options?.logDir ?? this.executeDir;
     const promptFile = path.join(logDir, 'prompt.txt');
     const rawLogFile = path.join(logDir, 'agent_log_raw.txt');
