@@ -1,4 +1,4 @@
-/**
+﻿/**
  * AI Workflow Orchestrator - Jenkinsfile
  *
  * GitHub IssueからPR作成まで、Claude AIによる自動開発を実行
@@ -43,7 +43,7 @@ pipeline {
             label 'ec2-fleet'
             dir 'scripts/ai-workflow-v2'
             filename 'Dockerfile'
-            args '-v ${WORKSPACE}:/workspace -w /workspace -e CLAUDE_DANGEROUSLY_SKIP_PERMISSIONS=1 -e CLAUDE_CODE_OAUTH_TOKEN=${CLAUDE_CODE_OAUTH_TOKEN} -e OPENAI_API_KEY=${OPENAI_API_KEY} -e GITHUB_TOKEN=${GITHUB_TOKEN}'
+            args '-v ${WORKSPACE}:/workspace -w /workspace -e CLAUDE_DANGEROUSLY_SKIP_PERMISSIONS=1 -e OPENAI_API_KEY=${OPENAI_API_KEY} -e GITHUB_TOKEN=${GITHUB_TOKEN} -e CODEX_AUTH_FILE=/workspace/.codex/auth.json -e CLAUDE_CODE_CREDENTIALS_PATH=/workspace/.claude-code/credentials.json'
         }
     }
 
@@ -61,6 +61,7 @@ pipeline {
 
         // Claude Agent SDK設定（Bashコマンド承認スキップ）
         CLAUDE_DANGEROUSLY_SKIP_PERMISSIONS = '1'
+        CLAUDE_CODE_CREDENTIALS_PATH = "/workspace/.claude-code/credentials.json"
 
         // AI Workflow設定
         WORKFLOW_DIR = 'scripts/ai-workflow-v2'
@@ -70,13 +71,79 @@ pipeline {
         GIT_COMMIT_USER_NAME = "${params.GIT_COMMIT_USER_NAME}"
         GIT_COMMIT_USER_EMAIL = "${params.GIT_COMMIT_USER_EMAIL}"
 
+        // Codex CLI�p�F�؃t�@�C���̃p�X
+        CODEX_AUTH_FILE = "/workspace/.codex/auth.json"
+
         // 認証情報（Jenkinsクレデンシャルから取得）
-        CLAUDE_CODE_OAUTH_TOKEN = credentials('claude-code-oauth-token')
         OPENAI_API_KEY = credentials('openai-api-key')
         GITHUB_TOKEN = credentials('github-token')
     }
 
     stages {
+        stage('Prepare Agent Credentials') {
+            steps {
+                script {
+                    echo "========================================="
+                    echo "Stage: Prepare Agent Credentials"
+                    echo "========================================="
+
+                    sh 'mkdir -p .codex .claude-code'
+
+                    def needCodex = !fileExists('.codex/auth.json')
+                    def needClaude = !fileExists('.claude-code/credentials.json')
+
+                    if (needCodex || needClaude) {
+                        echo '[INFO] Requesting agent credential files from user...'
+                        def uploadParams = input(
+                            message: 'Upload agent credential files (provide Codex auth.json and Claude Code credentials.json as needed)',
+                            ok: 'Upload',
+                            parameters: [
+                                file(name: 'codex-auth.json', description: 'Codex CLI authentication file'),
+                                file(name: 'claude-code-credentials.json', description: 'Claude Code CLI credentials file')
+                            ]
+                        )
+
+                        def codexPayload = uploadParams instanceof Map ? uploadParams['codex-auth.json'] : uploadParams
+                        def claudePayload = uploadParams instanceof Map ? uploadParams['claude-code-credentials.json'] : null
+
+                        if (codexPayload) {
+                            if (codexPayload instanceof String) {
+                                writeFile file: '.codex/auth.json', text: codexPayload
+                            } else if (codexPayload?.respondsTo('writeTo')) {
+                                codexPayload.writeTo(new File(env.WORKSPACE, '.codex/auth.json'))
+                            }
+                        }
+
+                        if (claudePayload) {
+                            if (claudePayload instanceof String) {
+                                writeFile file: '.claude-code/credentials.json', text: claudePayload
+                            } else if (claudePayload?.respondsTo('writeTo')) {
+                                claudePayload.writeTo(new File(env.WORKSPACE, '.claude-code/credentials.json'))
+                            }
+                        }
+                    } else {
+                        echo '[INFO] Reusing previously uploaded agent credential files.'
+                    }
+
+                    sh '''
+                        mkdir -p ~/.codex
+                        if [ -f .codex/auth.json ]; then
+                          cp .codex/auth.json ~/.codex/auth.json
+                          chmod 600 ~/.codex/auth.json
+                        fi
+                    '''
+
+                    sh '''
+                        mkdir -p ~/.claude-code
+                        if [ -f .claude-code/credentials.json ]; then
+                          cp .claude-code/credentials.json ~/.claude-code/credentials.json
+                          chmod 600 ~/.claude-code/credentials.json
+                        fi
+                    '''
+                }
+            }
+        }
+
         stage('Validate Parameters') {
             steps {
                 script {

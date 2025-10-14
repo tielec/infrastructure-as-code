@@ -16,19 +16,11 @@ export class ClaudeAgentClient {
   private readonly workingDir: string;
   private readonly model?: string;
 
-  constructor(options: { workingDir?: string; model?: string } = {}) {
+  constructor(options: { workingDir?: string; model?: string; credentialsPath?: string } = {}) {
     this.workingDir = options.workingDir ?? process.cwd();
     this.model = options.model;
 
-    if (!process.env.CLAUDE_CODE_OAUTH_TOKEN) {
-      throw new Error(
-        [
-          'CLAUDE_CODE_OAUTH_TOKEN is not set.',
-          'Please export the Claude Code OAuth token before running the workflow.',
-          'See DOCKER_AUTH_SETUP.md for instructions.',
-        ].join('\n'),
-      );
-    }
+    this.ensureAuthToken(options.credentialsPath);
   }
 
   public getWorkingDirectory(): string {
@@ -156,5 +148,64 @@ export class ClaudeAgentClient {
         console.log(`[AGENT THINKING] ${block.text_delta.trim()}`);
       }
     }
+  }
+
+  private ensureAuthToken(credentialsPath?: string): void {
+    const resolvedPath = credentialsPath ?? process.env.CLAUDE_CODE_CREDENTIALS_PATH ?? null;
+
+    if (resolvedPath) {
+      const token = this.readTokenFromCredentials(resolvedPath);
+      process.env.CLAUDE_CODE_OAUTH_TOKEN = token;
+      return;
+    }
+
+    const token = process.env.CLAUDE_CODE_OAUTH_TOKEN;
+    if (!token || !token.trim()) {
+      throw new Error(
+        [
+          'Claude Code credentials are not configured.',
+          'Provide a valid credentials file via CLAUDE_CODE_CREDENTIALS_PATH or set CLAUDE_CODE_OAUTH_TOKEN.',
+        ].join('\n'),
+      );
+    }
+  }
+
+  private readTokenFromCredentials(credentialsPath: string): string {
+    if (!fs.existsSync(credentialsPath)) {
+      throw new Error(`Claude Code credentials file not found: ${credentialsPath}`);
+    }
+
+    const raw = fs.readFileSync(credentialsPath, 'utf-8').trim();
+    if (!raw) {
+      throw new Error(`Claude Code credentials file is empty: ${credentialsPath}`);
+    }
+
+    let token = raw;
+    try {
+      const parsed = JSON.parse(raw);
+      if (typeof parsed === 'string' && parsed.trim()) {
+        token = parsed.trim();
+      } else if (parsed && typeof parsed === 'object') {
+        const obj = parsed as Record<string, unknown>;
+        if (typeof obj.token === 'string') {
+          token = (obj.token as string).trim();
+        } else if (typeof obj.access_token === 'string') {
+          token = (obj.access_token as string).trim();
+        } else if (obj.credentials && typeof obj.credentials === 'object') {
+          const credObj = obj.credentials as Record<string, unknown>;
+          if (typeof credObj.token === 'string') {
+            token = (credObj.token as string).trim();
+          }
+        }
+      }
+    } catch {
+      // Not JSON – treat as raw token string.
+    }
+
+    if (!token) {
+      throw new Error(`Unable to extract Claude Code token from credentials file: ${credentialsPath}`);
+    }
+
+    return token;
   }
 }
