@@ -321,6 +321,19 @@ async function handleExecuteCommand(options: any): Promise<void> {
   if (codexAuthPath) {
     codexClient = new CodexAgentClient({ workingDir });
     process.env.CODEX_AUTH_FILE = codexAuthPath;
+
+    const codexToken = extractCodexToken(codexAuthPath);
+    if (codexToken) {
+      if (!process.env.CODEX_API_KEY) {
+        process.env.CODEX_API_KEY = codexToken;
+      }
+      if (!process.env.OPENAI_API_KEY) {
+        process.env.OPENAI_API_KEY = codexToken;
+      }
+      console.info(
+        `[INFO] Loaded Codex token from ${codexAuthPath} (token length=${codexToken.length})`,
+      );
+    }
   }
 
   let claudeClient: ClaudeAgentClient | null = null;
@@ -659,6 +672,72 @@ async function loadExternalDocuments(
   }
   metadataManager.data.external_documents = externalDocs;
   metadataManager.save();
+}
+
+function extractCodexToken(authPath: string): string | null {
+  try {
+    if (!fs.existsSync(authPath)) {
+      return null;
+    }
+    const raw = fs.readFileSync(authPath, 'utf-8').trim();
+    if (!raw) {
+      return null;
+    }
+
+    const candidateKeys = ['token', 'access_token', 'api_key', 'key', 'bearer_token'];
+    const searchToken = (value: unknown): string | null => {
+      if (typeof value === 'string') {
+        const trimmed = value.trim();
+        return trimmed.length > 0 ? trimmed : null;
+      }
+
+      if (Array.isArray(value)) {
+        for (const item of value) {
+          const token = searchToken(item);
+          if (token) {
+            return token;
+          }
+        }
+        return null;
+      }
+
+      if (value && typeof value === 'object') {
+        const record = value as Record<string, unknown>;
+        for (const [key, candidate] of Object.entries(record)) {
+          if (candidateKeys.includes(key.toLowerCase())) {
+            const token = searchToken(candidate);
+            if (token) {
+              return token;
+            }
+          }
+        }
+        for (const nested of Object.values(record)) {
+          const token = searchToken(nested);
+          if (token) {
+            return token;
+          }
+        }
+      }
+
+      return null;
+    };
+
+    try {
+      const parsed = JSON.parse(raw);
+      const parsedToken = searchToken(parsed);
+      if (parsedToken) {
+        return parsedToken;
+      }
+    } catch {
+      // Not JSON, treat as plain string below.
+    }
+
+    return searchToken(raw);
+  } catch (error) {
+    const message = (error as Error).message ?? String(error);
+    console.warn(`[WARNING] Failed to extract Codex token from ${authPath}: ${message}`);
+    return null;
+  }
 }
 
 async function resetMetadata(

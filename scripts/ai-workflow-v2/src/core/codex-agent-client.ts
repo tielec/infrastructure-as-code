@@ -50,11 +50,6 @@ export class CodexAgentClient {
     const cwd = options.workingDirectory ?? this.workingDir;
     const args: string[] = ['exec', '--json', '--skip-git-repo-check'];
 
-    const codexAuthFile = process.env.CODEX_AUTH_FILE;
-    if (codexAuthFile && codexAuthFile.trim()) {
-      args.push('--auth-file', codexAuthFile.trim());
-    }
-
     const model = options.model ?? this.defaultModel;
     if (model) {
       args.push('--model', model);
