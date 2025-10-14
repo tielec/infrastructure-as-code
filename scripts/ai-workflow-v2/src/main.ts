@@ -325,6 +325,7 @@ async function handleExecuteCommand(options: any): Promise<void> {
 
   let claudeClient: ClaudeAgentClient | null = null;
   if (!codexClient && claudeCredentialsPath) {
+    console.info('[INFO] Codex credentials not found. Falling back to Claude Code.');
     claudeClient = new ClaudeAgentClient({ workingDir, credentialsPath: claudeCredentialsPath });
   }
 

@@ -184,6 +184,7 @@ export abstract class BasePhase {
     }
 
     const primaryName = this.codex && primaryAgent === this.codex ? 'Codex Agent' : 'Claude Agent';
+    console.info(`[INFO] Using ${primaryName} for phase ${this.phaseName}`);
     const primaryResult = await this.runAgentTask(primaryAgent, primaryName, prompt, options);
 
     if (primaryResult.authFailed && primaryAgent === this.codex && this.claude) {
@@ -209,6 +210,7 @@ export abstract class BasePhase {
 
     fs.writeFileSync(promptFile, prompt, 'utf-8');
     console.info(`[INFO] Prompt saved to: ${promptFile}`);
+    console.info(`[INFO] Running ${agentName} for phase ${this.phaseName}`);
 
     const startTime = Date.now();
     let messages: string[] = [];
