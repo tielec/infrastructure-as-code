@@ -95,32 +95,38 @@ pipeline {
                     if (needCodex || needClaude) {
                         echo '[INFO] Requesting agent credential files from user...'
                         def uploadParams = input(
-                            message: 'Upload agent credential files (provide Codex auth.json and Claude Code credentials.json as needed)',
+                            message: 'Upload agent credential files (Base64 encoded). Leave empty to reuse existing files.',
                             ok: 'Upload',
                             parameters: [
-                                file(name: 'codex-auth.json', description: 'Codex CLI authentication file'),
-                                file(name: 'claude-code-credentials.json', description: 'Claude Code CLI credentials file')
+                                base64File(name: 'codexAuthB64', description: 'Codex CLI authentication file (auth.json)'),
+                                base64File(name: 'claudeCredsB64', description: 'Claude Code credentials file (credentials.json)')
                             ]
                         )
 
-                        def codexPayload = uploadParams instanceof Map ? uploadParams['codex-auth.json'] : uploadParams
-                        def claudePayload = uploadParams instanceof Map ? uploadParams['claude-code-credentials.json'] : null
+                        def codexPayload = uploadParams instanceof Map ? uploadParams['codexAuthB64'] : uploadParams
+                        def claudePayload = uploadParams instanceof Map ? uploadParams['claudeCredsB64'] : null
 
-                        if (codexPayload) {
-                            if (codexPayload instanceof String) {
-                                writeFile file: '.codex/auth.json', text: codexPayload
-                            } else if (codexPayload?.respondsTo('writeTo')) {
-                                codexPayload.writeTo(new File(env.WORKSPACE, '.codex/auth.json'))
+                        def codexValue = (codexPayload instanceof CharSequence) ? codexPayload.toString().trim() : ''
+                        def claudeValue = (claudePayload instanceof CharSequence) ? claudePayload.toString().trim() : ''
+
+                        if (codexValue) {
+                            withEnv(["CODEX_FILE_B64=${codexValue}"]) {
+                                sh '''
+                                    printf "%s" "$CODEX_FILE_B64" | base64 -d > .codex/auth.json
+                                    chmod 600 .codex/auth.json
+                                '''
                             }
                         }
 
-                        if (claudePayload) {
-                            if (claudePayload instanceof String) {
-                                writeFile file: '.claude-code/credentials.json', text: claudePayload
-                            } else if (claudePayload?.respondsTo('writeTo')) {
-                                claudePayload.writeTo(new File(env.WORKSPACE, '.claude-code/credentials.json'))
+                        if (claudeValue) {
+                            withEnv(["CLAUDE_FILE_B64=${claudeValue}"]) {
+                                sh '''
+                                    printf "%s" "$CLAUDE_FILE_B64" | base64 -d > .claude-code/credentials.json
+                                    chmod 600 .claude-code/credentials.json
+                                '''
                             }
                         }
+
                     } else {
                         echo '[INFO] Reusing previously uploaded agent credential files.'
                     }
