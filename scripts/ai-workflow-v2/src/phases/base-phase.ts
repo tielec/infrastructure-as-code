@@ -42,8 +42,8 @@ export abstract class BasePhase {
   protected readonly phaseName: PhaseName;
   protected readonly workingDir: string;
   protected readonly metadata: MetadataManager;
-  protected readonly codex: CodexAgentClient | null;
-  protected readonly claude: ClaudeAgentClient | null;
+  protected codex: CodexAgentClient | null;
+  protected claude: ClaudeAgentClient | null;
   protected readonly github: GitHubClient;
   protected readonly skipDependencyCheck: boolean;
   protected readonly ignoreDependencies: boolean;
@@ -188,6 +188,7 @@ export abstract class BasePhase {
 
     if (primaryResult.authFailed && primaryAgent === this.codex && this.claude) {
       console.warn('[WARNING] Codex authentication failed. Falling back to Claude Code agent.');
+      this.codex = null;
       const fallbackResult = await this.runAgentTask(this.claude, 'Claude Agent', prompt, options);
       return fallbackResult.messages;
     }

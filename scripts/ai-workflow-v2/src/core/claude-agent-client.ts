@@ -195,6 +195,15 @@ export class ClaudeAgentClient {
           const credObj = obj.credentials as Record<string, unknown>;
           if (typeof credObj.token === 'string') {
             token = (credObj.token as string).trim();
+          } else if (typeof credObj.accessToken === 'string') {
+            token = (credObj.accessToken as string).trim();
+          }
+        } else if (obj.credential && typeof obj.credential === 'object') {
+          const singleCred = obj.credential as Record<string, unknown>;
+          if (typeof singleCred.accessToken === 'string') {
+            token = (singleCred.accessToken as string).trim();
+          } else if (typeof singleCred.token === 'string') {
+            token = (singleCred.token as string).trim();
           }
         }
       }
