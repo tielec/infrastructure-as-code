@@ -55,14 +55,6 @@ pipeline {
         ansiColor('xterm')
     }
 
-    parameters {
-        choice(
-            name: 'AGENT_MODE',
-            choices: ['auto', 'codex', 'claude'],
-            description: 'Agent backend to use (auto = Codex with Claude fallback)'
-        )
-    }
-
     environment {
         // Node.js実行環境
         NODE_ENV = 'production'

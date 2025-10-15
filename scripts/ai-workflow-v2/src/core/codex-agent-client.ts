@@ -48,7 +48,7 @@ export class CodexAgentClient {
 
   public async executeTask(options: ExecuteTaskOptions): Promise<string[]> {
     const cwd = options.workingDirectory ?? this.workingDir;
-    const args: string[] = ['exec', '--json', '--skip-git-repo-check'];
+    const args: string[] = ['exec', '--json', '--skip-git-repo-check', '--dangerously-bypass-approvals-and-sandbox'];
 
     const model = options.model ?? this.defaultModel;
     if (model) {
