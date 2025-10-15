@@ -308,6 +308,29 @@ export abstract class BasePhase {
     error: Error | null,
     agentName: string,
   ): string {
+    if (agentName === 'Codex Agent') {
+      const codexLog = this.formatCodexAgentLog(messages, startTime, endTime, duration, error);
+      if (codexLog) {
+        return codexLog;
+      }
+
+      return [
+        '# Codex Agent Execution Log',
+        '',
+        '```json',
+        ...messages,
+        '```',
+        '',
+        '---',
+        `**Elapsed**: ${duration}ms`,
+        `**Started**: ${new Date(startTime).toISOString()}`,
+        `**Finished**: ${new Date(endTime).toISOString()}`,
+        error ? `**Error**: ${error.message}` : '',
+      ]
+        .filter(Boolean)
+        .join('\n');
+    }
+
     const lines: string[] = [];
     lines.push('# Claude Agent 実行ログ\n');
     lines.push(`生成日時: ${new Date(startTime).toLocaleString('ja-JP')}\n`);
@@ -355,14 +378,13 @@ export abstract class BasePhase {
             lines.push(`\n${message.result}\n`);
           }
         }
-      } catch (parseError) {
-        // JSON parse error - skip this message
+      } catch {
         continue;
       }
     }
 
     lines.push('\n---\n');
-    lines.push(`**実行時間**: ${duration}ms`);
+    lines.push(`**経過時間**: ${duration}ms`);
     lines.push(`**開始**: ${new Date(startTime).toISOString()}`);
     lines.push(`**終了**: ${new Date(endTime).toISOString()}`);
     if (error) {
@@ -372,6 +394,193 @@ export abstract class BasePhase {
     return lines.join('\n');
   }
 
+  private formatCodexAgentLog(
+    messages: string[],
+    startTime: number,
+    endTime: number,
+    duration: number,
+    error: Error | null,
+  ): string | null {
+    const parseJson = (raw: string): Record<string, unknown> | null => {
+      const trimmed = raw.trim();
+      if (!trimmed) {
+        return null;
+      }
+
+      try {
+        return JSON.parse(trimmed) as Record<string, unknown>;
+      } catch {
+        return null;
+      }
+    };
+
+    const asRecord = (value: unknown): Record<string, unknown> | null => {
+      if (value && typeof value === 'object' && !Array.isArray(value)) {
+        return value as Record<string, unknown>;
+      }
+      return null;
+    };
+
+    const getString = (source: Record<string, unknown> | null, key: string): string | null => {
+      if (!source) {
+        return null;
+      }
+      const candidate = source[key];
+      if (typeof candidate === 'string') {
+        const trimmed = candidate.trim();
+        return trimmed.length > 0 ? trimmed : null;
+      }
+      return null;
+    };
+
+    const getNumber = (source: Record<string, unknown> | null, key: string): number | null => {
+      if (!source) {
+        return null;
+      }
+      const candidate = source[key];
+      if (typeof candidate === 'number' && Number.isFinite(candidate)) {
+        return candidate;
+      }
+      return null;
+    };
+
+    const describeItemType = (value: string): string => {
+      const normalized = value.toLowerCase();
+      if (normalized === 'command_execution') {
+        return 'コマンド実行';
+      }
+      if (normalized === 'tool') {
+        return 'ツール';
+      }
+      return value;
+    };
+
+    const truncate = (value: string, limit = 4000): { text: string; truncated: boolean } => {
+      if (value.length <= limit) {
+        return { text: value, truncated: false };
+      }
+      const sliced = value.slice(0, limit).replace(/\s+$/u, '');
+      return { text: sliced, truncated: true };
+    };
+
+    const lines: string[] = [];
+    lines.push('# Codex Agent 実行ログ\n');
+    lines.push(`開始日時: ${new Date(startTime).toLocaleString('ja-JP')}\n`);
+    lines.push('---\n');
+
+    const pendingItems = new Map<string, { type: string; command?: string }>();
+    let turnNumber = 1;
+    let wroteContent = false;
+
+    for (const rawMessage of messages) {
+      const event = parseJson(rawMessage);
+      if (!event) {
+        continue;
+      }
+
+      const eventType = (getString(event, 'type') ?? '').toLowerCase();
+
+      if (eventType === 'thread.started') {
+        const threadId = getString(event, 'thread_id') ?? 'N/A';
+        lines.push(`## Turn ${turnNumber++}: スレッド開始\n`);
+        lines.push(`**Thread ID**: \`${threadId}\`\n`);
+        wroteContent = true;
+        continue;
+      }
+
+      if (eventType === 'turn.started' || eventType === 'turn.delta') {
+        continue;
+      }
+
+      if (eventType === 'item.started') {
+        const item = asRecord(event['item']);
+        if (item) {
+          const itemId = getString(item, 'id');
+          if (itemId) {
+            pendingItems.set(itemId, {
+              type: (getString(item, 'type') ?? 'command_execution').toLowerCase(),
+              command: getString(item, 'command') ?? undefined,
+            });
+          }
+        }
+        continue;
+      }
+
+      if (eventType === 'item.completed') {
+        const item = asRecord(event['item']);
+        if (!item) {
+          continue;
+        }
+
+        const itemId = getString(item, 'id') ?? `item_${turnNumber}`;
+        const info = pendingItems.get(itemId);
+        const itemType = info?.type ?? (getString(item, 'type') ?? 'command_execution');
+        const command = info?.command ?? getString(item, 'command');
+        const status = getString(item, 'status') ?? 'completed';
+        const exitCode = getNumber(item, 'exit_code');
+        const aggregatedOutput = getString(item, 'aggregated_output');
+        const truncatedOutput = aggregatedOutput ? truncate(aggregatedOutput, 4000) : null;
+
+        lines.push(`## Turn ${turnNumber++}: ツール実行\n`);
+        lines.push(`**種別**: ${describeItemType(itemType)}`);
+        if (command) {
+          lines.push(`**コマンド**: \`${command}\``);
+        }
+        lines.push(
+          `**ステータス**: ${status}${exitCode !== null ? ` (exit_code=${exitCode})` : ''}`,
+        );
+
+        if (truncatedOutput) {
+          lines.push('');
+          lines.push('```text');
+          lines.push(truncatedOutput.text);
+          if (truncatedOutput.truncated) {
+            lines.push('... (truncated)');
+          }
+          lines.push('```');
+        }
+
+        lines.push('');
+        wroteContent = true;
+        pendingItems.delete(itemId);
+        continue;
+      }
+
+      if (eventType === 'response.completed' || eventType === 'turn.completed') {
+        const status = getString(event, 'status') ?? 'completed';
+        const eventDuration = getNumber(event, 'duration_ms') ?? duration;
+        const turnCount =
+          getNumber(event, 'turns') ?? getNumber(event, 'num_turns') ?? 'N/A';
+        const info = getString(event, 'result') ?? getString(event, 'summary') ?? null;
+
+        lines.push(`## Turn ${turnNumber++}: 実行完了\n`);
+        lines.push(`**ステータス**: ${status}`);
+        lines.push(`**所要時間**: ${eventDuration}ms`);
+        lines.push(`**ターン数**: ${turnCount}`);
+        if (info) {
+          lines.push('');
+          lines.push(info);
+          lines.push('');
+        }
+
+        wroteContent = true;
+      }
+    }
+
+    if (!wroteContent) {
+      return null;
+    }
+
+    lines.push('\n---\n');
+    lines.push(`**経過時間**: ${duration}ms`);
+    lines.push(`**開始**: ${new Date(startTime).toISOString()}`);
+    lines.push(`**終了**: ${new Date(endTime).toISOString()}`);
+    if (error) {
+      lines.push(`\n**エラー**: ${error.message}`);
+    }
+
+    return lines.join('\n');
+  }
   protected getIssueInfo() {
     const issueNumber = parseInt(this.metadata.data.issue_number, 10);
     if (Number.isNaN(issueNumber)) {
@@ -666,25 +875,19 @@ export abstract class BasePhase {
   }
 
   private async autoCommitAndPush(gitManager: GitManager, reviewResult: string | null) {
-    try {
-      const commitResult = await gitManager.commitPhaseOutput(
-        this.phaseName,
-        'completed',
-        reviewResult ?? undefined,
-      );
+    const commitResult = await gitManager.commitPhaseOutput(
+      this.phaseName,
+      'completed',
+      reviewResult ?? undefined,
+    );
 
-      if (!commitResult.success) {
-        console.warn(`[WARNING] Git commit failed: ${commitResult.error ?? 'unknown error'}`);
-        return;
-      }
+    if (!commitResult.success) {
+      throw new Error(`Git commit failed: ${commitResult.error ?? 'unknown error'}`);
+    }
 
-      const pushResult = await gitManager.pushToRemote();
-      if (!pushResult.success) {
-        console.warn(`[WARNING] Git push failed: ${pushResult.error ?? 'unknown error'}`);
-      }
-    } catch (error) {
-      const message = (error as Error).message ?? String(error);
-      console.warn(`[WARNING] Auto commit & push failed: ${message}`);
+    const pushResult = await gitManager.pushToRemote();
+    if (!pushResult.success) {
+      throw new Error(`Git push failed: ${pushResult.error ?? 'unknown error'}`);
     }
   }
 

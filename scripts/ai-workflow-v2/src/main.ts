@@ -174,22 +174,18 @@ async function handleInitCommand(issueUrl: string): Promise<void> {
   console.info('[INFO] Committing metadata.json...');
   const commitResult = await gitManager.commitPhaseOutput('planning', 'completed', 'N/A');
   if (!commitResult.success) {
-    console.warn(`[WARNING] Commit failed: ${commitResult.error ?? 'unknown error'}`);
-  } else {
-    console.info(
-      `[OK] Commit ${
-        commitResult.commit_hash ? commitResult.commit_hash.slice(0, 7) : ''
-      } created.`,
-    );
+    throw new Error(`Git commit failed: ${commitResult.error ?? 'unknown error'}`);
   }
+  console.info(
+    `[OK] Commit ${commitResult.commit_hash ? commitResult.commit_hash.slice(0, 7) : ''} created.`,
+  );
 
   console.info('[INFO] Pushing to remote...');
   const pushResult = await gitManager.pushToRemote();
   if (!pushResult.success) {
-    console.warn(`[WARNING] Push failed: ${pushResult.error ?? 'unknown error'}`);
-  } else {
-    console.info('[OK] Push successful.');
+    throw new Error(`Git push failed: ${pushResult.error ?? 'unknown error'}`);
   }
+  console.info('[OK] Push successful.');
 
   const githubToken = process.env.GITHUB_TOKEN ?? null;
   if (!githubToken || !repoName) {
@@ -333,7 +329,7 @@ async function handleExecuteCommand(options: any): Promise<void> {
         process.env.OPENAI_API_KEY = trimmed;
       }
       delete process.env.CLAUDE_CODE_CREDENTIALS_PATH;
-      codexClient = new CodexAgentClient({ workingDir });
+      codexClient = new CodexAgentClient({ workingDir, model: 'gpt-5-codex' });
       console.info('[INFO] Codex agent enabled (codex mode).');
       break;
     }
@@ -356,8 +352,8 @@ async function handleExecuteCommand(options: any): Promise<void> {
         if (!process.env.OPENAI_API_KEY || !process.env.OPENAI_API_KEY.trim()) {
           process.env.OPENAI_API_KEY = trimmed;
         }
-        codexClient = new CodexAgentClient({ workingDir });
-        console.info('[INFO] Codex API key detected. Codex agent enabled.');
+        codexClient = new CodexAgentClient({ workingDir, model: 'gpt-5-codex' });
+        console.info('[INFO] Codex API key detected. Codex agent enabled (model=gpt-5-codex).');
       }
 
       if (claudeCredentialsPath) {

@@ -132,12 +132,24 @@ export class GitManager {
 
     while (retries <= maxRetries) {
       try {
-        const result = needsUpstream && retries === 0 && branchName
-          ? ((await this.git.push(['--set-upstream', 'origin', branchName])) as PushResult)
-          : ((await this.git.push()) as PushResult);
-        if (result.pushed?.length) {
+        if (!branchName) {
+          throw new Error('Unable to determine current branch name');
+        }
+
+        if (needsUpstream && retries === 0) {
+          await this.git.raw(['push', '--set-upstream', 'origin', branchName]);
           return { success: true, retries };
         }
+
+        const result = (await this.git.push(
+          'origin',
+          branchName,
+        )) as PushResult;
+
+        if (result.pushed?.length || result.remoteMessages?.all?.length) {
+          return { success: true, retries };
+        }
+
         return { success: true, retries };
       } catch (error) {
         if (!branchName) {
