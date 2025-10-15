@@ -875,25 +875,19 @@ export abstract class BasePhase {
   }
 
   private async autoCommitAndPush(gitManager: GitManager, reviewResult: string | null) {
-    try {
-      const commitResult = await gitManager.commitPhaseOutput(
-        this.phaseName,
-        'completed',
-        reviewResult ?? undefined,
-      );
+    const commitResult = await gitManager.commitPhaseOutput(
+      this.phaseName,
+      'completed',
+      reviewResult ?? undefined,
+    );
 
-      if (!commitResult.success) {
-        console.warn(`[WARNING] Git commit failed: ${commitResult.error ?? 'unknown error'}`);
-        return;
-      }
+    if (!commitResult.success) {
+      throw new Error(`Git commit failed: ${commitResult.error ?? 'unknown error'}`);
+    }
 
-      const pushResult = await gitManager.pushToRemote();
-      if (!pushResult.success) {
-        console.warn(`[WARNING] Git push failed: ${pushResult.error ?? 'unknown error'}`);
-      }
-    } catch (error) {
-      const message = (error as Error).message ?? String(error);
-      console.warn(`[WARNING] Auto commit & push failed: ${message}`);
+    const pushResult = await gitManager.pushToRemote();
+    if (!pushResult.success) {
+      throw new Error(`Git push failed: ${pushResult.error ?? 'unknown error'}`);
     }
   }
 
