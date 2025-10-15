@@ -333,7 +333,7 @@ async function handleExecuteCommand(options: any): Promise<void> {
         process.env.OPENAI_API_KEY = trimmed;
       }
       delete process.env.CLAUDE_CODE_CREDENTIALS_PATH;
-      codexClient = new CodexAgentClient({ workingDir });
+      codexClient = new CodexAgentClient({ workingDir, model: 'gpt-5-codex' });
       console.info('[INFO] Codex agent enabled (codex mode).');
       break;
     }
@@ -356,8 +356,8 @@ async function handleExecuteCommand(options: any): Promise<void> {
         if (!process.env.OPENAI_API_KEY || !process.env.OPENAI_API_KEY.trim()) {
           process.env.OPENAI_API_KEY = trimmed;
         }
-        codexClient = new CodexAgentClient({ workingDir });
-        console.info('[INFO] Codex API key detected. Codex agent enabled.');
+        codexClient = new CodexAgentClient({ workingDir, model: 'gpt-5-codex' });
+        console.info('[INFO] Codex API key detected. Codex agent enabled (model=gpt-5-codex).');
       }
 
       if (claudeCredentialsPath) {

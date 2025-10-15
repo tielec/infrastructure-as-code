@@ -308,6 +308,24 @@ export abstract class BasePhase {
     error: Error | null,
     agentName: string,
   ): string {
+    if (agentName === 'Codex Agent') {
+      return [
+        '# Codex Agent Execution Log',
+        '',
+        '```json',
+        ...messages,
+        '```',
+        '',
+        '---',
+        `**Elapsed**: ${duration}ms`,
+        `**Started**: ${new Date(startTime).toISOString()}`,
+        `**Finished**: ${new Date(endTime).toISOString()}`,
+        error ? `**Error**: ${error.message}` : '',
+      ]
+        .filter(Boolean)
+        .join('\n');
+    }
+
     const lines: string[] = [];
     lines.push('# Claude Agent 実行ログ\n');
     lines.push(`生成日時: ${new Date(startTime).toLocaleString('ja-JP')}\n`);
