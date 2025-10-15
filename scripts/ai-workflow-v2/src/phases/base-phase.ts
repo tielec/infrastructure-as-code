@@ -3,6 +3,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { MetadataManager } from '../core/metadata-manager.js';
 import { ClaudeAgentClient } from '../core/claude-agent-client.js';
+import { CodexAgentClient } from '../core/codex-agent-client.js';
 import { GitHubClient } from '../core/github-client.js';
 import { ContentParser } from '../core/content-parser.js';
 import { GitManager } from '../core/git-manager.js';
@@ -28,7 +29,8 @@ export type BasePhaseConstructorParams = {
   phaseName: PhaseName;
   workingDir: string;
   metadataManager: MetadataManager;
-  claudeClient: ClaudeAgentClient;
+  codexClient?: CodexAgentClient | null;
+  claudeClient?: ClaudeAgentClient | null;
   githubClient: GitHubClient;
   skipDependencyCheck?: boolean;
   ignoreDependencies?: boolean;
@@ -40,7 +42,8 @@ export abstract class BasePhase {
   protected readonly phaseName: PhaseName;
   protected readonly workingDir: string;
   protected readonly metadata: MetadataManager;
-  protected readonly claude: ClaudeAgentClient;
+  protected codex: CodexAgentClient | null;
+  protected claude: ClaudeAgentClient | null;
   protected readonly github: GitHubClient;
   protected readonly skipDependencyCheck: boolean;
   protected readonly ignoreDependencies: boolean;
@@ -53,11 +56,30 @@ export abstract class BasePhase {
   protected readonly reviseDir: string;
   protected lastExecutionMetrics: UsageMetrics | null = null;
 
+  private getActiveAgent(): CodexAgentClient | ClaudeAgentClient {
+    if (this.codex) {
+      return this.codex;
+    }
+    if (this.claude) {
+      return this.claude;
+    }
+    throw new Error('No agent client configured for this phase.');
+  }
+
+  protected getAgentWorkingDirectory(): string {
+    try {
+      return this.getActiveAgent().getWorkingDirectory();
+    } catch {
+      return this.workingDir;
+    }
+  }
+
   constructor(params: BasePhaseConstructorParams) {
     this.phaseName = params.phaseName;
     this.workingDir = params.workingDir;
     this.metadata = params.metadataManager;
-    this.claude = params.claudeClient;
+    this.codex = params.codexClient ?? null;
+    this.claude = params.claudeClient ?? null;
     this.github = params.githubClient;
     this.skipDependencyCheck = params.skipDependencyCheck ?? false;
     this.ignoreDependencies = params.ignoreDependencies ?? false;
@@ -152,25 +174,87 @@ export abstract class BasePhase {
     return fs.readFileSync(promptPath, 'utf-8');
   }
 
-  protected async executeWithClaude(
+  protected async executeWithAgent(
     prompt: string,
     options?: { maxTurns?: number; verbose?: boolean; logDir?: string },
   ) {
+    const primaryAgent = this.codex ?? this.claude;
+    if (!primaryAgent) {
+      throw new Error('No agent client configured for this phase.');
+    }
+
+    const primaryName = this.codex && primaryAgent === this.codex ? 'Codex Agent' : 'Claude Agent';
+    console.info(`[INFO] Using ${primaryName} for phase ${this.phaseName}`);
+
+    let primaryResult: { messages: string[]; authFailed: boolean } | null = null;
+
+    try {
+      primaryResult = await this.runAgentTask(primaryAgent, primaryName, prompt, options);
+    } catch (error) {
+      if (primaryAgent === this.codex && this.claude) {
+        const err = error as NodeJS.ErrnoException & { code?: string };
+        const message = err?.message ?? String(error);
+        const binaryPath = this.codex?.getBinaryPath?.();
+
+        if (err?.code === 'CODEX_CLI_NOT_FOUND') {
+          console.warn(
+            `[WARNING] Codex CLI not found at ${binaryPath ?? 'codex'}: ${message}`,
+          );
+        } else {
+          console.warn(`[WARNING] Codex agent failed: ${message}`);
+        }
+
+        console.warn('[WARNING] Falling back to Claude Code agent.');
+        this.codex = null;
+        const fallbackResult = await this.runAgentTask(this.claude, 'Claude Agent', prompt, options);
+        return fallbackResult.messages;
+      }
+      throw error;
+    }
+
+    if (!primaryResult) {
+      throw new Error('Codex agent returned no result.');
+    }
+
+    const finalResult = primaryResult;
+
+    if (finalResult.authFailed && primaryAgent === this.codex && this.claude) {
+      console.warn('[WARNING] Codex authentication failed. Falling back to Claude Code agent.');
+      this.codex = null;
+      const fallbackResult = await this.runAgentTask(this.claude, 'Claude Agent', prompt, options);
+      return fallbackResult.messages;
+    }
+
+    if (finalResult.messages.length === 0 && this.claude && primaryAgent === this.codex) {
+      console.warn('[WARNING] Codex agent produced no output. Trying Claude Code agent as fallback.');
+      const fallbackResult = await this.runAgentTask(this.claude, 'Claude Agent', prompt, options);
+      return fallbackResult.messages;
+    }
+
+    return finalResult.messages;
+  }
+
+  private async runAgentTask(
+    agent: CodexAgentClient | ClaudeAgentClient,
+    agentName: string,
+    prompt: string,
+    options?: { maxTurns?: number; verbose?: boolean; logDir?: string },
+  ): Promise<{ messages: string[]; authFailed: boolean }> {
     const logDir = options?.logDir ?? this.executeDir;
     const promptFile = path.join(logDir, 'prompt.txt');
     const rawLogFile = path.join(logDir, 'agent_log_raw.txt');
     const agentLogFile = path.join(logDir, 'agent_log.md');
 
-    // Save prompt
     fs.writeFileSync(promptFile, prompt, 'utf-8');
     console.info(`[INFO] Prompt saved to: ${promptFile}`);
+    console.info(`[INFO] Running ${agentName} for phase ${this.phaseName}`);
 
     const startTime = Date.now();
     let messages: string[] = [];
     let error: Error | null = null;
 
     try {
-      messages = await this.claude.executeTask({
+      messages = await agent.executeTask({
         prompt,
         maxTurns: options?.maxTurns ?? 50,
         workingDirectory: this.workingDir,
@@ -183,12 +267,17 @@ export abstract class BasePhase {
     const endTime = Date.now();
     const duration = endTime - startTime;
 
-    // Save raw output as JSONL (JSON Lines format)
     fs.writeFileSync(rawLogFile, messages.join('\n'), 'utf-8');
     console.info(`[INFO] Raw log saved to: ${rawLogFile}`);
 
-    // Save human-readable markdown log
-    const agentLogContent = this.formatAgentLog(messages, startTime, endTime, duration, error);
+    if (agentName === 'Codex Agent') {
+      console.info('[DEBUG] Codex agent emitted messages:');
+      messages.slice(0, 10).forEach((line, index) => {
+        console.info(`[DEBUG][Codex][${index}] ${line}`);
+      });
+    }
+
+    const agentLogContent = this.formatAgentLog(messages, startTime, endTime, duration, error, agentName);
     fs.writeFileSync(agentLogFile, agentLogContent, 'utf-8');
     console.info(`[INFO] Agent log saved to: ${agentLogFile}`);
 
@@ -199,7 +288,16 @@ export abstract class BasePhase {
     const usage = this.extractUsageMetrics(messages);
     this.recordUsageMetrics(usage);
 
-    return messages;
+    const authFailed = messages.some((line) => {
+      const normalized = line.toLowerCase();
+      return (
+        normalized.includes('invalid bearer token') ||
+        normalized.includes('authentication_error') ||
+        normalized.includes('please run /login')
+      );
+    });
+
+    return { messages, authFailed };
   }
 
   private formatAgentLog(
@@ -208,6 +306,7 @@ export abstract class BasePhase {
     endTime: number,
     duration: number,
     error: Error | null,
+    agentName: string,
   ): string {
     const lines: string[] = [];
     lines.push('# Claude Agent 実行ログ\n');
@@ -365,7 +464,7 @@ export abstract class BasePhase {
       return 'Planning Phaseは実行されていません';
     }
 
-    const reference = this.getClaudeFileReference(planningFile);
+    const reference = this.getAgentFileReference(planningFile);
     if (!reference) {
       console.warn(`[WARNING] Failed to resolve relative path for planning document: ${planningFile}`);
       return 'Planning Phaseは実行されていません';
@@ -375,9 +474,9 @@ export abstract class BasePhase {
     return reference;
   }
 
-  protected getClaudeFileReference(filePath: string): string | null {
+  protected getAgentFileReference(filePath: string): string | null {
     const absoluteFile = path.resolve(filePath);
-    const workingDir = path.resolve(this.claude.getWorkingDirectory());
+    const workingDir = path.resolve(this.getAgentWorkingDirectory());
     const relative = path.relative(workingDir, absoluteFile);
 
     if (!relative || relative.startsWith('..') || path.isAbsolute(relative)) {

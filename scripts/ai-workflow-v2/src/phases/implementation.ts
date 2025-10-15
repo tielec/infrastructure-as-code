@@ -23,9 +23,9 @@ export class ImplementationPhase extends BasePhase {
       };
     }
 
-    const requirementsReference = this.getClaudeFileReference(requirementsFile);
-    const designReference = this.getClaudeFileReference(designFile);
-    const scenarioReference = this.getClaudeFileReference(scenarioFile);
+    const requirementsReference = this.getAgentFileReference(requirementsFile);
+    const designReference = this.getAgentFileReference(designFile);
+    const scenarioReference = this.getAgentFileReference(scenarioFile);
 
     if (!requirementsReference || !designReference || !scenarioReference) {
       return {
@@ -50,7 +50,7 @@ export class ImplementationPhase extends BasePhase {
       .replace('{implementation_strategy}', implementationStrategy)
       .replace('{issue_number}', String(issueNumber));
 
-    await this.executeWithClaude(executePrompt, { maxTurns: 50 });
+    await this.executeWithAgent(executePrompt, { maxTurns: 50 });
 
     const implementationFile = path.join(this.outputDir, 'implementation.md');
     if (!fs.existsSync(implementationFile)) {
@@ -95,9 +95,9 @@ export class ImplementationPhase extends BasePhase {
       };
     }
 
-    const implementationReference = this.getClaudeFileReference(implementationFile);
-    const designReference = this.getClaudeFileReference(designFile);
-    const scenarioReference = this.getClaudeFileReference(scenarioFile);
+    const implementationReference = this.getAgentFileReference(implementationFile);
+    const designReference = this.getAgentFileReference(designFile);
+    const scenarioReference = this.getAgentFileReference(scenarioFile);
     const implementationStrategy = this.metadata.data.design_decisions.implementation_strategy ?? 'UNKNOWN';
 
     if (!implementationReference || !designReference || !scenarioReference) {
@@ -113,7 +113,7 @@ export class ImplementationPhase extends BasePhase {
       .replace('{test_scenario_document_path}', scenarioReference)
       .replace('{implementation_strategy}', implementationStrategy);
 
-    const messages = await this.executeWithClaude(reviewPrompt, { maxTurns: 30, logDir: this.reviewDir });
+    const messages = await this.executeWithAgent(reviewPrompt, { maxTurns: 30, logDir: this.reviewDir });
     const reviewResult = await this.contentParser.parseReviewResult(messages);
 
     const reviewFile = path.join(this.reviewDir, 'result.md');
@@ -155,9 +155,9 @@ export class ImplementationPhase extends BasePhase {
       };
     }
 
-    const implementationReference = this.getClaudeFileReference(implementationFile);
-    const designReference = this.getClaudeFileReference(designFile);
-    const scenarioReference = this.getClaudeFileReference(scenarioFile);
+    const implementationReference = this.getAgentFileReference(implementationFile);
+    const designReference = this.getAgentFileReference(designFile);
+    const scenarioReference = this.getAgentFileReference(scenarioFile);
     const implementationStrategy = this.metadata.data.design_decisions.implementation_strategy ?? 'UNKNOWN';
 
     if (!implementationReference || !designReference || !scenarioReference) {
@@ -175,7 +175,7 @@ export class ImplementationPhase extends BasePhase {
       .replace('{review_feedback}', reviewFeedback)
       .replace('{issue_number}', String(issueNumber));
 
-    await this.executeWithClaude(revisePrompt, { maxTurns: 50, logDir: this.reviseDir });
+    await this.executeWithAgent(revisePrompt, { maxTurns: 50, logDir: this.reviseDir });
 
     if (!fs.existsSync(implementationFile)) {
       return {

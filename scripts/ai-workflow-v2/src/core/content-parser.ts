@@ -2,6 +2,7 @@ import fs from 'fs-extra';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { OpenAI } from 'openai';
+import type { EvaluationDecisionResult, PhaseName, RemainingTask } from '../types.js';
 
 interface ReviewParseResult {
   result: string;
@@ -201,5 +202,146 @@ export class ContentParser {
     }
 
     return true;
+  }
+
+  /**
+   * Parse evaluation report and extract decision, remaining tasks, failed phase, and abort reason
+   * Uses LLM to extract structured information from natural language
+   */
+  public async parseEvaluationDecision(content: string): Promise<EvaluationDecisionResult> {
+    const template = this.loadPrompt('parse_evaluation_decision');
+    const prompt = template.replace('{evaluation_content}', content);
+
+    try {
+      const response = await this.client.chat.completions.create({
+        model: this.model,
+        messages: [{ role: 'user', content: prompt }],
+        max_tokens: 2048,
+        temperature: 0,
+      });
+
+      const responseContent = response.choices?.[0]?.message?.content ?? '{}';
+      const parsed = JSON.parse(responseContent) as {
+        decision?: string;
+        failedPhase?: string | null;
+        abortReason?: string | null;
+        remainingTasks?: RemainingTask[] | null;
+      };
+
+      const decision = (parsed.decision ?? 'PASS').toUpperCase();
+      console.info(`[INFO] Extracted decision: ${decision}`);
+
+      // Validate decision
+      const validDecisions = ['PASS', 'PASS_WITH_ISSUES', 'ABORT'];
+      const isValidFailPhase = decision.startsWith('FAIL_PHASE_');
+
+      if (!validDecisions.includes(decision) && !isValidFailPhase) {
+        return {
+          success: false,
+          decision,
+          error: `無効な判定タイプ: ${decision}`,
+        };
+      }
+
+      // Build result
+      const result: EvaluationDecisionResult = {
+        success: true,
+        decision,
+      };
+
+      // Map failedPhase if FAIL_PHASE_*
+      if (isValidFailPhase && parsed.failedPhase) {
+        const mappedPhase = this.mapPhaseKey(parsed.failedPhase);
+        if (!mappedPhase) {
+          return {
+            success: false,
+            decision,
+            error: `無効なフェーズ名: ${parsed.failedPhase}`,
+          };
+        }
+        result.failedPhase = mappedPhase;
+      }
+
+      // Include abort reason if ABORT
+      if (decision === 'ABORT' && parsed.abortReason) {
+        result.abortReason = parsed.abortReason;
+      }
+
+      // Include remaining tasks if PASS_WITH_ISSUES
+      if (decision === 'PASS_WITH_ISSUES' && parsed.remainingTasks) {
+        result.remainingTasks = parsed.remainingTasks;
+      }
+
+      return result;
+    } catch (error) {
+      const message = (error as Error).message ?? String(error);
+      console.error(`[ERROR] Failed to parse evaluation decision via LLM: ${message}`);
+
+      // Fallback: Try simple pattern matching
+      return this.parseEvaluationDecisionFallback(content);
+    }
+  }
+
+  /**
+   * Fallback pattern matching for evaluation decision when LLM parsing fails
+   */
+  private parseEvaluationDecisionFallback(content: string): EvaluationDecisionResult {
+    console.warn('[WARNING] Using fallback pattern matching for evaluation decision.');
+
+    try {
+      const patterns = [
+        /DECISION:\s*([A-Z_]+)/i,
+        /\*\*総合評価\*\*.*?\*\*([A-Z_]+)\*\*/i,
+        /(?:判定|決定|結果)[:：]\s*\**([A-Z_]+)\**/i,
+      ];
+
+      let match: RegExpMatchArray | null = null;
+      for (const pattern of patterns) {
+        match = content.match(pattern);
+        if (match) break;
+      }
+
+      if (!match) {
+        console.warn('[WARNING] No decision pattern matched in fallback. Defaulting to PASS.');
+        return { success: true, decision: 'PASS' };
+      }
+
+      const decision = match[1].trim().toUpperCase();
+      console.info(`[INFO] Fallback extracted decision: ${decision}`);
+
+      return { success: true, decision };
+    } catch (error) {
+      const message = (error as Error).message ?? String(error);
+      return {
+        success: false,
+        error: `判定解析中にエラー: ${message}`,
+      };
+    }
+  }
+
+  private mapPhaseKey(phaseKey: string): PhaseName | null {
+    const normalized = phaseKey.toLowerCase().replace(/[-_]/g, '');
+    const mapping: Record<string, PhaseName> = {
+      planning: 'planning',
+      '0': 'planning',
+      requirements: 'requirements',
+      '1': 'requirements',
+      design: 'design',
+      '2': 'design',
+      testscenario: 'test_scenario',
+      '3': 'test_scenario',
+      implementation: 'implementation',
+      '4': 'implementation',
+      testimplementation: 'test_implementation',
+      '5': 'test_implementation',
+      testing: 'testing',
+      '6': 'testing',
+      documentation: 'documentation',
+      '7': 'documentation',
+      report: 'report',
+      '8': 'report',
+    };
+
+    return mapping[normalized] ?? null;
   }
 }

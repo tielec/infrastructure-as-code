@@ -46,7 +46,7 @@ export class DocumentationPhase extends BasePhase {
         .replace('{issue_number}', String(issueNumber)),
     );
 
-    await this.executeWithClaude(executePrompt, { maxTurns: 30 });
+    await this.executeWithAgent(executePrompt, { maxTurns: 30 });
 
     const documentationFile = path.join(this.outputDir, 'documentation-update-log.md');
     if (!fs.existsSync(documentationFile)) {
@@ -84,7 +84,7 @@ export class DocumentationPhase extends BasePhase {
     const outputs = this.getPhaseOutputs(issueNumber);
     const reviewPrompt = this.buildPrompt('review', issueNumber, documentationFile, outputs);
 
-    const messages = await this.executeWithClaude(reviewPrompt, { maxTurns: 30, logDir: this.reviewDir });
+    const messages = await this.executeWithAgent(reviewPrompt, { maxTurns: 30, logDir: this.reviewDir });
     const reviewResult = await this.contentParser.parseReviewResult(messages);
 
     const reviewFile = path.join(this.reviewDir, 'result.md');
@@ -122,7 +122,7 @@ export class DocumentationPhase extends BasePhase {
       reviewFeedback,
     );
 
-    await this.executeWithClaude(revisePrompt, { maxTurns: 30, logDir: this.reviseDir });
+    await this.executeWithAgent(revisePrompt, { maxTurns: 30, logDir: this.reviseDir });
 
     if (!fs.existsSync(documentationFile)) {
       return {
@@ -168,7 +168,7 @@ export class DocumentationPhase extends BasePhase {
       throw new Error(`Required phase output missing: ${key}`);
     }
 
-    const reference = this.getClaudeFileReference(info.path);
+    const reference = this.getAgentFileReference(info.path);
     if (!reference) {
       throw new Error(`Failed to compute reference path for ${info.path}`);
     }
@@ -180,12 +180,12 @@ export class DocumentationPhase extends BasePhase {
     if (!info?.exists) {
       return '';
     }
-    const reference = this.getClaudeFileReference(info.path);
+    const reference = this.getAgentFileReference(info.path);
     return reference ?? '';
   }
 
   private requireReferencePath(filePath: string): string {
-    const reference = this.getClaudeFileReference(filePath);
+    const reference = this.getAgentFileReference(filePath);
     if (!reference) {
       throw new Error(`Failed to compute reference path for ${filePath}`);
     }

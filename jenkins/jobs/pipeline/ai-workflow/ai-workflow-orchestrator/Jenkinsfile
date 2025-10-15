@@ -43,7 +43,7 @@ pipeline {
             label 'ec2-fleet'
             dir 'scripts/ai-workflow-v2'
             filename 'Dockerfile'
-            args '-v ${WORKSPACE}:/workspace -w /workspace -e CLAUDE_DANGEROUSLY_SKIP_PERMISSIONS=1 -e CLAUDE_CODE_OAUTH_TOKEN=${CLAUDE_CODE_OAUTH_TOKEN} -e OPENAI_API_KEY=${OPENAI_API_KEY} -e GITHUB_TOKEN=${GITHUB_TOKEN}'
+            args '-v ${WORKSPACE}:/workspace -w /workspace -e CLAUDE_DANGEROUSLY_SKIP_PERMISSIONS=1 -e OPENAI_API_KEY=${OPENAI_API_KEY} -e GITHUB_TOKEN=${GITHUB_TOKEN} -e CLAUDE_CODE_CREDENTIALS_PATH=/home/node/.claude-code/credentials.json'
         }
     }
 
@@ -61,6 +61,7 @@ pipeline {
 
         // Claude Agent SDK設定（Bashコマンド承認スキップ）
         CLAUDE_DANGEROUSLY_SKIP_PERMISSIONS = '1'
+        CLAUDE_CODE_CREDENTIALS_PATH = "/home/node/.claude-code/credentials.json"
 
         // AI Workflow設定
         WORKFLOW_DIR = 'scripts/ai-workflow-v2'
@@ -70,13 +71,69 @@ pipeline {
         GIT_COMMIT_USER_NAME = "${params.GIT_COMMIT_USER_NAME}"
         GIT_COMMIT_USER_EMAIL = "${params.GIT_COMMIT_USER_EMAIL}"
 
+
         // 認証情報（Jenkinsクレデンシャルから取得）
-        CLAUDE_CODE_OAUTH_TOKEN = credentials('claude-code-oauth-token')
         OPENAI_API_KEY = credentials('openai-api-key')
         GITHUB_TOKEN = credentials('github-token')
     }
 
     stages {
+        stage('Prepare Agent Credentials') {
+            steps {
+                script {
+                    echo "========================================="
+                    echo "Stage: Prepare Agent Credentials"
+                    echo "========================================="
+
+                    def homeDir = env.HOME ?: '/home/node'
+                    def agentMode = (params.AGENT_MODE ?: 'auto').toLowerCase()
+                    def claudeTarget = "${homeDir}/.claude-code/credentials.json"
+
+                    if (agentMode == 'codex') {
+                        echo '[INFO] Agent mode "codex" selected. Skipping Claude credential setup.'
+                    } else if (agentMode == 'claude') {
+                        if (!fileExists(claudeTarget)) {
+                            def uploadParams = input(
+                                message: 'Upload Claude Code credentials file (Base64 encoded). This is required for agent mode "claude".',
+                                ok: 'Upload',
+                                parameters: [
+                                    base64File(name: 'claudeCredsB64', description: 'Claude Code credentials file (credentials.json)')
+                                ]
+                            )
+
+                            def claudeValue = ''
+                            if (uploadParams instanceof Map) {
+                                claudeValue = (uploadParams['claudeCredsB64'] ?: '').toString().trim()
+                            } else if (uploadParams) {
+                                claudeValue = uploadParams.toString().trim()
+                            }
+
+                            if (!claudeValue) {
+                                error("Agent mode 'claude' requires Claude Code credentials.")
+                            }
+
+                            withEnv(["CLAUDE_FILE_B64=${claudeValue}"]) {
+                                sh '''
+                                    mkdir -p ~/.claude-code
+                                    printf "%s" "$CLAUDE_FILE_B64" | base64 -d > ~/.claude-code/credentials.json
+                                    chmod 600 ~/.claude-code/credentials.json
+                                '''
+                            }
+                        } else {
+                            echo '[INFO] Reusing previously uploaded Claude Code credentials.'
+                        }
+                    } else {
+                        if (fileExists(claudeTarget)) {
+                            echo '[INFO] Claude credentials found. Auto mode will use them for fallback.'
+                        } else {
+                            echo '[INFO] Claude credentials not found. Auto mode will run without Claude fallback.'
+                        }
+                    }
+                }
+            }
+        }
+
+
         stage('Validate Parameters') {
             steps {
                 script {
@@ -101,6 +158,7 @@ pipeline {
                     echo "Issue Number: ${env.ISSUE_NUMBER}"
                     echo "GitHub Repository: ${params.GITHUB_REPOSITORY}"
                     echo "Start Phase: ${params.START_PHASE}"
+                    echo "Agent Mode: ${params.AGENT_MODE}"
                     echo "Dry Run: ${params.DRY_RUN}"
                     echo "Skip Review: ${params.SKIP_REVIEW}"
                     echo "Max Retries: ${params.MAX_RETRIES}"
@@ -206,6 +264,7 @@ pipeline {
                                 node dist/index.js execute \
                                     --phase all \
                                     --issue ${env.ISSUE_NUMBER} \
+                                    --agent ${params.AGENT_MODE} \
                                     ${forceResetFlag}
                             """
                         }
@@ -234,6 +293,7 @@ pipeline {
                             sh """
                                 node dist/index.js execute \
                                     --phase ${params.START_PHASE} \
+                                    --agent ${params.AGENT_MODE} \
                                     --issue ${env.ISSUE_NUMBER}
                             """
                         }

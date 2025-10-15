@@ -8,6 +8,7 @@ import { WorkflowState } from './core/workflow-state.js';
 import { MetadataManager } from './core/metadata-manager.js';
 import { GitManager } from './core/git-manager.js';
 import { ClaudeAgentClient } from './core/claude-agent-client.js';
+import { CodexAgentClient } from './core/codex-agent-client.js';
 import { GitHubClient } from './core/github-client.js';
 import {
   PHASE_PRESETS,
@@ -43,7 +44,8 @@ const PHASE_ORDER: PhaseName[] = [
 type PhaseContext = {
   workingDir: string;
   metadataManager: MetadataManager;
-  claudeClient: ClaudeAgentClient;
+  codexClient: CodexAgentClient | null;
+  claudeClient: ClaudeAgentClient | null;
   githubClient: GitHubClient;
   skipDependencyCheck: boolean;
   ignoreDependencies: boolean;
@@ -94,6 +96,9 @@ export async function runCli(): Promise<void> {
       '--ignore-dependencies',
       'Warn about dependency violations but continue',
       false,
+    )
+    .addOption(
+      new Option('--agent <mode>', 'Agent mode').choices(['auto', 'codex', 'claude']).default('auto'),
     )
     .option('--requirements-doc <path>', 'External requirements document path')
     .option('--design-doc <path>', 'External design document path')
@@ -290,7 +295,90 @@ async function handleExecuteCommand(options: any): Promise<void> {
   }
 
   const workingDir = repoRoot;
-  const claudeClient = new ClaudeAgentClient({ workingDir });
+  const homeDir = process.env.HOME ?? null;
+
+  const agentModeRaw = typeof options.agent === 'string' ? options.agent.toLowerCase() : 'auto';
+  const agentMode: 'auto' | 'codex' | 'claude' =
+    agentModeRaw === 'codex' || agentModeRaw === 'claude' ? agentModeRaw : 'auto';
+
+  console.info(`[INFO] Agent mode: ${agentMode}`);
+
+  const claudeCandidatePaths: string[] = [];
+  if (process.env.CLAUDE_CODE_CREDENTIALS_PATH) {
+    claudeCandidatePaths.push(process.env.CLAUDE_CODE_CREDENTIALS_PATH);
+  }
+  if (homeDir) {
+    claudeCandidatePaths.push(path.join(homeDir, '.claude-code', 'credentials.json'));
+  }
+  claudeCandidatePaths.push(path.join(repoRoot, '.claude-code', 'credentials.json'));
+
+  const claudeCredentialsPath =
+    claudeCandidatePaths.find((candidate) => candidate && fs.existsSync(candidate)) ?? null;
+
+  let codexClient: CodexAgentClient | null = null;
+  let claudeClient: ClaudeAgentClient | null = null;
+
+  const codexApiKey = process.env.CODEX_API_KEY ?? process.env.OPENAI_API_KEY ?? null;
+
+  switch (agentMode) {
+    case 'codex': {
+      if (!codexApiKey || !codexApiKey.trim()) {
+        throw new Error(
+          'Agent mode "codex" requires CODEX_API_KEY or OPENAI_API_KEY to be set with a valid Codex API key.',
+        );
+      }
+      const trimmed = codexApiKey.trim();
+      process.env.CODEX_API_KEY = trimmed;
+      if (!process.env.OPENAI_API_KEY || !process.env.OPENAI_API_KEY.trim()) {
+        process.env.OPENAI_API_KEY = trimmed;
+      }
+      delete process.env.CLAUDE_CODE_CREDENTIALS_PATH;
+      codexClient = new CodexAgentClient({ workingDir });
+      console.info('[INFO] Codex agent enabled (codex mode).');
+      break;
+    }
+    case 'claude': {
+      if (!claudeCredentialsPath) {
+        throw new Error(
+          'Agent mode "claude" requires Claude Code credentials.json to be available.',
+        );
+      }
+      claudeClient = new ClaudeAgentClient({ workingDir, credentialsPath: claudeCredentialsPath });
+      process.env.CLAUDE_CODE_CREDENTIALS_PATH = claudeCredentialsPath;
+      console.info('[INFO] Claude Code agent enabled (claude mode).');
+      break;
+    }
+    case 'auto':
+    default: {
+      if (codexApiKey && codexApiKey.trim().length > 0) {
+        const trimmed = codexApiKey.trim();
+        process.env.CODEX_API_KEY = trimmed;
+        if (!process.env.OPENAI_API_KEY || !process.env.OPENAI_API_KEY.trim()) {
+          process.env.OPENAI_API_KEY = trimmed;
+        }
+        codexClient = new CodexAgentClient({ workingDir });
+        console.info('[INFO] Codex API key detected. Codex agent enabled.');
+      }
+
+      if (claudeCredentialsPath) {
+        if (!codexClient) {
+          console.info('[INFO] Codex agent unavailable. Using Claude Code.');
+        } else {
+          console.info('[INFO] Claude Code credentials detected. Fallback available.');
+        }
+        claudeClient = new ClaudeAgentClient({ workingDir, credentialsPath: claudeCredentialsPath });
+        process.env.CLAUDE_CODE_CREDENTIALS_PATH = claudeCredentialsPath;
+      }
+      break;
+    }
+  }
+
+  if (!codexClient && !claudeClient) {
+    console.error(
+      `[ERROR] Agent mode "${agentMode}" requires a valid agent configuration, but neither Codex API key nor Claude Code credentials are available.`,
+    );
+    process.exit(1);
+  }
 
   const githubToken = process.env.GITHUB_TOKEN ?? null;
   const repoName = metadataManager.data.repository ?? process.env.GITHUB_REPOSITORY ?? null;
@@ -343,6 +431,7 @@ async function handleExecuteCommand(options: any): Promise<void> {
   const context: PhaseContext = {
     workingDir,
     metadataManager,
+    codexClient,
     claudeClient,
     githubClient,
     skipDependencyCheck,
@@ -486,6 +575,7 @@ function createPhaseInstance(phaseName: PhaseName, context: PhaseContext) {
   const baseParams = {
     workingDir: context.workingDir,
     metadataManager: context.metadataManager,
+    codexClient: context.codexClient,
     claudeClient: context.claudeClient,
     githubClient: context.githubClient,
     skipDependencyCheck: context.skipDependencyCheck,

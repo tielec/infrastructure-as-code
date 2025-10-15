@@ -21,10 +21,16 @@ export interface PhaseMetadata {
   output_files?: string[];
 }
 
+export interface RemainingTask {
+  task: string;
+  phase: string;
+  priority: string;
+}
+
 export interface EvaluationPhaseMetadata extends PhaseMetadata {
   decision: string | null;
   failed_phase: PhaseName | null;
-  remaining_tasks: Array<Record<string, unknown>>;
+  remaining_tasks: RemainingTask[];
   created_issue_url: string | null;
   abort_reason: string | null;
 }
@@ -96,4 +102,13 @@ export interface GitCommandResult {
   success: boolean;
   error?: string;
   [key: string]: unknown;
+}
+
+export interface EvaluationDecisionResult {
+  success: boolean;
+  decision?: string;
+  failedPhase?: PhaseName;
+  abortReason?: string;
+  remainingTasks?: RemainingTask[];
+  error?: string;
 }

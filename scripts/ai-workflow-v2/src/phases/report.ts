@@ -55,7 +55,7 @@ export class ReportPhase extends BasePhase {
         .replace('{issue_number}', String(issueNumber)),
     );
 
-    await this.executeWithClaude(executePrompt, { maxTurns: 30 });
+    await this.executeWithAgent(executePrompt, { maxTurns: 30 });
 
     const reportFile = path.join(this.outputDir, 'report.md');
     if (!fs.existsSync(reportFile)) {
@@ -95,7 +95,7 @@ export class ReportPhase extends BasePhase {
     const outputs = this.getPhaseOutputs(issueNumber);
     const reviewPrompt = this.buildPrompt('review', issueNumber, reportFile, outputs);
 
-    const messages = await this.executeWithClaude(reviewPrompt, { maxTurns: 30, logDir: this.reviewDir });
+    const messages = await this.executeWithAgent(reviewPrompt, { maxTurns: 30, logDir: this.reviewDir });
     const reviewResult = await this.contentParser.parseReviewResult(messages);
 
     const reviewFile = path.join(this.reviewDir, 'result.md');
@@ -133,7 +133,7 @@ export class ReportPhase extends BasePhase {
       reviewFeedback,
     );
 
-    await this.executeWithClaude(revisePrompt, { maxTurns: 30, logDir: this.reviseDir });
+    await this.executeWithAgent(revisePrompt, { maxTurns: 30, logDir: this.reviseDir });
 
     if (!fs.existsSync(reportFile)) {
       return {
@@ -214,7 +214,7 @@ export class ReportPhase extends BasePhase {
       throw new Error(`Required phase output missing: ${key}`);
     }
 
-    const reference = this.getClaudeFileReference(info.path);
+    const reference = this.getAgentFileReference(info.path);
     if (!reference) {
       throw new Error(`Failed to compute reference for ${info.path}`);
     }
@@ -226,11 +226,11 @@ export class ReportPhase extends BasePhase {
     if (!info?.exists) {
       return '';
     }
-    return this.getClaudeFileReference(info.path) ?? '';
+    return this.getAgentFileReference(info.path) ?? '';
   }
 
   private requireReferencePath(filePath: string): string {
-    const reference = this.getClaudeFileReference(filePath);
+    const reference = this.getAgentFileReference(filePath);
     if (!reference) {
       throw new Error(`Failed to compute reference for ${filePath}`);
     }

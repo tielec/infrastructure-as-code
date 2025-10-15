@@ -20,8 +20,9 @@ RUN git config --global --add safe.directory '*' && \
 # Copy dependency manifests first (leverage Docker layer caching)
 COPY package.json tsconfig.json ./
 
-# Install Node dependencies
-RUN npm install --omit=dev=false
+# Install Node dependencies and Codex CLI (used by CodexAgentClient)
+RUN npm install --omit=dev=false \
+    && npm install -g @openai/codex
 
 # Copy the rest of the source tree (prompts, phases, etc.)
 COPY . .

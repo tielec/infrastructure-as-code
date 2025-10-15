@@ -16,7 +16,7 @@ export class PlanningPhase extends BasePhase {
       .replace('{issue_info}', this.formatIssueInfo(issueInfo))
       .replace('{issue_number}', issueInfo.number.toString());
 
-    await this.executeWithClaude(prompt, { maxTurns: 50 });
+    await this.executeWithAgent(prompt, { maxTurns: 50 });
 
     const outputFile = path.join(this.outputDir, 'planning.md');
     if (!fs.existsSync(outputFile)) {
@@ -59,7 +59,7 @@ export class PlanningPhase extends BasePhase {
       .replace('{issue_info}', this.formatIssueInfo(issueInfo))
       .replace('{planning_document_path}', `@${path.relative(this.workingDir, planningFile)}`);
 
-    const messages = await this.executeWithClaude(prompt, { maxTurns: 50, logDir: this.reviewDir });
+    const messages = await this.executeWithAgent(prompt, { maxTurns: 50, logDir: this.reviewDir });
     const parsed = await this.contentParser.parseReviewResult(messages);
 
     await this.github.postReviewResult(
