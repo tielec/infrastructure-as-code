@@ -17,6 +17,7 @@
 #   1: エラー発生
 
 set -euo pipefail
+SECONDS=0
 
 echo "======================================"
 echo "SSM Parameter Collection Script"
@@ -26,7 +27,11 @@ echo "Filter: ${ENV_FILTER}"
 echo "Region: ${AWS_REGION}"
 echo "Backup Date: ${BACKUP_DATE}"
 echo "Backup Timestamp: ${BACKUP_TIMESTAMP}"
+echo "Target Region: ${AWS_REGION}"
 echo "======================================"
+
+mkdir -p "${DATA_DIR}"
+rm -f "${DATA_DIR}/"*
 
 # AWS認証情報の確認
 echo "Checking AWS credentials..."
@@ -178,93 +183,73 @@ fi
 PARAM_COUNT=$(echo "$FILTERED_PARAMS" | jq 'length' 2>/dev/null || echo "0")
 echo "Found ${PARAM_COUNT} parameters for environment ${ENVIRONMENT}"
 
-if [ "$PARAM_COUNT" = "0" ]; then
-    echo "WARNING: No parameters found matching filter '${ENV_FILTER}'"
-    # 空のバックアップファイルを作成
-    jq -n \
-        --arg date "${BACKUP_DATE}" \
-        --arg timestamp "${BACKUP_TIMESTAMP}" \
-        --arg environment "${ENVIRONMENT}" \
-        '{
-            backup_date: $date,
-            backup_timestamp: $timestamp,
-            environment: $environment,
-            parameter_count: 0,
-            parameters: []
-        }' > ${DATA_DIR}/backup.json
-    exit 0
-fi
-
-# パラメータ名の一覧を保存
-echo "$FILTERED_PARAMS" | jq -r '.[].Name' > ${DATA_DIR}/parameter_names.txt
-
-# パラメータ取得前に待機（レート制限対策）
-echo "Waiting before fetching parameter values..."
-sleep 2
-
-# パラメータを取得してバックアップデータを作成（バッチ処理で高速化）
-echo "Fetching parameter values..."
 BACKUP_DATA="[]"
 BATCH_SIZE=10  # AWS APIの制限により最大10個
 FAILED_COUNT=0
 FAILED_PARAMS=()
+TOTAL_PARAMS=$PARAM_COUNT
 
-# パラメータ名を配列に読み込み
-mapfile -t PARAM_NAMES < ${DATA_DIR}/parameter_names.txt
-TOTAL_PARAMS=${#PARAM_NAMES[@]}
+if [ "$PARAM_COUNT" != "0" ]; then
+    # パラメータ名の一覧を保存
+    echo "$FILTERED_PARAMS" | jq -r '.[].Name' > ${DATA_DIR}/parameter_names.txt
 
-# バッチ処理でパラメータを取得
-for ((i=0; i<$TOTAL_PARAMS; i+=BATCH_SIZE)); do
-    # バッチの終了インデックスを計算
-    end=$((i + BATCH_SIZE))
-    if [ $end -gt $TOTAL_PARAMS ]; then
-        end=$TOTAL_PARAMS
-    fi
-    
-    # 進捗表示
-    echo "Fetching parameters $((i + 1))-$end of ${TOTAL_PARAMS}..."
-    
-    # バッチ用のパラメータ名を準備
-    batch_params=()
-    for ((j=i; j<end; j++)); do
-        batch_params+=("${PARAM_NAMES[$j]}")
+    # パラメータ取得前に待機（レート制限対策）
+    echo "Waiting before fetching parameter values..."
+    sleep 2
+
+    # パラメータ名を配列に読み込み
+    mapfile -t PARAM_NAMES < ${DATA_DIR}/parameter_names.txt
+    TOTAL_PARAMS=${#PARAM_NAMES[@]}
+
+    # パラメータを取得してバックアップデータを作成（バッチ処理で高速化）
+    echo "Fetching parameter values..."
+    for ((i=0; i<$TOTAL_PARAMS; i+=BATCH_SIZE)); do
+        end=$((i + BATCH_SIZE))
+        if [ $end -gt $TOTAL_PARAMS ]; then
+            end=$TOTAL_PARAMS
+        fi
+
+        echo "Fetching parameters $((i + 1))-$end of ${TOTAL_PARAMS}..."
+
+        batch_params=()
+        for ((j=i; j<end; j++)); do
+            batch_params+=("${PARAM_NAMES[$j]}")
+        done
+
+        if [ ${#batch_params[@]} -gt 0 ]; then
+            BATCH_RESULT=$(aws ssm get-parameters \
+                --names "${batch_params[@]}" \
+                --with-decryption \
+                --output json \
+                --region ${AWS_REGION} 2>/dev/null || echo '{"Parameters": [], "InvalidParameters": []}')
+
+            VALID_PARAMS=$(echo "$BATCH_RESULT" | jq '.Parameters // []')
+            if [ "$VALID_PARAMS" != "[]" ] && [ "$VALID_PARAMS" != "null" ]; then
+                BACKUP_DATA=$(echo "$BACKUP_DATA" | jq --argjson new_params "$VALID_PARAMS" '. + $new_params')
+            fi
+
+            INVALID_PARAMS=$(echo "$BATCH_RESULT" | jq -r '.InvalidParameters[]?' 2>/dev/null)
+            if [ -n "$INVALID_PARAMS" ]; then
+                while IFS= read -r invalid_param; do
+                    echo "Warning: Failed to get parameter: $invalid_param"
+                    FAILED_PARAMS+=("$invalid_param")
+                    FAILED_COUNT=$((FAILED_COUNT + 1))
+                done <<< "$INVALID_PARAMS"
+            fi
+        fi
+
+        if [ $end -lt $TOTAL_PARAMS ]; then
+            sleep 2
+        fi
     done
-    
-    # get-parameters（複数形）でバッチ取得
-    if [ ${#batch_params[@]} -gt 0 ]; then
-        # AWS CLIコマンドを直接実行（xargsを使わない）
-        BATCH_RESULT=$(aws ssm get-parameters \
-            --names "${batch_params[@]}" \
-            --with-decryption \
-            --output json \
-            --region ${AWS_REGION} 2>/dev/null || echo '{"Parameters": [], "InvalidParameters": []}')
-        
-        # 取得成功したパラメータを追加
-        VALID_PARAMS=$(echo "$BATCH_RESULT" | jq '.Parameters // []')
-        if [ "$VALID_PARAMS" != "[]" ] && [ "$VALID_PARAMS" != "null" ]; then
-            BACKUP_DATA=$(echo "$BACKUP_DATA" | jq --argjson new_params "$VALID_PARAMS" '. + $new_params')
-        fi
-        
-        # 取得失敗したパラメータを記録
-        INVALID_PARAMS=$(echo "$BATCH_RESULT" | jq -r '.InvalidParameters[]?' 2>/dev/null)
-        if [ -n "$INVALID_PARAMS" ]; then
-            while IFS= read -r invalid_param; do
-                echo "Warning: Failed to get parameter: $invalid_param"
-                FAILED_PARAMS+=("$invalid_param")
-                FAILED_COUNT=$((FAILED_COUNT + 1))
-            done <<< "$INVALID_PARAMS"
-        fi
-    fi
-    
-    # APIレート制限対策（バッチ間の待機時間を長めに）
-    if [ $end -lt $TOTAL_PARAMS ]; then
-        sleep 2
-    fi
-done
+else
+    echo "WARNING: No parameters found matching filter '${ENV_FILTER}'"
+fi
 
 COUNTER=$TOTAL_PARAMS
+SUCCESSFUL_COUNT=$((COUNTER - FAILED_COUNT))
 
-echo "Successfully fetched $((COUNTER - FAILED_COUNT)) parameters"
+echo "Successfully fetched ${SUCCESSFUL_COUNT} parameters"
 if [ "$FAILED_COUNT" -gt 0 ]; then
     echo "Failed to fetch ${FAILED_COUNT} parameters"
 fi
@@ -275,7 +260,7 @@ BACKUP_JSON=$(jq -n \
     --arg date "${BACKUP_DATE}" \
     --arg timestamp "${BACKUP_TIMESTAMP}" \
     --arg environment "${ENVIRONMENT}" \
-    --arg count "$((COUNTER - FAILED_COUNT))" \
+    --arg count "${SUCCESSFUL_COUNT}" \
     --argjson parameters "$BACKUP_DATA" \
     '{
         backup_date: $date,
@@ -287,10 +272,38 @@ BACKUP_JSON=$(jq -n \
 
 echo "$BACKUP_JSON" | jq '.' > ${DATA_DIR}/backup.json
 
+execution_time=${SECONDS}
+
 echo "======================================"
 echo "Backup Summary"
 echo "======================================"
 echo "Backup file created: ${DATA_DIR}/backup.json"
-echo "Total parameters backed up: $(echo "$BACKUP_JSON" | jq '.parameter_count')"
+echo "Total parameters backed up: ${SUCCESSFUL_COUNT}"
 echo "Failed parameters: ${FAILED_COUNT}"
 echo "======================================"
+
+# サマリーファイルを生成して上位パイプラインで参照できるようにする
+echo "Creating summary file..."
+jq -n \
+    --arg environment "${ENVIRONMENT}" \
+    --arg region "${AWS_REGION}" \
+    --arg backupDate "${BACKUP_DATE}" \
+    --arg backupTimestamp "${BACKUP_TIMESTAMP}" \
+    --argjson parameterCount ${SUCCESSFUL_COUNT} \
+    --argjson failedCount ${FAILED_COUNT} \
+    --argjson executionTimeSec ${execution_time} \
+    '{
+        environment: $environment,
+        region: $region,
+        backupDate: $backupDate,
+        backupTimestamp: $backupTimestamp,
+        parameterCount: $parameterCount,
+        failedCount: $failedCount,
+        executionTimeSec: $executionTimeSec,
+        backup_date: $backupDate,
+        backup_timestamp: $backupTimestamp,
+        parameter_count: $parameterCount,
+        failed_count: $failedCount
+    }' > "${DATA_DIR}/summary.json"
+
+echo "Summary file created: ${DATA_DIR}/summary.json"

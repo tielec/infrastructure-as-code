@@ -1,3 +1,8 @@
 config:
   jenkins-ssm-backup-s3:projectName: jenkins-infra
   jenkins-ssm-backup-s3:environment: dev
+  jenkins-ssm-backup-s3:regions:
+    - ap-northeast-1
+    - us-west-2
+  jenkins-ssm-backup-s3:defaultRegion: ap-northeast-1
+  jenkins-ssm-backup-s3:ssmHomeRegion: ap-northeast-1

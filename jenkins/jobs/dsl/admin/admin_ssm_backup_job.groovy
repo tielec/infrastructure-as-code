@@ -12,7 +12,7 @@ pipelineJob(fullJobName) {
     displayName(jobConfig.displayName)
     
     // 基本情報
-    description('SSM Parameter Storeのパラメータを自動的にバックアップします。')
+    description('SSM Parameter Storeのパラメータを複数リージョンへ順次バックアップします。実行時間はリージョン数×10分程度を想定し、詳細手順とロールバックガイドは docs/runbooks/ssm-backup.md を参照してください。')
     keepDependencies(false)
     disabled(false)
 
@@ -33,7 +33,7 @@ pipelineJob(fullJobName) {
         pipelineTriggers {
             triggers {
                 cron {
-                    spec('0 13 * * *')  // JST 22:00 = UTC 13:00 (毎日実行)
+                    spec('0 13 * * *')  // JST 22:00 = UTC 13:00 (毎日実行・多リージョン実行時間を考慮)
                 }
             }
         }
