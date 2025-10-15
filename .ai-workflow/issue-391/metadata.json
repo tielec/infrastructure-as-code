@@ -3,15 +3,15 @@
   "issue_url": "https://github.com/tielec/infrastructure-as-code/issues/391",
   "issue_title": "Issue #391",
   "workflow_version": "1.0.0",
-  "current_phase": "planning",
+  "current_phase": "requirements",
   "design_decisions": {
     "implementation_strategy": "EXTEND",
     "test_strategy": "UNIT_INTEGRATION",
     "test_code_strategy": "CREATE_TEST"
   },
   "cost_tracking": {
-    "total_input_tokens": 171118,
-    "total_output_tokens": 12813,
+    "total_input_tokens": 514724,
+    "total_output_tokens": 28096,
     "total_cost_usd": 0
   },
   "phases": {
@@ -26,11 +26,14 @@
       ]
     },
     "requirements": {
-      "status": "pending",
-      "retry_count": 0,
-      "started_at": null,
-      "completed_at": null,
-      "review_result": null
+      "status": "completed",
+      "retry_count": 1,
+      "started_at": "2025-10-15T12:07:11.360Z",
+      "completed_at": "2025-10-15T12:18:40.372Z",
+      "review_result": "PASS_WITH_SUGGESTIONS",
+      "output_files": [
+        "/tmp/jenkins-785de167/workspace/AI_Workflow/ai_workflow_orchestrator/.ai-workflow/issue-391/01_requirements/output/requirements.md"
+      ]
     },
     "design": {
       "status": "pending",
@@ -95,7 +98,7 @@
     }
   },
   "created_at": "2025-10-15T12:00:38.669Z",
-  "updated_at": "2025-10-15T12:07:09.890Z",
+  "updated_at": "2025-10-15T12:18:41.098Z",
   "branch_name": "ai-workflow/issue-391",
   "repository": "tielec/infrastructure-as-code",
   "pr_number": 394,
