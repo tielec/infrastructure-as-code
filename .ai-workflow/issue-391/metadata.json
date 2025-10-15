@@ -5,22 +5,25 @@
   "workflow_version": "1.0.0",
   "current_phase": "planning",
   "design_decisions": {
-    "implementation_strategy": null,
-    "test_strategy": null,
-    "test_code_strategy": null
+    "implementation_strategy": "EXTEND",
+    "test_strategy": "UNIT_INTEGRATION",
+    "test_code_strategy": "CREATE_TEST"
   },
   "cost_tracking": {
-    "total_input_tokens": 0,
-    "total_output_tokens": 0,
+    "total_input_tokens": 171118,
+    "total_output_tokens": 12813,
     "total_cost_usd": 0
   },
   "phases": {
     "planning": {
-      "status": "pending",
+      "status": "completed",
       "retry_count": 0,
-      "started_at": null,
-      "completed_at": null,
-      "review_result": null
+      "started_at": "2025-10-15T12:00:44.695Z",
+      "completed_at": "2025-10-15T12:07:09.128Z",
+      "review_result": "PASS_WITH_SUGGESTIONS",
+      "output_files": [
+        "/tmp/jenkins-785de167/workspace/AI_Workflow/ai_workflow_orchestrator/.ai-workflow/issue-391/00_planning/output/planning.md"
+      ]
     },
     "requirements": {
       "status": "pending",
@@ -92,7 +95,13 @@
     }
   },
   "created_at": "2025-10-15T12:00:38.669Z",
-  "updated_at": "2025-10-15T12:00:38.670Z",
+  "updated_at": "2025-10-15T12:07:09.890Z",
   "branch_name": "ai-workflow/issue-391",
-  "repository": "tielec/infrastructure-as-code"
+  "repository": "tielec/infrastructure-as-code",
+  "pr_number": 394,
+  "pr_url": "https://github.com/tielec/infrastructure-as-code/pull/394",
+  "github_integration": {
+    "progress_comment_id": 3406054797,
+    "progress_comment_url": "https://github.com/tielec/infrastructure-as-code/issues/391#issuecomment-3406054797"
+  }
 }
