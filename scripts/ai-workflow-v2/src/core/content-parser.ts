@@ -90,6 +90,18 @@ export class ContentParser {
         if (message.type === 'result' && message.result) {
           textBlocks.push(message.result);
         }
+
+        // Extract text from Codex agent_message items
+        if (message.type === 'item.completed' && message.item) {
+          const item = message.item as Record<string, unknown>;
+          const itemType = typeof item.type === 'string' ? item.type : '';
+          if (itemType === 'agent_message') {
+            const text = typeof item.text === 'string' ? item.text : '';
+            if (text.trim()) {
+              textBlocks.push(text);
+            }
+          }
+        }
       } catch (parseError) {
         // Not JSON, try legacy Python-style parsing
         const message = rawMessage ?? '';
