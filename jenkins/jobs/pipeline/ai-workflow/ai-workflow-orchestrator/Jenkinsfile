@@ -43,7 +43,7 @@ pipeline {
             label 'ec2-fleet'
             dir 'scripts/ai-workflow-v2'
             filename 'Dockerfile'
-            args '-v ${WORKSPACE}:/workspace -w /workspace -e CLAUDE_DANGEROUSLY_SKIP_PERMISSIONS=1 -e OPENAI_API_KEY=${OPENAI_API_KEY} -e GITHUB_TOKEN=${GITHUB_TOKEN} -e CODEX_AUTH_FILE=/home/node/.codex/auth.json -e CLAUDE_CODE_CREDENTIALS_PATH=/home/node/.claude-code/credentials.json'
+            args '-v ${WORKSPACE}:/workspace -w /workspace -e CLAUDE_DANGEROUSLY_SKIP_PERMISSIONS=1 -e OPENAI_API_KEY=${OPENAI_API_KEY} -e GITHUB_TOKEN=${GITHUB_TOKEN} -e CLAUDE_CODE_CREDENTIALS_PATH=/home/node/.claude-code/credentials.json'
         }
     }
 
@@ -53,6 +53,14 @@ pipeline {
 
         // カラー出力
         ansiColor('xterm')
+    }
+
+    parameters {
+        choice(
+            name: 'AGENT_MODE',
+            choices: ['auto', 'codex', 'claude'],
+            description: 'Agent backend to use (auto = Codex with Claude fallback)'
+        )
     }
 
     environment {
@@ -71,8 +79,6 @@ pipeline {
         GIT_COMMIT_USER_NAME = "${params.GIT_COMMIT_USER_NAME}"
         GIT_COMMIT_USER_EMAIL = "${params.GIT_COMMIT_USER_EMAIL}"
 
-        // Codex CLI�p�F�؃t�@�C���̃p�X
-        CODEX_AUTH_FILE = "/home/node/.codex/auth.json"
 
         // 認証情報（Jenkinsクレデンシャルから取得）
         OPENAI_API_KEY = credentials('openai-api-key')
@@ -88,43 +94,32 @@ pipeline {
                     echo "========================================="
 
                     def homeDir = env.HOME ?: '/home/node'
-                    def codexTarget = "${homeDir}/.codex/auth.json"
+                    def agentMode = (params.AGENT_MODE ?: 'auto').toLowerCase()
                     def claudeTarget = "${homeDir}/.claude-code/credentials.json"
 
-                    def needCodex = !fileExists(codexTarget)
-                    def needClaude = !fileExists(claudeTarget)
+                    if (agentMode == 'codex') {
+                        echo '[INFO] Agent mode "codex" selected. Skipping Claude credential setup.'
+                    } else if (agentMode == 'claude') {
+                        if (!fileExists(claudeTarget)) {
+                            def uploadParams = input(
+                                message: 'Upload Claude Code credentials file (Base64 encoded). This is required for agent mode "claude".',
+                                ok: 'Upload',
+                                parameters: [
+                                    base64File(name: 'claudeCredsB64', description: 'Claude Code credentials file (credentials.json)')
+                                ]
+                            )
 
-                    if (needCodex || needClaude) {
-                        echo '[INFO] Requesting agent credential files from user...'
-                        def uploadParams = input(
-                            message: 'Upload agent credential files (Base64 encoded). Leave empty to reuse existing files.',
-                            ok: 'Upload',
-                            parameters: [
-                                base64File(name: 'codexAuthB64', description: 'Codex CLI authentication file (auth.json)'),
-                                base64File(name: 'claudeCredsB64', description: 'Claude Code credentials file (credentials.json)')
-                            ]
-                        )
-
-                        def codexValue = ''
-                        def claudeValue = ''
-                        if (uploadParams instanceof Map) {
-                            codexValue = (uploadParams['codexAuthB64'] ?: '').toString().trim()
-                            claudeValue = (uploadParams['claudeCredsB64'] ?: '').toString().trim()
-                        } else if (uploadParams) {
-                            codexValue = uploadParams.toString().trim()
-                        }
-
-                        if (codexValue) {
-                            withEnv(["CODEX_FILE_B64=${codexValue}"]) {
-                                sh '''
-                                    mkdir -p ~/.codex
-                                    printf "%s" "$CODEX_FILE_B64" | base64 -d > ~/.codex/auth.json
-                                    chmod 600 ~/.codex/auth.json
-                                '''
+                            def claudeValue = ''
+                            if (uploadParams instanceof Map) {
+                                claudeValue = (uploadParams['claudeCredsB64'] ?: '').toString().trim()
+                            } else if (uploadParams) {
+                                claudeValue = uploadParams.toString().trim()
                             }
-                        }
 
-                        if (claudeValue) {
+                            if (!claudeValue) {
+                                error("Agent mode 'claude' requires Claude Code credentials.")
+                            }
+
                             withEnv(["CLAUDE_FILE_B64=${claudeValue}"]) {
                                 sh '''
                                     mkdir -p ~/.claude-code
@@ -132,12 +127,16 @@ pipeline {
                                     chmod 600 ~/.claude-code/credentials.json
                                 '''
                             }
+                        } else {
+                            echo '[INFO] Reusing previously uploaded Claude Code credentials.'
                         }
                     } else {
-                        echo '[INFO] Reusing previously uploaded agent credential files.'
+                        if (fileExists(claudeTarget)) {
+                            echo '[INFO] Claude credentials found. Auto mode will use them for fallback.'
+                        } else {
+                            echo '[INFO] Claude credentials not found. Auto mode will run without Claude fallback.'
+                        }
                     }
-
-                    sh 'mkdir -p ~/.codex ~/.claude-code'
                 }
             }
         }
@@ -167,6 +166,7 @@ pipeline {
                     echo "Issue Number: ${env.ISSUE_NUMBER}"
                     echo "GitHub Repository: ${params.GITHUB_REPOSITORY}"
                     echo "Start Phase: ${params.START_PHASE}"
+                    echo "Agent Mode: ${params.AGENT_MODE}"
                     echo "Dry Run: ${params.DRY_RUN}"
                     echo "Skip Review: ${params.SKIP_REVIEW}"
                     echo "Max Retries: ${params.MAX_RETRIES}"
@@ -272,6 +272,7 @@ pipeline {
                                 node dist/index.js execute \
                                     --phase all \
                                     --issue ${env.ISSUE_NUMBER} \
+                                    --agent ${params.AGENT_MODE} \
                                     ${forceResetFlag}
                             """
                         }
@@ -300,6 +301,7 @@ pipeline {
                             sh """
                                 node dist/index.js execute \
                                     --phase ${params.START_PHASE} \
+                                    --agent ${params.AGENT_MODE} \
                                     --issue ${env.ISSUE_NUMBER}
                             """
                         }

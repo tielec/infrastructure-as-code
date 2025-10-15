@@ -97,6 +97,9 @@ export async function runCli(): Promise<void> {
       'Warn about dependency violations but continue',
       false,
     )
+    .addOption(
+      new Option('--agent <mode>', 'Agent mode').choices(['auto', 'codex', 'claude']).default('auto'),
+    )
     .option('--requirements-doc <path>', 'External requirements document path')
     .option('--design-doc <path>', 'External design document path')
     .option('--test-scenario-doc <path>', 'External test scenario document path')
@@ -294,16 +297,11 @@ async function handleExecuteCommand(options: any): Promise<void> {
   const workingDir = repoRoot;
   const homeDir = process.env.HOME ?? null;
 
-  const codexCandidatePaths: string[] = [];
-  if (process.env.CODEX_AUTH_FILE) {
-    codexCandidatePaths.push(process.env.CODEX_AUTH_FILE);
-  }
-  if (homeDir) {
-    codexCandidatePaths.push(path.join(homeDir, '.codex', 'auth.json'));
-  }
-  codexCandidatePaths.push(path.join(repoRoot, '.codex', 'auth.json'));
+  const agentModeRaw = typeof options.agent === 'string' ? options.agent.toLowerCase() : 'auto';
+  const agentMode: 'auto' | 'codex' | 'claude' =
+    agentModeRaw === 'codex' || agentModeRaw === 'claude' ? agentModeRaw : 'auto';
 
-  const codexAuthPath = codexCandidatePaths.find((candidate) => candidate && fs.existsSync(candidate)) ?? null;
+  console.info(`[INFO] Agent mode: ${agentMode}`);
 
   const claudeCandidatePaths: string[] = [];
   if (process.env.CLAUDE_CODE_CREDENTIALS_PATH) {
@@ -318,37 +316,67 @@ async function handleExecuteCommand(options: any): Promise<void> {
     claudeCandidatePaths.find((candidate) => candidate && fs.existsSync(candidate)) ?? null;
 
   let codexClient: CodexAgentClient | null = null;
-  if (codexAuthPath) {
-    codexClient = new CodexAgentClient({ workingDir });
-    process.env.CODEX_AUTH_FILE = codexAuthPath;
-
-    const codexToken = extractCodexToken(codexAuthPath);
-    if (codexToken) {
-      if (!process.env.CODEX_API_KEY) {
-        process.env.CODEX_API_KEY = codexToken;
-      }
-      if (!process.env.OPENAI_API_KEY) {
-        process.env.OPENAI_API_KEY = codexToken;
-      }
-      console.info(
-        `[INFO] Loaded Codex token from ${codexAuthPath} (token length=${codexToken.length})`,
-      );
-    }
-  }
-
   let claudeClient: ClaudeAgentClient | null = null;
-  if (claudeCredentialsPath) {
-    if (!codexClient) {
-      console.info('[INFO] Codex credentials not found. Using Claude Code.');
-    } else {
-      console.info('[INFO] Claude Code credentials detected. Fallback available.');
+
+  const codexApiKey = process.env.CODEX_API_KEY ?? process.env.OPENAI_API_KEY ?? null;
+
+  switch (agentMode) {
+    case 'codex': {
+      if (!codexApiKey || !codexApiKey.trim()) {
+        throw new Error(
+          'Agent mode "codex" requires CODEX_API_KEY or OPENAI_API_KEY to be set with a valid Codex API key.',
+        );
+      }
+      const trimmed = codexApiKey.trim();
+      process.env.CODEX_API_KEY = trimmed;
+      if (!process.env.OPENAI_API_KEY || !process.env.OPENAI_API_KEY.trim()) {
+        process.env.OPENAI_API_KEY = trimmed;
+      }
+      delete process.env.CLAUDE_CODE_CREDENTIALS_PATH;
+      codexClient = new CodexAgentClient({ workingDir });
+      console.info('[INFO] Codex agent enabled (codex mode).');
+      break;
     }
-    claudeClient = new ClaudeAgentClient({ workingDir, credentialsPath: claudeCredentialsPath });
-    process.env.CLAUDE_CODE_CREDENTIALS_PATH = claudeCredentialsPath;
+    case 'claude': {
+      if (!claudeCredentialsPath) {
+        throw new Error(
+          'Agent mode "claude" requires Claude Code credentials.json to be available.',
+        );
+      }
+      claudeClient = new ClaudeAgentClient({ workingDir, credentialsPath: claudeCredentialsPath });
+      process.env.CLAUDE_CODE_CREDENTIALS_PATH = claudeCredentialsPath;
+      console.info('[INFO] Claude Code agent enabled (claude mode).');
+      break;
+    }
+    case 'auto':
+    default: {
+      if (codexApiKey && codexApiKey.trim().length > 0) {
+        const trimmed = codexApiKey.trim();
+        process.env.CODEX_API_KEY = trimmed;
+        if (!process.env.OPENAI_API_KEY || !process.env.OPENAI_API_KEY.trim()) {
+          process.env.OPENAI_API_KEY = trimmed;
+        }
+        codexClient = new CodexAgentClient({ workingDir });
+        console.info('[INFO] Codex API key detected. Codex agent enabled.');
+      }
+
+      if (claudeCredentialsPath) {
+        if (!codexClient) {
+          console.info('[INFO] Codex agent unavailable. Using Claude Code.');
+        } else {
+          console.info('[INFO] Claude Code credentials detected. Fallback available.');
+        }
+        claudeClient = new ClaudeAgentClient({ workingDir, credentialsPath: claudeCredentialsPath });
+        process.env.CLAUDE_CODE_CREDENTIALS_PATH = claudeCredentialsPath;
+      }
+      break;
+    }
   }
 
   if (!codexClient && !claudeClient) {
-    console.error('[ERROR] Neither Codex auth.json nor Claude Code credentials.json is available. Aborting execution.');
+    console.error(
+      `[ERROR] Agent mode "${agentMode}" requires a valid agent configuration, but neither Codex API key nor Claude Code credentials are available.`,
+    );
     process.exit(1);
   }
 
@@ -672,131 +700,6 @@ async function loadExternalDocuments(
   }
   metadataManager.data.external_documents = externalDocs;
   metadataManager.save();
-}
-
-function extractCodexToken(authPath: string): string | null {
-  const PREFERRED_HINTS = [
-    'api_key',
-    'apikey',
-    'openai_api_key',
-    'secret',
-    'codex_api_key',
-  ];
-  const SECONDARY_HINTS = ['access_token', 'bearer', 'authorization'];
-  const TERTIARY_HINTS = ['token', 'key'];
-
-  const looksLikeToken = (value: string): boolean => {
-    const trimmed = value.trim();
-    if (!trimmed) {
-      return false;
-    }
-    if (trimmed.length < 20) {
-      return false;
-    }
-    if (/\s/.test(trimmed)) {
-      return false;
-    }
-    const lower = trimmed.toLowerCase();
-    if (lower.startsWith('http://') || lower.startsWith('https://')) {
-      return false;
-    }
-    return true;
-  };
-
-  const isLikelyApiKey = (value: string): boolean => {
-    if (!looksLikeToken(value)) {
-      return false;
-    }
-    const trimmed = value.trim();
-    if (/^sk-[A-Za-z0-9]{20,}$/.test(trimmed)) {
-      return true;
-    }
-    if (/^codex-[A-Za-z0-9_-]{10,}$/.test(trimmed)) {
-      return true;
-    }
-    return false;
-  };
-
-  const searchToken = (
-    value: unknown,
-    hints: string[],
-    allowLoose = false,
-  ): string | null => {
-    if (typeof value === 'string') {
-      return allowLoose && looksLikeToken(value) ? value.trim() : null;
-    }
-
-    if (Array.isArray(value)) {
-      for (const item of value) {
-        const found = searchToken(item, hints, allowLoose);
-        if (found) {
-          return found;
-        }
-      }
-      return null;
-    }
-
-    if (value && typeof value === 'object') {
-      const record = value as Record<string, unknown>;
-
-      for (const [key, candidate] of Object.entries(record)) {
-        const normalizedKey = key.toLowerCase();
-        const matchesHint = hints.some((hint) => normalizedKey.includes(hint));
-
-        if (matchesHint) {
-          if (typeof candidate === 'string') {
-            if (isLikelyApiKey(candidate)) {
-              return candidate.trim();
-            }
-          } else {
-            const nested = searchToken(candidate, hints, true);
-            if (nested) {
-              return nested;
-            }
-          }
-        }
-      }
-
-      for (const nested of Object.values(record)) {
-        const found = searchToken(nested, hints, allowLoose);
-        if (found) {
-          return found;
-        }
-      }
-    }
-
-    return null;
-  };
-
-  try {
-    if (!fs.existsSync(authPath)) {
-      return null;
-    }
-    const raw = fs.readFileSync(authPath, 'utf-8').trim();
-    if (!raw) {
-      return null;
-    }
-
-    try {
-      const parsed = JSON.parse(raw);
-      const tokenFromPreferred =
-        searchToken(parsed, PREFERRED_HINTS) ??
-        searchToken(parsed, SECONDARY_HINTS) ??
-        searchToken(parsed, TERTIARY_HINTS);
-
-      if (tokenFromPreferred) {
-        return tokenFromPreferred;
-      }
-    } catch {
-      // Not JSON, treat as plain string below.
-    }
-
-    return isLikelyApiKey(raw) ? raw.trim() : null;
-  } catch (error) {
-    const message = (error as Error).message ?? String(error);
-    console.warn(`[WARNING] Failed to extract Codex token from ${authPath}: ${message}`);
-    return null;
-  }
 }
 
 async function resetMetadata(

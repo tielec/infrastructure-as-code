@@ -127,11 +127,10 @@ export class CodexAgentClient {
       const messages: string[] = [];
       const childEnv = { ...process.env };
 
-      if (childEnv.CODEX_API_KEY) {
-        childEnv.OPENAI_API_KEY = childEnv.CODEX_API_KEY;
-      } else if (childEnv.CODEX_AUTH_FILE) {
-        delete childEnv.OPENAI_API_KEY;
+      if (childEnv.CODEX_API_KEY && typeof childEnv.CODEX_API_KEY === 'string') {
+        childEnv.OPENAI_API_KEY = childEnv.CODEX_API_KEY.trim();
       }
+      delete childEnv.CODEX_AUTH_FILE;
 
       const child = spawn(this.binaryPath, args, {
         cwd: options.cwd,
