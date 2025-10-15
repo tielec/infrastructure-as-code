@@ -1,0 +1,31 @@
+{
+  "callerIdentity": {
+    "Account": "123456789012",
+    "Arn": "arn:aws:iam::123456789012:user/mock",
+    "UserId": "AIDACKCEVSQ6C2EXAMPLE"
+  },
+  "describeParameters": {
+    "ap-northeast-1": [
+      {
+        "Name": "/jenkins/dev/app/config"
+      },
+      {
+        "Name": "/jenkins/dev/database/url"
+      }
+    ],
+    "us-west-2": [
+      {
+        "Name": "/jenkins/dev/app/config"
+      }
+    ]
+  },
+  "getParameters": {
+    "ap-northeast-1": {
+      "/jenkins/dev/app/config": "{\"featureFlags\":true}",
+      "/jenkins/dev/database/url": "jdbc:postgresql://dev-db"
+    },
+    "us-west-2": {
+      "/jenkins/dev/app/config": "{\"featureFlags\":false}"
+    }
+  }
+}

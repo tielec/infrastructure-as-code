@@ -1,0 +1,7 @@
+{
+  "projectName": "jenkins-infra",
+  "environment": "dev",
+  "regions": [],
+  "defaultRegion": "ap-northeast-1",
+  "ssmHomeRegion": "ap-northeast-1"
+}

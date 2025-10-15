@@ -1,0 +1,5 @@
+{
+  "ap-northeast-1": "jenkins-infra-ssm-backup-dev-123456789012-ap-northeast-1",
+  "us-west-2": "jenkins-infra-ssm-backup-dev-123456789012-us-west-2",
+  "eu-central-1": "jenkins-infra-ssm-backup-dev-123456789012-eu-central-1"
+}

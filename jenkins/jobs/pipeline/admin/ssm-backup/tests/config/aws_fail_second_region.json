@@ -1,0 +1,29 @@
+{
+  "callerIdentity": {
+    "Account": "123456789012",
+    "Arn": "arn:aws:iam::123456789012:user/mock",
+    "UserId": "AIDACKCEVSQ6C2EXAMPLE"
+  },
+  "describeParameters": {
+    "ap-northeast-1": [
+      {
+        "Name": "/jenkins/dev/app/config"
+      }
+    ],
+    "us-west-2": []
+  },
+  "getParameters": {
+    "ap-northeast-1": {
+      "/jenkins/dev/app/config": "{\"featureFlags\":true}"
+    },
+    "us-west-2": {}
+  },
+  "failures": {
+    "describeParameters": {
+      "us-west-2": {
+        "exitCode": 2,
+        "stderr": "ThrottlingException: Rate exceeded for region us-west-2"
+      }
+    }
+  }
+}
