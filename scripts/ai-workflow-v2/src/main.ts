@@ -51,6 +51,7 @@ type PhaseContext = {
   githubClient: GitHubClient;
   skipDependencyCheck: boolean;
   ignoreDependencies: boolean;
+  presetPhases?: PhaseName[]; // プリセット実行時のフェーズリスト（Issue #396）
 };
 
 type PhaseResultMap = Record<PhaseName, PhaseExecutionResult>;
@@ -462,7 +463,14 @@ async function handleExecuteCommand(options: any): Promise<void> {
 
     const targetPhases = getPresetPhases(resolved.resolvedName);
     console.info(`[INFO] Running preset "${resolved.resolvedName}": ${targetPhases.join(', ')}`);
-    const summary = await executePhasesSequential(targetPhases, context, gitManager);
+
+    // プリセット実行時はpresetPhasesをcontextに追加（Issue #396）
+    const presetContext: PhaseContext = {
+      ...context,
+      presetPhases: targetPhases,
+    };
+
+    const summary = await executePhasesSequential(targetPhases, presetContext, gitManager);
     reportExecutionSummary(summary);
     process.exit(summary.success ? 0 : 1);
   }
@@ -599,6 +607,7 @@ function createPhaseInstance(phaseName: PhaseName, context: PhaseContext) {
     githubClient: context.githubClient,
     skipDependencyCheck: context.skipDependencyCheck,
     ignoreDependencies: context.ignoreDependencies,
+    presetPhases: context.presetPhases,
   };
 
   switch (phaseName) {
