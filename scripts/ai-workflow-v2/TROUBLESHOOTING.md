@@ -130,10 +130,41 @@ TypeScript CLI をローカルまたは Jenkins で利用する際によく発�
   node dist/index.js execute --phase all --issue 385
   ```
 
-## 8. デバッグのヒント
+## 8. ワークフローログクリーンアップ関連
+
+### デバッグログが見つからない
+
+Report Phase (Phase 8) 完了後、`execute/`, `review/`, `revise/` ディレクトリは自動的に削除されます。
+
+- **対処法**: デバッグログが必要な場合は、Report Phase 実行前に該当ディレクトリをバックアップしてください。
+- **確認方法**: `metadata.json` と `output/*.md` は保持されるため、フェーズの成果物は常に参照可能です。
+- **Planning Phase**: `00_planning/` ディレクトリは削除対象外のため、常に利用可能です。
+
+### クリーンアップ失敗時の対処
+
+クリーンアップが失敗した場合でも、WARNING ログが出力されるだけでワークフロー全体は継続します：
+
+```
+[WARNING] Failed to cleanup workflow logs: <error message>
+```
+
+- **手動クリーンアップ**: 必要に応じて手動で削除できます:
+  ```bash
+  # 特定のフェーズのexecuteディレクトリを削除
+  rm -rf .ai-workflow/issue-*/01_requirements/execute
+
+  # すべてのフェーズのデバッグログを削除
+  find .ai-workflow/issue-*/ -type d \( -name "execute" -o -name "review" -o -name "revise" \) -exec rm -rf {} +
+  ```
+
+### クリーンアップをスキップしたい場合
+
+現在の実装では、Report Phase 実行時に常にクリーンアップが実行されます。スキップする方法はありません。デバッグログを保持したい場合は、Report Phase 実行前に手動でバックアップを取得してください。
+
+## 9. デバッグのヒント
 
 - Codex の問題切り分けには `--agent claude`、Claude の問題切り分けには `--agent codex` を利用。
-- `.ai-workflow/issue-*/<phase>/execute/agent_log_raw.txt` の生ログを確認すると詳細が分かります。
+- `.ai-workflow/issue-*/<phase>/execute/agent_log_raw.txt` の生ログを確認すると詳細が分かります（Report Phase 前のみ利用可能）。
 - `DEBUG=ai-workflow:*` を設定すると詳細ログ（カスタムフック）が出力されます。
 - Git の問題は `GIT_TRACE=1` を付与して調査できます。
 - マルチリポジトリ関連の問題は、Issue URL が正しいか、対象リポジトリが正しくクローンされているか確認してください。
