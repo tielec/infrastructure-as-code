@@ -34,6 +34,7 @@ export type BasePhaseConstructorParams = {
   githubClient: GitHubClient;
   skipDependencyCheck?: boolean;
   ignoreDependencies?: boolean;
+  presetPhases?: PhaseName[]; // プリセット実行時のフェーズリスト（Issue #396）
 };
 
 export type PhaseInitializationParams = Omit<BasePhaseConstructorParams, 'phaseName'>;
@@ -47,6 +48,7 @@ export abstract class BasePhase {
   protected readonly github: GitHubClient;
   protected readonly skipDependencyCheck: boolean;
   protected readonly ignoreDependencies: boolean;
+  protected readonly presetPhases: PhaseName[] | undefined; // プリセット実行時のフェーズリスト（Issue #396）
   protected readonly contentParser: ContentParser;
 
   protected readonly phaseDir: string;
@@ -83,6 +85,7 @@ export abstract class BasePhase {
     this.github = params.githubClient;
     this.skipDependencyCheck = params.skipDependencyCheck ?? false;
     this.ignoreDependencies = params.ignoreDependencies ?? false;
+    this.presetPhases = params.presetPhases;
     this.contentParser = new ContentParser();
 
     const phaseNumber = this.getPhaseNumber(this.phaseName);
@@ -109,6 +112,7 @@ export abstract class BasePhase {
     const dependencyResult = validatePhaseDependencies(this.phaseName, this.metadata, {
       skipCheck: this.skipDependencyCheck,
       ignoreViolations: this.ignoreDependencies,
+      presetPhases: this.presetPhases,
     });
 
     if (!dependencyResult.valid) {

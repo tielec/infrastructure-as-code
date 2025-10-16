@@ -21,6 +21,14 @@ export class ClaudeAgentClient {
     this.model = options.model;
 
     this.ensureAuthToken(options.credentialsPath);
+
+    // 環境変数の設定を確認
+    const skipPermissions = process.env.CLAUDE_DANGEROUSLY_SKIP_PERMISSIONS === '1';
+    if (skipPermissions) {
+      console.info('[INFO] CLAUDE_DANGEROUSLY_SKIP_PERMISSIONS=1 detected. Using permissionMode="bypassPermissions".');
+    } else {
+      console.info('[INFO] Using permissionMode="acceptEdits" (default).');
+    }
   }
 
   public getWorkingDirectory(): string {
@@ -31,11 +39,16 @@ export class ClaudeAgentClient {
     const { prompt, systemPrompt = null, maxTurns = DEFAULT_MAX_TURNS, verbose = true } = options;
     const cwd = options.workingDirectory ?? this.workingDir;
 
+    // 環境変数でBashコマンド承認スキップを確認（Docker環境内で安全）
+    // CLAUDE_DANGEROUSLY_SKIP_PERMISSIONS=1 の場合、すべての操作を自動承認
+    const skipPermissions = process.env.CLAUDE_DANGEROUSLY_SKIP_PERMISSIONS === '1';
+    const permissionMode = skipPermissions ? 'bypassPermissions' : 'acceptEdits';
+
     const stream = query({
       prompt,
       options: {
         cwd,
-        permissionMode: 'acceptEdits',
+        permissionMode,
         maxTurns,
         model: this.model,
         systemPrompt: systemPrompt ?? undefined,
