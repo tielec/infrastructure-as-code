@@ -12,27 +12,27 @@ export class ImplementationPhase extends BasePhase {
     const issueNumber = parseInt(this.metadata.data.issue_number, 10);
     const planningReference = this.getPlanningDocumentReference(issueNumber);
 
-    const requirementsFile = this.getPhaseOutputFile('requirements', 'requirements.md', issueNumber);
-    const designFile = this.getPhaseOutputFile('design', 'design.md', issueNumber);
-    const scenarioFile = this.getPhaseOutputFile('test_scenario', 'test-scenario.md', issueNumber);
+    // オプショナルコンテキストを構築（Issue #396）
+    const requirementsContext = this.buildOptionalContext(
+      'requirements',
+      'requirements.md',
+      '要件定義書は利用できません。Planning情報とIssue情報から要件を推測してください。',
+      issueNumber,
+    );
 
-    if (!requirementsFile || !designFile || !scenarioFile) {
-      return {
-        success: false,
-        error: '要件・設計・テストシナリオのいずれかが欠けています。前段フェーズを完了してください。',
-      };
-    }
+    const designContext = this.buildOptionalContext(
+      'design',
+      'design.md',
+      '設計書は利用できません。Issue情報とPlanning情報に基づいて適切な設計判断を行ってください。',
+      issueNumber,
+    );
 
-    const requirementsReference = this.getAgentFileReference(requirementsFile);
-    const designReference = this.getAgentFileReference(designFile);
-    const scenarioReference = this.getAgentFileReference(scenarioFile);
-
-    if (!requirementsReference || !designReference || !scenarioReference) {
-      return {
-        success: false,
-        error: 'Claude Agent から参照できないドキュメントがあります。',
-      };
-    }
+    const testScenarioContext = this.buildOptionalContext(
+      'test_scenario',
+      'test-scenario.md',
+      'テストシナリオは利用できません。実装時に適切なテスト考慮を行ってください。',
+      issueNumber,
+    );
 
     const implementationStrategy = this.metadata.data.design_decisions.implementation_strategy;
     if (!implementationStrategy) {
@@ -44,9 +44,9 @@ export class ImplementationPhase extends BasePhase {
 
     const executePrompt = this.loadPrompt('execute')
       .replace('{planning_document_path}', planningReference)
-      .replace('{requirements_document_path}', requirementsReference)
-      .replace('{design_document_path}', designReference)
-      .replace('{test_scenario_document_path}', scenarioReference)
+      .replace('{requirements_context}', requirementsContext)
+      .replace('{design_context}', designContext)
+      .replace('{test_scenario_context}', testScenarioContext)
       .replace('{implementation_strategy}', implementationStrategy)
       .replace('{issue_number}', String(issueNumber));
 

@@ -72,7 +72,37 @@ TypeScript CLI をローカルまたは Jenkins で利用する際によく発�
 
 - `jenkins/jobs/dsl/ai-workflow/ai_workflow_orchestrator.groovy` で `AGENT_MODE` を定義しています。シードジョブを再実行して DSL を再適用してください。
 
-## 6. デバッグのヒント
+## 6. プリセット関連
+
+### `Unknown preset: <name>`
+
+- プリセット名が存在しません。`--list-presets` で利用可能なプリセット一覧を確認してください:
+  ```bash
+  node dist/index.js execute --list-presets
+  ```
+- 旧プリセット名（`requirements-only`, `design-phase`, `implementation-phase`, `full-workflow`）は非推奨ですが、6ヶ月間は動作します（警告が表示されます）。
+
+### プリセット実行時の依存関係エラー
+
+- プリセットに含まれるフェーズの依存関係が満たされていない場合、エラーメッセージが表示されます:
+  ```
+  [ERROR] Phase "implementation" requires the following phases to be completed:
+    ✗ planning - NOT COMPLETED
+    ✗ requirements - NOT COMPLETED
+  ```
+- **対処法**:
+  1. 必要なフェーズを先に実行する
+  2. `--phase all` で全フェーズを実行
+  3. `--ignore-dependencies` で警告のみ表示して実行継続（非推奨）
+
+### `full-workflow` プリセットが使えない
+
+- `full-workflow` プリセットは削除されました。代わりに `--phase all` を使用してください:
+  ```bash
+  node dist/index.js execute --phase all --issue 385
+  ```
+
+## 7. デバッグのヒント
 
 - Codex の問題切り分けには `--agent claude`、Claude の問題切り分けには `--agent codex` を利用。
 - `.ai-workflow/issue-*/<phase>/execute/agent_log_raw.txt` の生ログを確認すると詳細が分かります。

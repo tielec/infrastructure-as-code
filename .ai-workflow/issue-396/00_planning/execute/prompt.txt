@@ -1,0 +1,934 @@
+# プロジェクト計画フェーズ - 実行プロンプト
+
+## タスク概要
+
+GitHubのIssue情報から詳細なプロジェクト計画書を作成してください。
+Phase 0はプロジェクトマネージャの役割を担い、開発作業を計画的かつ効率的に進められるようにします。
+
+## Issue情報
+
+## Issue概要
+
+- **Issue番号**: #396
+- **タイトル**: [FEATURE] ai-workflow-v2: Preset機能の拡充による開発フロー最適化
+- **状態**: open
+- **URL**: https://github.com/tielec/infrastructure-as-code/issues/396
+- **ラベル**: enhancement
+
+### 本文
+
+# [FEATURE] ai-workflow-v2: Preset機能の拡充による開発フロー最適化
+
+## 概要
+
+ai-workflow-v2には既に`--preset`オプションが実装されていますが、実際の開発パターンをカバーしきれていません。本Issueでは、実際の開発ワークフローを分析し、プリセット機能を拡充することで開発効率を向上させます。
+
+## 現状の問題点
+
+### 既存のプリセット (phase-dependencies.ts)
+
+```typescript
+export const PHASE_PRESETS: Record<string, PhaseName[]> = {
+  'requirements-only': ['requirements'],
+  'design-phase': ['requirements', 'design'],
+  'implementation-phase': ['requirements', 'design', 'test_scenario', 'implementation'],
+  'full-workflow': [全Phase],
+};
+```
+
+### 問題点
+
+#### 1. 命名の一貫性がない
+
+- `requirements-only`: `-only` サフィックス
+- `design-phase`: `-phase` サフィックス
+- `implementation-phase`: `-phase` サフィックス
+- `full-workflow`: `-workflow` サフィックス
+
+→ **チーム内で混乱を招く**
+
+#### 2. 実際の開発パターンをカバーしていない
+
+| 開発シナリオ | 現在の対応 | 問題点 |
+|------------|-----------|--------|
+| **軽微な修正** (タイポ、小さなバグ) | `--phase all` で全Phase実行 | 8-12時間かかる。実装+ドキュメント+レポートだけで十分 |
+| **テスト追加** | 個別に `--phase test_implementation`, `--phase testing` | 2回実行が必要 |
+| **ドキュメント更新のみ** | `--phase documentation` | プリセットがないので分かりにくい |
+| **レポート作成のみ** | `--phase report` | プリセットがないので分かりにくい |
+
+#### 3. 依存関係が考慮されていない
+
+- `requirements-only`: planningが含まれていない → 依存関係エラーの可能性
+- `design-phase`: planningが含まれていない → 依存関係エラーの可能性
+
+#### 4. プロンプトの依存関係問題
+
+**現状**: 各フェーズのプロンプトは全Phase連続実行を前提として設計されている
+
+**問題**:
+- Phase 4（implementation）のみ実行 → requirements.md, design.md が存在しない
+- プロンプト内で `{requirements_document_path}` が空文字列になる
+- Agentが混乱する可能性
+
+**プロンプト例** (implementation/execute.txt):
+```markdown
+### 要件定義書
+{requirements_document_path}
+
+### 設計書
+{design_document_path}
+
+### テストシナリオ
+{test_scenario_document_path}
+```
+
+→ これらのファイルが存在しない場合、プロンプトが不完全になる
+
+## 実際の開発ワークフローパターン
+
+### パターン1: レビュー駆動開発
+
+**シナリオ**: 各フェーズでPRレビューを受けながら進める
+
+| パターン | 実行Phase | 用途 |
+|---------|----------|------|
+| 要件定義レビュー | Planning → Requirements | 要件定義のみ作成してレビュー待ち |
+| 設計レビュー | Planning → Requirements → Design | 設計まで作成してレビュー待ち |
+| テストシナリオレビュー | Planning → Requirements → Design → TestScenario | テストシナリオまで作成してレビュー待ち |
+
+### パターン2: 実装中心のワークフロー
+
+**シナリオ**: 要件が明確で、実装から開始
+
+| パターン | 実行方法 | 用途 |
+|---------|---------|------|
+| 軽微な修正 | `--preset quick-fix` | タイポ修正、小さなバグ修正 |
+| 通常の実装 | `--preset implementation` | 実装+テスト+ドキュメント |
+| 実装のみ | `--phase implementation` | 後でテスト追加予定（単一Phase） |
+
+### パターン3: テスト中心のワークフロー
+
+**シナリオ**: 実装済み、テストを追加
+
+| パターン | 実行方法 | 用途 |
+|---------|---------|------|
+| テスト追加 | `--preset testing` | テストコード追加+実行 |
+| テスト実行のみ | `--phase testing` | テスト実行のみ（単一Phase） |
+
+### パターン4: ドキュメント・レポート作成
+
+**シナリオ**: 実装完了、ドキュメント作成のみ
+
+| パターン | 実行方法 | 用途 |
+|---------|---------|------|
+| ドキュメント更新のみ | `--phase documentation` | ドキュメント更新のみ（単一Phase） |
+| レポート作成のみ | `--phase report` | レポート作成のみ（単一Phase） |
+| 最終化 | `--preset finalize` | ドキュメント+レポート+評価 |
+
+### パターン5: フルワークフロー
+
+**シナリオ**: 新規Issue、全フェーズ実行
+
+| パターン | 実行方法 | 用途 |
+|---------|---------|------|
+| 全フェーズ | `--phase all` | 新規Issue、全フェーズ実行（Planning → ... → Evaluation） |
+
+**注**: プリセットではなく `--phase all` を使用（既存機能で十分カバーされている）
+
+## 提案: 新しいプリセット設計
+
+### 設計原則
+
+1. **命名規則の統一**
+   - 用途を表す名詞を使用
+   - カテゴリごとにサフィックスを統一
+
+2. **依存関係の明示的な管理**
+   - 各プリセットは依存関係を考慮したPhaseリストとする
+   - planningが必要なプリセットには必ずplanningを含める
+
+3. **実用性重視**
+   - 実際の開発パターンから逆算してプリセットを定義
+   - 頻度の高いパターンを優先
+
+4. **拡張性**
+   - カテゴリごとに整理し、将来的な追加が容易
+
+### 提案するプリセット一覧
+
+```typescript
+export const PHASE_PRESETS: Record<string, PhaseName[]> = {
+  // === レビュー駆動パターン ===
+  'review-requirements': ['planning', 'requirements'],
+  'review-design': ['planning', 'requirements', 'design'],
+  'review-test-scenario': ['planning', 'requirements', 'design', 'test_scenario'],
+
+  // === 実装中心パターン ===
+  'quick-fix': ['implementation', 'documentation', 'report'],
+  'implementation': ['implementation', 'test_implementation', 'testing', 'documentation', 'report'],
+
+  // === テスト中心パターン ===
+  'testing': ['test_implementation', 'testing'],
+
+  // === ドキュメント・レポートパターン ===
+  'finalize': ['documentation', 'report', 'evaluation'],
+};
+```
+
+**設計方針**:
+- **プリセット**: 複数Phaseの組み合わせのみ（7個）
+- **単一Phase実行**: `--phase <name>` を使用
+  - 例: `--phase implementation`, `--phase documentation`, `--phase testing`, `--phase report`
+
+### 使用例
+
+#### レビュー駆動開発
+
+```bash
+# Step 1: 要件定義を作成してレビュー待ち
+npm run start -- execute --issue 123 --preset review-requirements
+
+# レビュー承認後、Step 2: 設計を追加
+npm run start -- execute --issue 123 --preset review-design
+
+# レビュー承認後、Step 3: テストシナリオを追加
+npm run start -- execute --issue 123 --preset review-test-scenario
+
+# レビュー承認後、実装フェーズに移行
+npm run start -- execute --issue 123 --preset implementation
+```
+
+#### 軽微な修正
+
+```bash
+# タイポ修正、小さなバグ修正
+npm run start -- execute --issue 123 --preset quick-fix
+
+# 実行されるPhase:
+#   - Phase 4: Implementation
+#   - Phase 7: Documentation
+#   - Phase 8: Report
+# 所要時間: 2-3時間（全Phase実行の8-12時間から大幅短縮）
+```
+
+#### 通常の実装フロー
+
+```bash
+# 実装 + テスト + ドキュメント + レポート
+npm run start -- execute --issue 123 --preset implementation
+
+# 実行されるPhase:
+#   - Phase 4: Implementation
+#   - Phase 5: TestImplementation
+#   - Phase 6: Testing
+#   - Phase 7: Documentation
+#   - Phase 8: Report
+```
+
+#### テスト追加
+
+```bash
+# 既存実装にテストを追加
+npm run start -- execute --issue 123 --preset testing
+
+# 実行されるPhase:
+#   - Phase 5: TestImplementation
+#   - Phase 6: Testing
+```
+
+#### 単一Phase実行（プリセット不要）
+
+```bash
+# 実装のみ
+npm run start -- execute --issue 123 --phase implementation
+
+# ドキュメント更新のみ
+npm run start -- execute --issue 123 --phase documentation
+
+# テスト実行のみ
+npm run start -- execute --issue 123 --phase testing
+
+# レポート作成のみ
+npm run start -- execute --issue 123 --phase report
+```
+
+**注意**: 単一Phase実行時は、依存関係チェックとプロンプトのオプショナル参照が重要
+
+#### 全フェーズ実行
+
+```bash
+# 新規Issue、全フェーズ実行
+npm run start -- execute --issue 123 --phase all
+
+# Resume機能により、中断したフェーズから自動再開される
+```
+
+## プロンプト改善と依存関係チェック強化
+
+### 課題1: プロンプトの依存関係問題
+
+現在のプロンプトは前段Phaseの成果物を必須参照として扱っているため、単一Phase実行やプリセット実行時に問題が発生します。
+
+**例1**: `quick-fix` プリセット実行時
+- Phase 4（implementation）のみ実行
+- requirements.md, design.md, test-scenario.md が存在しない
+- プロンプト内で `{requirements_document_path}` が空文字列になる
+
+**例2**: `--phase implementation` で単一Phase実行時
+- 同様に前段Phaseの成果物が存在しない可能性がある
+- プロンプトが不完全になる
+
+### 課題2: 依存関係チェックの確認
+
+**現在の実装確認が必要**:
+
+`phase-dependencies.ts` には `validatePhaseDependencies` 関数が実装されていますが、以下を確認する必要があります：
+
+1. **単一Phase実行時に依存関係チェックが動作するか**
+   - `--phase implementation` 実行時、planning/requirements/design/test_scenarioの完了チェックは行われるか？
+   - チェックが失敗した場合、エラーで停止するか、警告のみか？
+
+2. **依存関係チェックの厳格性**
+   - `skipDependencyCheck` オプションの使用状況
+   - `ignoreViolations` オプションの使用状況
+   - デフォルトの動作は厳格か、緩いか？
+
+3. **メタデータとファイル存在の整合性**
+   - metadata.jsonで `completed` となっていても、実際のファイルが存在しない場合は？
+   - ファイル存在チェックも行うべきか？
+
+### 解決策: オプショナル参照への変更
+
+#### 改善前: implementation/execute.txt（必須参照）
+
+```markdown
+## 参照ドキュメント
+
+### 要件定義書
+{requirements_document_path}
+
+### 設計書
+{design_document_path}
+
+### テストシナリオ
+{test_scenario_document_path}
+
+上記のドキュメントに基づいて実装してください。
+```
+
+**問題点**:
+- ファイルが存在しない場合、変数が空文字列になる
+- プロンプトが不完全になる
+
+#### 改善後: implementation/execute.txt（オプショナル参照）
+
+```markdown
+## 参照ドキュメント
+
+### Issue情報（必須）
+{issue_info}
+
+### Planning情報（必須）
+{planning_document_path}
+
+### 要件定義書（利用可能な場合）
+{requirements_context}
+<!--
+  存在する場合: @requirements.md への参照
+  存在しない場合: "要件定義書は利用できません。Planning情報とIssue情報から要件を推測してください。"
+-->
+
+### 設計書（利用可能な場合）
+{design_context}
+<!--
+  存在する場合: @design.md への参照
+  存在しない場合: "設計書は利用できません。Issue情報とPlanning情報に基づいて適切な設計判断を行ってください。"
+-->
+
+### テストシナリオ（利用可能な場合）
+{test_scenario_context}
+<!--
+  存在する場合: @test-scenario.md への参照
+  存在しない場合: "テストシナリオは利用できません。実装時に適切なテスト考慮を行ってください。"
+-->
+
+## 実装指示
+
+上記の利用可能なドキュメントとIssue情報に基づいて実装してください。
+ドキュメントが利用できない場合は、Issue情報とPlanning情報から合理的に判断してください。
+```
+
+### TypeScriptでの実装
+
+```typescript
+// src/phases/implementation.ts (execute メソッド)
+
+function buildOptionalContext(
+  filename: string,
+  issueNumber: number,
+  fallbackMessage: string
+): string {
+  const filePath = getPhaseOutputFile(filename, issueNumber);
+
+  if (filePath && fs.existsSync(filePath)) {
+    return `@${filePath}`;
+  } else {
+    return fallbackMessage;
+  }
+}
+
+// プロンプトのコンテキスト構築
+const context = {
+  issue_info: getIssueInfo(issueNumber),
+  planning_document_path: getPlanningDocumentPath(issueNumber), // 必須
+
+  // オプショナルコンテキスト
+  requirements_context: buildOptionalContext(
+    'requirements.md',
+    issueNumber,
+    '要件定義書は利用できません。Planning情報とIssue情報から要件を推測してください。'
+  ),
+
+  design_context: buildOptionalContext(
+    'design.md',
+    issueNumber,
+    '設計書は利用できません。Issue情報とPlanning情報に基づいて適切な設計判断を行ってください。'
+  ),
+
+  test_scenario_context: buildOptionalContext(
+    'test-scenario.md',
+    issueNumber,
+    'テストシナリオは利用できません。実装時に適切なテスト考慮を行ってください。'
+  ),
+};
+```
+
+### プロンプト修正対象
+
+- [ ] `implementation/execute.txt`
+- [ ] `test_implementation/execute.txt`
+- [ ] `testing/execute.txt`
+- [ ] `documentation/execute.txt`
+- [ ] `report/execute.txt` (全Phaseの成果物を参照するため、特に重要)
+
+## 実装計画
+
+### Phase 1: 既存プリセットの整理（優先度: High）
+
+**見積もり**: 2-3時間
+
+**実装内容**:
+1. 既存プリセット名を新しい命名規則に変更
+   - `requirements-only` → `review-requirements`
+   - `design-phase` → `review-design`
+   - `implementation-phase` → `implementation`
+   - `full-workflow` → **削除**（`--phase all` で代替）
+
+2. 依存関係を考慮したPhaseリストに修正
+   - `review-requirements`: planningを追加
+   - `review-design`: planningを追加
+
+3. 後方互換性のため、古いプリセット名もエイリアスとして残す（deprecation warning付き）
+   - `full-workflow` のみ、明示的に「`--phase all` を使用してください」というメッセージを表示
+
+**修正ファイル**:
+- `src/core/phase-dependencies.ts`
+
+**成果物**:
+- 既存プリセットが新しい命名規則に準拠
+- 依存関係エラーが解消される
+
+### Phase 2: 新規プリセットの追加（優先度: High）
+
+**見積もり**: 3-4時間
+
+**実装内容**:
+1. 頻度の高い**複数Phaseプリセット**を追加
+   - `quick-fix`: 軽微な修正用
+   - `testing`: テスト追加用
+   - `finalize`: 最終化用
+   - `review-test-scenario`: テストシナリオレビュー用
+
+2. 単一Phaseプリセットは**追加しない**（`--phase <name>` で十分）
+   - ❌ `code-only` → `--phase implementation` を使用
+   - ❌ `test-only` → `--phase testing` を使用
+   - ❌ `docs` → `--phase documentation` を使用
+   - ❌ `report-only` → `--phase report` を使用
+
+3. プリセット一覧の取得コマンド追加
+   ```bash
+   npm run start -- execute --list-presets
+   ```
+
+**修正ファイル**:
+- `src/core/phase-dependencies.ts`
+- `src/main.ts` (--list-presets オプション追加)
+
+**成果物**:
+- 実際の開発パターンをカバーする7個のプリセット（複数Phaseの組み合わせのみ）
+- プリセット一覧表示機能
+
+### Phase 3: 依存関係チェック確認とプロンプト改善（優先度: High）
+
+**見積もり**: 6-8時間
+
+**実装内容**:
+
+#### 3-1. 依存関係チェックの確認と強化（2-3時間）
+
+1. **現在の実装を確認**
+   - `--phase implementation` 実行時の依存関係チェック動作を検証
+   - `validatePhaseDependencies` の呼び出しタイミングを確認
+   - `skipDependencyCheck`, `ignoreViolations` オプションの使用状況を確認
+
+2. **依存関係チェックの強化（必要に応じて）**
+   - 単一Phase実行時に依存関係チェックを必ず実行
+   - デフォルトは厳格モード（依存Phase未完了時はエラーで停止）
+   - `--ignore-dependencies` オプションで緩和可能（警告のみ）
+   - ファイル存在チェックも追加（metadata.json と実ファイルの整合性）
+
+3. **エラーメッセージの改善**
+   ```
+   [ERROR] Phase "implementation" requires the following phases to be completed:
+     ✗ planning - .ai-workflow/issue-123/00_planning/output/planning.md NOT FOUND
+     ✗ requirements - .ai-workflow/issue-123/01_requirements/output/requirements.md NOT FOUND
+
+   Options:
+     1. Complete the missing phases first
+     2. Use --phase all to run all phases
+     3. Use --ignore-dependencies to proceed anyway (not recommended)
+   ```
+
+#### 3-2. プロンプトのオプショナル参照対応（3-5時間）
+
+1. `buildOptionalContext` ヘルパー関数の実装
+2. 各PhaseのbaseクラスでgetPhaseOutputFileメソッドを共通化
+3. 各Phase executeメソッドでオプショナルコンテキスト構築
+4. プロンプトファイルの修正
+
+**修正ファイル**:
+
+**依存関係チェック関連**:
+- `src/main.ts` (依存関係チェック強化、エラーメッセージ改善)
+- `src/core/phase-dependencies.ts` (ファイル存在チェック追加)
+- `src/phases/base-phase.ts` (共通チェックロジック)
+
+**プロンプト改善関連**:
+- `src/phases/base-phase.ts` (buildOptionalContext追加)
+- `src/phases/implementation.ts`
+- `src/phases/test-implementation.ts`
+- `src/phases/testing.ts`
+- `src/phases/documentation.ts`
+- `src/phases/report.ts`
+- `src/prompts/implementation/execute.txt`
+- `src/prompts/test_implementation/execute.txt`
+- `src/prompts/testing/execute.txt`
+- `src/prompts/documentation/execute.txt`
+- `src/prompts/report/execute.txt`
+
+**成果物**:
+- 単一Phase実行時の依存関係チェックが正常に動作する
+- 依存Phaseが未完了の場合、明確なエラーメッセージと選択肢を表示
+- プリセット実行時に前段Phaseの成果物が存在しなくても動作する（`--ignore-dependencies` 使用時）
+- Agentが適切なフォールバック動作を行う
+
+### Phase 4: ドキュメント更新（優先度: Medium）
+
+**見積もり**: 2-3時間
+
+**実装内容**:
+1. README.mdにプリセット一覧セクションを追加
+2. 各プリセットの用途と使用例を記載
+3. プリセット vs --phase の使い分けガイド
+4. 移行ガイド（古いプリセット名 → 新しいプリセット名）
+
+**修正ファイル**:
+- `README.md`
+
+**成果物**:
+- プリセット機能の利用ガイド
+- チーム内での標準化促進
+
+### Phase 5: テストとバリデーション（優先度: Medium）
+
+**見積もり**: 2-3時間
+
+**実装内容**:
+1. 各プリセットの動作テスト
+2. 依存関係チェックのテスト
+3. オプショナル参照のテスト
+4. エラーケースのテスト
+
+**テストケース**:
+
+**プリセット実行テスト**:
+- [ ] `quick-fix` プリセット実行（前段Phaseなし、`--ignore-dependencies` 必要）
+- [ ] `review-requirements` プリセット実行
+- [ ] `implementation` プリセット実行
+- [ ] `testing` プリセット実行
+- [ ] 存在しないプリセット名でエラー
+- [ ] 古いプリセット名 (`requirements-only`, `design-phase`, `implementation-phase`) で deprecation warning
+- [ ] `full-workflow` プリセット実行時に「`--phase all` を使用してください」メッセージ
+
+**依存関係チェックテスト**:
+- [ ] `--phase implementation` 実行時、依存Phase未完了でエラー
+- [ ] `--phase implementation --ignore-dependencies` 実行時、警告のみで実行
+- [ ] 依存Phase完了時、正常に実行
+- [ ] metadata.json に `completed` だがファイルが存在しない場合のエラー処理
+
+**プロンプトオプショナル参照テスト**:
+- [ ] requirements.md 不在時、フォールバックメッセージが表示される
+- [ ] design.md 不在時、フォールバックメッセージが表示される
+- [ ] Agent が適切に動作する（エラーにならない）
+
+**成果物**:
+- 全プリセットの動作確認完了
+- 依存関係チェックの動作確認完了
+- バグ修正
+
+## 期待される効果
+
+### 1. 開発効率の大幅向上
+
+| シナリオ | 現在 | 改善後 | 削減時間 |
+|---------|------|--------|---------|
+| 軽微な修正 | `--phase all` (8-12h) | `--preset quick-fix` (2-3h) | **6-9h削減** |
+| テスト追加 | 個別実行 x 2回 | `--preset testing` x 1回 | 操作の簡略化 |
+| ドキュメント更新 | `--phase documentation` | `--preset docs` | 明確化 |
+| レビュー駆動開発 | 不明瞭 | `--preset review-*` | 標準化 |
+
+### 2. チーム内の開発フロー標準化
+
+- ✅ ベストプラクティスがプリセットに組み込まれる
+- ✅ 開発フローが統一される
+- ✅ 新メンバーのオンボーディングが容易
+
+### 3. 柔軟性の確保
+
+- ✅ プリセットでカバーされないパターンは `--phase <name>` で対応
+- ✅ 段階的な拡張が可能（新しいプリセットを追加しやすい）
+
+### 4. プロンプトの堅牢性向上
+
+- ✅ 前段Phaseの成果物が存在しなくても動作する
+- ✅ Agentが混乱せず、適切なフォールバック動作を行う
+
+## オプションの使い分けガイド
+
+### `--preset`: 定義済みのワークフローパターン（推奨）
+
+**用途**: よく使うパターンを簡単に実行
+
+```bash
+npm run start -- execute --issue 123 --preset quick-fix
+npm run start -- execute --issue 123 --preset implementation
+```
+
+**メリット**:
+- ✅ 簡潔で覚えやすい
+- ✅ ベストプラクティスが組み込まれている
+- ✅ チーム内で統一された開発フロー
+
+### `--phase`: 単一フェーズまたは全フェーズ
+
+**用途**: 特定のフェーズのみ実行、またはデバッグ
+
+```bash
+npm run start -- execute --issue 123 --phase implementation
+npm run start -- execute --issue 123 --phase all
+```
+
+**メリット**:
+- ✅ 柔軟性が高い
+- ✅ デバッグ・テスト時に便利
+
+**依存関係チェック**:
+- デフォルト: 依存Phase未完了時はエラーで停止
+- `--ignore-dependencies` オプションで警告のみに緩和可能（非推奨）
+
+```bash
+# 依存関係を無視して実行（非推奨）
+npm run start -- execute --issue 123 --phase implementation --ignore-dependencies
+```
+
+**推奨**: 複数Phaseの実行にはプリセットを使用
+
+## 移行ガイド
+
+### 既存プリセット名から新プリセット名への移行
+
+| 古いプリセット名 | 新プリセット名 | 変更内容 |
+|----------------|--------------|---------|
+| `requirements-only` | `review-requirements` | planningを追加 |
+| `design-phase` | `review-design` | planningを追加 |
+| `implementation-phase` | `implementation` | 変更なし |
+| `full-workflow` | **削除** | `--phase all` を使用 |
+
+**移行期間**: 旧プリセット名は deprecation warning 付きで6ヶ月間サポート
+
+**注**: `full-workflow` は `--phase all` で代替可能なため、プリセットとしては削除
+
+## 関連Issue
+
+- #382: Review agentにPlanning.mdチェックリスト照合機能を追加
+
+## 見積もり合計
+
+| Phase | 優先度 | 見積もり | 内容 |
+|-------|-------|---------|------|
+| Phase 1: 既存プリセット整理 | High | 2-3h | 命名変更、依存関係修正、後方互換性 |
+| Phase 2: 新規プリセット追加 | High | 3-4h | 7個のプリセット追加、一覧表示機能 |
+| Phase 3: 依存関係チェック + プロンプト改善 | High | 6-8h | 依存関係確認・強化、オプショナル参照 |
+| Phase 4: ドキュメント更新 | Medium | 2-3h | README更新、使い分けガイド |
+| Phase 5: テスト・検証 | Medium | 2-3h | 全プリセット、依存関係、プロンプトテスト |
+| **合計** | - | **15-21h** | |
+
+**最小実装（Phase 1-3）**: 11-15時間
+- 既存プリセット整理 + 新規プリセット追加 + 依存関係チェック + プロンプト改善
+- これだけで主要な効果が得られる
+
+**重要**: Phase 3の「依存関係チェックの確認」は、現在の実装状況により見積もりが変動する可能性があります。
+
+
+## プロジェクト計画書の構成
+
+以下のセクションを含むプロジェクト計画書を作成してください：
+
+### 1. Issue分析
+- **複雑度**: 簡単/中程度/複雑を判定
+  - 簡単: 単一ファイルの修正、シンプルな機能追加（見積もり: ~4時間）
+  - 中程度: 複数ファイルの修正、既存機能の拡張（見積もり: 4~16時間）
+  - 複雑: アーキテクチャ変更、新規サブシステム追加（見積もり: 16時間~）
+- **見積もり工数**: X時間（根拠を記載）
+- **リスク評価**: 低/中/高
+
+### 2. 実装戦略判断
+
+**重要**: このセクションは最も重要です。Phase 2（Design）で使用されるため、必ず明記してください。
+
+#### 実装戦略: CREATE / EXTEND / REFACTOR
+
+**判断根拠**:
+- CREATE: 新規ファイル・クラス・モジュールの作成が中心
+- EXTEND: 既存コードの拡張（機能追加）が中心
+- REFACTOR: 既存コードのリファクタリング（構造改善）が中心
+
+（判断理由を具体的に記載）
+
+#### テスト戦略: UNIT_ONLY / INTEGRATION_ONLY / BDD_ONLY / UNIT_INTEGRATION / UNIT_BDD / INTEGRATION_BDD / ALL
+
+**判断根拠**:
+- UNIT_ONLY: ユニットテストのみ（単純なロジック、外部依存なし）
+- INTEGRATION_ONLY: インテグレーションテストのみ（外部システム連携中心）
+- BDD_ONLY: BDDテストのみ（ユーザーストーリー中心）
+- UNIT_INTEGRATION: ユニット + インテグレーション（一般的な機能開発）
+- UNIT_BDD: ユニット + BDD（エンドユーザー向け機能）
+- INTEGRATION_BDD: インテグレーション + BDD（システム間連携＋ユーザーストーリー）
+- ALL: すべてのテストレベル（大規模な変更、高リスク）
+
+（判断理由を具体的に記載）
+
+#### テストコード戦略: EXTEND_TEST / CREATE_TEST / BOTH_TEST
+
+**判断根拠**:
+- EXTEND_TEST: 既存テストファイルに追加（既存機能の拡張時）
+- CREATE_TEST: 新規テストファイル作成（新規機能追加時）
+- BOTH_TEST: 両方（既存テスト拡張 + 新規テスト作成）
+
+（判断理由を具体的に記載）
+
+### 3. 影響範囲分析
+- **既存コードへの影響**: 変更が必要なファイル・モジュール
+- **依存関係の変更**: 新規依存の追加、既存依存の変更
+- **マイグレーション要否**: データベーススキーマ変更、設定ファイル変更等
+
+### 4. タスク分割
+
+## ⚠️ 重要: チェックリスト標準フォーマット（必須）
+
+各フェーズのタスクは、**必ずチェックリスト形式**で記述してください。このチェックリストは、Review Phaseで完了判定に使用されます。
+
+### 標準フォーマット
+
+```markdown
+### Phase X: [フェーズ名] (見積もり: X~Yh)
+
+- [ ] Task X-1: [タスク名] (見積もり時間)
+  - [サブタスク1]
+  - [サブタスク2]
+- [ ] Task X-2: [タスク名] (見積もり時間)
+  - [サブタスク1]
+```
+
+**重要**: このチェックリストは、Review Phaseで完了判定に使用されます。各タスクは明確で検証可能な内容にしてください。
+
+**良い例**:
+```
+- [ ] Task 4-1: CLI層の分離 (3~5h)
+  - cli/commands.py の作成
+  - main.pyからCLIロジックを抽出
+```
+
+**悪い例**:
+```
+- [ ] リファクタリングを実施
+```
+（検証不可能なため不適切）
+
+### 各フェーズのタスクリスト
+
+各フェーズについて、サブタスクを洗い出してください：
+
+#### Phase 1: 要件定義 (見積もり: Xh)
+
+- [ ] Task 1-1: [タスク名] (見積もり時間)
+  - サブタスク1
+  - サブタスク2
+- [ ] Task 1-2: [タスク名] (見積もり時間)
+  - サブタスク1
+
+#### Phase 2: 設計 (見積もり: Xh)
+
+- [ ] Task 2-1: [タスク名] (見積もり時間)
+  - サブタスク1
+  - サブタスク2
+
+#### Phase 3: テストシナリオ (見積もり: Xh)
+
+- [ ] Task 3-1: [タスク名] (見積もり時間)
+  - サブタスク1
+
+#### Phase 4: 実装 (見積もり: Xh)
+
+- [ ] Task 4-1: [タスク名] (見積もり時間)
+  - サブタスク1
+  - サブタスク2
+
+#### Phase 5: テストコード実装 (見積もり: Xh)
+
+- [ ] Task 5-1: [タスク名] (見積もり時間)
+  - サブタスク1
+
+#### Phase 6: テスト実行 (見積もり: Xh)
+
+- [ ] Task 6-1: [タスク名] (見積もり時間)
+  - サブタスク1
+
+#### Phase 7: ドキュメント (見積もり: Xh)
+
+- [ ] Task 7-1: [タスク名] (見積もり時間)
+  - サブタスク1
+
+#### Phase 8: レポート (見積もり: Xh)
+
+- [ ] Task 8-1: [タスク名] (見積もり時間)
+  - サブタスク1
+
+**タスク粒度基準**:
+- 1タスク = 1~4時間程度で完了可能な作業単位
+- 明確な完了条件（Done criteria）を持つ
+- 他のタスクから独立して実装・テスト可能
+- **検証可能**: Review Phaseで「完了したか」を客観的に判断できる内容
+
+### 5. 依存関係
+
+タスク間の依存関係をMermaid形式で図示してください：
+
+```mermaid
+graph TD
+    P1[Phase 1] --> P2[Phase 2]
+    P2 --> P3[Phase 3]
+    P3 --> P4[Phase 4]
+    P4 --> P5[Phase 5]
+    P5 --> P6[Phase 6]
+    P6 --> P7[Phase 7]
+```
+
+### 6. リスクと軽減策
+
+潜在的なリスクを洗い出し、各リスクに対する軽減策を記載してください：
+
+#### リスク1: （リスク名）
+- **影響度**: 低/中/高
+- **確率**: 低/中/高
+- **軽減策**: （具体的な対策）
+
+#### リスク2: （リスク名）
+...
+
+**リスクカテゴリ**:
+- 技術的リスク: 新技術の学習コスト、既存システムとの統合問題
+- スコープリスク: 要件の曖昧さ、スコープクリープ
+- リソースリスク: 工数不足、スキル不足
+- 依存リスク: 外部システム依存、ブロッキング問題
+
+### 7. 品質ゲート
+
+各フェーズの合格基準を定義してください：
+
+#### Phase 1: 要件定義
+- [ ] 機能要件が明確に記載されている
+- [ ] 受け入れ基準が定義されている
+...
+
+#### Phase 2: 設計
+- [ ] 実装戦略の判断根拠が明記されている
+- [ ] テスト戦略の判断根拠が明記されている
+...
+
+（以下、Phase 3~7についても記載）
+
+## 出力形式
+
+Markdown形式でプロジェクト計画書を作成し、以下のファイルに保存してください：
+
+```
+.ai-workflow/issue-396/00_planning/output/planning.md
+```
+
+## 品質ゲート（Phase 0）
+
+作成するプロジェクト計画書は、以下の品質ゲートを満たす必要があります：
+
+- [ ] **実装戦略が明確に決定されている**（CREATE/EXTEND/REFACTOR）
+- [ ] **テスト戦略が明確に決定されている**（UNIT_ONLY/.../ALL）
+- [ ] **テストコード戦略が明確に決定されている**（EXTEND_TEST/CREATE_TEST/BOTH_TEST）
+- [ ] **影響範囲が分析されている**
+- [ ] **タスク分割が適切な粒度である**（1タスク = 1~4時間）
+- [ ] **リスクが洗い出されている**
+
+これらの品質ゲートは**必須要件**です。作成後、クリティカルシンキングレビューが実施され、品質ゲートを満たさない場合は修正が必要になります。
+
+## 注意事項
+
+1. **実装戦略の判断**: Phase 2で使用されるため、必ず明記してください
+   - 実装戦略: CREATE/EXTEND/REFACTOR
+   - テスト戦略: UNIT_ONLY/.../ALL
+   - テストコード戦略: EXTEND_TEST/CREATE_TEST/BOTH_TEST
+
+2. **具体性**: 曖昧な表現を避け、具体的かつ測定可能な計画を記述
+   - NG例: "適切に対応する"、"必要に応じて実施"
+   - OK例: "Phase 2で詳細設計を実施"、"最大3回のリトライを実施"
+
+3. **実現可能性**: 見積もりが現実的か、リソースは十分か確認
+   - タスク粒度が大きすぎないか（1タスク = 1~4時間）
+   - 依存関係が正確に記載されているか
+
+4. **リスク分析の網羅性**: 重要なリスクが見逃されていないか確認
+   - 技術的リスク、スコープリスク、リソースリスク、依存リスク
+
+5. **レビューされることを意識**: 作成した計画書はクリティカルシンキングレビューが実施されます
+   - 品質ゲート（6つの必須要件）を最優先で満たすこと
+   - ブロッカー（次フェーズに進めない問題）がないように注意
+   - 改善提案は歓迎されるが、ブロッカーは修正が必須
+
+## 参考情報
+
+必要に応じて以下を参照してください（存在する場合）：
+- @CLAUDE.md - プロジェクトの全体方針とコーディングガイドライン
+- @ARCHITECTURE.md - アーキテクチャ設計思想
+- @CONTRIBUTION.md - 開発ガイドライン
+- @README.md - プロジェクト概要と使用方法
+- その他、プロジェクト固有のドキュメント
+
+## プロジェクト計画書の作成を開始してください

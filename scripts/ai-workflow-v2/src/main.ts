@@ -12,6 +12,8 @@ import { CodexAgentClient } from './core/codex-agent-client.js';
 import { GitHubClient } from './core/github-client.js';
 import {
   PHASE_PRESETS,
+  DEPRECATED_PRESETS,
+  PRESET_DESCRIPTIONS,
   validateExternalDocument,
 } from './core/phase-dependencies.js';
 import { ResumeManager } from './utils/resume.js';
@@ -74,6 +76,17 @@ export async function runCli(): Promise<void> {
     .action(async (options) => {
       try {
         await handleInitCommand(options.issueUrl);
+      } catch (error) {
+        reportFatalError(error);
+      }
+    });
+
+  program
+    .command('list-presets')
+    .description('List available presets')
+    .action(async () => {
+      try {
+        listPresets();
       } catch (error) {
         reportFatalError(error);
       }
@@ -434,11 +447,21 @@ async function handleExecuteCommand(options: any): Promise<void> {
     ignoreDependencies,
   };
 
-  const targetPhases =
-    presetOption !== undefined ? getPresetPhases(presetOption) : null;
+  if (presetOption !== undefined) {
+    const resolved = resolvePresetName(presetOption);
 
-  if (targetPhases) {
-    console.info(`[INFO] Running preset "${presetOption}": ${targetPhases.join(', ')}`);
+    if (resolved.warning) {
+      console.warn(resolved.warning);
+    }
+
+    if (!resolved.resolvedName) {
+      // full-workflowの特殊ケース
+      console.error('[ERROR] Please use --phase all instead.');
+      process.exit(1);
+    }
+
+    const targetPhases = getPresetPhases(resolved.resolvedName);
+    console.info(`[INFO] Running preset "${resolved.resolvedName}": ${targetPhases.join(', ')}`);
     const summary = await executePhasesSequential(targetPhases, context, gitManager);
     reportExecutionSummary(summary);
     process.exit(summary.success ? 0 : 1);
@@ -664,6 +687,70 @@ function parseIssueNumber(issueUrl: string): number {
     throw new Error(`Could not extract issue number from URL: ${issueUrl}`);
   }
   return Number.parseInt(match[1], 10);
+}
+
+/**
+ * プリセット名を解決（後方互換性対応）
+ */
+function resolvePresetName(presetName: string): {
+  resolvedName: string;
+  warning?: string;
+} {
+  // 現行プリセット名の場合
+  if (PHASE_PRESETS[presetName]) {
+    return { resolvedName: presetName };
+  }
+
+  // 非推奨プリセット名の場合
+  if (DEPRECATED_PRESETS[presetName]) {
+    const newName = DEPRECATED_PRESETS[presetName];
+
+    // full-workflowの特殊ケース
+    if (presetName === 'full-workflow') {
+      return {
+        resolvedName: '',
+        warning: `[WARNING] Preset "${presetName}" is deprecated. Please use "--phase all" instead.`,
+      };
+    }
+
+    // 通常の非推奨プリセット
+    return {
+      resolvedName: newName,
+      warning: `[WARNING] Preset "${presetName}" is deprecated. Please use "${newName}" instead. This alias will be removed in 6 months.`,
+    };
+  }
+
+  // 存在しないプリセット名
+  throw new Error(`[ERROR] Unknown preset: ${presetName}. Use 'list-presets' command to see available presets.`);
+}
+
+/**
+ * 利用可能なプリセット一覧を表示
+ */
+function listPresets(): void {
+  console.info('Available Presets:\n');
+
+  // 現行プリセットの一覧表示
+  for (const [name, phases] of Object.entries(PHASE_PRESETS)) {
+    const description = PRESET_DESCRIPTIONS[name] || '';
+    const phaseList = phases.join(' → ');
+    console.info(`  ${name.padEnd(25)} - ${description}`);
+    console.info(`    Phases: ${phaseList}\n`);
+  }
+
+  console.info('\nDeprecated Presets (will be removed in 6 months):\n');
+
+  // 非推奨プリセットの一覧表示
+  for (const [oldName, newName] of Object.entries(DEPRECATED_PRESETS)) {
+    console.info(`  ${oldName.padEnd(25)} → Use '${newName}' instead`);
+  }
+
+  console.info('\nUsage:');
+  console.info('  npm run start -- execute --issue <number> --preset <preset-name>');
+  console.info('  npm run start -- execute --issue <number> --phase <phase-name>');
+  console.info('  npm run start -- execute --issue <number> --phase all');
+
+  process.exit(0);
 }
 
 function getPresetPhases(presetName: string): PhaseName[] {
