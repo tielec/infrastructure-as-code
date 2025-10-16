@@ -249,11 +249,11 @@ interface WorkflowMetadata {
 
 ### Phase 5: テストコード実装 (見積もり: 2〜3h)
 
-- [ ] Task 5-1: ユニットテスト実装 (1〜1.5h)
+- [x] Task 5-1: ユニットテスト実装 (1〜1.5h)
   - `tests/unit/repository-resolution.test.ts`の作成
   - `parseIssueUrl()`のテストケース実装
   - `resolveLocalRepoPath()`のテストケース実装（モック使用）
-- [ ] Task 5-2: インテグレーションテスト実装 (1〜1.5h)
+- [x] Task 5-2: インテグレーションテスト実装 (1〜1.5h)
   - `tests/integration/multi-repo-workflow.test.ts`の作成
   - テスト用の一時Gitリポジトリのセットアップ
   - Case 1, 2, 3のテストケース実装
