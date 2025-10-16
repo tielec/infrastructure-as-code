@@ -7,6 +7,7 @@ TypeScript で再実装した AI Workflow 自動化ツールの概要です。CL
 - **Codex + Claude のデュアルエージェント** … Codex（`gpt-5-codex`）で高い推論が必要な編集を担当し、状況に応じて自動で Claude にフォールバックします。
 - **決定的なプロンプト管理** … すべてのプロンプトテンプレートは `src/prompts/{phase}` に配置され、ビルド時に `dist` へコピーされます。
 - **永続化されたワークフロー状態** … `.ai-workflow/issue-*/metadata.json` へメタデータを保存する `MetadataManager` により、途中再開やコスト集計が可能です。
+- **マルチリポジトリ対応** … Issue URL から対象リポジトリを自動判定し、別のリポジトリに対してもワークフローを実行できます（v0.2.0 で追加）。
 - **GitHub & Jenkins 対応** … 個人アクセストークンと Jenkins Job DSL に対応し、Docker コンテナ内で TypeScript CLI を実行できます。
 
 ## リポジトリ構成
@@ -34,6 +35,7 @@ scripts/ai-workflow-v2/
 - Codex API キー（`CODEX_API_KEY` または `OPENAI_API_KEY`）
 - Claude Code 認証ファイル（`credentials.json`）
 - GitHub パーソナルアクセストークン（`repo`, `workflow`, `read:org`）
+- （任意）環境変数 `REPOS_ROOT` … マルチリポジトリ環境でリポジトリの親ディレクトリを指定
 - （任意）Docker 24 以上（コンテナ内で実行する場合）
 
 ## クイックスタート（ローカル）
@@ -48,6 +50,7 @@ export CODEX_API_KEY="sk-code..."        # Codex 高推論キー
 export CLAUDE_CODE_CREDENTIALS_PATH="$HOME/.claude-code/credentials.json"
 export GITHUB_TOKEN="ghp_..."
 export GITHUB_REPOSITORY="owner/repo"
+export REPOS_ROOT="$HOME/projects"       # （任意）リポジトリの親ディレクトリ
 
 # Issue URL からワークフローを初期化
 node dist/index.js init \
@@ -58,6 +61,11 @@ node dist/index.js execute --phase all --issue 385
 
 # 失敗したフェーズのみ再実行
 node dist/index.js execute --phase requirements --issue 385 --agent codex
+
+# マルチリポジトリの例: 別リポジトリのIssueに対してワークフローを実行
+node dist/index.js init \
+  --issue-url https://github.com/owner/my-app/issues/123
+node dist/index.js execute --phase all --issue 123
 ```
 
 ## CLI オプション

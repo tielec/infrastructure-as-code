@@ -187,6 +187,13 @@ export class WorkflowState {
       migrated = true;
     }
 
+    // Target repository (Issue #369)
+    if (!('target_repository' in this.data)) {
+      console.info('[INFO] Migrating metadata.json: Adding target_repository');
+      this.data.target_repository = null;
+      migrated = true;
+    }
+
     if (migrated) {
       this.save();
       console.info('[OK] metadata.json migrated successfully');
