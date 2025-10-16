@@ -62,9 +62,6 @@ pipeline {
     }
 
     environment {
-        // Node.js実行環境
-        NODE_ENV = 'production'
-
         // Claude Agent SDK設定（Bashコマンド承認スキップ）
         CLAUDE_DANGEROUSLY_SKIP_PERMISSIONS = '1'
         CLAUDE_CODE_CREDENTIALS_PATH = "/home/node/.claude-code/credentials.json"
