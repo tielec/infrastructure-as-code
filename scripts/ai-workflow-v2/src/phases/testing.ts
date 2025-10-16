@@ -44,7 +44,7 @@ export class TestingPhase extends BasePhase {
       .replace('{test_scenario_context}', scenarioContext)
       .replace('{issue_number}', String(issueNumber));
 
-    await this.executeWithAgent(executePrompt, { maxTurns: 30 });
+    await this.executeWithAgent(executePrompt, { maxTurns: 50 });
 
     if (!fs.existsSync(testResultFile)) {
       return {
@@ -111,7 +111,7 @@ export class TestingPhase extends BasePhase {
       .replace('{implementation_document_path}', implementationRef)
       .replace('{test_scenario_document_path}', scenarioRef);
 
-    const messages = await this.executeWithAgent(reviewPrompt, { maxTurns: 30, logDir: this.reviewDir });
+    const messages = await this.executeWithAgent(reviewPrompt, { maxTurns: 50, logDir: this.reviewDir });
     const reviewResult = await this.contentParser.parseReviewResult(messages);
 
     const reviewFile = path.join(this.reviewDir, 'result.md');
@@ -180,7 +180,7 @@ export class TestingPhase extends BasePhase {
 
     const oldMtime = fs.existsSync(testResultFile) ? fs.statSync(testResultFile).mtimeMs : null;
 
-    await this.executeWithAgent(revisePrompt, { maxTurns: 30, logDir: this.reviseDir });
+    await this.executeWithAgent(revisePrompt, { maxTurns: 50, logDir: this.reviseDir });
 
     if (!fs.existsSync(testResultFile)) {
       return {
