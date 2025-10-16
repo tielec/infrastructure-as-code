@@ -160,6 +160,24 @@ export class GitManager {
           };
         }
 
+        const errorMessage = (error as Error).message.toLowerCase();
+
+        // non-fast-forwardエラーの場合、pullしてから再試行
+        if ((errorMessage.includes('rejected') || errorMessage.includes('non-fast-forward')) && retries === 0) {
+          console.warn('[WARNING] Push rejected (non-fast-forward). Pulling remote changes...');
+          const pullResult = await this.pullLatest(branchName);
+          if (!pullResult.success) {
+            return {
+              success: false,
+              retries,
+              error: `Failed to pull remote changes: ${pullResult.error}`,
+            };
+          }
+          console.info('[INFO] Pull successful. Retrying push...');
+          retries += 1;
+          continue; // 再度pushを試行
+        }
+
         if (!this.isRetriableError(error) || retries === maxRetries) {
           return {
             success: false,
