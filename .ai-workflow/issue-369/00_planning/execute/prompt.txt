@@ -1,0 +1,814 @@
+# プロジェクト計画フェーズ - 実行プロンプト
+
+## タスク概要
+
+GitHubのIssue情報から詳細なプロジェクト計画書を作成してください。
+Phase 0はプロジェクトマネージャの役割を担い、開発作業を計画的かつ効率的に進められるようにします。
+
+## Issue情報
+
+## Issue概要
+
+- **Issue番号**: #369
+- **タイトル**: [FEATURE] AIワークフローv2: Issue URLから対象リポジトリを自動判定して実行
+- **状態**: open
+- **URL**: https://github.com/tielec/infrastructure-as-code/issues/369
+- **ラベル**: なし
+
+### 本文
+
+# [FEATURE] AIワークフローv2: Issue URLから対象リポジトリを自動判定して実行
+
+## 概要
+
+現在、AIワークフローv2（TypeScript版）は `scripts/ai-workflow-v2/` が配置されているリポジトリ（`infrastructure-as-code`）のみを対象としています。
+
+**Issue URLから対象リポジトリを自動的に判定**して、別のリポジトリに対してもワークフローを実行できるようにしたいです。
+
+## 現状の実装
+
+### Issue URL例
+
+```
+https://github.com/tielec/infrastructure-as-code/issues/305
+https://github.com/tielec/my-app/issues/123
+https://github.com/tielec/another-repo/issues/456
+```
+
+### 現在の対象リポジトリ決定方法
+
+`scripts/ai-workflow-v2/src/main.ts:445-452` で現在のGitリポジトリルートを取得：
+
+```typescript
+async function getRepoRoot(): Promise<string> {
+  const git = simpleGit(process.cwd());
+  try {
+    const root = await git.revparse(['--show-toplevel']);
+    return root.trim();
+  } catch {
+    return process.cwd();
+  }
+}
+```
+
+→ 実行環境のリポジトリ（infrastructure-as-code）に固定される
+
+### 問題点
+
+- Issue URLが `https://github.com/tielec/my-app/issues/123` でも、`infrastructure-as-code` リポジトリが対象になる
+- 別リポジトリのIssueを指定しても、実際には間違ったリポジトリが操作される
+
+## 要望
+
+### Issue URLから自動判定
+
+```bash
+# tielec/my-app リポジトリのIssueを指定
+npm run start -- init --issue-url https://github.com/tielec/my-app/issues/123
+
+# → 自動的に以下を判定
+#   - GitHubリポジトリ: tielec/my-app
+#   - ローカルパス: C:\Users\ytaka\TIELEC\development\my-app
+#   - リモートURL: https://github.com/tielec/my-app.git
+```
+
+### ローカルパスの判定ロジック
+
+#### オプション1: 環境変数で親ディレクトリを指定（推奨）
+
+```bash
+# 環境変数設定（Jenkinsfileで設定）
+export REPOS_ROOT="C:\Users\ytaka\TIELEC\development"
+
+# Issue URLから判定
+# https://github.com/tielec/my-app/issues/123
+# → repo_name = "my-app"
+# → local_path = "$REPOS_ROOT/my-app"
+#   = "C:\Users\ytaka\TIELEC\development\my-app"
+```
+
+#### オプション2: リポジトリ名からパスを探索
+
+```typescript
+function findRepoPath(repoName: string): string | null {
+  /**
+   * リポジトリ名からローカルパスを探索
+   */
+  // 候補パスをリストアップ
+  const searchRoots = [
+    path.join(os.homedir(), 'TIELEC', 'development'),
+    path.join(os.homedir(), 'projects'),
+    path.join(process.cwd(), '..'),
+  ];
+
+  for (const root of searchRoots) {
+    const candidate = path.join(root, repoName);
+    if (fs.existsSync(candidate) && fs.existsSync(path.join(candidate, '.git'))) {
+      return candidate;
+    }
+  }
+
+  return null;
+}
+```
+
+#### オプション3: 存在しない場合は自動clone（オプション機能）
+
+```bash
+# ローカルに存在しない場合、自動的にclone
+git clone https://github.com/tielec/my-app.git $REPOS_ROOT/my-app
+```
+
+## 実装案
+
+### 1. Issue URLからリポジトリ情報を抽出
+
+`scripts/ai-workflow-v2/src/main.ts:485-491` の `parseIssueNumber` を拡張：
+
+```typescript
+interface IssueInfo {
+  owner: string;
+  repo: string;
+  issueNumber: number;
+  repositoryName: string; // "owner/repo" 形式
+}
+
+function parseIssueUrl(issueUrl: string): IssueInfo {
+  /**
+   * Issue URLからリポジトリ情報を抽出
+   *
+   * @param issueUrl - GitHub Issue URL
+   *   例: https://github.com/tielec/my-app/issues/123
+   *
+   * @returns IssueInfo:
+   *   - owner: リポジトリオーナー（例: tielec）
+   *   - repo: リポジトリ名（例: my-app）
+   *   - issueNumber: Issue番号（例: 123）
+   *   - repositoryName: owner/repo形式（例: tielec/my-app）
+   */
+  // URLをパース
+  // https://github.com/tielec/my-app/issues/123
+  const match = issueUrl.match(/github\.com\/([^\/]+)\/([^\/]+)\/issues\/(\d+)/);
+
+  if (!match) {
+    throw new Error(`Invalid GitHub Issue URL: ${issueUrl}`);
+  }
+
+  const [, owner, repo, issueNumberStr] = match;
+  const issueNumber = Number.parseInt(issueNumberStr, 10);
+
+  return {
+    owner,
+    repo,
+    issueNumber,
+    repositoryName: `${owner}/${repo}`,
+  };
+}
+```
+
+### 2. ローカルリポジトリパスを判定
+
+```typescript
+function resolveLocalRepoPath(repoName: string): string {
+  /**
+   * リポジトリ名からローカルパスを解決
+   *
+   * @param repoName - リポジトリ名（例: my-app）
+   *
+   * @returns ローカルリポジトリパス
+   *
+   * @throws Error リポジトリが見つからない場合
+   */
+  // 1. 環境変数 REPOS_ROOT が設定されている場合
+  const reposRoot = process.env.REPOS_ROOT;
+  if (reposRoot) {
+    const candidate = path.join(reposRoot, repoName);
+    if (fs.existsSync(candidate) && fs.existsSync(path.join(candidate, '.git'))) {
+      return candidate;
+    }
+  }
+
+  // 2. 候補パスを探索
+  const searchRoots = [
+    path.join(os.homedir(), 'TIELEC', 'development'),
+    path.join(os.homedir(), 'projects'),
+    path.join(process.cwd(), '..'),
+  ];
+
+  for (const root of searchRoots) {
+    if (!fs.existsSync(root)) {
+      continue;
+    }
+
+    const candidate = path.join(root, repoName);
+    if (fs.existsSync(candidate) && fs.existsSync(path.join(candidate, '.git'))) {
+      return candidate;
+    }
+  }
+
+  // 3. 見つからない場合はエラー
+  throw new Error(
+    `Repository '${repoName}' not found. ` +
+    `Please set REPOS_ROOT environment variable or clone the repository.`
+  );
+}
+```
+
+### 3. init コマンドを修正
+
+`scripts/ai-workflow-v2/src/main.ts:142-203` の `handleInitCommand` を修正：
+
+```typescript
+async function handleInitCommand(issueUrl: string): Promise<void> {
+  // Issue URLをパース
+  let issueInfo: IssueInfo;
+  try {
+    issueInfo = parseIssueUrl(issueUrl);
+  } catch (error) {
+    console.error(`[ERROR] ${(error as Error).message}`);
+    process.exit(1);
+  }
+
+  const { owner, repo, issueNumber, repositoryName } = issueInfo;
+
+  // ローカルリポジトリパスを解決
+  let repoRoot: string;
+  try {
+    repoRoot = resolveLocalRepoPath(repo);
+    console.info(`[INFO] Target repository: ${repositoryName}`);
+    console.info(`[INFO] Local path: ${repoRoot}`);
+  } catch (error) {
+    console.error(`[ERROR] ${(error as Error).message}`);
+    process.exit(1);
+  }
+
+  // ワークフローディレクトリ作成（対象リポジトリ配下）
+  const workflowDir = path.join(repoRoot, '.ai-workflow', `issue-${issueNumber}`);
+  const metadataPath = path.join(workflowDir, 'metadata.json');
+  const branchName = `ai-workflow/issue-${issueNumber}`;
+
+  await ensureBranch(repoRoot, branchName, workflowDir);
+
+  fs.ensureDirSync(workflowDir);
+
+  if (fs.existsSync(metadataPath)) {
+    console.info('[INFO] Workflow already exists. Migrating metadata schema if required...');
+    const state = WorkflowState.load(metadataPath);
+    const migrated = state.migrate();
+    const metadataManager = new MetadataManager(metadataPath);
+    metadataManager.data.branch_name = branchName;
+    metadataManager.data.repository = repositoryName;
+    metadataManager.data.target_repository = {
+      path: repoRoot,
+      github_name: repositoryName,
+      remote_url: `https://github.com/${repositoryName}.git`,
+      owner,
+      repo,
+    };
+    metadataManager.save();
+    console.info(
+      migrated
+        ? '[OK] Metadata schema updated successfully.'
+        : '[INFO] Metadata schema already up to date.',
+    );
+    return;
+  }
+
+  console.info('[INFO] Creating metadata...');
+  WorkflowState.createNew(
+    metadataPath,
+    String(issueNumber),
+    issueUrl,
+    `Issue #${issueNumber}`,
+  );
+
+  const metadataManager = new MetadataManager(metadataPath);
+
+  metadataManager.data.branch_name = branchName;
+  metadataManager.data.repository = repositoryName;
+  metadataManager.data.target_repository = {
+    path: repoRoot,
+    github_name: repositoryName,
+    remote_url: `https://github.com/${repositoryName}.git`,
+    owner,
+    repo,
+  };
+  metadataManager.save();
+
+  const gitManager = new GitManager(repoRoot, metadataManager);
+  console.info('[INFO] Committing metadata.json...');
+  const commitResult = await gitManager.commitPhaseOutput('planning', 'completed', 'N/A');
+  if (!commitResult.success) {
+    throw new Error(`Git commit failed: ${commitResult.error ?? 'unknown error'}`);
+  }
+  console.info(
+    `[OK] Commit ${commitResult.commit_hash ? commitResult.commit_hash.slice(0, 7) : ''} created.`,
+  );
+
+  console.info('[INFO] Pushing to remote...');
+  const pushResult = await gitManager.pushToRemote();
+  if (!pushResult.success) {
+    throw new Error(`Git push failed: ${pushResult.error ?? 'unknown error'}`);
+  }
+  console.info('[OK] Push successful.');
+
+  const githubToken = process.env.GITHUB_TOKEN ?? null;
+  if (!githubToken) {
+    console.warn('[WARNING] GITHUB_TOKEN not set. PR creation skipped.');
+    console.info('[INFO] You can create a PR manually (e.g. gh pr create --draft).');
+    return;
+  }
+
+  try {
+    const githubClient = new GitHubClient(githubToken, repositoryName);
+    const existingPr = await githubClient.checkExistingPr(branchName);
+    if (existingPr) {
+      console.warn(`[WARNING] PR already exists: ${existingPr.pr_url}`);
+      metadataManager.data.pr_number = existingPr.pr_number;
+      metadataManager.data.pr_url = existingPr.pr_url;
+      metadataManager.save();
+      return;
+    }
+
+    console.info('[INFO] Creating draft PR...');
+    const prTitle = `[AI-Workflow] Issue #${issueNumber}`;
+    const prBody = githubClient.generatePrBodyTemplate(issueNumber, branchName);
+    const prResult = await githubClient.createPullRequest(
+      prTitle,
+      prBody,
+      branchName,
+      'main',
+      true,
+    );
+
+    if (prResult.success) {
+      console.info(`[OK] Draft PR created: ${prResult.pr_url}`);
+      metadataManager.data.pr_number = prResult.pr_number ?? null;
+      metadataManager.data.pr_url = prResult.pr_url ?? null;
+      metadataManager.save();
+    } else {
+      console.warn(
+        `[WARNING] PR creation failed: ${prResult.error ?? 'unknown error'}. Please create manually.`,
+      );
+    }
+  } catch (error) {
+    console.warn(`[WARNING] Failed to create PR automatically: ${(error as Error).message}`);
+  }
+}
+```
+
+### 4. execute コマンドでメタデータから読み込み
+
+`scripts/ai-workflow-v2/src/main.ts:249-475` の `handleExecuteCommand` を修正：
+
+```typescript
+async function handleExecuteCommand(options: any): Promise<void> {
+  const issueNumber = String(options.issue);
+  const phaseOption: string = (options.phase ?? 'all').toLowerCase();
+  const presetOption: string | undefined = options.preset;
+  const skipDependencyCheck = Boolean(options.skipDependencyCheck);
+  const ignoreDependencies = Boolean(options.ignoreDependencies);
+  const forceReset = Boolean(options.forceReset);
+
+  if (presetOption && phaseOption !== 'all') {
+    console.error("[ERROR] Options '--preset' and '--phase' are mutually exclusive.");
+    process.exit(1);
+  }
+
+  if (!phaseOption && !presetOption) {
+    console.error("[ERROR] Either '--phase' or '--preset' must be specified.");
+    process.exit(1);
+  }
+
+  if (skipDependencyCheck && ignoreDependencies) {
+    console.error("[ERROR] Options '--skip-dependency-check' and '--ignore-dependencies' are mutually exclusive.");
+    process.exit(1);
+  }
+
+  // メタデータからリポジトリ情報を取得
+  const { repoRoot, metadataPath } = await findWorkflowMetadata(issueNumber);
+
+  if (!fs.existsSync(metadataPath)) {
+    console.error('Error: Workflow not found. Run init first.');
+    process.exit(1);
+  }
+
+  let metadataManager = new MetadataManager(metadataPath);
+
+  // メタデータから対象リポジトリ情報を取得
+  const targetRepo = metadataManager.data.target_repository;
+  if (targetRepo) {
+    console.info(`[INFO] Target repository: ${targetRepo.github_name}`);
+    console.info(`[INFO] Local path: ${targetRepo.path}`);
+  } else {
+    // 後方互換性: target_repositoryが存在しない場合は現在のリポジトリを使用
+    console.warn('[WARNING] target_repository not found in metadata. Using current repository.');
+  }
+
+  // 以降、既存の実装と同じ
+  // ただし、workingDir は targetRepo.path を使用
+  const workingDir = targetRepo?.path ?? repoRoot;
+
+  // ... (省略)
+}
+```
+
+### 5. .ai-workflow ディレクトリの配置
+
+**対象リポジトリ配下に配置**（推奨）
+
+```
+C:\Users\ytaka\TIELEC\development\my-app/
+  .ai-workflow/
+    issue-123/
+      metadata.json
+      00_planning/
+      01_requirements/
+      ...
+  src/
+  README.md
+  .gitignore  # .ai-workflow を追加
+```
+
+メリット:
+- 成果物と対象リポジトリが同じ場所にある
+- リポジトリごとに独立して管理できる
+- Git管理対象外（.gitignoreに追加）
+
+## メタデータスキーマ拡張
+
+`scripts/ai-workflow-v2/src/types.ts` に `target_repository` フィールドを追加：
+
+```typescript
+export interface TargetRepository {
+  path: string;              // ローカルパス
+  github_name: string;       // owner/repo形式
+  remote_url: string;        // Git remote URL
+  owner: string;             // リポジトリオーナー
+  repo: string;              // リポジトリ名
+}
+
+export interface WorkflowData {
+  issue_number: string;
+  issue_url: string;
+  issue_title: string;
+  branch_name?: string;
+  repository?: string;       // 既存フィールド（後方互換性）
+  target_repository?: TargetRepository; // 新規フィールド
+  phases: Record<PhaseName, PhaseMetadata>;
+  external_documents?: Record<string, string>;
+  // ... その他のフィールド
+}
+```
+
+metadata.json 例：
+
+```json
+{
+  "issue_number": "123",
+  "issue_url": "https://github.com/tielec/my-app/issues/123",
+  "target_repository": {
+    "path": "C:\\Users\\ytaka\\TIELEC\\development\\my-app",
+    "github_name": "tielec/my-app",
+    "remote_url": "https://github.com/tielec/my-app.git",
+    "owner": "tielec",
+    "repo": "my-app"
+  },
+  "phases": { ... }
+}
+```
+
+## 環境変数
+
+### REPOS_ROOT（推奨）
+
+```bash
+# Bash/Zsh
+export REPOS_ROOT="C:\Users\ytaka\TIELEC\development"
+
+# Jenkins環境変数
+environment {
+    REPOS_ROOT = 'C:\Users\ytaka\TIELEC\development'
+}
+```
+
+## 使用例
+
+### Case 1: infrastructure-as-codeリポジトリのIssue（現在と同じ）
+
+```bash
+cd C:\Users\ytaka\TIELEC\development\infrastructure-as-code
+
+npm run start -- init \
+  --issue-url https://github.com/tielec/infrastructure-as-code/issues/305
+
+# → 対象: infrastructure-as-code リポジトリ
+# → ローカルパス: C:\Users\ytaka\TIELEC\development\infrastructure-as-code
+```
+
+### Case 2: 別リポジトリ（my-app）のIssue
+
+```bash
+cd C:\Users\ytaka\TIELEC\development\infrastructure-as-code
+
+# my-appリポジトリのIssueを指定
+npm run start -- init \
+  --issue-url https://github.com/tielec/my-app/issues/123
+
+# → 自動判定
+#   - GitHubリポジトリ: tielec/my-app
+#   - ローカルパス: C:\Users\ytaka\TIELEC\development\my-app
+#   - .ai-workflowディレクトリ: C:\Users\ytaka\TIELEC\development\my-app/.ai-workflow/
+
+# 実行
+npm run start -- execute --phase all --issue 123
+
+# → my-appリポジトリが対象になる
+```
+
+### Case 3: リポジトリが見つからない場合
+
+```bash
+npm run start -- init \
+  --issue-url https://github.com/tielec/unknown-repo/issues/999
+
+# → [ERROR] Repository 'unknown-repo' not found.
+#          Please set REPOS_ROOT environment variable or clone the repository.
+```
+
+## メリット
+
+1. **シンプル**: Issue URLを指定するだけで対象リポジトリを自動判定
+2. **追加オプション不要**: `--target-repo-path` などのオプションが不要
+3. **直感的**: Issueとリポジトリが自然に対応
+4. **マルチリポジトリ対応**: 複数のリポジトリで並行実行可能
+
+## TODO
+
+- [ ] `parseIssueUrl()` 関数を実装
+- [ ] `resolveLocalRepoPath()` 関数を実装
+- [ ] `findWorkflowMetadata()` 関数を実装（execute時のメタデータ探索）
+- [ ] `handleInitCommand()` を修正（Issue URLから自動判定）
+- [ ] `handleExecuteCommand()` を修正（メタデータから読み込み）
+- [ ] `types.ts` に `TargetRepository` 型を追加
+- [ ] `metadata.json` スキーマに `target_repository` フィールドを追加
+- [ ] `WorkflowState` のマイグレーション機能実装
+- [ ] 対象リポジトリの .gitignore に .ai-workflow を追加（自動 or ガイド）
+- [ ] Jenkinsfile の環境変数設定（REPOS_ROOT）
+- [ ] ドキュメント更新（README.md、使用例）
+- [ ] テストケース追加
+
+## 関連ファイル
+
+- `scripts/ai-workflow-v2/src/main.ts`
+- `scripts/ai-workflow-v2/src/core/metadata-manager.ts`
+- `scripts/ai-workflow-v2/src/core/workflow-state.ts`
+- `scripts/ai-workflow-v2/src/core/claude-agent-client.ts`
+- `scripts/ai-workflow-v2/src/core/git-manager.ts`
+- `scripts/ai-workflow-v2/src/core/github-client.ts`
+- `scripts/ai-workflow-v2/src/types.ts`
+- `jenkins/jobs/pipeline/ai-workflow/ai-workflow-orchestrator/Jenkinsfile`
+
+
+## プロジェクト計画書の構成
+
+以下のセクションを含むプロジェクト計画書を作成してください：
+
+### 1. Issue分析
+- **複雑度**: 簡単/中程度/複雑を判定
+  - 簡単: 単一ファイルの修正、シンプルな機能追加（見積もり: ~4時間）
+  - 中程度: 複数ファイルの修正、既存機能の拡張（見積もり: 4~16時間）
+  - 複雑: アーキテクチャ変更、新規サブシステム追加（見積もり: 16時間~）
+- **見積もり工数**: X時間（根拠を記載）
+- **リスク評価**: 低/中/高
+
+### 2. 実装戦略判断
+
+**重要**: このセクションは最も重要です。Phase 2（Design）で使用されるため、必ず明記してください。
+
+#### 実装戦略: CREATE / EXTEND / REFACTOR
+
+**判断根拠**:
+- CREATE: 新規ファイル・クラス・モジュールの作成が中心
+- EXTEND: 既存コードの拡張（機能追加）が中心
+- REFACTOR: 既存コードのリファクタリング（構造改善）が中心
+
+（判断理由を具体的に記載）
+
+#### テスト戦略: UNIT_ONLY / INTEGRATION_ONLY / BDD_ONLY / UNIT_INTEGRATION / UNIT_BDD / INTEGRATION_BDD / ALL
+
+**判断根拠**:
+- UNIT_ONLY: ユニットテストのみ（単純なロジック、外部依存なし）
+- INTEGRATION_ONLY: インテグレーションテストのみ（外部システム連携中心）
+- BDD_ONLY: BDDテストのみ（ユーザーストーリー中心）
+- UNIT_INTEGRATION: ユニット + インテグレーション（一般的な機能開発）
+- UNIT_BDD: ユニット + BDD（エンドユーザー向け機能）
+- INTEGRATION_BDD: インテグレーション + BDD（システム間連携＋ユーザーストーリー）
+- ALL: すべてのテストレベル（大規模な変更、高リスク）
+
+（判断理由を具体的に記載）
+
+#### テストコード戦略: EXTEND_TEST / CREATE_TEST / BOTH_TEST
+
+**判断根拠**:
+- EXTEND_TEST: 既存テストファイルに追加（既存機能の拡張時）
+- CREATE_TEST: 新規テストファイル作成（新規機能追加時）
+- BOTH_TEST: 両方（既存テスト拡張 + 新規テスト作成）
+
+（判断理由を具体的に記載）
+
+### 3. 影響範囲分析
+- **既存コードへの影響**: 変更が必要なファイル・モジュール
+- **依存関係の変更**: 新規依存の追加、既存依存の変更
+- **マイグレーション要否**: データベーススキーマ変更、設定ファイル変更等
+
+### 4. タスク分割
+
+## ⚠️ 重要: チェックリスト標準フォーマット（必須）
+
+各フェーズのタスクは、**必ずチェックリスト形式**で記述してください。このチェックリストは、Review Phaseで完了判定に使用されます。
+
+### 標準フォーマット
+
+```markdown
+### Phase X: [フェーズ名] (見積もり: X~Yh)
+
+- [ ] Task X-1: [タスク名] (見積もり時間)
+  - [サブタスク1]
+  - [サブタスク2]
+- [ ] Task X-2: [タスク名] (見積もり時間)
+  - [サブタスク1]
+```
+
+**重要**: このチェックリストは、Review Phaseで完了判定に使用されます。各タスクは明確で検証可能な内容にしてください。
+
+**良い例**:
+```
+- [ ] Task 4-1: CLI層の分離 (3~5h)
+  - cli/commands.py の作成
+  - main.pyからCLIロジックを抽出
+```
+
+**悪い例**:
+```
+- [ ] リファクタリングを実施
+```
+（検証不可能なため不適切）
+
+### 各フェーズのタスクリスト
+
+各フェーズについて、サブタスクを洗い出してください：
+
+#### Phase 1: 要件定義 (見積もり: Xh)
+
+- [ ] Task 1-1: [タスク名] (見積もり時間)
+  - サブタスク1
+  - サブタスク2
+- [ ] Task 1-2: [タスク名] (見積もり時間)
+  - サブタスク1
+
+#### Phase 2: 設計 (見積もり: Xh)
+
+- [ ] Task 2-1: [タスク名] (見積もり時間)
+  - サブタスク1
+  - サブタスク2
+
+#### Phase 3: テストシナリオ (見積もり: Xh)
+
+- [ ] Task 3-1: [タスク名] (見積もり時間)
+  - サブタスク1
+
+#### Phase 4: 実装 (見積もり: Xh)
+
+- [ ] Task 4-1: [タスク名] (見積もり時間)
+  - サブタスク1
+  - サブタスク2
+
+#### Phase 5: テストコード実装 (見積もり: Xh)
+
+- [ ] Task 5-1: [タスク名] (見積もり時間)
+  - サブタスク1
+
+#### Phase 6: テスト実行 (見積もり: Xh)
+
+- [ ] Task 6-1: [タスク名] (見積もり時間)
+  - サブタスク1
+
+#### Phase 7: ドキュメント (見積もり: Xh)
+
+- [ ] Task 7-1: [タスク名] (見積もり時間)
+  - サブタスク1
+
+#### Phase 8: レポート (見積もり: Xh)
+
+- [ ] Task 8-1: [タスク名] (見積もり時間)
+  - サブタスク1
+
+**タスク粒度基準**:
+- 1タスク = 1~4時間程度で完了可能な作業単位
+- 明確な完了条件（Done criteria）を持つ
+- 他のタスクから独立して実装・テスト可能
+- **検証可能**: Review Phaseで「完了したか」を客観的に判断できる内容
+
+### 5. 依存関係
+
+タスク間の依存関係をMermaid形式で図示してください：
+
+```mermaid
+graph TD
+    P1[Phase 1] --> P2[Phase 2]
+    P2 --> P3[Phase 3]
+    P3 --> P4[Phase 4]
+    P4 --> P5[Phase 5]
+    P5 --> P6[Phase 6]
+    P6 --> P7[Phase 7]
+```
+
+### 6. リスクと軽減策
+
+潜在的なリスクを洗い出し、各リスクに対する軽減策を記載してください：
+
+#### リスク1: （リスク名）
+- **影響度**: 低/中/高
+- **確率**: 低/中/高
+- **軽減策**: （具体的な対策）
+
+#### リスク2: （リスク名）
+...
+
+**リスクカテゴリ**:
+- 技術的リスク: 新技術の学習コスト、既存システムとの統合問題
+- スコープリスク: 要件の曖昧さ、スコープクリープ
+- リソースリスク: 工数不足、スキル不足
+- 依存リスク: 外部システム依存、ブロッキング問題
+
+### 7. 品質ゲート
+
+各フェーズの合格基準を定義してください：
+
+#### Phase 1: 要件定義
+- [ ] 機能要件が明確に記載されている
+- [ ] 受け入れ基準が定義されている
+...
+
+#### Phase 2: 設計
+- [ ] 実装戦略の判断根拠が明記されている
+- [ ] テスト戦略の判断根拠が明記されている
+...
+
+（以下、Phase 3~7についても記載）
+
+## 出力形式
+
+Markdown形式でプロジェクト計画書を作成し、以下のファイルに保存してください：
+
+```
+.ai-workflow/issue-369/00_planning/output/planning.md
+```
+
+## 品質ゲート（Phase 0）
+
+作成するプロジェクト計画書は、以下の品質ゲートを満たす必要があります：
+
+- [ ] **実装戦略が明確に決定されている**（CREATE/EXTEND/REFACTOR）
+- [ ] **テスト戦略が明確に決定されている**（UNIT_ONLY/.../ALL）
+- [ ] **テストコード戦略が明確に決定されている**（EXTEND_TEST/CREATE_TEST/BOTH_TEST）
+- [ ] **影響範囲が分析されている**
+- [ ] **タスク分割が適切な粒度である**（1タスク = 1~4時間）
+- [ ] **リスクが洗い出されている**
+
+これらの品質ゲートは**必須要件**です。作成後、クリティカルシンキングレビューが実施され、品質ゲートを満たさない場合は修正が必要になります。
+
+## 注意事項
+
+1. **実装戦略の判断**: Phase 2で使用されるため、必ず明記してください
+   - 実装戦略: CREATE/EXTEND/REFACTOR
+   - テスト戦略: UNIT_ONLY/.../ALL
+   - テストコード戦略: EXTEND_TEST/CREATE_TEST/BOTH_TEST
+
+2. **具体性**: 曖昧な表現を避け、具体的かつ測定可能な計画を記述
+   - NG例: "適切に対応する"、"必要に応じて実施"
+   - OK例: "Phase 2で詳細設計を実施"、"最大3回のリトライを実施"
+
+3. **実現可能性**: 見積もりが現実的か、リソースは十分か確認
+   - タスク粒度が大きすぎないか（1タスク = 1~4時間）
+   - 依存関係が正確に記載されているか
+
+4. **リスク分析の網羅性**: 重要なリスクが見逃されていないか確認
+   - 技術的リスク、スコープリスク、リソースリスク、依存リスク
+
+5. **レビューされることを意識**: 作成した計画書はクリティカルシンキングレビューが実施されます
+   - 品質ゲート（6つの必須要件）を最優先で満たすこと
+   - ブロッカー（次フェーズに進めない問題）がないように注意
+   - 改善提案は歓迎されるが、ブロッカーは修正が必須
+
+## 参考情報
+
+必要に応じて以下を参照してください（存在する場合）：
+- @CLAUDE.md - プロジェクトの全体方針とコーディングガイドライン
+- @ARCHITECTURE.md - アーキテクチャ設計思想
+- @CONTRIBUTION.md - 開発ガイドライン
+- @README.md - プロジェクト概要と使用方法
+- その他、プロジェクト固有のドキュメント
+
+## プロジェクト計画書の作成を開始してください
