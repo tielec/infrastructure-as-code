@@ -241,27 +241,27 @@ Issue #396で作成されたテストコード（42ケース）は、今回の�
 
 ### Phase 4: 実装 (見積もり: 3~5h)
 
-- [ ] Task 4-1: test-implementation.tsの修正 (0.5~0.75h)
+- [x] Task 4-1: test-implementation.tsの修正 (0.5~0.75h)
   - requirementsContext、designContext、scenarioContext、implementationContextの構築を`buildOptionalContext`に置き換え
   - プロンプト置換キーを変更（`{requirements_document_path}` → `{requirements_context}`など）
   - エラーハンドリング処理の削除（オプショナル参照に変更）
 
-- [ ] Task 4-2: testing.tsの修正 (0.5~0.75h)
+- [x] Task 4-2: testing.tsの修正 (0.5~0.75h)
   - testImplementationContext、implementationContextの構築を`buildOptionalContext`に置き換え
   - プロンプト置換キーを変更
   - エラーハンドリング処理の削除
 
-- [ ] Task 4-3: documentation.tsの修正 (0.5~0.75h)
+- [x] Task 4-3: documentation.tsの修正 (0.5~0.75h)
   - implementationContext、testingContextの構築を`buildOptionalContext`に置き換え
   - プロンプト置換キーを変更
   - エラーハンドリング処理の削除
 
-- [ ] Task 4-4: report.tsの修正 (0.75~1.25h)
+- [x] Task 4-4: report.tsの修正 (0.75~1.25h)
   - requirementsContext、designContext、implementationContext、testingContext、documentationContextの構築を`buildOptionalContext`に置き換え
   - プロンプト置換キーを変更（5箇所）
   - エラーハンドリング処理の削除
 
-- [ ] Task 4-5: プロンプトファイル5個の修正 (0.75~1.5h)
+- [x] Task 4-5: プロンプトファイル5個の修正 (0.75~1.5h)
   - implementation/execute.txt: 置換キー変更、コメント追加
   - test_implementation/execute.txt: 置換キー変更、コメント追加
   - testing/execute.txt: 置換キー変更、コメント追加

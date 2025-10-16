@@ -12,34 +12,34 @@ export class TestImplementationPhase extends BasePhase {
     const issueNumber = parseInt(this.metadata.data.issue_number, 10);
     const planningReference = this.getPlanningDocumentReference(issueNumber);
 
-    const requirementsFile = this.getPhaseOutputFile('requirements', 'requirements.md', issueNumber);
-    const designFile = this.getPhaseOutputFile('design', 'design.md', issueNumber);
-    const scenarioFile = this.getPhaseOutputFile('test_scenario', 'test-scenario.md', issueNumber);
-    const implementationFile = this.getPhaseOutputFile('implementation', 'implementation.md', issueNumber);
+    // オプショナルコンテキストを構築（Issue #398）
+    const requirementsContext = this.buildOptionalContext(
+      'requirements',
+      'requirements.md',
+      '要件定義書は利用できません。Planning情報とIssue情報から要件を推測してください。',
+      issueNumber,
+    );
 
-    if (!requirementsFile || !designFile || !scenarioFile || !implementationFile) {
-      return {
-        success: false,
-        error: '要件・設計・テストシナリオ・実装のいずれかが欠けています。',
-      };
-    }
+    const designContext = this.buildOptionalContext(
+      'design',
+      'design.md',
+      '設計書は利用できません。Issue情報とPlanning情報に基づいて適切な設計判断を行ってください。',
+      issueNumber,
+    );
 
-    const requirementsReference = this.getAgentFileReference(requirementsFile);
-    const designReference = this.getAgentFileReference(designFile);
-    const scenarioReference = this.getAgentFileReference(scenarioFile);
-    const implementationReference = this.getAgentFileReference(implementationFile);
+    const scenarioContext = this.buildOptionalContext(
+      'test_scenario',
+      'test-scenario.md',
+      'テストシナリオは利用できません。実装時に適切なテスト考慮を行ってください。',
+      issueNumber,
+    );
 
-    if (
-      !requirementsReference ||
-      !designReference ||
-      !scenarioReference ||
-      !implementationReference
-    ) {
-      return {
-        success: false,
-        error: 'Claude Agent から参照できないドキュメントがあります。',
-      };
-    }
+    const implementationContext = this.buildOptionalContext(
+      'implementation',
+      'implementation.md',
+      '実装ログは利用できません。設計書とテストシナリオに基づいて実装してください。',
+      issueNumber,
+    );
 
     const testStrategy = this.metadata.data.design_decisions.test_strategy;
     const testCodeStrategy = this.metadata.data.design_decisions.test_code_strategy;
@@ -53,10 +53,10 @@ export class TestImplementationPhase extends BasePhase {
 
     const executePrompt = this.loadPrompt('execute')
       .replace('{planning_document_path}', planningReference)
-      .replace('{requirements_document_path}', requirementsReference)
-      .replace('{design_document_path}', designReference)
-      .replace('{test_scenario_document_path}', scenarioReference)
-      .replace('{implementation_document_path}', implementationReference)
+      .replace('{requirements_context}', requirementsContext)
+      .replace('{design_context}', designContext)
+      .replace('{test_scenario_context}', scenarioContext)
+      .replace('{implementation_context}', implementationContext)
       .replace('{test_strategy}', testStrategy)
       .replace('{test_code_strategy}', testCodeStrategy)
       .replace('{issue_number}', String(issueNumber));
