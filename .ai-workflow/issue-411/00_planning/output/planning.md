@@ -136,14 +136,14 @@
 
 ### Phase 4: 実装 (見積もり: 3~5h)
 
-- [ ] Task 4-1: Phase 1 - Deprecated化の実施 (1h)
+- [x] Task 4-1: Phase 1 - Deprecated化の実施 (1h)
   - `scripts/ai-workflow/DEPRECATED.md` 作成
   - `scripts/ai-workflow/README.md` に非推奨警告追加
   - V1使用中のJenkinsジョブがあれば非推奨警告追加（V2使用中の場合はスキップ）
-- [ ] Task 4-2: Phase 2 - Jenkinsジョブの確認と更新 (0.5~1h)
+- [x] Task 4-2: Phase 2 - Jenkinsジョブの確認と更新 (0.5~1h)
   - V1を使用しているJenkinsジョブがないことを確認（既にV2使用中）
   - 必要に応じてfolder-config.yamlのV1参照を削除
-- [ ] Task 4-3: Phase 3 - ドキュメント更新 (1~2h)
+- [x] Task 4-3: Phase 3 - ドキュメント更新 (1~2h)
   - `jenkins/README.md` からV1への参照削除
   - その他のドキュメントからV1への参照削除
   - V2のREADMEに移行完了の記載追加（必要に応じて）
@@ -152,6 +152,7 @@
   - ブランチをリモートにプッシュ: `git push origin archive/ai-workflow-v1-python`
   - mainブランチに戻って削除実行: `git rm -rf scripts/ai-workflow/`
   - コミット作成: `[scripts] remove: AI Workflow V1 (Python版) を削除`
+  - **注意**: Phase 6（テスト実行）で検証テスト実施後に実行予定
 
 ### Phase 5: テストコード実装 (見積もり: 0h)
 

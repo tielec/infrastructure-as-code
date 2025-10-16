@@ -383,10 +383,8 @@ folders:
       * Git
 
       ### ドキュメント
-      * **README**: scripts/ai-workflow/README.md
-      * **アーキテクチャ**: scripts/ai-workflow/ARCHITECTURE.md
-      * **トラブルシューティング**: scripts/ai-workflow/TROUBLESHOOTING.md
-      * **ロードマップ**: scripts/ai-workflow/ROADMAP.md
+      * **README**: scripts/ai-workflow-v2/README.md
+      * **アーキテクチャ**: scripts/ai-workflow-v2/ARCHITECTURE.md
 
       ### 成果物
       実行後、`.ai-workflow/issue-{番号}/` に以下が生成されます:
