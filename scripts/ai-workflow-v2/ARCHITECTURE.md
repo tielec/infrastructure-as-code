@@ -85,6 +85,15 @@ CLI (src/main.ts)
 
 `BasePhase` クラスの `buildOptionalContext()` メソッドは、前段フェーズの成果物が存在しない場合でもフェーズを実行できるようにします。ファイルが存在する場合は `@filepath` 形式で参照し、存在しない場合はフォールバックメッセージを返します。これにより `quick-fix` プリセットなどで、依存関係を無視した柔軟な実行が可能になります。
 
+**適用済みPhase**（Issue #398で完了）:
+- `ImplementationPhase` - requirements、design、test_scenario を参照
+- `TestImplementationPhase` - requirements、design、test_scenario、implementation を参照
+- `TestingPhase` - test_implementation、implementation、test_scenario を参照
+- `DocumentationPhase` - implementation、testing を主要コンテキストとして参照
+- `ReportPhase` - requirements、design、implementation、testing、documentation を参照
+
+各Phaseは、ファイルが存在しない場合でも適切なフォールバックメッセージによりエージェントが動作を継続できます。
+
 ## ワークフローメタデータ
 
 ```
