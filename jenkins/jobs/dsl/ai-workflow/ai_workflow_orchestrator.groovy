@@ -24,7 +24,8 @@ GitHub Issue を入力として、要件定義から報告までの開発プロ�
 9. Phase 9: 評価 (Evaluation)
 
 【実行モード】
-- all_phases（推奨）: 全フェーズを順次実行（resume により途中から再開可能）
+- all_phases: 全フェーズを順次実行（resume により途中から再開可能）
+- preset（推奨）: 定義済みワークフローパターンを実行（例: quick-fix, implementation, testing）
 - single_phase: 指定フェーズのみ実行（デバッグ用）
 
 【レビューとリトライ】
@@ -51,11 +52,24 @@ GitHub Issue URL（必須）
 - claude: Claude Code のみを使用（credentials.json が必要）
         '''.stripIndent().trim())
 
-        choiceParam('EXECUTION_MODE', ['all_phases', 'single_phase'], '''
+        choiceParam('EXECUTION_MODE', ['all_phases', 'preset', 'single_phase'], '''
 実行モード
 
 - all_phases: planning から evaluation まで一括実行（resume により失敗フェーズから再開）
+- preset: 定義済みワークフローパターンを実行（推奨）
 - single_phase: START_PHASE で指定したフェーズのみ実行
+        '''.stripIndent().trim())
+
+        choiceParam('PRESET', ['quick-fix', 'implementation', 'testing', 'review-requirements', 'review-design', 'review-test-scenario', 'finalize'], '''
+プリセット（preset モード時のみ有効）
+
+- quick-fix: 軽微な修正用（Implementation → Documentation → Report）
+- implementation: 通常の実装フロー（Implementation → TestImplementation → Testing → Documentation → Report）
+- testing: テスト追加用（TestImplementation → Testing）
+- review-requirements: 要件定義レビュー用（Planning → Requirements）
+- review-design: 設計レビュー用（Planning → Requirements → Design）
+- review-test-scenario: テストシナリオレビュー用（Planning → Requirements → Design → TestScenario）
+- finalize: 最終化用（Documentation → Report → Evaluation）
         '''.stripIndent().trim())
 
         choiceParam('START_PHASE', ['planning', 'requirements', 'design', 'test_scenario', 'implementation', 'test_implementation', 'testing', 'documentation', 'report', 'evaluation'], '''

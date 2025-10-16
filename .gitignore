@@ -46,6 +46,9 @@ tmp/
 temp/
 *.tmp
 
+# Sandbox
+scripts/ai-workflow-v2/sandbox/
+
 # Python
 __pycache__/
 *.py[cod]
