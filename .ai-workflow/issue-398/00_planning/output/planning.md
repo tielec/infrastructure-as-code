@@ -276,12 +276,12 @@ Issue #396で作成されたテストコード（42ケース）は、今回の�
 
 ### Phase 6: テスト実行 (見積もり: 1.5~2.5h)
 
-- [ ] Task 6-1: 自動テストの実行 (0.5h)
+- [x] Task 6-1: 自動テストの実行 (0.5h)
   - Issue #396の42個のテストケースを実行
   - テスト結果の確認（全42ケース成功を期待）
   - テストカバレッジの確認
 
-- [ ] Task 6-2: 手動E2Eテストの実施 (1~2h)
+- [x] Task 6-2: 手動E2Eテストの実施 (1~2h)
   - quick-fixプリセット実行（--preset quick-fix --ignore-dependencies）
   - implementationプリセット実行
   - 非推奨プリセット名での実行（requirements-only → 警告確認）
