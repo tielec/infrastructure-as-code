@@ -76,6 +76,9 @@ ai-workflow-v2 execute \
   [--requirements-doc <path>] [...] \
   [--git-user <name>] [--git-email <email>]
 
+ai-workflow-v2 execute \
+  --list-presets
+
 ai-workflow-v2 review \
   --phase <name> \
   --issue <number>
@@ -86,6 +89,52 @@ ai-workflow-v2 review \
 - `auto`（既定）: Codex API キーがあれば Codex を使用し、なければ Claude にフォールバックします。
 - `codex`: Codex のみを使用（`gpt-5-codex`）。Claude 認証情報は無視されます。
 - `claude`: Claude Code を強制使用。`CLAUDE_CODE_CREDENTIALS_PATH` が必須です。
+
+### プリセット
+
+プリセットは、よくある開発パターンに合わせて複数のフェーズを組み合わせたショートカットです。
+
+**利用可能なプリセット一覧**:
+
+```bash
+# プリセット一覧を表示
+ai-workflow-v2 execute --list-presets
+```
+
+| プリセット名 | 含まれるフェーズ | 用途 |
+|------------|----------------|------|
+| `review-requirements` | Planning + Requirements | 要件定義のレビュー用 |
+| `review-design` | Planning + Requirements + Design | 設計のレビュー用 |
+| `review-test-scenario` | Planning + Requirements + Design + TestScenario | テストシナリオのレビュー用 |
+| `quick-fix` | Implementation + Documentation + Report | 軽微な修正（タイポ、小さなバグ修正） |
+| `implementation` | Implementation + TestImplementation + Testing + Documentation + Report | 通常の実装フロー |
+| `testing` | TestImplementation + Testing | 既存実装へのテスト追加 |
+| `finalize` | Documentation + Report + Evaluation | 実装完了後の最終化 |
+
+**使用例**:
+
+```bash
+# 軽微な修正を実装からレポートまで一括実行
+ai-workflow-v2 execute --issue 385 --preset quick-fix
+
+# 要件定義とPlanningのみ実行してレビューを受ける
+ai-workflow-v2 execute --issue 386 --preset review-requirements
+```
+
+**プリセット vs `--phase` の使い分け**:
+
+- **プリセット**: 頻繁に使用するフェーズの組み合わせ（推奨）
+- **`--phase all`**: 全フェーズを実行（新規Issue、初回実行時）
+- **`--phase <name>`**: 単一フェーズ実行、またはプリセットでカバーされないパターン
+
+**後方互換性**:
+
+旧プリセット名も6ヶ月間サポートされますが、新しい名前への移行を推奨します:
+
+- `requirements-only` → `review-requirements`
+- `design-phase` → `review-design`
+- `implementation-phase` → `implementation`
+- `full-workflow` → `--phase all`
 
 ### 依存関係チェックのフラグ
 
@@ -150,5 +199,5 @@ npx vitest
 
 ---
 
-**バージョン**: 0.2.0（TypeScript リライト版）  
-**最終更新日**: 2025-10-15
+**バージョン**: 0.2.0（TypeScript リライト版）
+**最終更新日**: 2025-01-16

@@ -24,7 +24,7 @@ CLI (src/main.ts)
 
 | モジュール | 役割 |
 |------------|------|
-| `src/main.ts` | `commander` による CLI 定義。オプション解析、環境初期化、ブランチ検証を担当。 |
+| `src/main.ts` | `commander` による CLI 定義。オプション解析、環境初期化、ブランチ検証、プリセット解決を担当。 |
 | `src/index.ts` | `ai-workflow-v2` 実行ファイルのエントリーポイント。`runCli` を呼び出す。 |
 | `src/core/codex-agent-client.ts` | Codex CLI を起動し JSON イベントをストリーム処理。認証エラー検知・利用量記録も実施。 |
 | `src/core/claude-agent-client.ts` | Claude Agent SDK を利用してイベントを取得し、Codex と同様の JSON 形式で保持。 |
@@ -33,6 +33,7 @@ CLI (src/main.ts)
 | `src/core/git-manager.ts` | `simple-git` 経由でブランチ切替、pull、commit、push を実行。 |
 | `src/core/metadata-manager.ts` | `.ai-workflow/issue-*/metadata.json` の CRUD、コスト集計、リトライ回数管理など。 |
 | `src/core/workflow-state.ts` | メタデータの読み書きとマイグレーション処理。 |
+| `src/core/phase-dependencies.ts` | フェーズ間の依存関係管理、プリセット定義、依存関係チェック機能を提供。 |
 | `src/phases/*.ts` | 各フェーズの具象クラス。`execute()`, `review()`, `revise()` を実装。 |
 | `src/prompts/{phase}/*.txt` | フェーズ別のプロンプトテンプレート。 |
 | `src/templates/*.md` | PR ボディ等の Markdown テンプレート。 |
@@ -56,6 +57,33 @@ CLI (src/main.ts)
 - `claude` … Claude 認証情報が必須。Codex は無効化されます。
 
 `CodexAgentClient` は JSON イベントを `agent_log_raw.txt` に蓄積し、Markdown サマリー（失敗時は生 JSON ブロック）を生成します。`ClaudeAgentClient` は従来の Markdown 形式を維持します。
+
+## プリセットとフェーズ依存関係
+
+### プリセット機能
+
+`src/core/phase-dependencies.ts` は、よくある開発パターンに合わせて複数のフェーズを組み合わせたプリセット定義を提供します。
+
+**主なプリセット**:
+- `review-requirements`, `review-design`, `review-test-scenario` … レビュー駆動パターン
+- `quick-fix`, `implementation` … 実装中心パターン
+- `testing` … テスト中心パターン
+- `finalize` … ドキュメント・レポートパターン
+
+プリセット名の解決は `src/main.ts` の `resolvePresetName()` 関数で行われ、後方互換性のために非推奨プリセット名（`requirements-only`, `design-phase`, `implementation-phase`, `full-workflow`）のエイリアスもサポートします。
+
+### 依存関係チェック
+
+`validatePhaseDependencies()` 関数は、各フェーズの実行前に依存する前段フェーズが完了しているかチェックします。以下の機能を提供:
+
+- **完了状態チェック**: metadata.json の `completed` フラグを確認
+- **ファイル存在チェック**: 実ファイルが存在するか確認（`checkFileExistence` オプション）
+- **エラーメッセージ構築**: 未完了フェーズとファイル不在を明示的に表示
+- **警告モード**: `--ignore-dependencies` オプションで警告のみ表示して実行継続
+
+### オプショナルコンテキスト構築
+
+`BasePhase` クラスの `buildOptionalContext()` メソッドは、前段フェーズの成果物が存在しない場合でもフェーズを実行できるようにします。ファイルが存在する場合は `@filepath` 形式で参照し、存在しない場合はフォールバックメッセージを返します。これにより `quick-fix` プリセットなどで、依存関係を無視した柔軟な実行が可能になります。
 
 ## ワークフローメタデータ
 
