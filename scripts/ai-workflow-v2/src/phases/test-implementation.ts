@@ -96,6 +96,7 @@ export class TestImplementationPhase extends BasePhase {
       };
     }
 
+    const planningReference = this.getPlanningDocumentReference(issueNumber);
     const designFile = this.getPhaseOutputFile('design', 'design.md', issueNumber);
     const scenarioFile = this.getPhaseOutputFile('test_scenario', 'test-scenario.md', issueNumber);
     const implementationFile = this.getPhaseOutputFile('implementation', 'implementation.md', issueNumber);
@@ -128,6 +129,7 @@ export class TestImplementationPhase extends BasePhase {
     const testCodeStrategy = this.metadata.data.design_decisions.test_code_strategy ?? 'UNKNOWN';
 
     const reviewPrompt = this.loadPrompt('review')
+      .replace('{planning_document_path}', planningReference)
       .replace('{test_implementation_document_path}', testImplementationReference)
       .replace('{design_document_path}', designReference)
       .replace('{test_scenario_document_path}', scenarioReference)

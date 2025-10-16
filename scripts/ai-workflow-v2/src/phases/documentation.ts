@@ -143,7 +143,9 @@ export class DocumentationPhase extends BasePhase {
     documentationPath: string,
     outputs: PhaseOutputMap,
   ): string {
+    const planningReference = this.getPlanningDocumentReference(issueNumber);
     const basePrompt = this.loadPrompt(promptType)
+      .replace('{planning_document_path}', planningReference)
       .replace('{documentation_update_log_path}', this.requireReferencePath(documentationPath))
       .replace('{issue_number}', String(issueNumber));
 
