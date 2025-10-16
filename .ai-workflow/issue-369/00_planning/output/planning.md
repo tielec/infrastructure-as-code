@@ -273,14 +273,14 @@ interface WorkflowMetadata {
 
 ### Phase 7: ドキュメント (見積もり: 1h)
 
-- [ ] Task 7-1: README.md の更新 (0.5h)
+- [x] Task 7-1: README.md の更新 (0.5h)
   - 環境変数REPOS_ROOTの説明追加
   - マルチリポジトリ対応の使用例追加
   - .gitignoreへの`.ai-workflow`追加案内
-- [ ] Task 7-2: コード内コメントの追加 (0.5h)
-  - `parseIssueUrl()`のJSDoc追加
-  - `resolveLocalRepoPath()`のJSDoc追加
-  - `findWorkflowMetadata()`のJSDoc追加
+- [x] Task 7-2: コード内コメントの追加 (0.5h)
+  - `parseIssueUrl()`のJSDoc追加 - Phase 4で完了済み
+  - `resolveLocalRepoPath()`のJSDoc追加 - Phase 4で完了済み
+  - `findWorkflowMetadata()`のJSDoc追加 - Phase 4で完了済み
 
 ### Phase 8: レポート (見積もり: 0.5h)
 
@@ -453,11 +453,11 @@ graph TD
 
 ### Phase 7: ドキュメント
 
-- [ ] README.mdに環境変数REPOS_ROOTの説明が追加されている
-- [ ] README.mdにマルチリポジトリ対応の使用例が追加されている
-- [ ] .gitignoreへの`.ai-workflow`追加案内が記載されている
-- [ ] JSDocコメントが追加されている（parseIssueUrl, resolveLocalRepoPath, findWorkflowMetadata）
-- [ ] ドキュメントの表現が明確で曖昧さがない
+- [x] README.mdに環境変数REPOS_ROOTの説明が追加されている
+- [x] README.mdにマルチリポジトリ対応の使用例が追加されている
+- [x] .gitignoreへの`.ai-workflow`追加案内が記載されている（更新不要と判断）
+- [x] JSDocコメントが追加されている（parseIssueUrl, resolveLocalRepoPath, findWorkflowMetadata） - Phase 4で完了済み
+- [x] ドキュメントの表現が明確で曖昧さがない
 
 ### Phase 8: レポート
 

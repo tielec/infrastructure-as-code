@@ -72,7 +72,35 @@ TypeScript CLI をローカルまたは Jenkins で利用する際によく発�
 
 - `jenkins/jobs/dsl/ai-workflow/ai_workflow_orchestrator.groovy` で `AGENT_MODE` を定義しています。シードジョブを再実行して DSL を再適用してください。
 
-## 6. プリセット関連
+## 6. マルチリポジトリ対応関連
+
+### `Repository '<repo-name>' not found`
+
+- ローカルに対象リポジトリがクローンされているか確認します。
+- 環境変数 `REPOS_ROOT` が正しく設定されているか確認します:
+  ```bash
+  export REPOS_ROOT="$HOME/projects"  # リポジトリの親ディレクトリ
+  ```
+- `REPOS_ROOT` が未設定の場合、以下の候補パスが自動探索されます:
+  - `~/TIELEC/development/<repo-name>`
+  - `~/projects/<repo-name>`
+  - `<current-repo>/../<repo-name>`
+- 対象リポジトリに `.git` ディレクトリが存在するか確認します（Git リポジトリとして認識される条件）。
+
+### `Workflow metadata for issue <number> not found`
+
+- `execute` コマンドで Issue 番号を指定した際、対応するメタデータが見つからない場合に発生します。
+- `init` コマンドを先に実行したか確認します。
+- `.ai-workflow/issue-<number>/metadata.json` が対象リポジトリ配下に存在するか確認します。
+- 複数のリポジトリに同じ Issue 番号のメタデータがある場合、最初に見つかったものが使用されます。
+
+### 後方互換性の警告: `target_repository not found in metadata`
+
+- 既存のワークフロー（v0.2.0 より前に作成）の場合に表示される警告メッセージです。
+- 警告が表示されても、実行環境のリポジトリを使用して正常に動作します。
+- 新しいスキーマに移行するには、`init` コマンドを再実行してください。
+
+## 7. プリセット関連
 
 ### `Unknown preset: <name>`
 
@@ -102,11 +130,12 @@ TypeScript CLI をローカルまたは Jenkins で利用する際によく発�
   node dist/index.js execute --phase all --issue 385
   ```
 
-## 7. デバッグのヒント
+## 8. デバッグのヒント
 
 - Codex の問題切り分けには `--agent claude`、Claude の問題切り分けには `--agent codex` を利用。
 - `.ai-workflow/issue-*/<phase>/execute/agent_log_raw.txt` の生ログを確認すると詳細が分かります。
 - `DEBUG=ai-workflow:*` を設定すると詳細ログ（カスタムフック）が出力されます。
 - Git の問題は `GIT_TRACE=1` を付与して調査できます。
+- マルチリポジトリ関連の問題は、Issue URL が正しいか、対象リポジトリが正しくクローンされているか確認してください。
 
 対処できない場合は、実行したコマンド、環境変数（機微情報をマスク）、`agent_log_raw.txt` の該当箇所を添えて Issue もしくはチームチャンネルで共有してください。

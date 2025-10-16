@@ -6,9 +6,14 @@
 
 ```
 CLI (src/main.ts)
- ├─ init コマンド … メタデータ初期化 + ブランチ作成
+ ├─ init コマンド … メタデータ初期化 + ブランチ作成 + 対象リポジトリ判定
+ │    ├─ Issue URL を解析（parseIssueUrl）
+ │    ├─ ローカルリポジトリパスを解決（resolveLocalRepoPath）
+ │    └─ target_repository をメタデータに保存
  ├─ execute コマンド
+ │    ├─ メタデータ探索（findWorkflowMetadata）
  │    ├─ .ai-workflow/issue-*/metadata.json を読み込み
+ │    ├─ target_repository から workingDir を取得
  │    ├─ エージェントモードを判定（Codex / Claude）
  │    ├─ 依存関係順にフェーズを実行
  │    │    ├─ BasePhase.run()
@@ -24,7 +29,7 @@ CLI (src/main.ts)
 
 | モジュール | 役割 |
 |------------|------|
-| `src/main.ts` | `commander` による CLI 定義。オプション解析、環境初期化、ブランチ検証、プリセット解決を担当。 |
+| `src/main.ts` | `commander` による CLI 定義。オプション解析、環境初期化、ブランチ検証、プリセット解決、マルチリポジトリ対応（Issue URL 解析、リポジトリパス解決）を担当。 |
 | `src/index.ts` | `ai-workflow-v2` 実行ファイルのエントリーポイント。`runCli` を呼び出す。 |
 | `src/core/codex-agent-client.ts` | Codex CLI を起動し JSON イベントをストリーム処理。認証エラー検知・利用量記録も実施。 |
 | `src/core/claude-agent-client.ts` | Claude Agent SDK を利用してイベントを取得し、Codex と同様の JSON 形式で保持。 |
@@ -98,7 +103,7 @@ CLI (src/main.ts)
 
 ```
 .ai-workflow/issue-385/
-├── metadata.json             # WorkflowState（フェーズ状態、コスト、設計メモ等）
+├── metadata.json             # WorkflowState（フェーズ状態、コスト、設計メモ、対象リポジトリ等）
 ├── 00_planning/
 │   ├── execute/agent_log_raw.txt
 │   ├── execute/prompt.txt
@@ -115,6 +120,7 @@ CLI (src/main.ts)
 - `design_decisions` … 設計フェーズでの意思決定ログ
 - `cost_tracking` … トークン数と概算コスト（USD）
 - `github_integration` … 進捗コメントの ID など
+- `target_repository` … 対象リポジトリ情報（path、github_name、remote_url、owner、repo）（v0.2.0 で追加）
 
 ## 外部サービスとの連携
 
