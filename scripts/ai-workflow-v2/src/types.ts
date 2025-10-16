@@ -54,11 +54,47 @@ export interface CostTracking {
   total_cost_usd: number;
 }
 
+/**
+ * 対象リポジトリ情報
+ */
+export interface TargetRepository {
+  /**
+   * ローカルパス
+   * 例: "C:\\Users\\ytaka\\TIELEC\\development\\my-app"
+   */
+  path: string;
+
+  /**
+   * GitHubリポジトリ名（owner/repo形式）
+   * 例: "tielec/my-app"
+   */
+  github_name: string;
+
+  /**
+   * Git remote URL
+   * 例: "https://github.com/tielec/my-app.git"
+   */
+  remote_url: string;
+
+  /**
+   * リポジトリオーナー
+   * 例: "tielec"
+   */
+  owner: string;
+
+  /**
+   * リポジトリ名
+   * 例: "my-app"
+   */
+  repo: string;
+}
+
 export interface WorkflowMetadata {
   issue_number: string;
   issue_url: string;
   issue_title: string;
   repository?: string | null;
+  target_repository?: TargetRepository | null;
   workflow_version: string;
   current_phase: PhaseName;
   design_decisions: DesignDecisions;

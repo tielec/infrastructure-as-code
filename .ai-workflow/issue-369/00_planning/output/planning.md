@@ -220,31 +220,31 @@ interface WorkflowMetadata {
 
 ### Phase 4: 実装 (見積もり: 4〜6h)
 
-- [ ] Task 4-1: types.ts の拡張 (0.5h)
+- [x] Task 4-1: types.ts の拡張 (0.5h)
   - `TargetRepository`インターフェースの追加
   - `WorkflowMetadata`に`target_repository?`フィールド追加
-- [ ] Task 4-2: URL解析機能の実装 (1h)
+- [x] Task 4-2: URL解析機能の実装 (1h)
   - `parseIssueUrl(issueUrl: string): IssueInfo`の実装
   - 正規表現によるGitHub Issue URL解析
   - バリデーション処理
-- [ ] Task 4-3: ローカルリポジトリパス解決機能の実装 (1〜1.5h)
+- [x] Task 4-3: ローカルリポジトリパス解決機能の実装 (1〜1.5h)
   - `resolveLocalRepoPath(repoName: string): string`の実装
   - 環境変数REPOS_ROOTのチェック
   - 複数の候補パスを探索するロジック
   - エラーハンドリング（リポジトリが見つからない場合）
-- [ ] Task 4-4: handleInitCommand の修正 (1h)
+- [x] Task 4-4: handleInitCommand の修正 (1h)
   - `parseIssueUrl()`の呼び出し
   - `resolveLocalRepoPath()`の呼び出し
   - `target_repository`フィールドの設定
   - .ai-workflowディレクトリを対象リポジトリ配下に作成
-- [ ] Task 4-5: handleExecuteCommand の修正 (0.5h)
+- [x] Task 4-5: handleExecuteCommand の修正 (0.5h)
   - メタデータから`target_repository`を読み込み
   - 後方互換性のための警告メッセージ追加
   - workingDirの設定を`target_repository.path`に変更
-- [ ] Task 4-6: WorkflowState.migrate() の拡張 (0.5h)
+- [x] Task 4-6: WorkflowState.migrate() の拡張 (0.5h)
   - `target_repository`フィールドの追加処理
   - テンプレートとの整合性確認
-- [ ] Task 4-7: metadata.json.template の更新 (0.5h)
+- [x] Task 4-7: metadata.json.template の更新 (0.5h)
   - `target_repository`フィールドをnullで追加
 
 ### Phase 5: テストコード実装 (見積もり: 2〜3h)
@@ -423,14 +423,14 @@ graph TD
 
 ### Phase 4: 実装
 
-- [ ] `TargetRepository`型が定義されている
-- [ ] `parseIssueUrl()`が実装され、正規表現によるURL解析が動作する
-- [ ] `resolveLocalRepoPath()`が実装され、環境変数とフォールバック探索が動作する
-- [ ] `handleInitCommand()`が`target_repository`を設定する
-- [ ] `handleExecuteCommand()`が`target_repository`からパスを読み込む
-- [ ] `WorkflowState.migrate()`が`target_repository`フィールドを追加する
-- [ ] `metadata.json.template`が更新されている
-- [ ] 後方互換性のための警告メッセージが実装されている
+- [x] `TargetRepository`型が定義されている
+- [x] `parseIssueUrl()`が実装され、正規表現によるURL解析が動作する
+- [x] `resolveLocalRepoPath()`が実装され、環境変数とフォールバック探索が動作する
+- [x] `handleInitCommand()`が`target_repository`を設定する
+- [x] `handleExecuteCommand()`が`target_repository`からパスを読み込む
+- [x] `WorkflowState.migrate()`が`target_repository`フィールドを追加する
+- [x] `metadata.json.template`が更新されている
+- [x] 後方互換性のための警告メッセージが実装されている
 
 ### Phase 5: テストコード実装
 
