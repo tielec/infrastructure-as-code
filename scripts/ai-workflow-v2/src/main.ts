@@ -158,7 +158,25 @@ async function handleInitCommand(issueUrl: string): Promise<void> {
   try {
     // まず現在のディレクトリがGitリポジトリか確認
     const currentRepoRoot = await getRepoRoot();
-    const currentRepoName = path.basename(currentRepoRoot);
+
+    // Gitリモート URL（origin）からリポジトリ名を抽出
+    const git = simpleGit(currentRepoRoot);
+    let currentRepoName: string | null = null;
+    try {
+      const remoteUrl = await git.remote(['get-url', 'origin']);
+      const urlString = typeof remoteUrl === 'string' ? remoteUrl.trim() : String(remoteUrl).trim();
+
+      // URLからリポジトリ名を抽出
+      // 例: https://github.com/tielec/infrastructure-as-code.git -> infrastructure-as-code
+      // 例: git@github.com:tielec/infrastructure-as-code.git -> infrastructure-as-code
+      const match = urlString.match(/\/([^\/]+?)(\.git)?$/);
+      if (match) {
+        currentRepoName = match[1];
+      }
+    } catch {
+      // リモート URL取得失敗時はディレクトリ名をフォールバック
+      currentRepoName = path.basename(currentRepoRoot);
+    }
 
     // 現在のリポジトリ名が対象と一致する場合はそのまま使用
     if (currentRepoName === repo) {
@@ -167,6 +185,7 @@ async function handleInitCommand(issueUrl: string): Promise<void> {
       console.info(`[INFO] Local path: ${repoRoot}`);
     } else {
       // 別のリポジトリを探索
+      console.info(`[INFO] Current repository (${currentRepoName}) does not match target (${repo}). Searching...`);
       repoRoot = resolveLocalRepoPath(repo);
       console.info(`[INFO] Target repository: ${repositoryName}`);
       console.info(`[INFO] Local path: ${repoRoot}`);
