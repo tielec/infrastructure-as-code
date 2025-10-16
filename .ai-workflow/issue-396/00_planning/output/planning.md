@@ -158,35 +158,35 @@
 
 ### Phase 4: 実装 (見積もり: 6~8h)
 
-- [ ] Task 4-1: プリセット定義の追加・変更 (1.5~2h)
+- [x] Task 4-1: プリセット定義の追加・変更 (1.5~2h)
   - `src/core/phase-dependencies.ts`の`PHASE_PRESETS`に7個の新規プリセット追加
   - 既存プリセット名の変更（`review-requirements`, `review-design`, `implementation`）
   - `full-workflow`の削除
   - 後方互換性のためのエイリアスマップ`DEPRECATED_PRESETS`追加
-- [ ] Task 4-2: `--list-presets`オプション実装 (0.5~1h)
+- [x] Task 4-2: `--list-presets`オプション実装 (0.5~1h)
   - `src/main.ts`に新規オプション追加
   - プリセット一覧表示機能の実装
   - 各プリセットの説明文追加
-- [ ] Task 4-3: 依存関係チェック強化 (1.5~2h)
+- [x] Task 4-3: 依存関係チェック強化 (1.5~2h)
   - `src/core/phase-dependencies.ts`の`validatePhaseDependencies`にファイル存在チェック追加
   - `src/main.ts`のエラーメッセージ改善
   - `--ignore-dependencies`オプション使用時の警告表示強化
-- [ ] Task 4-4: `buildOptionalContext`ヘルパー関数実装 (1~1.5h)
+- [x] Task 4-4: `buildOptionalContext`ヘルパー関数実装 (1~1.5h)
   - `src/phases/base-phase.ts`に`buildOptionalContext`メソッド追加
   - ファイル存在チェックロジック実装
   - フォールバックメッセージ生成ロジック実装
 - [ ] Task 4-5: 各Phaseでのオプショナルコンテキスト構築 (1.5~2h)
-  - `src/phases/implementation.ts`の`execute`メソッド修正
-  - `src/phases/test-implementation.ts`の`execute`メソッド修正
-  - `src/phases/testing.ts`の`execute`メソッド修正
-  - `src/phases/documentation.ts`の`execute`メソッド修正
-  - `src/phases/report.ts`の`execute`メソッド修正
+  - `src/phases/implementation.ts`の`execute`メソッド修正（✓実装済み）
+  - `src/phases/test-implementation.ts`の`execute`メソッド修正（未実装）
+  - `src/phases/testing.ts`の`execute`メソッド修正（未実装）
+  - `src/phases/documentation.ts`の`execute`メソッド修正（未実装）
+  - `src/phases/report.ts`の`execute`メソッド修正（未実装）
 - [ ] Task 4-6: プロンプトファイル修正 (1~1.5h)
-  - `src/prompts/implementation/execute.txt`修正
-  - `src/prompts/test_implementation/execute.txt`修正
-  - `src/prompts/testing/execute.txt`修正
-  - `src/prompts/documentation/execute.txt`修正
-  - `src/prompts/report/execute.txt`修正
+  - `src/prompts/implementation/execute.txt`修正（未実装）
+  - `src/prompts/test_implementation/execute.txt`修正（未実装）
+  - `src/prompts/testing/execute.txt`修正（未実装）
+  - `src/prompts/documentation/execute.txt`修正（未実装）
+  - `src/prompts/report/execute.txt`修正（未実装）
 
 ### Phase 5: テストコード実装 (見積もり: 2~3h)
 

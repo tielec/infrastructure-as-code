@@ -696,6 +696,46 @@ export abstract class BasePhase {
     return `@${normalized}`;
   }
 
+  /**
+   * オプショナルコンテキストを構築（Issue #396）
+   * ファイルが存在する場合は@filepath参照、存在しない場合はフォールバックメッセージ
+   *
+   * @param phaseName - 参照するPhase名
+   * @param filename - ファイル名（例: 'requirements.md'）
+   * @param fallbackMessage - ファイルが存在しない場合のメッセージ
+   * @param issueNumberOverride - Issue番号（省略時は現在のIssue番号を使用）
+   * @returns ファイル参照またはフォールバックメッセージ
+   */
+  protected buildOptionalContext(
+    phaseName: PhaseName,
+    filename: string,
+    fallbackMessage: string,
+    issueNumberOverride?: string | number,
+  ): string {
+    const issueNumber = issueNumberOverride !== undefined
+      ? String(issueNumberOverride)
+      : this.metadata.data.issue_number;
+
+    const filePath = this.getPhaseOutputFile(phaseName, filename, issueNumber);
+
+    // ファイル存在チェック
+    if (filePath && fs.existsSync(filePath)) {
+      // 存在する場合は@filepath形式で参照
+      const reference = this.getAgentFileReference(filePath);
+      if (reference) {
+        console.info(`[INFO] Using ${phaseName} output: ${reference}`);
+        return reference;
+      } else {
+        console.warn(`[WARNING] Failed to resolve relative path for ${phaseName}: ${filePath}`);
+        return fallbackMessage;
+      }
+    } else {
+      // 存在しない場合はフォールバックメッセージ
+      console.info(`[INFO] ${phaseName} output not found, using fallback message`);
+      return fallbackMessage;
+    }
+  }
+
   private getPhaseNumber(phase: PhaseName): string {
     const mapping: Record<PhaseName, string> = {
       planning: '00',
