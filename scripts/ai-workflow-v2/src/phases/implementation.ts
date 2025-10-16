@@ -34,13 +34,9 @@ export class ImplementationPhase extends BasePhase {
       issueNumber,
     );
 
-    const implementationStrategy = this.metadata.data.design_decisions.implementation_strategy;
-    if (!implementationStrategy) {
-      return {
-        success: false,
-        error: '実装方針が未設定です。Phase 2 (design) を完了してください。',
-      };
-    }
+    const implementationStrategy =
+      this.metadata.data.design_decisions.implementation_strategy ??
+      '実装方針は利用できません。Issue情報とPlanning情報に基づいて適切な実装アプローチを決定してください。';
 
     const executePrompt = this.loadPrompt('execute')
       .replace('{planning_document_path}', planningReference)
@@ -99,7 +95,9 @@ export class ImplementationPhase extends BasePhase {
     const implementationReference = this.getAgentFileReference(implementationFile);
     const designReference = this.getAgentFileReference(designFile);
     const scenarioReference = this.getAgentFileReference(scenarioFile);
-    const implementationStrategy = this.metadata.data.design_decisions.implementation_strategy ?? 'UNKNOWN';
+    const implementationStrategy =
+      this.metadata.data.design_decisions.implementation_strategy ??
+      '実装方針は利用できません。実装内容とPlanning情報から推測してください。';
 
     if (!implementationReference || !designReference || !scenarioReference) {
       return {
@@ -160,7 +158,9 @@ export class ImplementationPhase extends BasePhase {
     const implementationReference = this.getAgentFileReference(implementationFile);
     const designReference = this.getAgentFileReference(designFile);
     const scenarioReference = this.getAgentFileReference(scenarioFile);
-    const implementationStrategy = this.metadata.data.design_decisions.implementation_strategy ?? 'UNKNOWN';
+    const implementationStrategy =
+      this.metadata.data.design_decisions.implementation_strategy ??
+      '実装方針は利用できません。実装内容とPlanning情報から推測してください。';
 
     if (!implementationReference || !designReference || !scenarioReference) {
       return {
