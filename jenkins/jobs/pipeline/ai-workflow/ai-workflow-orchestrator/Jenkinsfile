@@ -6,8 +6,11 @@
  * パラメータ（Job DSLで定義）:
  * - ISSUE_URL: GitHub Issue URL（必須）
  * - EXECUTION_MODE: 実行モード（デフォルト: all_phases）
- *   - all_phases: 全フェーズを一括実行（推奨）
+ *   - all_phases: 全フェーズを一括実行
+ *   - preset: 定義済みワークフローパターンを実行（推奨）
  *   - single_phase: 特定フェーズのみ実行（デバッグ用）
+ * - PRESET: プリセット名（presetモード時のみ有効、デフォルト: quick-fix）
+ *   - quick-fix, implementation, testing, review-requirements, review-design, review-test-scenario, finalize
  * - START_PHASE: 開始フェーズ（single_phaseモード時のみ有効、デフォルト: planning）
  * - FORCE_RESET: 強制リセット（デフォルト: false）
  * - DRY_RUN: ドライランモード（デフォルト: false）
@@ -30,6 +33,9 @@
  *   - Phase 0-9を順次実行（planning → requirements → ... → evaluation）
  *   - resume機能により、失敗したフェーズから自動再開
  *   - --force-resetフラグで最初から実行し直すことも可能
+ * - preset: node dist/index.js execute --preset {PRESET} を実行（推奨）
+ *   - 定義済みワークフローパターンを実行
+ *   - 例: quick-fix, implementation, testing, review-requirements, finalize
  * - single_phase: node dist/index.js execute --phase {START_PHASE} を実行
  *   - 指定されたフェーズのみ実行（デバッグ用）
  */
@@ -266,6 +272,35 @@ pipeline {
                                     --issue ${env.ISSUE_NUMBER} \
                                     --agent ${params.AGENT_MODE} \
                                     ${forceResetFlag}
+                            """
+                        }
+                    }
+                }
+            }
+        }
+
+        stage('Execute Preset') {
+            when {
+                expression { params.EXECUTION_MODE == 'preset' }
+            }
+            steps {
+                script {
+                    echo "========================================="
+                    echo "Stage: Execute Preset - ${params.PRESET}"
+                    echo "========================================="
+                    echo "Execution Mode: ${params.EXECUTION_MODE}"
+                    echo "Preset: ${params.PRESET}"
+
+                    dir(env.WORKFLOW_DIR) {
+                        if (params.DRY_RUN) {
+                            echo "[DRY RUN] Preset ${params.PRESET}実行をスキップ"
+                        } else {
+                            // プリセットパターンを実行
+                            sh """
+                                node dist/index.js execute \
+                                    --preset ${params.PRESET} \
+                                    --agent ${params.AGENT_MODE} \
+                                    --issue ${env.ISSUE_NUMBER}
                             """
                         }
                     }
