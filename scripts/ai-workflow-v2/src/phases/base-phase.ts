@@ -133,23 +133,31 @@ export abstract class BasePhase {
     let currentOutputFile: string | null = null;
 
     try {
+      console.info(`[INFO] Phase ${this.phaseName}: Starting execute...`);
       const executeResult = await this.execute();
       if (!executeResult.success) {
+        console.error(`[ERROR] Phase ${this.phaseName}: Execute failed: ${executeResult.error ?? 'Unknown error'}`);
         await this.handleFailure(executeResult.error ?? 'Unknown execute error');
         return false;
       }
+      console.info(`[INFO] Phase ${this.phaseName}: Execute completed successfully`);
 
       currentOutputFile = executeResult.output ?? null;
 
       let reviewResult: PhaseExecutionResult | null = null;
       if (!options.skipReview && (await this.shouldRunReview())) {
+        console.info(`[INFO] Phase ${this.phaseName}: Starting review cycle (max retries: ${MAX_RETRIES})...`);
         const reviewOutcome = await this.performReviewCycle(currentOutputFile, MAX_RETRIES);
         if (!reviewOutcome.success) {
+          console.error(`[ERROR] Phase ${this.phaseName}: Review cycle failed: ${reviewOutcome.error ?? 'Unknown error'}`);
           await this.handleFailure(reviewOutcome.error ?? 'Review failed');
           return false;
         }
+        console.info(`[INFO] Phase ${this.phaseName}: Review cycle completed successfully`);
         reviewResult = reviewOutcome.reviewResult;
         currentOutputFile = reviewOutcome.outputFile ?? currentOutputFile;
+      } else {
+        console.info(`[INFO] Phase ${this.phaseName}: Skipping review (skipReview=${options.skipReview})`);
       }
 
       this.updatePhaseStatus('completed', {
@@ -948,8 +956,11 @@ export abstract class BasePhase {
     let currentOutputFile = initialOutputFile;
 
     while (true) {
+      console.info(`[INFO] Phase ${this.phaseName}: Starting review (attempt ${revisionAttempts + 1})...`);
       const reviewResult = await this.review();
+
       if (reviewResult.success) {
+        console.info(`[INFO] Phase ${this.phaseName}: Review passed with result: ${reviewResult.output ?? 'N/A'}`);
         return {
           success: true,
           reviewResult,
@@ -957,7 +968,10 @@ export abstract class BasePhase {
         };
       }
 
+      console.warn(`[WARNING] Phase ${this.phaseName}: Review failed: ${reviewResult.error ?? 'Unknown reason'}`);
+
       if (revisionAttempts >= maxRetries) {
+        console.error(`[ERROR] Phase ${this.phaseName}: Max retries (${maxRetries}) reached. Review cycle failed.`);
         return {
           success: false,
           reviewResult,
@@ -968,6 +982,7 @@ export abstract class BasePhase {
 
       const reviseFn = this.getReviseFunction();
       if (!reviseFn) {
+        console.error(`[ERROR] Phase ${this.phaseName}: revise() method not implemented. Cannot retry.`);
         return {
           success: false,
           reviewResult,
@@ -982,6 +997,7 @@ export abstract class BasePhase {
       try {
         retryCount = this.metadata.incrementRetryCount(this.phaseName);
       } catch (error) {
+        console.error(`[ERROR] Phase ${this.phaseName}: Failed to increment retry count: ${(error as Error).message}`);
         return {
           success: false,
           reviewResult,
@@ -990,6 +1006,7 @@ export abstract class BasePhase {
         };
       }
 
+      console.info(`[INFO] Phase ${this.phaseName}: Starting revise (retry ${retryCount}/${maxRetries})...`);
       await this.postProgress(
         'in_progress',
         `レビュー不合格のため修正を実施します（${retryCount}/${maxRetries}回目）。`,
@@ -1000,6 +1017,7 @@ export abstract class BasePhase {
       const reviseResult = await reviseFn(feedback);
 
       if (!reviseResult.success) {
+        console.error(`[ERROR] Phase ${this.phaseName}: Revise failed: ${reviseResult.error ?? 'Unknown error'}`);
         return {
           success: false,
           reviewResult,
@@ -1008,8 +1026,11 @@ export abstract class BasePhase {
         };
       }
 
+      console.info(`[INFO] Phase ${this.phaseName}: Revise completed successfully`);
+
       if (reviseResult.output) {
         currentOutputFile = reviseResult.output;
+        console.info(`[INFO] Phase ${this.phaseName}: Updated output file: ${currentOutputFile}`);
       }
     }
   }

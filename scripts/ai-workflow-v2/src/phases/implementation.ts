@@ -34,13 +34,9 @@ export class ImplementationPhase extends BasePhase {
       issueNumber,
     );
 
-    const implementationStrategy = this.metadata.data.design_decisions.implementation_strategy;
-    if (!implementationStrategy) {
-      return {
-        success: false,
-        error: '実装方針が未設定です。Phase 2 (design) を完了してください。',
-      };
-    }
+    const implementationStrategy =
+      this.metadata.data.design_decisions.implementation_strategy ??
+      '実装方針は利用できません。Issue情報とPlanning情報に基づいて適切な実装アプローチを決定してください。';
 
     const executePrompt = this.loadPrompt('execute')
       .replace('{planning_document_path}', planningReference)
@@ -89,24 +85,35 @@ export class ImplementationPhase extends BasePhase {
     const designFile = this.getPhaseOutputFile('design', 'design.md', issueNumber);
     const scenarioFile = this.getPhaseOutputFile('test_scenario', 'test-scenario.md', issueNumber);
 
-    if (!designFile || !scenarioFile) {
-      return {
-        success: false,
-        error: '設計またはテストシナリオが見つかりません。',
-      };
-    }
-
     const implementationReference = this.getAgentFileReference(implementationFile);
-    const designReference = this.getAgentFileReference(designFile);
-    const scenarioReference = this.getAgentFileReference(scenarioFile);
-    const implementationStrategy = this.metadata.data.design_decisions.implementation_strategy ?? 'UNKNOWN';
-
-    if (!implementationReference || !designReference || !scenarioReference) {
+    if (!implementationReference) {
       return {
         success: false,
-        error: 'Claude Agent から参照できないドキュメントがあります。',
+        error: 'Agent が implementation.md を参照できません。',
       };
     }
+
+    // design と test_scenario はオプショナル（Issue #405）
+    let designReference: string;
+    let scenarioReference: string;
+
+    if (designFile) {
+      const ref = this.getAgentFileReference(designFile);
+      designReference = ref ?? '設計書は利用できません。実装内容から設計を推測してレビューしてください。';
+    } else {
+      designReference = '設計書は利用できません。実装内容から設計を推測してレビューしてください。';
+    }
+
+    if (scenarioFile) {
+      const ref = this.getAgentFileReference(scenarioFile);
+      scenarioReference = ref ?? 'テストシナリオは利用できません。実装内容から適切なテスト観点でレビューしてください。';
+    } else {
+      scenarioReference = 'テストシナリオは利用できません。実装内容から適切なテスト観点でレビューしてください。';
+    }
+
+    const implementationStrategy =
+      this.metadata.data.design_decisions.implementation_strategy ??
+      '実装方針は利用できません。実装内容とPlanning情報から推測してください。';
 
     const reviewPrompt = this.loadPrompt('review')
       .replace('{planning_document_path}', planningReference)
@@ -150,24 +157,35 @@ export class ImplementationPhase extends BasePhase {
     const designFile = this.getPhaseOutputFile('design', 'design.md', issueNumber);
     const scenarioFile = this.getPhaseOutputFile('test_scenario', 'test-scenario.md', issueNumber);
 
-    if (!designFile || !scenarioFile) {
-      return {
-        success: false,
-        error: '設計またはテストシナリオが見つかりません。',
-      };
-    }
-
     const implementationReference = this.getAgentFileReference(implementationFile);
-    const designReference = this.getAgentFileReference(designFile);
-    const scenarioReference = this.getAgentFileReference(scenarioFile);
-    const implementationStrategy = this.metadata.data.design_decisions.implementation_strategy ?? 'UNKNOWN';
-
-    if (!implementationReference || !designReference || !scenarioReference) {
+    if (!implementationReference) {
       return {
         success: false,
-        error: 'Claude Agent から参照できないドキュメントがあります。',
+        error: 'Agent が implementation.md を参照できません。',
       };
     }
+
+    // design と test_scenario はオプショナル（Issue #405）
+    let designReference: string;
+    let scenarioReference: string;
+
+    if (designFile) {
+      const ref = this.getAgentFileReference(designFile);
+      designReference = ref ?? '設計書は利用できません。実装内容から設計を推測してください。';
+    } else {
+      designReference = '設計書は利用できません。実装内容から設計を推測してください。';
+    }
+
+    if (scenarioFile) {
+      const ref = this.getAgentFileReference(scenarioFile);
+      scenarioReference = ref ?? 'テストシナリオは利用できません。実装内容から適切なテスト観点で修正してください。';
+    } else {
+      scenarioReference = 'テストシナリオは利用できません。実装内容から適切なテスト観点で修正してください。';
+    }
+
+    const implementationStrategy =
+      this.metadata.data.design_decisions.implementation_strategy ??
+      '実装方針は利用できません。実装内容とPlanning情報から推測してください。';
 
     const revisePrompt = this.loadPrompt('revise')
       .replace('{implementation_document_path}', implementationReference)

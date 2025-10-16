@@ -130,6 +130,12 @@ export class CodexAgentClient {
       if (childEnv.CODEX_API_KEY && typeof childEnv.CODEX_API_KEY === 'string') {
         childEnv.OPENAI_API_KEY = childEnv.CODEX_API_KEY.trim();
       }
+
+      // GitHub CLI用の環境変数を設定
+      if (childEnv.GITHUB_TOKEN && typeof childEnv.GITHUB_TOKEN === 'string') {
+        childEnv.GH_TOKEN = childEnv.GITHUB_TOKEN.trim();
+      }
+
       delete childEnv.CODEX_AUTH_FILE;
 
       const child = spawn(this.binaryPath, args, {

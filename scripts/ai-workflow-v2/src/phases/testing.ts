@@ -86,23 +86,37 @@ export class TestingPhase extends BasePhase {
     const implementationFile = this.getPhaseOutputFile('implementation', 'implementation.md', issueNumber);
     const scenarioFile = this.getPhaseOutputFile('test_scenario', 'test-scenario.md', issueNumber);
 
-    if (!testImplementationFile || !implementationFile || !scenarioFile) {
+    const testResultRef = this.getAgentFileReference(testResultFile);
+    if (!testResultRef) {
       return {
         success: false,
-        error: '前段フェーズの成果物が不足しています。',
+        error: 'Agent が test-result.md を参照できません。',
       };
     }
 
-    const testResultRef = this.getAgentFileReference(testResultFile);
-    const testImplementationRef = this.getAgentFileReference(testImplementationFile);
-    const implementationRef = this.getAgentFileReference(implementationFile);
-    const scenarioRef = this.getAgentFileReference(scenarioFile);
+    // test_implementation, implementation, scenario はオプショナル（Issue #405）
+    let testImplementationRef: string;
+    if (testImplementationFile) {
+      const ref = this.getAgentFileReference(testImplementationFile);
+      testImplementationRef = ref ?? 'テストコード実装ログは利用できません。テスト結果から実装を推測してレビューしてください。';
+    } else {
+      testImplementationRef = 'テストコード実装ログは利用できません。テスト結果から実装を推測してレビューしてください。';
+    }
 
-    if (!testResultRef || !testImplementationRef || !implementationRef || !scenarioRef) {
-      return {
-        success: false,
-        error: 'Claude Agent から参照できないドキュメントがあります。',
-      };
+    let implementationRef: string;
+    if (implementationFile) {
+      const ref = this.getAgentFileReference(implementationFile);
+      implementationRef = ref ?? '実装ログは利用できません。テスト結果から実装を推測してレビューしてください。';
+    } else {
+      implementationRef = '実装ログは利用できません。テスト結果から実装を推測してレビューしてください。';
+    }
+
+    let scenarioRef: string;
+    if (scenarioFile) {
+      const ref = this.getAgentFileReference(scenarioFile);
+      scenarioRef = ref ?? 'テストシナリオは利用できません。テスト結果から適切なテスト観点でレビューしてください。';
+    } else {
+      scenarioRef = 'テストシナリオは利用できません。テスト結果から適切なテスト観点でレビューしてください。';
     }
 
     const reviewPrompt = this.loadPrompt('review')
@@ -151,23 +165,37 @@ export class TestingPhase extends BasePhase {
     const implementationFile = this.getPhaseOutputFile('implementation', 'implementation.md', issueNumber);
     const scenarioFile = this.getPhaseOutputFile('test_scenario', 'test-scenario.md', issueNumber);
 
-    if (!testImplementationFile || !implementationFile || !scenarioFile) {
+    const testResultRef = this.getAgentFileReference(testResultFile);
+    if (!testResultRef) {
       return {
         success: false,
-        error: '前段フェーズの成果物が不足しています。',
+        error: 'Agent が test-result.md を参照できません。',
       };
     }
 
-    const testResultRef = this.getAgentFileReference(testResultFile);
-    const testImplementationRef = this.getAgentFileReference(testImplementationFile);
-    const implementationRef = this.getAgentFileReference(implementationFile);
-    const scenarioRef = this.getAgentFileReference(scenarioFile);
+    // test_implementation, implementation, scenario はオプショナル（Issue #405）
+    let testImplementationRef: string;
+    if (testImplementationFile) {
+      const ref = this.getAgentFileReference(testImplementationFile);
+      testImplementationRef = ref ?? 'テストコード実装ログは利用できません。テスト結果から実装を推測してください。';
+    } else {
+      testImplementationRef = 'テストコード実装ログは利用できません。テスト結果から実装を推測してください。';
+    }
 
-    if (!testResultRef || !testImplementationRef || !implementationRef || !scenarioRef) {
-      return {
-        success: false,
-        error: 'Claude Agent から参照できないドキュメントがあります。',
-      };
+    let implementationRef: string;
+    if (implementationFile) {
+      const ref = this.getAgentFileReference(implementationFile);
+      implementationRef = ref ?? '実装ログは利用できません。テスト結果から実装を推測してください。';
+    } else {
+      implementationRef = '実装ログは利用できません。テスト結果から実装を推測してください。';
+    }
+
+    let scenarioRef: string;
+    if (scenarioFile) {
+      const ref = this.getAgentFileReference(scenarioFile);
+      scenarioRef = ref ?? 'テストシナリオは利用できません。テスト結果から適切なテスト観点で修正してください。';
+    } else {
+      scenarioRef = 'テストシナリオは利用できません。テスト結果から適切なテスト観点で修正してください。';
     }
 
     const revisePrompt = this.loadPrompt('revise')

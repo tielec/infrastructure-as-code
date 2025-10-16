@@ -24,37 +24,26 @@ export class TestScenarioPhase extends BasePhase {
     const requirementsFile = this.getPhaseOutputFile('requirements', 'requirements.md', issueInfo.number);
     const designFile = this.getPhaseOutputFile('design', 'design.md', issueInfo.number);
 
-    if (!requirementsFile) {
-      return {
-        success: false,
-        error: '要件定義書が見つかりません。Phase 1 を実行してください。',
-      };
+    // requirements と design はオプショナル（Issue #405）
+    let requirementsReference: string;
+    if (requirementsFile) {
+      const ref = this.getAgentFileReference(requirementsFile);
+      requirementsReference = ref ?? '要件定義書は利用できません。Planning情報とIssue情報から要件を推測してください。';
+    } else {
+      requirementsReference = '要件定義書は利用できません。Planning情報とIssue情報から要件を推測してください。';
     }
 
-    if (!designFile) {
-      return {
-        success: false,
-        error: '設計ドキュメントが見つかりません。Phase 2 を実行してください。',
-      };
+    let designReference: string;
+    if (designFile) {
+      const ref = this.getAgentFileReference(designFile);
+      designReference = ref ?? '設計ドキュメントは利用できません。Planning情報から設計を推測してください。';
+    } else {
+      designReference = '設計ドキュメントは利用できません。Planning情報から設計を推測してください。';
     }
 
-    const requirementsReference = this.getAgentFileReference(requirementsFile);
-    const designReference = this.getAgentFileReference(designFile);
-
-    if (!requirementsReference || !designReference) {
-      return {
-        success: false,
-        error: 'Claude Agent が参照できないドキュメントがあります。',
-      };
-    }
-
-    const testStrategy = this.metadata.data.design_decisions.test_strategy;
-    if (!testStrategy) {
-      return {
-        success: false,
-        error: 'テスト戦略が設定されていません。Phase 2 で設計を完了してください。',
-      };
-    }
+    // test_strategy もオプショナル（Issue #405）
+    const testStrategy = this.metadata.data.design_decisions.test_strategy ??
+      'テスト戦略は設定されていません。要件と設計から適切なテスト戦略を決定してください。';
 
     const executePrompt = this.loadPrompt('execute')
       .replace('{planning_document_path}', planningReference)
@@ -102,25 +91,33 @@ export class TestScenarioPhase extends BasePhase {
     const requirementsFile = this.getPhaseOutputFile('requirements', 'requirements.md', issueInfo.number);
     const designFile = this.getPhaseOutputFile('design', 'design.md', issueInfo.number);
 
-    if (!requirementsFile || !designFile) {
-      return {
-        success: false,
-        error: '要件または設計ドキュメントが見つかりません。',
-      };
-    }
-
     const scenarioReference = this.getAgentFileReference(scenarioFile);
-    const requirementsReference = this.getAgentFileReference(requirementsFile);
-    const designReference = this.getAgentFileReference(designFile);
-
-    if (!scenarioReference || !requirementsReference || !designReference) {
+    if (!scenarioReference) {
       return {
         success: false,
-        error: 'Claude Agent が参照できないドキュメントがあります。',
+        error: 'Agent が test-scenario.md を参照できません。',
       };
     }
 
-    const testStrategy = this.metadata.data.design_decisions.test_strategy ?? 'UNKNOWN';
+    // requirements と design はオプショナル（Issue #405）
+    let requirementsReference: string;
+    if (requirementsFile) {
+      const ref = this.getAgentFileReference(requirementsFile);
+      requirementsReference = ref ?? '要件定義書は利用できません。テストシナリオから要件を推測してレビューしてください。';
+    } else {
+      requirementsReference = '要件定義書は利用できません。テストシナリオから要件を推測してレビューしてください。';
+    }
+
+    let designReference: string;
+    if (designFile) {
+      const ref = this.getAgentFileReference(designFile);
+      designReference = ref ?? '設計ドキュメントは利用できません。テストシナリオから設計を推測してレビューしてください。';
+    } else {
+      designReference = '設計ドキュメントは利用できません。テストシナリオから設計を推測してレビューしてください。';
+    }
+
+    const testStrategy = this.metadata.data.design_decisions.test_strategy ??
+      'テスト戦略は設定されていません。テストシナリオ内容から適切なテスト観点でレビューしてください。';
 
     const reviewPrompt = this.loadPrompt('review')
       .replace('{test_scenario_document_path}', scenarioReference)
@@ -163,25 +160,33 @@ export class TestScenarioPhase extends BasePhase {
     const requirementsFile = this.getPhaseOutputFile('requirements', 'requirements.md', issueInfo.number);
     const designFile = this.getPhaseOutputFile('design', 'design.md', issueInfo.number);
 
-    if (!requirementsFile || !designFile) {
-      return {
-        success: false,
-        error: '要件または設計ドキュメントが見つかりません。',
-      };
-    }
-
     const scenarioReference = this.getAgentFileReference(scenarioFile);
-    const requirementsReference = this.getAgentFileReference(requirementsFile);
-    const designReference = this.getAgentFileReference(designFile);
-
-    if (!scenarioReference || !requirementsReference || !designReference) {
+    if (!scenarioReference) {
       return {
         success: false,
-        error: 'Claude Agent が参照できないドキュメントがあります。',
+        error: 'Agent が test-scenario.md を参照できません。',
       };
     }
 
-    const testStrategy = this.metadata.data.design_decisions.test_strategy ?? 'UNKNOWN';
+    // requirements と design はオプショナル（Issue #405）
+    let requirementsReference: string;
+    if (requirementsFile) {
+      const ref = this.getAgentFileReference(requirementsFile);
+      requirementsReference = ref ?? '要件定義書は利用できません。テストシナリオから要件を推測してください。';
+    } else {
+      requirementsReference = '要件定義書は利用できません。テストシナリオから要件を推測してください。';
+    }
+
+    let designReference: string;
+    if (designFile) {
+      const ref = this.getAgentFileReference(designFile);
+      designReference = ref ?? '設計ドキュメントは利用できません。テストシナリオから設計を推測してください。';
+    } else {
+      designReference = '設計ドキュメントは利用できません。テストシナリオから設計を推測してください。';
+    }
+
+    const testStrategy = this.metadata.data.design_decisions.test_strategy ??
+      'テスト戦略は設定されていません。テストシナリオ内容から適切なテスト戦略を決定してください。';
 
     const revisePrompt = this.loadPrompt('revise')
       .replace('{test_scenario_document_path}', scenarioReference)
