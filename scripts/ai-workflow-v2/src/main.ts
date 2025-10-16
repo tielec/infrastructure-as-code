@@ -235,7 +235,7 @@ async function handleInitCommand(issueUrl: string): Promise<void> {
   console.info('[OK] Push successful.');
 
   const githubToken = process.env.GITHUB_TOKEN ?? null;
-  if (!githubToken || !repoName) {
+  if (!githubToken || !repositoryName) {
     console.warn(
       '[WARNING] GITHUB_TOKEN or GITHUB_REPOSITORY not set. PR creation skipped.',
     );
@@ -244,7 +244,7 @@ async function handleInitCommand(issueUrl: string): Promise<void> {
   }
 
   try {
-    const githubClient = new GitHubClient(githubToken, repoName);
+    const githubClient = new GitHubClient(githubToken, repositoryName);
     const existingPr = await githubClient.checkExistingPr(branchName);
     if (existingPr) {
       console.warn(`[WARNING] PR already exists: ${existingPr.pr_url}`);
@@ -789,7 +789,7 @@ interface IssueInfo {
  * @returns Issue情報（owner, repo, issueNumber, repositoryName）
  * @throws URL形式が不正な場合はエラー
  */
-function parseIssueUrl(issueUrl: string): IssueInfo {
+export function parseIssueUrl(issueUrl: string): IssueInfo {
   // 末尾スラッシュの有無を許容する正規表現
   const pattern = /github\.com\/([^\/]+)\/([^\/]+)\/issues\/(\d+)(?:\/)?$/;
   const match = issueUrl.match(pattern);
@@ -830,7 +830,7 @@ function parseIssueNumber(issueUrl: string): number {
  * @returns ローカルリポジトリパス
  * @throws リポジトリが見つからない場合はエラー
  */
-function resolveLocalRepoPath(repoName: string): string {
+export function resolveLocalRepoPath(repoName: string): string {
   const candidatePaths: string[] = [];
 
   // 1. 環境変数REPOS_ROOTが設定されている場合は優先的に使用
@@ -869,7 +869,7 @@ function resolveLocalRepoPath(repoName: string): string {
  * @returns リポジトリルートパスとメタデータパス
  * @throws メタデータが見つからない場合はエラー
  */
-async function findWorkflowMetadata(
+export async function findWorkflowMetadata(
   issueNumber: string,
 ): Promise<{ repoRoot: string; metadataPath: string }> {
   const searchRoots: string[] = [];
