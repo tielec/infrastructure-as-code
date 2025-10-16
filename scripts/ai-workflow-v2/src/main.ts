@@ -146,27 +146,73 @@ async function handleInitCommand(issueUrl: string): Promise<void> {
   const workflowDir = path.join(repoRoot, '.ai-workflow', `issue-${issueNumber}`);
   const metadataPath = path.join(workflowDir, 'metadata.json');
   const branchName = `ai-workflow/issue-${issueNumber}`;
+  const repoName = process.env.GITHUB_REPOSITORY ?? null;
 
-  await ensureBranch(repoRoot, branchName, workflowDir);
+  const git = simpleGit(repoRoot);
 
-  fs.ensureDirSync(workflowDir);
+  // リモートブランチの存在確認
+  await git.fetch();
+  const remoteBranches = await git.branch(['-r']);
+  const remoteBranchExists = remoteBranches.all.some(ref => ref.includes(`origin/${branchName}`));
 
-  if (fs.existsSync(metadataPath)) {
-    console.info('[INFO] Workflow already exists. Migrating metadata schema if required...');
-    const state = WorkflowState.load(metadataPath);
-    const migrated = state.migrate();
-    const metadataManager = new MetadataManager(metadataPath);
-    metadataManager.data.branch_name = branchName;
-    metadataManager.save();
-    console.info(
-      migrated
-        ? '[OK] Metadata schema updated successfully.'
-        : '[INFO] Metadata schema already up to date.',
-    );
-    return;
+  if (remoteBranchExists) {
+    // リモートブランチが存在する場合: チェックアウト → pull → metadata確認
+    console.info(`[INFO] Remote branch '${branchName}' found. Checking out...`);
+
+    const localBranches = await git.branchLocal();
+    if (localBranches.all.includes(branchName)) {
+      await git.checkout(branchName);
+      console.info(`[INFO] Switched to existing local branch: ${branchName}`);
+    } else {
+      await git.checkoutBranch(branchName, `origin/${branchName}`);
+      console.info(`[INFO] Created local branch '${branchName}' tracking origin/${branchName}`);
+    }
+
+    // リモートの最新状態を取得
+    console.info('[INFO] Pulling latest changes from remote...');
+    await git.pull('origin', branchName, { '--no-rebase': null });
+    console.info('[OK] Successfully pulled latest changes.');
+
+    fs.ensureDirSync(workflowDir);
+
+    if (fs.existsSync(metadataPath)) {
+      console.info('[INFO] Workflow already exists. Migrating metadata schema if required...');
+      const state = WorkflowState.load(metadataPath);
+      const migrated = state.migrate();
+      const metadataManager = new MetadataManager(metadataPath);
+      metadataManager.data.branch_name = branchName;
+      if (repoName) {
+        metadataManager.data.repository = repoName;
+      }
+      metadataManager.save();
+      console.info(
+        migrated
+          ? '[OK] Metadata schema updated successfully.'
+          : '[INFO] Metadata schema already up to date.',
+      );
+      return;
+    }
+
+    // metadata.jsonが存在しない場合は作成（リモートブランチはあるが未初期化の状態）
+    console.info('[INFO] Creating metadata for existing branch...');
+  } else {
+    // リモートブランチが存在しない場合: 新規作成
+    console.info(`[INFO] Remote branch '${branchName}' not found. Creating new branch...`);
+
+    const localBranches = await git.branchLocal();
+    if (localBranches.all.includes(branchName)) {
+      await git.checkout(branchName);
+      console.info(`[INFO] Switched to existing local branch: ${branchName}`);
+    } else {
+      await git.checkoutLocalBranch(branchName);
+      console.info(`[INFO] Created and switched to new branch: ${branchName}`);
+    }
+
+    fs.ensureDirSync(workflowDir);
+    console.info('[INFO] Creating metadata...');
   }
 
-  console.info('[INFO] Creating metadata...');
+  // metadata.json作成
   WorkflowState.createNew(
     metadataPath,
     String(issueNumber),
@@ -175,15 +221,13 @@ async function handleInitCommand(issueUrl: string): Promise<void> {
   );
 
   const metadataManager = new MetadataManager(metadataPath);
-
   metadataManager.data.branch_name = branchName;
-
-  const repoName = process.env.GITHUB_REPOSITORY ?? null;
   if (repoName) {
     metadataManager.data.repository = repoName;
   }
   metadataManager.save();
 
+  // コミット & プッシュ
   const gitManager = new GitManager(repoRoot, metadataManager);
   console.info('[INFO] Committing metadata.json...');
   const commitResult = await gitManager.commitPhaseOutput('planning', 'completed', 'N/A');
@@ -201,6 +245,7 @@ async function handleInitCommand(issueUrl: string): Promise<void> {
   }
   console.info('[OK] Push successful.');
 
+  // PR作成
   const githubToken = process.env.GITHUB_TOKEN ?? null;
   if (!githubToken || !repoName) {
     console.warn(
@@ -428,14 +473,20 @@ async function handleExecuteCommand(options: any): Promise<void> {
     console.info(`[INFO] Already on branch: ${branchName}`);
   }
 
-  const pullResult = await gitManager.pullLatest(branchName);
-  if (!pullResult.success) {
-    console.warn(
-      `[WARNING] Failed to pull latest changes: ${pullResult.error ?? 'unknown error'}`,
-    );
-    console.warn('[WARNING] Continuing workflow execution...');
+  // uncommitted changesがある場合はpullをスキップ
+  const status = await gitManager.getStatus();
+  if (status.is_dirty) {
+    console.info('[INFO] Uncommitted changes detected. Skipping git pull to avoid conflicts.');
   } else {
-    console.info('[OK] Successfully pulled latest changes.');
+    const pullResult = await gitManager.pullLatest(branchName);
+    if (!pullResult.success) {
+      console.warn(
+        `[WARNING] Failed to pull latest changes: ${pullResult.error ?? 'unknown error'}`,
+      );
+      console.warn('[WARNING] Continuing workflow execution...');
+    } else {
+      console.info('[OK] Successfully pulled latest changes.');
+    }
   }
 
   const context: PhaseContext = {
