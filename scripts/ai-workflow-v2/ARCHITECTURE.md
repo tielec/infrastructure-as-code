@@ -122,6 +122,23 @@ CLI (src/main.ts)
 - `github_integration` … 進捗コメントの ID など
 - `target_repository` … 対象リポジトリ情報（path、github_name、remote_url、owner、repo）（v0.2.0 で追加）
 
+### ワークフローログクリーンアップ（Issue #405）
+
+Report Phase (Phase 8) 完了後、`cleanupWorkflowLogs()` メソッドが自動的に実行され、デバッグログを削除します：
+
+**削除対象**:
+- フェーズ 01_requirements 〜 08_report の `execute/`, `review/`, `revise/` ディレクトリ
+- 内容: `agent_log.md`, `agent_log_raw.txt`, `prompt.txt` など
+
+**保持対象**:
+- `metadata.json`（各フェーズのメタデータ）
+- `output/*.md`（成果物ファイル）
+- `00_planning/` ディレクトリ全体（Issue参照ソースとして保護）
+
+**実行タイミング**: Report Phase の `execute()` メソッド完了後、Git コミット前に実行されるため、クリーンアップされた状態が自動的にコミット・プッシュされます。
+
+**エラーハンドリング**: クリーンアップ失敗時も WARNING ログのみ出力し、ワークフロー全体は継続します。
+
 ## 外部サービスとの連携
 
 ### Codex CLI

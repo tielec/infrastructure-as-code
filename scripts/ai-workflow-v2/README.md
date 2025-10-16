@@ -161,10 +161,21 @@ ai-workflow-v2 execute --issue 386 --preset review-requirements
 | 5       | `src/phases/test-implementation.ts` | テストコードの実装                      |
 | 6       | `src/phases/testing.ts`          | テスト実行と証跡収集                        |
 | 7       | `src/phases/documentation.ts`    | ドキュメント・ランブック更新                |
-| 8       | `src/phases/report.ts`           | ステータスレポート・PR ボディ生成          |
+| 8       | `src/phases/report.ts`           | ステータスレポート・PR ボディ生成・ワークフローログクリーンアップ |
 | 9       | `src/phases/evaluation.ts`       | 最終評価と残作業の整理                     |
 
 各フェーズは `BasePhase` を継承し、メタデータ永続化、実行/レビューサイクル、エージェント制御、Git 自動コミットなど共通機能を利用します。
+
+### ワークフローログの自動クリーンアップ
+
+Report Phase (Phase 8) 完了後、リポジトリサイズを削減するためにワークフローログが自動的にクリーンアップされます：
+
+- **削除対象**: 各フェーズ（01_requirements 〜 08_report）の `execute/`, `review/`, `revise/` ディレクトリ
+- **保持対象**: `metadata.json` と `output/*.md`（成果物ファイル）
+- **保護対象**: `00_planning` ディレクトリ（Issue参照ソースとして保持）
+- **効果**: リポジトリサイズを約70%削減、PRレビューを成果物に集中
+
+クリーンアップは非破壊的に動作し、失敗してもワークフロー全体は継続します。
 
 ## Docker での実行
 
