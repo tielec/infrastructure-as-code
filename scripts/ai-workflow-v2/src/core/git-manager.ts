@@ -325,7 +325,8 @@ export class GitManager {
   ): Promise<{ success: boolean; error?: string | null }> {
     try {
       const targetBranch = branchName ?? (await this.getCurrentBranch());
-      await this.git.pull('origin', targetBranch);
+      // divergent branchesに対応するため、明示的にmerge戦略を指定
+      await this.git.raw(['pull', '--no-rebase', 'origin', targetBranch]);
       return { success: true };
     } catch (error) {
       return {
