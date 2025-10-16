@@ -96,6 +96,15 @@ export class ReportPhase extends BasePhase {
     const outputs = this.getPhaseOutputs(issueNumber);
     await this.updatePullRequestSummary(issueNumber, outputs);
 
+    // レポート完了後にワークフローログをクリーンアップ（Issue #405）
+    try {
+      await this.cleanupWorkflowLogs(issueNumber);
+      console.info('[INFO] Workflow logs cleaned up successfully.');
+    } catch (error) {
+      const message = (error as Error).message ?? String(error);
+      console.warn(`[WARNING] Failed to cleanup workflow logs: ${message}`);
+    }
+
     return {
       success: true,
       output: reportFile,
@@ -277,5 +286,62 @@ export class ReportPhase extends BasePhase {
       const message = (error as Error).message ?? String(error);
       console.warn(`[WARNING] Failed to update PR summary: ${message}`);
     }
+  }
+
+  /**
+   * ワークフローログをクリーンアップ（Issue #405）
+   *
+   * Report完了後に実行され、各フェーズのexecute/review/reviseディレクトリを削除します。
+   * metadata.jsonとoutput/*.mdファイルは保持されます。
+   *
+   * @param issueNumber - Issue番号
+   */
+  private async cleanupWorkflowLogs(issueNumber: number): Promise<void> {
+    const baseDir = path.resolve(this.metadata.workflowDir, '..', `issue-${issueNumber}`);
+
+    // Planning フェーズ（00_planning）は削除対象外（Issue参照ソースとして保持）
+    const phaseDirectories = [
+      '01_requirements',
+      '02_design',
+      '03_test_scenario',
+      '04_implementation',
+      '05_test_implementation',
+      '06_testing',
+      '07_documentation',
+      '08_report',
+    ];
+
+    const targetSubdirs = ['execute', 'review', 'revise'];
+
+    let deletedCount = 0;
+    let skippedCount = 0;
+
+    for (const phaseDir of phaseDirectories) {
+      const phasePath = path.join(baseDir, phaseDir);
+
+      if (!fs.existsSync(phasePath)) {
+        skippedCount++;
+        continue;
+      }
+
+      for (const subdir of targetSubdirs) {
+        const subdirPath = path.join(phasePath, subdir);
+
+        if (fs.existsSync(subdirPath)) {
+          try {
+            fs.removeSync(subdirPath);
+            deletedCount++;
+            console.info(`[INFO] Deleted: ${path.relative(baseDir, subdirPath)}`);
+          } catch (error) {
+            const message = (error as Error).message ?? String(error);
+            console.warn(`[WARNING] Failed to delete ${subdirPath}: ${message}`);
+          }
+        }
+      }
+    }
+
+    console.info(
+      `[INFO] Cleanup summary: ${deletedCount} directories deleted, ${skippedCount} phase directories skipped.`,
+    );
   }
 }
