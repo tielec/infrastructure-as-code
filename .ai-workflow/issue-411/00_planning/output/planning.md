@@ -101,12 +101,12 @@
 
 ### Phase 1: 要件定義 (見積もり: 1~2h)
 
-- [ ] Task 1-1: V1を参照しているファイルの全数調査 (1h)
+- [x] Task 1-1: V1を参照しているファイルの全数調査 (1h)
   - Grepで全markdownファイルから `scripts/ai-workflow` への参照を検索
   - Jenkinsジョブ（DSL、Jenkinsfile、folder-config.yaml）からV1への参照を検索
   - Ansibleプレイブック、スクリプトからV1への参照を検索
   - 調査結果をリスト化
-- [ ] Task 1-2: 削除リスクの評価とバックアップ戦略の確認 (0.5~1h)
+- [x] Task 1-2: 削除リスクの評価とバックアップ戦略の確認 (0.5~1h)
   - Issueで提案されたバックアップ方法（Gitブランチ vs tar.gz）の評価
   - ロールバック手順の実現可能性確認
   - 削除後の影響範囲を最終確認
@@ -258,10 +258,10 @@ graph TD
 
 ### Phase 1: 要件定義
 
-- [ ] V1を参照している全ファイルがリスト化されている
-- [ ] Jenkinsジョブ、DSLファイル、Jenkinsfileに V1への参照がないことを確認
-- [ ] ドキュメント（README.md, ARCHITECTURE.md等）のV1参照箇所を特定
-- [ ] バックアップ戦略が決定されている
+- [x] V1を参照している全ファイルがリスト化されている
+- [x] Jenkinsジョブ、DSLファイル、Jenkinsfileに V1への参照がないことを確認
+- [x] ドキュメント（README.md, ARCHITECTURE.md等）のV1参照箇所を特定
+- [x] バックアップ戦略が決定されている
 
 ### Phase 2: 設計
 
