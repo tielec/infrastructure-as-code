@@ -187,19 +187,19 @@ interface WorkflowMetadata {
 
 ### Phase 2: 設計 (見積もり: 2〜3h)
 
-- [ ] Task 2-1: アーキテクチャ設計 (1h)
+- [x] Task 2-1: アーキテクチャ設計 (1h)
   - Issue URL解析フロー設計
   - ローカルリポジトリパス探索アルゴリズム設計
   - メタデータスキーマ拡張設計（TargetRepository型）
-- [ ] Task 2-2: 関数インターフェース設計 (0.5h)
+- [x] Task 2-2: 関数インターフェース設計 (0.5h)
   - `parseIssueUrl(issueUrl: string): IssueInfo`
   - `resolveLocalRepoPath(repoName: string): string`
   - `findWorkflowMetadata(issueNumber: string): { repoRoot: string, metadataPath: string }`
-- [ ] Task 2-3: エラーハンドリング設計 (0.5h)
+- [x] Task 2-3: エラーハンドリング設計 (0.5h)
   - 無効なIssue URLの処理
   - リポジトリが見つからない場合の処理
   - メタデータが見つからない場合の処理
-- [ ] Task 2-4: マイグレーション戦略設計 (0.5〜1h)
+- [x] Task 2-4: マイグレーション戦略設計 (0.5〜1h)
   - 既存metadata.jsonの移行方法
   - WorkflowState.migrate()の拡張設計
   - 後方互換性の実装方針
@@ -405,13 +405,13 @@ graph TD
 
 ### Phase 2: 設計
 
-- [ ] 実装戦略の判断根拠が明記されている（EXTEND）
-- [ ] テスト戦略の判断根拠が明記されている（UNIT_INTEGRATION）
-- [ ] テストコード戦略の判断根拠が明記されている（BOTH_TEST）
-- [ ] 関数インターフェースが明確に設計されている
-- [ ] メタデータスキーマ拡張が設計されている
-- [ ] エラーハンドリング戦略が定義されている
-- [ ] マイグレーション戦略が設計されている
+- [x] 実装戦略の判断根拠が明記されている（EXTEND）
+- [x] テスト戦略の判断根拠が明記されている（UNIT_INTEGRATION）
+- [x] テストコード戦略の判断根拠が明記されている（BOTH_TEST）
+- [x] 関数インターフェースが明確に設計されている
+- [x] メタデータスキーマ拡張が設計されている
+- [x] エラーハンドリング戦略が定義されている
+- [x] マイグレーション戦略が設計されている
 
 ### Phase 3: テストシナリオ
 
