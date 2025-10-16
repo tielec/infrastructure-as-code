@@ -67,7 +67,7 @@ export class RequirementsPhase extends BasePhase {
     if (!requirementsReference) {
       return {
         success: false,
-        error: 'requirements.md を Claude Agent が参照できません。',
+        error: 'Agent が requirements.md を参照できません。',
       };
     }
 
@@ -115,7 +115,7 @@ export class RequirementsPhase extends BasePhase {
     if (!requirementsReference) {
       return {
         success: false,
-        error: 'requirements.md を Claude Agent が参照できません。',
+        error: 'Agent が requirements.md を参照できません。',
       };
     }
 

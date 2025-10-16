@@ -41,15 +41,11 @@ export class TestImplementationPhase extends BasePhase {
       issueNumber,
     );
 
-    const testStrategy = this.metadata.data.design_decisions.test_strategy;
-    const testCodeStrategy = this.metadata.data.design_decisions.test_code_strategy;
-
-    if (!testStrategy || !testCodeStrategy) {
-      return {
-        success: false,
-        error: 'テスト戦略・テストコード方針が未設定です。Phase 2 (design) を確認してください。',
-      };
-    }
+    // test_strategy と test_code_strategy もオプショナル（Issue #405）
+    const testStrategy = this.metadata.data.design_decisions.test_strategy ??
+      'テスト戦略は設定されていません。設計書とテストシナリオから適切なテスト戦略を決定してください。';
+    const testCodeStrategy = this.metadata.data.design_decisions.test_code_strategy ??
+      'テストコード方針は設定されていません。プロジェクトの規約とテスト戦略から適切なテストコード方針を決定してください。';
 
     const executePrompt = this.loadPrompt('execute')
       .replace('{planning_document_path}', planningReference)
@@ -101,32 +97,43 @@ export class TestImplementationPhase extends BasePhase {
     const scenarioFile = this.getPhaseOutputFile('test_scenario', 'test-scenario.md', issueNumber);
     const implementationFile = this.getPhaseOutputFile('implementation', 'implementation.md', issueNumber);
 
-    if (!designFile || !scenarioFile || !implementationFile) {
-      return {
-        success: false,
-        error: '設計・テストシナリオ・実装のいずれかが見つかりません。',
-      };
-    }
-
     const testImplementationReference = this.getAgentFileReference(testImplementationFile);
-    const designReference = this.getAgentFileReference(designFile);
-    const scenarioReference = this.getAgentFileReference(scenarioFile);
-    const implementationReference = this.getAgentFileReference(implementationFile);
-
-    if (
-      !testImplementationReference ||
-      !designReference ||
-      !scenarioReference ||
-      !implementationReference
-    ) {
+    if (!testImplementationReference) {
       return {
         success: false,
-        error: 'Claude Agent から参照できないドキュメントがあります。',
+        error: 'Agent が test-implementation.md を参照できません。',
       };
     }
 
-    const testStrategy = this.metadata.data.design_decisions.test_strategy ?? 'UNKNOWN';
-    const testCodeStrategy = this.metadata.data.design_decisions.test_code_strategy ?? 'UNKNOWN';
+    // design, scenario, implementation はオプショナル（Issue #405）
+    let designReference: string;
+    if (designFile) {
+      const ref = this.getAgentFileReference(designFile);
+      designReference = ref ?? '設計ドキュメントは利用できません。テストコード実装内容から設計を推測してレビューしてください。';
+    } else {
+      designReference = '設計ドキュメントは利用できません。テストコード実装内容から設計を推測してレビューしてください。';
+    }
+
+    let scenarioReference: string;
+    if (scenarioFile) {
+      const ref = this.getAgentFileReference(scenarioFile);
+      scenarioReference = ref ?? 'テストシナリオは利用できません。テストコード実装内容から適切なテスト観点でレビューしてください。';
+    } else {
+      scenarioReference = 'テストシナリオは利用できません。テストコード実装内容から適切なテスト観点でレビューしてください。';
+    }
+
+    let implementationReference: string;
+    if (implementationFile) {
+      const ref = this.getAgentFileReference(implementationFile);
+      implementationReference = ref ?? '実装ログは利用できません。テストコード実装内容から実装を推測してレビューしてください。';
+    } else {
+      implementationReference = '実装ログは利用できません。テストコード実装内容から実装を推測してレビューしてください。';
+    }
+
+    const testStrategy = this.metadata.data.design_decisions.test_strategy ??
+      'テスト戦略は設定されていません。テストコード実装内容から適切なテスト観点でレビューしてください。';
+    const testCodeStrategy = this.metadata.data.design_decisions.test_code_strategy ??
+      'テストコード方針は設定されていません。プロジェクトの規約に基づいてレビューしてください。';
 
     const reviewPrompt = this.loadPrompt('review')
       .replace('{planning_document_path}', planningReference)
@@ -173,32 +180,43 @@ export class TestImplementationPhase extends BasePhase {
     const scenarioFile = this.getPhaseOutputFile('test_scenario', 'test-scenario.md', issueNumber);
     const implementationFile = this.getPhaseOutputFile('implementation', 'implementation.md', issueNumber);
 
-    if (!designFile || !scenarioFile || !implementationFile) {
-      return {
-        success: false,
-        error: '設計・テストシナリオ・実装のいずれかが見つかりません。',
-      };
-    }
-
     const testImplementationReference = this.getAgentFileReference(testImplementationFile);
-    const designReference = this.getAgentFileReference(designFile);
-    const scenarioReference = this.getAgentFileReference(scenarioFile);
-    const implementationReference = this.getAgentFileReference(implementationFile);
-
-    if (
-      !testImplementationReference ||
-      !designReference ||
-      !scenarioReference ||
-      !implementationReference
-    ) {
+    if (!testImplementationReference) {
       return {
         success: false,
-        error: 'Claude Agent から参照できないドキュメントがあります。',
+        error: 'Agent が test-implementation.md を参照できません。',
       };
     }
 
-    const testStrategy = this.metadata.data.design_decisions.test_strategy ?? 'UNKNOWN';
-    const testCodeStrategy = this.metadata.data.design_decisions.test_code_strategy ?? 'UNKNOWN';
+    // design, scenario, implementation はオプショナル（Issue #405）
+    let designReference: string;
+    if (designFile) {
+      const ref = this.getAgentFileReference(designFile);
+      designReference = ref ?? '設計ドキュメントは利用できません。テストコード実装内容から設計を推測してください。';
+    } else {
+      designReference = '設計ドキュメントは利用できません。テストコード実装内容から設計を推測してください。';
+    }
+
+    let scenarioReference: string;
+    if (scenarioFile) {
+      const ref = this.getAgentFileReference(scenarioFile);
+      scenarioReference = ref ?? 'テストシナリオは利用できません。テストコード実装内容から適切なテスト観点で修正してください。';
+    } else {
+      scenarioReference = 'テストシナリオは利用できません。テストコード実装内容から適切なテスト観点で修正してください。';
+    }
+
+    let implementationReference: string;
+    if (implementationFile) {
+      const ref = this.getAgentFileReference(implementationFile);
+      implementationReference = ref ?? '実装ログは利用できません。テストコード実装内容から実装を推測してください。';
+    } else {
+      implementationReference = '実装ログは利用できません。テストコード実装内容から実装を推測してください。';
+    }
+
+    const testStrategy = this.metadata.data.design_decisions.test_strategy ??
+      'テスト戦略は設定されていません。テストコード実装内容から適切なテスト戦略を決定してください。';
+    const testCodeStrategy = this.metadata.data.design_decisions.test_code_strategy ??
+      'テストコード方針は設定されていません。プロジェクトの規約とテスト戦略から適切なテストコード方針を決定してください。';
 
     const revisePrompt = this.loadPrompt('revise')
       .replace('{test_implementation_document_path}', testImplementationReference)

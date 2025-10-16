@@ -22,19 +22,13 @@ export class DesignPhase extends BasePhase {
     const planningReference = this.getPlanningDocumentReference(issueInfo.number);
     const requirementsFile = this.getRequirementsFile(issueInfo.number);
 
-    if (!requirementsFile) {
-      return {
-        success: false,
-        error: '要件定義書が存在しません。Phase 1 を実行したか確認してください。',
-      };
-    }
-
-    const requirementsReference = this.getAgentFileReference(requirementsFile);
-    if (!requirementsReference) {
-      return {
-        success: false,
-        error: '要件定義書を Claude Agent が参照できません。',
-      };
+    // requirements はオプショナル（Issue #405）
+    let requirementsReference: string;
+    if (requirementsFile) {
+      const ref = this.getAgentFileReference(requirementsFile);
+      requirementsReference = ref ?? '要件定義書は利用できません。Planning情報とIssue情報から要件を推測してください。';
+    } else {
+      requirementsReference = '要件定義書は利用できません。Planning情報とIssue情報から要件を推測してください。';
     }
 
     const executePrompt = this.loadPrompt('execute')
@@ -92,23 +86,25 @@ export class DesignPhase extends BasePhase {
     }
 
     const requirementsFile = this.getRequirementsFile(issueInfo.number);
-    if (!requirementsFile) {
-      return {
-        success: false,
-        error: '要件定義書が存在しません。Phase 1 を実行したか確認してください。',
-      };
-    }
 
     const designReference = this.getAgentFileReference(designFile);
-    const requirementsReference = this.getAgentFileReference(requirementsFile);
-    const planningReference = this.getPlanningDocumentReference(issueInfo.number);
-
-    if (!designReference || !requirementsReference) {
+    if (!designReference) {
       return {
         success: false,
-        error: 'Claude Agent が参照できないドキュメントがあります。',
+        error: 'Agent が design.md を参照できません。',
       };
     }
+
+    // requirements はオプショナル（Issue #405）
+    let requirementsReference: string;
+    if (requirementsFile) {
+      const ref = this.getAgentFileReference(requirementsFile);
+      requirementsReference = ref ?? '要件定義書は利用できません。設計内容から要件を推測してレビューしてください。';
+    } else {
+      requirementsReference = '要件定義書は利用できません。設計内容から要件を推測してレビューしてください。';
+    }
+
+    const planningReference = this.getPlanningDocumentReference(issueInfo.number);
 
     const reviewPrompt = this.loadPrompt('review')
       .replace('{planning_document_path}', planningReference)
@@ -150,21 +146,22 @@ export class DesignPhase extends BasePhase {
     }
 
     const requirementsFile = this.getRequirementsFile(issueInfo.number);
-    if (!requirementsFile) {
+
+    const designReference = this.getAgentFileReference(designFile);
+    if (!designReference) {
       return {
         success: false,
-        error: '要件定義書が存在しません。Phase 1 を実行したか確認してください。',
+        error: 'Agent が design.md を参照できません。',
       };
     }
 
-    const designReference = this.getAgentFileReference(designFile);
-    const requirementsReference = this.getAgentFileReference(requirementsFile);
-
-    if (!designReference || !requirementsReference) {
-      return {
-        success: false,
-        error: 'Claude Agent が参照できないドキュメントがあります。',
-      };
+    // requirements はオプショナル（Issue #405）
+    let requirementsReference: string;
+    if (requirementsFile) {
+      const ref = this.getAgentFileReference(requirementsFile);
+      requirementsReference = ref ?? '要件定義書は利用できません。設計内容から要件を推測してください。';
+    } else {
+      requirementsReference = '要件定義書は利用できません。設計内容から要件を推測してください。';
     }
 
     const revisePrompt = this.loadPrompt('revise')

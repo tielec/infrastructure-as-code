@@ -89,7 +89,7 @@ export class ImplementationPhase extends BasePhase {
     if (!implementationReference) {
       return {
         success: false,
-        error: 'Claude Agent から implementation.md を参照できません。',
+        error: 'Agent が implementation.md を参照できません。',
       };
     }
 
@@ -161,7 +161,7 @@ export class ImplementationPhase extends BasePhase {
     if (!implementationReference) {
       return {
         success: false,
-        error: 'Claude Agent から implementation.md を参照できません。',
+        error: 'Agent が implementation.md を参照できません。',
       };
     }
 
