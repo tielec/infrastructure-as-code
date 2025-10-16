@@ -12,40 +12,36 @@ export class TestingPhase extends BasePhase {
     const issueNumber = parseInt(this.metadata.data.issue_number, 10);
     const planningReference = this.getPlanningDocumentReference(issueNumber);
 
-    const testImplementationFile = this.getPhaseOutputFile(
+    // オプショナルコンテキストを構築（Issue #398）
+    const testImplementationContext = this.buildOptionalContext(
       'test_implementation',
       'test-implementation.md',
+      'テストコード実装ログは利用できません。実装コードを直接確認してテストを実行してください。',
       issueNumber,
     );
-    const implementationFile = this.getPhaseOutputFile('implementation', 'implementation.md', issueNumber);
-    const scenarioFile = this.getPhaseOutputFile('test_scenario', 'test-scenario.md', issueNumber);
 
-    if (!testImplementationFile || !implementationFile || !scenarioFile) {
-      return {
-        success: false,
-        error: 'テスト実装・実装・テストシナリオのいずれかが欠けています。',
-      };
-    }
+    const implementationContext = this.buildOptionalContext(
+      'implementation',
+      'implementation.md',
+      '実装ログは利用できません。リポジトリの実装コードを直接確認してください。',
+      issueNumber,
+    );
 
-    const testImplementationRef = this.getAgentFileReference(testImplementationFile);
-    const implementationRef = this.getAgentFileReference(implementationFile);
-    const scenarioRef = this.getAgentFileReference(scenarioFile);
-
-    if (!testImplementationRef || !implementationRef || !scenarioRef) {
-      return {
-        success: false,
-        error: 'Claude Agent から参照できないドキュメントがあります。',
-      };
-    }
+    const scenarioContext = this.buildOptionalContext(
+      'test_scenario',
+      'test-scenario.md',
+      'テストシナリオは利用できません。実装内容に基づいて適切なテストを実施してください。',
+      issueNumber,
+    );
 
     const testResultFile = path.join(this.outputDir, 'test-result.md');
     const oldMtime = fs.existsSync(testResultFile) ? fs.statSync(testResultFile).mtimeMs : null;
 
     const executePrompt = this.loadPrompt('execute')
       .replace('{planning_document_path}', planningReference)
-      .replace('{test_implementation_document_path}', testImplementationRef)
-      .replace('{implementation_document_path}', implementationRef)
-      .replace('{test_scenario_document_path}', scenarioRef)
+      .replace('{test_implementation_context}', testImplementationContext)
+      .replace('{implementation_context}', implementationContext)
+      .replace('{test_scenario_context}', scenarioContext)
       .replace('{issue_number}', String(issueNumber));
 
     await this.executeWithAgent(executePrompt, { maxTurns: 30 });

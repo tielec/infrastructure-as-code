@@ -10,14 +10,26 @@ Phase 5で実装したテストコードを実行し、結果を記録してく�
 
 **注意**: Planning Phaseが実行されている場合、開発計画（実装戦略、テスト戦略、リスク、スケジュール）を必ず確認してください。
 
-### テスト実装ログ
-{test_implementation_document_path}
+### テスト実装ログ（利用可能な場合）
+{test_implementation_context}
+<!--
+  存在する場合: @test-implementation.md への参照
+  存在しない場合: "テストコード実装ログは利用できません。実装コードを直接確認してテストを実行してください。"
+-->
 
-### 実装ログ（参考）
-{implementation_document_path}
+### 実装ログ（利用可能な場合）
+{implementation_context}
+<!--
+  存在する場合: @implementation.md への参照
+  存在しない場合: "実装ログは利用できません。リポジトリの実装コードを直接確認してください。"
+-->
 
-### テストシナリオ（参考）
-{test_scenario_document_path}
+### テストシナリオ（利用可能な場合）
+{test_scenario_context}
+<!--
+  存在する場合: @test-scenario.md への参照
+  存在しない場合: "テストシナリオは利用できません。実装内容に基づいて適切なテストを実施してください。"
+-->
 
 ## テスト実行手順
 

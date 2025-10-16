@@ -10,13 +10,31 @@
 
 **注意**: Planning Phaseが実行されている場合、開発計画（実装戦略、テスト戦略、リスク、スケジュール）を必ず確認してください。
 
-### 各フェーズの成果物
-- Phase 1: {requirements_document_path}
-- Phase 2: {design_document_path}
-- Phase 3: {test_scenario_document_path}
-- Phase 4: {implementation_document_path}
-- Phase 5: {test_implementation_document_path}
-- Phase 6: {test_result_document_path}
+### 実装ログ（利用可能な場合）
+{implementation_context}
+<!--
+  存在する場合: @implementation.md への参照
+  存在しない場合: "実装ログは利用できません。リポジトリの実装内容を直接確認してください。"
+-->
+
+### テスト結果（利用可能な場合）
+{testing_context}
+<!--
+  存在する場合: @test-result.md への参照
+  存在しない場合: "テスト結果は利用できません。実装内容に基づいてドキュメントを更新してください。"
+-->
+
+### 要件定義書（参考・利用可能な場合）
+{requirements_context}
+
+### 設計書（参考・利用可能な場合）
+{design_context}
+
+### テストシナリオ（参考・利用可能な場合）
+{test_scenario_context}
+
+### テスト実装ログ（参考・利用可能な場合）
+{test_implementation_context}
 
 ## ドキュメント更新手順
 

@@ -10,14 +10,26 @@
 
 **注意**: Planning Phaseが実行されている場合、開発計画（実装戦略、テスト戦略、リスク、スケジュール）を必ず確認してください。
 
-### 設計書
-{design_document_path}
+### 設計書（利用可能な場合）
+{design_context}
+<!--
+  存在する場合: @design.md への参照
+  存在しない場合: "設計書は利用できません。Issue情報とPlanning情報に基づいて適切な設計判断を行ってください。"
+-->
 
-### テストシナリオ
-{test_scenario_document_path}
+### テストシナリオ（利用可能な場合）
+{test_scenario_context}
+<!--
+  存在する場合: @test-scenario.md への参照
+  存在しない場合: "テストシナリオは利用できません。実装時に適切なテスト考慮を行ってください。"
+-->
 
-### 要件定義書（参考）
-{requirements_document_path}
+### 要件定義書（利用可能な場合）
+{requirements_context}
+<!--
+  存在する場合: @requirements.md への参照
+  存在しない場合: "要件定義書は利用できません。Planning情報とIssue情報から要件を推測してください。"
+-->
 
 ### 実装戦略（Phase 2で決定）
 **{implementation_strategy}**

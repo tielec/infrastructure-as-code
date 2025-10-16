@@ -92,7 +92,7 @@ ai-workflow-v2 review \
 
 ### プリセット
 
-プリセットは、よくある開発パターンに合わせて複数のフェーズを組み合わせたショートカットです。
+プリセットは、よくある開発パターンに合わせて複数のフェーズを組み合わせたショートカットです。各プリセットはオプショナルコンテキスト構築機能により、前段フェーズの成果物が存在しない場合でも柔軟に実行できます。
 
 **利用可能なプリセット一覧**:
 
@@ -106,7 +106,7 @@ ai-workflow-v2 execute --list-presets
 | `review-requirements` | Planning + Requirements | 要件定義のレビュー用 |
 | `review-design` | Planning + Requirements + Design | 設計のレビュー用 |
 | `review-test-scenario` | Planning + Requirements + Design + TestScenario | テストシナリオのレビュー用 |
-| `quick-fix` | Implementation + Documentation + Report | 軽微な修正（タイポ、小さなバグ修正） |
+| `quick-fix` | Implementation + Documentation + Report | 軽微な修正（タイポ、小さなバグ修正）<br>※ `--ignore-dependencies` との併用を推奨 |
 | `implementation` | Implementation + TestImplementation + Testing + Documentation + Report | 通常の実装フロー |
 | `testing` | TestImplementation + Testing | 既存実装へのテスト追加 |
 | `finalize` | Documentation + Report + Evaluation | 実装完了後の最終化 |
@@ -114,8 +114,8 @@ ai-workflow-v2 execute --list-presets
 **使用例**:
 
 ```bash
-# 軽微な修正を実装からレポートまで一括実行
-ai-workflow-v2 execute --issue 385 --preset quick-fix
+# 軽微な修正を実装からレポートまで一括実行（依存関係を無視）
+ai-workflow-v2 execute --issue 385 --preset quick-fix --ignore-dependencies
 
 # 要件定義とPlanningのみ実行してレビューを受ける
 ai-workflow-v2 execute --issue 386 --preset review-requirements

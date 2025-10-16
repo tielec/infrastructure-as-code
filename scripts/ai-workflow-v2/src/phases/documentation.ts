@@ -17,34 +17,43 @@ export class DocumentationPhase extends BasePhase {
 
   protected async execute(): Promise<PhaseExecutionResult> {
     const issueNumber = parseInt(this.metadata.data.issue_number, 10);
-    const outputs = this.getPhaseOutputs(issueNumber);
-
-    const requiredPhases = ['requirements', 'design', 'test_scenario', 'implementation', 'test_result'];
-    for (const phase of requiredPhases) {
-      if (!outputs[phase]?.exists) {
-        return {
-          success: false,
-          error: `${phase} の成果物が見つかりません: ${outputs[phase]?.path ?? 'N/A'}`,
-        };
-      }
-    }
-
     const planningReference = this.getPlanningDocumentReference(issueNumber);
-    const replacements: Record<string, string> = {
-      requirements_document_path: this.requireReference(outputs, 'requirements'),
-      design_document_path: this.requireReference(outputs, 'design'),
-      test_scenario_document_path: this.requireReference(outputs, 'test_scenario'),
-      implementation_document_path: this.requireReference(outputs, 'implementation'),
-      test_result_document_path: this.requireReference(outputs, 'test_result'),
-      test_implementation_document_path: this.optionalReference(outputs, 'test_implementation'),
-    };
 
-    const executePrompt = Object.entries(replacements).reduce(
-      (acc, [key, value]) => acc.replace(`{${key}}`, value),
-      this.loadPrompt('execute')
-        .replace('{planning_document_path}', planningReference)
-        .replace('{issue_number}', String(issueNumber)),
+    // オプショナルコンテキストを構築（Issue #398）
+    const implementationContext = this.buildOptionalContext(
+      'implementation',
+      'implementation.md',
+      '実装ログは利用できません。リポジトリの実装内容を直接確認してください。',
+      issueNumber,
     );
+
+    const testingContext = this.buildOptionalContext(
+      'testing',
+      'test-result.md',
+      'テスト結果は利用できません。実装内容に基づいてドキュメントを更新してください。',
+      issueNumber,
+    );
+
+    // 参考情報（オプショナル）
+    const requirementsContext = this.buildOptionalContext('requirements', 'requirements.md', '', issueNumber);
+    const designContext = this.buildOptionalContext('design', 'design.md', '', issueNumber);
+    const scenarioContext = this.buildOptionalContext('test_scenario', 'test-scenario.md', '', issueNumber);
+    const testImplementationContext = this.buildOptionalContext(
+      'test_implementation',
+      'test-implementation.md',
+      '',
+      issueNumber,
+    );
+
+    const executePrompt = this.loadPrompt('execute')
+      .replace('{planning_document_path}', planningReference)
+      .replace('{implementation_context}', implementationContext)
+      .replace('{testing_context}', testingContext)
+      .replace('{requirements_context}', requirementsContext)
+      .replace('{design_context}', designContext)
+      .replace('{test_scenario_context}', scenarioContext)
+      .replace('{test_implementation_context}', testImplementationContext)
+      .replace('{issue_number}', String(issueNumber));
 
     await this.executeWithAgent(executePrompt, { maxTurns: 30 });
 
@@ -81,8 +90,7 @@ export class DocumentationPhase extends BasePhase {
       };
     }
 
-    const outputs = this.getPhaseOutputs(issueNumber);
-    const reviewPrompt = this.buildPrompt('review', issueNumber, documentationFile, outputs);
+    const reviewPrompt = this.buildPrompt('review', issueNumber, documentationFile);
 
     const messages = await this.executeWithAgent(reviewPrompt, { maxTurns: 30, logDir: this.reviewDir });
     const reviewResult = await this.contentParser.parseReviewResult(messages);
@@ -116,8 +124,7 @@ export class DocumentationPhase extends BasePhase {
       };
     }
 
-    const outputs = this.getPhaseOutputs(issueNumber);
-    const revisePrompt = this.buildPrompt('revise', issueNumber, documentationFile, outputs).replace(
+    const revisePrompt = this.buildPrompt('revise', issueNumber, documentationFile).replace(
       '{review_feedback}',
       reviewFeedback,
     );
@@ -141,89 +148,41 @@ export class DocumentationPhase extends BasePhase {
     promptType: 'review' | 'revise',
     issueNumber: number,
     documentationPath: string,
-    outputs: PhaseOutputMap,
   ): string {
     const planningReference = this.getPlanningDocumentReference(issueNumber);
-    const basePrompt = this.loadPrompt(promptType)
-      .replace('{planning_document_path}', planningReference)
-      .replace('{documentation_update_log_path}', this.requireReferencePath(documentationPath))
-      .replace('{issue_number}', String(issueNumber));
+    const documentationReference = this.getAgentFileReference(documentationPath);
 
-    const replacements: Record<string, string> = {
-      requirements_document_path: this.optionalReference(outputs, 'requirements'),
-      design_document_path: this.optionalReference(outputs, 'design'),
-      test_scenario_document_path: this.optionalReference(outputs, 'test_scenario'),
-      implementation_document_path: this.optionalReference(outputs, 'implementation'),
-      test_result_document_path: this.optionalReference(outputs, 'test_result'),
-      test_implementation_document_path: this.optionalReference(outputs, 'test_implementation'),
-    };
+    if (!documentationReference) {
+      throw new Error(`Failed to compute reference path for ${documentationPath}`);
+    }
 
-    return Object.entries(replacements).reduce(
-      (acc, [key, value]) => acc.replace(`{${key}}`, value),
-      basePrompt,
+    // オプショナルコンテキストを構築（Issue #398）
+    const implementationContext = this.buildOptionalContext(
+      'implementation',
+      'implementation.md',
+      '',
+      issueNumber,
     );
-  }
+    const testingContext = this.buildOptionalContext('testing', 'test-result.md', '', issueNumber);
+    const requirementsContext = this.buildOptionalContext('requirements', 'requirements.md', '', issueNumber);
+    const designContext = this.buildOptionalContext('design', 'design.md', '', issueNumber);
+    const scenarioContext = this.buildOptionalContext('test_scenario', 'test-scenario.md', '', issueNumber);
+    const testImplementationContext = this.buildOptionalContext(
+      'test_implementation',
+      'test-implementation.md',
+      '',
+      issueNumber,
+    );
 
-  private requireReference(outputs: PhaseOutputMap, key: string): string {
-    const info = outputs[key];
-    if (!info?.exists) {
-      throw new Error(`Required phase output missing: ${key}`);
-    }
-
-    const reference = this.getAgentFileReference(info.path);
-    if (!reference) {
-      throw new Error(`Failed to compute reference path for ${info.path}`);
-    }
-    return reference;
-  }
-
-  private optionalReference(outputs: PhaseOutputMap, key: string): string {
-    const info = outputs[key];
-    if (!info?.exists) {
-      return '';
-    }
-    const reference = this.getAgentFileReference(info.path);
-    return reference ?? '';
-  }
-
-  private requireReferencePath(filePath: string): string {
-    const reference = this.getAgentFileReference(filePath);
-    if (!reference) {
-      throw new Error(`Failed to compute reference path for ${filePath}`);
-    }
-    return reference;
-  }
-
-  private getPhaseOutputs(issueNumber: number): PhaseOutputMap {
-    const baseDir = path.resolve(this.metadata.workflowDir, '..', `issue-${issueNumber}`);
-
-    const newPaths: Record<string, string> = {
-      requirements: path.join(baseDir, '01_requirements', 'output', 'requirements.md'),
-      design: path.join(baseDir, '02_design', 'output', 'design.md'),
-      test_scenario: path.join(baseDir, '03_test_scenario', 'output', 'test-scenario.md'),
-      implementation: path.join(baseDir, '04_implementation', 'output', 'implementation.md'),
-      test_implementation: path.join(baseDir, '05_test_implementation', 'output', 'test-implementation.md'),
-      test_result: path.join(baseDir, '06_testing', 'output', 'test-result.md'),
-    };
-
-    const legacyPaths: Record<string, string> = {
-      test_result: path.join(baseDir, '05_testing', 'output', 'test-result.md'),
-    };
-
-    const outputs: PhaseOutputMap = {};
-
-    for (const [phase, newPath] of Object.entries(newPaths)) {
-      let finalPath = newPath;
-      if (!fs.existsSync(newPath) && legacyPaths[phase] && fs.existsSync(legacyPaths[phase])) {
-        finalPath = legacyPaths[phase];
-        console.info(`[INFO] Using legacy documentation path for ${phase}: ${finalPath}`);
-      }
-      outputs[phase] = {
-        path: finalPath,
-        exists: fs.existsSync(finalPath),
-      };
-    }
-
-    return outputs;
+    return this.loadPrompt(promptType)
+      .replace('{planning_document_path}', planningReference)
+      .replace('{documentation_update_log_path}', documentationReference)
+      .replace('{implementation_context}', implementationContext)
+      .replace('{testing_context}', testingContext)
+      .replace('{requirements_context}', requirementsContext)
+      .replace('{design_context}', designContext)
+      .replace('{test_scenario_context}', scenarioContext)
+      .replace('{test_implementation_context}', testImplementationContext)
+      .replace('{issue_number}', String(issueNumber));
   }
 }
