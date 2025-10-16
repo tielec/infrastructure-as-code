@@ -156,9 +156,21 @@ async function handleInitCommand(issueUrl: string): Promise<void> {
   // ローカルリポジトリパスを解決
   let repoRoot: string;
   try {
-    repoRoot = resolveLocalRepoPath(repo);
-    console.info(`[INFO] Target repository: ${repositoryName}`);
-    console.info(`[INFO] Local path: ${repoRoot}`);
+    // まず現在のディレクトリがGitリポジトリか確認
+    const currentRepoRoot = await getRepoRoot();
+    const currentRepoName = path.basename(currentRepoRoot);
+
+    // 現在のリポジトリ名が対象と一致する場合はそのまま使用
+    if (currentRepoName === repo) {
+      repoRoot = currentRepoRoot;
+      console.info(`[INFO] Using current repository: ${repositoryName}`);
+      console.info(`[INFO] Local path: ${repoRoot}`);
+    } else {
+      // 別のリポジトリを探索
+      repoRoot = resolveLocalRepoPath(repo);
+      console.info(`[INFO] Target repository: ${repositoryName}`);
+      console.info(`[INFO] Local path: ${repoRoot}`);
+    }
   } catch (error) {
     console.error(`[ERROR] ${(error as Error).message}`);
     process.exit(1);
