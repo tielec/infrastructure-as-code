@@ -544,7 +544,7 @@ ISSUE_URL: https://github.com/tielec/infrastructure-as-code/issues/332
 - ブランチ: `ai-workflow/issue-{番号}`
 - コミットメッセージフォーマット: `[ai-workflow] Phase X (phase_name) - completed/failed`
 
-**詳細ドキュメント**: [scripts/ai-workflow/README.md](../scripts/ai-workflow/README.md)
+**詳細ドキュメント**: [scripts/ai-workflow-v2/README.md](../scripts/ai-workflow-v2/README.md)
 
 #### Infrastructure_Management/Terminate_Lambda_NAT
 

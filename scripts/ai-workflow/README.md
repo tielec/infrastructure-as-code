@@ -1,5 +1,14 @@
 # AI駆動開発自動化ワークフロー
 
+> **⚠️ 非推奨警告**
+>
+> **このディレクトリは非推奨です。AI Workflow V2 (TypeScript版) に移行してください。**
+>
+> - **V2の場所**: `scripts/ai-workflow-v2/`
+> - **V2のドキュメント**: [scripts/ai-workflow-v2/README.md](../scripts/ai-workflow-v2/README.md)
+> - **削除予定日**: 2025年1月31日
+> - **詳細**: [DEPRECATED.md](DEPRECATED.md)
+
 Claude Agent SDKを使った7フェーズの自動開発ワークフロー
 
 ## 概要
