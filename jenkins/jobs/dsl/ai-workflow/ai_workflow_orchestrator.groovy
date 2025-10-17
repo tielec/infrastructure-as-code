@@ -39,11 +39,25 @@ GitHub Issue を入力として、要件定義から報告までの開発プロ�
 
     // パラメータ定義（Jenkinsfile には記述しないこと）
     parameters {
+        // ========================================
+        // 基本設定
+        // ========================================
         stringParam('ISSUE_URL', '', '''
 GitHub Issue URL（必須）
 
 例: https://github.com/tielec/my-project/issues/123
 注: Issue URL から対象リポジトリを自動判定します（マルチリポジトリ対応）
+        '''.stripIndent().trim())
+
+        stringParam('GITHUB_REPOSITORY', '', '''
+GitHub リポジトリ（owner/repo）
+注: 通常は ISSUE_URL から自動判定されるため、空欄で問題ありません
+        '''.stripIndent().trim())
+
+        stringParam('BRANCH_NAME', '', '''
+作業ブランチ名（任意）
+AI Workflow の作業ブランチを個別指定する場合に使用
+空欄の場合は Issue 番号から自動生成されます
         '''.stripIndent().trim())
 
         choiceParam('AGENT_MODE', ['auto', 'codex', 'claude'], '''
@@ -53,6 +67,9 @@ GitHub Issue URL（必須）
 - claude: Claude Code のみを使用（credentials.json が必要）
         '''.stripIndent().trim())
 
+        // ========================================
+        // 実行制御
+        // ========================================
         choiceParam('EXECUTION_MODE', ['all_phases', 'preset', 'single_phase'], '''
 実行モード
 
@@ -77,11 +94,9 @@ GitHub Issue URL（必須）
 開始フェーズ（single_phase モード時のみ有効）
         '''.stripIndent().trim())
 
-        stringParam('GITHUB_REPOSITORY', '', '''
-GitHub リポジトリ（owner/repo）
-注: 通常は ISSUE_URL から自動判定されるため、空欄で問題ありません
-        '''.stripIndent().trim())
-
+        // ========================================
+        // 実行オプション
+        // ========================================
         booleanParam('DRY_RUN', false, '''
 ドライランモード（API 呼び出しや Git 操作を行わず動作確認のみ実施）
         '''.stripIndent().trim())
@@ -98,17 +113,14 @@ AI レビューをスキップする（検証・デバッグ用）
 フェーズ失敗時の最大リトライ回数
         '''.stripIndent().trim())
 
-        stringParam('COST_LIMIT_USD', '5.0', '''
-ワークフローあたりのコスト上限（USD）
+        booleanParam('CLEANUP_ON_COMPLETE_FORCE', false, '''
+Evaluation Phase完了後にワークフローディレクトリを強制削除
+詳細: Issue #2、v0.3.0で追加
         '''.stripIndent().trim())
 
-        choiceParam('LOG_LEVEL', ['INFO', 'DEBUG', 'WARNING', 'ERROR'], '''
-ログレベル
-- INFO: 一般的な情報
-- DEBUG: 詳細ログ（デバッグ用）
-- WARNING / ERROR: 警告 / エラーのみ
-        '''.stripIndent().trim())
-
+        // ========================================
+        // Git 設定
+        // ========================================
         stringParam('GIT_COMMIT_USER_NAME', 'AI Workflow Bot', '''
 Git コミットユーザー名
         '''.stripIndent().trim())
@@ -117,6 +129,9 @@ Git コミットユーザー名
 Git コミットメールアドレス
         '''.stripIndent().trim())
 
+        // ========================================
+        // AWS 認証情報（Infrastructure as Code 用）
+        // ========================================
         stringParam('AWS_ACCESS_KEY_ID', '', '''
 AWS アクセスキー ID（任意）
 Infrastructure as Code実行時に必要
@@ -132,9 +147,18 @@ AWS セッショントークン（任意）
 一時的な認証情報を使用する場合
         '''.stripIndent().trim())
 
-        booleanParam('CLEANUP_ON_COMPLETE_FORCE', false, '''
-Evaluation Phase完了後にワークフローディレクトリを強制削除
-詳細: Issue #2、v0.3.0で追加
+        // ========================================
+        // その他
+        // ========================================
+        stringParam('COST_LIMIT_USD', '5.0', '''
+ワークフローあたりのコスト上限（USD）
+        '''.stripIndent().trim())
+
+        choiceParam('LOG_LEVEL', ['INFO', 'DEBUG', 'WARNING', 'ERROR'], '''
+ログレベル
+- INFO: 一般的な情報
+- DEBUG: 詳細ログ（デバッグ用）
+- WARNING / ERROR: 警告 / エラーのみ
         '''.stripIndent().trim())
     }
 
