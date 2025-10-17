@@ -21,10 +21,17 @@ export class ReportPhase extends BasePhase {
 
     // すべての処理が成功した場合のみ、ログをクリーンアップ（Issue #411）
     if (success) {
+      const gitManager = options.gitManager ?? null;
       const issueNumber = parseInt(this.metadata.data.issue_number, 10);
       try {
         await this.cleanupWorkflowLogs(issueNumber);
         console.info('[INFO] Workflow logs cleaned up successfully.');
+
+        // ログクリーンナップによる削除をコミット・プッシュ（Issue #411）
+        if (gitManager) {
+          await this.autoCommitAndPush(gitManager, null);
+          console.info('[INFO] Cleanup changes committed and pushed.');
+        }
       } catch (error) {
         const message = (error as Error).message ?? String(error);
         console.warn(`[WARNING] Failed to cleanup workflow logs: ${message}`);
