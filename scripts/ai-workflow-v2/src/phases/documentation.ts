@@ -65,13 +65,14 @@ export class DocumentationPhase extends BasePhase {
       };
     }
 
-    try {
-      const content = fs.readFileSync(documentationFile, 'utf-8');
-      await this.postOutput(content, 'ドキュメント更新ログ');
-    } catch (error) {
-      const message = (error as Error).message ?? String(error);
-      console.warn(`[WARNING] GitHub へのドキュメント更新ログ投稿に失敗しました: ${message}`);
-    }
+    // Phase outputはPRに含まれるため、Issue投稿は不要（Review resultのみ投稿）
+    // try {
+    //   const content = fs.readFileSync(documentationFile, 'utf-8');
+    //   await this.postOutput(content, 'ドキュメント更新ログ');
+    // } catch (error) {
+    //   const message = (error as Error).message ?? String(error);
+    //   console.warn(`[WARNING] GitHub へのドキュメント更新ログ投稿に失敗しました: ${message}`);
+    // }
 
     return {
       success: true,

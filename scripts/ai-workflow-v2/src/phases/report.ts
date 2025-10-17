@@ -21,10 +21,17 @@ export class ReportPhase extends BasePhase {
 
     // すべての処理が成功した場合のみ、ログをクリーンアップ（Issue #411）
     if (success) {
+      const gitManager = options.gitManager ?? null;
       const issueNumber = parseInt(this.metadata.data.issue_number, 10);
       try {
         await this.cleanupWorkflowLogs(issueNumber);
         console.info('[INFO] Workflow logs cleaned up successfully.');
+
+        // ログクリーンナップによる削除をコミット・プッシュ（Issue #411）
+        if (gitManager) {
+          await this.autoCommitAndPush(gitManager, null);
+          console.info('[INFO] Cleanup changes committed and pushed.');
+        }
       } catch (error) {
         const message = (error as Error).message ?? String(error);
         console.warn(`[WARNING] Failed to cleanup workflow logs: ${message}`);
@@ -104,13 +111,14 @@ export class ReportPhase extends BasePhase {
       };
     }
 
-    try {
-      const content = fs.readFileSync(reportFile, 'utf-8');
-      await this.postOutput(content, '最終レポート');
-    } catch (error) {
-      const message = (error as Error).message ?? String(error);
-      console.warn(`[WARNING] GitHub へのレポート投稿に失敗しました: ${message}`);
-    }
+    // Phase outputはPRに含まれるため、Issue投稿は不要（Review resultのみ投稿）
+    // try {
+    //   const content = fs.readFileSync(reportFile, 'utf-8');
+    //   await this.postOutput(content, '最終レポート');
+    // } catch (error) {
+    //   const message = (error as Error).message ?? String(error);
+    //   console.warn(`[WARNING] GitHub へのレポート投稿に失敗しました: ${message}`);
+    // }
 
     const outputs = this.getPhaseOutputs(issueNumber);
     await this.updatePullRequestSummary(issueNumber, outputs);

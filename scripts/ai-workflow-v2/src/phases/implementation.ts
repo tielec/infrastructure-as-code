@@ -56,13 +56,14 @@ export class ImplementationPhase extends BasePhase {
       };
     }
 
-    try {
-      const content = fs.readFileSync(implementationFile, 'utf-8');
-      await this.postOutput(content, '実装内容');
-    } catch (error) {
-      const message = (error as Error).message ?? String(error);
-      console.warn(`[WARNING] GitHub への実装結果投稿に失敗しました: ${message}`);
-    }
+    // Phase outputはPRに含まれるため、Issue投稿は不要（Review resultのみ投稿）
+    // try {
+    //   const content = fs.readFileSync(implementationFile, 'utf-8');
+    //   await this.postOutput(content, '実装内容');
+    // } catch (error) {
+    //   const message = (error as Error).message ?? String(error);
+    //   console.warn(`[WARNING] GitHub への実装結果投稿に失敗しました: ${message}`);
+    // }
 
     return {
       success: true,

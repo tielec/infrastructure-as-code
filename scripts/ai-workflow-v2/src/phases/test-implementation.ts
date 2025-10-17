@@ -67,13 +67,14 @@ export class TestImplementationPhase extends BasePhase {
       };
     }
 
-    try {
-      const content = fs.readFileSync(testImplementationFile, 'utf-8');
-      await this.postOutput(content, 'テストコード実装方針');
-    } catch (error) {
-      const message = (error as Error).message ?? String(error);
-      console.warn(`[WARNING] GitHub へのテストコード実装出力に失敗しました: ${message}`);
-    }
+    // Phase outputはPRに含まれるため、Issue投稿は不要（Review resultのみ投稿）
+    // try {
+    //   const content = fs.readFileSync(testImplementationFile, 'utf-8');
+    //   await this.postOutput(content, 'テストコード実装方針');
+    // } catch (error) {
+    //   const message = (error as Error).message ?? String(error);
+    //   console.warn(`[WARNING] GitHub へのテストコード実装出力に失敗しました: ${message}`);
+    // }
 
     return {
       success: true,

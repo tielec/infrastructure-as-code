@@ -926,7 +926,7 @@ export abstract class BasePhase {
     return parts.join('');
   }
 
-  private async autoCommitAndPush(gitManager: GitManager, reviewResult: string | null) {
+  protected async autoCommitAndPush(gitManager: GitManager, reviewResult: string | null) {
     const commitResult = await gitManager.commitPhaseOutput(
       this.phaseName,
       'completed',
