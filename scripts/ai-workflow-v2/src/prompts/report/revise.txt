@@ -12,12 +12,13 @@
 {report_document_path}
 
 ### 各フェーズ成果物
-- Phase 1: {requirements_document_path}
-- Phase 2: {design_document_path}
-- Phase 3: {test_scenario_document_path}
-- Phase 4: {implementation_document_path}
-- Phase 5: {test_result_document_path}
-- Phase 6: {documentation_update_log_path}
+- Phase 1 (Requirements): {requirements_context}
+- Phase 2 (Design): {design_context}
+- Phase 3 (Test Scenario): {test_scenario_context}
+- Phase 4 (Implementation): {implementation_context}
+- Phase 5 (Test Implementation): {test_implementation_context}
+- Phase 6 (Testing): {testing_context}
+- Phase 7 (Documentation): {documentation_context}
 
 ## 修正指示
 

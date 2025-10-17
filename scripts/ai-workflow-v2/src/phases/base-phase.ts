@@ -957,7 +957,23 @@ export abstract class BasePhase {
 
     while (true) {
       console.info(`[INFO] Phase ${this.phaseName}: Starting review (attempt ${revisionAttempts + 1})...`);
-      const reviewResult = await this.review();
+
+      let reviewResult: PhaseExecutionResult;
+      try {
+        reviewResult = await this.review();
+        console.info(`[INFO] Phase ${this.phaseName}: Review method completed. Success: ${reviewResult.success}`);
+      } catch (error) {
+        const message = (error as Error).message ?? String(error);
+        const stack = (error as Error).stack ?? '';
+        console.error(`[ERROR] Phase ${this.phaseName}: Review method threw an exception: ${message}`);
+        console.error(`[ERROR] Stack trace:\n${stack}`);
+        return {
+          success: false,
+          reviewResult: null,
+          outputFile: currentOutputFile,
+          error: `Review threw an exception: ${message}`,
+        };
+      }
 
       if (reviewResult.success) {
         console.info(`[INFO] Phase ${this.phaseName}: Review passed with result: ${reviewResult.output ?? 'N/A'}`);
@@ -1014,7 +1030,23 @@ export abstract class BasePhase {
 
       const feedback =
         reviewResult.error ?? 'レビューで不合格となりました。フィードバックをご確認ください。';
-      const reviseResult = await reviseFn(feedback);
+
+      let reviseResult: PhaseExecutionResult;
+      try {
+        reviseResult = await reviseFn(feedback);
+        console.info(`[INFO] Phase ${this.phaseName}: Revise method completed. Success: ${reviseResult.success}`);
+      } catch (error) {
+        const message = (error as Error).message ?? String(error);
+        const stack = (error as Error).stack ?? '';
+        console.error(`[ERROR] Phase ${this.phaseName}: Revise method threw an exception: ${message}`);
+        console.error(`[ERROR] Stack trace:\n${stack}`);
+        return {
+          success: false,
+          reviewResult,
+          outputFile: currentOutputFile,
+          error: `Revise threw an exception: ${message}`,
+        };
+      }
 
       if (!reviseResult.success) {
         console.error(`[ERROR] Phase ${this.phaseName}: Revise failed: ${reviseResult.error ?? 'Unknown error'}`);

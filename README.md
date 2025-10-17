@@ -8,6 +8,23 @@
 - **[CLAUDE.md](CLAUDE.md)** - Claude Code向けガイダンス
 - **[CONTRIBUTION.md](CONTRIBUTION.md)** - 開発者向けコントリビューションガイド
 
+## 📝 変更履歴
+
+### 2025-10-16: AI Workflow V1 (Python版) の削除完了
+
+AI Workflow V2 (TypeScript版) への移行が完了し、V1 (Python版) を削除しました。
+
+- **削除対象**: `scripts/ai-workflow/` ディレクトリ全体
+- **バックアップ**: `archive/ai-workflow-v1-python` ブランチに保存
+- **V2の場所**: `scripts/ai-workflow-v2/`
+- **V2のドキュメント**: [scripts/ai-workflow-v2/README.md](scripts/ai-workflow-v2/README.md)
+- **関連Issue**: [#411](https://github.com/tielec/infrastructure-as-code/issues/411)
+
+必要に応じて、以下のコマンドでV1を復元できます（5分以内）：
+```bash
+git checkout archive/ai-workflow-v1-python -- scripts/ai-workflow/
+```
+
 ## 前提条件
 
 - AWSアカウント

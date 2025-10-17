@@ -1,6 +1,6 @@
 import fs from 'fs-extra';
 import path from 'node:path';
-import { BasePhase, type PhaseInitializationParams } from './base-phase.js';
+import { BasePhase, type PhaseInitializationParams, type PhaseRunOptions } from './base-phase.js';
 import { PhaseExecutionResult } from '../types.js';
 
 type PhaseOutputInfo = {
@@ -13,6 +13,25 @@ type PhaseOutputMap = Record<string, PhaseOutputInfo>;
 export class ReportPhase extends BasePhase {
   constructor(params: PhaseInitializationParams) {
     super({ ...params, phaseName: 'report' });
+  }
+
+  public async run(options: PhaseRunOptions = {}): Promise<boolean> {
+    // 親クラスの run() を実行（execute + review cycle）
+    const success = await super.run(options);
+
+    // すべての処理が成功した場合のみ、ログをクリーンアップ（Issue #411）
+    if (success) {
+      const issueNumber = parseInt(this.metadata.data.issue_number, 10);
+      try {
+        await this.cleanupWorkflowLogs(issueNumber);
+        console.info('[INFO] Workflow logs cleaned up successfully.');
+      } catch (error) {
+        const message = (error as Error).message ?? String(error);
+        console.warn(`[WARNING] Failed to cleanup workflow logs: ${message}`);
+      }
+    }
+
+    return success;
   }
 
   protected async execute(): Promise<PhaseExecutionResult> {
@@ -96,15 +115,6 @@ export class ReportPhase extends BasePhase {
     const outputs = this.getPhaseOutputs(issueNumber);
     await this.updatePullRequestSummary(issueNumber, outputs);
 
-    // レポート完了後にワークフローログをクリーンアップ（Issue #405）
-    try {
-      await this.cleanupWorkflowLogs(issueNumber);
-      console.info('[INFO] Workflow logs cleaned up successfully.');
-    } catch (error) {
-      const message = (error as Error).message ?? String(error);
-      console.warn(`[WARNING] Failed to cleanup workflow logs: ${message}`);
-    }
-
     return {
       success: true,
       output: reportFile,
@@ -182,6 +192,8 @@ export class ReportPhase extends BasePhase {
       throw new Error(`Failed to compute reference for ${reportPath}`);
     }
 
+    const planningReference = this.getPlanningDocumentReference(issueNumber);
+
     // オプショナルコンテキストを構築（Issue #398）
     const requirementsContext = this.buildOptionalContext('requirements', 'requirements.md', '', issueNumber);
     const designContext = this.buildOptionalContext('design', 'design.md', '', issueNumber);
@@ -203,6 +215,7 @@ export class ReportPhase extends BasePhase {
 
     return this.loadPrompt(promptType)
       .replace('{report_document_path}', reportReference)
+      .replace('{planning_document_path}', planningReference)
       .replace('{requirements_context}', requirementsContext)
       .replace('{design_context}', designContext)
       .replace('{implementation_context}', implementationContext)
