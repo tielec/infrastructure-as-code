@@ -34,7 +34,8 @@ export class PlanningPhase extends BasePhase {
       }
     }
 
-    await this.postOutput(content, '企画フェーズ成果');
+    // Phase outputはPRに含まれるため、Issue投稿は不要（Review resultのみ投稿）
+    // await this.postOutput(content, '企画フェーズ成果');
 
     return {
       success: true,

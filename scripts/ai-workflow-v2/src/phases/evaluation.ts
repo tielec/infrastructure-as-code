@@ -91,7 +91,9 @@ export class EvaluationPhase extends BasePhase {
 
     try {
       const content = fs.readFileSync(evaluationFile, 'utf-8');
-      await this.postOutput(content, 'プロジェクト評価レポート');
+
+      // Phase outputはPRに含まれるため、Issue投稿は不要（Review resultのみ投稿）
+      // await this.postOutput(content, 'プロジェクト評価レポート');
 
       const decisionResult = await this.contentParser.parseEvaluationDecision(content);
 

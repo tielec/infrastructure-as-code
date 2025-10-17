@@ -61,12 +61,13 @@ export class DesignPhase extends BasePhase {
       console.info('[INFO] Using design decisions captured during planning phase.');
     }
 
-    try {
-      await this.postOutput(designContent, '設計ドキュメント');
-    } catch (error) {
-      const message = (error as Error).message ?? String(error);
-      console.warn(`[WARNING] GitHub への設計ドキュメント投稿に失敗しました: ${message}`);
-    }
+    // Phase outputはPRに含まれるため、Issue投稿は不要（Review resultのみ投稿）
+    // try {
+    //   await this.postOutput(designContent, '設計ドキュメント');
+    // } catch (error) {
+    //   const message = (error as Error).message ?? String(error);
+    //   console.warn(`[WARNING] GitHub への設計ドキュメント投稿に失敗しました: ${message}`);
+    // }
 
     return {
       success: true,

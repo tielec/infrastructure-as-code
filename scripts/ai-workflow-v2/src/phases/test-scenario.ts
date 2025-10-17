@@ -63,13 +63,14 @@ export class TestScenarioPhase extends BasePhase {
       };
     }
 
-    try {
-      const content = fs.readFileSync(scenarioFile, 'utf-8');
-      await this.postOutput(content, 'テストシナリオ');
-    } catch (error) {
-      const message = (error as Error).message ?? String(error);
-      console.warn(`[WARNING] GitHub へのテストシナリオ投稿に失敗しました: ${message}`);
-    }
+    // Phase outputはPRに含まれるため、Issue投稿は不要（Review resultのみ投稿）
+    // try {
+    //   const content = fs.readFileSync(scenarioFile, 'utf-8');
+    //   await this.postOutput(content, 'テストシナリオ');
+    // } catch (error) {
+    //   const message = (error as Error).message ?? String(error);
+    //   console.warn(`[WARNING] GitHub へのテストシナリオ投稿に失敗しました: ${message}`);
+    // }
 
     return {
       success: true,
