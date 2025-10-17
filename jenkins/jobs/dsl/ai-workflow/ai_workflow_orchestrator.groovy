@@ -116,6 +116,26 @@ Git コミットユーザー名
         stringParam('GIT_COMMIT_USER_EMAIL', 'ai-workflow@example.com', '''
 Git コミットメールアドレス
         '''.stripIndent().trim())
+
+        stringParam('AWS_ACCESS_KEY_ID', '', '''
+AWS アクセスキー ID（任意）
+Infrastructure as Code実行時に必要
+        '''.stripIndent().trim())
+
+        nonStoredPasswordParam('AWS_SECRET_ACCESS_KEY', '''
+AWS シークレットアクセスキー（任意）
+Infrastructure as Code実行時に必要
+        '''.stripIndent().trim())
+
+        nonStoredPasswordParam('AWS_SESSION_TOKEN', '''
+AWS セッショントークン（任意）
+一時的な認証情報を使用する場合
+        '''.stripIndent().trim())
+
+        booleanParam('CLEANUP_ON_COMPLETE_FORCE', false, '''
+Evaluation Phase完了後にワークフローディレクトリを強制削除
+詳細: Issue #2、v0.3.0で追加
+        '''.stripIndent().trim())
     }
 
     logRotator {
