@@ -182,6 +182,8 @@ export class ReportPhase extends BasePhase {
       throw new Error(`Failed to compute reference for ${reportPath}`);
     }
 
+    const planningReference = this.getPlanningDocumentReference(issueNumber);
+
     // オプショナルコンテキストを構築（Issue #398）
     const requirementsContext = this.buildOptionalContext('requirements', 'requirements.md', '', issueNumber);
     const designContext = this.buildOptionalContext('design', 'design.md', '', issueNumber);
@@ -203,6 +205,7 @@ export class ReportPhase extends BasePhase {
 
     return this.loadPrompt(promptType)
       .replace('{report_document_path}', reportReference)
+      .replace('{planning_document_path}', planningReference)
       .replace('{requirements_context}', requirementsContext)
       .replace('{design_context}', designContext)
       .replace('{implementation_context}', implementationContext)
