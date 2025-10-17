@@ -153,12 +153,16 @@ pipeline {
                         error("ISSUE_URL は GitHub Issue URLである必要があります: ${params.ISSUE_URL}")
                     }
 
-                    // Issue番号抽出
+                    // Issue番号とリポジトリ情報抽出
                     def urlParts = params.ISSUE_URL.split('/')
                     env.ISSUE_NUMBER = urlParts[-1]
+                    env.REPO_OWNER = urlParts[-4]
+                    env.REPO_NAME = urlParts[-3]
 
                     echo "Issue URL: ${params.ISSUE_URL}"
                     echo "Issue Number: ${env.ISSUE_NUMBER}"
+                    echo "Repository Owner: ${env.REPO_OWNER}"
+                    echo "Repository Name: ${env.REPO_NAME}"
                     echo "GitHub Repository: ${params.GITHUB_REPOSITORY}"
                     echo "Start Phase: ${params.START_PHASE}"
                     echo "Agent Mode: ${params.AGENT_MODE}"
@@ -179,6 +183,40 @@ pipeline {
                     echo "========================================="
                     echo "Stage: Setup Environment"
                     echo "========================================="
+
+                    // REPOS_ROOT の準備と対象リポジトリのチェックアウト
+                    // 注意: infrastructure-as-codeはWORKSPACEをそのまま使用（シンボリックリンク不要）
+                    def reposRoot = "/tmp/ai-workflow-repos-${env.BUILD_ID}"
+                    echo "Setting up REPOS_ROOT: ${reposRoot}"
+
+                    sh """
+                        # REPOS_ROOT ディレクトリ作成
+                        mkdir -p ${reposRoot}
+
+                        # 対象リポジトリが infrastructure-as-code 以外の場合のみクローン
+                        if [ "${env.REPO_NAME}" != "infrastructure-as-code" ]; then
+                            if [ ! -d ${reposRoot}/${env.REPO_NAME} ]; then
+                                echo "Cloning repository ${env.REPO_OWNER}/${env.REPO_NAME}..."
+                                cd ${reposRoot}
+                                git clone https://\${GITHUB_TOKEN}@github.com/${env.REPO_OWNER}/${env.REPO_NAME}.git
+                            else
+                                echo "Repository ${env.REPO_NAME} already exists. Pulling latest changes..."
+                                cd ${reposRoot}/${env.REPO_NAME}
+                                git pull
+                            fi
+                            echo "Repository ${env.REPO_NAME} setup completed."
+                        else
+                            echo "Target repository is infrastructure-as-code. Using WORKSPACE directly."
+                        fi
+
+                        echo "REPOS_ROOT contents:"
+                        ls -la ${reposRoot} || echo "REPOS_ROOT is empty (using WORKSPACE for infrastructure-as-code)"
+                    """
+
+                    // REPOS_ROOT 環境変数を設定
+                    env.REPOS_ROOT = reposRoot
+                    echo "REPOS_ROOT set to: ${env.REPOS_ROOT}"
+                    echo "WORKSPACE (infrastructure-as-code): ${env.WORKSPACE}"
 
                     // Git checkout: Detached HEADを回避するため、ブランチに明示的にcheckout
                     sh """
