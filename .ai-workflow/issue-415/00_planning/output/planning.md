@@ -214,22 +214,22 @@
 
 ### Phase 4: 実装 (見積もり: 1.0~1.5h)
 
-- [ ] Task 4-1: バックアップブランチの最終確認 (0.2~0.3h)
+- [x] Task 4-1: バックアップブランチの最終確認 (0.2~0.3h)
   - `git ls-remote --heads origin | grep archive/ai-workflow-v1-python` 実行
   - ブランチ存在確認
   - リモートリポジトリへのプッシュ確認
 
-- [ ] Task 4-2: V1参照箇所の再確認（念のため） (0.2~0.3h)
+- [x] Task 4-2: V1参照箇所の再確認（念のため） (0.2~0.3h)
   - `grep -r "scripts/ai-workflow" --exclude-dir=.git --exclude-dir=ai-workflow` 実行
   - 0件であることを確認（Issue #411で確認済みだが念のため）
   - リンク切れチェックの再実行
 
-- [ ] Task 4-3: scripts/ai-workflow/ ディレクトリの削除 (0.3~0.5h)
+- [x] Task 4-3: scripts/ai-workflow/ ディレクトリの削除 (0.3~0.5h)
   - `git rm -rf scripts/ai-workflow/` 実行
   - 削除内容の確認（`git status`）
   - ステージング確認（約50ファイルの削除）
 
-- [ ] Task 4-4: コミット作成とPush (0.3~0.4h)
+- [x] Task 4-4: コミット作成とPush (0.3~0.4h)
   - コミットメッセージ作成（CLAUDE.md line 348-360の規約準拠）
   - `git commit` 実行
   - `git push` 実行（適切なブランチへ）
