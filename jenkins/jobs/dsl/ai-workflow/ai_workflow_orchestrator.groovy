@@ -82,6 +82,12 @@ GitHub リポジトリ（owner/repo）
 注: 通常は ISSUE_URL から自動判定されるため、空欄で問題ありません
         '''.stripIndent().trim())
 
+        stringParam('BRANCH_NAME', '', '''
+作業ブランチ名（任意）
+AI Workflow の作業ブランチを個別指定する場合に使用
+空欄の場合は Issue 番号から自動生成されます
+        '''.stripIndent().trim())
+
         booleanParam('DRY_RUN', false, '''
 ドライランモード（API 呼び出しや Git 操作を行わず動作確認のみ実施）
         '''.stripIndent().trim())
