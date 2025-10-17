@@ -199,7 +199,6 @@ async function handleInitCommand(issueUrl: string): Promise<void> {
   const workflowDir = path.join(repoRoot, '.ai-workflow', `issue-${issueNumber}`);
   const metadataPath = path.join(workflowDir, 'metadata.json');
   const branchName = `ai-workflow/issue-${issueNumber}`;
-  const repoName = process.env.GITHUB_REPOSITORY ?? null;
 
   const git = simpleGit(repoRoot);
 
@@ -234,9 +233,18 @@ async function handleInitCommand(issueUrl: string): Promise<void> {
       const migrated = state.migrate();
       const metadataManager = new MetadataManager(metadataPath);
       metadataManager.data.branch_name = branchName;
-      if (repoName) {
-        metadataManager.data.repository = repoName;
-      }
+      metadataManager.data.repository = repositoryName;
+
+      // target_repository フィールドを設定
+      const remoteUrl = await git.remote(['get-url', 'origin']);
+      const remoteUrlStr = typeof remoteUrl === 'string' ? remoteUrl.trim() : String(remoteUrl).trim();
+      metadataManager.data.target_repository = {
+        path: repoRoot,
+        github_name: repositoryName,
+        remote_url: remoteUrlStr,
+        owner: owner,
+        repo: repo,
+      };
       metadataManager.save();
       console.info(
         migrated
@@ -275,9 +283,18 @@ async function handleInitCommand(issueUrl: string): Promise<void> {
 
   const metadataManager = new MetadataManager(metadataPath);
   metadataManager.data.branch_name = branchName;
-  if (repoName) {
-    metadataManager.data.repository = repoName;
-  }
+  metadataManager.data.repository = repositoryName;
+
+  // target_repository フィールドを設定
+  const remoteUrl = await git.remote(['get-url', 'origin']);
+  const remoteUrlStr = typeof remoteUrl === 'string' ? remoteUrl.trim() : String(remoteUrl).trim();
+  metadataManager.data.target_repository = {
+    path: repoRoot,
+    github_name: repositoryName,
+    remote_url: remoteUrlStr,
+    owner: owner,
+    repo: repo,
+  };
   metadataManager.save();
 
   // コミット & プッシュ

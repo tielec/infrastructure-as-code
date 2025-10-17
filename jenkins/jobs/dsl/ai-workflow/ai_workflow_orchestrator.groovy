@@ -42,7 +42,8 @@ GitHub Issue を入力として、要件定義から報告までの開発プロ�
         stringParam('ISSUE_URL', '', '''
 GitHub Issue URL（必須）
 
-例: https://github.com/tielec/infrastructure-as-code/issues/123
+例: https://github.com/tielec/my-project/issues/123
+注: Issue URL から対象リポジトリを自動判定します（マルチリポジトリ対応）
         '''.stripIndent().trim())
 
         choiceParam('AGENT_MODE', ['auto', 'codex', 'claude'], '''
@@ -76,8 +77,9 @@ GitHub Issue URL（必須）
 開始フェーズ（single_phase モード時のみ有効）
         '''.stripIndent().trim())
 
-        stringParam('GITHUB_REPOSITORY', 'tielec/infrastructure-as-code', '''
+        stringParam('GITHUB_REPOSITORY', '', '''
 GitHub リポジトリ（owner/repo）
+注: 通常は ISSUE_URL から自動判定されるため、空欄で問題ありません
         '''.stripIndent().trim())
 
         booleanParam('DRY_RUN', false, '''
@@ -126,19 +128,18 @@ Git コミットメールアドレス
             scm {
                 git {
                     remote {
-                        url('https://github.com/tielec/infrastructure-as-code.git')
+                        url('https://github.com/tielec/ai-workflow-agent.git')
                         credentials('github-token')
                     }
                     branch('*/main')
                 }
             }
-            scriptPath('jenkins/jobs/pipeline/ai-workflow/ai-workflow-orchestrator/Jenkinsfile')
+            scriptPath('Jenkinsfile')
         }
     }
 
     environmentVariables {
-        env('WORKFLOW_VERSION', '1.0.0')
-        env('PYTHON_PATH', '/usr/bin/python3')
+        env('WORKFLOW_VERSION', '0.2.0')
     }
 
     properties {
