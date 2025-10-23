@@ -349,21 +349,45 @@ Jenkins全体で使用される環境変数（JCaSCで定義）：
 - `WAIT_TIMEOUT_MINUTES`: エージェント完了待機時間（デフォルト30分）
 - `DRY_RUN`: 実際の停止を行わず確認のみ
 
+**Gracefulシャットダウンモード**（推奨）:
+
+Gracefulモードでは、実行中のジョブを安全に完了させてから環境を停止します：
+
+1. **QuietDown有効化**: Jenkins QuietDownモードを設定し、新規ジョブのキューを停止
+2. **ジョブ完了待機**: エージェント上で実行中のジョブが完了するまで待機（15秒間隔でポーリング）
+3. **SpotFleetスケールダウン**: エージェントのキャパシティを0に設定
+4. **インスタンス終了待機**: エージェントインスタンスの終了を確認
+5. **QuietDownキャンセル**: QuietDownモードを解除（念のため）
+
+**タイムアウト時の動作**:
+- エージェントジョブが`WAIT_TIMEOUT_MINUTES`で指定した時間内に完了しない場合、警告ログを出力してスケールダウンを続行
+- タイムアウト時もジョブは成功ステータスになる（エラーで失敗しない）
+- 実行中のジョブは強制終了される可能性があることを警告
+
+**Immediateモード**:
+- QuietDownやジョブ完了待機をスキップし、即座にスケールダウンを実行
+- 既存の動作と同じ（後方互換性を維持）
+
 **注意事項**:
 - このジョブはJenkins自身を停止するため、実行後アクセスできなくなります
 - 停止処理は非同期で実行され、ジョブは成功として終了します
 - 環境の再起動はAWSコンソールから手動で行う必要があります
-- 実行前に他の実行中ジョブがないことを確認してください
+- Gracefulモードを使用することで、エージェント上の実行中ジョブを保護できます
+- 初回実行時にScript Security承認が必要な場合があります（Jenkins管理 > In-process Script Approval）
 
 **使用例**:
 ```bash
 # ドライランで停止対象を確認
 DRY_RUN=true で実行
 
-# 本番環境を安全に停止
+# gracefulモードで安全に停止（推奨）
 CONFIRM_SHUTDOWN=true
 SHUTDOWN_MODE=graceful
 WAIT_TIMEOUT_MINUTES=30
+
+# immediateモードで即座に停止
+CONFIRM_SHUTDOWN=true
+SHUTDOWN_MODE=immediate
 ```
 
 #### Ansible Playbook Executor
