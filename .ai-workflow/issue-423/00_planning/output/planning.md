@@ -156,21 +156,21 @@
 
 ### Phase 4: 実装 (見積もり: 2.5~3h)
 
-- [ ] Task 4-1: `setJenkinsQuietMode()`実装 (0.5h)
+- [x] Task 4-1: `setJenkinsQuietMode()`実装 (0.5h)
   - Jenkins.instance.quietDown()/cancelQuietDown()呼び出し
   - エラーハンドリング（Script Approvalが必要な可能性）
 
-- [ ] Task 4-2: `getRunningAgentExecutors()`実装 (0.5~1h)
+- [x] Task 4-2: `getRunningAgentExecutors()`実装 (0.5~1h)
   - Jenkins.instance.computers取得
   - built-in以外のノード（エージェント）をフィルタ
   - Executor.isBusy()で実行中ジョブ数をカウント
 
-- [ ] Task 4-3: `waitForAgentJobsCompletion()`実装 (0.5~1h)
+- [x] Task 4-3: `waitForAgentJobsCompletion()`実装 (0.5~1h)
   - waitUntilループでエージェント実行中ジョブ数監視
   - タイムアウト設定（timeout()ブロック）
   - 定期的なログ出力（15秒間隔）
 
-- [ ] Task 4-4: `scaleDownEC2Fleet()`修正 (1h)
+- [x] Task 4-4: `scaleDownEC2Fleet()`修正 (1h)
   - gracefulモード時の処理フロー変更:
     1. quietDown設定
     2. エージェントジョブ完了待機
