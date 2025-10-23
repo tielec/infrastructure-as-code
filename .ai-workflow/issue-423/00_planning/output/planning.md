@@ -204,11 +204,11 @@
 
 ### Phase 7: ドキュメント (見積もり: 0.5~1h)
 
-- [ ] Task 7-1: Jenkinsfileコメント追加 (0.5h)
+- [x] Task 7-1: Jenkinsfileコメント追加 (0.5h)
   - 新規関数のJavaDoc形式コメント
   - 処理フロー説明コメント
 
-- [ ] Task 7-2: jenkins/CONTRIBUTION.md更新確認 (0.5h)
+- [x] Task 7-2: jenkins/CONTRIBUTION.md更新確認 (0.5h)
   - shutdown-environmentジョブの動作説明追加が必要か確認
 
 ### Phase 8: レポート (見積もり: 0.5h)
@@ -324,8 +324,8 @@ graph TD
 
 ### Phase 7: ドキュメント
 
-- [ ] Jenkinsfileにコメントが追加されている
-- [ ] 関連ドキュメントの更新が不要か確認されている
+- [x] Jenkinsfileにコメントが追加されている
+- [x] 関連ドキュメントの更新が不要か確認されている
 
 ### Phase 8: レポート
 
