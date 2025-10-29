@@ -41,9 +41,7 @@ multibranchPipelineJob(fullJobName) {
 
     configure { node ->
         def traitsNode = node / 'sources' / 'jenkins.branch.BranchSource' / 'source' / 'traits'
-        traitsNode.appendNode('org.jenkinsci.plugins.github_branch_source.filters.PullRequestFilterTrait')
-            .appendNode('filter', [class: 'org.jenkinsci.plugins.github_branch_source.filters.PullRequestSCMHeadFilterByDraftStatus'])
-            .appendNode('excludeDrafts', true)
+        traitsNode.appendNode('org.jenkinsci.plugins.github__branch__source.IgnoreDraftPullRequestFilterTrait')
     }
     
     // 孤立したアイテム戦略
