@@ -28,11 +28,12 @@ multibranchPipelineJob(fullJobName) {
                     repoOwner('tielec')
                     repository('reflection-cloud-api')
                     
-                    // ブランチ検出の設定 - configureを使用
+                    // ブランチ検出の設定
                     traits {
                         gitHubPullRequestDiscovery {
                             strategyId(2)  // プルリクエストのHEADとマージ後の両方を検出
                         }
+                        gitHubIgnoreDraftPullRequestFilter()
                     }
                 }
             }
