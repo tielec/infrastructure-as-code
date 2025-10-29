@@ -30,13 +30,20 @@ multibranchPipelineJob(fullJobName) {
                     
                     // ブランチ検出の設定 - configureを使用
                     traits {
-                        gitHubBranchDiscovery {
-                            strategyId(3)  // すべてのブランチを検出
+                        gitHubPullRequestDiscovery {
+                            strategyId(2)  // プルリクエストのHEADとマージ後の両方を検出
                         }
                     }
                 }
             }
         }
+    }
+
+    configure { node ->
+        def traitsNode = node / 'sources' / 'jenkins.branch.BranchSource' / 'source' / 'traits'
+        traitsNode.appendNode('org.jenkinsci.plugins.github_branch_source.filters.PullRequestFilterTrait')
+            .appendNode('filter', [class: 'org.jenkinsci.plugins.github_branch_source.filters.PullRequestSCMHeadFilterByDraftStatus'])
+            .appendNode('excludeDrafts', true)
     }
     
     // 孤立したアイテム戦略
