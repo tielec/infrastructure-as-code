@@ -327,7 +327,7 @@ pytest-asyncio==0.21.1
 **P-008: Claude Agent SDK**
 - Claude Code headless mode（OAuth認証）
 - API endpoint: Claude API（https://api.anthropic.com）
-- モデル: Claude 3.5 Sonnet（claude-3-5-sonnet-20241022）
+- モデル: Claude Sonnet 4.5（claude-sonnet-4-5-20250929）
 
 **P-009: Gitリモートリポジトリ**
 - GitHub: https://github.com/tielec/infrastructure-as-code.git
