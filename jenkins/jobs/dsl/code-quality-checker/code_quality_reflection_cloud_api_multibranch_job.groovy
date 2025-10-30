@@ -31,18 +31,13 @@ multibranchPipelineJob(fullJobName) {
                     // ブランチ検出の設定
                     traits {
                         gitHubPullRequestDiscovery {
-                            strategyId(2)  // プルリクエストのHEADとマージ後の両方を検出
+                            strategyId(2)  // The current pull request revision (PRのHEADのみ)
                         }
-                        gitHubIgnoreDraftPullRequestFilter()
+                        gitHubIgnoreDraftPullRequestFilter()  // ドラフトPRを無視
                     }
                 }
             }
         }
-    }
-
-    configure { node ->
-        def traitsNode = node / 'sources' / 'jenkins.branch.BranchSource' / 'source' / 'traits'
-        traitsNode.appendNode('org.jenkinsci.plugins.github__branch__source.IgnoreDraftPullRequestFilterTrait')
     }
     
     // 孤立したアイテム戦略
