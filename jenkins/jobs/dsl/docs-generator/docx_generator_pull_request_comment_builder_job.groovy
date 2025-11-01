@@ -62,6 +62,7 @@ repositories.each { repo ->
         parameters {
             stringParam('REPO_URL', repo.url, 'リポジトリURL')
             stringParam('PR_NUMBER', 'Latest', 'プルリクエスト番号（"Latest"の場合は最新のPRを対象）')
+            stringParam('PR_DRAFT', 'false', 'PRがドラフト状態かどうか（true/false、Triggerジョブから自動設定）')
             booleanParam('UPDATE_TITLE', false, 'PRのタイトルを更新するかどうか')
             booleanParam('FORCE_ANALYSIS', false, '既存のコメントが存在しても強制的に分析とコメント更新を実行するかどうか')
             stringParam('JENKINSFILE_BRANCH', 'main', 'Jenkinsfileが格納されているブランチ')
