@@ -33,6 +33,27 @@ pipeline {
     }
     
     stages {
+        stage('ドラフトPRチェック') {
+            steps {
+                script {
+                    // PR_DRAFTパラメータまたは環境変数から取得（フォールバック）
+                    def isDraft = params.PR_DRAFT ?: env.PR_DRAFT ?: 'false'
+
+                    if (isDraft == 'true') {
+                        echo "このPR (#${params.PR_NUMBER}) はドラフト状態です。処理をスキップします。"
+                        echo "理由: ドラフトPRではOpenAI API呼び出しやコメント投稿が不要です。"
+                        currentBuild.result = 'NOT_BUILT'
+                        currentBuild.description = "ドラフトPRのためスキップ"
+
+                        // パイプライン全体を終了
+                        return
+                    }
+
+                    echo "このPR (#${params.PR_NUMBER}) は非ドラフト状態です。処理を続行します。"
+                }
+            }
+        }
+
         stage('パラメータ検証') {
             steps {
                 script {
