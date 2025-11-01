@@ -113,10 +113,10 @@
 
 ### Phase 1: 要件定義 (見積もり: 0.5h)
 
-- [ ] Task 1-1: ドラフトPR判定仕様の確認 (0.2h)
+- [x] Task 1-1: ドラフトPR判定仕様の確認 (0.2h)
   - GitHub Webhook Payloadの`pull_request.draft`フィールドの仕様確認
   - 既存実装（MultiBranchジョブの`gitHubIgnoreDraftPullRequestFilter()`）の調査
-- [ ] Task 1-2: 受け入れ基準の定義 (0.3h)
+- [x] Task 1-2: 受け入れ基準の定義 (0.3h)
   - ドラフトPRのWebhook受信時にビルドが起動しないこと
   - ドラフト解除後のWebhook受信時に正常にビルドが起動すること
   - 既存の非ドラフトPRの動作に影響がないこと
