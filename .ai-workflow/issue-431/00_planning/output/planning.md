@@ -193,7 +193,7 @@
 
 ### Phase 7: ドキュメント (見積もり: 0.5h)
 
-- [ ] Task 7-1: CONTRIBUTION.md更新 (0.5h)
+- [x] Task 7-1: CONTRIBUTION.md更新 (0.5h)
   - ドラフトPRフィルタリングパターンをベストプラクティスとして追加
   - Generic Webhook Triggerでの条件判定例として記載
   - Jenkinsfileでの早期終了パターンとして記載
@@ -327,9 +327,9 @@ graph TD
 
 ### Phase 7: ドキュメント
 
-- [ ] CONTRIBUTION.mdが更新されている
-- [ ] ドラフトPRフィルタリングパターンが記載されている
-- [ ] 変更内容が明確に説明されている
+- [x] CONTRIBUTION.mdが更新されている
+- [x] ドラフトPRフィルタリングパターンが記載されている
+- [x] 変更内容が明確に説明されている
 
 ### Phase 8: レポート
 
