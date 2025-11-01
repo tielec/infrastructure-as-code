@@ -141,11 +141,11 @@
 
 ### Phase 4: 実装 (見積もり: 1.5h)
 
-- [ ] Task 4-1: Trigger JobのDSL修正 (0.5h)
+- [x] Task 4-1: Trigger JobのDSL修正 (0.5h)
   - `genericVariables`セクションに`PR_DRAFT`変数追加
   - JSONPath設定: `$.pull_request.draft`
   - `predefinedProps`に`PR_DRAFT`パラメータ追加
-- [ ] Task 4-2: Jenkinsfileのステージ追加 (1h)
+- [x] Task 4-2: Jenkinsfileのステージ追加 (1h)
   - 「ドラフトPRチェック」ステージを最初のステージとして追加
   - ドラフト判定ロジック実装
   - スキップ時のビルドステータス設定
@@ -283,14 +283,14 @@ graph TD
 
 ### Phase 4: 実装
 
-- [ ] Trigger JobのDSL修正が完了している
+- [x] Trigger JobのDSL修正が完了している
   - `genericVariables`に`PR_DRAFT`追加
   - `predefinedProps`に`PR_DRAFT`追加
-- [ ] Jenkinsfileのステージ追加が完了している
+- [x] Jenkinsfileのステージ追加が完了している
   - 「ドラフトPRチェック」ステージが最初のステージとして追加
   - ドラフト判定ロジックが実装されている
   - ビルドステータス設定とログ出力が実装されている
-- [ ] コードレビューが完了している（セルフレビュー）
+- [x] コードレビューが完了している（セルフレビュー）
 
 ### Phase 6: テスト実行
 
