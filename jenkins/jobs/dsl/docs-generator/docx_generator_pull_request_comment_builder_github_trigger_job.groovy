@@ -95,6 +95,12 @@ def createPRCommentTriggerJob(repoConfig) {
                         expressionType('JSONPath')
                         regexpFilter('')
                     }
+                    genericVariable {
+                        key('PR_DRAFT')
+                        value('$.pull_request.draft')
+                        expressionType('JSONPath')
+                        regexpFilter('')
+                    }
                 }
                 
                 // PullRequestが作成時または再オープン時のみトリガー
@@ -135,6 +141,7 @@ def createPRCommentTriggerJob(repoConfig) {
                         predefinedProps([
                             'REPO_URL': '$REPO_URL',
                             'PR_NUMBER': '$PR_NUMBER',
+                            'PR_DRAFT': '$PR_DRAFT',
                             'UPDATE_TITLE': repoConfig.updateTitle,
                             'FORCE_ANALYSIS': 'true'
                         ])

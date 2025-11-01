@@ -1,0 +1,178 @@
+{
+  "issue_number": "431",
+  "issue_url": "https://github.com/tielec/infrastructure-as-code/issues/431",
+  "issue_title": "Issue #431",
+  "repository": "tielec/infrastructure-as-code",
+  "target_repository": {
+    "path": "/tmp/ai-workflow-repos-3/infrastructure-as-code",
+    "github_name": "tielec/infrastructure-as-code",
+    "remote_url": "https://github.com/tielec/infrastructure-as-code.git",
+    "owner": "tielec",
+    "repo": "infrastructure-as-code"
+  },
+  "workflow_version": "1.0.0",
+  "current_phase": "evaluation",
+  "design_decisions": {
+    "implementation_strategy": "EXTEND",
+    "test_strategy": "INTEGRATION_ONLY",
+    "test_code_strategy": "EXTEND_TEST"
+  },
+  "cost_tracking": {
+    "total_input_tokens": 33307,
+    "total_output_tokens": 150140,
+    "total_cost_usd": 8.8187399
+  },
+  "phases": {
+    "planning": {
+      "status": "completed",
+      "retry_count": 0,
+      "started_at": "2025-11-01T14:30:53.144Z",
+      "completed_at": "2025-11-01T14:34:55.119Z",
+      "review_result": null,
+      "current_step": null,
+      "completed_steps": [
+        "execute",
+        "review"
+      ]
+    },
+    "requirements": {
+      "status": "completed",
+      "retry_count": 0,
+      "started_at": "2025-11-01T14:34:55.610Z",
+      "completed_at": "2025-11-01T14:38:03.735Z",
+      "review_result": null,
+      "current_step": null,
+      "completed_steps": [
+        "execute",
+        "review"
+      ]
+    },
+    "design": {
+      "status": "completed",
+      "retry_count": 0,
+      "started_at": "2025-11-01T14:38:04.317Z",
+      "completed_at": "2025-11-01T14:43:19.147Z",
+      "review_result": null,
+      "current_step": null,
+      "completed_steps": [
+        "execute",
+        "review"
+      ]
+    },
+    "test_scenario": {
+      "status": "completed",
+      "retry_count": 0,
+      "started_at": "2025-11-01T14:43:19.742Z",
+      "completed_at": "2025-11-01T14:48:55.094Z",
+      "review_result": null,
+      "current_step": null,
+      "completed_steps": [
+        "execute",
+        "review"
+      ]
+    },
+    "implementation": {
+      "status": "completed",
+      "retry_count": 0,
+      "started_at": "2025-11-01T14:48:55.626Z",
+      "completed_at": "2025-11-01T14:52:26.899Z",
+      "review_result": null,
+      "current_step": null,
+      "completed_steps": [
+        "execute",
+        "review"
+      ]
+    },
+    "test_implementation": {
+      "status": "completed",
+      "retry_count": 0,
+      "started_at": "2025-11-01T14:52:27.505Z",
+      "completed_at": "2025-11-01T14:55:31.127Z",
+      "review_result": null,
+      "current_step": null,
+      "completed_steps": [
+        "execute",
+        "review"
+      ]
+    },
+    "testing": {
+      "status": "completed",
+      "retry_count": 2,
+      "started_at": "2025-11-01T14:55:31.725Z",
+      "completed_at": "2025-11-01T15:08:48.012Z",
+      "review_result": null,
+      "current_step": null,
+      "completed_steps": [
+        "execute",
+        "revise",
+        "review"
+      ]
+    },
+    "documentation": {
+      "status": "completed",
+      "retry_count": 0,
+      "started_at": "2025-11-01T15:08:48.596Z",
+      "completed_at": "2025-11-01T15:11:45.725Z",
+      "review_result": null,
+      "current_step": null,
+      "completed_steps": [
+        "execute",
+        "review"
+      ]
+    },
+    "report": {
+      "status": "completed",
+      "retry_count": 0,
+      "started_at": "2025-11-01T15:11:46.331Z",
+      "completed_at": "2025-11-01T15:16:26.634Z",
+      "review_result": null,
+      "current_step": null,
+      "completed_steps": [
+        "execute",
+        "review"
+      ]
+    },
+    "evaluation": {
+      "status": "completed",
+      "retry_count": 0,
+      "started_at": "2025-11-01T15:16:28.572Z",
+      "completed_at": "2025-11-01T15:20:29.051Z",
+      "review_result": null,
+      "decision": "PASS_WITH_ISSUES",
+      "failed_phase": null,
+      "remaining_tasks": [
+        {
+          "task": "Jenkins管理者による手動テスト実行（Phase 6のテストケース1〜5）",
+          "phase": "testing",
+          "priority": "高"
+        },
+        {
+          "task": "テスト結果に基づくマージ判断の最終確認",
+          "phase": "report",
+          "priority": "高"
+        },
+        {
+          "task": "本番環境でのモニタリング（マージ後）",
+          "phase": "report",
+          "priority": "中"
+        }
+      ],
+      "created_issue_url": "https://github.com/tielec/infrastructure-as-code/issues/434",
+      "abort_reason": null,
+      "current_step": null,
+      "completed_steps": [
+        "execute",
+        "review"
+      ]
+    }
+  },
+  "created_at": "2025-11-01T14:30:46.833Z",
+  "updated_at": "2025-11-01T15:20:29.604Z",
+  "branch_name": "ai-workflow/issue-431",
+  "pr_number": 433,
+  "pr_url": "https://github.com/tielec/infrastructure-as-code/pull/433",
+  "github_integration": {
+    "progress_comment_id": 3476421700,
+    "progress_comment_url": "https://github.com/tielec/infrastructure-as-code/issues/431#issuecomment-3476421700"
+  }
+}

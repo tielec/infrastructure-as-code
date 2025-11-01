@@ -1360,14 +1360,14 @@ freeStyleJob('Nightly_Cleanup') {
         // JST 00:00 = UTC 15:00
         cron('0 15 * * *')
     }
-    
+
     steps {
         shell('''
             echo "Starting cleanup at $(date)"
             # クリーンアップ処理
         ''')
     }
-    
+
     publishers {
         // 非同期で他ジョブをトリガー
         downstreamParameterized {
@@ -1381,6 +1381,85 @@ freeStyleJob('Nightly_Cleanup') {
     }
 }
 ```
+
+#### 4.2.5 ドラフトPRフィルタリングパターン
+
+**概要**: GitHub WebhookでドラフトPRを検出し、ジョブ実行を早期スキップすることで、API呼び出しコストとビルドリソースを削減できます。
+
+**実装例**:
+
+```groovy
+// 1. Trigger Job（DSLファイル）でドラフト状態を取得
+pipelineJob('PR_Comment_Builder') {
+    triggers {
+        genericTrigger {
+            genericVariables {
+                genericVariable {
+                    key('PR_DRAFT')
+                    value('$.pull_request.draft')
+                    expressionType('JSONPath')
+                    regexpFilter('')
+                }
+                genericVariable {
+                    key('PR_NUMBER')
+                    value('$.pull_request.number')
+                    expressionType('JSONPath')
+                }
+            }
+        }
+    }
+
+    // 下流ジョブに渡す
+    parameters {
+        stringParam('PR_DRAFT', '', 'ドラフト状態（true/false）')
+        stringParam('PR_NUMBER', '', 'PR番号')
+    }
+}
+
+// 2. Pipeline Job（Jenkinsfile）で早期スキップ
+pipeline {
+    agent any
+
+    stages {
+        stage('ドラフトPRチェック') {
+            steps {
+                script {
+                    // フォールバック付き変数取得
+                    def isDraft = params.PR_DRAFT ?: env.PR_DRAFT ?: 'false'
+
+                    if (isDraft == 'true') {
+                        echo "このPR (#${params.PR_NUMBER}) はドラフト状態です。処理をスキップします。"
+                        echo "理由: ドラフトPRではOpenAI API呼び出しやコメント投稿が不要です。"
+                        currentBuild.result = 'NOT_BUILT'
+                        currentBuild.description = "ドラフトPRのためスキップ"
+                        return  // パイプライン終了
+                    }
+
+                    echo "このPR (#${params.PR_NUMBER}) は非ドラフト状態です。処理を続行します。"
+                }
+            }
+        }
+
+        stage('PR分析') {
+            steps {
+                // OpenAI API呼び出しなど
+            }
+        }
+    }
+}
+```
+
+**ポイント**:
+- **Generic Webhook Triggerで`$.pull_request.draft`を取得**
+- **Jenkinsfileの最初のステージでドラフト判定**
+- **`return`で早期終了（`error()`ではなく）**
+- **`currentBuild.result = 'NOT_BUILT'`で実行されなかったことを明示**
+- **フォールバック: `params.PR_DRAFT ?: env.PR_DRAFT ?: 'false'`でパラメータ欠落時も安全**
+
+**効果**:
+- ドラフトPR時のAPI呼び出しコスト削減
+- ビルドリソースの効率的利用
+- ビルド履歴でスキップ理由が明確
 
 ### 4.3 トラブルシューティング
 
