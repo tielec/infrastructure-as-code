@@ -122,11 +122,11 @@
 
 ### Phase 2: 設計 (見積もり: 1h)
 
-- [ ] Task 2-1: Trigger Job設計 (0.5h)
+- [x] Task 2-1: Trigger Job設計 (0.5h)
   - Generic Webhook Trigger変数リストに`PR_DRAFT`追加
   - 下流ジョブパラメータリストに`PR_DRAFT`追加
   - JSONPathによるペイロード取得方法の確認（`$.pull_request.draft`）
-- [ ] Task 2-2: Jenkinsfile設計 (0.5h)
+- [x] Task 2-2: Jenkinsfile設計 (0.5h)
   - 「ドラフトPRチェック」ステージの詳細設計
   - ドラフト判定ロジック（`params.PR_DRAFT`または`env.PR_DRAFT`）
   - スキップ時のビルドステータス設定（`currentBuild.result = 'NOT_BUILT'`）
