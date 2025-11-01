@@ -1,0 +1,331 @@
+# 要件定義フェーズ - 実行プロンプト
+
+## タスク概要
+
+GitHubのIssue情報から詳細な要件定義書を作成してください。
+
+## 入力情報
+
+### Planning Phase成果物
+- Planning Document: @.ai-workflow/issue-431/00_planning/output/planning.md
+
+**注意**: Planning Phaseが実行されている場合、開発計画（実装戦略、テスト戦略、リスク、スケジュール）を必ず確認してください。
+
+### GitHub Issue情報
+
+## Issue概要
+
+- **Issue番号**: #431
+- **タイトル**: [TASK] ドラフトPRに対するpull_request_comment_builderの実行を抑止
+- **状態**: open
+- **URL**: https://github.com/tielec/infrastructure-as-code/issues/431
+- **ラベル**: なし
+
+### 本文
+
+## 概要
+現在、ドラフト状態のPRに対しても `pull_request_comment_builder` ジョブが実行されてしまう問題があります。
+ドラフトPRの場合は処理を実行しないように修正が必要です。
+
+## 現状の問題
+- `docx_generator_pull_request_comment_builder_github_trigger_job` がGitHub Webhookからドラフト状態を判定していない
+- ドラフトPRでも不要なOpenAI API呼び出しが発生し、コストが無駄になる
+- 下流の `pull_request_comment_builder` ジョブ（Jenkinsfile）でドラフトチェックをしていない
+
+## 対象ファイル
+- **Triggerジョブ**: `jenkins/jobs/dsl/docs-generator/docx_generator_pull_request_comment_builder_github_trigger_job.groovy`
+- **Jenkinsfile**: `jenkins/jobs/pipeline/docs-generator/pull-request-comment-builder/Jenkinsfile`
+
+## 解決方法（Jenkinsfile側で判定）
+
+### なぜこのアプローチを選択したか
+
+**conditional-buildstepプラグインを使わない理由**:
+- ヘルススコアが80と低く、品質面で懸念がある
+- 追加プラグインのインストール・メンテナンスが不要
+- ロジックがJenkinsfileに集約され、可読性が向上
+
+**Jenkinsfile側で判定するメリット**:
+- 追加プラグイン不要
+- ジョブの実行履歴に記録が残る（スキップされた理由が明確）
+- テストが容易（Jenkinsfileの変更のみ）
+- 他の類似ジョブにも適用しやすい
+
+### 実装方法
+
+#### ステップ1: Triggerジョブの修正
+
+`PR_DRAFT` 変数を取得し、下流ジョブにパラメータとして渡します。
+
+**修正ファイル**: `jenkins/jobs/dsl/docs-generator/docx_generator_pull_request_comment_builder_github_trigger_job.groovy`
+
+```groovy
+triggers {
+    genericTrigger {
+        genericVariables {
+            // 既存の変数
+            genericVariable {
+                key('PR_NUMBER')
+                value('$.pull_request.number')
+                expressionType('JSONPath')
+                regexpFilter('')
+            }
+            genericVariable {
+                key('REPO_URL')
+                value('$.repository.html_url')
+                expressionType('JSONPath')
+                regexpFilter('')
+            }
+            genericVariable {
+                key('ACTION')
+                value('$.action')
+                expressionType('JSONPath')
+                regexpFilter('')
+            }
+            // ← ここに追加
+            genericVariable {
+                key('PR_DRAFT')
+                value('$.pull_request.draft')
+                expressionType('JSONPath')
+                regexpFilter('')
+            }
+        }
+        
+        // 既存の設定...
+    }
+}
+
+steps {
+    downstreamParameterized {
+        trigger(downstreamJobName) {
+            block {
+                buildStepFailure('FAILURE')
+                failure('FAILURE')
+                unstable('UNSTABLE')
+            }
+            parameters {
+                predefinedProps([
+                    'REPO_URL': '$REPO_URL',
+                    'PR_NUMBER': '$PR_NUMBER',
+                    'PR_DRAFT': '$PR_DRAFT',  // ← ドラフト状態を渡す
+                    'UPDATE_TITLE': repoConfig.updateTitle,
+                    'FORCE_ANALYSIS': 'true'
+                ])
+            }
+        }
+    }
+}
+```
+
+#### ステップ2: Jenkinsfileの修正
+
+パラメータ定義に `PR_DRAFT` を追加し、最初のステージでドラフトチェックを行います。
+
+**修正ファイル**: `jenkins/jobs/pipeline/docs-generator/pull-request-comment-builder/Jenkinsfile`
+
+```groovy
+pipeline {
+    agent {
+        docker {
+            label 'ec2-fleet'
+            image 'python:3.11-slim'
+            args '-v ${WORKSPACE}:/workspace -w /workspace -u root'
+        }
+    }
+    
+    // パラメータにPR_DRAFTを追加（Triggerジョブから渡される）
+    // ※ パラメータ定義はDSLファイルには追加しない（Triggerジョブ経由のみ）
+    
+    environment {
+        // 既存の環境変数...
+    }
+    
+    stages {
+        // ← 最初のステージとして追加
+        stage('ドラフトPRチェック') {
+            steps {
+                script {
+                    // PR_DRAFTパラメータまたは環境変数から取得
+                    def isDraft = params.PR_DRAFT ?: env.PR_DRAFT ?: 'false'
+                    
+                    if (isDraft == 'true') {
+                        echo "このPR (#${params.PR_NUMBER}) はドラフト状態です。処理をスキップします。"
+                        echo "理由: ドラフトPRではOpenAI API呼び出しやコメント投稿が不要です。"
+                        currentBuild.result = 'NOT_BUILT'
+                        currentBuild.description = "ドラフトPRのためスキップ"
+                        
+                        // パイプライン全体を終了
+                        return
+                    }
+                    
+                    echo "このPR (#${params.PR_NUMBER}) は非ドラフト状態です。処理を続行します。"
+                }
+            }
+        }
+
+        stage('パラメータ検証') {
+            // 既存のステージ...
+        }
+
+        stage('環境準備') {
+            // 既存のステージ...
+        }
+        
+        // 以降は既存のステージ...
+    }
+}
+```
+
+### ステップ3: DSLファイル（Job定義）の修正
+
+Jenkinsfileで `params.PR_DRAFT` を参照できるようにするため、DSLファイルでパラメータ定義は**追加しません**。
+
+理由:
+- Triggerジョブから `predefinedProps` で渡されるパラメータは、自動的に利用可能になる
+- DSLファイルでパラメータ定義すると、手動ビルド時にUI表示されてしまう（不要）
+
+**修正不要**: `jenkins/jobs/dsl/docs-generator/docx_generator_pull_request_comment_builder_job.groovy`
+
+## 実装手順
+
+### 1. Triggerジョブの修正
+- [ ] `docx_generator_pull_request_comment_builder_github_trigger_job.groovy` に `PR_DRAFT` 変数を追加
+- [ ] 下流ジョブのパラメータに `PR_DRAFT` を追加
+
+### 2. Jenkinsfileの修正
+- [ ] `Jenkinsfile` に「ドラフトPRチェック」ステージを追加
+- [ ] ドラフトの場合は `NOT_BUILT` で終了
+
+### 3. テスト
+- [ ] シードジョブでDSL変更を反映
+- [ ] ドラフトPRを作成してテスト（処理がスキップされることを確認）
+- [ ] ドラフトを解除して再度テスト（処理が正常に実行されることを確認）
+- [ ] 非ドラフトPRで回帰テスト（既存動作が影響を受けていないことを確認）
+
+### 4. ドキュメント更新（必要に応じて）
+- [ ] `jenkins/CONTRIBUTION.md`: ドラフトPRフィルタリングパターンの追加
+
+## テスト計画
+
+### テストケース1: ドラフトPRでスキップされる
+1. ドラフトPRを作成
+2. Webhookが `PR_DRAFT=true` を渡すことを確認
+3. Jenkinsfileの「ドラフトPRチェック」ステージでスキップされることを確認
+4. ビルドステータスが `NOT_BUILT` になることを確認
+
+### テストケース2: ドラフト解除後に正常実行される
+1. ドラフトPRを「Ready for review」にする
+2. Webhookが `PR_DRAFT=false` を渡すことを確認
+3. Jenkinsfileが正常に全ステージを実行することを確認
+4. OpenAI API呼び出しとコメント投稿が成功することを確認
+
+### テストケース3: 非ドラフトPRの回帰テスト
+1. 新規に非ドラフトPRを作成
+2. 既存と同じ動作をすることを確認
+
+## 期待される効果
+
+- ✅ ドラフトPRでのOpenAI APIコスト削減
+- ✅ ドラフトPRでの不要なビルド時間の削減
+- ✅ ジョブ実行履歴でドラフトPRのスキップ理由が明確
+- ✅ 追加プラグイン不要（メンテナンス負荷なし）
+- ✅ 他の類似ジョブへの適用が容易
+
+## 参考情報
+- GitHub Webhook Payload: https://docs.github.com/en/webhooks/webhook-events-and-payloads#pull_request
+  - `pull_request.draft`: PRがドラフト状態かどうか（boolean）
+- 類似対応: マルチブランチジョブでは `gitHubIgnoreDraftPullRequestFilter()` を使用
+
+## 要件定義書の構成
+
+以下のセクションを含む要件定義書を作成してください：
+
+### 0. Planning Documentの確認（Planning Phaseが実行されている場合）
+- 開発計画の全体像を把握
+- スコープ、技術選定、リスク、スケジュールを確認
+- Planning Documentで策定された戦略を踏まえて要件定義を実施
+
+### 1. 概要
+- Issue本文の「## 概要」セクションを要約
+- 背景と目的を明確に記述
+- ビジネス価値・技術的価値を説明
+
+### 2. 機能要件
+- Issue本文の「## TODO」セクションから機能要件を抽出
+- 各要件を明確かつ検証可能な形で記述
+- 優先度（高/中/低）を付与
+
+### 3. 非機能要件
+- パフォーマンス要件
+- セキュリティ要件
+- 可用性・信頼性要件
+- 保守性・拡張性要件
+
+### 4. 制約事項
+- 技術的制約（使用技術、既存システムとの整合性）
+- リソース制約（時間、人員、予算）
+- ポリシー制約（セキュリティポリシー、コーディング規約）
+
+### 5. 前提条件
+- システム環境
+- 依存コンポーネント
+- 外部システム連携
+
+### 6. 受け入れ基準
+- 各機能要件の受け入れ基準（Given-When-Then形式推奨）
+- テスト可能な形で記述
+
+### 7. スコープ外
+- 明確にスコープ外とする事項
+- 将来的な拡張候補
+
+## 出力形式
+
+Markdown形式で要件定義書を作成し、以下のファイルに保存してください：
+
+```
+.ai-workflow/issue-431/01_requirements/output/requirements.md
+```
+
+## 品質ゲート（Phase 1）
+
+作成する要件定義書は、以下の品質ゲートを満たす必要があります：
+
+- [ ] **機能要件が明確に記載されている**
+- [ ] **受け入れ基準が定義されている**
+- [ ] **スコープが明確である**
+- [ ] **論理的な矛盾がない**
+
+これらの品質ゲートは**必須要件**です。作成後、クリティカルシンキングレビューが実施され、品質ゲートを満たさない場合は修正が必要になります。
+
+## 注意事項
+
+1. **具体性**: 曖昧な表現を避け、具体的かつ測定可能な要件を記述
+   - NG例: "適切に処理する"、"必要に応じて対応"
+   - OK例: "3秒以内にレスポンスを返す"、"エラー発生時は管理者に通知"
+
+2. **整合性**: 各セクション間で矛盾がないか確認
+   - 機能要件と受け入れ基準が対応しているか
+   - 非機能要件と制約事項が矛盾していないか
+
+3. **完全性**: Issue本文の情報を漏れなく反映
+   - TODOセクションの項目をすべて機能要件に反映
+   - 概要セクションの背景・目的を明確に記述
+
+4. **検証可能性**: 各要件が検証可能（テスト可能）な形で記述
+   - 受け入れ基準は Given-When-Then 形式で記述
+   - 成功条件・失敗条件が明確に識別可能
+
+5. **レビューされることを意識**: 作成した要件定義書はクリティカルシンキングレビューが実施されます
+   - 品質ゲート（4つの必須要件）を最優先で満たすこと
+   - ブロッカー（次フェーズに進めない問題）がないように注意
+   - 改善提案は歓迎されるが、ブロッカーは修正が必須
+
+## 参考情報
+
+必要に応じて以下を参照してください（存在する場合）：
+- @CLAUDE.md - プロジェクトの全体方針とコーディングガイドライン
+- @ARCHITECTURE.md - アーキテクチャ設計思想
+- @CONTRIBUTION.md - 開発ガイドライン
+- @README.md - プロジェクト概要と使用方法
+- その他、プロジェクト固有のドキュメント
