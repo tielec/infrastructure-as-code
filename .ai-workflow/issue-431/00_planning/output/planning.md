@@ -144,14 +144,14 @@
 
 ### Phase 4: 実装 (見積もり: 1~1.5h)
 
-- [ ] Task 4-1: Generic Webhook Trigger変数の追加 (0.3h)
+- [x] Task 4-1: Generic Webhook Trigger変数の追加 (0.3h)
   - `PR_DRAFT`変数を`genericVariables`に追加
   - JSONPath: `$.pull_request.draft`
-- [ ] Task 4-2: 条件付きビルドステップの実装 (0.5~0.8h)
+- [x] Task 4-2: 条件付きビルドステップの実装 (0.5~0.8h)
   - `conditionalSteps`ブロックで`downstreamParameterized`をラップ
   - 条件: `stringsMatch('$PR_DRAFT', 'false', false)`
   - ログ出力: ドラフトPR時のスキップメッセージ
-- [ ] Task 4-3: ビルド履歴への影響確認 (0.2~0.4h)
+- [x] Task 4-3: ビルド履歴への影響確認 (0.2~0.4h)
   - スキップ時のビルドステータス（`NOT_BUILT`または`SUCCESS`）の確認
   - Generic Webhook Triggerのログ出力（`causeString`の調整）
 
