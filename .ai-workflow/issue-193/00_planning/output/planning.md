@@ -111,13 +111,13 @@
 
 ### Phase 4: 実装 (見積もり: 1h)
 
-- [ ] Task 4-1: Job DSLファイルへのコメント追加 (0.25h)
+- [x] Task 4-1: Job DSLファイルへのコメント追加 (0.25h)
   - `infrastructure_ansible_playbook_executor_job.groovy`の`ANSIBLE_EXTRA_VARS`パラメータにコメント追加
-- [ ] Task 4-2: jenkins/README.mdの更新 (0.5h)
+- [x] Task 4-2: jenkins/README.mdの更新 (0.5h)
   - Lambda Teardown Pipelineジョブの使用方法セクションを追加
   - パラメータ一覧に`force_destroy`の説明を追記
   - 実行例を記載
-- [ ] Task 4-3: ansible/README.mdの更新 (0.25h)
+- [x] Task 4-3: ansible/README.mdの更新 (0.25h)
   - Lambda Teardown Pipelineの実行例を更新
   - 非対話モードでの注意事項を追記
 
