@@ -123,10 +123,10 @@
 
 ### Phase 2: 設計 (見積もり: 0.5h)
 
-- [ ] Task 2-1: 実装方針の決定 (0.2h)
+- [x] Task 2-1: 実装方針の決定 (0.2h)
   - Triggerジョブでの判定 vs Jenkinsfileでの判定を比較
   - Triggerジョブでの実装を選択（早期スキップでリソース節約）
-- [ ] Task 2-2: DSL変更内容の設計 (0.3h)
+- [x] Task 2-2: DSL変更内容の設計 (0.3h)
   - `genericVariable`の追加仕様（`PR_DRAFT`変数）
   - `conditionalSteps`の実装パターン（`stringsMatch`条件）
   - エラーハンドリング（ドラフト時のログ出力）
@@ -272,9 +272,9 @@ Phase 1 → Phase 2 → Phase 3 → Phase 4 → Phase 6 → Phase 7 → Phase 8
 - [ ] 既存の類似実装（MultiBranchジョブ）の調査が完了している
 
 ### Phase 2: 設計
-- [ ] 実装戦略（Triggerジョブ vs Jenkinsfile）の判断根拠が明記されている
-- [ ] DSL変更内容（`genericVariable`と`conditionalSteps`）が具体的に設計されている
-- [ ] エラーハンドリング（ドラフト時のログ出力）が考慮されている
+- [x] 実装戦略（Triggerジョブ vs Jenkinsfile）の判断根拠が明記されている
+- [x] DSL変更内容（`genericVariable`と`conditionalSteps`）が具体的に設計されている
+- [x] エラーハンドリング（ドラフト時のログ出力）が考慮されている
 
 ### Phase 3: テストシナリオ
 - [ ] 3つのテストケース（TC1~TC3）が定義されている
