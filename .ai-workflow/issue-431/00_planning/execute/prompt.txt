@@ -1,0 +1,474 @@
+# プロジェクト計画フェーズ - 実行プロンプト
+
+## タスク概要
+
+GitHubのIssue情報から詳細なプロジェクト計画書を作成してください。
+Phase 0はプロジェクトマネージャの役割を担い、開発作業を計画的かつ効率的に進められるようにします。
+
+## Issue情報
+
+## Issue概要
+
+- **Issue番号**: #431
+- **タイトル**: [TASK] ドラフトPRに対するpull_request_comment_builderの実行を抑止
+- **状態**: open
+- **URL**: https://github.com/tielec/infrastructure-as-code/issues/431
+- **ラベル**: なし
+
+### 本文
+
+## 概要
+現在、ドラフト状態のPRに対しても `pull_request_comment_builder` ジョブが実行されてしまう問題があります。
+ドラフトPRの場合は処理を実行しないように修正が必要です。
+
+## 現状の問題
+- `docx_generator_pull_request_comment_builder_github_trigger_job` がGitHub Webhookからドラフト状態を判定していない
+- ドラフトPRでも不要なOpenAI API呼び出しが発生し、コストが無駄になる
+- 下流の `pull_request_comment_builder` ジョブ（Jenkinsfile）でドラフトチェックをしていない
+
+## 対象ファイル
+- **Triggerジョブ**: `jenkins/jobs/dsl/docs-generator/docx_generator_pull_request_comment_builder_github_trigger_job.groovy`
+- **Jenkinsfile**: `jenkins/jobs/pipeline/docs-generator/pull-request-comment-builder/Jenkinsfile`
+
+## 解決方法（Jenkinsfile側で判定）
+
+### なぜこのアプローチを選択したか
+
+**conditional-buildstepプラグインを使わない理由**:
+- ヘルススコアが80と低く、品質面で懸念がある
+- 追加プラグインのインストール・メンテナンスが不要
+- ロジックがJenkinsfileに集約され、可読性が向上
+
+**Jenkinsfile側で判定するメリット**:
+- 追加プラグイン不要
+- ジョブの実行履歴に記録が残る（スキップされた理由が明確）
+- テストが容易（Jenkinsfileの変更のみ）
+- 他の類似ジョブにも適用しやすい
+
+### 実装方法
+
+#### ステップ1: Triggerジョブの修正
+
+`PR_DRAFT` 変数を取得し、下流ジョブにパラメータとして渡します。
+
+**修正ファイル**: `jenkins/jobs/dsl/docs-generator/docx_generator_pull_request_comment_builder_github_trigger_job.groovy`
+
+```groovy
+triggers {
+    genericTrigger {
+        genericVariables {
+            // 既存の変数
+            genericVariable {
+                key('PR_NUMBER')
+                value('$.pull_request.number')
+                expressionType('JSONPath')
+                regexpFilter('')
+            }
+            genericVariable {
+                key('REPO_URL')
+                value('$.repository.html_url')
+                expressionType('JSONPath')
+                regexpFilter('')
+            }
+            genericVariable {
+                key('ACTION')
+                value('$.action')
+                expressionType('JSONPath')
+                regexpFilter('')
+            }
+            // ← ここに追加
+            genericVariable {
+                key('PR_DRAFT')
+                value('$.pull_request.draft')
+                expressionType('JSONPath')
+                regexpFilter('')
+            }
+        }
+        
+        // 既存の設定...
+    }
+}
+
+steps {
+    downstreamParameterized {
+        trigger(downstreamJobName) {
+            block {
+                buildStepFailure('FAILURE')
+                failure('FAILURE')
+                unstable('UNSTABLE')
+            }
+            parameters {
+                predefinedProps([
+                    'REPO_URL': '$REPO_URL',
+                    'PR_NUMBER': '$PR_NUMBER',
+                    'PR_DRAFT': '$PR_DRAFT',  // ← ドラフト状態を渡す
+                    'UPDATE_TITLE': repoConfig.updateTitle,
+                    'FORCE_ANALYSIS': 'true'
+                ])
+            }
+        }
+    }
+}
+```
+
+#### ステップ2: Jenkinsfileの修正
+
+パラメータ定義に `PR_DRAFT` を追加し、最初のステージでドラフトチェックを行います。
+
+**修正ファイル**: `jenkins/jobs/pipeline/docs-generator/pull-request-comment-builder/Jenkinsfile`
+
+```groovy
+pipeline {
+    agent {
+        docker {
+            label 'ec2-fleet'
+            image 'python:3.11-slim'
+            args '-v ${WORKSPACE}:/workspace -w /workspace -u root'
+        }
+    }
+    
+    // パラメータにPR_DRAFTを追加（Triggerジョブから渡される）
+    // ※ パラメータ定義はDSLファイルには追加しない（Triggerジョブ経由のみ）
+    
+    environment {
+        // 既存の環境変数...
+    }
+    
+    stages {
+        // ← 最初のステージとして追加
+        stage('ドラフトPRチェック') {
+            steps {
+                script {
+                    // PR_DRAFTパラメータまたは環境変数から取得
+                    def isDraft = params.PR_DRAFT ?: env.PR_DRAFT ?: 'false'
+                    
+                    if (isDraft == 'true') {
+                        echo "このPR (#${params.PR_NUMBER}) はドラフト状態です。処理をスキップします。"
+                        echo "理由: ドラフトPRではOpenAI API呼び出しやコメント投稿が不要です。"
+                        currentBuild.result = 'NOT_BUILT'
+                        currentBuild.description = "ドラフトPRのためスキップ"
+                        
+                        // パイプライン全体を終了
+                        return
+                    }
+                    
+                    echo "このPR (#${params.PR_NUMBER}) は非ドラフト状態です。処理を続行します。"
+                }
+            }
+        }
+
+        stage('パラメータ検証') {
+            // 既存のステージ...
+        }
+
+        stage('環境準備') {
+            // 既存のステージ...
+        }
+        
+        // 以降は既存のステージ...
+    }
+}
+```
+
+### ステップ3: DSLファイル（Job定義）の修正
+
+Jenkinsfileで `params.PR_DRAFT` を参照できるようにするため、DSLファイルでパラメータ定義は**追加しません**。
+
+理由:
+- Triggerジョブから `predefinedProps` で渡されるパラメータは、自動的に利用可能になる
+- DSLファイルでパラメータ定義すると、手動ビルド時にUI表示されてしまう（不要）
+
+**修正不要**: `jenkins/jobs/dsl/docs-generator/docx_generator_pull_request_comment_builder_job.groovy`
+
+## 実装手順
+
+### 1. Triggerジョブの修正
+- [ ] `docx_generator_pull_request_comment_builder_github_trigger_job.groovy` に `PR_DRAFT` 変数を追加
+- [ ] 下流ジョブのパラメータに `PR_DRAFT` を追加
+
+### 2. Jenkinsfileの修正
+- [ ] `Jenkinsfile` に「ドラフトPRチェック」ステージを追加
+- [ ] ドラフトの場合は `NOT_BUILT` で終了
+
+### 3. テスト
+- [ ] シードジョブでDSL変更を反映
+- [ ] ドラフトPRを作成してテスト（処理がスキップされることを確認）
+- [ ] ドラフトを解除して再度テスト（処理が正常に実行されることを確認）
+- [ ] 非ドラフトPRで回帰テスト（既存動作が影響を受けていないことを確認）
+
+### 4. ドキュメント更新（必要に応じて）
+- [ ] `jenkins/CONTRIBUTION.md`: ドラフトPRフィルタリングパターンの追加
+
+## テスト計画
+
+### テストケース1: ドラフトPRでスキップされる
+1. ドラフトPRを作成
+2. Webhookが `PR_DRAFT=true` を渡すことを確認
+3. Jenkinsfileの「ドラフトPRチェック」ステージでスキップされることを確認
+4. ビルドステータスが `NOT_BUILT` になることを確認
+
+### テストケース2: ドラフト解除後に正常実行される
+1. ドラフトPRを「Ready for review」にする
+2. Webhookが `PR_DRAFT=false` を渡すことを確認
+3. Jenkinsfileが正常に全ステージを実行することを確認
+4. OpenAI API呼び出しとコメント投稿が成功することを確認
+
+### テストケース3: 非ドラフトPRの回帰テスト
+1. 新規に非ドラフトPRを作成
+2. 既存と同じ動作をすることを確認
+
+## 期待される効果
+
+- ✅ ドラフトPRでのOpenAI APIコスト削減
+- ✅ ドラフトPRでの不要なビルド時間の削減
+- ✅ ジョブ実行履歴でドラフトPRのスキップ理由が明確
+- ✅ 追加プラグイン不要（メンテナンス負荷なし）
+- ✅ 他の類似ジョブへの適用が容易
+
+## 参考情報
+- GitHub Webhook Payload: https://docs.github.com/en/webhooks/webhook-events-and-payloads#pull_request
+  - `pull_request.draft`: PRがドラフト状態かどうか（boolean）
+- 類似対応: マルチブランチジョブでは `gitHubIgnoreDraftPullRequestFilter()` を使用
+
+## プロジェクト計画書の構成
+
+以下のセクションを含むプロジェクト計画書を作成してください：
+
+### 1. Issue分析
+- **複雑度**: 簡単/中程度/複雑を判定
+  - 簡単: 単一ファイルの修正、シンプルな機能追加（見積もり: ~4時間）
+  - 中程度: 複数ファイルの修正、既存機能の拡張（見積もり: 4~16時間）
+  - 複雑: アーキテクチャ変更、新規サブシステム追加（見積もり: 16時間~）
+- **見積もり工数**: X時間（根拠を記載）
+- **リスク評価**: 低/中/高
+
+### 2. 実装戦略判断
+
+**重要**: このセクションは最も重要です。Phase 2（Design）で使用されるため、必ず明記してください。
+
+#### 実装戦略: CREATE / EXTEND / REFACTOR
+
+**判断根拠**:
+- CREATE: 新規ファイル・クラス・モジュールの作成が中心
+- EXTEND: 既存コードの拡張（機能追加）が中心
+- REFACTOR: 既存コードのリファクタリング（構造改善）が中心
+
+（判断理由を具体的に記載）
+
+#### テスト戦略: UNIT_ONLY / INTEGRATION_ONLY / BDD_ONLY / UNIT_INTEGRATION / UNIT_BDD / INTEGRATION_BDD / ALL
+
+**判断根拠**:
+- UNIT_ONLY: ユニットテストのみ（単純なロジック、外部依存なし）
+- INTEGRATION_ONLY: インテグレーションテストのみ（外部システム連携中心）
+- BDD_ONLY: BDDテストのみ（ユーザーストーリー中心）
+- UNIT_INTEGRATION: ユニット + インテグレーション（一般的な機能開発）
+- UNIT_BDD: ユニット + BDD（エンドユーザー向け機能）
+- INTEGRATION_BDD: インテグレーション + BDD（システム間連携＋ユーザーストーリー）
+- ALL: すべてのテストレベル（大規模な変更、高リスク）
+
+（判断理由を具体的に記載）
+
+#### テストコード戦略: EXTEND_TEST / CREATE_TEST / BOTH_TEST
+
+**判断根拠**:
+- EXTEND_TEST: 既存テストファイルに追加（既存機能の拡張時）
+- CREATE_TEST: 新規テストファイル作成（新規機能追加時）
+- BOTH_TEST: 両方（既存テスト拡張 + 新規テスト作成）
+
+（判断理由を具体的に記載）
+
+### 3. 影響範囲分析
+- **既存コードへの影響**: 変更が必要なファイル・モジュール
+- **依存関係の変更**: 新規依存の追加、既存依存の変更
+- **マイグレーション要否**: データベーススキーマ変更、設定ファイル変更等
+
+### 4. タスク分割
+
+## ⚠️ 重要: チェックリスト標準フォーマット（必須）
+
+各フェーズのタスクは、**必ずチェックリスト形式**で記述してください。このチェックリストは、Review Phaseで完了判定に使用されます。
+
+### 標準フォーマット
+
+```markdown
+### Phase X: [フェーズ名] (見積もり: X~Yh)
+
+- [ ] Task X-1: [タスク名] (見積もり時間)
+  - [サブタスク1]
+  - [サブタスク2]
+- [ ] Task X-2: [タスク名] (見積もり時間)
+  - [サブタスク1]
+```
+
+**重要**: このチェックリストは、Review Phaseで完了判定に使用されます。各タスクは明確で検証可能な内容にしてください。
+
+**良い例**:
+```
+- [ ] Task 4-1: CLI層の分離 (3~5h)
+  - cli/commands.py の作成
+  - main.pyからCLIロジックを抽出
+```
+
+**悪い例**:
+```
+- [ ] リファクタリングを実施
+```
+（検証不可能なため不適切）
+
+### 各フェーズのタスクリスト
+
+各フェーズについて、サブタスクを洗い出してください：
+
+#### Phase 1: 要件定義 (見積もり: Xh)
+
+- [ ] Task 1-1: [タスク名] (見積もり時間)
+  - サブタスク1
+  - サブタスク2
+- [ ] Task 1-2: [タスク名] (見積もり時間)
+  - サブタスク1
+
+#### Phase 2: 設計 (見積もり: Xh)
+
+- [ ] Task 2-1: [タスク名] (見積もり時間)
+  - サブタスク1
+  - サブタスク2
+
+#### Phase 3: テストシナリオ (見積もり: Xh)
+
+- [ ] Task 3-1: [タスク名] (見積もり時間)
+  - サブタスク1
+
+#### Phase 4: 実装 (見積もり: Xh)
+
+- [ ] Task 4-1: [タスク名] (見積もり時間)
+  - サブタスク1
+  - サブタスク2
+
+#### Phase 5: テストコード実装 (見積もり: Xh)
+
+- [ ] Task 5-1: [タスク名] (見積もり時間)
+  - サブタスク1
+
+#### Phase 6: テスト実行 (見積もり: Xh)
+
+- [ ] Task 6-1: [タスク名] (見積もり時間)
+  - サブタスク1
+
+#### Phase 7: ドキュメント (見積もり: Xh)
+
+- [ ] Task 7-1: [タスク名] (見積もり時間)
+  - サブタスク1
+
+#### Phase 8: レポート (見積もり: Xh)
+
+- [ ] Task 8-1: [タスク名] (見積もり時間)
+  - サブタスク1
+
+**タスク粒度基準**:
+- 1タスク = 1~4時間程度で完了可能な作業単位
+- 明確な完了条件（Done criteria）を持つ
+- 他のタスクから独立して実装・テスト可能
+- **検証可能**: Review Phaseで「完了したか」を客観的に判断できる内容
+
+### 5. 依存関係
+
+タスク間の依存関係をMermaid形式で図示してください：
+
+```mermaid
+graph TD
+    P1[Phase 1] --> P2[Phase 2]
+    P2 --> P3[Phase 3]
+    P3 --> P4[Phase 4]
+    P4 --> P5[Phase 5]
+    P5 --> P6[Phase 6]
+    P6 --> P7[Phase 7]
+```
+
+### 6. リスクと軽減策
+
+潜在的なリスクを洗い出し、各リスクに対する軽減策を記載してください：
+
+#### リスク1: （リスク名）
+- **影響度**: 低/中/高
+- **確率**: 低/中/高
+- **軽減策**: （具体的な対策）
+
+#### リスク2: （リスク名）
+...
+
+**リスクカテゴリ**:
+- 技術的リスク: 新技術の学習コスト、既存システムとの統合問題
+- スコープリスク: 要件の曖昧さ、スコープクリープ
+- リソースリスク: 工数不足、スキル不足
+- 依存リスク: 外部システム依存、ブロッキング問題
+
+### 7. 品質ゲート
+
+各フェーズの合格基準を定義してください：
+
+#### Phase 1: 要件定義
+- [ ] 機能要件が明確に記載されている
+- [ ] 受け入れ基準が定義されている
+...
+
+#### Phase 2: 設計
+- [ ] 実装戦略の判断根拠が明記されている
+- [ ] テスト戦略の判断根拠が明記されている
+...
+
+（以下、Phase 3~7についても記載）
+
+## 出力形式
+
+Markdown形式でプロジェクト計画書を作成し、以下のファイルに保存してください：
+
+```
+.ai-workflow/issue-431/00_planning/output/planning.md
+```
+
+## 品質ゲート（Phase 0）
+
+作成するプロジェクト計画書は、以下の品質ゲートを満たす必要があります：
+
+- [ ] **実装戦略が明確に決定されている**（CREATE/EXTEND/REFACTOR）
+- [ ] **テスト戦略が明確に決定されている**（UNIT_ONLY/.../ALL）
+- [ ] **テストコード戦略が明確に決定されている**（EXTEND_TEST/CREATE_TEST/BOTH_TEST）
+- [ ] **影響範囲が分析されている**
+- [ ] **タスク分割が適切な粒度である**（1タスク = 1~4時間）
+- [ ] **リスクが洗い出されている**
+
+これらの品質ゲートは**必須要件**です。作成後、クリティカルシンキングレビューが実施され、品質ゲートを満たさない場合は修正が必要になります。
+
+## 注意事項
+
+1. **実装戦略の判断**: Phase 2で使用されるため、必ず明記してください
+   - 実装戦略: CREATE/EXTEND/REFACTOR
+   - テスト戦略: UNIT_ONLY/.../ALL
+   - テストコード戦略: EXTEND_TEST/CREATE_TEST/BOTH_TEST
+
+2. **具体性**: 曖昧な表現を避け、具体的かつ測定可能な計画を記述
+   - NG例: "適切に対応する"、"必要に応じて実施"
+   - OK例: "Phase 2で詳細設計を実施"、"最大3回のリトライを実施"
+
+3. **実現可能性**: 見積もりが現実的か、リソースは十分か確認
+   - タスク粒度が大きすぎないか（1タスク = 1~4時間）
+   - 依存関係が正確に記載されているか
+
+4. **リスク分析の網羅性**: 重要なリスクが見逃されていないか確認
+   - 技術的リスク、スコープリスク、リソースリスク、依存リスク
+
+5. **レビューされることを意識**: 作成した計画書はクリティカルシンキングレビューが実施されます
+   - 品質ゲート（6つの必須要件）を最優先で満たすこと
+   - ブロッカー（次フェーズに進めない問題）がないように注意
+   - 改善提案は歓迎されるが、ブロッカーは修正が必須
+
+## 参考情報
+
+必要に応じて以下を参照してください（存在する場合）：
+- @CLAUDE.md - プロジェクトの全体方針とコーディングガイドライン
+- @ARCHITECTURE.md - アーキテクチャ設計思想
+- @CONTRIBUTION.md - 開発ガイドライン
+- @README.md - プロジェクト概要と使用方法
+- その他、プロジェクト固有のドキュメント
+
+## プロジェクト計画書の作成を開始してください
