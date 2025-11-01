@@ -141,10 +141,7 @@ def createPRCommentTriggerJob(repoConfig) {
                     // draft=falseの場合のみ実行（非ドラフトPR）
                     stringsMatch('$PR_DRAFT', 'false', false)
                 }
-                runner {
-                    // 条件が不一致の場合はステップをスキップ（ビルドは継続）
-                    dontRun()
-                }
+                runner('DontRun')  // 条件が不一致の場合はステップをスキップ（ビルドは継続）
                 steps {
                     // 子ジョブの起動
                     downstreamParameterized {
