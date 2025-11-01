@@ -333,6 +333,55 @@ Jenkins全体で使用される環境変数（JCaSCで定義）：
 - `DRY_RUN`: 実際のリストアを行わず確認のみ（デフォルト: true）
 - `FORCE_OVERWRITE`: 既存パラメータの強制上書き
 
+#### Lambda Teardown Pipeline
+
+**目的**: Lambda APIインフラストラクチャを安全に削除
+
+**パラメータ**:
+- `PLAYBOOKS`: `playbooks/lambda/lambda_teardown_pipeline.yml`（自動設定）
+- `ENVIRONMENT`: 実行環境（dev/prod）
+- `ANSIBLE_EXTRA_VARS`: 追加のAnsible変数
+  - **必須パラメータ（非対話モード）**: `force_destroy=true`
+    - Jenkinsから実行する場合、誤操作防止のため明示的な設定が必須
+    - 例: `env=dev force_destroy=true`
+  - **オプションパラメータ**: `destroy_ssm=true`
+    - SSMパラメータも削除する場合に指定
+    - 例: `env=dev force_destroy=true destroy_ssm=true`
+
+**削除対象リソース**（逆順で削除）:
+1. API Gateway
+2. Lambda Functions
+3. Lambda Shipment S3バケット
+4. VPC Endpoints
+5. Security Groups
+6. Network Infrastructure
+7. SSM Parameters（`destroy_ssm=true`の場合のみ）
+
+**実行例**:
+
+```bash
+# 基本的な削除（SSMパラメータは保持）
+PLAYBOOKS: playbooks/lambda/lambda_teardown_pipeline.yml
+ENVIRONMENT: dev
+ANSIBLE_EXTRA_VARS: env=dev force_destroy=true
+
+# SSMパラメータも削除
+PLAYBOOKS: playbooks/lambda/lambda_teardown_pipeline.yml
+ENVIRONMENT: dev
+ANSIBLE_EXTRA_VARS: env=dev force_destroy=true destroy_ssm=true
+```
+
+**注意事項**:
+- ⚠️ **非対話モード（Jenkins/CI）では`force_destroy=true`が必須**: 未設定の場合、安全のため処理が停止します
+- ⚠️ **削除は不可逆的**: 削除したリソースは復元できません。実行前に環境名を必ず確認してください
+- ⚠️ **本番環境への影響**: 本番環境（`env=prod`）の削除は特に慎重に実行してください
+- 📌 **対話モードでの実行**: Ansibleをコマンドラインから直接実行する場合は確認プロンプトが表示されます
+
+**セーフガード機能**:
+- プレイブック（`ansible/playbooks/lambda/lambda_teardown_pipeline.yml`）の66-69行目で実装
+- 非対話モードでは`force_destroy=true`が設定されていない限り処理を停止
+- 誤操作による本番環境の削除を防止
+
 #### Infrastructure_Management/Shutdown_Jenkins_Environment
 
 **目的**: Jenkins環境全体を安全に停止

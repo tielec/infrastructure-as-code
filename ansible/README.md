@@ -121,8 +121,16 @@ cd ansible
 ansible-playbook playbooks/lambda_setup_pipeline.yml -e "env=dev"
 
 # 完全削除
-ansible-playbook playbooks/lambda_teardown_pipeline.yml -e "env=dev force_destroy=true"
+# 【重要】Jenkinsから実行する場合、force_destroy=true の明示的な設定が必須です
+ansible-playbook playbooks/lambda/lambda_teardown_pipeline.yml -e "env=dev force_destroy=true"
+
+# SSMパラメータも削除する場合
+ansible-playbook playbooks/lambda/lambda_teardown_pipeline.yml -e "env=dev force_destroy=true destroy_ssm=true"
 ```
+
+**注意**: 非対話モード（CI/Jenkins）では`force_destroy=true`が必須パラメータです。設定されていない場合、安全のため処理が停止します。
+
+**セーフガード機能**: プレイブック（66-69行目）で実装されており、誤操作による本番環境の削除を防止します。
 
 ## システム別プレイブック
 
