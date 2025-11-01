@@ -36,25 +36,27 @@ pipeline {
         stage('ドラフトPRチェック') {
             steps {
                 script {
-                    // PR_DRAFTパラメータまたは環境変数から取得（フォールバック）
-                    def isDraft = params.PR_DRAFT ?: env.PR_DRAFT ?: 'false'
+                    // PR_DRAFTパラメータから取得
+                    def isDraft = params.PR_DRAFT ?: 'false'
 
                     if (isDraft == 'true') {
                         echo "このPR (#${params.PR_NUMBER}) はドラフト状態です。処理をスキップします。"
                         echo "理由: ドラフトPRではOpenAI API呼び出しやコメント投稿が不要です。"
                         currentBuild.result = 'NOT_BUILT'
                         currentBuild.description = "ドラフトPRのためスキップ"
-
-                        // パイプライン全体を終了
-                        return
+                        env.SKIP_BUILD = 'true'
+                    } else {
+                        echo "このPR (#${params.PR_NUMBER}) は非ドラフト状態です。処理を続行します。"
+                        env.SKIP_BUILD = 'false'
                     }
-
-                    echo "このPR (#${params.PR_NUMBER}) は非ドラフト状態です。処理を続行します。"
                 }
             }
         }
 
         stage('パラメータ検証') {
+            when {
+                environment name: 'SKIP_BUILD', value: 'false'
+            }
             steps {
                 script {
                     // リポジトリ情報の設定
@@ -105,6 +107,9 @@ pipeline {
         }
 
         stage('環境準備') {
+            when {
+                environment name: 'SKIP_BUILD', value: 'false'
+            }
             steps {
                 script {
                     // 必要なツールのインストール
@@ -139,6 +144,9 @@ pipeline {
         }
         
         stage('既存コメントの確認') {
+            when {
+                environment name: 'SKIP_BUILD', value: 'false'
+            }
             steps {
                 script {
                     // このフラグでステージのスキップを制御
@@ -189,9 +197,9 @@ pipeline {
         
         stage('PR情報と差分の取得') {
             when {
-                expression { 
-                    echo "スキップフラグの状態（PR情報取得ステージ）: SKIP_ANALYSIS=${env.SKIP_ANALYSIS}"
-                    return env.SKIP_ANALYSIS == 'false'
+                expression {
+                    echo "スキップフラグの状態（PR情報取得ステージ）: SKIP_BUILD=${env.SKIP_BUILD}, SKIP_ANALYSIS=${env.SKIP_ANALYSIS}"
+                    return env.SKIP_BUILD == 'false' && env.SKIP_ANALYSIS == 'false'
                 }
             }
             steps {
@@ -233,10 +241,9 @@ pipeline {
         
         stage('OpenAIによる分析') {
             when {
-                expression { 
-                    // 文字列比較は '==' を使用
-                    echo "スキップフラグの状態（分析ステージ）: SKIP_ANALYSIS=${env.SKIP_ANALYSIS}"
-                    return env.SKIP_ANALYSIS == 'false'
+                expression {
+                    echo "スキップフラグの状態（分析ステージ）: SKIP_BUILD=${env.SKIP_BUILD}, SKIP_ANALYSIS=${env.SKIP_ANALYSIS}"
+                    return env.SKIP_BUILD == 'false' && env.SKIP_ANALYSIS == 'false'
                 }
             }
             steps {
@@ -277,8 +284,8 @@ pipeline {
         stage('PRコメントとタイトルの更新') {
             when {
                 expression {
-                    echo "スキップフラグの状態（更新ステージ）: SKIP_ANALYSIS=${env.SKIP_ANALYSIS}" 
-                    return env.SKIP_ANALYSIS == 'false'
+                    echo "スキップフラグの状態（更新ステージ）: SKIP_BUILD=${env.SKIP_BUILD}, SKIP_ANALYSIS=${env.SKIP_ANALYSIS}"
+                    return env.SKIP_BUILD == 'false' && env.SKIP_ANALYSIS == 'false'
                 }
             }
             steps {
@@ -361,6 +368,9 @@ pipeline {
         }
         
         stage('Jenkins再実行リンクの投稿') {
+            when {
+                environment name: 'SKIP_BUILD', value: 'false'
+            }
             steps {
                 script {
                     try {
