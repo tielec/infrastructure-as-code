@@ -8,6 +8,12 @@ def repositories = jenkinsManagedRepositories.collect { name, repo ->
 }
 
 // 共通設定を定義するメソッド
+//
+// 【ドラフトPRフィルタリング機能】
+// このジョブはドラフト状態のPRに対しては下流ジョブを起動しません。
+// - Generic Webhook Triggerで`$.pull_request.draft`を取得
+// - Conditional BuildStepで`draft=false`の場合のみ下流ジョブを起動
+// - ドラフト解除後（ready_for_review）に自動的に処理が再開されます
 def createPRCommentTriggerJob(repoConfig) {
     // 共通設定を取得
     def jenkinsPipelineRepo = commonSettings['jenkins-pipeline-repo']
@@ -95,6 +101,13 @@ def createPRCommentTriggerJob(repoConfig) {
                         expressionType('JSONPath')
                         regexpFilter('')
                     }
+                    // ドラフト状態を取得（ドラフトPRフィルタリング機能）
+                    genericVariable {
+                        key('PR_DRAFT')
+                        value('$.pull_request.draft')
+                        expressionType('JSONPath')
+                        regexpFilter('')
+                    }
                 }
                 
                 // PullRequestが作成時または再オープン時のみトリガー
@@ -106,7 +119,7 @@ def createPRCommentTriggerJob(repoConfig) {
                 token(tokenValue)
                 
                 // レスポンスのステータスコード
-                causeString('GitHub PR #$PR_NUMBER が $ACTION されました')
+                causeString('GitHub PR #$PR_NUMBER が $ACTION されました (Draft: $PR_DRAFT)')
                 
                 // デバッグ設定
                 printContributedVariables(true)
@@ -122,22 +135,35 @@ def createPRCommentTriggerJob(repoConfig) {
         
         // ビルドステップ（子ジョブのトリガー）
         steps {
-            // 子ジョブの起動
-            downstreamParameterized {
-                trigger(downstreamJobName) {
-                    block {
-                        buildStepFailure('FAILURE')
-                        failure('FAILURE')
-                        unstable('UNSTABLE')
-                    }
-                    parameters {
-                        // 子ジョブに渡すパラメータ
-                        predefinedProps([
-                            'REPO_URL': '$REPO_URL',
-                            'PR_NUMBER': '$PR_NUMBER',
-                            'UPDATE_TITLE': repoConfig.updateTitle,
-                            'FORCE_ANALYSIS': 'true'
-                        ])
+            // ドラフトPRの場合はスキップ（ドラフトPRフィルタリング機能）
+            conditionalSteps {
+                condition {
+                    // draft=falseの場合のみ実行（非ドラフトPR）
+                    stringsMatch('$PR_DRAFT', 'false', false)
+                }
+                runner {
+                    // 条件が不一致の場合はステップをスキップ（ビルドは継続）
+                    dontRun()
+                }
+                steps {
+                    // 子ジョブの起動
+                    downstreamParameterized {
+                        trigger(downstreamJobName) {
+                            block {
+                                buildStepFailure('FAILURE')
+                                failure('FAILURE')
+                                unstable('UNSTABLE')
+                            }
+                            parameters {
+                                // 子ジョブに渡すパラメータ
+                                predefinedProps([
+                                    'REPO_URL': '$REPO_URL',
+                                    'PR_NUMBER': '$PR_NUMBER',
+                                    'UPDATE_TITLE': repoConfig.updateTitle,
+                                    'FORCE_ANALYSIS': 'true'
+                                ])
+                            }
+                        }
                     }
                 }
             }
