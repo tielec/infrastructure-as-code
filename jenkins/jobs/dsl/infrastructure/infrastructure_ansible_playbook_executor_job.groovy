@@ -111,7 +111,13 @@ ${playbookListText}
                 booleanParam('USE_CUSTOM_CONFIG_FILE', false, 'カスタムgroup_vars/all.yml設定を使用（対話的に値を更新）')
                 
                 // Ansibleオプション
-                stringParam('ANSIBLE_EXTRA_VARS', ansibleExtraVarsDefault, '追加のAnsible変数（例: key1=value1 key2=value2）')
+                stringParam('ANSIBLE_EXTRA_VARS', ansibleExtraVarsDefault, '''追加のAnsible変数（例: key1=value1 key2=value2）
+
+【重要】Lambda Teardown Pipeline実行時の必須パラメータ:
+- 非対話モード（Jenkins/CI）から実行する場合、force_destroy=true の明示的な設定が必須です
+- 例: env=dev force_destroy=true
+- SSMパラメータも削除する場合: env=dev force_destroy=true destroy_ssm=true
+- 詳細は jenkins/README.md の「Lambda Teardown Pipeline」セクションを参照''')
                 
                 booleanParam('ANSIBLE_VERBOSE', false, 'Ansibleの詳細出力を有効化（-vvv）')
                 
