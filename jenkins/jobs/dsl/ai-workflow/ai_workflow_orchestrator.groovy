@@ -27,6 +27,7 @@ GitHub Issue を入力として、要件定義から報告までの開発プロ�
 - all_phases: 全フェーズを順次実行（resume により途中から再開可能）
 - preset（推奨）: 定義済みワークフローパターンを実行（例: quick-fix, implementation, testing）
 - single_phase: 指定フェーズのみ実行（デバッグ用）
+- rollback: フェーズ差し戻し実行（v0.4.0、Issue #90）
 
 【レビューとリトライ】
 - PASS: 次フェーズへ進行
@@ -70,12 +71,13 @@ AI Workflow の作業ブランチを個別指定する場合に使用
         // ========================================
         // 実行制御
         // ========================================
-        choiceParam('EXECUTION_MODE', ['all_phases', 'preset', 'single_phase'], '''
+        choiceParam('EXECUTION_MODE', ['all_phases', 'preset', 'single_phase', 'rollback'], '''
 実行モード
 
 - all_phases: planning から evaluation まで一括実行（resume により失敗フェーズから再開）
 - preset: 定義済みワークフローパターンを実行（推奨）
 - single_phase: START_PHASE で指定したフェーズのみ実行
+- rollback: フェーズ差し戻し実行（v0.4.0、Issue #90）
         '''.stripIndent().trim())
 
         choiceParam('PRESET', ['quick-fix', 'implementation', 'testing', 'review-requirements', 'review-design', 'review-test-scenario', 'finalize'], '''
@@ -92,6 +94,39 @@ AI Workflow の作業ブランチを個別指定する場合に使用
 
         choiceParam('START_PHASE', ['planning', 'requirements', 'design', 'test_scenario', 'implementation', 'test_implementation', 'testing', 'documentation', 'report', 'evaluation'], '''
 開始フェーズ（single_phase モード時のみ有効）
+        '''.stripIndent().trim())
+
+        // ========================================
+        // Rollback 設定（v0.4.0、Issue #90）
+        // ========================================
+        choiceParam('ROLLBACK_TO_PHASE', ['implementation', 'planning', 'requirements', 'design', 'test_scenario', 'test_implementation', 'testing', 'documentation', 'report'], '''
+差し戻し先フェーズ（rollback モード時のみ有効）
+
+差し戻したいフェーズを指定します。メタデータが更新され、指定されたフェーズから再実行可能になります。
+注: evaluation フェーズへの差し戻しはできません。
+        '''.stripIndent().trim())
+
+        choiceParam('ROLLBACK_TO_STEP', ['revise', 'execute', 'review'], '''
+差し戻し先ステップ（rollback モード時、省略可）
+
+デフォルトは revise です。
+- execute: フェーズの最初から再実行
+- review: レビューステップから再実行
+- revise: 修正ステップから再実行（差し戻し理由がプロンプトに注入されます）
+        '''.stripIndent().trim())
+
+        textParam('ROLLBACK_REASON', '', '''
+差し戻し理由（rollback モード時のみ有効、省略可）
+
+差し戻しの理由を記述します。この内容は revise プロンプトに自動注入されます。
+空欄の場合、CI環境では差し戻しが実行されません（インタラクティブ入力が必要）。
+        '''.stripIndent().trim())
+
+        stringParam('ROLLBACK_REASON_FILE', '', '''
+差し戻し理由ファイルパス（rollback モード時、省略可）
+
+差し戻し理由を記述したファイルのパスを指定します。
+ROLLBACK_REASON と ROLLBACK_REASON_FILE の両方が指定された場合、ROLLBACK_REASON_FILE が優先されます。
         '''.stripIndent().trim())
 
         // ========================================
