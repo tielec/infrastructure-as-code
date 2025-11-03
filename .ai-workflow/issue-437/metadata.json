@@ -18,9 +18,9 @@
     "test_code_strategy": "CREATE_TEST"
   },
   "cost_tracking": {
-    "total_input_tokens": 1874,
-    "total_output_tokens": 43353,
-    "total_cost_usd": 2.0867158499999996
+    "total_input_tokens": 1879,
+    "total_output_tokens": 45123,
+    "total_cost_usd": 2.3541794499999997
   },
   "phases": {
     "planning": {
@@ -53,7 +53,10 @@
       "started_at": "2025-11-03T08:04:18.643Z",
       "completed_at": null,
       "review_result": null,
-      "current_step": "execute"
+      "current_step": "review",
+      "completed_steps": [
+        "execute"
+      ]
     },
     "test_scenario": {
       "status": "pending",
@@ -111,7 +114,7 @@
     }
   },
   "created_at": "2025-11-03T07:56:20.375Z",
-  "updated_at": "2025-11-03T08:09:22.634Z",
+  "updated_at": "2025-11-03T08:11:35.442Z",
   "branch_name": "ai-workflow/issue-437",
   "pr_number": 438,
   "pr_url": "https://github.com/tielec/infrastructure-as-code/pull/438",
