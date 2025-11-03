@@ -1,0 +1,228 @@
+---
+# CloudWatch Agent動作確認テストプレイブック
+#
+# 目的: Jenkins AgentのCloudWatch Agent動作を検証
+# 実行例: ansible-playbook playbooks/test/test-cloudwatch-agent.yml -e "env=dev"
+
+- name: Test CloudWatch Agent on Jenkins Agent instances
+  hosts: localhost
+  gather_facts: false
+  vars:
+    env_name: "{{ env | default('dev') }}"
+    ssm_prefix: "/jenkins-infra/{{ env_name }}"
+    aws_region: "{{ lookup('env', 'AWS_REGION') | default('ap-northeast-1', true) }}"
+
+  tasks:
+    - name: Get Jenkins Agent instance IDs from Spot Fleet
+      ansible.builtin.include_role:
+        name: aws_cli_helper
+        tasks_from: execute
+      vars:
+        aws_command: >-
+          aws ec2 describe-spot-fleet-instances
+          --spot-fleet-request-id {{ lookup('aws_ssm', ssm_prefix + '/agent/spotFleetRequestId', region=aws_region) }}
+          --query 'ActiveInstances[*].InstanceId'
+          --output json
+        operation_name: "Get Jenkins Agent instance IDs"
+        parse_output: true
+
+    - name: Set instance IDs fact
+      ansible.builtin.set_fact:
+        agent_instance_ids: "{{ aws_cli_result.stdout | from_json }}"
+
+    - name: Fail if no agent instances found
+      ansible.builtin.fail:
+        msg: "No Jenkins Agent instances found in Spot Fleet"
+      when: agent_instance_ids | length == 0
+
+    - name: Display found instances
+      ansible.builtin.debug:
+        msg: "Found {{ agent_instance_ids | length }} Jenkins Agent instance(s): {{ agent_instance_ids }}"
+
+    # テスト1: CloudWatch Agentサービス起動確認
+    - name: Check CloudWatch Agent service status on each instance
+      ansible.builtin.include_role:
+        name: aws_cli_helper
+        tasks_from: execute
+      vars:
+        aws_command: >-
+          aws ssm send-command
+          --instance-ids {{ item }}
+          --document-name "AWS-RunShellScript"
+          --parameters 'commands=["systemctl is-active amazon-cloudwatch-agent"]'
+          --query 'Command.CommandId'
+          --output text
+        operation_name: "Check CloudWatch Agent service on {{ item }}"
+        parse_output: true
+      loop: "{{ agent_instance_ids }}"
+      register: service_check_commands
+
+    - name: Wait for service check commands to complete
+      ansible.builtin.pause:
+        seconds: 5
+
+    - name: Get service check results
+      ansible.builtin.include_role:
+        name: aws_cli_helper
+        tasks_from: execute
+      vars:
+        aws_command: >-
+          aws ssm get-command-invocation
+          --command-id {{ item.aws_cli_result.stdout | trim }}
+          --instance-id {{ item.item }}
+          --query 'StandardOutputContent'
+          --output text
+        operation_name: "Get service check result for {{ item.item }}"
+        parse_output: true
+      loop: "{{ service_check_commands.results }}"
+      register: service_status_results
+
+    - name: Verify CloudWatch Agent is active
+      ansible.builtin.assert:
+        that:
+          - "'active' in item.aws_cli_result.stdout"
+        fail_msg: "CloudWatch Agent service is not active on instance {{ item.item.item }}"
+        success_msg: "CloudWatch Agent service is active on instance {{ item.item.item }}"
+      loop: "{{ service_status_results.results }}"
+
+    # テスト2: 設定ファイル存在確認
+    - name: Check CloudWatch Agent configuration file exists
+      ansible.builtin.include_role:
+        name: aws_cli_helper
+        tasks_from: execute
+      vars:
+        aws_command: >-
+          aws ssm send-command
+          --instance-ids {{ item }}
+          --document-name "AWS-RunShellScript"
+          --parameters 'commands=["test -f /opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json && echo OK || echo NG"]'
+          --query 'Command.CommandId'
+          --output text
+        operation_name: "Check config file on {{ item }}"
+        parse_output: true
+      loop: "{{ agent_instance_ids }}"
+      register: config_check_commands
+
+    - name: Wait for config check commands to complete
+      ansible.builtin.pause:
+        seconds: 5
+
+    - name: Get config check results
+      ansible.builtin.include_role:
+        name: aws_cli_helper
+        tasks_from: execute
+      vars:
+        aws_command: >-
+          aws ssm get-command-invocation
+          --command-id {{ item.aws_cli_result.stdout | trim }}
+          --instance-id {{ item.item }}
+          --query 'StandardOutputContent'
+          --output text
+        operation_name: "Get config check result for {{ item.item }}"
+        parse_output: true
+      loop: "{{ config_check_commands.results }}"
+      register: config_file_results
+
+    - name: Verify configuration file exists
+      ansible.builtin.assert:
+        that:
+          - "'OK' in item.aws_cli_result.stdout"
+        fail_msg: "CloudWatch Agent config file not found on instance {{ item.item.item }}"
+        success_msg: "CloudWatch Agent config file exists on instance {{ item.item.item }}"
+      loop: "{{ config_file_results.results }}"
+
+    # テスト3: メトリクス送信確認（CloudWatch APIで確認）
+    - name: Get AutoScalingGroup name
+      ansible.builtin.include_role:
+        name: aws_cli_helper
+        tasks_from: execute
+      vars:
+        aws_command: >-
+          aws ec2 describe-instances
+          --instance-ids {{ agent_instance_ids[0] }}
+          --query 'Reservations[0].Instances[0].Tags[?Key==`aws:autoscaling:groupName`].Value'
+          --output text
+        operation_name: "Get AutoScalingGroup name"
+        parse_output: true
+
+    - name: Set ASG name fact
+      ansible.builtin.set_fact:
+        asg_name: "{{ aws_cli_result.stdout | trim }}"
+
+    - name: Wait for metrics to be sent (60 seconds)
+      ansible.builtin.pause:
+        seconds: 60
+        prompt: "Waiting for CloudWatch Agent to send metrics..."
+
+    - name: Check metrics in CloudWatch
+      ansible.builtin.include_role:
+        name: aws_cli_helper
+        tasks_from: execute
+      vars:
+        aws_command: >-
+          aws cloudwatch list-metrics
+          --namespace CWAgent
+          --dimensions Name=AutoScalingGroupName,Value={{ asg_name }}
+          --query 'Metrics[*].MetricName'
+          --output json
+        operation_name: "List CloudWatch metrics for ASG {{ asg_name }}"
+        parse_output: true
+
+    - name: Set metrics fact
+      ansible.builtin.set_fact:
+        cloudwatch_metrics: "{{ aws_cli_result.stdout | from_json }}"
+
+    - name: Verify required metrics exist
+      ansible.builtin.assert:
+        that:
+          - "'mem_used_percent' in cloudwatch_metrics"
+          - "'mem_used' in cloudwatch_metrics"
+          - "'mem_available' in cloudwatch_metrics"
+        fail_msg: "Required metrics not found in CloudWatch. Found: {{ cloudwatch_metrics }}"
+        success_msg: "All required metrics are present in CloudWatch"
+
+    # テスト4: Dimension設定確認
+    - name: Verify only AutoScalingGroupName dimension is used
+      ansible.builtin.include_role:
+        name: aws_cli_helper
+        tasks_from: execute
+      vars:
+        aws_command: >-
+          aws cloudwatch list-metrics
+          --namespace CWAgent
+          --metric-name mem_used_percent
+          --query 'Metrics[0].Dimensions[*].Name'
+          --output json
+        operation_name: "Check dimensions for mem_used_percent metric"
+        parse_output: true
+
+    - name: Set dimensions fact
+      ansible.builtin.set_fact:
+        metric_dimensions: "{{ aws_cli_result.stdout | from_json }}"
+
+    - name: Verify dimension is AutoScalingGroupName only
+      ansible.builtin.assert:
+        that:
+          - "metric_dimensions | length == 1"
+          - "'AutoScalingGroupName' in metric_dimensions"
+        fail_msg: "Unexpected dimensions found: {{ metric_dimensions }}. Expected only AutoScalingGroupName."
+        success_msg: "Dimension configuration is correct (AutoScalingGroupName only)"
+
+    # 最終結果表示
+    - name: Display test summary
+      ansible.builtin.debug:
+        msg: |
+          ========================================
+          CloudWatch Agent Test Summary
+          ========================================
+          Environment: {{ env_name }}
+          Tested Instances: {{ agent_instance_ids | length }}
+          AutoScalingGroup: {{ asg_name }}
+
+          ✅ CloudWatch Agent service is active
+          ✅ Configuration file exists
+          ✅ Metrics are being sent to CloudWatch
+          ✅ Dimension configuration is correct
+
+          Metrics found: {{ cloudwatch_metrics }}
+          ========================================

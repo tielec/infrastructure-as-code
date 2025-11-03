@@ -133,6 +133,51 @@ phases:
             - pip3 install mitogen
             - python3 -c "import ansible_mitogen" && echo "Mitogen installed successfully"
 
+      - name: InstallCloudWatchAgent
+        action: ExecuteBash
+        inputs:
+          commands:
+            - echo "Installing CloudWatch Agent..."
+            - dnf install -y amazon-cloudwatch-agent
+            - amazon-cloudwatch-agent-ctl --version
+
+      - name: ConfigureCloudWatchAgent
+        action: ExecuteBash
+        inputs:
+          commands:
+            - echo "Configuring CloudWatch Agent..."
+            - mkdir -p /opt/aws/amazon-cloudwatch-agent/etc
+            - |
+              cat > /opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json << 'EOF'
+              {
+                "metrics": {
+                  "namespace": "CWAgent",
+                  "metrics_collected": {
+                    "mem": {
+                      "measurement": [
+                        {"name": "mem_used_percent"},
+                        {"name": "mem_used"},
+                        {"name": "mem_available"}
+                      ],
+                      "metrics_collection_interval": 60
+                    }
+                  },
+                  "append_dimensions": {
+                    "AutoScalingGroupName": "${aws:AutoScalingGroupName}"
+                  }
+                }
+              }
+              EOF
+            - cat /opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json
+
+      - name: EnableCloudWatchAgent
+        action: ExecuteBash
+        inputs:
+          commands:
+            - echo "Enabling CloudWatch Agent service..."
+            - systemctl enable amazon-cloudwatch-agent
+            - echo "CloudWatch Agent will start automatically on instance boot"
+
       - name: CreateJenkinsUser
         action: ExecuteBash
         inputs:
@@ -193,3 +238,9 @@ phases:
             - ansible --version
             - echo "Checking Mitogen installation..."
             - python3 -m ansible_mitogen || echo "Mitogen module check completed"
+            - echo "Checking CloudWatch Agent installation..."
+            - amazon-cloudwatch-agent-ctl --version
+            - test -f /opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json
+            - echo "CloudWatch Agent configuration:"
+            - cat /opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json
+            - systemctl is-enabled amazon-cloudwatch-agent

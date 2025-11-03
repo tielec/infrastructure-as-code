@@ -195,6 +195,84 @@ ansible-playbook playbooks/lambda/lambda_teardown_pipeline.yml -e "env=dev force
 | `test-aws-cli-helper.yml` | AWS CLIヘルパーのテスト | `ansible-playbook playbooks/test/test-aws-cli-helper.yml` |
 | `test-s3-validation.yml` | S3バケット検証 | `ansible-playbook playbooks/test/test-s3-validation.yml` |
 | `test-ssm-parameter-store.yml` | SSMパラメータストアのテスト | `ansible-playbook playbooks/test/test-ssm-parameter-store.yml` |
+| `test-cloudwatch-agent.yml` | CloudWatch Agent動作検証 | `ansible-playbook playbooks/test/test-cloudwatch-agent.yml -e "env=dev"` |
+
+
+## CloudWatchモニタリング
+
+### 概要
+
+Jenkins Agentのメモリ使用状況をCloudWatchで監視できます。CloudWatch Agentを使用してメトリクスを収集し、CloudWatchコンソールで可視化します。
+
+### 収集メトリクス
+
+| メトリクス名 | 説明 | 単位 |
+|------------|------|------|
+| `mem_used_percent` | メモリ使用率 | パーセント |
+| `mem_used` | メモリ使用量 | バイト |
+| `mem_available` | メモリ空き容量 | バイト |
+
+### メトリクス設定
+
+- **Namespace**: `CWAgent`
+- **Dimension**: `AutoScalingGroupName` のみ
+- **送信間隔**: 60秒
+- **コスト**: 約$0.60-1.0/月（固定、インスタンス台数に依存しない）
+
+### CloudWatchコンソールでの確認手順
+
+1. AWSコンソールでCloudWatchサービスを開く
+2. 左メニューから「メトリクス」→「すべてのメトリクス」を選択
+3. 「CWAgent」Namespaceを選択
+4. 「AutoScalingGroupName」Dimensionを選択
+5. Jenkins AgentのAutoScalingGroup名を選択
+6. メトリクス（`mem_used_percent`, `mem_used`, `mem_available`）を選択してグラフ表示
+
+### トラブルシューティング
+
+#### メトリクスが表示されない場合
+
+1. **CloudWatch Agentサービスの確認**:
+   ```bash
+   # SSM Session Managerでインスタンスに接続
+   systemctl status amazon-cloudwatch-agent
+   ```
+   - サービスが起動していない場合: `systemctl start amazon-cloudwatch-agent`
+   - サービスが有効化されていない場合: `systemctl enable amazon-cloudwatch-agent`
+
+2. **設定ファイルの確認**:
+   ```bash
+   cat /opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json
+   ```
+   - 設定ファイルが存在しない場合: AMIが古い可能性があります。最新のAMIを使用してください。
+
+3. **IAM権限の確認**:
+   - Jenkins Agent IAMロールに `CloudWatchAgentServerPolicy` がアタッチされているか確認
+
+4. **ログの確認**:
+   ```bash
+   journalctl -u amazon-cloudwatch-agent -n 100
+   ```
+
+#### コストが予想より高い場合
+
+- CloudWatchコンソールで実際のメトリクス数を確認
+- Dimensionに `InstanceId` が含まれていないか確認（含まれている場合は設定ミス）
+- 期待されるメトリクス数: 3個（`mem_used_percent`, `mem_used`, `mem_available`）
+
+### テスト方法
+
+CloudWatch Agent動作確認テストプレイブックを実行:
+```bash
+cd ansible
+ansible-playbook playbooks/test/test-cloudwatch-agent.yml -e "env=dev"
+```
+
+このテストは以下を検証します:
+- CloudWatch Agentサービスの起動状態
+- 設定ファイルの存在
+- メトリクスがCloudWatchに送信されているか
+- Dimension設定の正確性（`AutoScalingGroupName` のみ）
 
 
 ## ロール一覧
