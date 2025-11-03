@@ -202,26 +202,34 @@ CloudWatch Agent設定の検証は、既存テストコードに統合するよ�
 
 ### Phase 4: 実装 (見積もり: 3~4h)
 
-- [ ] Task 4-1: Pulumiスタック変更 (0.5h)
+- [x] Task 4-1: Pulumiスタック変更 (0.5h)
   - `pulumi/jenkins-agent/index.ts` のIAMロールに `CloudWatchAgentServerPolicy` 追加
   - コード変更箇所: 約170行目付近（`adminPolicy`の後）
-- [ ] Task 4-2: CloudWatch Agent設定ファイル作成 (1h)
-  - `ansible/roles/jenkins_agent_ami/templates/cloudwatch-agent-config.json.j2` 作成
+  - 実装完了: 171-175行目にCloudWatchAgentServerPolicyをアタッチ
+- [x] Task 4-2: CloudWatch Agent設定（AWS Image Builder経由） (1h)
+  - **実装方法変更**: Ansibleロールではなく、AWS Image Builderコンポーネントに直接実装
+  - `pulumi/jenkins-agent-ami/component-x86.yml` 修正
+  - `pulumi/jenkins-agent-ami/component-arm.yml` 修正
   - メモリメトリクス設定（mem_used_percent, mem_used, mem_available）
   - Dimension設定（AutoScalingGroupNameのみ）
   - 集約間隔設定（60秒）
-- [ ] Task 4-3: Ansibleロール変更 (1.5~2h)
-  - `ansible/roles/jenkins_agent_ami/tasks/setup_cloudwatch_agent.yml` 新規作成
-    - CloudWatch Agentパッケージインストール
-    - 設定ファイル配置（テンプレートから生成）
-    - CloudWatch Agentサービス起動・有効化
-  - `ansible/roles/jenkins_agent_ami/tasks/deploy.yml` 修正
-    - CloudWatch Agentセットアップタスクの呼び出し追加
-- [ ] Task 4-4: テストプレイブック作成 (1h)
+  - HEREDOCで設定ファイルを直接配置
+- [x] Task 4-3: Image Builderコンポーネント変更 (1.5~2h)
+  - **実装方法変更**: Ansibleロール経由ではなく、Image Builderコンポーネントに直接実装
+  - `InstallCloudWatchAgent` ステップ追加（dnf install）
+  - `ConfigureCloudWatchAgent` ステップ追加（設定ファイル配置）
+  - `EnableCloudWatchAgent` ステップ追加（systemd有効化）
+  - `ValidateInstallation` ステップ拡張（検証コマンド追加）
+  - x86とARMの両方に同じ実装を適用
+- [x] Task 4-4: テストプレイブック作成 (1h)
   - `ansible/playbooks/test/test-cloudwatch-agent.yml` 新規作成
     - CloudWatch Agentサービス状態確認
     - 設定ファイル存在確認
     - メトリクス送信確認（AWS CLIでメトリクス取得）
+    - Dimension設定確認
+- [x] Task 4-5: ドキュメント更新（Phase 7から前倒し）
+  - `ansible/README.md` にCloudWatchモニタリングセクション追加
+  - テストプレイブック一覧に `test-cloudwatch-agent.yml` 追加
 
 ### Phase 5: テストコード実装 (見積もり: 0h)
 
