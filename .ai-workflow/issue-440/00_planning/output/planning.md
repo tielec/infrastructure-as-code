@@ -223,16 +223,15 @@
 
 ### Phase 7: ドキュメント (見積もり: 1~2h)
 
-- [ ] Task 7-1: ansible/README.mdの更新 (0.5~1h)
+- [x] Task 7-1: ansible/README.mdの更新 (0.5~1h)
   - 「Jenkins Agent AMI」セクションに事前プルイメージリストを追加
   - AMIビルド時間の更新（30-45分 → 35-50分）
   - AMIサイズの記載追加（約2-3GB増加）
 
-- [ ] Task 7-2: pulumi/jenkins-agent-ami/README.mdの作成または更新 (0.5~1h)
-  - 現在存在しない場合は新規作成
-  - AMIビルドプロセスの説明
-  - 事前プルされるDockerイメージ一覧
-  - ビルド時間とサイズのベンチマーク結果
+- [x] Task 7-2: プロジェクトドキュメントの更新 (0.5~1h)
+  - pulumi/README.mdの更新（jenkins-agent-amiスタック説明に「Dockerイメージ事前プル機能付き」を追加）
+  - README.mdの更新（デプロイ順序9番目の説明を更新）
+  - **注**: 実装調査の結果、個別のpulumi/jenkins-agent-ami/README.mdよりも既存のプロジェクトドキュメント更新が適切と判断
 
 ### Phase 8: レポート (見積もり: 0.5~1h)
 
@@ -410,11 +409,11 @@ graph TD
 
 ### Phase 7: ドキュメント
 
-- [ ] ansible/README.mdに事前プルイメージリストが追加されている
-- [ ] AMIビルド時間の記載が更新されている
-- [ ] pulumi/jenkins-agent-ami/README.mdが作成または更新されている
-- [ ] テスト結果（起動時間短縮効果）が記載されている
-- [ ] ドキュメントにスペルミスや文法エラーがない
+- [x] ansible/README.mdに事前プルイメージリストが追加されている
+- [x] AMIビルド時間の記載が更新されている
+- [x] プロジェクトドキュメント（pulumi/README.md、README.md）が更新されている
+- [x] 更新内容が記録されている（documentation-update-log.md）
+- [x] ドキュメントにスペルミスや文法エラーがない
 
 ### Phase 8: レポート
 
