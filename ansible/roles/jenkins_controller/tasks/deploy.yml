@@ -59,7 +59,6 @@
         instance_id: "{{ jenkins_instance_id }}"
         max_wait_time: 300  # 5分間待機
         check_interval: 10  # 10秒ごとにチェック
-        aws_region: "{{ aws_region }}"
       when: jenkins_instance_id is defined
 
     - name: Summary of controller deployment

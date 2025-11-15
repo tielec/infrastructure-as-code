@@ -3,19 +3,19 @@
 #
 # 必須変数:
 #   - instance_id: 対象のEC2インスタンスID
+#   - aws_region: AWSリージョン
 #
 # オプション変数:
 #   - max_wait_time: 最大待機時間（秒） (default: 300)
 #   - check_interval: チェック間隔（秒） (default: 10)
 #   - target_status: 期待するステータス (default: "Online")
-#   - aws_region: AWSリージョン (default: aws_cli_helper_region)
 
 - name: Set SSM wait parameters
   ansible.builtin.set_fact:
     _ssm_max_wait: "{{ max_wait_time | default(300) }}"
     _ssm_interval: "{{ check_interval | default(10) }}"
     _ssm_target_status: "{{ target_status | default('Online') }}"
-    _ssm_region: "{{ aws_region | default(aws_cli_helper_region) }}"
+    _ssm_region: "{{ aws_region }}"
     _ssm_max_attempts: "{{ ((max_wait_time | default(300) | int) / (check_interval | default(10) | int)) | int }}"
     _ssm_current_attempt: 0
 
