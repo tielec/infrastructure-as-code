@@ -200,6 +200,9 @@ phases:
               echo "Pulling node:18-slim..."
               docker pull node:18-slim || echo "WARNING: Failed to pull node:18-slim"
 
+              echo "Pulling node:20-slim..."
+              docker pull node:20-slim || echo "WARNING: Failed to pull node:20-slim"
+
               # Rust系イメージ
               echo "Pulling rust:1.76-slim..."
               docker pull rust:1.76-slim || echo "WARNING: Failed to pull rust:1.76-slim"
