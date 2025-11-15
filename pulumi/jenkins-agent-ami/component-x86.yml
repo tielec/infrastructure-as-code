@@ -139,7 +139,7 @@ phases:
           commands:
             - echo "Installing CloudWatch Agent..."
             - dnf install -y amazon-cloudwatch-agent
-            - amazon-cloudwatch-agent-ctl --version
+            - rpm -q amazon-cloudwatch-agent
 
       - name: ConfigureCloudWatchAgent
         action: ExecuteBash
