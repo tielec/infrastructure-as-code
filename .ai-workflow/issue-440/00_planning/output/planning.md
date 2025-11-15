@@ -186,14 +186,14 @@
 
 ### Phase 5: テストコード実装 (見積もり: 1~1.5h)
 
-- [ ] Task 5-1: Dockerイメージ検証スクリプト作成 (0.5~1h)
+- [x] Task 5-1: Dockerイメージ検証スクリプト作成 (0.5~1h)
   - `.ai-workflow/issue-440/06_test/integration/test_docker_images.sh`を作成
   - EC2インスタンスIDを引数で受け取る
   - SSM Session Managerでコマンド実行
   - docker imagesの出力をパースして12種類の存在を確認
   - 結果をJSONで出力
 
-- [ ] Task 5-2: 起動時間測定スクリプト作成 (0.5h)
+- [x] Task 5-2: 起動時間測定スクリプト作成 (0.5h)
   - `.ai-workflow/issue-440/06_test/integration/measure_job_startup.sh`を作成
   - Jenkins APIでジョブをトリガー
   - ジョブログからDockerイメージプル時間を抽出
@@ -393,11 +393,11 @@ graph TD
 
 ### Phase 5: テストコード実装
 
-- [ ] test_docker_images.shが作成されている
-- [ ] 12種類のイメージ存在確認ロジックが実装されている
-- [ ] measure_job_startup.shが作成されている
-- [ ] before/after比較レポート生成ロジックが実装されている
-- [ ] スクリプトが実行可能権限を持っている（chmod +x）
+- [x] test_docker_images.shが作成されている
+- [x] 12種類のイメージ存在確認ロジックが実装されている
+- [x] measure_job_startup.shが作成されている
+- [x] before/after比較レポート生成ロジックが実装されている
+- [x] スクリプトが実行可能権限を持っている（chmod +x）
 
 ### Phase 6: テスト実行
 
