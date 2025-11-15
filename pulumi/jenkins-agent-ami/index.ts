@@ -110,9 +110,8 @@ const imageBuilderInstanceProfile = new aws.iam.InstanceProfile(`imagebuilder-pr
 });
 
 // コンポーネント定義YAMLファイルを読み込み
-// __dirnameはコンパイル後のbinディレクトリを指すため、親ディレクトリから読み込む
-const componentX86Yaml = fs.readFileSync(path.join(__dirname, "..", "component-x86.yml"), "utf8");
-const componentArmYaml = fs.readFileSync(path.join(__dirname, "..", "component-arm.yml"), "utf8");
+const componentX86Yaml = fs.readFileSync(path.join(__dirname, "component-x86.yml"), "utf8");
+const componentArmYaml = fs.readFileSync(path.join(__dirname, "component-arm.yml"), "utf8");
 
 // Jenkins Agent用コンポーネント（x86_64）
 const jenkinsAgentComponentX86 = new aws.imagebuilder.Component(`agent-component-x86`, {

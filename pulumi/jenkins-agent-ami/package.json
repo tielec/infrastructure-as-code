@@ -1,6 +1,6 @@
 {
   "name": "jenkins-agent-ami",
-  "main": "bin/index.js",
+  "main": "index.ts",
   "scripts": {
     "build": "tsc",
     "preview": "pulumi preview",
