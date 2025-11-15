@@ -168,6 +168,12 @@ const adminPolicy = new aws.iam.RolePolicyAttachment(`agent-admin-policy`, {
     policyArn: "arn:aws:iam::aws:policy/AdministratorAccess",
 });
 
+// CloudWatch Agent用のマネージドポリシーをアタッチ
+const cloudWatchAgentPolicy = new aws.iam.RolePolicyAttachment(`agent-cloudwatch-policy`, {
+    role: jenkinsAgentRole.name,
+    policyArn: "arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy",
+});
+
 // SSMパラメータストア追加権限（ダッシュボード用）
 // AdministratorAccessに含まれているが、明示的に記載
 const ssmParameterReadPolicy = new aws.iam.Policy(`agent-ssm-parameter-policy`, {
