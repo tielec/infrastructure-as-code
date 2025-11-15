@@ -181,6 +181,36 @@ phases:
             - systemctl enable amazon-cloudwatch-agent
             - echo "CloudWatch Agent will start automatically on instance boot"
 
+      - name: PullDockerImages
+        action: ExecuteBash
+        inputs:
+          commands:
+            - echo "===== Docker Image Pre-pulling for faster job startup ====="
+            - echo "Starting Docker daemon..."
+            - systemctl start docker
+            - sleep 5
+            - 'systemctl is-active docker || (echo "ERROR: Docker daemon is not running" && exit 1)'
+            - echo "Docker daemon is running. Starting image pull..."
+            - echo "Pulling Python images..."
+            - 'docker pull python:3.11-slim || echo "WARNING: Failed to pull python:3.11-slim"'
+            - echo "Pulling Node.js images..."
+            - 'docker pull node:18-slim || echo "WARNING: Failed to pull node:18-slim"'
+            - 'docker pull node:20-slim || echo "WARNING: Failed to pull node:20-slim"'
+            - echo "Pulling Rust images..."
+            - 'docker pull rust:1.76-slim || echo "WARNING: Failed to pull rust:1.76-slim"'
+            - 'docker pull rust:slim || echo "WARNING: Failed to pull rust:slim"'
+            - echo "Pulling AWS CLI image..."
+            - 'docker pull amazon/aws-cli:latest || echo "WARNING: Failed to pull amazon/aws-cli:latest"'
+            - echo "Pulling Pulumi image..."
+            - 'docker pull pulumi/pulumi:latest || echo "WARNING: Failed to pull pulumi/pulumi:latest"'
+            - echo "Pulling Ubuntu image..."
+            - 'docker pull ubuntu:22.04 || echo "WARNING: Failed to pull ubuntu:22.04"'
+            - echo "Pulling Python + Node.js combined image..."
+            - 'docker pull nikolaik/python-nodejs:python3.11-nodejs20 || echo "WARNING: Failed to pull nikolaik/python-nodejs:python3.11-nodejs20"'
+            - echo "===== Verifying pulled images ====="
+            - docker images
+            - echo "===== Docker image pre-pulling completed successfully ====="
+
       - name: CreateJenkinsUser
         action: ExecuteBash
         inputs:

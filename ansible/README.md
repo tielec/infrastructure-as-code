@@ -198,6 +198,44 @@ ansible-playbook playbooks/lambda/lambda_teardown_pipeline.yml -e "env=dev force
 | `test-cloudwatch-agent.yml` | CloudWatch Agent動作検証 | `ansible-playbook playbooks/test/test-cloudwatch-agent.yml -e "env=dev"` |
 
 
+## Docker Image Pre-pulling
+
+### 概要
+
+Jenkins Agentでは、頻繁に使用されるDockerイメージをAMIビルド時に事前にプルしてキャッシュします。これにより、ジョブ実行時のイメージダウンロード時間を劇的に短縮し、パイプライン全体の高速化と安定性向上を実現します。
+
+### 事前プルされるDockerイメージ一覧（8種類）
+
+| イメージ | タグ | サイズ（概算） | 使用箇所 |
+|---------|------|--------------|----------|
+| python | 3.11-slim | 130MB | diagram-generator, pull-request-comment-builder |
+| node | 18-slim | 180MB | mermaid-generator |
+| rust | 1.76-slim | 850MB | pr-complexity-analyzer |
+| rust | slim | 850MB | (バックアップ用) |
+| amazon/aws-cli | latest | 400MB | ssm-dashboard, pulumi-dashboard |
+| pulumi/pulumi | latest | 100MB | pulumi-dashboard |
+| ubuntu | 22.04 | 77MB | (汎用用途) |
+| nikolaik/python-nodejs | python3.11-nodejs20 | 400MB | auto-insert-doxygen-comment, technical-docs-writer |
+
+**合計サイズ**: 約2.9GB
+
+### 効果
+
+- **ジョブ起動時間短縮**: 小イメージで10-20秒→1-2秒、大イメージで1-2分→1-2秒
+- **ネットワーク帯域削減**: ジョブ実行時のダウンロードがほぼゼロ
+- **レート制限回避**: Docker Hubのレート制限を回避し、大規模並列実行時も安定動作
+- **オフライン動作**: ネットワーク障害時もキャッシュされたイメージで継続動作可能
+
+### AMIへの影響
+
+- **AMIサイズ増加**: 約2-3GB
+- **AMIビルド時間**: 30-45分 → 35-50分（+5-10分程度）
+- **EBSストレージコスト**: 約$0.24/月増加（開発環境のみならほぼ無視できる）
+
+### 実装方法
+
+Dockerイメージの事前プルは、EC2 Image Builderのコンポーネント定義（`pulumi/jenkins-agent-ami/component-arm.yml`と`pulumi/jenkins-agent-ami/component-x86.yml`）で実装されています。EnableCloudWatchAgentステップの直後に`PullDockerImages`ステップが追加され、AMIビルド時に自動的にイメージがプルされます。
+
 ## CloudWatchモニタリング
 
 ### 概要

@@ -123,7 +123,7 @@ pulumi/
 | `jenkins-storage` | ストレージ | security | EFS、バックアップ設定 |
 | `jenkins-loadbalancer` | ロードバランサー | security | ALB、ターゲットグループ |
 | `jenkins-controller` | Jenkinsコントローラー | nat, storage, loadbalancer | EC2、Auto Scaling |
-| `jenkins-agent-ami` | エージェントAMI | security | カスタムAMI |
+| `jenkins-agent-ami` | エージェントAMI | security | カスタムAMI（Dockerイメージ事前プル機能付き） |
 | `jenkins-agent` | Jenkinsエージェント | controller, agent-ami | EC2 Fleet、Auto Scaling |
 | `jenkins-config` | Jenkins設定 | controller | SSMドキュメント、設定 |
 | `jenkins-application` | Jenkinsアプリ | config, agent | ジョブ、プラグイン設定 |

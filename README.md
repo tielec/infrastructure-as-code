@@ -341,7 +341,7 @@ tmux attach -t jenkins-deploy
 6. jenkins-loadbalancer（ALB）
 7. jenkins-controller（Jenkinsコントローラー）
 8. jenkins-config（設定リソース）
-9. jenkins-agent-ami（カスタムAMI作成）※最大1時間
+9. jenkins-agent-ami（カスタムAMI作成、Dockerイメージ事前プル機能付き）※最大1時間
 10. jenkins-agent（SpotFleet）
 11. jenkins-application（Jenkins設定、プラグイン）
 
