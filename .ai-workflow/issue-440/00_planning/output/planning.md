@@ -174,13 +174,13 @@
 
 ### Phase 4: 実装 (見積もり: 1~2h)
 
-- [ ] Task 4-1: component-arm.ymlの修正 (0.5~1h)
+- [x] Task 4-1: component-arm.ymlの修正 (0.5~1h)
   - EnableCloudWatchAgentステップの後にPullDockerImagesステップを追加
   - 12種類のDockerイメージのプルコマンドを記載
   - systemctl start dockerを最初に実行
   - プル完了後のdocker imagesで確認ログ出力
 
-- [ ] Task 4-2: component-x86.ymlの修正 (0.5~1h)
+- [x] Task 4-2: component-x86.ymlの修正 (0.5~1h)
   - component-arm.ymlと同じPullDockerImagesステップを追加
   - 内容が完全一致していることを確認（diff比較）
 
@@ -384,12 +384,12 @@ graph TD
 
 ### Phase 4: 実装
 
-- [ ] component-arm.ymlにPullDockerImagesステップが追加されている
-- [ ] component-x86.ymlにPullDockerImagesステップが追加されている
-- [ ] 両ファイルの内容が一致している（アーキテクチャ固有部分を除く）
-- [ ] systemctl start dockerが最初に実行されている
-- [ ] 12種類すべてのイメージがプルされている
-- [ ] プル成功確認のログ出力がある
+- [x] component-arm.ymlにPullDockerImagesステップが追加されている
+- [x] component-x86.ymlにPullDockerImagesステップが追加されている
+- [x] 両ファイルの内容が一致している（アーキテクチャ固有部分を除く）
+- [x] systemctl start dockerが最初に実行されている
+- [x] 12種類すべてのイメージがプルされている
+- [x] プル成功確認のログ出力がある
 
 ### Phase 5: テストコード実装
 
