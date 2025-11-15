@@ -1,9 +1,6 @@
 ---
 # SSMパラメータストアヘルパーのデフォルト変数
 
-# AWS設定
-aws_region: "{{ aws_region }}"
-
 # キャッシュ設定
 ssm_parameter_store_cache:
   enabled: true
