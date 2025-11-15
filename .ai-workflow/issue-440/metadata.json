@@ -11,16 +11,16 @@
     "repo": "infrastructure-as-code"
   },
   "workflow_version": "1.0.0",
-  "current_phase": "report",
+  "current_phase": "evaluation",
   "design_decisions": {
     "implementation_strategy": "EXTEND",
     "test_strategy": "INTEGRATION_ONLY",
     "test_code_strategy": "CREATE_TEST"
   },
   "cost_tracking": {
-    "total_input_tokens": 524,
-    "total_output_tokens": 140331,
-    "total_cost_usd": 8.45454925
+    "total_input_tokens": 531,
+    "total_output_tokens": 152985,
+    "total_cost_usd": 9.0891313
   },
   "phases": {
     "planning": {
@@ -132,20 +132,37 @@
       ]
     },
     "evaluation": {
-      "status": "pending",
+      "status": "in_progress",
       "retry_count": 0,
-      "started_at": null,
+      "started_at": "2025-11-15T05:37:34.841Z",
       "completed_at": null,
       "review_result": null,
-      "decision": null,
+      "decision": "PASS_WITH_ISSUES",
       "failed_phase": null,
-      "remaining_tasks": [],
-      "created_issue_url": null,
-      "abort_reason": null
+      "remaining_tasks": [
+        {
+          "task": "dev環境でAMIビルド実行（ARM64またはx86_64の1つ）を1回成功させる",
+          "phase": "implementation",
+          "priority": "高"
+        },
+        {
+          "task": "Dockerイメージ存在確認テスト（test_docker_images.sh）を実行する",
+          "phase": "test_implementation",
+          "priority": "高"
+        },
+        {
+          "task": "（推奨）ジョブ起動時間測定テスト（measure_job_startup.sh）を実行する",
+          "phase": "test_implementation",
+          "priority": "低"
+        }
+      ],
+      "created_issue_url": "https://github.com/tielec/infrastructure-as-code/issues/442",
+      "abort_reason": null,
+      "current_step": "execute"
     }
   },
   "created_at": "2025-11-15T04:53:21.369Z",
-  "updated_at": "2025-11-15T05:37:33.527Z",
+  "updated_at": "2025-11-15T05:41:39.559Z",
   "branch_name": "ai-workflow/issue-440",
   "pr_number": 441,
   "pr_url": "https://github.com/tielec/infrastructure-as-code/pull/441",
