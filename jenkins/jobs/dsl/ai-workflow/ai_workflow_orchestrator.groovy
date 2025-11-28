@@ -3,6 +3,7 @@
  *
  * GitHub Issue から PR 作成まで、Claude / Codex を使って自動開発ワークフローを実行する
  * 9 フェーズ構成: planning → requirements → design → test_scenario → implementation → test_implementation → testing → documentation → report → evaluation
+ * Auto Issue: AIエージェントによる自動Issue作成（v0.5.0、Issue #121）
  */
 
 pipelineJob('AI_Workflow/ai_workflow_orchestrator') {
@@ -28,6 +29,13 @@ GitHub Issue を入力として、要件定義から報告までの開発プロ�
 - preset（推奨）: 定義済みワークフローパターンを実行（例: quick-fix, implementation, testing）
 - single_phase: 指定フェーズのみ実行（デバッグ用）
 - rollback: フェーズ差し戻し実行（v0.4.0、Issue #90）
+- auto_issue: AIによる自動Issue作成（v0.5.0、Issue #121）
+
+【Auto Issue モード】
+AIエージェントがリポジトリを探索し、バグや改善点を検出してIssueを自動作成します。
+- bug: バグ・潜在的問題の検出
+- refactor: リファクタリング候補の検出（Phase 2で実装予定）
+- enhancement: 機能拡張提案（Phase 3で実装予定）
 
 【レビューとリトライ】
 - PASS: 次フェーズへ進行
@@ -44,15 +52,19 @@ GitHub Issue を入力として、要件定義から報告までの開発プロ�
         // 基本設定
         // ========================================
         stringParam('ISSUE_URL', '', '''
-GitHub Issue URL（必須）
+GitHub Issue URL（auto_issue モード以外で必須）
 
 例: https://github.com/tielec/my-project/issues/123
 注: Issue URL から対象リポジトリを自動判定します（マルチリポジトリ対応）
+注: auto_issue モードでは不要（GITHUB_REPOSITORY を使用）
         '''.stripIndent().trim())
 
         stringParam('GITHUB_REPOSITORY', '', '''
 GitHub リポジトリ（owner/repo）
+
 注: 通常は ISSUE_URL から自動判定されるため、空欄で問題ありません
+注: auto_issue モードでは必須（対象リポジトリを指定）
+例: tielec/ai-workflow-agent
         '''.stripIndent().trim())
 
         stringParam('BRANCH_NAME', '', '''
@@ -71,13 +83,14 @@ AI Workflow の作業ブランチを個別指定する場合に使用
         // ========================================
         // 実行制御
         // ========================================
-        choiceParam('EXECUTION_MODE', ['all_phases', 'preset', 'single_phase', 'rollback'], '''
+        choiceParam('EXECUTION_MODE', ['all_phases', 'preset', 'single_phase', 'rollback', 'auto_issue'], '''
 実行モード
 
 - all_phases: planning から evaluation まで一括実行（resume により失敗フェーズから再開）
 - preset: 定義済みワークフローパターンを実行（推奨）
 - single_phase: START_PHASE で指定したフェーズのみ実行
 - rollback: フェーズ差し戻し実行（v0.4.0、Issue #90）
+- auto_issue: AIによる自動Issue作成（v0.5.0、Issue #121）
         '''.stripIndent().trim())
 
         choiceParam('PRESET', ['quick-fix', 'implementation', 'testing', 'review-requirements', 'review-design', 'review-test-scenario', 'finalize'], '''
@@ -127,6 +140,31 @@ AI Workflow の作業ブランチを個別指定する場合に使用
 
 差し戻し理由を記述したファイルのパスを指定します。
 ROLLBACK_REASON と ROLLBACK_REASON_FILE の両方が指定された場合、ROLLBACK_REASON_FILE が優先されます。
+        '''.stripIndent().trim())
+
+        // ========================================
+        // Auto Issue 設定（v0.5.0、Issue #121）
+        // ========================================
+        choiceParam('AUTO_ISSUE_CATEGORY', ['bug', 'refactor', 'enhancement', 'all'], '''
+Issue検出カテゴリ（auto_issue モード時のみ有効）
+
+- bug: バグ・潜在的問題の検出（Phase 1で実装済み）
+- refactor: リファクタリング候補の検出（Phase 2で実装予定）
+- enhancement: 機能拡張提案（Phase 3で実装予定）
+- all: 全カテゴリを検出
+        '''.stripIndent().trim())
+
+        stringParam('AUTO_ISSUE_LIMIT', '5', '''
+作成するIssueの最大数（auto_issue モード時のみ有効）
+
+1〜50の範囲で指定してください。
+        '''.stripIndent().trim())
+
+        stringParam('AUTO_ISSUE_SIMILARITY_THRESHOLD', '0.8', '''
+重複判定の類似度閾値（auto_issue モード時のみ有効）
+
+0.0〜1.0の範囲で指定してください。
+値が高いほど厳密に重複判定します（デフォルト: 0.8）。
         '''.stripIndent().trim())
 
         // ========================================
