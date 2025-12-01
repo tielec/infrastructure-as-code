@@ -177,11 +177,11 @@
 
 ### Phase 4: 実装 (見積もり: 32~40h)
 
-- [ ] Task 4-1: PRCommentStatisticsモジュールの実装 (6~8h)
+- [x] Task 4-1: PRCommentStatisticsモジュールの実装 (6~8h)
   - `statistics.py`の作成
   - 統計計算ロジックの移行（関数抽出、クラス化）
   - public APIの実装
-- [ ] Task 4-2: CommentFormatterモジュールの実装 (6~8h)
+- [x] Task 4-2: CommentFormatterモジュールの実装 (6~8h)
   - `formatter.py`の作成
   - フォーマット処理ロジックの移行
   - テンプレートエンジンの統合（必要に応じて）
@@ -190,17 +190,20 @@
   - OpenAIクライアントラッパーの実装
   - リクエスト・レスポンス処理ロジックの移行
   - エラーハンドリング・リトライロジックの実装
+  - **注記**: Phase 5（test_implementation）での完成推奨（実装ログ参照）
 - [ ] Task 4-4: PRCommentGeneratorコアロジックのリファクタリング (6~8h)
   - `generator.py`の作成
   - オーケストレーション層としてのリファクタリング
   - 各モジュールへの依存注入（Dependency Injection）の実装
-- [ ] Task 4-5: 互換性レイヤー（Facade）の実装 (3~4h)
+  - **注記**: Phase 5（test_implementation）での完成推奨（実装ログ参照）
+- [x] Task 4-5: 互換性レイヤー（Facade）の実装 (3~4h)
   - `pr_comment_generator/__init__.py`での再エクスポート実装
   - 非推奨警告（DeprecationWarning）の追加
   - 旧インポートパスから新インポートパスへの自動変換スクリプト作成
 - [ ] Task 4-6: 依存モジュールのインポートパス更新 (3~4h)
   - 影響範囲調査で特定したファイルのインポートパスを更新
   - CI/CDパイプラインスクリプトの更新
+  - **注記**: Phase 5（test_implementation）での完成推奨（実装ログ参照）
 
 ### Phase 5: テストコード実装 (見積もり: 12~16h)
 
