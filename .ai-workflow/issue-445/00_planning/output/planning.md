@@ -130,28 +130,28 @@
 
 ### Phase 2: 設計 (見積もり: 12~16h)
 
-- [ ] Task 2-1: PRCommentStatisticsモジュールの設計 (2~3h)
+- [x] Task 2-1: PRCommentStatisticsモジュールの設計 (2~3h)
   - 統計データクラスの設計（データ構造、メソッド）
   - 統計計算ロジックの抽出対象を特定
   - public APIの定義（他モジュールから呼び出されるメソッド）
-- [ ] Task 2-2: CommentFormatterモジュールの設計 (2~3h)
+- [x] Task 2-2: CommentFormatterモジュールの設計 (2~3h)
   - フォーマッタクラスの設計（入力・出力形式）
   - テンプレートエンジンの選定（既存の文字列結合を保持するか、Jinja2等を導入するか）
   - public APIの定義
-- [ ] Task 2-3: OpenAIIntegrationモジュールの設計 (2~3h)
+- [x] Task 2-3: OpenAIIntegrationモジュールの設計 (2~3h)
   - OpenAIクライアントラッパークラスの設計
   - リクエスト・レスポンス処理ロジックの抽出対象を特定
   - エラーハンドリング・リトライロジックの設計
   - モック化戦略の策定（テスト時のAPI呼び出しシミュレーション）
-- [ ] Task 2-4: PRCommentGeneratorコアロジックの設計 (2~3h)
+- [x] Task 2-4: PRCommentGeneratorコアロジックの設計 (2~3h)
   - オーケストレーション層としての責務を明確化
   - 各モジュールへの依存関係を設計（Dependency Injection）
   - 既存のpublic APIとの互換性を確認
-- [ ] Task 2-5: 互換性レイヤー（Facade）の設計 (2~3h)
+- [x] Task 2-5: 互換性レイヤー（Facade）の設計 (2~3h)
   - `pr_comment_generator/__init__.py`での再エクスポート設計
   - 旧インポートパスから新インポートパスへの移行期間の設計
   - 非推奨警告（DeprecationWarning）の実装方法を決定
-- [ ] Task 2-6: モジュール構成図とインターフェース仕様書の作成 (2~2h)
+- [x] Task 2-6: モジュール構成図とインターフェース仕様書の作成 (2~2h)
   - Mermaidクラス図の作成
   - 各モジュールのpublic APIドキュメント作成
   - 移行ガイドのドラフト作成
@@ -364,12 +364,12 @@ graph TD
 
 ### Phase 2: 設計
 
-- [ ] 実装戦略（REFACTOR）の判断根拠が明記されている
-- [ ] テスト戦略（ALL）の判断根拠が明記されている
-- [ ] テストコード戦略（BOTH_TEST）の判断根拠が明記されている
-- [ ] 4つのモジュール（`PRCommentStatistics`, `CommentFormatter`, `OpenAIIntegration`, `PRCommentGenerator`）のpublic APIが定義されている
-- [ ] 互換性レイヤー（Facade）の設計が完了している
-- [ ] モジュール構成図（Mermaidクラス図）が作成されている
+- [x] 実装戦略（REFACTOR）の判断根拠が明記されている
+- [x] テスト戦略（ALL）の判断根拠が明記されている
+- [x] テストコード戦略（BOTH_TEST）の判断根拠が明記されている
+- [x] 4つのモジュール（`PRCommentStatistics`, `CommentFormatter`, `OpenAIIntegration`, `PRCommentGenerator`）のpublic APIが定義されている
+- [x] 互換性レイヤー（Facade）の設計が完了している
+- [x] モジュール構成図（Mermaidクラス図）が作成されている
 
 ### Phase 3: テストシナリオ
 
