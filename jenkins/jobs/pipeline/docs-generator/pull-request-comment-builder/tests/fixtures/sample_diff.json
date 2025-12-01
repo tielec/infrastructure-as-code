@@ -1,0 +1,42 @@
+[
+  {
+    "filename": "src/auth/login.py",
+    "status": "modified",
+    "additions": 45,
+    "deletions": 20,
+    "changes": 65,
+    "patch": "@@ -1,20 +1,45 @@\n import hashlib\n+import bcrypt\n+from datetime import datetime, timedelta\n \n def authenticate_user(username, password):\n-    # Old authentication logic\n-    hashed = hashlib.md5(password.encode()).hexdigest()\n+    # New bcrypt-based authentication\n+    hashed = bcrypt.hashpw(password.encode(), bcrypt.gensalt())\n     return check_credentials(username, hashed)\n+\n+def generate_jwt_token(user_id):\n+    expiration = datetime.utcnow() + timedelta(hours=24)\n+    return create_token(user_id, expiration)"
+  },
+  {
+    "filename": "src/auth/session.py",
+    "status": "added",
+    "additions": 120,
+    "deletions": 0,
+    "changes": 120,
+    "patch": "@@ -0,0 +1,120 @@\n+class SessionManager:\n+    def __init__(self):\n+        self.sessions = {}\n+\n+    def create_session(self, user_id):\n+        session_id = generate_session_id()\n+        self.sessions[session_id] = {\n+            'user_id': user_id,\n+            'created_at': datetime.utcnow()\n+        }\n+        return session_id"
+  },
+  {
+    "filename": "tests/test_auth.py",
+    "status": "added",
+    "additions": 200,
+    "deletions": 0,
+    "changes": 200,
+    "patch": "@@ -0,0 +1,200 @@\n+import pytest\n+from src.auth.login import authenticate_user, generate_jwt_token\n+from src.auth.session import SessionManager\n+\n+class TestAuthentication:\n+    def test_authenticate_valid_user(self):\n+        result = authenticate_user('testuser', 'password123')\n+        assert result is True"
+  },
+  {
+    "filename": "README.md",
+    "status": "modified",
+    "additions": 30,
+    "deletions": 5,
+    "changes": 35,
+    "patch": "@@ -1,5 +1,30 @@\n # Project Authentication\n \n-Basic authentication system\n+## Authentication System\n+\n+This project now includes a comprehensive authentication system:\n+\n+### Features\n+- JWT token-based authentication\n+- Secure password hashing with bcrypt\n+- Session management\n+- Rate limiting"
+  },
+  {
+    "filename": "docs/authentication.md",
+    "status": "added",
+    "additions": 150,
+    "deletions": 0,
+    "changes": 150,
+    "patch": "@@ -0,0 +1,150 @@\n+# Authentication Documentation\n+\n+## Overview\n+\n+This document describes the authentication system implementation.\n+\n+## Usage\n+\n+```python\n+from src.auth.login import authenticate_user\n+result = authenticate_user('username', 'password')\n+```"
+  }
+]
