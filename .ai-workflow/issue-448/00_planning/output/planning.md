@@ -267,32 +267,32 @@ jenkins/jobs/pipeline/infrastructure/pulumi-stack-action/tests/ (新規作成)
 
 ### Phase 4: 実装 (見積もり: 6〜8h)
 
-- [ ] Task 4-1: UrnProcessorクラスの実装 (1.5〜2h)
+- [x] Task 4-1: UrnProcessorクラスの実装 (1.5〜2h)
   - `parse_urn()`メソッドの実装
   - `_parse_provider_type()`メソッドの実装
   - エラーハンドリングの実装
   - docstringとコメントの追加
 
-- [ ] Task 4-2: NodeLabelGeneratorクラスの実装 (1.5〜2h)
+- [x] Task 4-2: NodeLabelGeneratorクラスの実装 (1.5〜2h)
   - `create_readable_label()`メソッドの実装
   - `_format_resource_type()`メソッドの実装
   - エスケープ処理の実装
   - docstringとコメントの追加
 
-- [ ] Task 4-3: ResourceDependencyBuilderクラスの実装 (2〜2.5h)
+- [x] Task 4-3: ResourceDependencyBuilderクラスの実装 (2〜2.5h)
   - `build_dependency_graph()`メソッドの実装
   - ノードIDマッピングの管理ロジック実装
   - エッジ属性処理の実装
   - docstringとコメントの追加
 
-- [ ] Task 4-4: DotFileProcessorのリファクタリング (1.5〜2h)
+- [x] Task 4-4: DotFileProcessorのリファクタリング (1.5〜2h)
   - 新規クラスのインポート追加
   - 既存メソッドを新規クラスへ委譲するように変更
   - Guard Clauseパターンでネストを解消
   - 不要になったメソッドの削除
   - docstringの更新
 
-- [ ] Task 4-5: コードレビューと修正 (0.5〜1h)
+- [x] Task 4-5: コードレビューと修正 (0.5〜1h)
   - PEP 8準拠の確認
   - 型ヒントの追加漏れチェック
   - docstringの完全性確認
