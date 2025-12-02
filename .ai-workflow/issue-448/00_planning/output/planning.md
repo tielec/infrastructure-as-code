@@ -242,25 +242,25 @@ jenkins/jobs/pipeline/infrastructure/pulumi-stack-action/tests/ (新規作成)
 
 ### Phase 3: テストシナリオ (見積もり: 2〜3h)
 
-- [ ] Task 3-1: UrnProcessorのテストシナリオ作成 (0.5〜1h)
+- [x] Task 3-1: UrnProcessorのテストシナリオ作成 (0.5〜1h)
   - 正常系: 標準的なURN形式のパース
   - 準正常系: プロバイダー情報がないURN、短いURN
   - 異常系: 不正なURN形式、空文字列、None
   - エッジケース: 特殊文字を含むURN、非常に長いURN
 
-- [ ] Task 3-2: NodeLabelGeneratorのテストシナリオ作成 (0.5〜1h)
+- [x] Task 3-2: NodeLabelGeneratorのテストシナリオ作成 (0.5〜1h)
   - 正常系: 標準的なラベル生成、モジュール名付きラベル
   - 準正常系: 長いリソースタイプ名の省略、空のモジュール名
   - 異常系: 空のurn_info、不完全なurn_info
   - エッジケース: 特殊文字を含む名前、改行を含む名前
 
-- [ ] Task 3-3: ResourceDependencyBuilderのテストシナリオ作成 (0.5〜1h)
+- [x] Task 3-3: ResourceDependencyBuilderのテストシナリオ作成 (0.5〜1h)
   - 正常系: 単純な依存関係グラフ、複雑な依存関係グラフ
   - 準正常系: 循環依存、依存先が存在しない
   - 異常系: 空のリソースリスト、不正なリソース形式
   - エッジケース: 大量のリソース（100+）、親子関係とプロパティ依存の混在
 
-- [ ] Task 3-4: 統合テストシナリオ作成 (0.5〜1h)
+- [x] Task 3-4: 統合テストシナリオ作成 (0.5〜1h)
   - リファクタリング前後の振る舞い同一性テスト（特性テスト）
   - 実際のPulumi DOTファイルを使用したE2Eテスト
   - パフォーマンステスト（リファクタリング前後での処理時間比較）
@@ -490,11 +490,11 @@ graph TD
 
 ### Phase 3: テストシナリオ
 
-- [ ] UrnProcessorのテストシナリオ（正常系、異常系、エッジケース）が作成されている
-- [ ] NodeLabelGeneratorのテストシナリオが作成されている
-- [ ] ResourceDependencyBuilderのテストシナリオが作成されている
-- [ ] 統合テストシナリオ（特性テスト、E2Eテスト）が作成されている
-- [ ] テストデータ（フィクスチャ）の準備計画が明確化されている
+- [x] UrnProcessorのテストシナリオ（正常系、異常系、エッジケース）が作成されている
+- [x] NodeLabelGeneratorのテストシナリオが作成されている
+- [x] ResourceDependencyBuilderのテストシナリオが作成されている
+- [x] 統合テストシナリオ（特性テスト、E2Eテスト）が作成されている
+- [x] テストデータ（フィクスチャ）の準備計画が明確化されている
 
 ### Phase 4: 実装
 
