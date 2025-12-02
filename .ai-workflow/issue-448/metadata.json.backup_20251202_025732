@@ -4,7 +4,7 @@
   "issue_title": "Issue #448",
   "repository": "tielec/infrastructure-as-code",
   "target_repository": {
-    "path": "/tmp/ai-workflow-repos-6/infrastructure-as-code",
+    "path": "/tmp/ai-workflow-repos-5/infrastructure-as-code",
     "github_name": "tielec/infrastructure-as-code",
     "remote_url": "https://github.com/tielec/infrastructure-as-code.git",
     "owner": "tielec",
@@ -18,9 +18,9 @@
     "test_code_strategy": "CREATE_TEST"
   },
   "cost_tracking": {
-    "total_input_tokens": 754,
-    "total_output_tokens": 181336,
-    "total_cost_usd": 9.8091153
+    "total_input_tokens": 707,
+    "total_output_tokens": 168231,
+    "total_cost_usd": 9.00647035
   },
   "phases": {
     "planning": {
@@ -97,7 +97,7 @@
     },
     "testing": {
       "status": "in_progress",
-      "retry_count": 2,
+      "retry_count": 1,
       "started_at": "2025-12-02T02:43:45.656Z",
       "completed_at": null,
       "review_result": null,
@@ -111,18 +111,14 @@
       "retry_count": 0,
       "started_at": null,
       "completed_at": null,
-      "review_result": null,
-      "current_step": null,
-      "completed_steps": []
+      "review_result": null
     },
     "report": {
       "status": "pending",
       "retry_count": 0,
       "started_at": null,
       "completed_at": null,
-      "review_result": null,
-      "current_step": null,
-      "completed_steps": []
+      "review_result": null
     },
     "evaluation": {
       "status": "pending",
@@ -134,13 +130,11 @@
       "failed_phase": null,
       "remaining_tasks": [],
       "created_issue_url": null,
-      "abort_reason": null,
-      "current_step": null,
-      "completed_steps": []
+      "abort_reason": null
     }
   },
   "created_at": "2025-12-02T02:01:52.966Z",
-  "updated_at": "2025-12-02T03:01:54.509Z",
+  "updated_at": "2025-12-02T02:51:01.486Z",
   "branch_name": "ai-workflow/issue-448",
   "pr_number": 452,
   "pr_url": "https://github.com/tielec/infrastructure-as-code/pull/452",
