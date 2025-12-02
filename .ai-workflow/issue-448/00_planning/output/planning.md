@@ -299,28 +299,28 @@ jenkins/jobs/pipeline/infrastructure/pulumi-stack-action/tests/ (新規作成)
 
 ### Phase 5: テストコード実装 (見積もり: 4〜6h)
 
-- [ ] Task 5-1: テスト環境のセットアップ (0.5〜1h)
+- [x] Task 5-1: テスト環境のセットアップ (0.5〜1h)
   - `tests/`ディレクトリ構造の作成
   - `conftest.py`の作成（pytest設定）
   - フィクスチャファイルの準備（sample_urns.json、sample_dot_files/）
 
-- [ ] Task 5-2: UrnProcessorのユニットテスト実装 (1〜1.5h)
+- [x] Task 5-2: UrnProcessorのユニットテスト実装 (1〜1.5h)
   - `test_urn_processor.py`の作成
   - 正常系テストケースの実装
   - 異常系・エッジケースのテストケース実装
   - パラメタライズドテストの活用
 
-- [ ] Task 5-3: NodeLabelGeneratorのユニットテスト実装 (1〜1.5h)
+- [x] Task 5-3: NodeLabelGeneratorのユニットテスト実装 (1〜1.5h)
   - `test_node_label_generator.py`の作成
   - 正常系テストケースの実装
   - 異常系・エッジケースのテストケース実装
 
-- [ ] Task 5-4: ResourceDependencyBuilderのユニットテスト実装 (1〜1.5h)
+- [x] Task 5-4: ResourceDependencyBuilderのユニットテスト実装 (1〜1.5h)
   - `test_resource_dependency_builder.py`の作成
   - 正常系テストケースの実装
   - 異常系・エッジケースのテストケース実装
 
-- [ ] Task 5-5: 統合テストの実装 (1〜1.5h)
+- [x] Task 5-5: 統合テストの実装 (1〜1.5h)
   - `test_dot_processor.py`の作成
   - リファクタリング前後の振る舞い同一性テスト
   - 実際のPulumi DOTファイルを使用したE2Eテスト
@@ -507,10 +507,10 @@ graph TD
 
 ### Phase 5: テストコード実装
 
-- [ ] テスト環境（`tests/`ディレクトリ、`conftest.py`）がセットアップされている
-- [ ] 各新規クラスのユニットテストが実装されている
-- [ ] 統合テスト（特性テスト、E2Eテスト）が実装されている
-- [ ] テストカバレッジが測定可能な状態になっている
+- [x] テスト環境（`tests/`ディレクトリ、`conftest.py`）がセットアップされている
+- [x] 各新規クラスのユニットテストが実装されている
+- [x] 統合テスト（特性テスト、E2Eテスト）が実装されている
+- [x] テストカバレッジが測定可能な状態になっている
 
 ### Phase 6: テスト実行
 
