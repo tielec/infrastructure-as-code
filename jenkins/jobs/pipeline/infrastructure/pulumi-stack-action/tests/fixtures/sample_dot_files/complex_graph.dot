@@ -1,0 +1,27 @@
+strict digraph {
+    rankdir="LR";
+    node [fontname="sans-serif"];
+    edge [fontname="sans-serif"];
+
+    N0 [label="urn:pulumi:prod::app::aws:ec2/vpc:Vpc::main-vpc"];
+    N1 [label="urn:pulumi:prod::app::aws:ec2/subnet:Subnet::public-subnet"];
+    N2 [label="urn:pulumi:prod::app::aws:ec2/subnet:Subnet::private-subnet"];
+    N3 [label="urn:pulumi:prod::app::aws:ec2/internetGateway:InternetGateway::igw"];
+    N4 [label="urn:pulumi:prod::app::aws:ec2/securityGroup:SecurityGroup::web-sg"];
+    N5 [label="urn:pulumi:prod::app::aws:ec2/instance:Instance::web-1"];
+    N6 [label="urn:pulumi:prod::app::aws:ec2/instance:Instance::web-2"];
+    N7 [label="urn:pulumi:prod::app::aws:elb/loadBalancer:LoadBalancer::web-lb"];
+    N8 [label="urn:pulumi:prod::app::aws:rds/instance:Instance::db"];
+
+    N1 -> N0;
+    N2 -> N0;
+    N3 -> N0;
+    N4 -> N0;
+    N5 -> N1;
+    N5 -> N4;
+    N6 -> N1;
+    N6 -> N4;
+    N7 -> N5;
+    N7 -> N6;
+    N8 -> N2;
+}

@@ -1,0 +1,12 @@
+strict digraph {
+    rankdir="LR";
+    node [fontname="sans-serif"];
+    edge [fontname="sans-serif"];
+
+    N0 [label="urn:pulumi:dev::myproject::aws:ec2/securityGroup:SecurityGroup::web-sg"];
+    N1 [label="urn:pulumi:dev::myproject::aws:ec2/instance:Instance::webserver"];
+    N2 [label="urn:pulumi:dev::myproject::aws:s3/bucket:Bucket::data-bucket"];
+
+    N1 -> N0;
+    N1 -> N2;
+}

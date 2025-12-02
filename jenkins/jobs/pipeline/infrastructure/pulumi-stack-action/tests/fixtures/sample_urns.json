@@ -1,0 +1,82 @@
+{
+  "valid_urns": [
+    {
+      "urn": "urn:pulumi:dev::myproject::aws:ec2/instance:Instance::webserver",
+      "expected": {
+        "stack": "dev",
+        "project": "myproject",
+        "provider": "aws",
+        "module": "ec2",
+        "type": "Instance",
+        "name": "webserver"
+      }
+    },
+    {
+      "urn": "urn:pulumi:prod::api::kubernetes:apps/v1:Deployment::nginx",
+      "expected": {
+        "stack": "prod",
+        "project": "api",
+        "provider": "kubernetes",
+        "module": "apps/v1",
+        "type": "Deployment",
+        "name": "nginx"
+      }
+    },
+    {
+      "urn": "urn:pulumi:staging::web::gcp:compute/instance:Instance::vm-1",
+      "expected": {
+        "stack": "staging",
+        "project": "web",
+        "provider": "gcp",
+        "module": "compute",
+        "type": "Instance",
+        "name": "vm-1"
+      }
+    },
+    {
+      "urn": "urn:pulumi:test::db::azure:sql/database:Database::mydb",
+      "expected": {
+        "stack": "test",
+        "project": "db",
+        "provider": "azure",
+        "module": "sql",
+        "type": "Database",
+        "name": "mydb"
+      }
+    }
+  ],
+  "edge_case_urns": [
+    {
+      "urn": "",
+      "description": "空文字列",
+      "expected": {
+        "name": "",
+        "provider": "unknown",
+        "type": "unknown"
+      }
+    },
+    {
+      "urn": "invalid-urn-format",
+      "description": "不正な形式",
+      "expected": {
+        "name": "invalid-urn-format",
+        "provider": "unknown",
+        "type": "unknown"
+      }
+    },
+    {
+      "urn": "urn:pulumi:dev::project-with-very-long-name-that-exceeds-normal-limits::aws:ec2/instance:Instance::resource-with-extremely-long-name-that-should-be-handled-correctly",
+      "description": "非常に長いURN"
+    }
+  ],
+  "special_character_urns": [
+    {
+      "urn": "urn:pulumi:dev::my-project::aws:s3/bucket:Bucket::my-bucket-2024",
+      "description": "ハイフンを含む"
+    },
+    {
+      "urn": "urn:pulumi:dev::my_project::aws:ec2/instance:Instance::web_server_01",
+      "description": "アンダースコアを含む"
+    }
+  ]
+}
