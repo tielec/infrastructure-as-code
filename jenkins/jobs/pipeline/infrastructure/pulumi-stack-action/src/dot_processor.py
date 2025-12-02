@@ -1,9 +1,21 @@
 """
 DOT file processing for Pulumi dependency graphs
+
+このモジュールは、Pulumiが生成したDOTファイル（依存関係グラフ）を処理し、
+視覚的に改善された形式で出力する責務を担当します。
+
+リファクタリング履歴（Issue #448）:
+- UrnProcessor: URN/URIのパース処理を分離
+- NodeLabelGenerator: ラベル生成ロジックを分離
+- ResourceDependencyBuilder: 依存関係グラフ構築を分離
 """
 
 import re
 from typing import Dict, List, Tuple
+
+from urn_processor import UrnProcessor
+from node_label_generator import NodeLabelGenerator
+from resource_dependency_builder import ResourceDependencyBuilder
 
 
 class DotFileGenerator:
@@ -271,108 +283,71 @@ class DotFileProcessor:
     
     @staticmethod
     def parse_urn(urn: str) -> Dict[str, str]:
-        """URNをパースして構成要素を抽出
+        """URNをパースして構成要素を抽出（既存の公開API - 後方互換性のため維持）
+
         URN形式: urn:pulumi:STACK::PROJECT::PROVIDER:MODULE/TYPE:TYPE::NAME
+
+        Args:
+            urn: Pulumi URN文字列
+
+        Returns:
+            URN構成要素の辞書
+
+        Notes:
+            - 内部実装は UrnProcessor に委譲
+            - 既存の公開APIを維持するため、staticmethodとして保持
         """
-        # デフォルト値を設定
-        default_result = {
-            'stack': '',
-            'project': '',
-            'provider': 'unknown',
-            'module': '',
-            'type': 'unknown',
-            'name': urn.split('::')[-1] if '::' in urn else urn,
-            'full_urn': urn
-        }
-        
-        parts = urn.split('::')
-        if len(parts) < 4:
-            return default_result
-        
-        # 基本情報を抽出
-        result = {
-            'stack': parts[0].replace('urn:pulumi:', '') if parts else '',
-            'project': parts[1] if len(parts) > 1 else '',
-            'name': parts[-1] if parts else 'unknown',
-            'full_urn': urn
-        }
-        
-        # プロバイダーとタイプを解析
-        provider_type = parts[2] if len(parts) > 2 else ''
-        provider_info = DotFileProcessor._parse_provider_type(provider_type)
-        result.update(provider_info)
-        
-        return result
-    
+        processor = UrnProcessor()
+        return processor.parse_urn(urn)
+
     @staticmethod
     def _parse_provider_type(provider_type: str) -> Dict[str, str]:
-        """プロバイダータイプ文字列を解析"""
-        if not provider_type or ':' not in provider_type:
-            return {
-                'provider': 'unknown',
-                'module': '',
-                'type': provider_type or 'unknown'
-            }
-        
-        provider_parts = provider_type.split(':')
-        provider = provider_parts[0]
-        
-        # モジュールとタイプを抽出
-        module = ''
-        if len(provider_parts) > 1 and '/' in provider_parts[1]:
-            module_and_type = provider_parts[1]
-            module = module_and_type.split('/')[0]
-        
-        # タイプ名は最後の:以降
-        resource_type = provider_parts[-1] if len(provider_parts) > 1 else 'unknown'
-        
-        return {
-            'provider': provider,
-            'module': module,
-            'type': resource_type
-        }
+        """プロバイダータイプ文字列を解析（内部実装 - 後方互換性のため維持）
+
+        Args:
+            provider_type: プロバイダータイプ文字列
+
+        Returns:
+            プロバイダー情報の辞書
+
+        Notes:
+            - 内部実装は UrnProcessor に委譲
+            - 既存コードとの互換性のため維持
+        """
+        return UrnProcessor._parse_provider_type(provider_type)
 
     @staticmethod
     def create_readable_label(urn_info: Dict[str, str]) -> str:
-        """URN情報から読みやすいラベルを生成"""
-        resource_type = urn_info['type']
-        resource_name = urn_info['name']
-        module = urn_info.get('module', '')
-        
-        # ラベルの構成要素を準備
-        label_parts = []
-        
-        # 1. モジュール名があれば追加
-        if module:
-            label_parts.append(module)
-        
-        # 2. リソースタイプを処理
-        readable_type = DotFileProcessor._format_resource_type(resource_type)
-        label_parts.append(readable_type)
-        
-        # 3. リソース名（全体を表示）
-        label_parts.append(resource_name)
-        
-        # 改行で結合
-        return '\\n'.join(label_parts)
-    
+        """URN情報から読みやすいラベルを生成（既存の公開API - 後方互換性のため維持）
+
+        Args:
+            urn_info: parse_urn() の戻り値形式の辞書
+
+        Returns:
+            改行区切りのラベル文字列
+
+        Notes:
+            - 内部実装は NodeLabelGenerator に委譲
+            - 既存の公開APIを維持するため、staticmethodとして保持
+        """
+        generator = NodeLabelGenerator()
+        return generator.create_readable_label(urn_info)
+
     @staticmethod
     def _format_resource_type(resource_type: str) -> str:
-        """リソースタイプを読みやすい形式にフォーマット"""
-        import re
-        
-        # 長いタイプ名の場合は省略
-        if len(resource_type) <= 30:
-            return resource_type
-        
-        # キャメルケースを単語に分割
-        words = re.findall(r'[A-Z][a-z]*', resource_type)
-        
-        # 主要な単語のみを残す
-        if len(words) > 3:
-            return f"{words[0]}{words[1]}...{words[-1]}"
-        else:
-            return resource_type
+        """リソースタイプを読みやすい形式にフォーマット（内部実装 - 後方互換性のため維持）
+
+        Args:
+            resource_type: リソースタイプ文字列
+
+        Returns:
+            フォーマット済みのリソースタイプ
+
+        Notes:
+            - 内部実装は NodeLabelGenerator に委譲
+            - 既存コードとの互換性のため維持
+        """
+        return NodeLabelGenerator._format_resource_type(resource_type)
 
     
     @staticmethod
@@ -395,31 +370,47 @@ class DotFileProcessor:
     
     @staticmethod
     def _enhance_pulumi_graph(dot_content: str) -> str:
-        """Pulumi生成グラフを拡張"""
+        """Pulumi生成グラフを拡張（Guard Clauseパターン適用）
+
+        Args:
+            dot_content: Pulumiが生成したDOTファイルの内容
+
+        Returns:
+            拡張されたDOTファイルの内容
+
+        Notes:
+            - リファクタリング（Issue #448）: ネストレベルを3以下に削減
+            - Guard Clauseパターンを適用し、早期リターンでフロー制御を簡素化
+        """
         lines = dot_content.split('\n')
         new_lines = []
-        
+
         # URN情報をキャッシュ
         node_urn_map = {}
         stack_node_id = None
-        
+
         # 各行を処理
         for i, line in enumerate(lines):
+            # Guard Clause: グラフヘッダーの処理
             if i == 0 and 'strict digraph' in line:
                 new_lines.extend(DotFileProcessor._add_graph_header(line))
-            else:
-                processed_line, node_info = DotFileProcessor._process_graph_line(
-                    line, node_urn_map, stack_node_id
-                )
-                
-                if node_info:
-                    node_urn_map.update(node_info.get('node_urn_map', {}))
-                    if node_info.get('stack_node_id'):
-                        stack_node_id = node_info['stack_node_id']
-                
-                if processed_line:
-                    new_lines.append(processed_line)
-        
+                continue
+
+            # 行を処理
+            processed_line, node_info = DotFileProcessor._process_graph_line(
+                line, node_urn_map, stack_node_id
+            )
+
+            # メタデータを更新
+            if node_info:
+                node_urn_map.update(node_info.get('node_urn_map', {}))
+                if node_info.get('stack_node_id'):
+                    stack_node_id = node_info['stack_node_id']
+
+            # 処理済み行を追加
+            if processed_line:
+                new_lines.append(processed_line)
+
         return '\n'.join(new_lines)
     
     @staticmethod
@@ -447,29 +438,42 @@ class DotFileProcessor:
     
     @staticmethod
     def _process_node_definition(line: str) -> Tuple[str, Dict]:
-        """ノード定義を処理"""
+        """ノード定義を処理（Guard Clauseパターン適用）
+
+        Args:
+            line: DOTファイルのノード定義行
+
+        Returns:
+            (処理済み行, メタデータ) のタプル
+
+        Notes:
+            - リファクタリング（Issue #448）: ネスト削減のためGuard Clauseを適用
+            - URN抽出が失敗した場合は早期リターン
+        """
         # ノードIDを抽出
         node_id = line.strip().split('[')[0].strip()
-        
+
         # URNを抽出
         urn_match = re.search(r'label="([^"]+)"', line)
+
+        # Guard Clause: URNが見つからない場合は早期リターン
         if not urn_match:
             return line, None
-        
+
         urn = urn_match.group(1)
         urn_info = DotFileProcessor.parse_urn(urn)
-        
+
         # ノード属性を生成
         node_attrs = DotFileProcessor._generate_node_attributes(urn, urn_info)
-        
+
         # 新しいノード定義
         new_line = f'    {node_id} [{node_attrs}];'
-        
+
         # メタデータを返す
         result_info = {'node_urn_map': {node_id: urn_info}}
         if DotFileProcessor.is_stack_resource(urn):
             result_info['stack_node_id'] = node_id
-        
+
         return new_line, result_info
     
     @staticmethod
@@ -500,26 +504,42 @@ class DotFileProcessor:
     
     @staticmethod
     def _process_edge_definition(line: str, stack_node_id: str) -> Tuple[str, None]:
-        """エッジ定義を処理（スタックへの依存を逆転）"""
+        """エッジ定義を処理（スタックへの依存を逆転、Guard Clauseパターン適用）
+
+        Args:
+            line: DOTファイルのエッジ定義行
+            stack_node_id: スタックノードのID
+
+        Returns:
+            (処理済み行, None) のタプル
+
+        Notes:
+            - リファクタリング（Issue #448）: Guard Clauseパターンを適用
+            - 不正な形式の場合は早期リターン
+        """
         parts = line.split('->')
+
+        # Guard Clause: 不正な形式の場合は早期リターン
         if len(parts) != 2:
             return line, None
-        
+
         from_node = parts[0].strip()
         to_part = parts[1].strip()
-        
+
         # エッジ属性を抽出
         edge_attrs, to_node = DotFileProcessor._extract_edge_attributes(to_part)
-        
+
+        # Guard Clause: スタックノードでない場合は早期リターン
+        if to_node != stack_node_id:
+            return line, None
+
         # スタックから他のリソースへの矢印に変更
-        if to_node == stack_node_id:
-            new_line = f'    {stack_node_id} -> {from_node}'
-            if edge_attrs:
-                new_line += f' {edge_attrs}'
-            new_line += ';'
-            return new_line, None
-        
-        return line, None
+        new_line = f'    {stack_node_id} -> {from_node}'
+        if edge_attrs:
+            new_line += f' {edge_attrs}'
+        new_line += ';'
+
+        return new_line, None
     
     @staticmethod
     def _extract_edge_attributes(to_part: str) -> Tuple[str, str]:
@@ -551,20 +571,33 @@ class DotFileProcessor:
     
     @staticmethod
     def _process_single_node(line: str) -> str:
-        """単一ノードのラベルを処理"""
+        """単一ノードのラベルを処理（Guard Clauseパターン適用）
+
+        Args:
+            line: DOTファイルのノード定義行
+
+        Returns:
+            処理済みの行
+
+        Notes:
+            - リファクタリング（Issue #448）: Guard Clauseパターンを適用
+            - ラベルが見つからない場合は早期リターン
+        """
         match = re.search(r'\[label="([^"]+)"\]', line)
+
+        # Guard Clause: ラベルが見つからない場合は早期リターン
         if not match:
             return line
-            
+
         full_name = match.group(1)
         short_name = full_name.split('::')[-1]
-        
+
         if len(short_name) > 30:
             short_name = short_name[:27] + '...'
-        
+
         # プロバイダーに応じた色を設定
         fill_color, border_color = DotFileProcessor.DEFAULT_COLORS
-        
+
         # プロバイダーを検出
         for provider_key in DotFileProcessor.PROVIDER_COLORS:
             if f'{provider_key}:' in full_name.lower():
@@ -573,7 +606,7 @@ class DotFileProcessor:
                     resource_type = full_name.split(f'::{provider_key}:')[1].split('::')[0]
                     short_name = f"{resource_type}\\n{short_name}"
                 break
-        
+
         return re.sub(
             r'\[label="[^"]+"\]',
             f'[label="{short_name}", fillcolor="{fill_color}", color="{border_color}"]',
