@@ -191,19 +191,19 @@ jenkins/jobs/pipeline/infrastructure/pulumi-stack-action/tests/ (新規作成)
 
 ### Phase 1: 要件定義 (見積もり: 2〜3h)
 
-- [ ] Task 1-1: 外部依存の調査 (1〜1.5h)
+- [x] Task 1-1: 外部依存の調査 (1〜1.5h)
   - `graph_processor.py`, `main.py`, `report_generator.py`での`dot_processor.py`の使用箇所を特定
   - インポート文とメソッド呼び出しをリストアップ
   - 公開API（変更してはいけないインターフェース）を明確化
   - Jenkinsfileでの使用状況を確認
 
-- [ ] Task 1-2: 現状のコード複雑度の定量的測定 (0.5〜1h)
+- [x] Task 1-2: 現状のコード複雑度の定量的測定 (0.5〜1h)
   - Cyclomatic Complexity（循環的複雑度）の測定
   - ネストレベルの詳細確認（5レベル以上の箇所をすべて特定）
   - メソッド数と平均行数の計算
   - 測定結果を`requirements.md`に記録
 
-- [ ] Task 1-3: リファクタリング要件の詳細化 (0.5〜1h)
+- [x] Task 1-3: リファクタリング要件の詳細化 (0.5〜1h)
   - 各新規クラス（UrnProcessor、NodeLabelGenerator、ResourceDependencyBuilder）の責務を明確に定義
   - クラス間のインターフェース設計（メソッドシグネチャ、戻り値、例外処理）
   - Extract Classパターンの適用方針を文書化
