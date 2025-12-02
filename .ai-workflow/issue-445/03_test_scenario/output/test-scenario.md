@@ -1,0 +1,1534 @@
+# テストシナリオ: Issue #445
+
+## 文書情報
+
+- **Issue番号**: #445
+- **タイトル**: [Refactor] ファイルサイズの削減: pr_comment_generator.py
+- **状態**: open
+- **URL**: https://github.com/tielec/infrastructure-as-code/issues/445
+- **作成日**: 2025年1月
+- **最終更新日**: 2025年1月
+
+---
+
+## 0. Planning & Requirements & Design Documentの確認
+
+### Planning Phase成果物の概要
+
+Planning Documentで策定された以下の戦略を確認し、本テストシナリオに反映しています：
+
+#### テスト戦略: ALL
+
+**判断根拠**:
+- **ユニットテスト**: 各分割モジュール（Statistics、Formatter、OpenAIIntegration）の独立した機能を検証
+- **インテグレーションテスト**: モジュール間の連携（Statistics→Formatter、Generator→OpenAI API）を検証
+- **BDDテスト**: エンドユーザーのユースケース（「PRコメント生成リクエストを送信すると、適切なコメントが返される」）を検証
+- **理由**: 大規模リファクタリング（高リスク）のため、すべてのテストレベルで品質を保証する必要がある
+
+### Requirements Phase成果物の概要
+
+要件定義書で定義された以下の機能要件を本テストシナリオでカバーしています：
+
+- **FR-001**: モジュール分割（PRCommentStatistics、CommentFormatter、OpenAIIntegration、PRCommentGenerator）
+- **FR-002**: 互換性レイヤーの実装（Facadeパターン）
+- **FR-003**: テストコードの実装（ユニット、統合、BDD）
+- **FR-004**: ドキュメント作成（API仕様書、モジュール構成図、移行ガイド）
+
+### Design Phase成果物の概要
+
+設計書で定義された以下のクラス設計を本テストシナリオでカバーしています：
+
+- `models.py`: PRInfo、FileChange
+- `token_estimator.py`: TokenEstimator
+- `prompt_manager.py`: PromptTemplateManager
+- `statistics.py`: PRCommentStatistics
+- `formatter.py`: CommentFormatter
+- `openai_integration.py`: OpenAIIntegration
+- `generator.py`: PRCommentGenerator
+- `__init__.py`: Facade（互換性レイヤー）
+
+---
+
+## 1. テスト戦略サマリー
+
+### 選択されたテスト戦略
+
+**ALL**（Phase 2で決定）
+
+### テスト対象の範囲
+
+**ユニットテスト対象**:
+- `models.py`: データクラス（PRInfo、FileChange）
+- `token_estimator.py`: トークン推定
+- `prompt_manager.py`: プロンプトテンプレート管理
+- `statistics.py`: 統計計算
+- `formatter.py`: コメントフォーマット
+- `openai_integration.py`: OpenAI API統合（モック使用）
+- `generator.py`: オーケストレーション
+
+**インテグレーションテスト対象**:
+- モジュール間連携（Generator ↔ Statistics、Generator ↔ Formatter、Generator ↔ OpenAIIntegration）
+- 互換性レイヤー（Facade）
+
+**BDDテスト対象**:
+- エンドユーザーのユースケース（PRコメント生成フロー全体）
+
+### テストの目的
+
+1. **機能正確性の保証**: リファクタリング前後で機能が同一であることを検証
+2. **モジュール独立性の検証**: 各モジュールが独立してテスト可能であることを確認
+3. **統合時の動作保証**: モジュール間の連携が正しく動作することを検証
+4. **ユーザーストーリーの充足**: エンドユーザーの要求が満たされていることを確認
+5. **リグレッションの防止**: 既存機能が破壊されていないことを保証
+
+---
+
+## 2. Unitテストシナリオ
+
+### 2.1 models.py
+
+#### 2.1.1 PRInfo.from_json_正常系
+
+- **目的**: JSONデータからPRInfoオブジェクトが正しく生成されることを検証
+- **前提条件**: 有効なPR情報JSONデータが存在する
+- **入力**:
+  ```json
+  {
+    "title": "Add new feature",
+    "number": 123,
+    "body": "This is a test PR",
+    "user": {"login": "testuser"},
+    "base": {"ref": "main", "sha": "abc123"},
+    "head": {"ref": "feature-branch", "sha": "def456"}
+  }
+  ```
+- **期待結果**:
+  - `PRInfo`オブジェクトが生成される
+  - `title == "Add new feature"`
+  - `number == 123`
+  - `author == "testuser"`
+  - `base_branch == "main"`
+  - `head_branch == "feature-branch"`
+- **テストデータ**: 上記JSON
+
+#### 2.1.2 PRInfo.from_json_異常系（欠損データ）
+
+- **目的**: 一部のフィールドが欠損しているJSONからPRInfoを生成できることを検証
+- **前提条件**: 一部フィールドが欠損したJSONデータ
+- **入力**:
+  ```json
+  {
+    "title": "Add new feature",
+    "number": 123
+  }
+  ```
+- **期待結果**:
+  - `PRInfo`オブジェクトが生成される（デフォルト値が設定される）
+  - `body == ""`
+  - `author == ""`
+- **テストデータ**: 上記JSON
+
+#### 2.1.3 FileChange.from_json_正常系
+
+- **目的**: JSONデータからFileChangeオブジェクトが正しく生成されることを検証
+- **前提条件**: 有効なファイル変更JSONデータが存在する
+- **入力**:
+  ```json
+  {
+    "filename": "src/main.py",
+    "status": "modified",
+    "additions": 10,
+    "deletions": 5,
+    "changes": 15,
+    "patch": "@@ -1,3 +1,4 @@\n+new line\n old line"
+  }
+  ```
+- **期待結果**:
+  - `FileChange`オブジェクトが生成される
+  - `filename == "src/main.py"`
+  - `additions == 10`
+  - `deletions == 5`
+  - `patch`が正しく設定される
+- **テストデータ**: 上記JSON
+
+### 2.2 token_estimator.py
+
+#### 2.2.1 estimate_tokens_正常系_英語テキスト
+
+- **目的**: 英語テキストのトークン数が正しく推定されることを検証
+- **前提条件**: TokenEstimatorインスタンスが初期化されている
+- **入力**: `"Hello, this is a test."`（23文字）
+- **期待結果**: `int(23 * 0.25) = 5`トークン前後
+- **テストデータ**: 上記文字列
+
+#### 2.2.2 estimate_tokens_正常系_日本語テキスト
+
+- **目的**: 日本語テキストのトークン数が正しく推定されることを検証
+- **前提条件**: TokenEstimatorインスタンスが初期化されている
+- **入力**: `"これはテストです。"`（9文字）
+- **期待結果**: `int(9 * 0.6) = 5`トークン前後
+- **テストデータ**: 上記文字列
+
+#### 2.2.3 estimate_tokens_境界値_空文字列
+
+- **目的**: 空文字列の場合、0トークンが返されることを検証
+- **前提条件**: TokenEstimatorインスタンスが初期化されている
+- **入力**: `""`
+- **期待結果**: `0`トークン
+- **テストデータ**: 空文字列
+
+#### 2.2.4 truncate_text_正常系
+
+- **目的**: テキストが指定されたトークン数以下に切り詰められることを検証
+- **前提条件**: TokenEstimatorインスタンスが初期化されている
+- **入力**:
+  - `text = "This is a very long text that needs to be truncated."`
+  - `max_tokens = 5`
+- **期待結果**:
+  - 切り詰められたテキストのトークン数が5以下
+  - 元のテキストより短い
+- **テストデータ**: 上記text、max_tokens
+
+#### 2.2.5 truncate_text_境界値_トークン数以下
+
+- **目的**: トークン数が既に制限以下の場合、テキストがそのまま返されることを検証
+- **前提条件**: TokenEstimatorインスタンスが初期化されている
+- **入力**:
+  - `text = "Short."`
+  - `max_tokens = 100`
+- **期待結果**: `text == "Short."`（変更なし）
+- **テストデータ**: 上記text、max_tokens
+
+### 2.3 prompt_manager.py
+
+#### 2.3.1 PromptTemplateManager_初期化_正常系
+
+- **目的**: テンプレートファイルが正しく読み込まれることを検証
+- **前提条件**: `templates/`ディレクトリにテンプレートファイルが存在する
+- **入力**: `template_dir = "templates"`
+- **期待結果**:
+  - `self.templates['base']`が空でない
+  - `self.templates['chunk']`が空でない
+  - `self.templates['summary']`が空でない
+- **テストデータ**: モックされたテンプレートファイル
+
+#### 2.3.2 PromptTemplateManager_get_base_prompt_正常系
+
+- **目的**: ベースプロンプトが正しく取得されることを検証
+- **前提条件**: PromptTemplateManagerが初期化されている
+- **入力**: なし
+- **期待結果**: ベースプロンプトの文字列が返される
+- **テストデータ**: モックされたテンプレート
+
+#### 2.3.3 PromptTemplateManager_format_prompt_正常系
+
+- **目的**: プロンプトが正しくフォーマットされることを検証
+- **前提条件**: PromptTemplateManagerが初期化されている
+- **入力**:
+  - `template_key = "base"`
+  - `kwargs = {"pr_number": 123, "author": "testuser"}`
+- **期待結果**: プレースホルダーが`kwargs`の値で置換される
+- **テストデータ**: `"PR #{pr_number} by {author}"`テンプレート
+
+#### 2.3.4 PromptTemplateManager_format_prompt_異常系_キー欠損
+
+- **目的**: フォーマット変数が欠損している場合、警告が出るが処理が継続することを検証
+- **前提条件**: PromptTemplateManagerが初期化されている
+- **入力**:
+  - `template_key = "base"`
+  - `kwargs = {}`（キーが欠損）
+- **期待結果**: 警告が出力され、元のテンプレートが返される
+- **テストデータ**: `"PR #{pr_number}"`テンプレート
+
+### 2.4 statistics.py
+
+#### 2.4.1 calculate_optimal_chunk_size_正常系
+
+- **目的**: 最適なチャンクサイズが正しく計算されることを検証
+- **前提条件**: PRCommentStatisticsインスタンスが初期化されている
+- **入力**:
+  - `files = [FileChange(patch="..." * 100), FileChange(patch="..." * 100), ...]`（10ファイル）
+  - `max_tokens = 3000`
+- **期待結果**: `chunk_size`が1以上、ファイル数以下
+- **テストデータ**: 上記filesリスト
+
+#### 2.4.2 calculate_optimal_chunk_size_境界値_空リスト
+
+- **目的**: ファイルリストが空の場合、最小チャンクサイズが返されることを検証
+- **前提条件**: PRCommentStatisticsインスタンスが初期化されている
+- **入力**: `files = []`
+- **期待結果**: `chunk_size == 1`（DEFAULT_MIN_CHUNK_SIZE）
+- **テストデータ**: 空リスト
+
+#### 2.4.3 estimate_chunk_tokens_正常系
+
+- **目的**: チャンクのトークン数が正しく推定されることを検証
+- **前提条件**: PRCommentStatisticsインスタンスが初期化されている
+- **入力**: `chunk = [FileChange(patch="test" * 50), FileChange(patch="test" * 50)]`
+- **期待結果**: 推定トークン数が0より大きい
+- **テストデータ**: 上記chunk
+
+#### 2.4.4 calculate_statistics_正常系
+
+- **目的**: ファイル変更の統計情報が正しく計算されることを検証
+- **前提条件**: PRCommentStatisticsインスタンスが初期化されている
+- **入力**:
+  ```python
+  files = [
+    FileChange(additions=10, deletions=5, changes=15),
+    FileChange(additions=20, deletions=10, changes=30)
+  ]
+  ```
+- **期待結果**:
+  - `file_count == 2`
+  - `total_additions == 30`
+  - `total_deletions == 15`
+  - `total_changes == 45`
+  - `avg_changes_per_file == 22.5`
+- **テストデータ**: 上記filesリスト
+
+### 2.5 formatter.py
+
+#### 2.5.1 clean_markdown_format_正常系
+
+- **目的**: Markdownフォーマットが正しくクリーンアップされることを検証
+- **前提条件**: CommentFormatterインスタンスが初期化されている
+- **入力**:
+  ```markdown
+  # Title
+
+
+
+  Some text
+
+
+  ```code```
+
+
+  ```
+- **期待結果**:
+  - 3行以上の空行が2行に削減される
+  - コードブロック前後の余分な空行が削除される
+  - 末尾の空白が削除される
+- **テストデータ**: 上記Markdownテキスト
+
+#### 2.5.2 format_chunk_analyses_正常系
+
+- **目的**: チャンク分析結果が正しくフォーマットされることを検証
+- **前提条件**: CommentFormatterインスタンスが初期化されている
+- **入力**:
+  ```python
+  analyses = [
+    "Analysis of chunk 1",
+    "Analysis of chunk 2"
+  ]
+  ```
+- **期待結果**:
+  - "## チャンク 1 の分析"ヘッダーが追加される
+  - "## チャンク 2 の分析"ヘッダーが追加される
+  - 各分析が"\n\n"で区切られる
+- **テストデータ**: 上記analysesリスト
+
+#### 2.5.3 format_chunk_analyses_境界値_空リスト
+
+- **目的**: 分析結果が空の場合、空文字列が返されることを検証
+- **前提条件**: CommentFormatterインスタンスが初期化されている
+- **入力**: `analyses = []`
+- **期待結果**: `""`（空文字列）
+- **テストデータ**: 空リスト
+
+#### 2.5.4 format_file_list_正常系
+
+- **目的**: ファイルリストが正しくフォーマットされることを検証
+- **前提条件**: CommentFormatterインスタンスが初期化されている
+- **入力**:
+  ```python
+  files = [
+    FileChange(filename="src/main.py", status="modified", additions=10, deletions=5),
+    FileChange(filename="src/utils.py", status="added", additions=50, deletions=0)
+  ]
+  ```
+- **期待結果**:
+  - "## 変更されたファイル"ヘッダーが含まれる
+  - "- 📝 `src/main.py` (+10 -5)"が含まれる
+  - "- ✨ `src/utils.py` (+50 -0)"が含まれる
+- **テストデータ**: 上記filesリスト
+
+#### 2.5.5 format_skipped_files_info_正常系
+
+- **目的**: スキップされたファイル情報が正しくフォーマットされることを検証
+- **前提条件**: CommentFormatterインスタンスが初期化されている
+- **入力**:
+  ```python
+  skipped_files = [
+    FileChange(filename="large_file.txt"),
+    FileChange(filename="another_large.txt")
+  ]
+  reason = "サイズ制限"
+  ```
+- **期待結果**:
+  - "## ⚠️ スキップされたファイル (サイズ制限)"ヘッダーが含まれる
+  - "- `large_file.txt`"が含まれる
+  - "- `another_large.txt`"が含まれる
+- **テストデータ**: 上記skipped_files、reason
+
+#### 2.5.6 format_skipped_files_info_境界値_空リスト
+
+- **目的**: スキップファイルが空の場合、空文字列が返されることを検証
+- **前提条件**: CommentFormatterインスタンスが初期化されている
+- **入力**: `skipped_files = []`
+- **期待結果**: `""`（空文字列）
+- **テストデータ**: 空リスト
+
+#### 2.5.7 format_final_comment_正常系
+
+- **目的**: 最終コメントが正しくフォーマットされることを検証
+- **前提条件**: CommentFormatterインスタンスが初期化されている
+- **入力**:
+  ```python
+  summary = "This PR adds a new feature."
+  chunk_analyses = ["Analysis 1", "Analysis 2"]
+  files = [FileChange(filename="src/main.py", status="modified", additions=10, deletions=5)]
+  skipped_files = []
+  ```
+- **期待結果**:
+  - "# 変更内容サマリー"ヘッダーが含まれる
+  - サマリーテキストが含まれる
+  - チャンク分析が含まれる
+  - ファイルリストが含まれる
+- **テストデータ**: 上記パラメータ
+
+### 2.6 openai_integration.py
+
+#### 2.6.1 OpenAIIntegration_初期化_正常系
+
+- **目的**: OpenAIIntegrationが正しく初期化されることを検証
+- **前提条件**: 環境変数`OPENAI_API_KEY`が設定されている
+- **入力**:
+  ```python
+  prompt_manager = PromptTemplateManager()
+  token_estimator = TokenEstimator()
+  ```
+- **期待結果**:
+  - `self.client`が初期化される
+  - `self.model`が設定される
+  - `self.usage_stats`が初期化される
+- **テストデータ**: モックされたPromptTemplateManager、TokenEstimator
+
+#### 2.6.2 OpenAIIntegration_初期化_異常系_APIキー欠損
+
+- **目的**: APIキーが設定されていない場合、例外が発生することを検証
+- **前提条件**: 環境変数`OPENAI_API_KEY`が設定されていない
+- **入力**: `PromptTemplateManager()`
+- **期待結果**: `ValueError("Missing required environment variable: OPENAI_API_KEY")`が発生
+- **テストデータ**: なし
+
+#### 2.6.3 analyze_chunk_正常系（モック使用）
+
+- **目的**: チャンク分析が正しく実行されることを検証（API呼び出しはモック）
+- **前提条件**: OpenAIIntegrationインスタンスが初期化されている
+- **入力**:
+  ```python
+  chunk = [FileChange(filename="src/main.py", additions=10, deletions=5)]
+  chunk_index = 1
+  ```
+- **期待結果**:
+  - モックされたAPI応答が返される
+  - `_call_openai_api`が1回呼ばれる
+  - トークン使用量が記録される
+- **テストデータ**: 上記chunk、モックされたOpenAIレスポンス
+
+#### 2.6.4 generate_summary_正常系（モック使用）
+
+- **目的**: サマリー生成が正しく実行されることを検証（API呼び出しはモック）
+- **前提条件**: OpenAIIntegrationインスタンスが初期化されている
+- **入力**: `chunk_analyses = ["Analysis 1", "Analysis 2"]`
+- **期待結果**:
+  - モックされたサマリーが返される
+  - `_call_openai_api`が1回呼ばれる
+- **テストデータ**: 上記chunk_analyses、モックされたレスポンス
+
+#### 2.6.5 generate_title_正常系（モック使用）
+
+- **目的**: タイトル生成が正しく実行されることを検証（API呼び出しはモック）
+- **前提条件**: OpenAIIntegrationインスタンスが初期化されている
+- **入力**: `summary = "This PR adds a new feature."`
+- **期待結果**:
+  - モックされたタイトルが返される
+  - `_call_openai_api`が1回呼ばれる
+- **テストデータ**: 上記summary、モックされたレスポンス
+
+#### 2.6.6 _call_openai_api_正常系（モック使用）
+
+- **目的**: OpenAI API呼び出しが正常に実行されることを検証
+- **前提条件**: OpenAIIntegrationインスタンスが初期化されている
+- **入力**: `prompt = "Test prompt"`
+- **期待結果**:
+  - モックされたレスポンスが返される
+  - トークン使用量が記録される
+- **テストデータ**: 上記prompt、モックされたレスポンス
+
+#### 2.6.7 _call_openai_api_異常系_レート制限エラー（モック使用）
+
+- **目的**: レート制限エラー時に自動リトライが実行されることを検証
+- **前提条件**: OpenAIIntegrationインスタンスが初期化されている
+- **入力**: `prompt = "Test prompt"`
+- **期待結果**:
+  - 1回目: レート制限エラー（モック）
+  - 2回目: 成功（モック）
+  - `usage_stats['retries'] == 1`
+  - バックオフ時間が経過する（`time.sleep`が呼ばれる）
+- **テストデータ**: 上記prompt、モックされたエラー/成功レスポンス
+
+#### 2.6.8 _call_openai_api_異常系_最大リトライ超過（モック使用）
+
+- **目的**: 最大リトライ回数を超えた場合、例外が発生することを検証
+- **前提条件**: OpenAIIntegrationインスタンスが初期化されている
+- **入力**: `prompt = "Test prompt"`
+- **期待結果**:
+  - 5回すべてレート制限エラー（モック）
+  - `Exception("Max retries (5) exceeded")`が発生
+  - `usage_stats['retries'] == 5`
+- **テストデータ**: 上記prompt、モックされたエラーレスポンス
+
+#### 2.6.9 _record_token_usage_正常系
+
+- **目的**: トークン使用量が正しく記録されることを検証
+- **前提条件**: OpenAIIntegrationインスタンスが初期化されている
+- **入力**:
+  ```python
+  response = Mock(usage=Mock(prompt_tokens=100, completion_tokens=50))
+  ```
+- **期待結果**:
+  - `usage_stats['prompt_tokens'] == 100`
+  - `usage_stats['completion_tokens'] == 50`
+- **テストデータ**: 上記モックレスポンス
+
+#### 2.6.10 get_usage_stats_正常系
+
+- **目的**: 使用統計が正しく取得されることを検証
+- **前提条件**: トークン使用量が記録されている
+- **入力**: なし
+- **期待結果**:
+  ```python
+  {
+    'prompt_tokens': 100,
+    'completion_tokens': 50,
+    'total_tokens': 150,
+    'retries': 0,
+    'skipped_files': 0
+  }
+  ```
+- **テストデータ**: 事前に記録されたトークン使用量
+
+### 2.7 generator.py
+
+#### 2.7.1 PRCommentGenerator_初期化_正常系
+
+- **目的**: PRCommentGeneratorが正しく初期化されることを検証
+- **前提条件**: テンプレートディレクトリが存在する
+- **入力**: `template_dir = "templates"`
+- **期待結果**:
+  - 依存オブジェクト（statistics、formatter、openai_integration）が初期化される
+  - `self.logger`が設定される
+- **テストデータ**: モックされたテンプレートディレクトリ
+
+#### 2.7.2 generate_comment_正常系（モック使用）
+
+- **目的**: PRコメントとタイトルが正しく生成されることを検証（エンドツーエンド、モック使用）
+- **前提条件**: PRCommentGeneratorインスタンスが初期化されている
+- **入力**:
+  - `pr_info_path = "test_pr_info.json"`
+  - `diff_file_path = "test_diff.json"`
+- **期待結果**:
+  - `(comment, title, metadata)`タプルが返される
+  - `comment`が空でない
+  - `title`が空でない
+  - `metadata['pr_number'] == 123`
+- **テストデータ**: モックされたPR情報、Diffファイル、OpenAI APIレスポンス
+
+#### 2.7.3 _load_and_validate_data_正常系
+
+- **目的**: PR情報とDiffファイルが正しく読み込まれることを検証
+- **前提条件**: JSONファイルが存在する
+- **入力**:
+  - `pr_info_path = "test_pr_info.json"`
+  - `diff_file_path = "test_diff.json"`
+- **期待結果**:
+  - `(pr_info, files)`タプルが返される
+  - `pr_info.number == 123`
+  - `len(files) > 0`
+- **テストデータ**: モックされたJSONファイル
+
+#### 2.7.4 _load_and_validate_data_異常系_ファイル不在
+
+- **目的**: JSONファイルが存在しない場合、例外が発生することを検証
+- **前提条件**: JSONファイルが存在しない
+- **入力**: `pr_info_path = "nonexistent.json"`
+- **期待結果**: `FileNotFoundError`が発生
+- **テストデータ**: なし
+
+#### 2.7.5 _preprocess_file_changes_正常系
+
+- **目的**: ファイル変更が正しく前処理されることを検証
+- **前提条件**: ファイルリストが存在する
+- **入力**:
+  ```python
+  files = [
+    FileChange(changes=100),
+    FileChange(changes=2000),  # スキップ対象
+    FileChange(changes=50)
+  ]
+  ```
+- **期待結果**:
+  - `processed`に2ファイル
+  - `skipped`に1ファイル
+- **テストデータ**: 上記filesリスト
+
+#### 2.7.6 _should_skip_file_正常系
+
+- **目的**: ファイルのスキップ判定が正しく動作することを検証
+- **前提条件**: FileChangeオブジェクトが存在する
+- **入力**: `file = FileChange(changes=2000)`
+- **期待結果**: `True`（スキップすべき）
+- **テストデータ**: 上記file
+
+#### 2.7.7 _should_skip_file_境界値_ちょうど1000行
+
+- **目的**: 境界値（1000行）のスキップ判定が正しく動作することを検証
+- **前提条件**: FileChangeオブジェクトが存在する
+- **入力**: `file = FileChange(changes=1000)`
+- **期待結果**: `False`（スキップしない）
+- **テストデータ**: 上記file
+
+#### 2.7.8 _split_into_chunks_正常系
+
+- **目的**: ファイルが正しくチャンクに分割されることを検証
+- **前提条件**: ファイルリストが存在する
+- **入力**:
+  ```python
+  files = [FileChange() for _ in range(10)]
+  chunk_size = 3
+  ```
+- **期待結果**:
+  - チャンク数 = 4（3, 3, 3, 1）
+  - 各チャンクのサイズが正しい
+- **テストデータ**: 上記files、chunk_size
+
+#### 2.7.9 _perform_chunk_analyses_正常系（モック使用）
+
+- **目的**: 各チャンクが正しく分析されることを検証
+- **前提条件**: チャンクリストが存在する
+- **入力**:
+  ```python
+  chunks = [
+    [FileChange()],
+    [FileChange()]
+  ]
+  ```
+- **期待結果**:
+  - `analyses`に2つの分析結果
+  - `openai_integration.analyze_chunk`が2回呼ばれる
+- **テストデータ**: 上記chunks、モックされたAPI応答
+
+#### 2.7.10 _generate_summary_and_title_正常系（モック使用）
+
+- **目的**: サマリーとタイトルが正しく生成されることを検証
+- **前提条件**: チャンク分析結果が存在する
+- **入力**: `chunk_analyses = ["Analysis 1", "Analysis 2"]`
+- **期待結果**:
+  - `(summary, title)`タプルが返される
+  - `summary`が空でない
+  - `title`が空でない
+- **テストデータ**: 上記chunk_analyses、モックされたAPI応答
+
+#### 2.7.11 _build_metadata_正常系
+
+- **目的**: メタデータが正しく構築されることを検証
+- **前提条件**: 各種データが存在する
+- **入力**:
+  ```python
+  pr_info = PRInfo(number=123)
+  processed_files = [FileChange() for _ in range(5)]
+  skipped_files = [FileChange()]
+  start_time = time.time() - 10  # 10秒前
+  ```
+- **期待結果**:
+  ```python
+  {
+    'pr_number': 123,
+    'file_count': 6,
+    'processed_file_count': 5,
+    'skipped_file_count': 1,
+    'execution_time_seconds': 10前後,
+    'usage': {...},
+    'statistics': {...}
+  }
+  ```
+- **テストデータ**: 上記パラメータ
+
+### 2.8 __init__.py（Facade）
+
+#### 2.8.1 Facade_非推奨警告_表示
+
+- **目的**: 旧インポートパス使用時に非推奨警告が表示されることを検証
+- **前提条件**: なし
+- **入力**: `from pr_comment_generator import PRCommentGenerator`
+- **期待結果**:
+  - `DeprecationWarning`が発生
+  - 警告メッセージに新しいインポートパスが含まれる
+- **テストデータ**: なし
+
+#### 2.8.2 Facade_再エクスポート_正常動作
+
+- **目的**: 旧インポートパスで取得したクラスが正常に動作することを検証
+- **前提条件**: なし
+- **入力**: `from pr_comment_generator import PRCommentGenerator`
+- **期待結果**:
+  - `PRCommentGenerator`クラスが取得できる
+  - インスタンス化が可能
+  - `generate_comment`メソッドが呼び出せる
+- **テストデータ**: モックされたPR情報
+
+---
+
+## 3. Integrationテストシナリオ
+
+### 3.1 Generator ↔ Statistics 連携
+
+#### シナリオ名: チャンクサイズ計算と統計情報の連携
+
+- **目的**: PRCommentGeneratorがPRCommentStatisticsを正しく呼び出し、最適なチャンクサイズを取得できることを検証
+- **前提条件**:
+  - PRCommentGeneratorとPRCommentStatisticsが初期化されている
+  - テスト用のファイルリストが存在する
+- **テスト手順**:
+  1. `PRCommentGenerator`インスタンスを作成
+  2. `_preprocess_file_changes`でファイルを前処理
+  3. `statistics.calculate_optimal_chunk_size`を呼び出す
+  4. 返されたチャンクサイズで`_split_into_chunks`を実行
+- **期待結果**:
+  - チャンクサイズが1以上
+  - 各チャンクのトークン数がmax_tokens以下（`statistics.estimate_chunk_tokens`で検証）
+  - ログに"Calculated optimal chunk size"が出力される
+- **確認項目**:
+  - [ ] `calculate_optimal_chunk_size`が正しく呼ばれる
+  - [ ] チャンクサイズが妥当な範囲
+  - [ ] チャンク分割が正しく実行される
+
+### 3.2 Generator ↔ Formatter 連携
+
+#### シナリオ名: コメント生成とフォーマット処理の連携
+
+- **目的**: PRCommentGeneratorがCommentFormatterを正しく呼び出し、最終コメントをフォーマットできることを検証
+- **前提条件**:
+  - PRCommentGeneratorとCommentFormatterが初期化されている
+  - チャンク分析結果が存在する
+- **テスト手順**:
+  1. `PRCommentGenerator`インスタンスを作成
+  2. モックされたチャンク分析結果を用意
+  3. `formatter.format_final_comment`を呼び出す
+  4. 返されたコメントを検証
+- **期待結果**:
+  - コメントにMarkdownヘッダー（"# 変更内容サマリー"）が含まれる
+  - チャンク分析が正しくフォーマットされている
+  - ファイルリストが含まれる
+  - スキップファイル情報が含まれる（該当する場合）
+- **確認項目**:
+  - [ ] `format_final_comment`が正しく呼ばれる
+  - [ ] Markdown形式が正しい
+  - [ ] すべてのセクションが含まれる
+
+### 3.3 Generator ↔ OpenAIIntegration 連携
+
+#### シナリオ名: チャンク分析とOpenAI API呼び出しの連携
+
+- **目的**: PRCommentGeneratorがOpenAIIntegrationを正しく呼び出し、チャンク分析を実行できることを検証（モック使用）
+- **前提条件**:
+  - PRCommentGeneratorとOpenAIIntegrationが初期化されている
+  - OpenAI APIレスポンスがモック化されている
+- **テスト手順**:
+  1. `PRCommentGenerator`インスタンスを作成
+  2. テスト用のチャンクを用意
+  3. `_perform_chunk_analyses`を呼び出す
+  4. モックされたAPI応答を検証
+- **期待結果**:
+  - 各チャンクに対して`openai_integration.analyze_chunk`が呼ばれる
+  - 分析結果のリストが返される
+  - トークン使用量が記録される
+- **確認項目**:
+  - [ ] `analyze_chunk`が正しく呼ばれる
+  - [ ] チャンク数と分析結果数が一致
+  - [ ] トークン使用量が0より大きい
+
+### 3.4 OpenAIIntegration ↔ PromptTemplateManager 連携
+
+#### シナリオ名: プロンプト生成とテンプレート管理の連携
+
+- **目的**: OpenAIIntegrationがPromptTemplateManagerを正しく呼び出し、プロンプトを生成できることを検証
+- **前提条件**:
+  - OpenAIIntegrationとPromptTemplateManagerが初期化されている
+  - テンプレートファイルが存在する
+- **テスト手順**:
+  1. `OpenAIIntegration`インスタンスを作成
+  2. `_build_chunk_analysis_prompt`を呼び出す
+  3. 返されたプロンプトを検証
+- **期待結果**:
+  - プロンプトにベーステンプレートの内容が含まれる
+  - ファイル情報が正しく埋め込まれる
+  - プロンプトが空でない
+- **確認項目**:
+  - [ ] `prompt_manager.get_chunk_analysis_prompt`が呼ばれる
+  - [ ] プロンプトにファイル情報が含まれる
+
+### 3.5 OpenAIIntegration ↔ TokenEstimator 連携
+
+#### シナリオ名: トークン推定とAPI呼び出しの連携
+
+- **目的**: OpenAIIntegrationがTokenEstimatorを使用してプロンプトのトークン数を推定できることを検証
+- **前提条件**:
+  - OpenAIIntegrationとTokenEstimatorが初期化されている
+- **テスト手順**:
+  1. `OpenAIIntegration`インスタンスを作成
+  2. 長いプロンプトを生成
+  3. `token_estimator.estimate_tokens`でトークン数を推定
+  4. 必要に応じて`token_estimator.truncate_text`で切り詰め
+- **期待結果**:
+  - トークン数が正しく推定される
+  - 切り詰め後のテキストがmax_tokens以下
+- **確認項目**:
+  - [ ] `estimate_tokens`が正しく呼ばれる
+  - [ ] 切り詰めが必要な場合、`truncate_text`が呼ばれる
+
+### 3.6 エンドツーエンド統合テスト（モック使用）
+
+#### シナリオ名: PR情報からコメント生成までの全体フロー
+
+- **目的**: すべてのモジュールが連携して、PR情報からコメントとタイトルを生成できることを検証
+- **前提条件**:
+  - すべてのモジュールが初期化されている
+  - OpenAI APIがモック化されている
+  - テスト用のPR情報とDiffファイルが存在する
+- **テスト手順**:
+  1. `PRCommentGenerator`インスタンスを作成
+  2. テスト用のPR情報JSONとDiff JSONを用意
+  3. `generate_comment(pr_info_path, diff_file_path)`を呼び出す
+  4. 返された`(comment, title, metadata)`を検証
+- **期待結果**:
+  - `comment`が以下を含む:
+    - "# 変更内容サマリー"
+    - チャンク分析結果
+    - ファイルリスト
+  - `title`が空でない
+  - `metadata`に以下が含まれる:
+    - `pr_number`
+    - `file_count`
+    - `execution_time_seconds`
+    - `usage`（トークン使用量）
+- **確認項目**:
+  - [ ] PR情報が正しく読み込まれる
+  - [ ] ファイルが正しく前処理される
+  - [ ] チャンクサイズが計算される
+  - [ ] 各チャンクが分析される
+  - [ ] サマリーとタイトルが生成される
+  - [ ] 最終コメントがフォーマットされる
+  - [ ] メタデータが構築される
+  - [ ] OpenAI API呼び出し回数が適切（チャンク数 + 2（サマリー、タイトル））
+
+### 3.7 互換性レイヤーテスト
+
+#### シナリオ名: 旧インポートパスからの実行
+
+- **目的**: 旧インポートパス（`from pr_comment_generator import PRCommentGenerator`）でも正常に動作することを検証
+- **前提条件**:
+  - Facadeが実装されている
+  - 非推奨警告が実装されている
+- **テスト手順**:
+  1. `from pr_comment_generator import PRCommentGenerator`でインポート
+  2. 非推奨警告が出力されることを確認
+  3. `PRCommentGenerator`インスタンスを作成
+  4. `generate_comment`を呼び出す
+  5. 正常に動作することを確認
+- **期待結果**:
+  - 非推奨警告が標準エラーに出力される
+  - 警告メッセージに新しいインポートパスが含まれる
+  - `generate_comment`が正常に実行される
+  - 新インポートパスと同じ結果が得られる
+- **確認項目**:
+  - [ ] `DeprecationWarning`が発生
+  - [ ] 警告メッセージが適切
+  - [ ] 旧インポートパスで正常動作
+  - [ ] 新旧インポートパスで結果が同一
+
+---
+
+## 4. BDDシナリオ
+
+### 4.1 Feature: PRコメント自動生成機能
+
+**背景**:
+```
+ユーザーはPull Requestの変更内容を自動的に分析し、
+わかりやすいコメントとタイトルを生成したい。
+```
+
+#### Scenario 4.1.1: 小規模PRのコメント生成
+
+```gherkin
+Given ユーザーがPR情報JSONファイルを用意している
+  And PR情報には以下が含まれる:
+    | field       | value              |
+    | number      | 123                |
+    | title       | Add new feature    |
+    | author      | testuser           |
+  And 変更ファイルは3個で、合計100行の変更である
+  And OpenAI APIキーが環境変数に設定されている
+
+When ユーザーがPRコメント生成スクリプトを実行する
+  And スクリプトは以下の引数で呼ばれる:
+    """
+    python pr_comment_generator.py \
+      --pr-info test_pr_info.json \
+      --pr-diff test_diff.json \
+      --output output.json
+    """
+
+Then スクリプトが正常に終了する（終了コード0）
+  And 出力JSONファイルが作成される
+  And 出力JSONに以下のフィールドが含まれる:
+    | field            | type   |
+    | comment          | string |
+    | suggested_title  | string |
+    | pr_number        | number |
+    | execution_time_seconds | number |
+  And コメントに"# 変更内容サマリー"ヘッダーが含まれる
+  And コメントにファイルリストが含まれる
+  And suggested_titleが空でない
+  And 実行時間が60秒以内である
+```
+
+#### Scenario 4.1.2: 大規模PRのコメント生成（チャンク分割）
+
+```gherkin
+Given ユーザーがPR情報JSONファイルを用意している
+  And PR情報には以下が含まれる:
+    | field       | value                     |
+    | number      | 456                       |
+    | title       | Major refactoring         |
+    | author      | developer                 |
+  And 変更ファイルは50個で、合計5000行の変更である
+  And 一部のファイルは1000行を超える変更がある
+  And OpenAI APIキーが環境変数に設定されている
+
+When ユーザーがPRコメント生成スクリプトを実行する
+
+Then スクリプトが正常に終了する（終了コード0）
+  And ファイルが複数のチャンクに分割される
+  And 各チャンクが個別に分析される
+  And スキップされたファイルの情報がコメントに含まれる
+  And コメントに"## チャンク X の分析"セクションが複数含まれる
+  And メタデータにskipped_file_countが含まれる
+  And skipped_file_count > 0である
+```
+
+#### Scenario 4.1.3: API エラー時の自動リトライ
+
+```gherkin
+Given ユーザーがPR情報JSONファイルを用意している
+  And OpenAI APIがレート制限エラーを1回返す
+  And 2回目の呼び出しでは成功する
+  And OpenAI APIキーが環境変数に設定されている
+
+When ユーザーがPRコメント生成スクリプトを実行する
+
+Then スクリプトが正常に終了する（終了コード0）
+  And ログに"Rate limit error"警告が含まれる
+  And ログに"Retrying in X seconds"メッセージが含まれる
+  And OpenAI APIが2回呼ばれる
+  And 最終的にコメントが生成される
+  And メタデータのretries > 0である
+```
+
+#### Scenario 4.1.4: プロンプトと結果の保存（オプション機能）
+
+```gherkin
+Given ユーザーがPR情報JSONファイルを用意している
+  And 環境変数SAVE_PROMPTSがtrueに設定されている
+  And プロンプト保存ディレクトリが/promptsである
+  And OpenAI APIキーが環境変数に設定されている
+
+When ユーザーがPRコメント生成スクリプトを実行する
+
+Then スクリプトが正常に終了する（終了コード0）
+  And /promptsディレクトリにプロンプトファイルが保存される
+  And /promptsディレクトリに結果ファイルが保存される
+  And ログに"Saved prompt and result"メッセージが含まれる
+```
+
+#### Scenario 4.1.5: APIキー未設定時のエラーハンドリング
+
+```gherkin
+Given ユーザーがPR情報JSONファイルを用意している
+  And 環境変数OPENAI_API_KEYが設定されていない
+
+When ユーザーがPRコメント生成スクリプトを実行する
+
+Then スクリプトがエラーで終了する（終了コード1）
+  And エラーメッセージに"Missing required environment variable: OPENAI_API_KEY"が含まれる
+  And ログにERRORレベルのメッセージが出力される
+```
+
+### 4.2 Feature: モジュール分割後の互換性維持
+
+#### Scenario 4.2.1: 旧インポートパスでの実行
+
+```gherkin
+Given 既存のスクリプトが旧インポートパスを使用している
+  And スクリプトには以下のインポート文が含まれる:
+    """
+    from pr_comment_generator import PRCommentGenerator
+    """
+  And PR情報JSONファイルが用意されている
+
+When 既存のスクリプトを実行する
+
+Then スクリプトが正常に動作する
+  And 標準エラー出力に非推奨警告が表示される
+  And 警告メッセージに新しいインポートパスが含まれる:
+    """
+    from pr_comment_generator.generator import PRCommentGenerator
+    """
+  And PRコメントが正しく生成される
+```
+
+#### Scenario 4.2.2: 新インポートパスでの実行
+
+```gherkin
+Given ユーザーが新しいインポートパスを使用している
+  And スクリプトには以下のインポート文が含まれる:
+    """
+    from pr_comment_generator.generator import PRCommentGenerator
+    from pr_comment_generator.models import PRInfo, FileChange
+    """
+  And PR情報JSONファイルが用意されている
+
+When 新しいスクリプトを実行する
+
+Then スクリプトが正常に動作する
+  And 非推奨警告が表示されない
+  And PRComメントが正しく生成される
+  And 新旧インポートパスで同じ結果が得られる
+```
+
+### 4.3 Feature: Jenkinsfileからの実行
+
+#### Scenario 4.3.1: Jenkins パイプラインからの実行
+
+```gherkin
+Given Jenkinsfileが以下のコマンドを実行する:
+  """
+  python pr_comment_generator.py \
+    --pr-info ${PR_INFO_FILE} \
+    --pr-diff ${DIFF_FILE} \
+    --output ${OUTPUT_FILE} \
+    --template-dir templates \
+    --log-level INFO
+  """
+  And Jenkins環境で環境変数OPENAI_API_KEYが設定されている
+  And PR情報とDiffファイルが生成されている
+
+When Jenkinsパイプラインが実行される
+
+Then パイプラインが成功する
+  And 出力JSONファイルが生成される
+  And Jenkinsログに"Comment generation completed"が含まれる
+  And 出力JSONにコメントとタイトルが含まれる
+  And Jenkins環境変数からAPIキーが正しく読み込まれる
+```
+
+### 4.4 Feature: テストカバレッジの達成
+
+#### Scenario 4.4.1: ユニットテストの実行
+
+```gherkin
+Given すべてのモジュールにユニットテストが実装されている
+  And pytest-covがインストールされている
+
+When ユーザーが以下のコマンドを実行する:
+  """
+  pytest tests/unit --cov=pr_comment_generator --cov-report=term
+  """
+
+Then すべてのユニットテストが成功する
+  And テストカバレッジが80%以上である
+  And カバレッジレポートが表示される
+  And 各モジュールのカバレッジが80%以上である
+```
+
+#### Scenario 4.4.2: 統合テストの実行
+
+```gherkin
+Given すべてのモジュール間連携テストが実装されている
+  And OpenAI APIがモック化されている
+
+When ユーザーが以下のコマンドを実行する:
+  """
+  pytest tests/integration
+  """
+
+Then すべての統合テストが成功する
+  And モジュール間連携が正しく動作する
+  And 互換性レイヤーのテストが成功する
+```
+
+#### Scenario 4.4.3: BDDテストの実行
+
+```gherkin
+Given すべてのユーザーストーリーにBDDテストが実装されている
+
+When ユーザーが以下のコマンドを実行する:
+  """
+  pytest tests/bdd
+  """
+
+Then すべてのBDDテストが成功する
+  And ユーザーストーリーレベルの要件が満たされている
+```
+
+---
+
+## 5. テストデータ
+
+### 5.1 正常データ
+
+#### 5.1.1 PR情報JSON（小規模PR）
+
+```json
+{
+  "title": "Add new feature",
+  "number": 123,
+  "body": "This PR adds a new feature to the system.",
+  "user": {
+    "login": "testuser"
+  },
+  "base": {
+    "ref": "main",
+    "sha": "abc123def456"
+  },
+  "head": {
+    "ref": "feature-branch",
+    "sha": "def456abc123"
+  }
+}
+```
+
+#### 5.1.2 Diff JSON（小規模PR）
+
+```json
+[
+  {
+    "filename": "src/main.py",
+    "status": "modified",
+    "additions": 10,
+    "deletions": 5,
+    "changes": 15,
+    "patch": "@@ -1,3 +1,4 @@\n import sys\n+import os\n def main():\n     pass"
+  },
+  {
+    "filename": "src/utils.py",
+    "status": "added",
+    "additions": 50,
+    "deletions": 0,
+    "changes": 50,
+    "patch": "@@ -0,0 +1,50 @@\n+def helper():\n+    pass"
+  },
+  {
+    "filename": "README.md",
+    "status": "modified",
+    "additions": 5,
+    "deletions": 2,
+    "changes": 7,
+    "patch": "@@ -1,2 +1,5 @@\n # Project\n+## New Section"
+  }
+]
+```
+
+#### 5.1.3 PR情報JSON（大規模PR）
+
+```json
+{
+  "title": "Major refactoring",
+  "number": 456,
+  "body": "This PR refactors the entire codebase.",
+  "user": {
+    "login": "developer"
+  },
+  "base": {
+    "ref": "develop",
+    "sha": "xyz789"
+  },
+  "head": {
+    "ref": "refactor-branch",
+    "sha": "uvw012"
+  }
+}
+```
+
+#### 5.1.4 Diff JSON（大規模PR、50ファイル）
+
+```json
+[
+  {
+    "filename": "src/module1.py",
+    "status": "modified",
+    "additions": 500,
+    "deletions": 300,
+    "changes": 800,
+    "patch": "... (省略: 大量のdiff)"
+  },
+  {
+    "filename": "src/module2.py",
+    "status": "modified",
+    "additions": 1200,
+    "deletions": 800,
+    "changes": 2000,
+    "patch": "... (省略: 大量のdiff、スキップ対象)"
+  }
+  // ... 残り48ファイル
+]
+```
+
+### 5.2 異常データ
+
+#### 5.2.1 不正なJSON（構文エラー）
+
+```json
+{
+  "title": "Invalid JSON"
+  "number": 999
+  // カンマ欠損
+}
+```
+
+#### 5.2.2 必須フィールド欠損
+
+```json
+{
+  "body": "Missing title and number"
+}
+```
+
+#### 5.2.3 空のDiff
+
+```json
+[]
+```
+
+### 5.3 境界値データ
+
+#### 5.3.1 ちょうど1000行変更のファイル
+
+```json
+{
+  "filename": "boundary_file.py",
+  "status": "modified",
+  "additions": 500,
+  "deletions": 500,
+  "changes": 1000,
+  "patch": "... (省略: 1000行分のdiff)"
+}
+```
+
+#### 5.3.2 0行変更のファイル（ステータス変更のみ）
+
+```json
+{
+  "filename": "renamed_file.py",
+  "status": "renamed",
+  "additions": 0,
+  "deletions": 0,
+  "changes": 0,
+  "patch": null
+}
+```
+
+### 5.4 モックデータ（OpenAI APIレスポンス）
+
+#### 5.4.1 チャンク分析レスポンス
+
+```python
+{
+  "id": "chatcmpl-123",
+  "object": "chat.completion",
+  "created": 1234567890,
+  "model": "gpt-4-turbo",
+  "choices": [
+    {
+      "index": 0,
+      "message": {
+        "role": "assistant",
+        "content": "このチャンクでは、main.pyにインポート文が追加され、utils.pyに新しいヘルパー関数が実装されています。"
+      },
+      "finish_reason": "stop"
+    }
+  ],
+  "usage": {
+    "prompt_tokens": 150,
+    "completion_tokens": 50,
+    "total_tokens": 200
+  }
+}
+```
+
+#### 5.4.2 サマリー生成レスポンス
+
+```python
+{
+  "id": "chatcmpl-456",
+  "object": "chat.completion",
+  "created": 1234567891,
+  "model": "gpt-4-turbo",
+  "choices": [
+    {
+      "index": 0,
+      "message": {
+        "role": "assistant",
+        "content": "このPRは、新機能の追加とコードのリファクタリングを含んでいます。主な変更は以下の通りです：\n- main.pyへのインポート追加\n- utils.pyへのヘルパー関数追加\n- READMEの更新"
+      },
+      "finish_reason": "stop"
+    }
+  ],
+  "usage": {
+    "prompt_tokens": 300,
+    "completion_tokens": 80,
+    "total_tokens": 380
+  }
+}
+```
+
+#### 5.4.3 タイトル生成レスポンス
+
+```python
+{
+  "id": "chatcmpl-789",
+  "object": "chat.completion",
+  "created": 1234567892,
+  "model": "gpt-4-turbo",
+  "choices": [
+    {
+      "index": 0,
+      "message": {
+        "role": "assistant",
+        "content": "新機能追加とヘルパー関数の実装"
+      },
+      "finish_reason": "stop"
+    }
+  ],
+  "usage": {
+    "prompt_tokens": 50,
+    "completion_tokens": 10,
+    "total_tokens": 60
+  }
+}
+```
+
+#### 5.4.4 レート制限エラーレスポンス
+
+```python
+{
+  "error": {
+    "message": "Rate limit exceeded. Please try again later.",
+    "type": "rate_limit_error",
+    "code": "rate_limit_exceeded"
+  }
+}
+```
+
+---
+
+## 6. テスト環境要件
+
+### 6.1 ローカル開発環境
+
+**OS**: Amazon Linux 2023（または互換環境）
+
+**Python**: 3.8以上
+
+**必須パッケージ**:
+```
+openai>=1.0.0
+pytest>=7.0.0
+pytest-cov>=4.0.0
+pytest-mock>=3.10.0
+responses>=0.23.0  # OpenAI APIのモック用
+```
+
+**環境変数**:
+- `OPENAI_API_KEY`: OpenAI APIキー（テスト時はモック使用）
+- `OPENAI_MODEL_NAME`: 使用するモデル名（デフォルト: gpt-4-turbo）
+- `SAVE_PROMPTS`: プロンプト保存フラグ（デフォルト: true）
+
+### 6.2 CI/CD環境（Jenkins）
+
+**Jenkins環境変数**:
+- `OPENAI_API_KEY`: SSMパラメータから取得
+- `GITHUB_AUTH_METHOD`: GitHub認証方法
+- `PR_INFO_FILE`: PR情報JSONファイルパス
+- `DIFF_FILE`: Diff JSONファイルパス
+- `OUTPUT_FILE`: 出力JSONファイルパス
+
+**必要なJenkinsプラグイン**:
+- Pipeline
+- GitHub Branch Source
+- Credentials Binding
+
+### 6.3 テスト用モック/スタブ
+
+**OpenAI APIのモック**:
+- `responses`ライブラリを使用してHTTPリクエストをモック
+- `unittest.mock`を使用してOpenAIクライアントをモック
+
+**ファイルシステムのモック**:
+- `unittest.mock.mock_open`を使用してファイル読み込みをモック
+- `tempfile`モジュールを使用して一時ファイルを作成
+
+**ロガーのモック**:
+- `unittest.mock.Mock`を使用してロガーをモック
+- ログ出力を検証可能にする
+
+### 6.4 テストディレクトリ構成
+
+```
+tests/
+├── unit/                                    # ユニットテスト
+│   ├── test_models.py
+│   ├── test_token_estimator.py
+│   ├── test_prompt_manager.py
+│   ├── test_statistics.py
+│   ├── test_formatter.py
+│   ├── test_openai_integration.py
+│   └── test_generator.py
+├── integration/                             # 統合テスト
+│   ├── test_generator_statistics.py
+│   ├── test_generator_formatter.py
+│   ├── test_generator_openai.py
+│   └── test_compatibility_layer.py
+├── bdd/                                     # BDDテスト
+│   └── test_bdd_pr_comment_generation.py
+├── fixtures/                                # テストフィクスチャ
+│   ├── pr_info_small.json
+│   ├── pr_info_large.json
+│   ├── diff_small.json
+│   └── diff_large.json
+├── conftest.py                              # pytest共通設定
+└── __init__.py
+```
+
+---
+
+## 7. テスト実行計画
+
+### 7.1 テスト実行順序
+
+1. **ユニットテスト**（Phase 5-1）
+   - データモデル層（models.py）
+   - ユーティリティ層（token_estimator.py、prompt_manager.py）
+   - 統計・フォーマット層（statistics.py、formatter.py）
+   - API統合層（openai_integration.py）
+   - オーケストレーション層（generator.py）
+
+2. **統合テスト**（Phase 5-2）
+   - モジュール間連携
+   - エンドツーエンド統合
+   - 互換性レイヤー
+
+3. **BDDテスト**（Phase 5-3）
+   - ユーザーストーリーレベルのシナリオ
+
+### 7.2 テスト実行コマンド
+
+**すべてのテストを実行**:
+```bash
+pytest tests/ --cov=pr_comment_generator --cov-report=term --cov-report=html
+```
+
+**ユニットテストのみ**:
+```bash
+pytest tests/unit/ --cov=pr_comment_generator --cov-report=term
+```
+
+**統合テストのみ**:
+```bash
+pytest tests/integration/
+```
+
+**BDDテストのみ**:
+```bash
+pytest tests/bdd/
+```
+
+**特定のモジュールのテスト**:
+```bash
+pytest tests/unit/test_statistics.py -v
+```
+
+**カバレッジ80%以上を確認**:
+```bash
+pytest tests/ --cov=pr_comment_generator --cov-fail-under=80
+```
+
+### 7.3 テスト合格基準
+
+**ユニットテスト**:
+- [ ] すべてのテストが成功（0 failed）
+- [ ] 各モジュールのカバレッジが80%以上
+- [ ] 実行時間が5分以内
+
+**統合テスト**:
+- [ ] すべてのテストが成功（0 failed）
+- [ ] モジュール間連携が正しく動作
+- [ ] 互換性レイヤーのテストが成功
+- [ ] 実行時間が10分以内
+
+**BDDテスト**:
+- [ ] すべてのシナリオが成功
+- [ ] ユーザーストーリーが満たされている
+- [ ] 実行時間が10分以内
+
+**全体**:
+- [ ] 総合カバレッジが80%以上
+- [ ] 失敗したテストが0件
+- [ ] CI/CDパイプラインでのテストが成功
+
+---
+
+## 8. 品質ゲート確認
+
+本テストシナリオは、Phase 3の品質ゲートを満たしていることを確認しました：
+
+- [x] **Phase 2の戦略に沿ったテストシナリオである**: テスト戦略「ALL」に基づき、ユニットテスト、統合テスト、BDDテストすべてのシナリオを作成
+- [x] **主要な正常系がカバーされている**:
+  - ユニットテスト: 各モジュールの主要メソッドの正常系（計40+ケース）
+  - 統合テスト: モジュール間連携の正常フロー（7シナリオ）
+  - BDDテスト: エンドユーザーのユースケース正常系（11シナリオ）
+- [x] **主要な異常系がカバーされている**:
+  - ユニットテスト: APIキー欠損、ファイル不在、レート制限エラー等（計10+ケース）
+  - BDDテスト: APIキー未設定時のエラーハンドリング等（2シナリオ）
+- [x] **期待結果が明確である**: すべてのテストケース・シナリオに具体的な期待結果を記載
+
+---
+
+## 9. 次のステップ
+
+1. **Phase 4（実装）の開始**: 本テストシナリオに基づき、各モジュールの実装を開始
+2. **テストコードの実装**: Phase 5でテストシナリオに基づいたテストコードを実装
+3. **継続的なレビュー**: 実装中にテストシナリオの妥当性を継続的に検証し、必要に応じて更新
+
+---
+
+## 10. 承認
+
+- **作成者**: Claude Code
+- **作成日**: 2025年1月
+- **レビュアー**: （クリティカルシンキングレビュー実施後に記載）
+- **承認日**: （レビュー承認後に記載）

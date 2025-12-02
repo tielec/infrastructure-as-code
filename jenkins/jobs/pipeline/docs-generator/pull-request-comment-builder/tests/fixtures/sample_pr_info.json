@@ -1,0 +1,16 @@
+{
+  "title": "Add new authentication feature",
+  "number": 123,
+  "body": "This PR adds a comprehensive authentication feature with the following improvements:\n- JWT token-based authentication\n- Password hashing with bcrypt\n- Session management\n- Rate limiting for login attempts",
+  "user": {
+    "login": "developer123"
+  },
+  "base": {
+    "ref": "main",
+    "sha": "abc123def456789"
+  },
+  "head": {
+    "ref": "feature/authentication",
+    "sha": "def456abc123789"
+  }
+}
