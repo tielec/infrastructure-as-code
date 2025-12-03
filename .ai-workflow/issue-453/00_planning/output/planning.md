@@ -160,32 +160,32 @@
 
 ### Phase 4: 実装 (見積もり: 3~5h)
 
-- [ ] Task 4-1: Job DSL実装 - all_phases (0.5~1h)
+- [x] Task 4-1: Job DSL実装 - all_phases (0.5~1h)
   - `ai_workflow_all_phases_job.groovy`の作成
   - 14個のパラメータを定義
   - EXECUTION_MODE='all_phases'を固定値として設定
 
-- [ ] Task 4-2: Job DSL実装 - preset (0.5~1h)
+- [x] Task 4-2: Job DSL実装 - preset (0.5~1h)
   - `ai_workflow_preset_job.groovy`の作成
   - 15個のパラメータを定義
   - PRESETパラメータを必須化
 
-- [ ] Task 4-3: Job DSL実装 - single_phase (0.5~1h)
+- [x] Task 4-3: Job DSL実装 - single_phase (0.5~1h)
   - `ai_workflow_single_phase_job.groovy`の作成
   - 13個のパラメータを定義
   - START_PHASEパラメータを必須化
 
-- [ ] Task 4-4: Job DSL実装 - rollback (0.5~1h)
+- [x] Task 4-4: Job DSL実装 - rollback (0.5~1h)
   - `ai_workflow_rollback_job.groovy`の作成
   - 12個のパラメータを定義
   - ROLLBACK_TO_PHASEパラメータを必須化
 
-- [ ] Task 4-5: Job DSL実装 - auto_issue (0.5~1h)
+- [x] Task 4-5: Job DSL実装 - auto_issue (0.5~1h)
   - `ai_workflow_auto_issue_job.groovy`の作成
   - 8個のパラメータを定義
   - GITHUB_REPOSITORYを必須化、ISSUE_URLを除外
 
-- [ ] Task 4-6: job-config.yaml更新 (0.5h)
+- [x] Task 4-6: job-config.yaml更新 (0.5h)
   - 5つの新しいジョブ定義を追加
   - 既存の`ai_workflow_orchestrator_job`をコメントアウトまたは削除
 
@@ -346,11 +346,11 @@ graph TD
 
 ### Phase 4: 実装
 
-- [ ] **5つのJob DSLファイルがすべて作成されている**
-- [ ] **job-config.yamlに新しいジョブ定義が追加されている**
-- [ ] **各ジョブのEXECUTION_MODEが固定値として正しく設定されている**
-- [ ] **Issue本文のパラメータ対応表通りにパラメータが実装されている**
-- [ ] **リポジトリ別フォルダ構成が実装されている**
+- [x] **5つのJob DSLファイルがすべて作成されている**
+- [x] **job-config.yamlに新しいジョブ定義が追加されている**
+- [x] **各ジョブのEXECUTION_MODEが固定値として正しく設定されている**
+- [x] **Issue本文のパラメータ対応表通りにパラメータが実装されている**
+- [x] **リポジトリ別フォルダ構成が実装されている**
 
 ### Phase 5: テスト実装
 
