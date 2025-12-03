@@ -215,12 +215,12 @@
 
 ### Phase 7: ドキュメント (見積もり: 1h)
 
-- [ ] Task 7-1: jenkins/README.md更新 (0.5h)
+- [x] Task 7-1: jenkins/README.md更新 (0.5h)
   - AI_Workflowセクションの更新
   - 5つのジョブの説明追加
   - パラメータ一覧表の更新
 
-- [ ] Task 7-2: CLAUDE.md更新確認 (0.5h)
+- [x] Task 7-2: CLAUDE.md更新確認 (0.5h)
   - Jenkins開発時の注意事項セクションを確認
   - 新しいジョブ構成についての説明追加（必要に応じて）
 
