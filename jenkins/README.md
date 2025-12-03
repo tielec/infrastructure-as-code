@@ -123,7 +123,7 @@ aws ssm get-parameter --name /jenkins-infra/dev/jenkins/admin-password \
 |---------|------|-----------|
 | **Admin_Jobs** | システム管理 | backup-config（設定バックアップ）<br>restore-config（設定リストア）<br>ssm-parameter-backup（SSMパラメータバックアップ）<br>ssm-parameter-restore（SSMパラメータリストア）<br>github-webhooks-setting（GitHub Webhook設定）<br>github-deploykeys-setting（デプロイキー設定）<br>user-management（ユーザー管理） |
 | **Account_Setup** | アカウント管理 | account-self-activation（アカウント自己有効化） |
-| **AI_Workflow** | AI駆動開発自動化 | ai_workflow_orchestrator（10フェーズ自動開発ワークフロー） |
+| **AI_Workflow** | AI駆動開発自動化 | 実行モード別ジョブ（all_phases、preset、single_phase、rollback、auto_issue）<br>※リポジトリごとにサブフォルダで整理 |
 | **Code_Quality_Checker** | コード品質分析 | pr-complexity-analyzer（PR複雑度分析）<br>rust-code-analysis（Rustコード解析） |
 | **Document_Generator** | ドキュメント生成 | auto-insert-doxygen-comment（Doxygenコメント自動挿入）<br>generate-doxygen-html（DoxygenHTML生成）<br>technical-docs-writer（技術文書作成）<br>pr-comment-builder（PRコメントビルダー） |
 | **Infrastructure_Management** | インフラ管理 | shutdown-jenkins-environment（Jenkins環境停止）<br>terminate-lambda-nat（Lambda NAT削除）<br>Ansible Playbook実行、Pulumi Stack管理 |
@@ -536,86 +536,185 @@ Jenkins UI > Infrastructure_Management > Shutdown-Environment-Scheduler > 設定
 Jenkins UI > Infrastructure_Management > Shutdown-Environment-Scheduler > "Build Now"をクリック
 ```
 
-#### AI_Workflow/ai_workflow_orchestrator
+#### AI_Workflow（実行モード別ジョブ）
 
 **目的**: GitHub IssueからClaude AIが自動的に開発プロセスを実行（10フェーズワークフロー）
 
-**主な機能**:
-- Phase 0（Planning）: プロジェクト計画、実装戦略・テスト戦略の事前決定
-- Phase 1（Requirements）: 要件定義書の自動生成
-- Phase 2（Design）: 詳細設計書の自動生成
-- Phase 3（Test Scenario）: テストシナリオの自動生成
-- Phase 4（Implementation）: 本番コード実装の自動実行
-- Phase 5（Test Implementation）: テストコード実装の自動実行
-- Phase 6（Testing）: テスト実行と結果レポート
-- Phase 7（Documentation）: ドキュメント更新
-- Phase 8（Report）: 全体レポート生成
-- Phase 9（Evaluation）: プロジェクト評価
+**ジョブ構成**: 実行モードごとに5つのジョブに分割され、リポジトリ別に整理
+- フォルダ構造: `AI_Workflow/{repository-name}/各ジョブ`
+- パラメータ削減: 従来の24個から8〜15個に削減（削減率最大66.7%）
+- 各ジョブで実行モード（EXECUTION_MODE）は固定値として設定
 
-**実行モード**:
-- **all_phases（推奨）**: 全フェーズを1つのステージで一括実行
-  - resume機能により、失敗したフェーズから自動再開
-  - 実行時間とコストを最適化
-- **single_phase（デバッグ用）**: 特定のフェーズのみ実行
+**利用可能なジョブ**:
+
+##### 1. all_phases（全フェーズ一括実行）
+
+**パラメータ数**: 14個（従来比: -10個、削減率41.7%）
+
+**主な機能**: Planning（Phase 0）からEvaluation（Phase 9）まで全フェーズを一括実行
+- resume機能により、失敗したフェーズから自動再開
+- 実行時間とコストを最適化
 
 **パラメータ**:
 - `ISSUE_URL`: GitHub Issue URL（必須）
-- `EXECUTION_MODE`: 実行モード（デフォルト: all_phases）
-  - `all_phases`: 全フェーズを一括実行（推奨）
-  - `single_phase`: 特定フェーズのみ実行（デバッグ用）
-- `START_PHASE`: 開始フェーズ（single_phaseモード時のみ有効、デフォルト: planning）
-  - 選択肢: planning, requirements, design, test_scenario, implementation, test_implementation, testing, documentation, report, evaluation
-- `FORCE_RESET`: 強制リセット（デフォルト: false）
-  - `true`: メタデータをクリアして最初から実行
-  - `false`: 通常実行（resume機能により途中から再開）
-- `GIT_COMMIT_USER_NAME`: Gitコミット時のユーザー名（デフォルト: AI Workflow Bot）
-- `GIT_COMMIT_USER_EMAIL`: Gitコミット時のメールアドレス（デフォルト: ai-workflow@example.com）
-- `DRY_RUN`: ドライラン実行（デフォルト: false）
-- `SKIP_REVIEW`: レビュースキップ（デフォルト: false）
-- `MAX_RETRIES`: 最大リトライ回数（デフォルト: 3）
-- `COST_LIMIT_USD`: コスト上限USD（デフォルト: 5.0）
+- `BRANCH_NAME`: 作業ブランチ名（任意、空欄時は自動生成）
+- `AGENT_MODE`: エージェント実行モード（auto/codex/claude）
+- `DRY_RUN`: ドライランモード（デフォルト: false）
+- `SKIP_REVIEW`: AIレビューをスキップ（デフォルト: false）
+- `FORCE_RESET`: メタデータを初期化して最初から実行（デフォルト: false）
+- `MAX_RETRIES`: フェーズ失敗時の最大リトライ回数（デフォルト: 3）
+- `CLEANUP_ON_COMPLETE_FORCE`: Evaluation Phase完了後にディレクトリを削除（デフォルト: false）
+- `GIT_COMMIT_USER_NAME`: Gitコミットユーザー名（デフォルト: AI Workflow Bot）
+- `GIT_COMMIT_USER_EMAIL`: Gitコミットメールアドレス（デフォルト: ai-workflow@example.com）
+- `AWS_ACCESS_KEY_ID`: AWSアクセスキーID（Infrastructure as Code実行時）
+- `AWS_SECRET_ACCESS_KEY`: AWSシークレットアクセスキー（Infrastructure as Code実行時）
+- `AWS_SESSION_TOKEN`: AWSセッショントークン（一時的な認証情報使用時）
+- `COST_LIMIT_USD`: ワークフローあたりのコスト上限（デフォルト: 5.0 USD）
+- `LOG_LEVEL`: ログレベル（INFO/DEBUG/WARNING/ERROR）
 
 **実行例**:
 ```bash
-# 全フェーズを一括実行（推奨）
-EXECUTION_MODE: all_phases
-ISSUE_URL: https://github.com/tielec/infrastructure-as-code/issues/332
-
-# 特定フェーズのみ実行（デバッグ用）
-EXECUTION_MODE: single_phase
-START_PHASE: requirements
-ISSUE_URL: https://github.com/tielec/infrastructure-as-code/issues/332
+# 基本的な実行
+ISSUE_URL: https://github.com/tielec/infrastructure-as-code/issues/453
 
 # 失敗したワークフローを最初から実行し直す
-EXECUTION_MODE: all_phases
+ISSUE_URL: https://github.com/tielec/infrastructure-as-code/issues/453
 FORCE_RESET: true
-ISSUE_URL: https://github.com/tielec/infrastructure-as-code/issues/332
 ```
 
-**resume機能**:
-- 途中で失敗した場合、次回実行時に失敗したフェーズから自動再開
-- メタデータ（.ai-workflow/issue-XXX/metadata.json）に記録された進捗を活用
-- 無駄な実行を避け、コストを削減
-- `FORCE_RESET=true` で最初から実行し直すことも可能
+##### 2. preset（プリセット実行）
 
-**Planning Phase（Phase 0）の重要性**:
-- **実装戦略の事前決定**: CREATE/EXTEND/REFACTORを判断し、Phase 2以降の負荷を軽減
-- **テスト戦略の事前決定**: UNIT_ONLY/INTEGRATION_ONLY/ALL等を判断し、Phase 3の方針を明確化
-- **Issue複雑度分析**: 工数見積もり、リスク評価、タスク分割を実施
-- **開発計画書の生成**: planning.mdとして保存され、全フェーズで参照可能
+**パラメータ数**: 15個（all_phasesの14個 + PRESET）
 
-**Phase間の連携**:
-- Planning Phaseの成果物（planning.md）は後続の全Phase（Requirements～Report）で自動的に参照される
-- Planning Phaseをスキップした場合でも、各Phaseは正常に動作する（警告ログのみ出力）
+**主な機能**: 事前定義されたフェーズの組み合わせを実行
+- quick-fix: 軽微な修正用（Implementation → Documentation → Report）
+- implementation: 通常の実装フロー（Implementation → TestImplementation → Testing → Documentation → Report）
+- testing: テスト追加用（TestImplementation → Testing）
+- review-requirements: 要件定義レビュー用（Planning → Requirements）
+- review-design: 設計レビュー用（Planning → Requirements → Design）
+- review-test-scenario: テストシナリオレビュー用（Planning → Requirements → Design → TestScenario）
+- finalize: 最終化用（Documentation → Report → Evaluation）
 
-**成果物の自動投稿**:
-- 各Phase完了後、成果物がGitHub Issueコメントとして自動投稿される
-- レビュー結果とフィードバックもIssueコメントとして記録される
+**追加パラメータ**:
+- `PRESET`: プリセット名（必須、上記の選択肢から選択）
 
-**Git自動commit & push**:
-- 各Phase完了後、成果物が自動的にGitにcommit & pushされる
-- ブランチ: `ai-workflow/issue-{番号}`
-- コミットメッセージフォーマット: `[ai-workflow] Phase X (phase_name) - completed/failed`
+**その他のパラメータ**: all_phasesと同じ
+
+**実行例**:
+```bash
+# 実装フローの実行
+ISSUE_URL: https://github.com/tielec/infrastructure-as-code/issues/453
+PRESET: implementation
+```
+
+##### 3. single_phase（単一フェーズ実行）
+
+**パラメータ数**: 13個（all_phasesから-2個、FORCE_RESETとCLEANUP_ON_COMPLETE_FORCEを除外）
+
+**主な機能**: 特定のフェーズのみを実行（デバッグ用）
+
+**追加パラメータ**:
+- `START_PHASE`: 実行するフェーズ（必須）
+  - 選択肢: planning、requirements、design、test_scenario、implementation、test_implementation、testing、documentation、report、evaluation
+
+**除外パラメータ**: FORCE_RESET、CLEANUP_ON_COMPLETE_FORCE
+
+**実行例**:
+```bash
+# Requirementsフェーズのみ実行
+ISSUE_URL: https://github.com/tielec/infrastructure-as-code/issues/453
+START_PHASE: requirements
+```
+
+##### 4. rollback（フェーズ差し戻し実行）
+
+**パラメータ数**: 12個（最も大きな削減、削減率50.0%）
+
+**主な機能**: 特定のフェーズに差し戻してレビュー修正を反映
+- メタデータを更新して指定されたフェーズから再実行可能にする
+- 差し戻し理由をreviseプロンプトに注入
+
+**追加パラメータ**:
+- `ROLLBACK_TO_PHASE`: 差し戻し先フェーズ（必須、evaluationは除外）
+  - 選択肢: implementation、planning、requirements、design、test_scenario、test_implementation、testing、documentation、report
+- `ROLLBACK_TO_STEP`: 差し戻し先ステップ（任意、デフォルト: revise）
+  - 選択肢: revise、execute、review
+- `ROLLBACK_REASON`: 差し戻し理由（任意、reviseプロンプトに注入）
+- `ROLLBACK_REASON_FILE`: 差し戻し理由ファイルパス（任意）
+
+**除外パラメータ**: SKIP_REVIEW、FORCE_RESET、MAX_RETRIES、CLEANUP_ON_COMPLETE_FORCE
+
+**実行例**:
+```bash
+# Implementationフェーズに差し戻し
+ISSUE_URL: https://github.com/tielec/infrastructure-as-code/issues/453
+ROLLBACK_TO_PHASE: implementation
+ROLLBACK_TO_STEP: revise
+ROLLBACK_REASON: テストカバレッジが不足しているため、実装を見直してください
+```
+
+##### 5. auto_issue（自動Issue作成）
+
+**パラメータ数**: 8個（最大削減効果、削減率66.7%）
+
+**主な機能**: リポジトリをスキャンして自動的にIssueを作成
+- バグ・潜在的問題の検出
+- リファクタリング候補の検出（実装予定）
+- 機能拡張提案（実装予定）
+
+**パラメータ**:
+- `GITHUB_REPOSITORY`: GitHubリポジトリ（owner/repo、必須）
+  - ※ISSUE_URLは不要（リポジトリ探索のため）
+- `AUTO_ISSUE_CATEGORY`: Issue検出カテゴリ（必須）
+  - 選択肢: bug、refactor、enhancement、all
+- `AUTO_ISSUE_LIMIT`: 作成するIssueの最大数（任意、デフォルト: 5、範囲: 1〜50）
+- `AUTO_ISSUE_SIMILARITY_THRESHOLD`: 重複判定の類似度閾値（任意、デフォルト: 0.8、範囲: 0.0〜1.0）
+- `AGENT_MODE`: エージェント実行モード（auto/codex/claude）
+- `DRY_RUN`: ドライランモード（デフォルト: false）
+- `COST_LIMIT_USD`: ワークフローあたりのコスト上限（デフォルト: 5.0 USD）
+- `LOG_LEVEL`: ログレベル（INFO/DEBUG/WARNING/ERROR）
+
+**除外パラメータ**: ISSUE_URL、BRANCH_NAME、Git設定、AWS認証情報
+
+**実行例**:
+```bash
+# バグ検出
+GITHUB_REPOSITORY: tielec/infrastructure-as-code
+AUTO_ISSUE_CATEGORY: bug
+AUTO_ISSUE_LIMIT: 5
+```
+
+**共通機能**:
+- **resume機能**: 途中で失敗した場合、次回実行時に失敗したフェーズから自動再開
+- **Planning Phase（Phase 0）**: 実装戦略・テスト戦略の事前決定、Issue複雑度分析、開発計画書の生成
+- **Phase間の連携**: Planning Phaseの成果物（planning.md）は後続の全Phaseで自動的に参照
+- **成果物の自動投稿**: 各Phase完了後、成果物がGitHub Issueコメントとして自動投稿
+- **Git自動commit & push**: 各Phase完了後、成果物が自動的にGitにcommit & push
+  - ブランチ: `ai-workflow/issue-{番号}`
+  - コミットメッセージ: `[ai-workflow] Phase X (phase_name) - completed/failed`
+
+**パラメータ削減の効果**:
+
+| ジョブ | パラメータ数 | 削減数 | 削減率 |
+|--------|-------------|--------|--------|
+| 従来（統合） | 24個 | - | - |
+| all_phases | 14個 | -10 | 41.7% |
+| preset | 15個 | -9 | 37.5% |
+| single_phase | 13個 | -11 | 45.8% |
+| rollback | 12個 | -12 | 50.0% |
+| auto_issue | 8個 | -16 | 66.7% |
+
+**移行ガイド（従来のai_workflow_orchestratorから）**:
+
+従来の単一ジョブ`ai_workflow_orchestrator`は非推奨（Deprecated）となりました。新しいリポジトリ別構成のジョブに移行してください。
+
+- **従来**: `AI_Workflow/ai_workflow_orchestrator`（24パラメータ、全実行モードを選択）
+- **新規**: `AI_Workflow/{repository-name}/all_phases`等（8〜15パラメータ、実行モードごとに専用ジョブ）
+
+**移行のメリット**:
+- パラメータ数が大幅に削減され、使いやすくなった
+- リポジトリごとにジョブが整理され、視認性が向上
+- 不要なパラメータが表示されないため、誤操作が減少
 
 **詳細ドキュメント**: [scripts/ai-workflow-v2/README.md](../scripts/ai-workflow-v2/README.md)
 
