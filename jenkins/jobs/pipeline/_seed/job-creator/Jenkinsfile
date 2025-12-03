@@ -64,8 +64,11 @@ pipeline {
                         }
                         
                         // jenkinsfileの存在チェック（定義されている場合のみ）
+                        // skipJenkinsfileValidation: true の場合はスキップ（別リポジトリのJenkinsfileを使用）
                         if (jobDef.jenkinsfile) {
-                            if (!fileExists(jobDef.jenkinsfile)) {
+                            if (jobDef.skipJenkinsfileValidation == true) {
+                                jobValidationResults.add("  ⊘ Jenkinsfile: ${jobDef.jenkinsfile} (validation skipped - external repo)")
+                            } else if (!fileExists(jobDef.jenkinsfile)) {
                                 validationErrors.add("Job '${jobKey}': Jenkinsfile not found - ${jobDef.jenkinsfile}")
                                 jobValidationResults.add("  ✗ Jenkinsfile: ${jobDef.jenkinsfile} (NOT FOUND)")
                                 hasErrors = true
