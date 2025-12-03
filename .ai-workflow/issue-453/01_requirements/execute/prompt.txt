@@ -1,0 +1,241 @@
+## 🛠️ 開発環境情報
+
+このDocker環境では、以下のプログラミング言語をインストール可能です：
+
+- **Python**: `apt-get update && apt-get install -y python3 python3-pip`
+- **Go**: `apt-get update && apt-get install -y golang-go`
+- **Java**: `apt-get update && apt-get install -y default-jdk`
+- **Rust**: `curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y`
+- **Ruby**: `apt-get update && apt-get install -y ruby ruby-dev`
+
+テスト実行や品質チェックに必要な言語環境は、自由にインストールしてください。
+
+# 要件定義フェーズ - 実行プロンプト
+
+## タスク概要
+
+GitHubのIssue情報から詳細な要件定義書を作成してください。
+
+## 入力情報
+
+### Planning Phase成果物
+- Planning Document: @.ai-workflow/issue-453/00_planning/output/planning.md
+
+**注意**: Planning Phaseが実行されている場合、開発計画（実装戦略、テスト戦略、リスク、スケジュール）を必ず確認してください。
+
+### GitHub Issue情報
+
+## Issue概要
+
+- **Issue番号**: #453
+- **タイトル**: [TASK] AI Workflow Orchestrator ジョブを実行モードごとに分割・リポジトリ別構成に変更
+- **状態**: open
+- **URL**: https://github.com/tielec/infrastructure-as-code/issues/453
+- **ラベル**: なし
+
+### 本文
+
+## 概要
+
+現在の `ai_workflow_orchestrator` ジョブを、実行モード（EXECUTION_MODE）ごとに分割し、リポジトリ別のサブフォルダ構成に変更します。
+
+## 背景・目的
+
+### 現状の問題
+- 1つのジョブに全ての実行モード用パラメータが混在しており、パラメータが多すぎて使いにくい
+- `AI_Workflow/ai_workflow_orchestrator` という単一ジョブ構成で、リポジトリ区別がない
+
+### 期待する構成
+```
+AI_Workflow/
+├── {repository-name}/
+│   ├── all_phases          # 全フェーズ一括実行
+│   ├── preset              # プリセット実行
+│   ├── single_phase        # 単一フェーズ実行
+│   ├── rollback            # フェーズ差し戻し
+│   └── auto_issue          # 自動Issue作成
+├── {another-repository}/
+│   ├── all_phases
+│   ├── preset
+│   └── ...
+```
+
+### メリット
+- **パラメータの削減**: 各ジョブに必要なパラメータのみを表示
+- **視認性向上**: リポジトリごとにジョブがグループ化される
+- **再利用性**: `Code_Quality_Checker` と同じパターンで一貫性がある
+
+## ジョブ別パラメータ対応表
+
+| パラメータ | all_phases | preset | single_phase | rollback | auto_issue |
+|-----------|:----------:|:------:|:------------:|:--------:|:----------:|
+| **基本設定** | | | | | |
+| ISSUE_URL | ✅ 必須 | ✅ 必須 | ✅ 必須 | ✅ 必須 | ❌ 不要 |
+| GITHUB_REPOSITORY | ❌ | ❌ | ❌ | ❌ | ✅ 必須 |
+| BRANCH_NAME | ⚪ 任意 | ⚪ 任意 | ⚪ 任意 | ⚪ 任意 | ❌ 不要 |
+| AGENT_MODE | ✅ | ✅ | ✅ | ✅ | ✅ |
+| **実行制御** | | | | | |
+| ~~EXECUTION_MODE~~ | 固定値 | 固定値 | 固定値 | 固定値 | 固定値 |
+| PRESET | ❌ | ✅ 必須 | ❌ | ❌ | ❌ |
+| START_PHASE | ❌ | ❌ | ✅ 必須 | ❌ | ❌ |
+| **Rollback設定** | | | | | |
+| ROLLBACK_TO_PHASE | ❌ | ❌ | ❌ | ✅ 必須 | ❌ |
+| ROLLBACK_TO_STEP | ❌ | ❌ | ❌ | ⚪ 任意 | ❌ |
+| ROLLBACK_REASON | ❌ | ❌ | ❌ | ⚪ 任意 | ❌ |
+| ROLLBACK_REASON_FILE | ❌ | ❌ | ❌ | ⚪ 任意 | ❌ |
+| **Auto Issue設定** | | | | | |
+| AUTO_ISSUE_CATEGORY | ❌ | ❌ | ❌ | ❌ | ✅ |
+| AUTO_ISSUE_LIMIT | ❌ | ❌ | ❌ | ❌ | ⚪ 任意 |
+| AUTO_ISSUE_SIMILARITY_THRESHOLD | ❌ | ❌ | ❌ | ❌ | ⚪ 任意 |
+| **実行オプション** | | | | | |
+| DRY_RUN | ✅ | ✅ | ✅ | ✅ | ✅ |
+| SKIP_REVIEW | ✅ | ✅ | ✅ | ❌ | ❌ |
+| FORCE_RESET | ✅ | ✅ | ❌ | ❌ | ❌ |
+| MAX_RETRIES | ✅ | ✅ | ✅ | ❌ | ❌ |
+| CLEANUP_ON_COMPLETE_FORCE | ✅ | ✅ | ❌ | ❌ | ❌ |
+| **Git設定** | | | | | |
+| GIT_COMMIT_USER_NAME | ✅ | ✅ | ✅ | ✅ | ❌ |
+| GIT_COMMIT_USER_EMAIL | ✅ | ✅ | ✅ | ✅ | ❌ |
+| **AWS認証情報** | | | | | |
+| AWS_ACCESS_KEY_ID | ⚪ 任意 | ⚪ 任意 | ⚪ 任意 | ⚪ 任意 | ❌ |
+| AWS_SECRET_ACCESS_KEY | ⚪ 任意 | ⚪ 任意 | ⚪ 任意 | ⚪ 任意 | ❌ |
+| AWS_SESSION_TOKEN | ⚪ 任意 | ⚪ 任意 | ⚪ 任意 | ⚪ 任意 | ❌ |
+| **その他** | | | | | |
+| COST_LIMIT_USD | ✅ | ✅ | ✅ | ✅ | ✅ |
+| LOG_LEVEL | ✅ | ✅ | ✅ | ✅ | ✅ |
+
+### パラメータ数サマリー
+
+| ジョブ | パラメータ数 | 削減数 |
+|--------|-------------|--------|
+| 現在（統合） | 24個 | - |
+| all_phases | 14個 | -10 |
+| preset | 15個 | -9 |
+| single_phase | 13個 | -11 |
+| rollback | 12個 | -12 |
+| auto_issue | 8個 | -16 |
+
+## 参考: 現在のジョブ構成
+
+### Job DSL (`ai_workflow_orchestrator.groovy`)
+- パラメータ定義（全実行モード用パラメータが混在）
+- `ai-workflow-agent` リポジトリのJenkinsfileを参照
+
+### EXECUTION_MODE（5種類）
+1. `all_phases` - 全フェーズ一括実行
+2. `preset` - 定義済みワークフローパターン実行
+3. `single_phase` - 単一フェーズ実行
+4. `rollback` - フェーズ差し戻し
+5. `auto_issue` - 自動Issue作成
+
+## TODO
+
+- [ ] 共通Jenkinsfileの設計（全モードで共有可能な形に）
+- [ ] EXECUTION_MODEごとのDSLファイル作成（5種類）
+  - [ ] `ai_workflow_all_phases_job.groovy`
+  - [ ] `ai_workflow_preset_job.groovy`
+  - [ ] `ai_workflow_single_phase_job.groovy`
+  - [ ] `ai_workflow_rollback_job.groovy`
+  - [ ] `ai_workflow_auto_issue_job.groovy`
+- [ ] リポジトリ別サブフォルダ構成の実装（`jenkinsManagedRepositories` を使用）
+- [ ] 各ジョブに必要なパラメータのみ定義
+- [ ] 既存の `ai_workflow_orchestrator.groovy` の削除または非推奨化
+- [ ] Jenkins README.md の更新
+
+## 参考ファイル
+- `jenkins/jobs/dsl/ai-workflow/ai_workflow_orchestrator.groovy` - 現在のジョブ定義
+- `jenkins/jobs/dsl/code-quality-checker/code_quality_pr_complexity_analyzer_job.groovy` - リポジトリ別構成の参考
+
+## 要件定義書の構成
+
+以下のセクションを含む要件定義書を作成してください：
+
+### 0. Planning Documentの確認（Planning Phaseが実行されている場合）
+- 開発計画の全体像を把握
+- スコープ、技術選定、リスク、スケジュールを確認
+- Planning Documentで策定された戦略を踏まえて要件定義を実施
+
+### 1. 概要
+- Issue本文の「## 概要」セクションを要約
+- 背景と目的を明確に記述
+- ビジネス価値・技術的価値を説明
+
+### 2. 機能要件
+- Issue本文の「## TODO」セクションから機能要件を抽出
+- 各要件を明確かつ検証可能な形で記述
+- 優先度（高/中/低）を付与
+
+### 3. 非機能要件
+- パフォーマンス要件
+- セキュリティ要件
+- 可用性・信頼性要件
+- 保守性・拡張性要件
+
+### 4. 制約事項
+- 技術的制約（使用技術、既存システムとの整合性）
+- リソース制約（時間、人員、予算）
+- ポリシー制約（セキュリティポリシー、コーディング規約）
+
+### 5. 前提条件
+- システム環境
+- 依存コンポーネント
+- 外部システム連携
+
+### 6. 受け入れ基準
+- 各機能要件の受け入れ基準（Given-When-Then形式推奨）
+- テスト可能な形で記述
+
+### 7. スコープ外
+- 明確にスコープ外とする事項
+- 将来的な拡張候補
+
+## 出力形式
+
+Markdown形式で要件定義書を作成し、以下のファイルに保存してください：
+
+```
+.ai-workflow/issue-453/01_requirements/output/requirements.md
+```
+
+## 品質ゲート（Phase 1）
+
+作成する要件定義書は、以下の品質ゲートを満たす必要があります：
+
+- [ ] **機能要件が明確に記載されている**
+- [ ] **受け入れ基準が定義されている**
+- [ ] **スコープが明確である**
+- [ ] **論理的な矛盾がない**
+
+これらの品質ゲートは**必須要件**です。作成後、クリティカルシンキングレビューが実施され、品質ゲートを満たさない場合は修正が必要になります。
+
+## 注意事項
+
+1. **具体性**: 曖昧な表現を避け、具体的かつ測定可能な要件を記述
+   - NG例: "適切に処理する"、"必要に応じて対応"
+   - OK例: "3秒以内にレスポンスを返す"、"エラー発生時は管理者に通知"
+
+2. **整合性**: 各セクション間で矛盾がないか確認
+   - 機能要件と受け入れ基準が対応しているか
+   - 非機能要件と制約事項が矛盾していないか
+
+3. **完全性**: Issue本文の情報を漏れなく反映
+   - TODOセクションの項目をすべて機能要件に反映
+   - 概要セクションの背景・目的を明確に記述
+
+4. **検証可能性**: 各要件が検証可能（テスト可能）な形で記述
+   - 受け入れ基準は Given-When-Then 形式で記述
+   - 成功条件・失敗条件が明確に識別可能
+
+5. **レビューされることを意識**: 作成した要件定義書はクリティカルシンキングレビューが実施されます
+   - 品質ゲート（4つの必須要件）を最優先で満たすこと
+   - ブロッカー（次フェーズに進めない問題）がないように注意
+   - 改善提案は歓迎されるが、ブロッカーは修正が必須
+
+## 参考情報
+
+必要に応じて以下を参照してください（存在する場合）：
+- @CLAUDE.md - プロジェクトの全体方針とコーディングガイドライン
+- @ARCHITECTURE.md - アーキテクチャ設計思想
+- @CONTRIBUTION.md - 開発ガイドライン
+- @README.md - プロジェクト概要と使用方法
+- その他、プロジェクト固有のドキュメント
