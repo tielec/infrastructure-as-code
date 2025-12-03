@@ -1,4 +1,19 @@
 /**
+ * ⚠️ DEPRECATED: このジョブは非推奨です
+ *
+ * 新しいジョブ構成に移行してください：
+ * - AI_Workflow/{repository-name}/all_phases
+ * - AI_Workflow/{repository-name}/preset
+ * - AI_Workflow/{repository-name}/single_phase
+ * - AI_Workflow/{repository-name}/rollback
+ * - AI_Workflow/{repository-name}/auto_issue
+ *
+ * 削除予定日: 2025年2月17日（1ヶ月後）
+ *
+ * 移行ガイド: jenkins/README.md参照
+ *
+ * ========================================
+ *
  * AI Workflow Orchestrator - Job DSL
  *
  * GitHub Issue から PR 作成まで、Claude / Codex を使って自動開発ワークフローを実行する
@@ -8,6 +23,30 @@
 
 pipelineJob('AI_Workflow/ai_workflow_orchestrator') {
     description('''
+⚠️ **このジョブは非推奨です** ⚠️
+
+実行モードごとに分割された新しいジョブに移行してください：
+
+**新しいジョブ**:
+- AI_Workflow/{repository-name}/all_phases - 全フェーズ一括実行
+- AI_Workflow/{repository-name}/preset - プリセット実行
+- AI_Workflow/{repository-name}/single_phase - 単一フェーズ実行
+- AI_Workflow/{repository-name}/rollback - フェーズ差し戻し
+- AI_Workflow/{repository-name}/auto_issue - 自動Issue作成
+
+**メリット**:
+- パラメータ数が24個 → 8〜15個に削減
+- リポジトリごとにジョブが整理
+- 必要なパラメータのみ表示
+
+**削除予定日**: 2025年2月17日
+
+**移行方法**: jenkins/README.md の「AI_Workflowジョブの移行ガイド」を参照
+
+---
+
+# 旧ジョブ説明（以下、既存のまま）
+
 AI駆動開発ワークフロー
 
 GitHub Issue を入力として、要件定義から報告までの開発プロセスを AI が自律実行します。

@@ -328,8 +328,18 @@ folders:
 
       ### 概要
       GitHub IssueからPR作成まで、Claude AIが自動的に開発プロセスを実行します。
-      要件定義、詳細設計、テストシナリオ、実装、テスト、ドキュメント作成の
-      6フェーズを自動化し、開発者の生産性を向上させます。
+      実行モードごとにジョブが分割され、リポジトリ別に整理されています。
+
+      ### ジョブ構成
+      各リポジトリ配下に以下のジョブが配置されます：
+      * **all_phases** - 全フェーズ一括実行（planning → evaluation）
+      * **preset** - プリセット実行（quick-fix, implementation等）
+      * **single_phase** - 単一フェーズ実行
+      * **rollback** - フェーズ差し戻し実行
+      * **auto_issue** - AIによる自動Issue作成
+
+      ### パラメータ削減効果
+      実行モードごとの分割により、パラメータ数を24個 → 8〜15個に削減しました。
 
       ### 主な機能
       * **自動要件定義** - GitHub Issueから要件定義書を生成
@@ -339,71 +349,39 @@ folders:
       * **自動テスト** - テストの実行と結果検証
       * **自動ドキュメント** - README、APIドキュメントを生成
 
-      ### ワークフロー
-      1. Phase 1: 要件定義 (Requirements)
-      2. Phase 2: 詳細設計 (Design)
-      3. Phase 3: テストシナリオ (Test Scenario)
-      4. Phase 4: 実装 (Implementation)
-      5. Phase 5: テスト実行 (Testing)
-      6. Phase 6: ドキュメント作成 (Documentation)
-      7. PR作成
-
-      ### AIレビュー
-      各フェーズ完了後、AIが批判的思考レビューを実施:
-      - **PASS**: 次フェーズへ進行
-      - **PASS_WITH_SUGGESTIONS**: 改善提案あり、次フェーズへ進行
-      - **FAIL**: リトライ（最大3回）
-
-      ### コスト管理
-      - 1ワークフローあたり最大 $5.00 USD
-      - トークン数の追跡とコスト制限
-      - 警告閾値: 80%（$4.00）
-
-      ### パラメータ
-      * **ISSUE_URL**: GitHub Issue URL（必須）
-      * **DRY_RUN**: ドライランモード（デフォルト: false）
-      * **SKIP_REVIEW**: レビュースキップ（デフォルト: false）
-      * **MAX_RETRIES**: 最大リトライ回数（デフォルト: 3）
-      * **COST_LIMIT_USD**: コスト上限（デフォルト: $5.00）
-      * **LOG_LEVEL**: ログレベル（デフォルト: INFO）
-
-      ### 現在の実装状況
-      **MVP v1.0.0**: ワークフロー基盤のみ実装
-      - ✅ ワークフロー初期化（metadata.json生成）
-      - ✅ Python環境セットアップ
-      - ⏳ Phase 1-6の自動実行は今後の拡張で実装予定
-
       ### 必要な認証情報
       * **claude-api-key**: Claude API キー（Jenkinsクレデンシャル）
       * **github-token**: GitHub Token（Jenkinsクレデンシャル）
 
-      ### 必要な環境
-      * Python 3.10以上
-      * pip
-      * Git
-
-      ### ドキュメント
-      * **README**: scripts/ai-workflow-v2/README.md
-      * **アーキテクチャ**: scripts/ai-workflow-v2/ARCHITECTURE.md
-
-      ### 成果物
-      実行後、`.ai-workflow/issue-{番号}/` に以下が生成されます:
-      * metadata.json - ワークフロー状態管理
-      * 01-requirements.md - 要件定義書（将来実装）
-      * 02-design.md - 詳細設計書（将来実装）
-      * 03-test-scenario.md - テストシナリオ（将来実装）
-      * 04-implementation.md - 実装ログ（将来実装）
-      * 05-testing.md - テスト実行ログ（将来実装）
-      * 06-documentation.md - ドキュメント（将来実装）
-
-      ### 注意事項
-      * このジョブはClaude APIを使用します（有料）
-      * コスト上限を超えると自動停止します
-      * 実行前にIssue内容を確認してください
-      * DRY_RUNモードで動作確認することを推奨
-
 # 動的フォルダ生成ルール
 dynamic_folders:
+  # AI Workflowのリポジトリ別フォルダ
+  - parent_path: "AI_Workflow"
+    source: "jenkins-managed-repositories"
+    template:
+      path_suffix: "{name}"
+      displayName: "AI Workflow - {name}"
+      description: |
+        {name}リポジトリのAI駆動開発ワークフロージョブ
+
+        ### 提供ジョブ
+        * **all_phases** - 全フェーズ一括実行（14パラメータ）
+        * **preset** - プリセット実行（15パラメータ）
+        * **single_phase** - 単一フェーズ実行（13パラメータ）
+        * **rollback** - フェーズ差し戻し実行（12パラメータ）
+        * **auto_issue** - 自動Issue作成（8パラメータ）
+
+        ### 実行モード
+        各ジョブは実行モードが固定されており、必要なパラメータのみを表示します。
+
+        ### 推奨の使い方
+        1. **通常の開発**: `preset` → `implementation`を選択
+        2. **軽微な修正**: `preset` → `quick-fix`を選択
+        3. **テストのみ追加**: `preset` → `testing`を選択
+        4. **特定フェーズのみ**: `single_phase`でフェーズを指定
+        5. **レビュー修正**: `rollback`で差し戻し先を指定
+        6. **Issue探索**: `auto_issue`でバグや改善点を検出
+
   # Code Quality Checkerのリポジトリ別フォルダ
   - parent_path: "Code_Quality_Checker"
     source: "jenkins-managed-repositories"

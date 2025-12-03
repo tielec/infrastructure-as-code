@@ -1,0 +1,183 @@
+/**
+ * AI Workflow Single Phase Job DSL
+ *
+ * 単一フェーズ実行用ジョブ（指定フェーズのみ実行）
+ * EXECUTION_MODE: single_phase（固定値、パラメータとして表示しない）
+ * パラメータ数: 13個
+ */
+
+// リポジトリ情報を取得
+def repositories = jenkinsManagedRepositories.collect { name, repo ->
+    [
+        name: name,
+        url: repo.httpsUrl,
+        credentialsId: repo.credentialsId
+    ]
+}
+
+// 共通設定を取得
+def jenkinsPipelineRepo = commonSettings['jenkins-pipeline-repo']
+def jobKey = 'ai_workflow_single_phase_job'
+def jobConfig = jenkinsJobsConfig[jobKey]
+
+// 各リポジトリのジョブを作成
+repositories.each { repo ->
+    def jobName = "AI_Workflow/${repo.name}/${jobConfig.name}"
+
+    pipelineJob(jobName) {
+        displayName(jobConfig.displayName)
+
+        description("""\
+            |# AI Workflow - Single Phase Execution
+            |
+            |リポジトリ: ${repo.name}
+            |
+            |## 概要
+            |指定した単一フェーズのみを実行します（デバッグ用）。
+            |
+            |## フェーズ
+            |- planning: 計画
+            |- requirements: 要件定義
+            |- design: 詳細設計
+            |- test_scenario: テストシナリオ
+            |- implementation: 実装
+            |- test_implementation: テスト実装
+            |- testing: テスト実行
+            |- documentation: ドキュメント作成
+            |- report: レポート作成
+            |- evaluation: 評価
+            |
+            |## 注意事項
+            |- EXECUTION_MODEは内部的に'single_phase'に固定されます
+            |- コスト上限: デフォルト \$5.00 USD
+            """.stripMargin())
+
+        // パラメータ定義
+        parameters {
+            // ========================================
+            // 基本設定
+            // ========================================
+            stringParam('ISSUE_URL', '', '''
+GitHub Issue URL（必須）
+
+例: https://github.com/tielec/my-project/issues/123
+注: Issue URL から対象リポジトリを自動判定します
+            '''.stripIndent().trim())
+
+            stringParam('BRANCH_NAME', '', '''
+作業ブランチ名（任意）
+空欄の場合は Issue 番号から自動生成されます
+            '''.stripIndent().trim())
+
+            choiceParam('AGENT_MODE', ['auto', 'codex', 'claude'], '''
+エージェントの実行モード
+- auto: Codex APIキーがあれば Codex を優先し、なければ Claude Code を使用
+- codex: Codex のみを使用（CODEX_API_KEY または OPENAI_API_KEY が必要）
+- claude: Claude Code のみを使用（credentials.json が必要）
+            '''.stripIndent().trim())
+
+            // ========================================
+            // フェーズ指定
+            // ========================================
+            choiceParam('START_PHASE', ['planning', 'requirements', 'design', 'test_scenario', 'implementation', 'test_implementation', 'testing', 'documentation', 'report', 'evaluation'], '''
+開始フェーズ（必須）
+
+指定したフェーズのみを実行します
+            '''.stripIndent().trim())
+
+            // ========================================
+            // 実行オプション
+            // ========================================
+            booleanParam('DRY_RUN', false, '''
+ドライランモード（API 呼び出しや Git 操作を行わず動作確認のみ実施）
+            '''.stripIndent().trim())
+
+            booleanParam('SKIP_REVIEW', false, '''
+AI レビューをスキップする（検証・デバッグ用）
+            '''.stripIndent().trim())
+
+            choiceParam('MAX_RETRIES', ['3', '1', '5', '10'], '''
+フェーズ失敗時の最大リトライ回数
+            '''.stripIndent().trim())
+
+            // ========================================
+            // Git 設定
+            // ========================================
+            stringParam('GIT_COMMIT_USER_NAME', 'AI Workflow Bot', '''
+Git コミットユーザー名
+            '''.stripIndent().trim())
+
+            stringParam('GIT_COMMIT_USER_EMAIL', 'ai-workflow@example.com', '''
+Git コミットメールアドレス
+            '''.stripIndent().trim())
+
+            // ========================================
+            // AWS 認証情報（Infrastructure as Code 用）
+            // ========================================
+            stringParam('AWS_ACCESS_KEY_ID', '', '''
+AWS アクセスキー ID（任意）
+Infrastructure as Code実行時に必要
+            '''.stripIndent().trim())
+
+            nonStoredPasswordParam('AWS_SECRET_ACCESS_KEY', '''
+AWS シークレットアクセスキー（任意）
+Infrastructure as Code実行時に必要
+            '''.stripIndent().trim())
+
+            nonStoredPasswordParam('AWS_SESSION_TOKEN', '''
+AWS セッショントークン（任意）
+一時的な認証情報を使用する場合
+            '''.stripIndent().trim())
+
+            // ========================================
+            // その他
+            // ========================================
+            stringParam('COST_LIMIT_USD', '5.0', '''
+ワークフローあたりのコスト上限（USD）
+            '''.stripIndent().trim())
+
+            choiceParam('LOG_LEVEL', ['INFO', 'DEBUG', 'WARNING', 'ERROR'], '''
+ログレベル
+- INFO: 一般的な情報
+- DEBUG: 詳細ログ（デバッグ用）
+- WARNING / ERROR: 警告 / エラーのみ
+            '''.stripIndent().trim())
+        }
+
+        // ログローテーション
+        logRotator {
+            numToKeep(30)
+            daysToKeep(90)
+        }
+
+        // パイプライン定義
+        definition {
+            cpsScm {
+                scm {
+                    git {
+                        remote {
+                            url('https://github.com/tielec/ai-workflow-agent.git')
+                            credentials('github-token')
+                        }
+                        branch('*/main')
+                    }
+                }
+                scriptPath('Jenkinsfile')
+            }
+        }
+
+        // 環境変数（EXECUTION_MODEを固定値として設定）
+        environmentVariables {
+            env('EXECUTION_MODE', 'single_phase')
+            env('WORKFLOW_VERSION', '0.2.0')
+        }
+
+        // プロパティ
+        properties {
+            disableConcurrentBuilds()
+        }
+
+        // ジョブの無効化状態
+        disabled(false)
+    }
+}
