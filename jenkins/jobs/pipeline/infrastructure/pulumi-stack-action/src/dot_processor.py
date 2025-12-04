@@ -5,6 +5,7 @@ DOT file processing for Pulumi dependency graphs
 import re
 from typing import Dict, List, Tuple
 from urn_processor import UrnProcessor
+from node_label_generator import NodeLabelGenerator
 
 
 class DotFileGenerator:
@@ -341,54 +342,28 @@ class DotFileProcessor:
         """ノード定義を処理"""
         # ノードIDを抽出
         node_id = line.strip().split('[')[0].strip()
-        
+
         # URNを抽出
         urn_match = re.search(r'label="([^"]+)"', line)
         if not urn_match:
             return line, None
-        
+
         urn = urn_match.group(1)
         urn_info = UrnProcessor.parse_urn(urn)
 
-        # ノード属性を生成
-        node_attrs = DotFileProcessor._generate_node_attributes(urn, urn_info)
-        
+        # NodeLabelGeneratorでノード属性を生成
+        node_attrs = NodeLabelGenerator.generate_node_label(urn, urn_info)
+
         # 新しいノード定義
         new_line = f'    {node_id} [{node_attrs}];'
-        
+
         # メタデータを返す
         result_info = {'node_urn_map': {node_id: urn_info}}
         if UrnProcessor.is_stack_resource(urn):
             result_info['stack_node_id'] = node_id
 
         return new_line, result_info
-    
-    @staticmethod
-    def _generate_node_attributes(urn: str, urn_info: Dict) -> str:
-        """ノード属性を生成"""
-        if UrnProcessor.is_stack_resource(urn):
-            return DotFileProcessor._generate_stack_node_attributes(urn_info)
-        else:
-            return DotFileProcessor._generate_resource_node_attributes(urn_info)
-    
-    @staticmethod
-    def _generate_stack_node_attributes(urn_info: Dict) -> str:
-        """スタックノードの属性を生成"""
-        new_label = f"Stack\\n{urn_info['stack']}"
-        return f'label="{new_label}", fillcolor="#D1C4E9", color="#512DA8", shape=ellipse, fontsize="14"'
-    
-    @staticmethod
-    def _generate_resource_node_attributes(urn_info: Dict) -> str:
-        """リソースノードの属性を生成"""
-        new_label = UrnProcessor.create_readable_label(urn_info)
-        provider_colors = DotFileProcessor.PROVIDER_COLORS.get(
-            urn_info['provider'].lower(),
-            DotFileProcessor.DEFAULT_COLORS
-        )
-        fillcolor = provider_colors[0]
-        color = provider_colors[1]
-        return f'label="{new_label}", fillcolor="{fillcolor}", color="{color}", shape=box, fontsize="11"'
-    
+
     @staticmethod
     def _process_edge_definition(line: str, stack_node_id: str) -> Tuple[str, None]:
         """エッジ定義を処理（スタックへの依存を逆転）"""
