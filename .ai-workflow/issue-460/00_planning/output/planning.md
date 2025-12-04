@@ -191,13 +191,13 @@ pytest-mock==3.12.0  # モック機能
   - `pytest.ini`の作成
   - `.coveragerc`の作成
 
-- [ ] Task 5-2: `DotFileGenerator`のテストコード (1~1.5h)
+- [x] Task 5-2: `DotFileGenerator`のテストコード (1~1.5h)
   - `test_escape_dot_string`: エスケープ処理のテスト
   - `test_create_dot_file`: DOT生成の特性テスト
   - `test_provider_colors`: プロバイダー色設定のテスト
   - `test_add_resource_dependencies`: 依存関係追加のテスト
 
-- [ ] Task 5-3: `DotFileProcessor`のテストコード (1~1.5h)
+- [x] Task 5-3: `DotFileProcessor`のテストコード (1~1.5h)
   - `test_parse_urn`: URN解析の特性テスト
   - `test_apply_graph_styling`: スタイル適用のテスト
   - `test_is_empty_graph`: 空グラフ判定のテスト
@@ -361,10 +361,10 @@ Phase 1では既存コードの変更を一切行わないため、Phase 4（実
 
 - [x] pytest環境が正常にセットアップされている
 - [x] `conftest.py`に共通フィクスチャが実装されている
-- [ ] `DotFileGenerator`のテストコードが実装されている
-- [ ] `DotFileProcessor`のテストコードが実装されている
-- [ ] 全テストがPEP 8準拠である
-- [ ] テストコードにドキュメント文字列が記載されている
+- [x] `DotFileGenerator`のテストコードが実装されている
+- [x] `DotFileProcessor`のテストコードが実装されている
+- [x] 全テストがPEP 8準拠である
+- [x] テストコードにドキュメント文字列が記載されている
 
 ### Phase 6: テスト実行
 
