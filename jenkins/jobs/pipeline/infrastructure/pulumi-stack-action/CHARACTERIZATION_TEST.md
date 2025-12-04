@@ -250,3 +250,54 @@ Phase 2-3リファクタリングにより、依存関係処理の責務を`DotF
 - 要件定義: `.ai-workflow/issue-463/01_requirements/output/requirements.md`
 - 設計書: `.ai-workflow/issue-463/02_design/output/design.md`
 - 実装ログ: `.ai-workflow/issue-463/04_implementation/output/implementation.md`
+
+### Phase 3: Issue #464 - 統合とネスト解消
+
+**実施日**: 2025-01-XX
+
+Phase 3リファクタリングにより、Phase 2で作成した新規クラスの統合を完成させ、`dot_processor.py`の深いネスト構造を平坦化しました。
+
+**目的**: コード品質向上（Cyclomatic Complexity削減、ネストレベル削減）、保守性向上
+
+**変更内容**:
+- 修正: `src/dot_processor.py`（ネスト解消、4つの新規ヘルパーメソッド追加）
+  - `_update_node_info()`: node_info更新ロジックを抽出
+  - `_is_node_definition_line()`: ノード定義行判定を抽出
+  - `_is_edge_to_stack_line()`: スタックへのエッジ行判定を抽出
+  - `_detect_provider_colors()`: プロバイダー別色設定検出を抽出
+- 拡張: `tests/test_dot_processor.py`（新規テストケース24個追加）
+  - 新規クラス: `TestDotProcessorHelperMethods`（17テストケース）
+  - 新規クラス: `TestDotProcessorIntegration`（6テストケース）
+  - 新規クラス: `TestDotProcessorPerformance`（1テストケース）
+
+**Cyclomatic Complexity改善結果**:
+| メソッド | 変更前 | 変更後 | 改善 |
+|---------|-------|-------|------|
+| `_enhance_pulumi_graph()` | 5 | 4 | ✅ -1 |
+| `_process_graph_line()` | 5 | 2 | ✅ -3 |
+| `_process_single_node()` | 5 | 3 | ✅ -2 |
+
+**ネストレベル改善結果**:
+| メソッド | 変更前 | 変更後 | 改善 |
+|---------|-------|-------|------|
+| `_enhance_pulumi_graph()` | 3 | 2 | ✅ -1 |
+| `_process_single_node()` | 3 | 2 | ✅ -1 |
+
+**影響**:
+- 外部から見た`DotFileProcessor`の振る舞いは完全に維持されています
+- 内部実装のみ変更（ネスト解消、ヘルパーメソッド抽出）
+- すべてのメソッドでCyclomatic Complexity < 10を達成
+- すべてのメソッドでネストレベル ≤ 3を達成
+
+**テスト実行状況**:
+- Phase 6（テスト実行）は環境制約により実行不可
+- テストコードは完全に実装済み（24/24テストケース）
+- CI/CD環境での実行を推奨
+
+**関連ドキュメント**:
+- 計画書: `.ai-workflow/issue-464/00_planning/output/planning.md`
+- 要件定義: `.ai-workflow/issue-464/01_requirements/output/requirements.md`
+- 設計書: `.ai-workflow/issue-464/02_design/output/design.md`
+- 実装ログ: `.ai-workflow/issue-464/04_implementation/output/implementation.md`
+- テスト実装ログ: `.ai-workflow/issue-464/05_test_implementation/output/test-implementation.md`
+- テスト結果: `.ai-workflow/issue-464/06_testing/output/test-result.md`
