@@ -72,3 +72,10 @@ def node_label_generator():
     """NodeLabelGeneratorインスタンスを返す（静的メソッドのため実際にはクラスを返す）"""
     from node_label_generator import NodeLabelGenerator
     return NodeLabelGenerator
+
+
+@pytest.fixture
+def resource_dependency_builder():
+    """ResourceDependencyBuilderインスタンスを返す（静的メソッドのため実際にはクラスを返す）"""
+    from resource_dependency_builder import ResourceDependencyBuilder
+    return ResourceDependencyBuilder
