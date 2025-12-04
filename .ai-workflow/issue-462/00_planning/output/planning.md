@@ -296,18 +296,18 @@ After (Phase 2-2):
 
 ### Phase 5: テストコード実装 (見積もり: 2~3h)
 
-- [ ] Task 5-1: test_node_label_generator.py新規作成 (1~1.5h)
+- [x] Task 5-1: test_node_label_generator.py新規作成 (1~1.5h)
   - テストファイル作成
   - 基本的なラベル生成テスト
   - スタックラベルとリソースラベルのテスト
   - エッジケーステスト
 
-- [ ] Task 5-2: カスタムラベル対応テスト実装 (0.5~1h)
+- [x] Task 5-2: カスタムラベル対応テスト実装 (0.5~1h)
   - カスタムラベルフォーマットのテスト
   - プロバイダー別色設定のテスト
   - 長いラベルの省略テスト
 
-- [ ] Task 5-3: conftest.pyの更新 (0.5h)
+- [x] Task 5-3: conftest.pyの更新 (0.5h)
   - `node_label_generator`フィクスチャの追加
   - 既存フィクスチャの動作確認
 
@@ -485,10 +485,10 @@ graph TD
 
 ### Phase 5: テストコード実装
 
-- [ ] test_node_label_generator.pyが作成されている
-- [ ] すべてのテストシナリオが実装されている
-- [ ] conftest.pyが更新されている
-- [ ] テストコードが読みやすく、保守可能である
+- [x] test_node_label_generator.pyが作成されている
+- [x] すべてのテストシナリオが実装されている
+- [x] conftest.pyが更新されている
+- [x] テストコードが読みやすく、保守可能である
 
 ### Phase 6: テスト実行
 
