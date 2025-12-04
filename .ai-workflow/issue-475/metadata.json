@@ -120,14 +120,15 @@
       ]
     },
     "report": {
-      "status": "in_progress",
+      "status": "completed",
       "retry_count": 0,
       "started_at": "2025-12-04T23:54:42.803Z",
-      "completed_at": null,
+      "completed_at": "2025-12-04T23:58:39.861Z",
       "review_result": null,
-      "current_step": "review",
+      "current_step": null,
       "completed_steps": [
-        "execute"
+        "execute",
+        "review"
       ]
     },
     "evaluation": {
@@ -144,7 +145,7 @@
     }
   },
   "created_at": "2025-12-04T23:23:30.667Z",
-  "updated_at": "2025-12-04T23:58:33.117Z",
+  "updated_at": "2025-12-04T23:58:40.401Z",
   "branch_name": "ai-workflow/issue-475",
   "base_commit": "94c97ed54a6e52284dcf779757d903886ea5ef90",
   "pr_number": 476,
