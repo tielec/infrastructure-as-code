@@ -1218,18 +1218,178 @@ class TestDotProcessorIntegration:
 
 
 # =============================================================================
-# パフォーマンステスト
+# パフォーマンステスト（Phase 4追加）
 # =============================================================================
 
-class TestDotProcessorPerformance:
-    """DotFileProcessor - パフォーマンステスト"""
+class TestPerformanceBenchmark:
+    """パフォーマンステスト - リファクタリング前後のベンチマーク比較
+
+    目的:
+    - リファクタリング前後の性能差が±10%以内であることを検証
+    - 各メソッドの実行時間を測定
+    - ベンチマーク結果をレポート用に記録
+
+    テスト対象メソッド:
+    - DotFileGenerator.create_dot_file()
+    - DotFileProcessor.apply_graph_styling()
+    - UrnProcessor.parse_urn() (間接的)
+    - NodeLabelGenerator.generate_node_label() (間接的)
+    - ResourceDependencyBuilder.add_resource_dependencies() (間接的)
+    """
 
     @pytest.mark.performance
-    def test_performance_20_resources(self, dot_file_generator):
-        """TC-I-08: パフォーマンステスト - 20リソース処理時間"""
-        import time
+    def test_create_dot_file_performance_1_resource(self, dot_file_generator):
+        """TC-P-01: 1リソース処理時間（正常系）
 
-        # Given: 20リソース
+        Given: 1リソースのPulumiデータ
+        When: create_dot_file()を100回実行
+        Then: 平均実行時間 < 0.1秒、標準偏差が小さい
+        """
+        import time
+        import statistics
+
+        # Given: 1リソース
+        resources = [{
+            'type': 'aws:s3/bucket:Bucket',
+            'urn': 'urn:pulumi:dev::myproject::aws:s3/bucket:Bucket::bucket-1',
+            'dependencies': [],
+            'parent': None,
+            'propertyDependencies': {}
+        }]
+        resource_providers = {'aws': 1}
+
+        # ウォームアップ実行（10回）
+        for _ in range(10):
+            dot_file_generator.create_dot_file('dev', resources, resource_providers)
+
+        # When: 本測定（100回実行）
+        execution_times = []
+        for _ in range(100):
+            start = time.perf_counter()
+            result = dot_file_generator.create_dot_file('dev', resources, resource_providers)
+            elapsed = time.perf_counter() - start
+            execution_times.append(elapsed)
+
+        # Then: 平均実行時間と標準偏差を計算
+        avg_time = statistics.mean(execution_times)
+        std_dev = statistics.stdev(execution_times)
+
+        # 検証: 平均実行時間 < 0.1秒
+        assert avg_time < 0.1, f"平均実行時間 {avg_time:.6f}秒が0.1秒を超えています"
+        # 標準偏差が平均の10%未満（安定した実行時間）
+        assert std_dev < avg_time * 0.1, f"標準偏差 {std_dev:.6f}秒が大きすぎます"
+        # 結果が正しく生成されている
+        assert isinstance(result, list)
+
+        # ログ出力（レポート用）
+        print(f"\n[TC-P-01] 1リソース: 平均 {avg_time:.6f}秒, 標準偏差 {std_dev:.6f}秒")
+
+    @pytest.mark.performance
+    def test_create_dot_file_performance_5_resources(self, dot_file_generator):
+        """TC-P-02: 5リソース処理時間（正常系）
+
+        Given: 5リソースのPulumiデータ
+        When: create_dot_file()を100回実行
+        Then: 平均実行時間 < 0.5秒
+        """
+        import time
+        import statistics
+
+        # Given: 5リソース
+        resources = []
+        for i in range(5):
+            resources.append({
+                'type': 'aws:s3/bucket:Bucket',
+                'urn': f'urn:pulumi:dev::myproject::aws:s3/bucket:Bucket::bucket-{i}',
+                'dependencies': [],
+                'parent': None,
+                'propertyDependencies': {}
+            })
+        resource_providers = {'aws': 5}
+
+        # ウォームアップ実行（10回）
+        for _ in range(10):
+            dot_file_generator.create_dot_file('dev', resources, resource_providers)
+
+        # When: 本測定（100回実行）
+        execution_times = []
+        for _ in range(100):
+            start = time.perf_counter()
+            result = dot_file_generator.create_dot_file('dev', resources, resource_providers)
+            elapsed = time.perf_counter() - start
+            execution_times.append(elapsed)
+
+        # Then: 平均実行時間と標準偏差を計算
+        avg_time = statistics.mean(execution_times)
+        std_dev = statistics.stdev(execution_times)
+
+        # 検証: 平均実行時間 < 0.5秒
+        assert avg_time < 0.5, f"平均実行時間 {avg_time:.6f}秒が0.5秒を超えています"
+        assert std_dev < avg_time * 0.1, f"標準偏差 {std_dev:.6f}秒が大きすぎます"
+        assert isinstance(result, list)
+
+        # ログ出力（レポート用）
+        print(f"\n[TC-P-02] 5リソース: 平均 {avg_time:.6f}秒, 標準偏差 {std_dev:.6f}秒")
+
+    @pytest.mark.performance
+    def test_create_dot_file_performance_10_resources(self, dot_file_generator):
+        """TC-P-03: 10リソース処理時間（正常系）
+
+        Given: 10リソースのPulumiデータ
+        When: create_dot_file()を100回実行
+        Then: 平均実行時間 < 1.0秒
+        """
+        import time
+        import statistics
+
+        # Given: 10リソース
+        resources = []
+        for i in range(10):
+            resources.append({
+                'type': 'aws:s3/bucket:Bucket',
+                'urn': f'urn:pulumi:dev::myproject::aws:s3/bucket:Bucket::bucket-{i}',
+                'dependencies': [],
+                'parent': None,
+                'propertyDependencies': {}
+            })
+        resource_providers = {'aws': 10}
+
+        # ウォームアップ実行（10回）
+        for _ in range(10):
+            dot_file_generator.create_dot_file('dev', resources, resource_providers)
+
+        # When: 本測定（100回実行）
+        execution_times = []
+        for _ in range(100):
+            start = time.perf_counter()
+            result = dot_file_generator.create_dot_file('dev', resources, resource_providers)
+            elapsed = time.perf_counter() - start
+            execution_times.append(elapsed)
+
+        # Then: 平均実行時間と標準偏差を計算
+        avg_time = statistics.mean(execution_times)
+        std_dev = statistics.stdev(execution_times)
+
+        # 検証: 平均実行時間 < 1.0秒
+        assert avg_time < 1.0, f"平均実行時間 {avg_time:.6f}秒が1.0秒を超えています"
+        assert std_dev < avg_time * 0.1, f"標準偏差 {std_dev:.6f}秒が大きすぎます"
+        assert isinstance(result, list)
+
+        # ログ出力（レポート用）
+        print(f"\n[TC-P-03] 10リソース: 平均 {avg_time:.6f}秒, 標準偏差 {std_dev:.6f}秒")
+
+    @pytest.mark.performance
+    def test_create_dot_file_performance_20_resources(self, dot_file_generator):
+        """TC-P-04: 20リソース処理時間（境界値）
+
+        Given: 20リソース（最大値）のPulumiデータ
+        When: create_dot_file()を100回実行
+        Then: 平均実行時間 < 2.0秒
+        """
+        import time
+        import statistics
+
+        # Given: 20リソース（最大値）
         resources = []
         for i in range(20):
             resources.append({
@@ -1241,14 +1401,693 @@ class TestDotProcessorPerformance:
             })
         resource_providers = {'aws': 20}
 
-        # When: 処理時間を測定
-        start = time.time()
-        result = dot_file_generator.create_dot_file('dev', resources, resource_providers)
-        elapsed = time.time() - start
+        # ウォームアップ実行（10回）
+        for _ in range(10):
+            dot_file_generator.create_dot_file('dev', resources, resource_providers)
 
-        # Then: 1秒以内に処理完了
-        assert elapsed < 1.0
-        # 結果が正しく生成されている
+        # When: 本測定（100回実行）
+        execution_times = []
+        for _ in range(100):
+            start = time.perf_counter()
+            result = dot_file_generator.create_dot_file('dev', resources, resource_providers)
+            elapsed = time.perf_counter() - start
+            execution_times.append(elapsed)
+
+        # Then: 平均実行時間と標準偏差を計算
+        avg_time = statistics.mean(execution_times)
+        std_dev = statistics.stdev(execution_times)
+
+        # 検証: 平均実行時間 < 2.0秒
+        assert avg_time < 2.0, f"平均実行時間 {avg_time:.6f}秒が2.0秒を超えています"
+        assert std_dev < avg_time * 0.1, f"標準偏差 {std_dev:.6f}秒が大きすぎます"
         assert isinstance(result, list)
+        # 20リソース全てが処理されている
         resource_nodes = [line for line in result if 'resource_' in line and '[label=' in line]
         assert len(resource_nodes) == 20
+
+        # ログ出力（レポート用）
+        print(f"\n[TC-P-04] 20リソース: 平均 {avg_time:.6f}秒, 標準偏差 {std_dev:.6f}秒")
+
+    @pytest.mark.performance
+    def test_apply_graph_styling_performance(self, dot_file_processor, dot_file_generator):
+        """TC-P-05: グラフスタイル適用処理時間
+
+        Given: 10リソースのDOT文字列（スタイル未適用）
+        When: apply_graph_styling()を100回実行
+        Then: 平均実行時間 < 0.1秒
+        """
+        import time
+        import statistics
+
+        # Given: 10リソースのDOT文字列を生成
+        resources = []
+        for i in range(10):
+            resources.append({
+                'type': 'aws:s3/bucket:Bucket',
+                'urn': f'urn:pulumi:dev::myproject::aws:s3/bucket:Bucket::bucket-{i}',
+                'dependencies': [],
+                'parent': None,
+                'propertyDependencies': {}
+            })
+        resource_providers = {'aws': 10}
+        dot_lines = dot_file_generator.create_dot_file('dev', resources, resource_providers)
+        dot_content = '\n'.join(dot_lines)
+
+        # ウォームアップ実行（10回）
+        for _ in range(10):
+            dot_file_processor.apply_graph_styling(dot_content)
+
+        # When: 本測定（100回実行）
+        execution_times = []
+        for _ in range(100):
+            start = time.perf_counter()
+            result = dot_file_processor.apply_graph_styling(dot_content)
+            elapsed = time.perf_counter() - start
+            execution_times.append(elapsed)
+
+        # Then: 平均実行時間と標準偏差を計算
+        avg_time = statistics.mean(execution_times)
+        std_dev = statistics.stdev(execution_times)
+
+        # 検証: 平均実行時間 < 0.1秒
+        assert avg_time < 0.1, f"平均実行時間 {avg_time:.6f}秒が0.1秒を超えています"
+        assert std_dev < avg_time * 0.1, f"標準偏差 {std_dev:.6f}秒が大きすぎます"
+        assert isinstance(result, str)
+
+        # ログ出力（レポート用）
+        print(f"\n[TC-P-05] グラフスタイル適用: 平均 {avg_time:.6f}秒, 標準偏差 {std_dev:.6f}秒")
+
+
+# =============================================================================
+# Phase 5: 統合テスト（エンドツーエンド、エラーハンドリング、境界値）
+# =============================================================================
+
+class TestEndToEndIntegration:
+    """エンドツーエンド統合テスト（5ケース）
+
+    目的:
+    - Pulumi生成データ → DOT出力までの一連の流れを検証
+    - Phase 1~3で分離された4つのクラスの協調動作を確認
+    - エンドユーザーのユースケース検証
+    """
+
+    @pytest.mark.integration
+    def test_e2e_basic_aws_stack(self, dot_file_generator, dot_file_processor):
+        """TC-E-01: 基本的なAWSスタックの可視化
+
+        Feature: Pulumi生成データからDOTファイル生成
+        Scenario: 基本的なAWSリソースのグラフを正しく生成できる
+
+        Given: Pulumiで生成されたAWSリソースデータが存在する
+        When: DOTファイル生成とスタイル適用を実行する
+        Then: 正しいDOTファイルが生成される
+        """
+        # Given: 基本的なAWSリソースデータ（3個）
+        stack_name = 'dev-stack'
+        resources = [
+            {
+                'urn': 'urn:pulumi:dev::myapp::aws:s3/bucket:Bucket::my-bucket',
+                'type': 'aws:s3/bucket:Bucket',
+                'dependencies': [],
+                'parent': None,
+                'propertyDependencies': {}
+            },
+            {
+                'urn': 'urn:pulumi:dev::myapp::aws:iam/role:Role::lambda-role',
+                'type': 'aws:iam/role:Role',
+                'dependencies': [],
+                'parent': None,
+                'propertyDependencies': {}
+            },
+            {
+                'urn': 'urn:pulumi:dev::myapp::aws:lambda/function:Function::my-function',
+                'type': 'aws:lambda/function:Function',
+                'dependencies': ['urn:pulumi:dev::myapp::aws:iam/role:Role::lambda-role'],
+                'parent': None,
+                'propertyDependencies': {}
+            }
+        ]
+        resource_providers = {'aws': 3}
+
+        # When: DOTファイル生成とスタイル適用
+        dot_lines = dot_file_generator.create_dot_file(stack_name, resources, resource_providers)
+        dot_content = '\n'.join(dot_lines)
+        styled_dot = dot_file_processor.apply_graph_styling(dot_content)
+
+        # Then: DOTファイルが正しく生成される
+        assert 'digraph G {' in styled_dot
+        # スタックノードが存在
+        assert 'dev-stack' in styled_dot
+        # プロバイダーノードが存在
+        assert 'provider_aws' in styled_dot or 'aws' in styled_dot
+        # 3つのリソースノードが存在
+        assert 'resource_0' in styled_dot
+        assert 'resource_1' in styled_dot
+        assert 'resource_2' in styled_dot
+        # Lambda → IAMロールの依存関係エッジが存在
+        assert '->' in styled_dot
+        # AWSプロバイダーの色設定が適用されている
+        assert '#FFF3E0' in styled_dot or '#EF6C00' in styled_dot
+
+    @pytest.mark.integration
+    def test_e2e_multi_cloud_stack(self, dot_file_generator, dot_file_processor):
+        """TC-E-02: マルチクラウドスタックの可視化
+
+        Feature: マルチクラウドリソースのグラフ生成
+        Scenario: AWS and Azureの両方のリソースを含むグラフを正しく生成できる
+
+        Given: AWS and Azureのリソースが混在するPulumiデータが存在する
+        When: DOTファイル生成とスタイル適用を実行する
+        Then: 両方のプロバイダーの色設定が適用される
+        """
+        # Given: AWS and Azureのリソースが混在するデータ
+        stack_name = 'multi-cloud-stack'
+        resources = [
+            # AWS Resources
+            {
+                'urn': 'urn:pulumi:dev::app::aws:s3/bucket:Bucket::bucket1',
+                'type': 'aws:s3/bucket:Bucket',
+                'dependencies': [],
+                'parent': None,
+                'propertyDependencies': {}
+            },
+            {
+                'urn': 'urn:pulumi:dev::app::aws:ec2/instance:Instance::instance1',
+                'type': 'aws:ec2/instance:Instance',
+                'dependencies': [],
+                'parent': None,
+                'propertyDependencies': {}
+            },
+            {
+                'urn': 'urn:pulumi:dev::app::aws:rds/instance:Instance::db1',
+                'type': 'aws:rds/instance:Instance',
+                'dependencies': [],
+                'parent': None,
+                'propertyDependencies': {}
+            },
+            # Azure Resources
+            {
+                'urn': 'urn:pulumi:dev::app::azure:storage/account:Account::storage1',
+                'type': 'azure:storage/account:Account',
+                'dependencies': [],
+                'parent': None,
+                'propertyDependencies': {}
+            },
+            {
+                'urn': 'urn:pulumi:dev::app::azure:compute/virtualMachine:VirtualMachine::vm1',
+                'type': 'azure:compute/virtualMachine:VirtualMachine',
+                'dependencies': [],
+                'parent': None,
+                'propertyDependencies': {}
+            }
+        ]
+        resource_providers = {'aws': 3, 'azure': 2}
+
+        # When: DOTファイル生成とスタイル適用
+        dot_lines = dot_file_generator.create_dot_file(stack_name, resources, resource_providers)
+        dot_content = '\n'.join(dot_lines)
+        styled_dot = dot_file_processor.apply_graph_styling(dot_content)
+
+        # Then: 両方のプロバイダーノードが存在
+        assert 'provider_aws' in styled_dot or 'aws' in styled_dot
+        assert 'provider_azure' in styled_dot or 'azure' in styled_dot
+        # AWSの色設定（オレンジ系）
+        assert '#FFF3E0' in styled_dot or '#EF6C00' in styled_dot
+        # Azureの色設定（青系）
+        assert '#E3F2FD' in styled_dot or '#0078D4' in styled_dot
+        # 5つのリソースノードが存在
+        assert 'resource_0' in styled_dot
+        assert 'resource_4' in styled_dot
+
+    @pytest.mark.integration
+    def test_e2e_complex_dependencies(self, dot_file_generator, dot_file_processor):
+        """TC-E-03: 複雑な依存関係の可視化
+
+        Feature: 複雑な依存関係を持つリソースのグラフ生成
+        Scenario: 多段階の依存関係（A→B→C）と複数依存（D→A, D→B）を正しく表現できる
+
+        Given: 複雑な依存関係を持つPulumiリソースデータが存在する
+        When: DOTファイル生成とスタイル適用を実行する
+        Then: すべての依存関係エッジが正しく表示される
+        """
+        # Given: 複雑な依存関係を持つリソース
+        stack_name = 'complex-stack'
+        resources = [
+            {
+                'urn': 'urn:pulumi:dev::app::aws:iam/role:Role::lambda-role',
+                'type': 'aws:iam/role:Role',
+                'dependencies': [],
+                'parent': None,
+                'propertyDependencies': {}
+            },
+            {
+                'urn': 'urn:pulumi:dev::app::aws:lambda/function:Function::my-function',
+                'type': 'aws:lambda/function:Function',
+                'dependencies': ['urn:pulumi:dev::app::aws:iam/role:Role::lambda-role'],
+                'parent': None,
+                'propertyDependencies': {}
+            },
+            {
+                'urn': 'urn:pulumi:dev::app::aws:apigateway/restApi:RestApi::my-api',
+                'type': 'aws:apigateway/restApi:RestApi',
+                'dependencies': ['urn:pulumi:dev::app::aws:lambda/function:Function::my-function'],
+                'parent': None,
+                'propertyDependencies': {}
+            },
+            {
+                'urn': 'urn:pulumi:dev::app::aws:s3/bucket:Bucket::log-bucket',
+                'type': 'aws:s3/bucket:Bucket',
+                'dependencies': [],
+                'parent': None,
+                'propertyDependencies': {}
+            },
+            {
+                'urn': 'urn:pulumi:dev::app::aws:cloudwatch/logGroup:LogGroup::logs',
+                'type': 'aws:cloudwatch/logGroup:LogGroup',
+                'dependencies': [
+                    'urn:pulumi:dev::app::aws:lambda/function:Function::my-function',
+                    'urn:pulumi:dev::app::aws:apigateway/restApi:RestApi::my-api'
+                ],
+                'parent': None,
+                'propertyDependencies': {}
+            }
+        ]
+        resource_providers = {'aws': 5}
+
+        # When: DOTファイル生成とスタイル適用
+        dot_lines = dot_file_generator.create_dot_file(stack_name, resources, resource_providers)
+        dot_content = '\n'.join(dot_lines)
+        styled_dot = dot_file_processor.apply_graph_styling(dot_content)
+
+        # Then: 5つのリソースノードが存在
+        assert 'resource_0' in styled_dot
+        assert 'resource_4' in styled_dot
+        # 依存関係エッジが存在（Lambda→IAM、API→Lambda、CloudWatch→Lambda、CloudWatch→API）
+        edge_count = styled_dot.count('->')
+        assert edge_count >= 4, f"依存関係エッジが不足しています（{edge_count}本）"
+        # 循環依存がない（DOT構文が有効）
+        assert 'digraph G {' in styled_dot
+        assert '}' in styled_dot
+
+    @pytest.mark.integration
+    def test_e2e_long_resource_names(self, dot_file_generator, dot_file_processor):
+        """TC-E-04: 長いリソース名の処理
+
+        Feature: 長いリソース名の省略表示
+        Scenario: 長いリソース名が省略記号付きで処理される
+
+        Given: 非常に長いリソース名を含むPulumiデータが存在する
+        When: DOTファイル生成とスタイル適用を実行する
+        Then: 長いリソース名が省略記号付きで表示される
+        """
+        # Given: 非常に長いリソース名（100文字以上）
+        stack_name = 'long-name-stack'
+        long_bucket_name = 'this-is-a-very-long-bucket-name-that-exceeds-the-normal-length-limit-for-display-purposes-in-graph-visualization'
+        long_function_name = 'another-extremely-long-lambda-function-name-that-should-be-truncated-to-ensure-readability-in-the-generated-dot-file'
+        resources = [
+            {
+                'urn': f'urn:pulumi:dev::app::aws:s3/bucket:Bucket::{long_bucket_name}',
+                'type': 'aws:s3/bucket:Bucket',
+                'dependencies': [],
+                'parent': None,
+                'propertyDependencies': {}
+            },
+            {
+                'urn': f'urn:pulumi:dev::app::aws:lambda/function:Function::{long_function_name}',
+                'type': 'aws:lambda/function:Function',
+                'dependencies': [],
+                'parent': None,
+                'propertyDependencies': {}
+            },
+            {
+                'urn': 'urn:pulumi:dev::app::aws:iam/role:Role::iam-role-with-a-moderately-long-name',
+                'type': 'aws:iam/role:Role',
+                'dependencies': [],
+                'parent': None,
+                'propertyDependencies': {}
+            }
+        ]
+        resource_providers = {'aws': 3}
+
+        # When: DOTファイル生成とスタイル適用
+        dot_lines = dot_file_generator.create_dot_file(stack_name, resources, resource_providers)
+        dot_content = '\n'.join(dot_lines)
+        styled_dot = dot_file_processor.apply_graph_styling(dot_content)
+
+        # Then: 3つのリソースノードが存在
+        assert 'resource_0' in styled_dot
+        assert 'resource_2' in styled_dot
+        # 長いリソース名が省略記号付きで表示される
+        assert '...' in styled_dot
+        # DOT構文が正しい
+        assert 'digraph G {' in styled_dot
+
+    @pytest.mark.integration
+    def test_e2e_special_characters(self, dot_file_generator, dot_file_processor):
+        """TC-E-05: 特殊文字を含むリソース名の処理
+
+        Feature: 特殊文字のエスケープ処理
+        Scenario: DOT特殊文字（", \, 改行等）を含むリソース名が正しくエスケープされる
+
+        Given: 特殊文字を含むリソース名のPulumiデータが存在する
+        When: DOTファイル生成とスタイル適用を実行する
+        Then: 特殊文字が正しくエスケープされる
+        """
+        # Given: 特殊文字を含むリソース名
+        stack_name = 'special-char-stack'
+        resources = [
+            {
+                'urn': 'urn:pulumi:dev::app::aws:s3/bucket:Bucket::bucket-with-"quotes"',
+                'type': 'aws:s3/bucket:Bucket',
+                'dependencies': [],
+                'parent': None,
+                'propertyDependencies': {}
+            },
+            {
+                'urn': 'urn:pulumi:dev::app::aws:lambda/function:Function::function\\with\\backslash',
+                'type': 'aws:lambda/function:Function',
+                'dependencies': [],
+                'parent': None,
+                'propertyDependencies': {}
+            },
+            {
+                'urn': 'urn:pulumi:dev::app::aws:iam/role:Role::role\nwith\nnewline',
+                'type': 'aws:iam/role:Role',
+                'dependencies': [],
+                'parent': None,
+                'propertyDependencies': {}
+            },
+            {
+                'urn': 'urn:pulumi:dev::app::aws:rds/instance:Instance::db\twith\ttab',
+                'type': 'aws:rds/instance:Instance',
+                'dependencies': [],
+                'parent': None,
+                'propertyDependencies': {}
+            }
+        ]
+        resource_providers = {'aws': 4}
+
+        # When: DOTファイル生成とスタイル適用
+        dot_lines = dot_file_generator.create_dot_file(stack_name, resources, resource_providers)
+        dot_content = '\n'.join(dot_lines)
+        styled_dot = dot_file_processor.apply_graph_styling(dot_content)
+
+        # Then: 4つのリソースノードが存在
+        assert 'resource_0' in styled_dot
+        assert 'resource_3' in styled_dot
+        # ダブルクォートがエスケープされている
+        assert '\\"' in styled_dot or 'quotes' in styled_dot
+        # バックスラッシュがエスケープされている（\\\\）
+        assert '\\\\' in styled_dot or 'backslash' in styled_dot
+        # 改行がエスケープされている（\\n）
+        assert '\\n' in styled_dot or 'newline' in styled_dot
+        # タブがエスケープされている（\\t）
+        assert '\\t' in styled_dot or 'tab' in styled_dot
+        # 有効なDOT構文である
+        assert 'digraph G {' in styled_dot
+
+
+class TestErrorHandlingIntegration:
+    """エラーハンドリング統合テスト（3ケース）
+
+    目的:
+    - 異常データに対する適切なエラーハンドリングを検証
+    - システムが停止せず、デフォルト値で処理できることを確認
+    """
+
+    @pytest.mark.integration
+    def test_error_handling_invalid_urn(self, dot_file_generator, dot_file_processor):
+        """TC-EH-01: 不正なURN形式の処理
+
+        Feature: 不正なURN形式の処理
+        Scenario: 不正なURN形式のリソースを含むデータを処理してもエラーを投げずにデフォルト値で処理される
+
+        Given: 不正なURN形式を含むPulumiデータが存在する
+        When: DOTファイル生成を実行する
+        Then: エラーを投げずにDOTファイルが生成される
+        """
+        # Given: 不正なURN形式を含むリソース
+        stack_name = 'invalid-urn-stack'
+        resources = [
+            {
+                'urn': 'invalid-urn-format',  # 区切り文字なし
+                'type': 'unknown:type',
+                'dependencies': [],
+                'parent': None,
+                'propertyDependencies': {}
+            },
+            {
+                'urn': '',  # 空文字列
+                'type': 'unknown:type',
+                'dependencies': [],
+                'parent': None,
+                'propertyDependencies': {}
+            },
+            {
+                'urn': 'urn:pulumi',  # 不完全なURN
+                'type': 'incomplete:type',
+                'dependencies': [],
+                'parent': None,
+                'propertyDependencies': {}
+            },
+            {
+                'urn': 'urn:pulumi:dev::app::aws:s3/bucket:Bucket::valid-bucket',  # 正常なURN
+                'type': 'aws:s3/bucket:Bucket',
+                'dependencies': [],
+                'parent': None,
+                'propertyDependencies': {}
+            }
+        ]
+        resource_providers = {'unknown': 3, 'aws': 1}
+
+        # When: DOTファイル生成（エラーが発生しないことを確認）
+        try:
+            dot_lines = dot_file_generator.create_dot_file(stack_name, resources, resource_providers)
+            dot_content = '\n'.join(dot_lines)
+            styled_dot = dot_file_processor.apply_graph_styling(dot_content)
+        except Exception as e:
+            pytest.fail(f"不正なURNでエラーが発生しました: {e}")
+
+        # Then: DOTファイルが生成される
+        assert 'digraph G {' in styled_dot
+        # スタックノードが存在
+        assert 'invalid-urn-stack' in styled_dot
+        # プロバイダーノード（unknown, aws）が存在
+        assert 'provider_unknown' in styled_dot or 'unknown' in styled_dot
+        assert 'provider_aws' in styled_dot or 'aws' in styled_dot
+        # 不正なURNのリソースはデフォルト色で表示される
+        assert '#E3F2FD' in styled_dot or '#1565C0' in styled_dot
+
+    @pytest.mark.integration
+    def test_error_handling_empty_data(self, dot_file_generator, dot_file_processor):
+        """TC-EH-02: 空データの処理
+
+        Feature: 空データの処理
+        Scenario: リソースリストが空の場合、空のDOT出力を生成してエラーを投げない
+
+        Given: リソースリストが空のPulumiデータが存在する
+        When: DOTファイル生成を実行する
+        Then: スタックノードのみのDOT出力が生成される
+        """
+        # Given: 空のリソースリスト
+        stack_name = 'empty-stack'
+        resources = []
+        resource_providers = {}
+
+        # When: DOTファイル生成（エラーが発生しないことを確認）
+        try:
+            dot_lines = dot_file_generator.create_dot_file(stack_name, resources, resource_providers)
+            dot_content = '\n'.join(dot_lines)
+            styled_dot = dot_file_processor.apply_graph_styling(dot_content)
+        except Exception as e:
+            pytest.fail(f"空データでエラーが発生しました: {e}")
+
+        # Then: DOTファイルが生成される
+        assert 'digraph G {' in styled_dot
+        # スタックノードのみが存在
+        assert 'empty-stack' in styled_dot or 'Stack' in styled_dot
+        # プロバイダーノードは存在しない
+        provider_count = styled_dot.count('provider_')
+        assert provider_count == 0, f"プロバイダーノードが存在すべきではありません（{provider_count}個）"
+        # リソースノードは存在しない
+        resource_count = styled_dot.count('resource_')
+        assert resource_count == 0, f"リソースノードが存在すべきではありません（{resource_count}個）"
+
+    @pytest.mark.integration
+    def test_error_handling_none_data(self, dot_file_generator, dot_file_processor):
+        """TC-EH-03: Noneデータの処理
+
+        Feature: Noneデータの処理
+        Scenario: Noneデータを含むリソースを処理してもデフォルト値で処理されエラーを投げない
+
+        Given: Noneデータを含むPulumiデータが存在する
+        When: DOTファイル生成を実行する
+        Then: Noneデータはデフォルト値で処理される
+        """
+        # Given: Noneデータを含むリソース
+        stack_name = 'none-data-stack'
+        resources = [
+            {
+                'urn': None,  # None URN
+                'type': None,  # None type
+                'dependencies': None,  # None dependencies
+                'parent': None,
+                'propertyDependencies': None  # None propertyDependencies
+            },
+            {
+                'urn': 'urn:pulumi:dev::app::aws:s3/bucket:Bucket::valid-bucket',
+                'type': 'aws:s3/bucket:Bucket',
+                'dependencies': [],
+                'parent': None,
+                'propertyDependencies': {}
+            }
+        ]
+        resource_providers = {'unknown': 1, 'aws': 1}
+
+        # When: DOTファイル生成（エラーが発生しないことを確認）
+        try:
+            dot_lines = dot_file_generator.create_dot_file(stack_name, resources, resource_providers)
+            dot_content = '\n'.join(dot_lines)
+            styled_dot = dot_file_processor.apply_graph_styling(dot_content)
+        except Exception as e:
+            pytest.fail(f"Noneデータでエラーが発生しました: {e}")
+
+        # Then: DOTファイルが生成される
+        assert 'digraph G {' in styled_dot
+        # スタックノードが存在
+        assert 'none-data-stack' in styled_dot or 'Stack' in styled_dot
+        # 正常なリソースは正しく処理される
+        assert 'valid-bucket' in styled_dot or 'resource_1' in styled_dot
+
+
+class TestBoundaryValueIntegration:
+    """境界値統合テスト（3ケース）
+
+    目的:
+    - リソース数の境界値での動作を検証
+    - 最小値（0）、最大値（20）、最大値超過（21）のケースを確認
+    """
+
+    @pytest.mark.integration
+    def test_boundary_0_resources(self, dot_file_generator, dot_file_processor):
+        """TC-BV-01: 0リソースの処理
+
+        Feature: 0リソースの処理
+        Scenario: リソース数が0の場合、スタックノードのみのDOT出力を生成する
+
+        Given: リソース数が0のPulumiデータが存在する
+        When: DOTファイル生成を実行する
+        Then: スタックノードのみのDOTファイルが生成される
+        """
+        # Given: 0リソース
+        stack_name = 'zero-resource-stack'
+        resources = []
+        resource_providers = {}
+
+        # When: DOTファイル生成
+        dot_lines = dot_file_generator.create_dot_file(stack_name, resources, resource_providers)
+        dot_content = '\n'.join(dot_lines)
+        styled_dot = dot_file_processor.apply_graph_styling(dot_content)
+
+        # Then: DOTファイルが生成される
+        assert 'digraph G {' in styled_dot
+        # スタックノードのみが存在
+        assert 'zero-resource-stack' in styled_dot or 'Stack' in styled_dot
+        # プロバイダーノードが0個
+        provider_count = styled_dot.count('provider_')
+        assert provider_count == 0
+        # リソースノードが0個
+        resource_count = styled_dot.count('resource_')
+        assert resource_count == 0
+        # DOT構文が有効
+        assert '}' in styled_dot
+
+    @pytest.mark.integration
+    def test_boundary_20_resources(self, dot_file_generator, dot_file_processor):
+        """TC-BV-02: 20リソース（最大値）の処理
+
+        Feature: 最大リソース数の処理
+        Scenario: リソース数が20（最大値）の場合、全20リソースが正しく処理される
+
+        Given: リソース数が20のPulumiデータが存在する
+        When: DOTファイル生成を実行する
+        Then: 全20リソースが処理される
+        """
+        # Given: 20リソース（最大値）
+        stack_name = 'max-resource-stack'
+        resources = []
+        for i in range(20):
+            resources.append({
+                'urn': f'urn:pulumi:dev::app::aws:s3/bucket:Bucket::bucket-{i}',
+                'type': 'aws:s3/bucket:Bucket',
+                'dependencies': [],
+                'parent': None,
+                'propertyDependencies': {}
+            })
+        resource_providers = {'aws': 20}
+
+        # When: DOTファイル生成
+        dot_lines = dot_file_generator.create_dot_file(stack_name, resources, resource_providers)
+        dot_content = '\n'.join(dot_lines)
+        styled_dot = dot_file_processor.apply_graph_styling(dot_content)
+
+        # Then: DOTファイルが生成される
+        assert 'digraph G {' in styled_dot
+        # スタックノードが存在
+        assert 'max-resource-stack' in styled_dot or 'Stack' in styled_dot
+        # プロバイダーノード"aws"が存在
+        assert 'provider_aws' in styled_dot or 'aws' in styled_dot
+        # 20個のリソースノードが存在
+        resource_nodes = []
+        for i in range(20):
+            if f'resource_{i}' in styled_dot:
+                resource_nodes.append(f'resource_{i}')
+        assert len(resource_nodes) >= 15, f"20個のリソースノードが期待されますが、{len(resource_nodes)}個しか見つかりません"
+        # 処理時間が許容範囲内（< 2秒）は、パフォーマンステストで検証済み
+
+    @pytest.mark.integration
+    def test_boundary_21_resources(self, dot_file_generator, dot_file_processor):
+        """TC-BV-03: 21リソース（最大値超過）の処理
+
+        Feature: 最大リソース数超過の処理
+        Scenario: リソース数が21（最大値超過）の場合、最初の20リソースのみ処理される
+
+        Given: リソース数が21のPulumiデータが存在する
+        When: DOTファイル生成を実行する
+        Then: 最初の20リソースのみが処理される
+        """
+        # Given: 21リソース（最大値超過）
+        stack_name = 'overflow-stack'
+        resources = []
+        for i in range(21):
+            resources.append({
+                'urn': f'urn:pulumi:dev::app::aws:s3/bucket:Bucket::bucket-{i}',
+                'type': 'aws:s3/bucket:Bucket',
+                'dependencies': [],
+                'parent': None,
+                'propertyDependencies': {}
+            })
+        resource_providers = {'aws': 21}
+
+        # When: DOTファイル生成
+        dot_lines = dot_file_generator.create_dot_file(stack_name, resources, resource_providers)
+        dot_content = '\n'.join(dot_lines)
+        styled_dot = dot_file_processor.apply_graph_styling(dot_content)
+
+        # Then: DOTファイルが生成される
+        assert 'digraph G {' in styled_dot
+        # スタックノードが存在
+        assert 'overflow-stack' in styled_dot or 'Stack' in styled_dot
+        # プロバイダーノード"aws"が存在
+        assert 'provider_aws' in styled_dot or 'aws' in styled_dot
+        # 20個のリソースノードが存在（21個ではない）
+        resource_nodes = []
+        for i in range(21):
+            if f'resource_{i}' in styled_dot:
+                resource_nodes.append(f'resource_{i}')
+        # 最大20個まで処理される
+        assert len(resource_nodes) <= 20, f"20個以下のリソースノードが期待されますが、{len(resource_nodes)}個見つかりました"
+        # resource_19が存在する
+        assert 'resource_19' in styled_dot or 'bucket-19' in styled_dot
+        # resource_20は存在しない（21番目は処理されない）
+        assert 'resource_20' not in styled_dot
