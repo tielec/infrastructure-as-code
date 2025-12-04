@@ -11,16 +11,16 @@
     "repo": "infrastructure-as-code"
   },
   "workflow_version": "1.0.0",
-  "current_phase": "documentation",
+  "current_phase": "report",
   "design_decisions": {
     "implementation_strategy": null,
     "test_strategy": null,
     "test_code_strategy": null
   },
   "cost_tracking": {
-    "total_input_tokens": 8832,
-    "total_output_tokens": 136387,
-    "total_cost_usd": 8.80294635
+    "total_input_tokens": 8839,
+    "total_output_tokens": 146029,
+    "total_cost_usd": 9.330935349999999
   },
   "phases": {
     "planning": {
@@ -108,22 +108,24 @@
       ]
     },
     "documentation": {
-      "status": "in_progress",
+      "status": "completed",
       "retry_count": 0,
       "started_at": "2025-12-04T11:28:08.106Z",
-      "completed_at": null,
+      "completed_at": "2025-12-04T11:32:57.233Z",
       "review_result": null,
-      "current_step": "review",
+      "current_step": null,
       "completed_steps": [
-        "execute"
+        "execute",
+        "review"
       ]
     },
     "report": {
-      "status": "pending",
+      "status": "in_progress",
       "retry_count": 0,
-      "started_at": null,
+      "started_at": "2025-12-04T11:32:58.052Z",
       "completed_at": null,
-      "review_result": null
+      "review_result": null,
+      "current_step": "execute"
     },
     "evaluation": {
       "status": "pending",
@@ -139,7 +141,7 @@
     }
   },
   "created_at": "2025-12-04T10:49:59.283Z",
-  "updated_at": "2025-12-04T11:32:49.355Z",
+  "updated_at": "2025-12-04T11:35:54.777Z",
   "branch_name": "ai-workflow/issue-462",
   "pr_number": 468,
   "pr_url": "https://github.com/tielec/infrastructure-as-code/pull/468",
