@@ -355,16 +355,20 @@ class TestDotFileGeneratorCreation:
 # =============================================================================
 
 class TestDotFileProcessorUrnParsing:
-    """DotFileProcessor - URN解析のテスト"""
+    """DotFileProcessor - URN解析のテスト（UrnProcessorへの委譲）
+
+    Phase 2-1リファクタリング後、DotFileProcessorはURN処理をUrnProcessorに委譲しています。
+    これらのテストは統合テストとして、UrnProcessorが正しく呼び出されることを検証します。
+    """
 
     @pytest.mark.characterization
-    def test_parse_urn_valid_aws(self, dot_file_processor, sample_urns):
-        """正常なAWS URNの解析"""
+    def test_parse_urn_valid_aws(self, urn_processor, sample_urns):
+        """正常なAWS URNの解析（UrnProcessor経由）"""
         # Given: 正しいURN形式の文字列
         urn = sample_urns['valid_aws_urn']
 
-        # When: parse_urn()を呼び出す
-        result = dot_file_processor.parse_urn(urn)
+        # When: UrnProcessor.parse_urn()を呼び出す
+        result = urn_processor.parse_urn(urn)
 
         # Then: 辞書形式で構成要素が返される
         assert isinstance(result, dict)
@@ -377,13 +381,13 @@ class TestDotFileProcessorUrnParsing:
         assert result['full_urn'] == urn
 
     @pytest.mark.characterization
-    def test_parse_urn_valid_azure(self, dot_file_processor, sample_urns):
-        """正常なAzure URNの解析"""
+    def test_parse_urn_valid_azure(self, urn_processor, sample_urns):
+        """正常なAzure URNの解析（UrnProcessor経由）"""
         # Given: 正しいAzure URN
         urn = sample_urns['valid_azure_urn']
 
-        # When: parse_urn()を呼び出す
-        result = dot_file_processor.parse_urn(urn)
+        # When: UrnProcessor.parse_urn()を呼び出す
+        result = urn_processor.parse_urn(urn)
 
         # Then: Azure URNが正しく解析される
         assert result['stack'] == 'dev'
@@ -394,13 +398,13 @@ class TestDotFileProcessorUrnParsing:
         assert result['name'] == 'mystorage'
 
     @pytest.mark.characterization
-    def test_parse_urn_valid_gcp(self, dot_file_processor, sample_urns):
-        """正常なGCP URNの解析"""
+    def test_parse_urn_valid_gcp(self, urn_processor, sample_urns):
+        """正常なGCP URNの解析（UrnProcessor経由）"""
         # Given: 正しいGCP URN
         urn = sample_urns['valid_gcp_urn']
 
-        # When: parse_urn()を呼び出す
-        result = dot_file_processor.parse_urn(urn)
+        # When: UrnProcessor.parse_urn()を呼び出す
+        result = urn_processor.parse_urn(urn)
 
         # Then: GCP URNが正しく解析される
         assert result['stack'] == 'dev'
@@ -411,13 +415,13 @@ class TestDotFileProcessorUrnParsing:
         assert result['name'] == 'my-bucket'
 
     @pytest.mark.characterization
-    def test_parse_urn_valid_kubernetes(self, dot_file_processor, sample_urns):
-        """正常なKubernetes URNの解析"""
+    def test_parse_urn_valid_kubernetes(self, urn_processor, sample_urns):
+        """正常なKubernetes URNの解析（UrnProcessor経由）"""
         # Given: 正しいKubernetes URN
         urn = sample_urns['valid_kubernetes_urn']
 
-        # When: parse_urn()を呼び出す
-        result = dot_file_processor.parse_urn(urn)
+        # When: UrnProcessor.parse_urn()を呼び出す
+        result = urn_processor.parse_urn(urn)
 
         # Then: Kubernetes URNが正しく解析される
         assert result['stack'] == 'dev'
@@ -428,13 +432,13 @@ class TestDotFileProcessorUrnParsing:
         assert result['name'] == 'my-namespace'
 
     @pytest.mark.characterization
-    def test_parse_urn_stack_resource(self, dot_file_processor, sample_urns):
-        """スタックリソースURNの解析"""
+    def test_parse_urn_stack_resource(self, urn_processor, sample_urns):
+        """スタックリソースURNの解析（UrnProcessor経由）"""
         # Given: スタックリソースURN
         urn = sample_urns['stack_urn']
 
-        # When: parse_urn()を呼び出す
-        result = dot_file_processor.parse_urn(urn)
+        # When: UrnProcessor.parse_urn()を呼び出す
+        result = urn_processor.parse_urn(urn)
 
         # Then: スタックURNが正しく解析される
         assert result['stack'] == 'dev'
@@ -444,13 +448,13 @@ class TestDotFileProcessorUrnParsing:
         assert result['name'] == 'dev'
 
     @pytest.mark.characterization
-    def test_parse_urn_invalid_format(self, dot_file_processor, sample_urns):
-        """不正なURN形式（区切り不足）"""
+    def test_parse_urn_invalid_format(self, urn_processor, sample_urns):
+        """不正なURN形式（区切り不足、UrnProcessor経由）"""
         # Given: 不正なURN形式
         urn = sample_urns['invalid_urn_no_separator']
 
-        # When: parse_urn()を呼び出す
-        result = dot_file_processor.parse_urn(urn)
+        # When: UrnProcessor.parse_urn()を呼び出す
+        result = urn_processor.parse_urn(urn)
 
         # Then: デフォルト値が返される（エラーが発生しない）
         assert isinstance(result, dict)
@@ -463,13 +467,13 @@ class TestDotFileProcessorUrnParsing:
         assert result['full_urn'] == urn
 
     @pytest.mark.characterization
-    def test_parse_urn_partial_urn(self, dot_file_processor, sample_urns):
-        """部分的なURN"""
+    def test_parse_urn_partial_urn(self, urn_processor, sample_urns):
+        """部分的なURN（UrnProcessor経由）"""
         # Given: 部分的なURN
         urn = sample_urns['invalid_urn_partial']
 
-        # When: parse_urn()を呼び出す
-        result = dot_file_processor.parse_urn(urn)
+        # When: UrnProcessor.parse_urn()を呼び出す
+        result = urn_processor.parse_urn(urn)
 
         # Then: デフォルト値が返される
         assert isinstance(result, dict)
@@ -477,13 +481,13 @@ class TestDotFileProcessorUrnParsing:
         assert result['full_urn'] == urn
 
     @pytest.mark.characterization
-    def test_parse_urn_empty_string(self, dot_file_processor, sample_urns):
-        """空文字列"""
+    def test_parse_urn_empty_string(self, urn_processor, sample_urns):
+        """空文字列（UrnProcessor経由）"""
         # Given: 空文字列
         urn = sample_urns['empty_urn']
 
-        # When: parse_urn()を呼び出す
-        result = dot_file_processor.parse_urn(urn)
+        # When: UrnProcessor.parse_urn()を呼び出す
+        result = urn_processor.parse_urn(urn)
 
         # Then: デフォルト値が返される（エラーが発生しない）
         assert isinstance(result, dict)
@@ -493,13 +497,13 @@ class TestDotFileProcessorUrnParsing:
         assert result['name'] == ''
 
     @pytest.mark.characterization
-    def test_parse_urn_extremely_long(self, dot_file_processor, sample_urns):
-        """極端に長いURN"""
+    def test_parse_urn_extremely_long(self, urn_processor, sample_urns):
+        """極端に長いURN（UrnProcessor経由）"""
         # Given: 極端に長いURN（100文字以上）
         urn = sample_urns['long_urn']
 
-        # When: parse_urn()を呼び出す
-        result = dot_file_processor.parse_urn(urn)
+        # When: UrnProcessor.parse_urn()を呼び出す
+        result = urn_processor.parse_urn(urn)
 
         # Then: パース処理が正常に完了する
         assert isinstance(result, dict)
@@ -605,11 +609,14 @@ class TestDotFileProcessorGraphValidation:
 
 
 class TestDotFileProcessorLabelCreation:
-    """DotFileProcessor - ラベル生成のテスト"""
+    """DotFileProcessor - ラベル生成のテスト（UrnProcessorへの委譲）
+
+    Phase 2-1リファクタリング後、ラベル生成はUrnProcessorに委譲されています。
+    """
 
     @pytest.mark.characterization
-    def test_create_readable_label_basic(self, dot_file_processor):
-        """基本的なラベル生成"""
+    def test_create_readable_label_basic(self, urn_processor):
+        """基本的なラベル生成（UrnProcessor経由）"""
         # Given: URN情報辞書
         urn_info = {
             'provider': 'aws',
@@ -618,8 +625,8 @@ class TestDotFileProcessorLabelCreation:
             'name': 'my-bucket'
         }
 
-        # When: create_readable_label()を呼び出す
-        result = dot_file_processor.create_readable_label(urn_info)
+        # When: UrnProcessor.create_readable_label()を呼び出す
+        result = urn_processor.create_readable_label(urn_info)
 
         # Then: 改行区切りの読みやすいラベル文字列が返される
         assert isinstance(result, str)
@@ -629,8 +636,8 @@ class TestDotFileProcessorLabelCreation:
         assert '\\n' in result
 
     @pytest.mark.characterization
-    def test_create_readable_label_no_module(self, dot_file_processor):
-        """モジュール名なしの場合"""
+    def test_create_readable_label_no_module(self, urn_processor):
+        """モジュール名なしの場合（UrnProcessor経由）"""
         # Given: モジュール名がないURN情報
         urn_info = {
             'provider': 'pulumi',
@@ -639,8 +646,8 @@ class TestDotFileProcessorLabelCreation:
             'name': 'dev'
         }
 
-        # When: create_readable_label()を呼び出す
-        result = dot_file_processor.create_readable_label(urn_info)
+        # When: UrnProcessor.create_readable_label()を呼び出す
+        result = urn_processor.create_readable_label(urn_info)
 
         # Then: モジュール名が省略される
         assert isinstance(result, str)
@@ -648,8 +655,8 @@ class TestDotFileProcessorLabelCreation:
         assert 'dev' in result
 
     @pytest.mark.characterization
-    def test_create_readable_label_long_type(self, dot_file_processor):
-        """長いタイプ名の省略処理"""
+    def test_create_readable_label_long_type(self, urn_processor):
+        """長いタイプ名の省略処理（UrnProcessor経由）"""
         # Given: 長いタイプ名
         urn_info = {
             'provider': 'aws',
@@ -658,8 +665,8 @@ class TestDotFileProcessorLabelCreation:
             'name': 'my-resource'
         }
 
-        # When: create_readable_label()を呼び出す
-        result = dot_file_processor.create_readable_label(urn_info)
+        # When: UrnProcessor.create_readable_label()を呼び出す
+        result = urn_processor.create_readable_label(urn_info)
 
         # Then: ラベルが生成される
         assert isinstance(result, str)
@@ -667,40 +674,43 @@ class TestDotFileProcessorLabelCreation:
 
 
 class TestDotFileProcessorResourceIdentification:
-    """DotFileProcessor - リソース識別のテスト"""
+    """DotFileProcessor - リソース識別のテスト（UrnProcessorへの委譲）
+
+    Phase 2-1リファクタリング後、リソース判定はUrnProcessorに委譲されています。
+    """
 
     @pytest.mark.characterization
-    def test_is_stack_resource_true(self, dot_file_processor, sample_urns):
-        """スタックリソースの判定"""
+    def test_is_stack_resource_true(self, urn_processor, sample_urns):
+        """スタックリソースの判定（UrnProcessor経由）"""
         # Given: スタックリソースURN
         urn = sample_urns['stack_urn']
 
-        # When: is_stack_resource()を呼び出す
-        result = dot_file_processor.is_stack_resource(urn)
+        # When: UrnProcessor.is_stack_resource()を呼び出す
+        result = urn_processor.is_stack_resource(urn)
 
         # Then: Trueが返される
         assert result is True
 
     @pytest.mark.characterization
-    def test_is_stack_resource_false(self, dot_file_processor, sample_urns):
-        """通常リソースの判定"""
+    def test_is_stack_resource_false(self, urn_processor, sample_urns):
+        """通常リソースの判定（UrnProcessor経由）"""
         # Given: 通常リソースURN
         urn = sample_urns['valid_aws_urn']
 
-        # When: is_stack_resource()を呼び出す
-        result = dot_file_processor.is_stack_resource(urn)
+        # When: UrnProcessor.is_stack_resource()を呼び出す
+        result = urn_processor.is_stack_resource(urn)
 
         # Then: Falseが返される
         assert result is False
 
     @pytest.mark.characterization
-    def test_is_stack_resource_invalid_urn(self, dot_file_processor, sample_urns):
-        """不正なURN"""
+    def test_is_stack_resource_invalid_urn(self, urn_processor, sample_urns):
+        """不正なURN（UrnProcessor経由）"""
         # Given: 不正なURN
         urn = sample_urns['invalid_urn_no_separator']
 
-        # When: is_stack_resource()を呼び出す
-        result = dot_file_processor.is_stack_resource(urn)
+        # When: UrnProcessor.is_stack_resource()を呼び出す
+        result = urn_processor.is_stack_resource(urn)
 
         # Then: Falseが返される
         assert result is False
