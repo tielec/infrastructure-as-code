@@ -36,6 +36,17 @@ tests/
   - `TestDotProcessorIntegration`: Phase 3統合テスト（6ケース）
   - `TestDotProcessorPerformance`: パフォーマンステスト（1ケース）
 
+**Phase 4リファクタリング（Issue #465）による変更**:
+- `test_dot_processor.py` を更新: パフォーマンステストと統合テストを追加（16ケース）
+  - `TestPerformanceBenchmark`: リファクタリング前後のベンチマーク比較（5ケース）
+  - `TestEndToEndIntegration`: エンドツーエンド統合テスト（5ケース）
+  - `TestErrorHandlingIntegration`: エラーハンドリング統合テスト（3ケース）
+  - `TestBoundaryValueIntegration`: 境界値統合テスト（3ケース）
+- `dot_processor.py` を更新: コードレビューに基づく軽微な修正
+  - escape_dot_string() のDocstring改善
+  - 未使用メソッド _shorten_pulumi_label() の削除
+- `docs/ARCHITECTURE.md` を新規作成: アーキテクチャドキュメント
+
 ## テスト実行方法
 
 ### 前提条件
@@ -97,6 +108,12 @@ pytest tests/test_dot_processor.py::TestDotProcessorHelperMethods -v
 pytest tests/test_dot_processor.py::TestDotProcessorIntegration -v
 pytest tests/test_dot_processor.py::TestDotProcessorPerformance -v
 
+# Phase 4で追加されたテストのみ実行
+pytest tests/test_dot_processor.py::TestPerformanceBenchmark -v
+pytest tests/test_dot_processor.py::TestEndToEndIntegration -v
+pytest tests/test_dot_processor.py::TestErrorHandlingIntegration -v
+pytest tests/test_dot_processor.py::TestBoundaryValueIntegration -v
+
 # クラス単位
 pytest tests/test_dot_processor.py::TestDotFileGeneratorEscaping
 pytest tests/test_urn_processor.py::TestUrnProcessorParsing
@@ -113,6 +130,7 @@ pytest tests/ -m "characterization"
 pytest tests/ -m "unit"
 pytest tests/ -m "edge_case"
 pytest tests/ -m "performance"
+pytest tests/ -m "integration"
 ```
 
 ## テストの種類
@@ -153,6 +171,19 @@ Phase 3リファクタリング後の新規ヘルパーメソッドと統合動�
   - `TestDotProcessorIntegration`: 6ケース
   - `TestDotProcessorPerformance`: 1ケース
 - **カバレッジ目標**: 80%以上
+
+**Phase 4で追加**: `test_dot_processor.py`にパフォーマンステストと統合テストを追加
+
+Phase 4リファクタリング後のパフォーマンス検証と統合動作テストを実施します。
+
+- **対象**: リファクタリング前後の性能比較、エンドツーエンド統合、エラーハンドリング、境界値
+- **テストケース数**: 16ケース
+  - `TestPerformanceBenchmark`: 5ケース（リソース数1/5/10/20、グラフスタイル適用）
+  - `TestEndToEndIntegration`: 5ケース（基本AWS、マルチクラウド、複雑依存関係、長いリソース名、特殊文字）
+  - `TestErrorHandlingIntegration`: 3ケース（不正URN、空データ、Noneデータ）
+  - `TestBoundaryValueIntegration`: 3ケース（0/20/21リソース）
+- **カバレッジ目標**: 80%以上（維持）
+- **テスト戦略**: INTEGRATION_BDD（Given-When-Then形式）
 
 ### 特性テスト（Characterization Test）
 
