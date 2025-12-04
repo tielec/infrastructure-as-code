@@ -177,28 +177,28 @@
 
 ### Phase 4: 実装 (見積もり: 2.5〜3.5h)
 
-- [ ] Task 4-1: 依存性注入の適用 (0.5〜1h)
+- [x] Task 4-1: 依存性注入の適用 (0.5〜1h)
   - `DotFileProcessor`への依存性注入実装（必要に応じてコンストラクタ追加）
   - `DotFileGenerator`への依存性注入実装（ResourceDependencyBuilder使用箇所）
   - 既存の静的メソッド呼び出しを維持（互換性確保）
 
-- [ ] Task 4-2: ネスト解消（`_enhance_pulumi_graph`） (0.5〜1h)
+- [x] Task 4-2: ネスト解消（`_enhance_pulumi_graph`） (0.5〜1h)
   - 現状のネストレベル確認（3以上）
   - 早期リターンパターン適用（ガード節の追加）
   - ネストレベル削減（目標: 3以下）
   - 可読性向上の確認
 
-- [ ] Task 4-3: ネスト解消（`_process_node_definition`） (0.5〜1h)
+- [x] Task 4-3: ネスト解消（`_process_node_definition`） (0.5〜1h)
   - 現状のネストレベル確認
   - 早期リターンパターン適用
   - ネストレベル削減（目標: 3以下）
 
-- [ ] Task 4-4: その他の深いネスト構造の平坦化 (0.5h)
+- [x] Task 4-4: その他の深いネスト構造の平坦化 (0.5h)
   - 深いネスト（3以上）を持つメソッドの洗い出し
   - 早期リターンパターン適用
   - ネストレベル削減
 
-- [ ] Task 4-5: Cyclomatic Complexity削減確認 (0.5h)
+- [x] Task 4-5: Cyclomatic Complexity削減確認 (0.5h)
   - radonツールでCyclomatic Complexity測定
   - 目標値（< 10）達成確認
   - 未達成の場合は追加リファクタリング
@@ -370,12 +370,12 @@ graph TD
 
 ### Phase 4: 実装
 
-- [ ] **依存性注入が正しく実装されている**
-- [ ] **`_enhance_pulumi_graph`のネストレベルが3以下に削減されている**
-- [ ] **`_process_node_definition`のネストレベルが3以下に削減されている**
-- [ ] **その他の深いネスト構造が平坦化されている**
-- [ ] **Cyclomatic Complexityが10未満を達成している**
-- [ ] **既存の静的メソッド呼び出しが維持されている（互換性）**
+- [x] **依存性注入が正しく実装されている**
+- [x] **`_enhance_pulumi_graph`のネストレベルが3以下に削減されている**
+- [x] **`_process_node_definition`のネストレベルが3以下に削減されている**
+- [x] **その他の深いネスト構造が平坦化されている**
+- [x] **Cyclomatic Complexityが10未満を達成している**
+- [x] **既存の静的メソッド呼び出しが維持されている（互換性）**
 
 ### Phase 5: テストコード実装
 
