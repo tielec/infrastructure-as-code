@@ -1,0 +1,161 @@
+{
+  "issue_number": "463",
+  "issue_url": "https://github.com/tielec/infrastructure-as-code/issues/463",
+  "issue_title": "Issue #463",
+  "repository": "tielec/infrastructure-as-code",
+  "target_repository": {
+    "path": "/tmp/ai-workflow-repos-5/infrastructure-as-code",
+    "github_name": "tielec/infrastructure-as-code",
+    "remote_url": "https://github.com/tielec/infrastructure-as-code.git",
+    "owner": "tielec",
+    "repo": "infrastructure-as-code"
+  },
+  "workflow_version": "1.0.0",
+  "current_phase": "evaluation",
+  "design_decisions": {
+    "implementation_strategy": null,
+    "test_strategy": null,
+    "test_code_strategy": null
+  },
+  "cost_tracking": {
+    "total_input_tokens": 1913,
+    "total_output_tokens": 147382,
+    "total_cost_usd": 11.03003075
+  },
+  "phases": {
+    "planning": {
+      "status": "completed",
+      "retry_count": 0,
+      "started_at": "2025-12-04T11:50:35.505Z",
+      "completed_at": "2025-12-04T11:54:48.780Z",
+      "review_result": null,
+      "current_step": null,
+      "completed_steps": [
+        "execute",
+        "review"
+      ]
+    },
+    "requirements": {
+      "status": "completed",
+      "retry_count": 0,
+      "started_at": "2025-12-04T11:54:49.408Z",
+      "completed_at": "2025-12-04T11:59:22.380Z",
+      "review_result": null,
+      "current_step": null,
+      "completed_steps": [
+        "execute",
+        "review"
+      ]
+    },
+    "design": {
+      "status": "completed",
+      "retry_count": 0,
+      "started_at": "2025-12-04T11:59:22.985Z",
+      "completed_at": "2025-12-04T12:06:28.023Z",
+      "review_result": null,
+      "current_step": null,
+      "completed_steps": [
+        "execute",
+        "review"
+      ]
+    },
+    "test_scenario": {
+      "status": "completed",
+      "retry_count": 0,
+      "started_at": "2025-12-04T12:06:28.662Z",
+      "completed_at": "2025-12-04T12:13:07.222Z",
+      "review_result": null,
+      "current_step": null,
+      "completed_steps": [
+        "execute",
+        "review"
+      ]
+    },
+    "implementation": {
+      "status": "completed",
+      "retry_count": 0,
+      "started_at": "2025-12-04T12:13:07.830Z",
+      "completed_at": "2025-12-04T12:19:33.438Z",
+      "review_result": null,
+      "current_step": null,
+      "completed_steps": [
+        "execute",
+        "review"
+      ]
+    },
+    "test_implementation": {
+      "status": "completed",
+      "retry_count": 0,
+      "started_at": "2025-12-04T12:19:34.070Z",
+      "completed_at": "2025-12-04T12:26:50.276Z",
+      "review_result": null,
+      "current_step": null,
+      "completed_steps": [
+        "execute",
+        "review"
+      ]
+    },
+    "testing": {
+      "status": "completed",
+      "retry_count": 0,
+      "started_at": "2025-12-04T12:26:51.132Z",
+      "completed_at": "2025-12-04T12:35:04.232Z",
+      "review_result": null,
+      "current_step": null,
+      "completed_steps": [
+        "execute",
+        "review"
+      ]
+    },
+    "documentation": {
+      "status": "completed",
+      "retry_count": 0,
+      "started_at": "2025-12-04T12:35:04.964Z",
+      "completed_at": "2025-12-04T12:40:40.913Z",
+      "review_result": null,
+      "current_step": null,
+      "completed_steps": [
+        "execute",
+        "review"
+      ]
+    },
+    "report": {
+      "status": "completed",
+      "retry_count": 0,
+      "started_at": "2025-12-04T12:40:41.569Z",
+      "completed_at": "2025-12-04T12:45:18.543Z",
+      "review_result": null,
+      "current_step": null,
+      "completed_steps": [
+        "execute",
+        "review"
+      ]
+    },
+    "evaluation": {
+      "status": "completed",
+      "retry_count": 0,
+      "started_at": "2025-12-04T12:45:20.942Z",
+      "completed_at": "2025-12-04T12:48:01.084Z",
+      "review_result": null,
+      "decision": "PASS_WITH_ISSUES",
+      "failed_phase": null,
+      "remaining_tasks": [],
+      "created_issue_url": null,
+      "abort_reason": null,
+      "current_step": null,
+      "completed_steps": [
+        "execute",
+        "review"
+      ]
+    }
+  },
+  "created_at": "2025-12-04T11:50:29.707Z",
+  "updated_at": "2025-12-04T12:48:01.792Z",
+  "branch_name": "ai-workflow/issue-463",
+  "pr_number": 469,
+  "pr_url": "https://github.com/tielec/infrastructure-as-code/pull/469",
+  "github_integration": {
+    "progress_comment_id": 3611808543,
+    "progress_comment_url": "https://github.com/tielec/infrastructure-as-code/issues/463#issuecomment-3611808543"
+  }
+}

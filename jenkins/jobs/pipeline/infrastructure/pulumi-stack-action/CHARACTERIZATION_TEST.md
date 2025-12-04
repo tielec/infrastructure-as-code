@@ -135,24 +135,57 @@
 
 **注意**: URN処理関連のメソッド（`parse_urn`, `create_readable_label`, `is_stack_resource`）は、Phase 2-1リファクタリングにより`UrnProcessor`クラスに移動しました。`DotFileProcessor`は内部で`UrnProcessor`を呼び出しますが、外部から見た振る舞いは変更ありません。
 
-## 依存関係の種類
+## ResourceDependencyBuilder クラス
+
+**概要**: Phase 2-3リファクタリング（Issue #463）により、依存関係処理の責務を`DotFileProcessor`から分離しました。依存関係グラフ構築に特化した独立クラスです。
+
+### `add_resource_dependencies(resources: List[Dict], dot_lines: List[str]) -> None`
+
+**目的**: リソース間の依存関係をDOT形式で追加
+
+**期待動作**:
+- リソースが1個以下の場合: 何もしない（早期リターン）
+- リソースが2個以上の場合: コメント行追加と依存関係処理を実行
+- URNマッピングを作成後、各リソースの依存関係を順次処理
+- 破壊的更新: `dot_lines`リストに直接追加
+
+**エッジケース**:
+- 空リスト: 何もしない
+- 1個のリソース: 何もしない
+- 不正なURNが含まれていても処理を継続
+
+### `create_urn_to_node_mapping(resources: List[Dict]) -> Dict[str, str]`
+
+**目的**: URNからノードIDへのマッピング作成
+
+**期待動作**:
+- 各リソースのURNを`resource_{i}`形式のノードIDにマッピング
+- 空リスト: 空の辞書を返す
+- 重複URN: 最後のリソースのノードIDで上書き
+- 'urn'キーなし: 空文字列をキーとして扱う
+
+### 依存関係の種類
 
 ### 通常依存（dependencies）
 - **スタイル**: `solid`
 - **色**: `#9C27B0`（紫）
 - **説明**: リソース間の直接的な依存関係
+- **処理**: `_add_direct_dependencies()`メソッド
 
 ### 親依存（parent）
 - **スタイル**: `dashed`
 - **色**: `#2196F3`（青）
 - **ラベル**: `"parent"`
 - **説明**: 親子関係による依存
+- **処理**: `_add_parent_dependency()`メソッド
 
 ### プロパティ依存（propertyDependencies）
 - **スタイル**: `dotted`
 - **色**: `#FF5722`（オレンジ）
 - **ラベル**: プロパティ名（短縮形）
 - **説明**: プロパティ値による依存
+- **処理**: `_add_property_dependencies()`メソッド
+- **プロパティ名短縮**: `vpc.subnet.id` → `id`（ドット区切りの末尾のみ使用）
 
 ## テスト実行時の注意事項
 
@@ -171,9 +204,11 @@
 
 **注意**: このドキュメントは、テスト実装後に実際の振る舞いを記録して完成させます。Phase 5（テストコード実装）およびPhase 6（テスト実行）で更新されます。
 
-## リファクタリング記録（Phase 2-1: Issue #461）
+## リファクタリング記録
 
-### 変更サマリー
+### Phase 2-1: Issue #461 - UrnProcessorクラスの抽出
+
+**実施日**: 2025-01-19
 
 2025-01-19に実施されたPhase 2-1リファクタリングにより、URN処理の責務を`DotFileProcessor`から分離し、新規クラス`UrnProcessor`を作成しました。
 
@@ -192,3 +227,26 @@
 - 要件定義: `.ai-workflow/issue-461/01_requirements/output/requirements.md`
 - 設計書: `.ai-workflow/issue-461/02_design/output/design.md`
 - 実装ログ: `.ai-workflow/issue-461/04_implementation/output/implementation.md`
+
+### Phase 2-3: Issue #463 - ResourceDependencyBuilderクラスの抽出
+
+**実施日**: 2025-01-XX
+
+Phase 2-3リファクタリングにより、依存関係処理の責務を`DotFileProcessor`から分離し、新規クラス`ResourceDependencyBuilder`を作成しました。
+
+**目的**: 単一責務の原則（SRP）の適用、テスト容易性の向上
+
+**変更内容**:
+- 新規作成: `src/resource_dependency_builder.py`（`ResourceDependencyBuilder`クラス）
+- 修正: `src/dot_processor.py`（依存関係処理メソッドの削除、`ResourceDependencyBuilder`の呼び出しに置き換え）
+- 新規作成: `tests/test_resource_dependency_builder.py`（ユニットテスト、37ケース）
+
+**影響**:
+- 外部から見た`DotFileProcessor`の振る舞いは完全に維持されています
+- 内部実装のみ変更（依存関係処理を`ResourceDependencyBuilder`に委譲）
+- カバレッジ目標: 80%以上（推定90%以上）
+
+**関連ドキュメント**:
+- 要件定義: `.ai-workflow/issue-463/01_requirements/output/requirements.md`
+- 設計書: `.ai-workflow/issue-463/02_design/output/design.md`
+- 実装ログ: `.ai-workflow/issue-463/04_implementation/output/implementation.md`
