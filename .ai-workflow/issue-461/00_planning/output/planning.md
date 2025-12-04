@@ -218,7 +218,7 @@
 
 ### Phase 4: 実装 (見積もり: 2.5~3.5h)
 
-- [ ] Task 4-1: `urn_processor.py`の実装 (1.5~2h)
+- [x] Task 4-1: `urn_processor.py`の実装 (1.5~2h)
   - ファイルヘッダーの作成（モジュールドキュメント）
   - `UrnProcessor`クラスの定義
   - `parse_urn()`の実装（`DotFileProcessor`から移行）
@@ -229,7 +229,7 @@
   - 型ヒントの追加
   - ドキュメント文字列の記載
 
-- [ ] Task 4-2: `dot_processor.py`の修正 (1~1.5h)
+- [x] Task 4-2: `dot_processor.py`の修正 (1~1.5h)
   - `from urn_processor import UrnProcessor`のインポート追加
   - URN関連メソッドの削除
   - `UrnProcessor`の呼び出しへの置き換え
