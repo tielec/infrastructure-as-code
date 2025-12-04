@@ -47,6 +47,14 @@ tests/
   - 未使用メソッド _shorten_pulumi_label() の削除
 - `docs/ARCHITECTURE.md` を新規作成: アーキテクチャドキュメント
 
+**バグ修正（Issue #475）による変更**:
+- `src/__init__.py` を新規作成: Pythonパッケージ認識用のマーカーファイル
+  - Pythonが`src/`ディレクトリをパッケージとして認識するために必要
+  - `ModuleNotFoundError: No module named 'urn_processor'`エラーを解消
+- `Jenkinsfile` を更新: ファイルコピー処理に`__init__.py`と依存モジュールを追加
+  - `__init__.py`のコピー処理を追加（後方互換性のため`|| true`付き）
+  - `urn_processor.py`、`node_label_generator.py`、`resource_dependency_builder.py`のコピー処理を追加
+
 ## テスト実行方法
 
 ### 前提条件
@@ -212,6 +220,9 @@ Phase 4リファクタリング後のパフォーマンス検証と統合動作�
 ### ImportErrorが発生する場合
 
 ```bash
+# src/__init__.pyが存在するか確認（Issue #475で追加）
+ls -la src/__init__.py
+
 # src/ディレクトリへのパスが正しく設定されているか確認
 # conftest.pyでsys.pathに追加しているため、通常は問題なし
 

@@ -333,4 +333,8 @@ class ResourceDependencyBuilder:
 
 ---
 
-**最終更新**: Phase 4完了時（Issue #465: レビューと最適化、2025年1月）
+**最終更新**:
+- Phase 4完了時（Issue #465: レビューと最適化、2025年1月）
+- バグ修正（Issue #475: Pythonパッケージ構造の正常化、2025年1月）
+  - `src/__init__.py`を追加し、Pythonパッケージとして正しく認識されるように修正
+  - インポートエラー（`ModuleNotFoundError`）を解消
