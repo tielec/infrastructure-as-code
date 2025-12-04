@@ -144,32 +144,32 @@ AWS セッショントークン（任意）
             // ========================================
             // APIキー設定
             // ========================================
-            password('GITHUB_TOKEN', '''
+            nonStoredPasswordParam('GITHUB_TOKEN', '''
 GitHub Personal Access Token（任意）
 GitHub API呼び出しに使用されます
             '''.stripIndent().trim())
 
-            password('OPENAI_API_KEY', '''
+            nonStoredPasswordParam('OPENAI_API_KEY', '''
 OpenAI API キー（任意）
 Codex実行モードで使用されます
             '''.stripIndent().trim())
 
-            password('CODEX_API_KEY', '''
+            nonStoredPasswordParam('CODEX_API_KEY', '''
 Codex API キー（任意）
 OPENAI_API_KEYの代替として使用可能
             '''.stripIndent().trim())
 
-            password('CLAUDE_CODE_OAUTH_TOKEN', '''
+            nonStoredPasswordParam('CLAUDE_CODE_OAUTH_TOKEN', '''
 Claude Code OAuth トークン（任意）
 Claude実行モードで使用されます
             '''.stripIndent().trim())
 
-            password('CLAUDE_CODE_API_KEY', '''
+            nonStoredPasswordParam('CLAUDE_CODE_API_KEY', '''
 Claude Code API キー（任意）
 Claude実行モードで使用されます
             '''.stripIndent().trim())
 
-            password('ANTHROPIC_API_KEY', '''
+            nonStoredPasswordParam('ANTHROPIC_API_KEY', '''
 Anthropic API キー（任意）
 Claude実行モードで使用されます
             '''.stripIndent().trim())
