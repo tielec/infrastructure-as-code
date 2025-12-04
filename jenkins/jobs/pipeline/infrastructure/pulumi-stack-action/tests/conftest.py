@@ -65,3 +65,10 @@ def urn_processor():
     """UrnProcessorインスタンスを返す"""
     from urn_processor import UrnProcessor
     return UrnProcessor()
+
+
+@pytest.fixture
+def node_label_generator():
+    """NodeLabelGeneratorインスタンスを返す（静的メソッドのため実際にはクラスを返す）"""
+    from node_label_generator import NodeLabelGenerator
+    return NodeLabelGenerator
