@@ -4,7 +4,7 @@
 
 - **Issue**: #455 - [jenkins] AI WorkflowジョブにAPIキーパラメータを追加
 - **更新日時**: 2025-01-20
-- **更新ファイル数**: 1個
+- **更新ファイル数**: 2個
 - **調査ファイル数**: 48個の.mdファイル
 
 ## 更新したドキュメント
@@ -34,6 +34,32 @@
 - APIキーセクションに「（任意）」を明記し、必須パラメータとの区別を明確化
 - 各パラメータの用途を簡潔に記載（例: 「GitHub API呼び出し用」「Codex実行モード用」）
 
+### 2. jenkins/CONTRIBUTION.md
+
+**更新理由**: Issue #455の実装で使用された`password()`メソッドのパターンを開発者向けドキュメントに追加する必要がある
+
+**更新箇所**: Pipelineジョブの実装セクション（410-413行目）
+
+**更新内容**:
+- `password()`メソッドの使用例を追加
+- 複数行の説明文を適切にフォーマットする方法（`.stripIndent().trim()`）を例示
+- `nonStoredPasswordParam()`との違いをコメントで明記
+
+**追加したコード例**:
+```groovy
+// パスワード（マスク表示、保存あり）
+password('API_KEY', '''
+API キー（任意）
+入力値はマスク表示され、ビルドログにも表示されません
+'''.stripIndent().trim())
+```
+
+**技術的背景**:
+- `nonStoredPasswordParam()`: ビルド実行時のみパラメータ値を保持し、ビルド完了後は保存しない
+- `password()`: パラメータ値をJenkinsに暗号化して保存し、UI上およびログ上でマスク表示する
+
+Issue #455の実装では、APIキーパラメータに`password()`メソッドを使用したため、開発者が今後同様の実装を行う際の参考となるように、CONTRIBUTION.mdに実装例を追加しました。
+
 ## 更新不要と判断したドキュメント
 
 ### プロジェクトルート
@@ -50,7 +76,7 @@
 ### jenkins/
 
 #### jenkins/CONTRIBUTION.md
-**理由**: Jenkinsパラメータ定義の技術的なルール（「Job DSLで定義すること」「Groovy構文」等）を記載。個別ジョブのパラメータ仕様は記載していない。
+✅ **更新済み** - パラメータ定義の実装例に`password()`メソッドを追加（詳細は後述）
 
 ### .ai-workflow/
 
@@ -92,7 +118,7 @@
 
 ### jenkins/ (2個)
 4. `./jenkins/README.md` - ✅ **更新済み**
-5. `./jenkins/CONTRIBUTION.md` - 更新不要
+5. `./jenkins/CONTRIBUTION.md` - ✅ **更新済み**
 
 ### terraform/ (1個)
 6. `./terraform/README.md` - 更新不要
@@ -228,20 +254,23 @@
 
 - ✅ **影響を受けるドキュメントが特定されている**
   - 48個の.mdファイルをすべて調査
-  - 更新対象: jenkins/README.md（1個）
-  - 更新不要: 47個（理由を記載）
+  - 更新対象: jenkins/README.md、jenkins/CONTRIBUTION.md（2個）
+  - 更新不要: 46個（理由を記載）
 
 - ✅ **必要なドキュメントが更新されている**
   - jenkins/README.mdを更新済み
-  - AI_Workflow all_phases ジョブのパラメータセクションに6つのAPIキーパラメータを追加
-  - パラメータを論理的なグループに整理（基本設定、実行オプション、Git設定、AWS認証情報、APIキー設定、その他）
+    - AI_Workflow all_phases ジョブのパラメータセクションに6つのAPIキーパラメータを追加
+    - パラメータを論理的なグループに整理（基本設定、実行オプション、Git設定、AWS認証情報、APIキー設定、その他）
+  - jenkins/CONTRIBUTION.mdを更新済み
+    - `password()`メソッドの使用例を追加
+    - 複数行説明文のフォーマット方法（`.stripIndent().trim()`）を例示
 
 - ✅ **更新内容が記録されている**
   - このドキュメント更新ログに以下を記録:
-    - 更新したファイル（jenkins/README.md）
-    - 更新箇所（558-591行目）
-    - 更新内容（6つのAPIキーパラメータの追加、パラメータグループ化）
-    - 更新不要と判断したファイル（47個）とその理由
+    - 更新したファイル（jenkins/README.md、jenkins/CONTRIBUTION.md）
+    - 更新箇所（README: 558-591行目、CONTRIBUTION: 410-413行目）
+    - 更新内容（6つのAPIキーパラメータの追加、パラメータグループ化、password()メソッド例の追加）
+    - 更新不要と判断したファイル（46個）とその理由
 
 ## 他のAI Workflowジョブのドキュメント
 
@@ -304,15 +333,23 @@ Phase 9の後、Phase 10（Evaluation）で以下を実施予定:
 Phase 7（Documentation）を完了しました:
 
 - ✅ **ドキュメント調査**: 48個の.mdファイルをすべて調査
-- ✅ **ドキュメント更新**: jenkins/README.mdを更新（AI_Workflow all_phasesジョブのパラメータセクション）
+- ✅ **ドキュメント更新**: 2個のファイルを更新
+  - jenkins/README.md（AI_Workflow all_phasesジョブのパラメータセクション）
+  - jenkins/CONTRIBUTION.md（password()メソッドの使用例）
 - ✅ **更新内容記録**: このドキュメント更新ログに詳細を記録
 - ✅ **品質ゲート達成**: Phase 7の3つの必須要件をすべて満たす
 
-jenkins/README.mdの更新により、ユーザーは以下を理解できるようになりました:
+**ユーザーへの影響**（jenkins/README.md）:
 
 1. **新規APIキーパラメータ**: 6つのAPIキーパラメータ（GITHUB_TOKEN, OPENAI_API_KEY等）が追加されたこと
 2. **パラメータの用途**: 各APIキーの用途（GitHub API呼び出し、Codex実行モード、Claude実行モード）
 3. **任意パラメータ**: すべてのAPIキーが任意入力であること
 4. **パラメータ構成**: 20個のパラメータが6つの論理的なグループに整理されていること
+
+**開発者への影響**（jenkins/CONTRIBUTION.md）:
+
+1. **password()メソッド**: APIキーパラメータ定義の実装パターンを学習可能
+2. **複数行説明文**: `.stripIndent().trim()`を使った適切なフォーマット方法
+3. **セキュリティ考慮**: `nonStoredPasswordParam()`との違いを理解し、適切に使い分け可能
 
 次のPhase 8（Report）で実装完了レポートを作成し、Issue #455の完了報告を行います。
