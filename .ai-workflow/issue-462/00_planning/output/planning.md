@@ -277,18 +277,18 @@ After (Phase 2-2):
 
 ### Phase 4: 実装 (見積もり: 3~4h)
 
-- [ ] Task 4-1: NodeLabelGeneratorクラスの基本実装 (1~1.5h)
+- [x] Task 4-1: NodeLabelGeneratorクラスの基本実装 (1~1.5h)
   - `node_label_generator.py`ファイル作成
   - クラス定義とdocstring
   - 基本メソッドの実装（generate_label, generate_stack_label, generate_resource_label）
 
-- [ ] Task 4-2: リソースタイプ別ラベル生成ロジック実装 (1~1.5h)
+- [x] Task 4-2: リソースタイプ別ラベル生成ロジック実装 (1~1.5h)
   - スタックノードラベル生成
   - リソースノードラベル生成
   - ラベルフォーマット処理（長いラベルの省略、特殊文字エスケープ）
   - プロバイダー別カラー設定の統合
 
-- [ ] Task 4-3: DotFileProcessorからのロジック抽出と統合 (0.5~1h)
+- [x] Task 4-3: DotFileProcessorからのロジック抽出と統合 (0.5~1h)
   - ラベル生成メソッドの削除
   - NodeLabelGeneratorのインポート
   - 呼び出し箇所の更新
@@ -477,11 +477,11 @@ graph TD
 
 ### Phase 4: 実装
 
-- [ ] NodeLabelGeneratorクラスが正しく実装されている
-- [ ] リソースタイプ別ラベル生成が実装されている
-- [ ] DotFileProcessorからのロジック抽出が完了している
-- [ ] コードが読みやすく、保守可能である
-- [ ] docstringがすべてのメソッドに記載されている
+- [x] NodeLabelGeneratorクラスが正しく実装されている
+- [x] リソースタイプ別ラベル生成が実装されている
+- [x] DotFileProcessorからのロジック抽出が完了している
+- [x] コードが読みやすく、保守可能である
+- [x] docstringがすべてのメソッドに記載されている
 
 ### Phase 5: テストコード実装
 
