@@ -134,12 +134,12 @@
 
 ### Phase 1: 要件定義 (見積もり: 1~1.5h)
 
-- [ ] Task 1-1: 既存の依存関係処理ロジックの詳細分析 (0.5~1h)
+- [x] Task 1-1: 既存の依存関係処理ロジックの詳細分析 (0.5~1h)
   - `DotFileGenerator._add_resource_dependencies()`の動作を完全に理解
   - `_create_urn_to_node_mapping()`の役割を特定
   - `_add_dependencies_for_resource()`以下の6メソッドの責務を整理
   - 現在の依存関係処理の入力・出力を明確化
-- [ ] Task 1-2: ResourceDependencyBuilderの責務と境界の定義 (0.5h)
+- [x] Task 1-2: ResourceDependencyBuilderの責務と境界の定義 (0.5h)
   - 依存関係グラフ構築の責務範囲を決定
   - DotFileGeneratorとの責務分担を明確化
   - パブリックAPI（メソッド）を定義
@@ -330,10 +330,10 @@ graph TD
 ## 7. 品質ゲート
 
 ### Phase 1: 要件定義
-- [ ] 既存の依存関係処理ロジックが完全に理解されている
-- [ ] ResourceDependencyBuilderの責務が明確に定義されている
-- [ ] DotFileGeneratorとの責務分担が明確である
-- [ ] 入力・出力データ構造が明確に定義されている
+- [x] 既存の依存関係処理ロジックが完全に理解されている
+- [x] ResourceDependencyBuilderの責務が明確に定義されている
+- [x] DotFileGeneratorとの責務分担が明確である
+- [x] 入力・出力データ構造が明確に定義されている
 
 ### Phase 2: 設計
 - [ ] 実装戦略（REFACTOR）の判断根拠が明記されている
