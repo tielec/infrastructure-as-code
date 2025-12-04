@@ -132,11 +132,11 @@
 
 ### Phase 2: 設計 (見積もり: 0.5h)
 
-- [ ] Task 2-1: フォルダ構造設計 (0.3h)
+- [x] Task 2-1: フォルダ構造設計 (0.3h)
   - 3つのフォルダのパス設計（`AI_Workflow/develop`、`AI_Workflow/main-1`、`AI_Workflow/main-2`等）
   - displayNameの設計（わかりやすい表示名）
   - descriptionの設計（用途説明文の作成）
-- [ ] Task 2-2: YAML構造設計 (0.2h)
+- [x] Task 2-2: YAML構造設計 (0.2h)
   - `folder-config.yaml`への追加箇所の特定
   - 既存フォルダとの一貫性確認
   - インデントと構文の確認
@@ -282,11 +282,11 @@ graph TD
 
 ### Phase 2: 設計
 
-- [ ] 実装戦略の判断根拠が明記されている（EXTEND）
-- [ ] テスト戦略の判断根拠が明記されている（INTEGRATION_ONLY）
-- [ ] テストコード戦略の判断根拠が明記されている（なし）
-- [ ] 3つのフォルダのパス、displayName、descriptionが設計されている
-- [ ] 既存フォルダとの命名規則の一貫性が確認されている
+- [x] 実装戦略の判断根拠が明記されている（EXTEND）
+- [x] テスト戦略の判断根拠が明記されている（INTEGRATION_ONLY）
+- [x] テストコード戦略の判断根拠が明記されている（なし）
+- [x] 3つのフォルダのパス、displayName、descriptionが設計されている
+- [x] 既存フォルダとの命名規則の一貫性が確認されている
 
 ### Phase 3: テストシナリオ
 
