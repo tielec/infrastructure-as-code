@@ -40,8 +40,15 @@ class DotFileGenerator:
     DEFAULT_COLORS = ('#E3F2FD', '#1565C0')
     
     @staticmethod
-    def escape_dot_string(s: str) -> str:
-        """DOT形式の文字列をエスケープ"""
+    def escape_dot_string(s: str):
+        """DOT形式の文字列をエスケープ
+
+        Args:
+            s (str): エスケープする文字列
+
+        Returns:
+            str: エスケープ済み文字列（入力がNoneの場合はNoneを返す）
+        """
         if not s:
             return s
         # ダブルクォートとバックスラッシュをエスケープ
@@ -453,39 +460,3 @@ class DotFileProcessor:
             break
 
         return fill_color, border_color, short_name
-    
-    @staticmethod
-    def _shorten_pulumi_label(line: str) -> str:
-        """既存のメソッドを改善"""
-        match = re.search(r'\[label="([^"]+)"\]', line)
-        if not match:
-            return line
-
-        full_label = match.group(1)
-
-        # URN形式の場合はUrnProcessorを使用
-        if full_label.startswith('urn:pulumi:'):
-            urn_info = UrnProcessor.parse_urn(full_label)
-            short_label = UrnProcessor.create_readable_label(urn_info)
-
-            # 色設定
-            if UrnProcessor.is_stack_resource(full_label):
-                fillcolor = '#D1C4E9'
-                color = '#512DA8'
-            else:
-                provider_colors = DotFileProcessor.PROVIDER_COLORS.get(
-                    urn_info['provider'].lower(),
-                    DotFileProcessor.DEFAULT_COLORS
-                )
-                fillcolor = provider_colors[0]
-                color = provider_colors[1]
-        else:
-            # URN形式でない場合は既存の処理
-            short_label = full_label[:40] if len(full_label) > 40 else full_label
-            fillcolor, color = DotFileProcessor.DEFAULT_COLORS
-
-        return re.sub(
-            r'\[label="[^"]+"\]',
-            f'[label="{short_label}", fillcolor="{fillcolor}", color="{color}"]',
-            line
-        )

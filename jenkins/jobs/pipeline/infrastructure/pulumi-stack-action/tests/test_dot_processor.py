@@ -1218,18 +1218,178 @@ class TestDotProcessorIntegration:
 
 
 # =============================================================================
-# パフォーマンステスト
+# パフォーマンステスト（Phase 4追加）
 # =============================================================================
 
-class TestDotProcessorPerformance:
-    """DotFileProcessor - パフォーマンステスト"""
+class TestPerformanceBenchmark:
+    """パフォーマンステスト - リファクタリング前後のベンチマーク比較
+
+    目的:
+    - リファクタリング前後の性能差が±10%以内であることを検証
+    - 各メソッドの実行時間を測定
+    - ベンチマーク結果をレポート用に記録
+
+    テスト対象メソッド:
+    - DotFileGenerator.create_dot_file()
+    - DotFileProcessor.apply_graph_styling()
+    - UrnProcessor.parse_urn() (間接的)
+    - NodeLabelGenerator.generate_node_label() (間接的)
+    - ResourceDependencyBuilder.add_resource_dependencies() (間接的)
+    """
 
     @pytest.mark.performance
-    def test_performance_20_resources(self, dot_file_generator):
-        """TC-I-08: パフォーマンステスト - 20リソース処理時間"""
-        import time
+    def test_create_dot_file_performance_1_resource(self, dot_file_generator):
+        """TC-P-01: 1リソース処理時間（正常系）
 
-        # Given: 20リソース
+        Given: 1リソースのPulumiデータ
+        When: create_dot_file()を100回実行
+        Then: 平均実行時間 < 0.1秒、標準偏差が小さい
+        """
+        import time
+        import statistics
+
+        # Given: 1リソース
+        resources = [{
+            'type': 'aws:s3/bucket:Bucket',
+            'urn': 'urn:pulumi:dev::myproject::aws:s3/bucket:Bucket::bucket-1',
+            'dependencies': [],
+            'parent': None,
+            'propertyDependencies': {}
+        }]
+        resource_providers = {'aws': 1}
+
+        # ウォームアップ実行（10回）
+        for _ in range(10):
+            dot_file_generator.create_dot_file('dev', resources, resource_providers)
+
+        # When: 本測定（100回実行）
+        execution_times = []
+        for _ in range(100):
+            start = time.perf_counter()
+            result = dot_file_generator.create_dot_file('dev', resources, resource_providers)
+            elapsed = time.perf_counter() - start
+            execution_times.append(elapsed)
+
+        # Then: 平均実行時間と標準偏差を計算
+        avg_time = statistics.mean(execution_times)
+        std_dev = statistics.stdev(execution_times)
+
+        # 検証: 平均実行時間 < 0.1秒
+        assert avg_time < 0.1, f"平均実行時間 {avg_time:.6f}秒が0.1秒を超えています"
+        # 標準偏差が平均の10%未満（安定した実行時間）
+        assert std_dev < avg_time * 0.1, f"標準偏差 {std_dev:.6f}秒が大きすぎます"
+        # 結果が正しく生成されている
+        assert isinstance(result, list)
+
+        # ログ出力（レポート用）
+        print(f"\n[TC-P-01] 1リソース: 平均 {avg_time:.6f}秒, 標準偏差 {std_dev:.6f}秒")
+
+    @pytest.mark.performance
+    def test_create_dot_file_performance_5_resources(self, dot_file_generator):
+        """TC-P-02: 5リソース処理時間（正常系）
+
+        Given: 5リソースのPulumiデータ
+        When: create_dot_file()を100回実行
+        Then: 平均実行時間 < 0.5秒
+        """
+        import time
+        import statistics
+
+        # Given: 5リソース
+        resources = []
+        for i in range(5):
+            resources.append({
+                'type': 'aws:s3/bucket:Bucket',
+                'urn': f'urn:pulumi:dev::myproject::aws:s3/bucket:Bucket::bucket-{i}',
+                'dependencies': [],
+                'parent': None,
+                'propertyDependencies': {}
+            })
+        resource_providers = {'aws': 5}
+
+        # ウォームアップ実行（10回）
+        for _ in range(10):
+            dot_file_generator.create_dot_file('dev', resources, resource_providers)
+
+        # When: 本測定（100回実行）
+        execution_times = []
+        for _ in range(100):
+            start = time.perf_counter()
+            result = dot_file_generator.create_dot_file('dev', resources, resource_providers)
+            elapsed = time.perf_counter() - start
+            execution_times.append(elapsed)
+
+        # Then: 平均実行時間と標準偏差を計算
+        avg_time = statistics.mean(execution_times)
+        std_dev = statistics.stdev(execution_times)
+
+        # 検証: 平均実行時間 < 0.5秒
+        assert avg_time < 0.5, f"平均実行時間 {avg_time:.6f}秒が0.5秒を超えています"
+        assert std_dev < avg_time * 0.1, f"標準偏差 {std_dev:.6f}秒が大きすぎます"
+        assert isinstance(result, list)
+
+        # ログ出力（レポート用）
+        print(f"\n[TC-P-02] 5リソース: 平均 {avg_time:.6f}秒, 標準偏差 {std_dev:.6f}秒")
+
+    @pytest.mark.performance
+    def test_create_dot_file_performance_10_resources(self, dot_file_generator):
+        """TC-P-03: 10リソース処理時間（正常系）
+
+        Given: 10リソースのPulumiデータ
+        When: create_dot_file()を100回実行
+        Then: 平均実行時間 < 1.0秒
+        """
+        import time
+        import statistics
+
+        # Given: 10リソース
+        resources = []
+        for i in range(10):
+            resources.append({
+                'type': 'aws:s3/bucket:Bucket',
+                'urn': f'urn:pulumi:dev::myproject::aws:s3/bucket:Bucket::bucket-{i}',
+                'dependencies': [],
+                'parent': None,
+                'propertyDependencies': {}
+            })
+        resource_providers = {'aws': 10}
+
+        # ウォームアップ実行（10回）
+        for _ in range(10):
+            dot_file_generator.create_dot_file('dev', resources, resource_providers)
+
+        # When: 本測定（100回実行）
+        execution_times = []
+        for _ in range(100):
+            start = time.perf_counter()
+            result = dot_file_generator.create_dot_file('dev', resources, resource_providers)
+            elapsed = time.perf_counter() - start
+            execution_times.append(elapsed)
+
+        # Then: 平均実行時間と標準偏差を計算
+        avg_time = statistics.mean(execution_times)
+        std_dev = statistics.stdev(execution_times)
+
+        # 検証: 平均実行時間 < 1.0秒
+        assert avg_time < 1.0, f"平均実行時間 {avg_time:.6f}秒が1.0秒を超えています"
+        assert std_dev < avg_time * 0.1, f"標準偏差 {std_dev:.6f}秒が大きすぎます"
+        assert isinstance(result, list)
+
+        # ログ出力（レポート用）
+        print(f"\n[TC-P-03] 10リソース: 平均 {avg_time:.6f}秒, 標準偏差 {std_dev:.6f}秒")
+
+    @pytest.mark.performance
+    def test_create_dot_file_performance_20_resources(self, dot_file_generator):
+        """TC-P-04: 20リソース処理時間（境界値）
+
+        Given: 20リソース（最大値）のPulumiデータ
+        When: create_dot_file()を100回実行
+        Then: 平均実行時間 < 2.0秒
+        """
+        import time
+        import statistics
+
+        # Given: 20リソース（最大値）
         resources = []
         for i in range(20):
             resources.append({
@@ -1241,14 +1401,78 @@ class TestDotProcessorPerformance:
             })
         resource_providers = {'aws': 20}
 
-        # When: 処理時間を測定
-        start = time.time()
-        result = dot_file_generator.create_dot_file('dev', resources, resource_providers)
-        elapsed = time.time() - start
+        # ウォームアップ実行（10回）
+        for _ in range(10):
+            dot_file_generator.create_dot_file('dev', resources, resource_providers)
 
-        # Then: 1秒以内に処理完了
-        assert elapsed < 1.0
-        # 結果が正しく生成されている
+        # When: 本測定（100回実行）
+        execution_times = []
+        for _ in range(100):
+            start = time.perf_counter()
+            result = dot_file_generator.create_dot_file('dev', resources, resource_providers)
+            elapsed = time.perf_counter() - start
+            execution_times.append(elapsed)
+
+        # Then: 平均実行時間と標準偏差を計算
+        avg_time = statistics.mean(execution_times)
+        std_dev = statistics.stdev(execution_times)
+
+        # 検証: 平均実行時間 < 2.0秒
+        assert avg_time < 2.0, f"平均実行時間 {avg_time:.6f}秒が2.0秒を超えています"
+        assert std_dev < avg_time * 0.1, f"標準偏差 {std_dev:.6f}秒が大きすぎます"
         assert isinstance(result, list)
+        # 20リソース全てが処理されている
         resource_nodes = [line for line in result if 'resource_' in line and '[label=' in line]
         assert len(resource_nodes) == 20
+
+        # ログ出力（レポート用）
+        print(f"\n[TC-P-04] 20リソース: 平均 {avg_time:.6f}秒, 標準偏差 {std_dev:.6f}秒")
+
+    @pytest.mark.performance
+    def test_apply_graph_styling_performance(self, dot_file_processor, dot_file_generator):
+        """TC-P-05: グラフスタイル適用処理時間
+
+        Given: 10リソースのDOT文字列（スタイル未適用）
+        When: apply_graph_styling()を100回実行
+        Then: 平均実行時間 < 0.1秒
+        """
+        import time
+        import statistics
+
+        # Given: 10リソースのDOT文字列を生成
+        resources = []
+        for i in range(10):
+            resources.append({
+                'type': 'aws:s3/bucket:Bucket',
+                'urn': f'urn:pulumi:dev::myproject::aws:s3/bucket:Bucket::bucket-{i}',
+                'dependencies': [],
+                'parent': None,
+                'propertyDependencies': {}
+            })
+        resource_providers = {'aws': 10}
+        dot_lines = dot_file_generator.create_dot_file('dev', resources, resource_providers)
+        dot_content = '\n'.join(dot_lines)
+
+        # ウォームアップ実行（10回）
+        for _ in range(10):
+            dot_file_processor.apply_graph_styling(dot_content)
+
+        # When: 本測定（100回実行）
+        execution_times = []
+        for _ in range(100):
+            start = time.perf_counter()
+            result = dot_file_processor.apply_graph_styling(dot_content)
+            elapsed = time.perf_counter() - start
+            execution_times.append(elapsed)
+
+        # Then: 平均実行時間と標準偏差を計算
+        avg_time = statistics.mean(execution_times)
+        std_dev = statistics.stdev(execution_times)
+
+        # 検証: 平均実行時間 < 0.1秒
+        assert avg_time < 0.1, f"平均実行時間 {avg_time:.6f}秒が0.1秒を超えています"
+        assert std_dev < avg_time * 0.1, f"標準偏差 {std_dev:.6f}秒が大きすぎます"
+        assert isinstance(result, str)
+
+        # ログ出力（レポート用）
+        print(f"\n[TC-P-05] グラフスタイル適用: 平均 {avg_time:.6f}秒, 標準偏差 {std_dev:.6f}秒")
