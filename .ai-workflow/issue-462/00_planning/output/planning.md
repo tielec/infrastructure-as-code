@@ -244,19 +244,19 @@ After (Phase 2-2):
 
 ### Phase 2: 設計 (見積もり: 2~3h)
 
-- [ ] Task 2-1: NodeLabelGeneratorクラス設計 (1~1.5h)
+- [x] Task 2-1: NodeLabelGeneratorクラス設計 (1~1.5h)
   - クラスの責務定義（Single Responsibility Principle）
   - メソッド一覧とシグネチャ設計
   - 入力・出力のデータ構造設計
   - UrnProcessorとの協調設計
 
-- [ ] Task 2-2: リソースタイプ別ラベルフォーマット設計 (0.5~1h)
+- [x] Task 2-2: リソースタイプ別ラベルフォーマット設計 (0.5~1h)
   - スタックノードラベル
   - リソースノードラベル
   - プロバイダー別カラー設定の移行
   - カスタムラベル対応の設計
 
-- [ ] Task 2-3: DotFileProcessorとの統合設計 (0.5h)
+- [x] Task 2-3: DotFileProcessorとの統合設計 (0.5h)
   - NodeLabelGenerator呼び出し箇所の特定
   - メソッドシグネチャの変更点の明確化
   - エラーハンドリング設計
