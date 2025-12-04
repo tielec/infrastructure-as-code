@@ -54,6 +54,13 @@ def createJob = { String jobName, String descriptionHeader, String gitBranch ->
         // パラメータ定義
         parameters {
             // ========================================
+            // 実行モード（固定値）
+            // ========================================
+            choiceParam('EXECUTION_MODE', ['all_phases'], '''
+実行モード（固定値 - 変更不可）
+            '''.stripIndent().trim())
+
+            // ========================================
             // 基本設定
             // ========================================
             stringParam('ISSUE_URL', '', '''
