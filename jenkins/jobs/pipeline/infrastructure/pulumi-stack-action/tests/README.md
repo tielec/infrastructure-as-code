@@ -26,6 +26,10 @@ tests/
 - `test_node_label_generator.py` を追加: `NodeLabelGenerator`クラスの単体テスト（29ケース）
 - `test_dot_processor.py` を更新: 統合テストとして継続（NodeLabelGenerator経由のテスト）
 
+**Phase 2-3リファクタリング（Issue #463）による変更**:
+- `test_resource_dependency_builder.py` を追加: `ResourceDependencyBuilder`クラスの単体テスト（37ケース）
+- `test_dot_processor.py` を更新: 統合テストとして継続（ResourceDependencyBuilder経由のテスト）
+
 ## テスト実行方法
 
 ### 前提条件
@@ -76,6 +80,9 @@ pytest tests/test_urn_processor.py -v
 # NodeLabelGeneratorのユニットテストのみ実行
 pytest tests/test_node_label_generator.py -v
 
+# ResourceDependencyBuilderのユニットテストのみ実行
+pytest tests/test_resource_dependency_builder.py -v
+
 # DotFileProcessorの統合テストのみ実行
 pytest tests/test_dot_processor.py -v
 
@@ -88,6 +95,7 @@ pytest tests/test_node_label_generator.py::TestGenerateNodeLabel
 pytest tests/test_dot_processor.py::TestDotFileGeneratorEscaping::test_escape_dot_string_with_double_quotes
 pytest tests/test_urn_processor.py::TestUrnProcessorParsing::test_parse_urn_valid_aws
 pytest tests/test_node_label_generator.py::TestGenerateNodeLabel::test_generate_node_label_stack_resource
+pytest tests/test_resource_dependency_builder.py::TestURNMapping::test_create_urn_to_node_mapping_正常系_3リソース
 
 # マーカー指定
 pytest tests/ -m "characterization"
@@ -114,6 +122,14 @@ pytest tests/ -m "performance"
 
 - **対象**: ノードラベル生成、スタックラベル、リソースラベル、プロバイダー別色設定
 - **テストケース数**: 29ケース
+- **カバレッジ目標**: 80%以上
+
+**Phase 2-3で追加**: `test_resource_dependency_builder.py`
+
+`ResourceDependencyBuilder`クラスの全公開メソッドを独立してテストします。
+
+- **対象**: URNマッピング作成、直接依存関係、親依存関係、プロパティ依存関係
+- **テストケース数**: 37ケース
 - **カバレッジ目標**: 80%以上
 
 ### 特性テスト（Characterization Test）
@@ -155,7 +171,11 @@ pytest tests/
 
 ### 新規テストケースの追加
 
-1. `test_dot_processor.py`または`test_urn_processor.py`に新しいテストクラスまたはメソッドを追加
+1. 対応するテストファイルに新しいテストクラスまたはメソッドを追加
+   - `test_dot_processor.py`: 統合テスト
+   - `test_urn_processor.py`: UrnProcessorの単体テスト
+   - `test_node_label_generator.py`: NodeLabelGeneratorの単体テスト
+   - `test_resource_dependency_builder.py`: ResourceDependencyBuilderの単体テスト
 2. Given-When-Then形式でコメントを記載
 3. 適切なマーカーを付与（`@pytest.mark.characterization`、`@pytest.mark.unit`等）
 4. テストを実行して動作確認
@@ -171,6 +191,9 @@ pytest tests/
 
 **Phase 2-2で追加されたフィクスチャ**:
 - `node_label_generator`: `NodeLabelGenerator`インスタンスを返すフィクスチャ
+
+**Phase 2-3で追加されたフィクスチャ**:
+- `resource_dependency_builder`: `ResourceDependencyBuilder`クラスを返すフィクスチャ（静的メソッドのためクラスを直接返す）
 
 ## 参考資料
 
