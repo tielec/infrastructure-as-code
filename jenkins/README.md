@@ -123,7 +123,7 @@ aws ssm get-parameter --name /jenkins-infra/dev/jenkins/admin-password \
 |---------|------|-----------|
 | **Admin_Jobs** | システム管理 | backup-config（設定バックアップ）<br>restore-config（設定リストア）<br>ssm-parameter-backup（SSMパラメータバックアップ）<br>ssm-parameter-restore（SSMパラメータリストア）<br>github-webhooks-setting（GitHub Webhook設定）<br>github-deploykeys-setting（デプロイキー設定）<br>user-management（ユーザー管理） |
 | **Account_Setup** | アカウント管理 | account-self-activation（アカウント自己有効化） |
-| **AI_Workflow** | AI駆動開発自動化 | 実行モード別ジョブ（all_phases、preset、single_phase、rollback、auto_issue）<br>※リポジトリごとにサブフォルダで整理 |
+| **AI_Workflow** | AI駆動開発自動化 | 実行モード別ジョブ（all_phases、preset、single_phase、rollback、auto_issue）<br>※リポジトリごとにサブフォルダで整理<br>※汎用フォルダ（develop-generic、main-generic-1、main-generic-2）も利用可能 |
 | **Code_Quality_Checker** | コード品質分析 | pr-complexity-analyzer（PR複雑度分析）<br>rust-code-analysis（Rustコード解析） |
 | **Document_Generator** | ドキュメント生成 | auto-insert-doxygen-comment（Doxygenコメント自動挿入）<br>generate-doxygen-html（DoxygenHTML生成）<br>technical-docs-writer（技術文書作成）<br>pr-comment-builder（PRコメントビルダー） |
 | **Infrastructure_Management** | インフラ管理 | shutdown-jenkins-environment（Jenkins環境停止）<br>terminate-lambda-nat（Lambda NAT削除）<br>Ansible Playbook実行、Pulumi Stack管理 |
@@ -544,6 +544,17 @@ Jenkins UI > Infrastructure_Management > Shutdown-Environment-Scheduler > "Build
 - フォルダ構造: `AI_Workflow/{repository-name}/各ジョブ`
 - パラメータ削減: 従来の24個から8〜15個に削減（削減率最大66.7%）
 - 各ジョブで実行モード（EXECUTION_MODE）は固定値として設定
+
+**汎用フォルダ**: 特定リポジトリに依存しない汎用的なワークフロー実行環境
+- `AI_Workflow/develop-generic`: developブランチ用（ai-workflow-agentの最新バージョン）
+  - 新機能のテスト、実験的な利用
+  - 開発中の機能のため、動作が不安定な場合があります
+- `AI_Workflow/main-generic-1`: mainブランチ用（1つ目、ai-workflow-agentの安定バージョン）
+  - 本番環境での利用、安定した動作が求められる場合
+  - 複数のワークフローを同時実行可能（main-generic-2と並行利用）
+- `AI_Workflow/main-generic-2`: mainブランチ用（2つ目、ai-workflow-agentの安定バージョン）
+  - 本番環境での利用、安定した動作が求められる場合
+  - 複数のワークフローを同時実行可能（main-generic-1と並行利用）
 
 **利用可能なジョブ**:
 
