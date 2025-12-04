@@ -1,0 +1,7 @@
+{
+  "pulumi_generated_graph": "strict digraph {\n  \"node1\" [label=\"urn:pulumi:dev::myproject::aws:s3/bucket:Bucket::my-bucket\"];\n  \"node2\" [label=\"urn:pulumi:dev::myproject::aws:s3/bucketObject:BucketObject::my-object\"];\n  \"node2\" -> \"node1\";\n}",
+  "custom_generated_graph": "digraph G {\n  \"node1\" [label=\"Resource1\"];\n  \"node2\" [label=\"Resource2\"];\n  \"node1\" -> \"node2\";\n}",
+  "empty_graph": "digraph G {}",
+  "minimal_graph": "digraph G { a; }",
+  "stack_graph": "strict digraph {\n  \"stack_node\" [label=\"urn:pulumi:dev::myproject::pulumi:pulumi:Stack::dev\"];\n  \"resource_node\" [label=\"urn:pulumi:dev::myproject::aws:s3/bucket:Bucket::my-bucket\"];\n  \"resource_node\" -> \"stack_node\";\n}"
+}

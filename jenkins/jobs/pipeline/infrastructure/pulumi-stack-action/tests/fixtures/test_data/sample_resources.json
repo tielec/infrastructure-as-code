@@ -1,0 +1,36 @@
+{
+  "basic_resource": {
+    "type": "aws:s3/bucket:Bucket",
+    "urn": "urn:pulumi:dev::myproject::aws:s3/bucket:Bucket::my-bucket",
+    "dependencies": [],
+    "parent": null,
+    "propertyDependencies": {}
+  },
+  "resource_with_dependencies": {
+    "type": "aws:s3/bucketObject:BucketObject",
+    "urn": "urn:pulumi:dev::myproject::aws:s3/bucketObject:BucketObject::my-object",
+    "dependencies": ["urn:pulumi:dev::myproject::aws:s3/bucket:Bucket::my-bucket"],
+    "parent": null,
+    "propertyDependencies": {
+      "bucket": ["urn:pulumi:dev::myproject::aws:s3/bucket:Bucket::my-bucket"]
+    }
+  },
+  "minimal_resource": {
+    "type": "aws:s3/bucket:Bucket",
+    "urn": "urn:pulumi:dev::myproject::aws:s3/bucket:Bucket::minimal"
+  },
+  "azure_resource": {
+    "type": "azure:storage/storageAccount:StorageAccount",
+    "urn": "urn:pulumi:dev::myproject::azure:storage/storageAccount:StorageAccount::mystorage",
+    "dependencies": [],
+    "parent": null,
+    "propertyDependencies": {}
+  },
+  "gcp_resource": {
+    "type": "gcp:storage/bucket:Bucket",
+    "urn": "urn:pulumi:dev::myproject::gcp:storage/bucket:Bucket::my-bucket",
+    "dependencies": [],
+    "parent": null,
+    "propertyDependencies": {}
+  }
+}

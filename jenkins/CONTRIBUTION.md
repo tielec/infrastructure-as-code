@@ -33,6 +33,10 @@ Jenkinsジョブ、パイプライン、共有ライブラリの開発者向け�
 - [4.2 よくあるパターン集](#42-よくあるパターン集)
 - [4.3 トラブルシューティング](#43-トラブルシューティング)
 - [4.4 テスト手法](#44-テスト手法)
+  - [4.4.1 Job DSLテスト](#441-job-dslテスト)
+  - [4.4.2 パイプラインテスト](#442-パイプラインテスト)
+  - [4.4.3 共有ライブラリテスト](#443-共有ライブラリテスト)
+  - [4.4.4 Pythonスクリプトテスト](#444-pythonスクリプトテスト)
 
 ---
 
@@ -1636,18 +1640,132 @@ class SharedLibraryTest extends BasePipelineTest {
             .build()
         helper.registerSharedLibrary(library)
     }
-    
+
     @Test
     void testUtilityFunction() {
         // スクリプトの実行
         runScript('test/resources/testPipeline.groovy')
-        
+
         // アサーション
         assertJobStatusSuccess()
         assertCallStackContains('echo Testing')
     }
 }
 ```
+
+#### 4.4.4 Pythonスクリプトテスト
+
+Jenkinsパイプライン内で使用されるPythonスクリプトのユニットテストについて説明します。
+
+##### テストフレームワーク
+
+| ツール | バージョン | 用途 |
+|--------|------------|------|
+| pytest | 7.4.3以上 | テストフレームワーク |
+| pytest-cov | 4.1.0以上 | カバレッジ測定 |
+| pytest-mock | 3.12.0以上 | モックオブジェクト |
+
+##### テスト実行方法
+
+```bash
+# テスト実行（基本）
+pytest tests/
+
+# カバレッジ測定付き実行
+pytest --cov=. --cov-report=html --cov-report=term tests/
+
+# 特定のマーカーのみ実行
+pytest -m characterization tests/
+pytest -m edge_case tests/
+
+# 詳細出力
+pytest -v tests/
+```
+
+##### テスト構造の例
+
+```python
+# tests/test_example_script.py
+import pytest
+from unittest.mock import Mock, patch, MagicMock
+
+# テストクラス: 機能単位でグループ化
+class TestScriptFunctionality:
+    """スクリプトの主要機能のテスト"""
+
+    @pytest.mark.characterization
+    def test_basic_functionality(self):
+        """
+        Given: 正常な入力データ
+        When: スクリプトを実行
+        Then: 期待される出力が得られる
+        """
+        # Arrange
+        input_data = {"key": "value"}
+
+        # Act
+        result = process_data(input_data)
+
+        # Assert
+        assert result is not None
+        assert result["status"] == "success"
+
+    @pytest.mark.edge_case
+    def test_empty_input(self):
+        """
+        Given: 空の入力データ
+        When: スクリプトを実行
+        Then: 適切なエラーハンドリングが行われる
+        """
+        # Arrange
+        input_data = {}
+
+        # Act & Assert
+        with pytest.raises(ValueError):
+            process_data(input_data)
+
+# フィクスチャ: テストデータの準備
+@pytest.fixture
+def sample_data():
+    """テスト用のサンプルデータ"""
+    return {
+        "name": "test",
+        "value": 123
+    }
+
+@pytest.fixture
+def mock_external_api():
+    """外部API呼び出しのモック"""
+    with patch('module.external_api_call') as mock:
+        mock.return_value = {"result": "success"}
+        yield mock
+```
+
+##### 実装例: pulumi-stack-actionのdot_processor.py
+
+`jenkins/jobs/pipeline/infrastructure/pulumi-stack-action/`ディレクトリに実装例があります：
+
+```
+pulumi-stack-action/
+├── dot_processor.py          # 本体スクリプト
+├── tests/                    # テストディレクトリ
+│   ├── __init__.py
+│   ├── conftest.py          # pytest設定・共通フィクスチャ
+│   ├── test_dot_file_generator.py
+│   ├── test_dot_file_processor.py
+│   └── fixtures/            # テストデータ
+│       ├── simple_stack.json
+│       ├── complex_stack.json
+│       └── edge_cases.json
+├── pytest.ini               # pytest設定ファイル
+├── .coveragerc             # カバレッジ設定
+├── tests/README.md         # テスト実行ガイド
+└── CHARACTERIZATION_TEST.md # 動作仕様ドキュメント
+```
+
+詳細な実装例とテスト実行方法については、以下を参照してください：
+- [テスト実行ガイド](../jobs/pipeline/infrastructure/pulumi-stack-action/tests/README.md)
+- [動作仕様ドキュメント](../jobs/pipeline/infrastructure/pulumi-stack-action/CHARACTERIZATION_TEST.md)
 
 ---
 

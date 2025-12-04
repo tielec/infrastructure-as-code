@@ -1,0 +1,11 @@
+{
+  "valid_aws_urn": "urn:pulumi:dev::myproject::aws:s3/bucket:Bucket::my-bucket",
+  "valid_azure_urn": "urn:pulumi:dev::myproject::azure:storage/storageAccount:StorageAccount::mystorage",
+  "valid_gcp_urn": "urn:pulumi:dev::myproject::gcp:storage/bucket:Bucket::my-bucket",
+  "valid_kubernetes_urn": "urn:pulumi:dev::myproject::kubernetes:core/v1:Namespace::my-namespace",
+  "stack_urn": "urn:pulumi:dev::myproject::pulumi:pulumi:Stack::dev",
+  "invalid_urn_no_separator": "invalid-urn",
+  "invalid_urn_partial": "urn:pulumi:dev",
+  "empty_urn": "",
+  "long_urn": "urn:pulumi:dev::myproject::aws:s3/bucket:Bucket::AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+}
