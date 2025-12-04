@@ -205,12 +205,12 @@
 
 ### Phase 5: テストコード実装 (見積もり: 1〜1.5h)
 
-- [ ] Task 5-1: 統合テストの実装 (0.5〜1h)
+- [x] Task 5-1: 統合テストの実装 (0.5〜1h)
   - `test_dot_processor.py`に統合テストクラス追加（`TestDotProcessorIntegration`）
   - 新規クラス協調動作テスト（`UrnProcessor`, `NodeLabelGenerator`, `ResourceDependencyBuilder`）
   - エッジケーステスト（不正URN、長いリソース名）
 
-- [ ] Task 5-2: 回帰テストの拡張 (0.5h)
+- [x] Task 5-2: 回帰テストの拡張 (0.5h)
   - Characterization Testマーカー（`@pytest.mark.characterization`）の確認
   - リファクタリング前後の振る舞い比較テスト
   - パフォーマンステスト（20リソース処理時間）
@@ -379,10 +379,10 @@ graph TD
 
 ### Phase 5: テストコード実装
 
-- [ ] **統合テストが実装されている**
-- [ ] **Characterization Testが実行可能である**
-- [ ] **エッジケーステストが実装されている**
-- [ ] **パフォーマンステストが実装されている**
+- [x] **統合テストが実装されている**
+- [x] **Characterization Testが実行可能である**
+- [x] **エッジケーステストが実装されている**
+- [x] **パフォーマンステストが実装されている**
 
 ### Phase 6: テスト実行
 
