@@ -10,11 +10,16 @@
 tests/
 ├── __init__.py
 ├── conftest.py                # 共通フィクスチャ
-├── test_dot_processor.py      # メインテストコード
+├── test_dot_processor.py      # DotFileProcessorのテスト（統合テスト）
+├── test_urn_processor.py      # UrnProcessorのテスト（ユニットテスト）
 ├── fixtures/
 │   └── test_data/             # サンプルデータ
 └── README.md                  # このファイル
 ```
+
+**Phase 2-1リファクタリング（Issue #461）による変更**:
+- `test_urn_processor.py` を追加: `UrnProcessor`クラスの単体テスト（24ケース）
+- `test_dot_processor.py` を更新: 統合テストとして継続（UrnProcessor経由のテスト）
 
 ## テスト実行方法
 
@@ -60,22 +65,43 @@ xdg-open htmlcov/index.html
 ### 特定のテストのみ実行
 
 ```bash
+# UrnProcessorのユニットテストのみ実行
+pytest tests/test_urn_processor.py -v
+
+# DotFileProcessorの統合テストのみ実行
+pytest tests/test_dot_processor.py -v
+
 # クラス単位
 pytest tests/test_dot_processor.py::TestDotFileGeneratorEscaping
+pytest tests/test_urn_processor.py::TestUrnProcessorParsing
 
 # テストケース単位
 pytest tests/test_dot_processor.py::TestDotFileGeneratorEscaping::test_escape_dot_string_with_double_quotes
+pytest tests/test_urn_processor.py::TestUrnProcessorParsing::test_parse_urn_valid_aws
 
 # マーカー指定
 pytest tests/ -m "characterization"
+pytest tests/ -m "unit"
 pytest tests/ -m "edge_case"
 ```
 
 ## テストの種類
 
+### ユニットテスト（Unit Test）
+
+**Phase 2-1で追加**: `test_urn_processor.py`
+
+`UrnProcessor`クラスの全公開メソッドを独立してテストします。
+
+- **対象**: URNパース、ラベル生成、リソース判定
+- **テストケース数**: 24ケース
+- **カバレッジ目標**: 80%以上
+
 ### 特性テスト（Characterization Test）
 
-既存の振る舞いを記録するテスト。将来のリファクタリング時に振る舞いが維持されていることを検証します。
+**既存**: `test_dot_processor.py`
+
+既存の振る舞いを記録するテスト。将来のリファクタリング時に振る舞いが維持されていることを検証します。Phase 2-1リファクタリング後は、統合テストとしても機能します。
 
 ### エッジケーステスト
 
@@ -110,9 +136,9 @@ pytest tests/
 
 ### 新規テストケースの追加
 
-1. `test_dot_processor.py`に新しいテストクラスまたはメソッドを追加
+1. `test_dot_processor.py`または`test_urn_processor.py`に新しいテストクラスまたはメソッドを追加
 2. Given-When-Then形式でコメントを記載
-3. 適切なマーカーを付与（`@pytest.mark.characterization`等）
+3. 適切なマーカーを付与（`@pytest.mark.characterization`、`@pytest.mark.unit`等）
 4. テストを実行して動作確認
 
 ### テストデータの追加
@@ -120,6 +146,9 @@ pytest tests/
 1. `fixtures/test_data/`にJSONファイルを追加
 2. `conftest.py`に新しいフィクスチャを定義
 3. テストコードでフィクスチャを使用
+
+**Phase 2-1で追加されたフィクスチャ**:
+- `urn_processor`: `UrnProcessor`インスタンスを返すフィクスチャ
 
 ## 参考資料
 

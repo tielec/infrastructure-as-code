@@ -52,7 +52,9 @@
 
 **デフォルト色**: `#E3F2FD` (fill), `#1565C0` (border)
 
-## DotFileProcessor クラス
+## UrnProcessor クラス
+
+**概要**: Phase 2-1リファクタリング（Issue #461）により、URN処理の責務を`DotFileProcessor`から分離しました。URN/URI処理に特化した独立クラスです。
 
 ### `parse_urn(urn: str) -> Dict[str, str]`
 
@@ -72,6 +74,35 @@
 - 部分的なURN: デフォルト値で補完
 - 極端に長いURN: 正常に解析（パフォーマンスは低下する可能性）
 - プロバイダー情報なし: `provider='unknown'`
+
+### `create_readable_label(urn_info: Dict) -> str`
+
+**目的**: 読みやすいラベル生成
+
+**期待動作**:
+- 改行区切りで`module`, `type`, `name`を表示
+- モジュール名が空の場合: `type`, `name`のみ表示
+- 長いタイプ名: 省略処理（30文字以内）
+
+**エッジケース**:
+- モジュール名が空: `type\nname`の形式
+- 長いタイプ名: キャメルケースを分割して主要部分のみ表示
+
+### `is_stack_resource(urn: str) -> bool`
+
+**目的**: スタックリソース判定
+
+**期待動作**:
+- スタックURN（`pulumi:pulumi:Stack`を含む）: `True`
+- 通常リソースURN: `False`
+
+**エッジケース**:
+- 不正なURN: `False`
+- 空文字列: `False`
+
+## DotFileProcessor クラス
+
+**概要**: Phase 2-1リファクタリング（Issue #461）により、URN処理を`UrnProcessor`に委譲しました。DOT処理に専念します。
 
 ### `apply_graph_styling(dot_content: str) -> str`
 
@@ -102,30 +133,7 @@
 **エッジケース**:
 - ちょうど30文字: `False`（30文字以上なので空でない）
 
-### `create_readable_label(urn_info: Dict) -> str`
-
-**目的**: 読みやすいラベル生成
-
-**期待動作**:
-- 改行区切りで`module`, `type`, `name`を表示
-- モジュール名が空の場合: `type`, `name`のみ表示
-- 長いタイプ名: 省略処理（30文字以内）
-
-**エッジケース**:
-- モジュール名が空: `type\nname`の形式
-- 長いタイプ名: キャメルケースを分割して主要部分のみ表示
-
-### `is_stack_resource(urn: str) -> bool`
-
-**目的**: スタックリソース判定
-
-**期待動作**:
-- スタックURN（`pulumi:pulumi:Stack`を含む）: `True`
-- 通常リソースURN: `False`
-
-**エッジケース**:
-- 不正なURN: `False`
-- 空文字列: `False`
+**注意**: URN処理関連のメソッド（`parse_urn`, `create_readable_label`, `is_stack_resource`）は、Phase 2-1リファクタリングにより`UrnProcessor`クラスに移動しました。`DotFileProcessor`は内部で`UrnProcessor`を呼び出しますが、外部から見た振る舞いは変更ありません。
 
 ## 依存関係の種類
 
@@ -157,7 +165,30 @@
 | 日付 | バージョン | 変更者 | 変更内容 |
 |------|-----------|--------|----------|
 | 2025-01-19 | 1.0 | Claude Code | 初版作成（テスト実装前の設計版） |
+| 2025-01-19 | 2.0 | Claude Code | Phase 2-1リファクタリング（Issue #461）反映：UrnProcessorクラスの分離 |
 
 ---
 
 **注意**: このドキュメントは、テスト実装後に実際の振る舞いを記録して完成させます。Phase 5（テストコード実装）およびPhase 6（テスト実行）で更新されます。
+
+## リファクタリング記録（Phase 2-1: Issue #461）
+
+### 変更サマリー
+
+2025-01-19に実施されたPhase 2-1リファクタリングにより、URN処理の責務を`DotFileProcessor`から分離し、新規クラス`UrnProcessor`を作成しました。
+
+**目的**: 単一責務の原則（SRP）の適用
+
+**変更内容**:
+- 新規作成: `src/urn_processor.py`（`UrnProcessor`クラス）
+- 修正: `src/dot_processor.py`（URN関連メソッドの削除、`UrnProcessor`の呼び出しに置き換え）
+- 新規作成: `tests/test_urn_processor.py`（ユニットテスト）
+
+**影響**:
+- 外部から見た`DotFileProcessor`の振る舞いは完全に維持されています
+- 内部実装のみ変更（URN処理を`UrnProcessor`に委譲）
+
+**関連ドキュメント**:
+- 要件定義: `.ai-workflow/issue-461/01_requirements/output/requirements.md`
+- 設計書: `.ai-workflow/issue-461/02_design/output/design.md`
+- 実装ログ: `.ai-workflow/issue-461/04_implementation/output/implementation.md`

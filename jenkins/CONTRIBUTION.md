@@ -1747,25 +1747,34 @@ def mock_external_api():
 
 ```
 pulumi-stack-action/
-├── dot_processor.py          # 本体スクリプト
+├── src/                      # 実装コード
+│   ├── dot_processor.py     # DotFileProcessor（DOT処理）
+│   └── urn_processor.py     # UrnProcessor（URN処理） ※Phase 2-1で追加
 ├── tests/                    # テストディレクトリ
 │   ├── __init__.py
 │   ├── conftest.py          # pytest設定・共通フィクスチャ
-│   ├── test_dot_file_generator.py
-│   ├── test_dot_file_processor.py
+│   ├── test_dot_processor.py      # 統合テスト
+│   ├── test_urn_processor.py      # ユニットテスト ※Phase 2-1で追加
 │   └── fixtures/            # テストデータ
-│       ├── simple_stack.json
-│       ├── complex_stack.json
-│       └── edge_cases.json
+│       └── test_data/
+│           ├── sample_urns.json
+│           ├── sample_resources.json
+│           └── sample_dot_strings.json
 ├── pytest.ini               # pytest設定ファイル
 ├── .coveragerc             # カバレッジ設定
 ├── tests/README.md         # テスト実行ガイド
 └── CHARACTERIZATION_TEST.md # 動作仕様ドキュメント
 ```
 
+**Phase 2-1リファクタリング（Issue #461）による変更**:
+- **単一責務の原則（SRP）を適用**: URN処理を`UrnProcessor`クラスに分離
+- **テスト構造の拡張**: ユニットテスト（`test_urn_processor.py`）と統合テスト（`test_dot_processor.py`）に分離
+- **外部APIは維持**: `DotFileProcessor`の振る舞いは変更なし
+
 詳細な実装例とテスト実行方法については、以下を参照してください：
 - [テスト実行ガイド](../jobs/pipeline/infrastructure/pulumi-stack-action/tests/README.md)
 - [動作仕様ドキュメント](../jobs/pipeline/infrastructure/pulumi-stack-action/CHARACTERIZATION_TEST.md)
+- [Phase 2-1実装ログ](../.ai-workflow/issue-461/04_implementation/output/implementation.md)
 
 ---
 
