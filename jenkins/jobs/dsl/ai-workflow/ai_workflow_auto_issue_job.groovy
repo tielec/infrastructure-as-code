@@ -3,7 +3,7 @@
  *
  * AIによる自動Issue作成用ジョブ
  * EXECUTION_MODE: auto_issue（固定値、パラメータとして表示しない）
- * パラメータ数: 8個（最小）
+ * パラメータ数: 14個（8個 + APIキー6個）
  */
 
 // リポジトリ情報を取得
@@ -99,6 +99,39 @@ Issue検出カテゴリ
             // ========================================
             booleanParam('DRY_RUN', false, '''
 ドライランモード（API 呼び出しや Git 操作を行わず動作確認のみ実施）
+            '''.stripIndent().trim())
+
+            // ========================================
+            // APIキー設定
+            // ========================================
+            password('GITHUB_TOKEN', '''
+GitHub Personal Access Token（任意）
+GitHub API呼び出しに使用されます
+            '''.stripIndent().trim())
+
+            password('OPENAI_API_KEY', '''
+OpenAI API キー（任意）
+Codex実行モードで使用されます
+            '''.stripIndent().trim())
+
+            password('CODEX_API_KEY', '''
+Codex API キー（任意）
+OPENAI_API_KEYの代替として使用可能
+            '''.stripIndent().trim())
+
+            password('CLAUDE_CODE_OAUTH_TOKEN', '''
+Claude Code OAuth トークン（任意）
+Claude実行モードで使用されます
+            '''.stripIndent().trim())
+
+            password('CLAUDE_CODE_API_KEY', '''
+Claude Code API キー（任意）
+Claude実行モードで使用されます
+            '''.stripIndent().trim())
+
+            password('ANTHROPIC_API_KEY', '''
+Anthropic API キー（任意）
+Claude実行モードで使用されます
             '''.stripIndent().trim())
 
             // ========================================

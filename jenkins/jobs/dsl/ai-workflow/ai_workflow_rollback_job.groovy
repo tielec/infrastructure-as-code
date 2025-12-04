@@ -3,7 +3,7 @@
  *
  * フェーズ差し戻し実行用ジョブ
  * EXECUTION_MODE: rollback（固定値、パラメータとして表示しない）
- * パラメータ数: 12個
+ * パラメータ数: 18個（12個 + APIキー6個）
  */
 
 // リポジトリ情報を取得
@@ -145,6 +145,39 @@ Infrastructure as Code実行時に必要
             nonStoredPasswordParam('AWS_SESSION_TOKEN', '''
 AWS セッショントークン（任意）
 一時的な認証情報を使用する場合
+            '''.stripIndent().trim())
+
+            // ========================================
+            // APIキー設定
+            // ========================================
+            password('GITHUB_TOKEN', '''
+GitHub Personal Access Token（任意）
+GitHub API呼び出しに使用されます
+            '''.stripIndent().trim())
+
+            password('OPENAI_API_KEY', '''
+OpenAI API キー（任意）
+Codex実行モードで使用されます
+            '''.stripIndent().trim())
+
+            password('CODEX_API_KEY', '''
+Codex API キー（任意）
+OPENAI_API_KEYの代替として使用可能
+            '''.stripIndent().trim())
+
+            password('CLAUDE_CODE_OAUTH_TOKEN', '''
+Claude Code OAuth トークン（任意）
+Claude実行モードで使用されます
+            '''.stripIndent().trim())
+
+            password('CLAUDE_CODE_API_KEY', '''
+Claude Code API キー（任意）
+Claude実行モードで使用されます
+            '''.stripIndent().trim())
+
+            password('ANTHROPIC_API_KEY', '''
+Anthropic API キー（任意）
+Claude実行モードで使用されます
             '''.stripIndent().trim())
 
             // ========================================
