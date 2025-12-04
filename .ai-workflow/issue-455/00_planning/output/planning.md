@@ -141,16 +141,16 @@ Job DSLの特性上、専用のテストコードではなく、実際のシー�
 
 ### Phase 4: 実装 (見積もり: 1.0h)
 
-- [ ] Task 4-1: ai_workflow_all_phases_job.groovyへの追加 (0.2h)
+- [x] Task 4-1: ai_workflow_all_phases_job.groovyへの追加 (0.2h)
   - APIキー設定セクションの追加
   - 6つのパスワードパラメータ定義の追加
-- [ ] Task 4-2: ai_workflow_preset_job.groovyへの追加 (0.2h)
+- [x] Task 4-2: ai_workflow_preset_job.groovyへの追加 (0.2h)
   - all_phases_jobと同じパターンで追加
-- [ ] Task 4-3: ai_workflow_single_phase_job.groovyへの追加 (0.2h)
+- [x] Task 4-3: ai_workflow_single_phase_job.groovyへの追加 (0.2h)
   - all_phases_jobと同じパターンで追加
-- [ ] Task 4-4: ai_workflow_rollback_job.groovyへの追加 (0.2h)
+- [x] Task 4-4: ai_workflow_rollback_job.groovyへの追加 (0.2h)
   - all_phases_jobと同じパターンで追加
-- [ ] Task 4-5: ai_workflow_auto_issue_job.groovyへの追加 (0.2h)
+- [x] Task 4-5: ai_workflow_auto_issue_job.groovyへの追加 (0.2h)
   - all_phases_jobと同じパターンで追加
 
 ### Phase 5: テストコード実装 (見積もり: 0h)
