@@ -556,19 +556,37 @@ Jenkins UI > Infrastructure_Management > Shutdown-Environment-Scheduler > "Build
 - 実行時間とコストを最適化
 
 **パラメータ**:
+
+**基本設定**:
 - `ISSUE_URL`: GitHub Issue URL（必須）
 - `BRANCH_NAME`: 作業ブランチ名（任意、空欄時は自動生成）
 - `AGENT_MODE`: エージェント実行モード（auto/codex/claude）
+
+**実行オプション**:
 - `DRY_RUN`: ドライランモード（デフォルト: false）
 - `SKIP_REVIEW`: AIレビューをスキップ（デフォルト: false）
 - `FORCE_RESET`: メタデータを初期化して最初から実行（デフォルト: false）
 - `MAX_RETRIES`: フェーズ失敗時の最大リトライ回数（デフォルト: 3）
 - `CLEANUP_ON_COMPLETE_FORCE`: Evaluation Phase完了後にディレクトリを削除（デフォルト: false）
+
+**Git設定**:
 - `GIT_COMMIT_USER_NAME`: Gitコミットユーザー名（デフォルト: AI Workflow Bot）
 - `GIT_COMMIT_USER_EMAIL`: Gitコミットメールアドレス（デフォルト: ai-workflow@example.com）
+
+**AWS認証情報**:
 - `AWS_ACCESS_KEY_ID`: AWSアクセスキーID（Infrastructure as Code実行時）
 - `AWS_SECRET_ACCESS_KEY`: AWSシークレットアクセスキー（Infrastructure as Code実行時）
 - `AWS_SESSION_TOKEN`: AWSセッショントークン（一時的な認証情報使用時）
+
+**APIキー設定**（任意）:
+- `GITHUB_TOKEN`: GitHub Personal Access Token（GitHub API呼び出し用）
+- `OPENAI_API_KEY`: OpenAI APIキー（Codex実行モード用）
+- `CODEX_API_KEY`: Codex APIキー（OPENAI_API_KEYの代替）
+- `CLAUDE_CODE_OAUTH_TOKEN`: Claude Code OAuthトークン（Claude実行モード用）
+- `CLAUDE_CODE_API_KEY`: Claude Code APIキー（Claude実行モード用）
+- `ANTHROPIC_API_KEY`: Anthropic APIキー（Claude実行モード用）
+
+**その他**:
 - `COST_LIMIT_USD`: ワークフローあたりのコスト上限（デフォルト: 5.0 USD）
 - `LOG_LEVEL`: ログレベル（INFO/DEBUG/WARNING/ERROR）
 

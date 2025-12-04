@@ -404,8 +404,13 @@ pipelineJob(jobName) {
         booleanParam('FLAG', false, '説明')
         // テキスト（複数行）
         textParam('CONFIG', '', '説明')
-        // パスワード
+        // パスワード（入力時のみ保持、ビルド後は非保存）
         nonStoredPasswordParam('SECRET', '説明')
+        // パスワード（マスク表示、保存あり）
+        password('API_KEY', '''
+API キー（任意）
+入力値はマスク表示され、ビルドログにも表示されません
+        '''.stripIndent().trim())
     }
     
     // プロパティ
