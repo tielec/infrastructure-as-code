@@ -353,6 +353,85 @@ folders:
       * **claude-api-key**: Claude API キー（Jenkinsクレデンシャル）
       * **github-token**: GitHub Token（Jenkinsクレデンシャル）
 
+  # Issue #456: AI Workflow用の汎用フォルダを追加
+  # 追加日: 2025-01-17
+  # URL: https://github.com/tielec/infrastructure-as-code/issues/456
+  #
+  # 背景:
+  # - 特定リポジトリに依存しない汎用的なワークフロー実行環境が必要
+  # - developブランチ用（最新機能のテスト）とmainブランチ用（安定バージョン）を分離
+  # - main用は並行利用可能にするため2つ用意
+
+  # AI Workflow - develop用汎用フォルダ
+  - path: "AI_Workflow/develop-generic"
+    displayName: "汎用 - Develop"
+    description: |
+      developブランチ用の汎用ワークフロー実行環境
+
+      ### 用途
+      - ai-workflow-agentの**最新バージョン**（developブランチ）を使用
+      - 新機能のテスト、実験的な利用
+      - 特定リポジトリに依存しない汎用的なワークフロー
+
+      ### 対象ブランチ
+      - ai-workflow-agent: **develop**
+
+      ### 推奨の使い方
+      - 最新機能の検証
+      - 新しいワークフローのテスト
+      - リポジトリ横断的なタスク実行
+
+      ### 注意事項
+      - 開発中の機能のため、動作が不安定な場合があります
+      - 本番環境での利用は避けてください
+      - 安定した動作が必要な場合はmain用フォルダを使用してください
+
+  # AI Workflow - main用汎用フォルダ（1つ目）
+  - path: "AI_Workflow/main-generic-1"
+    displayName: "汎用 - Main #1"
+    description: |
+      mainブランチ用の汎用ワークフロー実行環境（1つ目）
+
+      ### 用途
+      - ai-workflow-agentの**安定バージョン**（mainブランチ）を使用
+      - 本番環境での利用、安定した動作が求められる場合
+      - 特定リポジトリに依存しない汎用的なワークフロー
+
+      ### 対象ブランチ
+      - ai-workflow-agent: **main**
+
+      ### 推奨の使い方
+      - 本番環境でのワークフロー実行
+      - 安定性が求められるタスク
+      - リポジトリ横断的なタスク実行
+
+      ### 並行利用について
+      - main用フォルダは2つあり、複数のワークフローを同時実行可能です
+      - 使用中は`main-generic-2`をご利用ください
+
+  # AI Workflow - main用汎用フォルダ（2つ目）
+  - path: "AI_Workflow/main-generic-2"
+    displayName: "汎用 - Main #2"
+    description: |
+      mainブランチ用の汎用ワークフロー実行環境（2つ目）
+
+      ### 用途
+      - ai-workflow-agentの**安定バージョン**（mainブランチ）を使用
+      - 本番環境での利用、安定した動作が求められる場合
+      - 特定リポジトリに依存しない汎用的なワークフロー
+
+      ### 対象ブランチ
+      - ai-workflow-agent: **main**
+
+      ### 推奨の使い方
+      - 本番環境でのワークフロー実行
+      - 安定性が求められるタスク
+      - リポジトリ横断的なタスク実行
+
+      ### 並行利用について
+      - main用フォルダは2つあり、複数のワークフローを同時実行可能です
+      - `main-generic-1`が使用中の場合はこちらをご利用ください
+
 # 動的フォルダ生成ルール
 dynamic_folders:
   # AI Workflowのリポジトリ別フォルダ
