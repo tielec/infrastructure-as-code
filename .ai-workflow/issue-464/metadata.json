@@ -132,24 +132,25 @@
       ]
     },
     "evaluation": {
-      "status": "in_progress",
+      "status": "completed",
       "retry_count": 0,
       "started_at": "2025-12-04T15:21:21.724Z",
-      "completed_at": null,
+      "completed_at": "2025-12-04T15:23:53.923Z",
       "review_result": null,
       "decision": "PASS_WITH_ISSUES",
       "failed_phase": null,
       "remaining_tasks": [],
       "created_issue_url": null,
       "abort_reason": null,
-      "current_step": "review",
+      "current_step": null,
       "completed_steps": [
-        "execute"
+        "execute",
+        "review"
       ]
     }
   },
   "created_at": "2025-12-04T13:44:49.806Z",
-  "updated_at": "2025-12-04T15:23:52.660Z",
+  "updated_at": "2025-12-04T15:23:54.722Z",
   "branch_name": "ai-workflow/issue-464",
   "pr_number": 471,
   "pr_url": "https://github.com/tielec/infrastructure-as-code/pull/471",
