@@ -4,6 +4,7 @@ DOT file processing for Pulumi dependency graphs
 
 import re
 from typing import Dict, List, Tuple
+from urn_processor import UrnProcessor
 
 
 class DotFileGenerator:
@@ -269,116 +270,6 @@ class DotFileProcessor:
             (dot_content.count('{') == 1 and dot_content.count('}') == 1 and 'digraph' not in dot_content)
         ])
     
-    @staticmethod
-    def parse_urn(urn: str) -> Dict[str, str]:
-        """URNをパースして構成要素を抽出
-        URN形式: urn:pulumi:STACK::PROJECT::PROVIDER:MODULE/TYPE:TYPE::NAME
-        """
-        # デフォルト値を設定
-        default_result = {
-            'stack': '',
-            'project': '',
-            'provider': 'unknown',
-            'module': '',
-            'type': 'unknown',
-            'name': urn.split('::')[-1] if '::' in urn else urn,
-            'full_urn': urn
-        }
-        
-        parts = urn.split('::')
-        if len(parts) < 4:
-            return default_result
-        
-        # 基本情報を抽出
-        result = {
-            'stack': parts[0].replace('urn:pulumi:', '') if parts else '',
-            'project': parts[1] if len(parts) > 1 else '',
-            'name': parts[-1] if parts else 'unknown',
-            'full_urn': urn
-        }
-        
-        # プロバイダーとタイプを解析
-        provider_type = parts[2] if len(parts) > 2 else ''
-        provider_info = DotFileProcessor._parse_provider_type(provider_type)
-        result.update(provider_info)
-        
-        return result
-    
-    @staticmethod
-    def _parse_provider_type(provider_type: str) -> Dict[str, str]:
-        """プロバイダータイプ文字列を解析"""
-        if not provider_type or ':' not in provider_type:
-            return {
-                'provider': 'unknown',
-                'module': '',
-                'type': provider_type or 'unknown'
-            }
-        
-        provider_parts = provider_type.split(':')
-        provider = provider_parts[0]
-        
-        # モジュールとタイプを抽出
-        module = ''
-        if len(provider_parts) > 1 and '/' in provider_parts[1]:
-            module_and_type = provider_parts[1]
-            module = module_and_type.split('/')[0]
-        
-        # タイプ名は最後の:以降
-        resource_type = provider_parts[-1] if len(provider_parts) > 1 else 'unknown'
-        
-        return {
-            'provider': provider,
-            'module': module,
-            'type': resource_type
-        }
-
-    @staticmethod
-    def create_readable_label(urn_info: Dict[str, str]) -> str:
-        """URN情報から読みやすいラベルを生成"""
-        resource_type = urn_info['type']
-        resource_name = urn_info['name']
-        module = urn_info.get('module', '')
-        
-        # ラベルの構成要素を準備
-        label_parts = []
-        
-        # 1. モジュール名があれば追加
-        if module:
-            label_parts.append(module)
-        
-        # 2. リソースタイプを処理
-        readable_type = DotFileProcessor._format_resource_type(resource_type)
-        label_parts.append(readable_type)
-        
-        # 3. リソース名（全体を表示）
-        label_parts.append(resource_name)
-        
-        # 改行で結合
-        return '\\n'.join(label_parts)
-    
-    @staticmethod
-    def _format_resource_type(resource_type: str) -> str:
-        """リソースタイプを読みやすい形式にフォーマット"""
-        import re
-        
-        # 長いタイプ名の場合は省略
-        if len(resource_type) <= 30:
-            return resource_type
-        
-        # キャメルケースを単語に分割
-        words = re.findall(r'[A-Z][a-z]*', resource_type)
-        
-        # 主要な単語のみを残す
-        if len(words) > 3:
-            return f"{words[0]}{words[1]}...{words[-1]}"
-        else:
-            return resource_type
-
-    
-    @staticmethod
-    def is_stack_resource(urn: str) -> bool:
-        """スタックリソースかどうかを判定"""
-        return 'pulumi:pulumi:Stack' in urn
     
     @staticmethod
     def apply_graph_styling(dot_content: str) -> str:
@@ -457,8 +348,8 @@ class DotFileProcessor:
             return line, None
         
         urn = urn_match.group(1)
-        urn_info = DotFileProcessor.parse_urn(urn)
-        
+        urn_info = UrnProcessor.parse_urn(urn)
+
         # ノード属性を生成
         node_attrs = DotFileProcessor._generate_node_attributes(urn, urn_info)
         
@@ -467,15 +358,15 @@ class DotFileProcessor:
         
         # メタデータを返す
         result_info = {'node_urn_map': {node_id: urn_info}}
-        if DotFileProcessor.is_stack_resource(urn):
+        if UrnProcessor.is_stack_resource(urn):
             result_info['stack_node_id'] = node_id
-        
+
         return new_line, result_info
     
     @staticmethod
     def _generate_node_attributes(urn: str, urn_info: Dict) -> str:
         """ノード属性を生成"""
-        if DotFileProcessor.is_stack_resource(urn):
+        if UrnProcessor.is_stack_resource(urn):
             return DotFileProcessor._generate_stack_node_attributes(urn_info)
         else:
             return DotFileProcessor._generate_resource_node_attributes(urn_info)
@@ -489,9 +380,9 @@ class DotFileProcessor:
     @staticmethod
     def _generate_resource_node_attributes(urn_info: Dict) -> str:
         """リソースノードの属性を生成"""
-        new_label = DotFileProcessor.create_readable_label(urn_info)
+        new_label = UrnProcessor.create_readable_label(urn_info)
         provider_colors = DotFileProcessor.PROVIDER_COLORS.get(
-            urn_info['provider'].lower(), 
+            urn_info['provider'].lower(),
             DotFileProcessor.DEFAULT_COLORS
         )
         fillcolor = provider_colors[0]
@@ -586,16 +477,16 @@ class DotFileProcessor:
         match = re.search(r'\[label="([^"]+)"\]', line)
         if not match:
             return line
-        
+
         full_label = match.group(1)
-        
-        # URN形式の場合はparse_urnを使用
+
+        # URN形式の場合はUrnProcessorを使用
         if full_label.startswith('urn:pulumi:'):
-            urn_info = DotFileProcessor.parse_urn(full_label)
-            short_label = DotFileProcessor.create_readable_label(urn_info)
-            
+            urn_info = UrnProcessor.parse_urn(full_label)
+            short_label = UrnProcessor.create_readable_label(urn_info)
+
             # 色設定
-            if DotFileProcessor.is_stack_resource(full_label):
+            if UrnProcessor.is_stack_resource(full_label):
                 fillcolor = '#D1C4E9'
                 color = '#512DA8'
             else:
@@ -609,7 +500,7 @@ class DotFileProcessor:
             # URN形式でない場合は既存の処理
             short_label = full_label[:40] if len(full_label) > 40 else full_label
             fillcolor, color = DotFileProcessor.DEFAULT_COLORS
-        
+
         return re.sub(
             r'\[label="[^"]+"\]',
             f'[label="{short_label}", fillcolor="{fillcolor}", color="{color}"]',
