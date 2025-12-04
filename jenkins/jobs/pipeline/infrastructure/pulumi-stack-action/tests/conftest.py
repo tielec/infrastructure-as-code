@@ -58,3 +58,10 @@ def dot_file_processor():
     """DotFileProcessorインスタンスを返す"""
     from dot_processor import DotFileProcessor
     return DotFileProcessor()
+
+
+@pytest.fixture
+def urn_processor():
+    """UrnProcessorインスタンスを返す"""
+    from urn_processor import UrnProcessor
+    return UrnProcessor()
