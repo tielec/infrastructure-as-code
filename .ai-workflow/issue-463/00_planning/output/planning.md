@@ -216,11 +216,11 @@
 
 ### Phase 7: ドキュメント (見積もり: 0.5~1h)
 
-- [ ] Task 7-1: ResourceDependencyBuilderのdocstring整備 (0.3~0.5h)
+- [x] Task 7-1: ResourceDependencyBuilderのdocstring整備 (0.3~0.5h)
   - クラスレベルのdocstring
   - 各メソッドのdocstring（Args, Returns, Examples）
   - 使用例のコメント追加
-- [ ] Task 7-2: README更新とコメント追加 (0.2~0.5h)
+- [x] Task 7-2: README更新とコメント追加 (0.2~0.5h)
   - リファクタリング内容の記録
   - 設計判断の理由を記載
   - 今後の拡張性についてのノート
@@ -371,10 +371,10 @@ graph TD
 - [ ] リグレッションが発生していない
 
 ### Phase 7: ドキュメント
-- [ ] ResourceDependencyBuilderのdocstringが完全である
-- [ ] 使用例とコメントが適切に記述されている
-- [ ] README/設計ドキュメントが更新されている
-- [ ] リファクタリング内容が記録されている
+- [x] ResourceDependencyBuilderのdocstringが完全である
+- [x] 使用例とコメントが適切に記述されている
+- [x] README/設計ドキュメントが更新されている
+- [x] リファクタリング内容が記録されている
 
 ### Phase 8: レポート
 - [ ] 完了レポートが作成されている
