@@ -30,6 +30,12 @@ tests/
 - `test_resource_dependency_builder.py` を追加: `ResourceDependencyBuilder`クラスの単体テスト（37ケース）
 - `test_dot_processor.py` を更新: 統合テストとして継続（ResourceDependencyBuilder経由のテスト）
 
+**Phase 3リファクタリング（Issue #464）による変更**:
+- `test_dot_processor.py` を更新: 新規テストケース24個を追加
+  - `TestDotProcessorHelperMethods`: 新規ヘルパーメソッドの単体テスト（17ケース）
+  - `TestDotProcessorIntegration`: Phase 3統合テスト（6ケース）
+  - `TestDotProcessorPerformance`: パフォーマンステスト（1ケース）
+
 ## テスト実行方法
 
 ### 前提条件
@@ -86,6 +92,11 @@ pytest tests/test_resource_dependency_builder.py -v
 # DotFileProcessorの統合テストのみ実行
 pytest tests/test_dot_processor.py -v
 
+# Phase 3で追加されたテストのみ実行
+pytest tests/test_dot_processor.py::TestDotProcessorHelperMethods -v
+pytest tests/test_dot_processor.py::TestDotProcessorIntegration -v
+pytest tests/test_dot_processor.py::TestDotProcessorPerformance -v
+
 # クラス単位
 pytest tests/test_dot_processor.py::TestDotFileGeneratorEscaping
 pytest tests/test_urn_processor.py::TestUrnProcessorParsing
@@ -130,6 +141,17 @@ pytest tests/ -m "performance"
 
 - **対象**: URNマッピング作成、直接依存関係、親依存関係、プロパティ依存関係
 - **テストケース数**: 37ケース
+- **カバレッジ目標**: 80%以上
+
+**Phase 3で追加**: `test_dot_processor.py`に新規テストクラスを追加
+
+Phase 3リファクタリング後の新規ヘルパーメソッドと統合動作をテストします。
+
+- **対象**: 新規ヘルパーメソッド、統合動作、パフォーマンス
+- **テストケース数**: 24ケース
+  - `TestDotProcessorHelperMethods`: 17ケース
+  - `TestDotProcessorIntegration`: 6ケース
+  - `TestDotProcessorPerformance`: 1ケース
 - **カバレッジ目標**: 80%以上
 
 ### 特性テスト（Characterization Test）

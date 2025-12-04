@@ -840,3 +840,415 @@ class TestEdgeCases:
         result_str = '\n'.join(result)
         assert 'Stack' in result_str
         assert 'digraph G {' in result_str[0]
+
+
+# =============================================================================
+# Phase 3リファクタリング後のテスト（新規ヘルパーメソッド）
+# =============================================================================
+
+class TestDotProcessorHelperMethods:
+    """DotFileProcessor - Phase 3で追加されたヘルパーメソッドのテスト"""
+
+    # _update_node_info()のテスト
+    def test_update_node_info_with_node_urn_map(self, dot_file_processor):
+        """TC-U-01: 正常系 - node_urn_map更新"""
+        # Given: node_infoにURNマッピング情報が含まれる
+        node_info = {
+            'node_urn_map': {'node1': {'provider': 'aws', 'type': 'Bucket', 'name': 'my-bucket'}},
+            'stack_node_id': None
+        }
+        node_urn_map = {}
+        stack_node_id = None
+
+        # When: _update_node_info()を呼び出す
+        result = dot_file_processor._update_node_info(node_info, node_urn_map, stack_node_id)
+
+        # Then: node_urn_mapが更新され、stack_node_idはNoneのまま
+        assert node_urn_map == {'node1': {'provider': 'aws', 'type': 'Bucket', 'name': 'my-bucket'}}
+        assert result is None
+
+    def test_update_node_info_with_stack_node_id(self, dot_file_processor):
+        """TC-U-02: 正常系 - stack_node_id更新"""
+        # Given: node_infoにstack_node_idが含まれる
+        node_info = {
+            'node_urn_map': {'stack_node': {'provider': 'pulumi', 'type': 'Stack'}},
+            'stack_node_id': 'stack_node'
+        }
+        node_urn_map = {}
+        stack_node_id = None
+
+        # When: _update_node_info()を呼び出す
+        result = dot_file_processor._update_node_info(node_info, node_urn_map, stack_node_id)
+
+        # Then: node_urn_mapとstack_node_idが更新される
+        assert node_urn_map == {'stack_node': {'provider': 'pulumi', 'type': 'Stack'}}
+        assert result == 'stack_node'
+
+    def test_update_node_info_with_empty_node_info(self, dot_file_processor):
+        """TC-U-03: 異常系 - 空のnode_info"""
+        # Given: 空のnode_info
+        node_info = {}
+        node_urn_map = {}
+        stack_node_id = None
+
+        # When: _update_node_info()を呼び出す
+        result = dot_file_processor._update_node_info(node_info, node_urn_map, stack_node_id)
+
+        # Then: エラーが発生せず、node_urn_mapは空のまま、stack_node_idはNone
+        assert node_urn_map == {}
+        assert result is None
+
+    def test_update_node_info_overwrite_stack_node_id(self, dot_file_processor):
+        """TC-U-04: 境界値 - stack_node_idが既に存在する場合"""
+        # Given: stack_node_idが既に'old_stack'
+        node_info = {
+            'node_urn_map': {},
+            'stack_node_id': 'new_stack'
+        }
+        node_urn_map = {}
+        stack_node_id = 'old_stack'
+
+        # When: _update_node_info()を呼び出す
+        result = dot_file_processor._update_node_info(node_info, node_urn_map, stack_node_id)
+
+        # Then: stack_node_idが'new_stack'に上書きされる
+        assert result == 'new_stack'
+
+    # _is_node_definition_line()のテスト
+    def test_is_node_definition_line_with_urn_label(self, dot_file_processor):
+        """TC-U-05: 正常系 - ノード定義行（URNラベル）"""
+        # Given: URNラベルを持つノード定義行
+        line = '    node1 [label="urn:pulumi:dev::myproject::aws:s3/bucket:Bucket::my-bucket"];'
+
+        # When: _is_node_definition_line()を呼び出す
+        result = dot_file_processor._is_node_definition_line(line)
+
+        # Then: Trueが返される
+        assert result is True
+
+    def test_is_node_definition_line_with_comment(self, dot_file_processor):
+        """TC-U-06: 異常系 - コメント行"""
+        # Given: コメント行
+        line = '    // node1 [label="urn:pulumi:dev::myproject::aws:s3/bucket:Bucket::my-bucket"];'
+
+        # When: _is_node_definition_line()を呼び出す
+        result = dot_file_processor._is_node_definition_line(line)
+
+        # Then: Falseが返される
+        assert result is False
+
+    def test_is_node_definition_line_with_edge(self, dot_file_processor):
+        """TC-U-07: 異常系 - エッジ定義行"""
+        # Given: エッジ定義行
+        line = '    node1 -> node2;'
+
+        # When: _is_node_definition_line()を呼び出す
+        result = dot_file_processor._is_node_definition_line(line)
+
+        # Then: Falseが返される
+        assert result is False
+
+    def test_is_node_definition_line_without_urn_label(self, dot_file_processor):
+        """TC-U-08: 境界値 - URNラベルなしのノード定義"""
+        # Given: URNラベルを持たないノード定義行
+        line = '    node1 [label="non-urn-label"];'
+
+        # When: _is_node_definition_line()を呼び出す
+        result = dot_file_processor._is_node_definition_line(line)
+
+        # Then: Falseが返される
+        assert result is False
+
+    # _is_edge_to_stack_line()のテスト
+    def test_is_edge_to_stack_line_valid(self, dot_file_processor):
+        """TC-U-09: 正常系 - スタックへのエッジ行"""
+        # Given: スタックへのエッジ行、stack_node_idが'stack_node'
+        line = '    node1 -> stack_node;'
+        stack_node_id = 'stack_node'
+
+        # When: _is_edge_to_stack_line()を呼び出す
+        result = dot_file_processor._is_edge_to_stack_line(line, stack_node_id)
+
+        # Then: Trueが返される
+        assert result is True
+
+    def test_is_edge_to_stack_line_with_none_stack_node_id(self, dot_file_processor):
+        """TC-U-10: 異常系 - stack_node_idがNone"""
+        # Given: stack_node_idがNone
+        line = '    node1 -> node2;'
+        stack_node_id = None
+
+        # When: _is_edge_to_stack_line()を呼び出す
+        result = dot_file_processor._is_edge_to_stack_line(line, stack_node_id)
+
+        # Then: Falseが返される
+        assert result is False
+
+    def test_is_edge_to_stack_line_to_different_node(self, dot_file_processor):
+        """TC-U-11: 異常系 - 別ノードへのエッジ"""
+        # Given: スタック以外のノードへのエッジ、stack_node_idが'stack_node'
+        line = '    node1 -> node2;'
+        stack_node_id = 'stack_node'
+
+        # When: _is_edge_to_stack_line()を呼び出す
+        result = dot_file_processor._is_edge_to_stack_line(line, stack_node_id)
+
+        # Then: Falseが返される（node2はスタックではない）
+        assert result is False
+
+    def test_is_edge_to_stack_line_without_arrow(self, dot_file_processor):
+        """TC-U-12: 境界値 - エッジ記号なし"""
+        # Given: エッジ記号'->'を含まない行、stack_node_idが'stack_node'
+        line = '    node1 [label="test"];'
+        stack_node_id = 'stack_node'
+
+        # When: _is_edge_to_stack_line()を呼び出す
+        result = dot_file_processor._is_edge_to_stack_line(line, stack_node_id)
+
+        # Then: Falseが返される
+        assert result is False
+
+    # _detect_provider_colors()のテスト
+    def test_detect_provider_colors_aws(self, dot_file_processor):
+        """TC-U-13: 正常系 - AWSプロバイダー検出"""
+        # Given: AWSプロバイダーのURN
+        full_name = 'urn:pulumi:dev::myproject::aws:s3/bucket:Bucket::my-bucket'
+        short_name = 'my-bucket'
+
+        # When: _detect_provider_colors()を呼び出す
+        fill_color, border_color, result_short_name = dot_file_processor._detect_provider_colors(
+            full_name, short_name
+        )
+
+        # Then: AWSの色設定が返される
+        assert fill_color == '#FFF3E0'
+        assert border_color == '#EF6C00'
+        # リソースタイプが追加される
+        assert 'Bucket' in result_short_name
+        assert 'my-bucket' in result_short_name
+
+    def test_detect_provider_colors_azure(self, dot_file_processor):
+        """TC-U-14: 正常系 - Azureプロバイダー検出"""
+        # Given: Azureプロバイダーのリソース名
+        full_name = 'urn:pulumi:dev::myproject::azure:storage/storageAccount:StorageAccount::mystorage'
+        short_name = 'mystorage'
+
+        # When: _detect_provider_colors()を呼び出す
+        fill_color, border_color, result_short_name = dot_file_processor._detect_provider_colors(
+            full_name, short_name
+        )
+
+        # Then: Azureの色設定が返される
+        assert fill_color == '#E3F2FD'
+        assert border_color == '#0078D4'
+        assert 'mystorage' in result_short_name
+
+    def test_detect_provider_colors_unknown(self, dot_file_processor):
+        """TC-U-15: 異常系 - 未定義プロバイダー"""
+        # Given: 未定義プロバイダー
+        full_name = 'urn:pulumi:dev::myproject::unknown:resource:Resource::my-resource'
+        short_name = 'my-resource'
+
+        # When: _detect_provider_colors()を呼び出す
+        fill_color, border_color, result_short_name = dot_file_processor._detect_provider_colors(
+            full_name, short_name
+        )
+
+        # Then: デフォルト色が返される
+        assert fill_color == '#E3F2FD'
+        assert border_color == '#1565C0'
+        assert result_short_name == 'my-resource'
+
+    def test_detect_provider_colors_with_resource_type(self, dot_file_processor):
+        """TC-U-16: 正常系 - リソースタイプ抽出"""
+        # Given: リソースタイプを持つURN
+        full_name = 'pulumi::dev::myproject::aws:ec2/instance:Instance::my-instance'
+        short_name = 'my-instance'
+
+        # When: _detect_provider_colors()を呼び出す
+        fill_color, border_color, result_short_name = dot_file_processor._detect_provider_colors(
+            full_name, short_name
+        )
+
+        # Then: リソースタイプが追加される
+        assert fill_color == '#FFF3E0'
+        assert border_color == '#EF6C00'
+        assert 'instance' in result_short_name
+        assert 'my-instance' in result_short_name
+        assert '\\n' in result_short_name
+
+    def test_detect_provider_colors_with_empty_full_name(self, dot_file_processor):
+        """TC-U-17: 境界値 - 空のfull_name"""
+        # Given: 空のfull_name
+        full_name = ''
+        short_name = 'test'
+
+        # When: _detect_provider_colors()を呼び出す
+        fill_color, border_color, result_short_name = dot_file_processor._detect_provider_colors(
+            full_name, short_name
+        )
+
+        # Then: デフォルト色が返され、short_nameはそのまま
+        assert fill_color == '#E3F2FD'
+        assert border_color == '#1565C0'
+        assert result_short_name == 'test'
+
+
+# =============================================================================
+# Phase 3統合テスト
+# =============================================================================
+
+class TestDotProcessorIntegration:
+    """DotFileProcessor - Phase 3統合テスト（新規クラスとの協調動作）"""
+
+    @pytest.mark.integration
+    def test_enhance_pulumi_graph_with_urn_processor(self, dot_file_processor, sample_dot_strings):
+        """TC-I-01: 正常系 - apply_graph_styling()でのUrnProcessor連携"""
+        # Given: Pulumi生成のDOT文字列（URN含む）
+        dot_content = sample_dot_strings['pulumi_generated_graph']
+
+        # When: apply_graph_styling()を呼び出す
+        result = dot_file_processor.apply_graph_styling(dot_content)
+
+        # Then: URNが正しく解析され、ラベルが生成される
+        assert isinstance(result, str)
+        assert 'label=' in result
+        assert 'fillcolor=' in result
+
+    @pytest.mark.integration
+    def test_enhance_pulumi_graph_multiple_nodes(self, dot_file_processor):
+        """TC-I-02: 正常系 - 複数ノードの処理"""
+        # Given: 複数ノード定義を含むDOT文字列
+        dot_content = """strict digraph G {
+    node1 [label="urn:pulumi:dev::myproject::aws:s3/bucket:Bucket::bucket-1"];
+    node2 [label="urn:pulumi:dev::myproject::azure:storage/storageAccount:StorageAccount::storage-1"];
+    node1 -> node2;
+}"""
+
+        # When: apply_graph_styling()を呼び出す
+        result = dot_file_processor.apply_graph_styling(dot_content)
+
+        # Then: すべてのノードが正しく処理される
+        assert 'label=' in result
+        # プロバイダー別色設定が適用される
+        assert '#FFF3E0' in result or '#E3F2FD' in result
+
+    @pytest.mark.integration
+    def test_enhance_pulumi_graph_with_invalid_urn(self, dot_file_processor):
+        """TC-I-03: 異常系 - 不正なURN"""
+        # Given: 不正なURN（区切り文字なし）を含むDOT文字列
+        dot_content = """strict digraph G {
+    node1 [label="invalid-urn"];
+}"""
+
+        # When: apply_graph_styling()を呼び出す
+        result = dot_file_processor.apply_graph_styling(dot_content)
+
+        # Then: エラーが発生せず、デフォルト値で処理される
+        assert isinstance(result, str)
+
+    @pytest.mark.integration
+    def test_enhance_pulumi_graph_with_long_resource_name(self, dot_file_processor):
+        """TC-I-04: 境界値 - 極端に長いリソース名"""
+        # Given: 極端に長いリソース名（100文字以上）
+        long_name = 'a' * 100
+        urn = f'urn:pulumi:dev::myproject::aws:s3/bucket:Bucket::{long_name}'
+        dot_content = f"""strict digraph G {{
+    node1 [label="{urn}"];
+}}"""
+
+        # When: apply_graph_styling()を呼び出す
+        result = dot_file_processor.apply_graph_styling(dot_content)
+
+        # Then: エラーが発生せず、省略記号付きで処理される
+        assert isinstance(result, str)
+
+    @pytest.mark.integration
+    def test_create_dot_file_with_resource_dependency_builder(
+        self, dot_file_generator, sample_resources
+    ):
+        """TC-I-05: 正常系 - ResourceDependencyBuilderとの協調動作"""
+        # Given: 依存関係を持つリソース
+        resources = [
+            sample_resources['basic_resource'],
+            sample_resources['resource_with_dependencies']
+        ]
+        resource_providers = {'aws': 2}
+
+        # When: create_dot_file()を呼び出す
+        result = dot_file_generator.create_dot_file('dev', resources, resource_providers)
+
+        # Then: 依存関係エッジが正しく生成される
+        result_str = '\n'.join(result)
+        assert '->' in result_str
+        assert 'resource_1' in result_str
+        assert 'resource_0' in result_str
+
+    @pytest.mark.integration
+    def test_create_dot_file_with_circular_dependencies(self, dot_file_generator):
+        """TC-I-06: 異常系 - 循環依存"""
+        # Given: 循環依存を持つリソース
+        resources = [
+            {
+                'type': 'aws:s3/bucket:Bucket',
+                'urn': 'urn:pulumi:dev::myproject::aws:s3/bucket:Bucket::bucket-a',
+                'dependencies': ['urn:pulumi:dev::myproject::aws:s3/bucket:Bucket::bucket-b'],
+                'parent': None,
+                'propertyDependencies': {}
+            },
+            {
+                'type': 'aws:s3/bucket:Bucket',
+                'urn': 'urn:pulumi:dev::myproject::aws:s3/bucket:Bucket::bucket-b',
+                'dependencies': ['urn:pulumi:dev::myproject::aws:s3/bucket:Bucket::bucket-a'],
+                'parent': None,
+                'propertyDependencies': {}
+            }
+        ]
+        resource_providers = {'aws': 2}
+
+        # When: create_dot_file()を呼び出す
+        result = dot_file_generator.create_dot_file('dev', resources, resource_providers)
+
+        # Then: エラーが発生しない
+        assert isinstance(result, list)
+        # 両方の依存関係エッジが生成される
+        result_str = '\n'.join(result)
+        assert 'resource_0' in result_str
+        assert 'resource_1' in result_str
+
+
+# =============================================================================
+# パフォーマンステスト
+# =============================================================================
+
+class TestDotProcessorPerformance:
+    """DotFileProcessor - パフォーマンステスト"""
+
+    @pytest.mark.performance
+    def test_performance_20_resources(self, dot_file_generator):
+        """TC-I-08: パフォーマンステスト - 20リソース処理時間"""
+        import time
+
+        # Given: 20リソース
+        resources = []
+        for i in range(20):
+            resources.append({
+                'type': 'aws:s3/bucket:Bucket',
+                'urn': f'urn:pulumi:dev::myproject::aws:s3/bucket:Bucket::bucket-{i}',
+                'dependencies': [],
+                'parent': None,
+                'propertyDependencies': {}
+            })
+        resource_providers = {'aws': 20}
+
+        # When: 処理時間を測定
+        start = time.time()
+        result = dot_file_generator.create_dot_file('dev', resources, resource_providers)
+        elapsed = time.time() - start
+
+        # Then: 1秒以内に処理完了
+        assert elapsed < 1.0
+        # 結果が正しく生成されている
+        assert isinstance(result, list)
+        resource_nodes = [line for line in result if 'resource_' in line and '[label=' in line]
+        assert len(resource_nodes) == 20

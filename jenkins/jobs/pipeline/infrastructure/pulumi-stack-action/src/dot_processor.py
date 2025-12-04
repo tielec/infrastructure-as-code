@@ -204,29 +204,60 @@ class DotFileProcessor:
         """Pulumi生成グラフを拡張"""
         lines = dot_content.split('\n')
         new_lines = []
-        
+
         # URN情報をキャッシュ
         node_urn_map = {}
         stack_node_id = None
-        
+
         # 各行を処理
         for i, line in enumerate(lines):
+            # ヘッダー行の処理（早期処理）
             if i == 0 and 'strict digraph' in line:
                 new_lines.extend(DotFileProcessor._add_graph_header(line))
-            else:
-                processed_line, node_info = DotFileProcessor._process_graph_line(
-                    line, node_urn_map, stack_node_id
+                continue
+
+            # 通常行の処理
+            processed_line, node_info = DotFileProcessor._process_graph_line(
+                line, node_urn_map, stack_node_id
+            )
+
+            # node_info更新（ヘルパーメソッドに委譲）
+            if node_info:
+                stack_node_id = DotFileProcessor._update_node_info(
+                    node_info, node_urn_map, stack_node_id
                 )
-                
-                if node_info:
-                    node_urn_map.update(node_info.get('node_urn_map', {}))
-                    if node_info.get('stack_node_id'):
-                        stack_node_id = node_info['stack_node_id']
-                
-                if processed_line:
-                    new_lines.append(processed_line)
-        
+
+            # 処理済み行の追加
+            if processed_line:
+                new_lines.append(processed_line)
+
         return '\n'.join(new_lines)
+
+    @staticmethod
+    def _update_node_info(
+        node_info: Dict,
+        node_urn_map: Dict,
+        stack_node_id: str
+    ) -> str:
+        """node_info辞書からnode_urn_mapとstack_node_idを更新
+
+        Args:
+            node_info (Dict): ノード情報辞書
+            node_urn_map (Dict): URNマッピング（破壊的更新）
+            stack_node_id (str): 現在のスタックノードID
+
+        Returns:
+            str: 更新後のstack_node_id
+        """
+        # URNマッピング更新
+        node_urn_map.update(node_info.get('node_urn_map', {}))
+
+        # stack_node_id更新（あれば）
+        new_stack_node_id = node_info.get('stack_node_id')
+        if new_stack_node_id:
+            return new_stack_node_id
+
+        return stack_node_id
     
     @staticmethod
     def _add_graph_header(first_line: str) -> List[str]:
@@ -241,15 +272,51 @@ class DotFileProcessor:
     @staticmethod
     def _process_graph_line(line: str, node_urn_map: Dict, stack_node_id: str) -> Tuple[str, Dict]:
         """グラフの各行を処理"""
-        # ノード定義を処理
-        if '[label="urn:pulumi:' in line and not line.strip().startswith('//'):
+        # ノード定義行の判定
+        if DotFileProcessor._is_node_definition_line(line):
             return DotFileProcessor._process_node_definition(line)
-        
-        # エッジ（矢印）の処理
-        elif '->' in line and stack_node_id and f'-> {stack_node_id}' in line:
+
+        # スタックへのエッジ行の判定
+        if DotFileProcessor._is_edge_to_stack_line(line, stack_node_id):
             return DotFileProcessor._process_edge_definition(line, stack_node_id)
-        
+
+        # その他の行はそのまま返す
         return line, None
+
+    @staticmethod
+    def _is_node_definition_line(line: str) -> bool:
+        """ノード定義行かどうかを判定
+
+        Args:
+            line (str): DOT形式の行
+
+        Returns:
+            bool: ノード定義行の場合True
+        """
+        # コメント行はスキップ
+        if line.strip().startswith('//'):
+            return False
+
+        # URNラベルを持つノード定義
+        return '[label="urn:pulumi:' in line
+
+    @staticmethod
+    def _is_edge_to_stack_line(line: str, stack_node_id: str) -> bool:
+        """スタックへのエッジ行かどうかを判定
+
+        Args:
+            line (str): DOT形式の行
+            stack_node_id (str): スタックノードID
+
+        Returns:
+            bool: スタックへのエッジ行の場合True
+        """
+        # stack_node_idがない場合はFalse
+        if not stack_node_id:
+            return False
+
+        # エッジ記号とスタックノードへの接続を確認
+        return '->' in line and f'-> {stack_node_id}' in line
     
     @staticmethod
     def _process_node_definition(line: str) -> Tuple[str, Dict]:
@@ -332,33 +399,60 @@ class DotFileProcessor:
     @staticmethod
     def _process_single_node(line: str) -> str:
         """単一ノードのラベルを処理"""
+        # ラベル抽出
         match = re.search(r'\[label="([^"]+)"\]', line)
         if not match:
             return line
-            
+
         full_name = match.group(1)
         short_name = full_name.split('::')[-1]
-        
+
+        # 長いラベルの省略
         if len(short_name) > 30:
             short_name = short_name[:27] + '...'
-        
-        # プロバイダーに応じた色を設定
-        fill_color, border_color = DotFileProcessor.DEFAULT_COLORS
-        
-        # プロバイダーを検出
-        for provider_key in DotFileProcessor.PROVIDER_COLORS:
-            if f'{provider_key}:' in full_name.lower():
-                fill_color, border_color = DotFileProcessor.PROVIDER_COLORS[provider_key]
-                if f'::{provider_key}:' in full_name.lower():
-                    resource_type = full_name.split(f'::{provider_key}:')[1].split('::')[0]
-                    short_name = f"{resource_type}\\n{short_name}"
-                break
-        
+
+        # プロバイダー別色設定を取得
+        fill_color, border_color, short_name = DotFileProcessor._detect_provider_colors(
+            full_name, short_name
+        )
+
+        # ラベル置換
         return re.sub(
             r'\[label="[^"]+"\]',
             f'[label="{short_name}", fillcolor="{fill_color}", color="{border_color}"]',
             line
         )
+
+    @staticmethod
+    def _detect_provider_colors(full_name: str, short_name: str) -> Tuple[str, str, str]:
+        """プロバイダー別色設定を検出
+
+        Args:
+            full_name (str): 完全なリソース名
+            short_name (str): 短縮リソース名
+
+        Returns:
+            Tuple[str, str, str]: (fill_color, border_color, updated_short_name)
+        """
+        # デフォルト色
+        fill_color, border_color = DotFileProcessor.DEFAULT_COLORS
+
+        # プロバイダーを検出
+        for provider_key in DotFileProcessor.PROVIDER_COLORS:
+            if f'{provider_key}:' not in full_name.lower():
+                continue
+
+            # プロバイダー色を適用
+            fill_color, border_color = DotFileProcessor.PROVIDER_COLORS[provider_key]
+
+            # リソースタイプを抽出（あれば）
+            if f'::{provider_key}:' in full_name.lower():
+                resource_type = full_name.split(f'::{provider_key}:')[1].split('::')[0]
+                short_name = f"{resource_type}\\n{short_name}"
+
+            break
+
+        return fill_color, border_color, short_name
     
     @staticmethod
     def _shorten_pulumi_label(line: str) -> str:
