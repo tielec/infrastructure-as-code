@@ -171,7 +171,7 @@
 
 ### Phase 4: 実装 (見積もり: 3~4h)
 
-- [ ] Task 4-1: resource_dependency_builder.pyの新規作成 (2~2.5h)
+- [x] Task 4-1: resource_dependency_builder.pyの新規作成 (2~2.5h)
   - ファイルとクラスの基本構造を作成
   - `create_urn_to_node_mapping()`メソッドの実装
   - `add_resource_dependencies()`メソッドの実装
@@ -180,7 +180,7 @@
   - `_add_parent_dependency()`の実装
   - `_add_property_dependencies()`の実装
   - docstringとコメントの記述
-- [ ] Task 4-2: dot_processor.pyの更新 (1~1.5h)
+- [x] Task 4-2: dot_processor.pyの更新 (1~1.5h)
   - ResourceDependencyBuilderのimport追加
   - `_add_resource_dependencies()`をResourceDependencyBuilderの呼び出しに置き換え
   - 既存の依存関係処理メソッドの削除
