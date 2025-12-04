@@ -6,6 +6,7 @@ import re
 from typing import Dict, List, Tuple
 from urn_processor import UrnProcessor
 from node_label_generator import NodeLabelGenerator
+from resource_dependency_builder import ResourceDependencyBuilder
 
 
 class DotFileGenerator:
@@ -157,95 +158,8 @@ class DotFileGenerator:
     
     @staticmethod
     def _add_resource_dependencies(resources: List[Dict], dot_lines: List[str]):
-        """リソース間の依存関係を追加（汎用版）"""
-        if len(resources) <= 1:
-            return
-            
-        dot_lines.extend(['', '    // リソース間の依存関係'])
-        
-        # リソースのURNからIDへのマッピングを作成
-        urn_to_node_id = DotFileGenerator._create_urn_to_node_mapping(resources)
-        
-        # 各リソースの依存関係を処理
-        for i, resource in enumerate(resources):
-            DotFileGenerator._add_dependencies_for_resource(
-                i, resource, urn_to_node_id, dot_lines
-            )
-    
-    @staticmethod
-    def _create_urn_to_node_mapping(resources: List[Dict]) -> Dict[str, str]:
-        """URNからノードIDへのマッピングを作成"""
-        mapping = {}
-        for i, resource in enumerate(resources):
-            urn = resource.get('urn', '')
-            mapping[urn] = f'resource_{i}'
-        return mapping
-    
-    @staticmethod
-    def _add_dependencies_for_resource(resource_index: int, resource: Dict, 
-                                     urn_to_node_id: Dict[str, str], 
-                                     dot_lines: List[str]):
-        """単一リソースの依存関係を追加"""
-        node_id = f'resource_{resource_index}'
-        
-        # 通常の依存関係を追加
-        DotFileGenerator._add_direct_dependencies(
-            node_id, resource, urn_to_node_id, dot_lines
-        )
-        
-        # 親リソースへの依存を追加
-        DotFileGenerator._add_parent_dependency(
-            node_id, resource, urn_to_node_id, dot_lines
-        )
-        
-        # プロパティ依存を追加
-        DotFileGenerator._add_property_dependencies(
-            node_id, resource, urn_to_node_id, dot_lines
-        )
-    
-    @staticmethod
-    def _add_direct_dependencies(node_id: str, resource: Dict, 
-                               urn_to_node_id: Dict[str, str], 
-                               dot_lines: List[str]):
-        """直接的な依存関係を追加"""
-        dependencies = resource.get('dependencies', [])
-        for dep_urn in dependencies:
-            if dep_urn in urn_to_node_id:
-                dep_node_id = urn_to_node_id[dep_urn]
-                dot_lines.append(
-                    f'    "{node_id}" -> "{dep_node_id}" '
-                    f'[style=solid, color="#9C27B0", fontsize="10"];'
-                )
-    
-    @staticmethod
-    def _add_parent_dependency(node_id: str, resource: Dict,
-                             urn_to_node_id: Dict[str, str],
-                             dot_lines: List[str]):
-        """親リソースへの依存を追加"""
-        parent = resource.get('parent')
-        if parent and parent in urn_to_node_id:
-            parent_node_id = urn_to_node_id[parent]
-            dot_lines.append(
-                f'    "{node_id}" -> "{parent_node_id}" '
-                f'[style=dashed, color="#2196F3", label="parent", fontsize="10"];'
-            )
-    
-    @staticmethod
-    def _add_property_dependencies(node_id: str, resource: Dict,
-                                 urn_to_node_id: Dict[str, str],
-                                 dot_lines: List[str]):
-        """プロパティ依存を追加"""
-        prop_deps = resource.get('propertyDependencies', {})
-        for prop_name, dep_urns in prop_deps.items():
-            for dep_urn in dep_urns:
-                if dep_urn in urn_to_node_id:
-                    dep_node_id = urn_to_node_id[dep_urn]
-                    # 短いプロパティ名を表示
-                    short_prop = prop_name.split('.')[-1] if '.' in prop_name else prop_name
-                    dot_lines.append(
-                        f'    "{node_id}" -> "{dep_node_id}" '
-                        f'[style=dotted, color="#FF5722", label="{short_prop}", fontsize="9"];'
-                    )
+        """リソース間の依存関係を追加（ResourceDependencyBuilderに委譲）"""
+        ResourceDependencyBuilder.add_resource_dependencies(resources, dot_lines)
 
 
 class DotFileProcessor:
