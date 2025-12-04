@@ -15,22 +15,27 @@ def repositories = jenkinsManagedRepositories.collect { name, repo ->
     ]
 }
 
+// 汎用フォルダ定義
+def genericFolders = [
+    [name: 'develop-generic', displayName: '汎用 - Develop', branch: '*/develop'],
+    [name: 'main-generic-1', displayName: '汎用 - Main #1', branch: '*/main'],
+    [name: 'main-generic-2', displayName: '汎用 - Main #2', branch: '*/main']
+]
+
 // 共通設定を取得
 def jenkinsPipelineRepo = commonSettings['jenkins-pipeline-repo']
 def jobKey = 'ai_workflow_all_phases_job'
 def jobConfig = jenkinsJobsConfig[jobKey]
 
-// 各リポジトリのジョブを作成
-repositories.each { repo ->
-    def jobName = "AI_Workflow/${repo.name}/${jobConfig.name}"
-
+// ジョブ作成クロージャ
+def createJob = { String jobName, String descriptionHeader, String gitBranch ->
     pipelineJob(jobName) {
         displayName(jobConfig.displayName)
 
         description("""\
             |# AI Workflow - All Phases Execution
             |
-            |リポジトリ: ${repo.name}
+            |${descriptionHeader}
             |
             |## 概要
             |全フェーズ（planning → evaluation）を順次実行します。
@@ -126,32 +131,32 @@ AWS セッショントークン（任意）
             // ========================================
             // APIキー設定
             // ========================================
-            password('GITHUB_TOKEN', '''
+            nonStoredPasswordParam('GITHUB_TOKEN', '''
 GitHub Personal Access Token（任意）
 GitHub API呼び出しに使用されます
             '''.stripIndent().trim())
 
-            password('OPENAI_API_KEY', '''
+            nonStoredPasswordParam('OPENAI_API_KEY', '''
 OpenAI API キー（任意）
 Codex実行モードで使用されます
             '''.stripIndent().trim())
 
-            password('CODEX_API_KEY', '''
+            nonStoredPasswordParam('CODEX_API_KEY', '''
 Codex API キー（任意）
 OPENAI_API_KEYの代替として使用可能
             '''.stripIndent().trim())
 
-            password('CLAUDE_CODE_OAUTH_TOKEN', '''
+            nonStoredPasswordParam('CLAUDE_CODE_OAUTH_TOKEN', '''
 Claude Code OAuth トークン（任意）
 Claude実行モードで使用されます
             '''.stripIndent().trim())
 
-            password('CLAUDE_CODE_API_KEY', '''
+            nonStoredPasswordParam('CLAUDE_CODE_API_KEY', '''
 Claude Code API キー（任意）
 Claude実行モードで使用されます
             '''.stripIndent().trim())
 
-            password('ANTHROPIC_API_KEY', '''
+            nonStoredPasswordParam('ANTHROPIC_API_KEY', '''
 Anthropic API キー（任意）
 Claude実行モードで使用されます
             '''.stripIndent().trim())
@@ -186,7 +191,7 @@ Claude実行モードで使用されます
                             url('https://github.com/tielec/ai-workflow-agent.git')
                             credentials('github-token')
                         }
-                        branch('*/main')
+                        branch(gitBranch)
                     }
                 }
                 scriptPath('Jenkinsfile')
@@ -207,4 +212,22 @@ Claude実行モードで使用されます
         // ジョブの無効化状態
         disabled(false)
     }
+}
+
+// 各リポジトリのジョブを作成
+repositories.each { repo ->
+    createJob(
+        "AI_Workflow/${repo.name}/${jobConfig.name}",
+        "リポジトリ: ${repo.name}",
+        '*/main'
+    )
+}
+
+// 汎用フォルダ用ジョブを作成
+genericFolders.each { folder ->
+    createJob(
+        "AI_Workflow/${folder.name}/${jobConfig.name}",
+        "フォルダ: ${folder.displayName}\nブランチ: ${folder.branch}",
+        folder.branch
+    )
 }
