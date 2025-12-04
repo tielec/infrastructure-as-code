@@ -115,6 +115,10 @@ Evaluation Phase完了後にワークフローディレクトリを強制削除
 詳細: Issue #2、v0.3.0で追加
             '''.stripIndent().trim())
 
+            booleanParam('SQUASH_ON_COMPLETE', true, '''
+ワークフロー完了時にコミットをスカッシュする
+            '''.stripIndent().trim())
+
             // ========================================
             // Git 設定
             // ========================================
