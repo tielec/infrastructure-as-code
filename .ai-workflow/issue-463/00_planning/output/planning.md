@@ -146,12 +146,12 @@
 
 ### Phase 2: 設計 (見積もり: 1.5~2h)
 
-- [ ] Task 2-1: ResourceDependencyBuilderクラスの設計 (1~1.5h)
+- [x] Task 2-1: ResourceDependencyBuilderクラスの設計 (1~1.5h)
   - クラス構造の設計（静的メソッドかインスタンスメソッドか）
   - パブリックメソッドのシグネチャ設計
   - プライベートメソッドの役割分担
   - データ構造の設計（URNマッピング、依存関係グラフ）
-- [ ] Task 2-2: DotFileGeneratorとの統合インターフェース設計 (0.5h)
+- [x] Task 2-2: DotFileGeneratorとの統合インターフェース設計 (0.5h)
   - 呼び出し方法の設計
   - エラーハンドリングの方針
   - 既存のDOT lines構造との整合性確保
@@ -336,12 +336,12 @@ graph TD
 - [x] 入力・出力データ構造が明確に定義されている
 
 ### Phase 2: 設計
-- [ ] 実装戦略（REFACTOR）の判断根拠が明記されている
-- [ ] テスト戦略（UNIT_INTEGRATION）の判断根拠が明記されている
-- [ ] テストコード戦略（BOTH_TEST）の判断根拠が明記されている
-- [ ] ResourceDependencyBuilderのパブリックAPIが設計されている
-- [ ] DotFileGeneratorとの統合方法が設計されている
-- [ ] データ構造（URNマッピング、依存グラフ）が設計されている
+- [x] 実装戦略（REFACTOR）の判断根拠が明記されている
+- [x] テスト戦略（UNIT_INTEGRATION）の判断根拠が明記されている
+- [x] テストコード戦略（BOTH_TEST）の判断根拠が明記されている
+- [x] ResourceDependencyBuilderのパブリックAPIが設計されている
+- [x] DotFileGeneratorとの統合方法が設計されている
+- [x] データ構造（URNマッピング、依存グラフ）が設計されている
 
 ### Phase 3: テストシナリオ
 - [ ] 単体テストシナリオが網羅的に作成されている（80%カバレッジ目標）
