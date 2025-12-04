@@ -165,13 +165,13 @@ pytest-mock==3.12.0  # モック機能
 
 ### Phase 3: テストシナリオ (見積もり: 2~3h)
 
-- [ ] Task 3-1: `DotFileGenerator`のテストシナリオ (1~1.5h)
+- [x] Task 3-1: `DotFileGenerator`のテストシナリオ (1~1.5h)
   - `escape_dot_string`: 特殊文字エスケープの検証
   - `create_dot_file`: DOTファイル生成の完全検証
   - プロバイダー別色設定の検証
   - 依存関係グラフの検証
 
-- [ ] Task 3-2: `DotFileProcessor`のテストシナリオ (1~1.5h)
+- [x] Task 3-2: `DotFileProcessor`のテストシナリオ (1~1.5h)
   - `parse_urn`: URN解析の網羅的検証
   - `apply_graph_styling`: グラフスタイル適用の検証
   - `is_empty_graph`: 空グラフ判定の検証
@@ -351,11 +351,11 @@ Phase 1では既存コードの変更を一切行わないため、Phase 4（実
 
 ### Phase 3: テストシナリオ
 
-- [ ] `DotFileGenerator`の全公開メソッドのテストシナリオが定義されている
-- [ ] `DotFileProcessor`の全公開メソッドのテストシナリオが定義されている
-- [ ] エッジケースのテストシナリオが定義されている
-- [ ] アサーション戦略が明確である
-- [ ] テストデータ準備方針が定義されている
+- [x] `DotFileGenerator`の全公開メソッドのテストシナリオが定義されている
+- [x] `DotFileProcessor`の全公開メソッドのテストシナリオが定義されている
+- [x] エッジケースのテストシナリオが定義されている
+- [x] アサーション戦略が明確である
+- [x] テストデータ準備方針が定義されている
 
 ### Phase 5: テストコード実装
 
