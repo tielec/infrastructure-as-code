@@ -327,12 +327,12 @@ After (Phase 2-2):
 
 ### Phase 7: ドキュメント (見積もり: 0.5~1h)
 
-- [ ] Task 7-1: NodeLabelGeneratorクラスのdocstring作成 (0.25~0.5h)
+- [x] Task 7-1: NodeLabelGeneratorクラスのdocstring作成 (0.25~0.5h)
   - クラスレベルのdocstring
   - 各メソッドのdocstring（引数、戻り値、例）
   - 使用例の記載
 
-- [ ] Task 7-2: コードコメントの追加 (0.25~0.5h)
+- [x] Task 7-2: コードコメントの追加 (0.25~0.5h)
   - 複雑なロジックへのコメント
   - TODO/FIXMEの確認と解決
 
@@ -501,9 +501,9 @@ graph TD
 
 ### Phase 7: ドキュメント
 
-- [ ] NodeLabelGeneratorのdocstringが完成している
-- [ ] 複雑なロジックにコメントが追加されている
-- [ ] README（必要に応じて）が更新されている
+- [x] NodeLabelGeneratorのdocstringが完成している
+- [x] 複雑なロジックにコメントが追加されている
+- [x] README（必要に応じて）が更新されている
 
 ### Phase 8: レポート
 
