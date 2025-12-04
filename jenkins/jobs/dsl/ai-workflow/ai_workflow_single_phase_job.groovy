@@ -6,21 +6,12 @@
  * パラメータ数: 19個（13個 + APIキー6個）
  */
 
-// リポジトリ情報を取得
-def repositories = jenkinsManagedRepositories.collect { name, repo ->
-    [
-        name: name,
-        url: repo.httpsUrl,
-        credentialsId: repo.credentialsId
-    ]
-}
-
-// 汎用フォルダ定義
+// 汎用フォルダ定義（Develop 1 + Stable 9）
 def genericFolders = [
-    [name: 'develop-generic', displayName: '汎用 - Develop', branch: '*/develop'],
-    [name: 'main-generic-1', displayName: '汎用 - Main #1', branch: '*/main'],
-    [name: 'main-generic-2', displayName: '汎用 - Main #2', branch: '*/main']
-]
+    [name: 'develop', displayName: 'AI Workflow Executor - Develop', branch: '*/develop']
+] + (1..9).collect { i ->
+    [name: "stable-${i}", displayName: "AI Workflow Executor - Stable ${i}", branch: '*/main']
+}
 
 // 共通設定を取得
 def jenkinsPipelineRepo = commonSettings['jenkins-pipeline-repo']
@@ -225,15 +216,6 @@ Claude実行モードで使用されます
         // ジョブの無効化状態
         disabled(false)
     }
-}
-
-// 各リポジトリのジョブを作成
-repositories.each { repo ->
-    createJob(
-        "AI_Workflow/${repo.name}/${jobConfig.name}",
-        "リポジトリ: ${repo.name}",
-        '*/main'
-    )
 }
 
 // 汎用フォルダ用ジョブを作成
