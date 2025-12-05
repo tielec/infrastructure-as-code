@@ -67,13 +67,6 @@ jenkins-jobs:
     dslfile: jenkins/jobs/dsl/admin/admin_user_management_job.groovy
     jenkinsfile: jenkins/jobs/pipeline/admin/user-management/Jenkinsfile
 
-  # AI Workflow Job Creator（新規追加）
-  ai_workflow_job_creator:
-    name: 'ai-workflow-job-creator'
-    displayName: 'AI Workflow Job Creator'
-    dslfile: jenkins/jobs/dsl/admin/admin_ai_workflow_job_creator.groovy
-    jenkinsfile: jenkins/jobs/pipeline/_seed/ai-workflow-job-creator/Jenkinsfile
-
   # SSM Parameter Store Backup Jobs
   admin_ssm_backup_job:
     name: 'SSM_Parameter_Backup'
