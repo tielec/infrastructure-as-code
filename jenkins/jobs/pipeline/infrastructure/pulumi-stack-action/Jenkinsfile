@@ -803,6 +803,7 @@ def generatePythonHtmlReport() {
         
         # Pythonスクリプトファイルのコピー
         echo "Pythonスクリプトファイルのコピー..."
+        cp ${JENKINS_REPO_DIR}/${SCRIPT_PATH}/__init__.py . || true
         cp ${JENKINS_REPO_DIR}/${SCRIPT_PATH}/main.py .
         cp ${JENKINS_REPO_DIR}/${SCRIPT_PATH}/config.py .
         cp ${JENKINS_REPO_DIR}/${SCRIPT_PATH}/dot_processor.py .
@@ -810,6 +811,9 @@ def generatePythonHtmlReport() {
         cp ${JENKINS_REPO_DIR}/${SCRIPT_PATH}/data_processor.py .
         cp ${JENKINS_REPO_DIR}/${SCRIPT_PATH}/charts.py .
         cp ${JENKINS_REPO_DIR}/${SCRIPT_PATH}/graph_processor.py .
+        cp ${JENKINS_REPO_DIR}/${SCRIPT_PATH}/urn_processor.py .
+        cp ${JENKINS_REPO_DIR}/${SCRIPT_PATH}/node_label_generator.py .
+        cp ${JENKINS_REPO_DIR}/${SCRIPT_PATH}/resource_dependency_builder.py .
         
         # テンプレートファイルのコピー
         echo "テンプレートファイルのコピー..."
