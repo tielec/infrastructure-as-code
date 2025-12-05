@@ -188,22 +188,22 @@ graph TD
 
 ### Phase 2: 設計 (見積もり: 2〜3h)
 
-- [ ] Task 2-1: ディレクトリ構造設計 (0.5h)
+- [x] Task 2-1: ディレクトリ構造設計 (0.5h)
   - `jenkins/jobs/pipeline/_seed/ai-workflow-job-creator/`の構成
   - 設定ファイルの配置（Jenkinsfile、job-config、folder-config）
 
-- [ ] Task 2-2: 新規シードジョブのJob DSL設計 (1h)
+- [x] Task 2-2: 新規シードジョブのJob DSL設計 (1h)
   - `admin_ai_workflow_job_creator.groovy`の設計
   - パラメータ定義（実行環境、ブランチ等）
   - トリガー条件の設計
 
-- [ ] Task 2-3: 新規Jenkinsfileのパイプライン設計 (1〜1.5h)
+- [x] Task 2-3: 新規Jenkinsfileのパイプライン設計 (1〜1.5h)
   - 既存job-creatorのJenkinsfileをベースに設計
   - AI Workflow専用のDSL読み込みロジック
   - 設定ファイル読み込みロジック
   - エラーハンドリング
 
-- [ ] Task 2-4: 既存job-creatorからの除外ロジック設計 (0.5h)
+- [x] Task 2-4: 既存job-creatorからの除外ロジック設計 (0.5h)
   - AI Workflow関連DSLファイルの除外方法
   - 条件分岐ロジックの設計
 
@@ -370,11 +370,11 @@ Phase 1 → Phase 2 → Phase 3 → Phase 4 → Phase 6 → Phase 7 → Phase 8
 
 ### Phase 2: 設計
 
-- [ ] 実装戦略の判断根拠が明記されている（CREATE + EXTEND）
-- [ ] テスト戦略の判断根拠が明記されている（INTEGRATION_ONLY）
-- [ ] ディレクトリ構造が既存パターンに準拠している
-- [ ] 新規Jenkinsfileの設計が既存job-creatorと整合している
-- [ ] 既存システムへの影響が最小化されている
+- [x] 実装戦略の判断根拠が明記されている（CREATE + EXTEND）
+- [x] テスト戦略の判断根拠が明記されている（INTEGRATION_ONLY）
+- [x] ディレクトリ構造が既存パターンに準拠している
+- [x] 新規Jenkinsfileの設計が既存job-creatorと整合している
+- [x] 既存システムへの影響が最小化されている
 
 ### Phase 3: テストシナリオ
 
