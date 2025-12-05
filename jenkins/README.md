@@ -99,6 +99,7 @@ aws ssm get-parameter --name /jenkins-infra/dev/jenkins/admin-password \
 
 # 3. シードジョブの実行
 # Jenkins UIから: Admin_Jobs > job-creator を実行
+# AI Workflowジョブは自動的に作成されます
 ```
 
 ### 3. 必須プラグイン
@@ -121,7 +122,7 @@ aws ssm get-parameter --name /jenkins-infra/dev/jenkins/admin-password \
 
 | カテゴリ | 説明 | 主要ジョブ |
 |---------|------|-----------|
-| **Admin_Jobs** | システム管理 | backup-config（設定バックアップ）<br>restore-config（設定リストア）<br>ssm-parameter-backup（SSMパラメータバックアップ）<br>ssm-parameter-restore（SSMパラメータリストア）<br>github-webhooks-setting（GitHub Webhook設定）<br>github-deploykeys-setting（デプロイキー設定）<br>user-management（ユーザー管理） |
+| **Admin_Jobs** | システム管理 | job-creator（全ジョブ生成）<br>ai-workflow-job-creator（AI Workflowジョブ専用生成）<br>backup-config（設定バックアップ）<br>restore-config（設定リストア）<br>ssm-parameter-backup（SSMパラメータバックアップ）<br>ssm-parameter-restore（SSMパラメータリストア）<br>github-webhooks-setting（GitHub Webhook設定）<br>github-deploykeys-setting（デプロイキー設定）<br>user-management（ユーザー管理） |
 | **Account_Setup** | アカウント管理 | account-self-activation（アカウント自己有効化） |
 | **AI_Workflow** | AI駆動開発自動化 | 実行モード別ジョブ（all_phases、preset、single_phase、rollback、auto_issue）<br>※リポジトリごとにサブフォルダで整理<br>※汎用フォルダ（develop-generic、main-generic-1、main-generic-2）も利用可能 |
 | **Code_Quality_Checker** | コード品質分析 | pr-complexity-analyzer（PR複雑度分析）<br>rust-code-analysis（Rustコード解析） |
@@ -799,7 +800,7 @@ Jenkins UI > Infrastructure_Management > Terminate_Lambda_NAT > 設定 > ビル�
 
 | 問題 | 原因 | 解決方法 |
 |-----|------|---------|
-| ジョブが見つからない | Job DSLが未反映 | Admin_Jobs > job-creator を実行 |
+| ジョブが見つからない | Job DSLが未反映 | Admin_Jobs > job-creator を実行（AI Workflowジョブは自動生成される） |
 | クレデンシャルエラー | ID不一致または権限不足 | Credentials画面でIDを確認、権限を付与 |
 | ビルド失敗 | エージェント不足 | エージェントのラベルと状態を確認 |
 | 共有ライブラリエラー | ライブラリ未設定 | Global Pipeline Librariesで設定 |

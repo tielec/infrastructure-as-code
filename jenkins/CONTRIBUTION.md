@@ -187,6 +187,21 @@ flowchart LR
 
 シードジョブは、設定ファイルを読み込んで全ジョブを自動生成する中心的な仕組みです。
 
+本プロジェクトでは、目的別に複数のシードジョブを運用しています：
+
+| シードジョブ | 対象 | 実行頻度 | 説明 |
+|------------|------|----------|------|
+| **job-creator** | 全般ジョブ | 手動・定期 | 通常のJenkinsジョブを生成（AI Workflowジョブは除外） |
+| **ai-workflow-job-creator** | AI Workflowジョブ | 手動 | AI Workflow専用のジョブ（50ジョブ）を生成 |
+
+##### シードジョブの分離理由
+
+AI Workflow専用シードジョブを分離することで、以下のメリットが得られます：
+
+- **実行時間の短縮**: AI Workflowジョブのみを更新する際、全ジョブを処理しなくて良い
+- **独立した管理**: AI Workflowジョブの変更が他のジョブに影響しない
+- **明確な責務分離**: ドメイン別にシードジョブを管理でき、保守性が向上
+
 ##### 実装の流れ
 
 1. **設定ファイルの準備**
@@ -379,6 +394,158 @@ class GitHubApiClient {
     }
 }
 ```
+
+##### AI Workflowジョブ作成ガイド
+
+AI Workflow専用ジョブは`ai-workflow-job-creator`シードジョブで管理されます。以下の手順で新規AI Workflowジョブを追加します。
+
+###### 前提条件
+
+- AI Workflowジョブは命名規則として`ai_workflow_`プレフィックスが必要
+- ジョブは`AI_Workflow`フォルダまたはそのサブフォルダに配置される
+- 既存のAI Workflowジョブ：
+  - `ai_workflow_planning` - 計画フェーズ
+  - `ai_workflow_requirements` - 要件定義フェーズ
+  - `ai_workflow_design` - 設計フェーズ
+  - `ai_workflow_test_scenario` - テストシナリオフェーズ
+  - `ai_workflow_implementation` - 実装フェーズ
+
+###### Step 1: job-config.yamlへの追加
+
+```yaml
+# jenkins/jobs/pipeline/_seed/job-creator/job-config.yaml
+
+jenkins-jobs:
+  # 既存のAI Workflowジョブ...
+
+  # 新規AI Workflowジョブ
+  ai_workflow_your_phase:
+    name: 'your-phase'
+    displayName: 'Your Phase'
+    dslfile: jenkins/jobs/dsl/ai-workflow/ai_workflow_your_phase.groovy
+    jenkinsfile: jenkins/jobs/pipeline/ai-workflow/your-phase/Jenkinsfile
+    folder: 'AI_Workflow/{repo_name}'  # 動的フォルダパス
+```
+
+**重要**: `ai_workflow_`プレフィックスを必ず付けることで、`job-creator`から除外され、`ai-workflow-job-creator`のみで処理されます。
+
+###### Step 2: DSLスクリプトの作成
+
+```groovy
+// jenkins/jobs/dsl/ai-workflow/ai_workflow_your_phase.groovy
+
+// 設定の取得
+def jobKey = 'ai_workflow_your_phase'
+def jobConfig = jenkinsJobsConfig[jobKey]
+
+// AI Workflowリポジトリごとにジョブを生成
+jenkinsManagedRepositories.each { repo ->
+    def repoName = repo.name
+    def fullJobName = "AI_Workflow/${repoName}/${jobConfig.name}"
+
+    pipelineJob(fullJobName) {
+        displayName(jobConfig.displayName)
+        description("""
+AI Workflow - ${jobConfig.displayName}
+
+リポジトリ: ${repoName}
+フェーズ: ${jobConfig.displayName}
+""")
+
+        // パラメータ定義
+        parameters {
+            stringParam('ISSUE_NUMBER', '', 'Issue番号（必須）')
+            stringParam('TARGET_BRANCH', repo.defaultBranch ?: 'main', 'ターゲットブランch')
+            booleanParam('DRY_RUN', false, 'ドライラン実行')
+        }
+
+        // 並行実行制限
+        properties {
+            disableConcurrentBuilds()
+        }
+
+        // パイプライン定義
+        definition {
+            cpsScm {
+                scm {
+                    git {
+                        remote {
+                            url(jenkinsPipelineRepo.url)
+                            credentials(jenkinsPipelineRepo.credentials)
+                        }
+                        branch(jenkinsPipelineRepo.branch)
+                    }
+                }
+                scriptPath(jobConfig.jenkinsfile)
+            }
+        }
+
+        // ログローテーション
+        logRotator {
+            daysToKeep(90)
+            numToKeep(30)
+        }
+    }
+}
+```
+
+###### Step 3: Jenkinsfileの作成
+
+```groovy
+// jenkins/jobs/pipeline/ai-workflow/your-phase/Jenkinsfile
+
+@Library('jenkins-shared-lib@main') _
+
+pipeline {
+    agent { label 'docker' }
+
+    environment {
+        PHASE_NAME = 'your-phase'
+        AWS_REGION = 'ap-northeast-1'
+    }
+
+    stages {
+        stage('Validate Parameters') {
+            steps {
+                script {
+                    if (!params.ISSUE_NUMBER) {
+                        error "ISSUE_NUMBER is required"
+                    }
+                    echo "Processing Issue #${params.ISSUE_NUMBER}"
+                }
+            }
+        }
+
+        stage('Execute Phase') {
+            when {
+                expression { !params.DRY_RUN }
+            }
+            steps {
+                script {
+                    // フェーズ固有の処理
+                    echo "Executing ${PHASE_NAME} phase"
+                }
+            }
+        }
+    }
+
+    post {
+        always { cleanWs() }
+    }
+}
+```
+
+###### Step 4: シードジョブの実行
+
+```bash
+# AI Workflowジョブを生成
+# Jenkins UI > Admin_Jobs > ai-workflow-job-creator > Build Now
+```
+
+**注意事項**:
+- 通常の`job-creator`では、`ai_workflow_`プレフィックスのジョブは自動的に除外されます
+- AI Workflowジョブの更新時は`ai-workflow-job-creator`のみを実行すればよい
+- フォルダ構造（`AI_Workflow`とそのサブフォルダ）は両シードジョブで共有される
 
 #### 2.1.2 Job DSL開発
 
