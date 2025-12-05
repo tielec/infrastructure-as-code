@@ -252,13 +252,13 @@ graph TD
 
 ### Phase 6: テスト実行 (見積もり: 1〜2h)
 
-- [ ] Task 6-1: 新規シードジョブの動作確認 (0.5〜1h)
+- [x] Task 6-1: 新規シードジョブの動作確認 (0.5〜1h)
   - Admin_Jobs/ai-workflow-job-creator を実行
   - AI Workflowジョブが生成されることを確認
   - フォルダ構造（AI_Workflow/develop, stable-1〜9）の確認
   - 生成されたジョブのパラメータ確認
 
-- [ ] Task 6-2: 既存job-creatorの影響確認 (0.5〜1h)
+- [x] Task 6-2: 既存job-creatorの影響確認 (0.5〜1h)
   - Admin_Jobs/job-creator を実行
   - AI Workflowジョブが生成されないことを確認
   - 他のジョブカテゴリが正常に生成されることを確認
@@ -392,11 +392,11 @@ Phase 1 → Phase 2 → Phase 3 → Phase 4 → Phase 6 → Phase 7 → Phase 8
 
 ### Phase 6: テスト実行
 
-- [ ] 新規シードジョブがAI Workflowジョブを正しく生成する
-- [ ] AI Workflowフォルダ構造（10フォルダ）が正しく作成される
-- [ ] 既存job-creatorがAI Workflowジョブを生成しない
-- [ ] 既存ジョブカテゴリへの影響がない
-- [ ] エラーログが出力されない
+- [x] 新規シードジョブがAI Workflowジョブを正しく生成する
+- [x] AI Workflowフォルダ構造（10フォルダ）が正しく作成される
+- [x] 既存job-creatorがAI Workflowジョブを生成しない
+- [x] 既存ジョブカテゴリへの影響がない
+- [x] エラーログが出力されない
 
 ### Phase 7: ドキュメント
 
