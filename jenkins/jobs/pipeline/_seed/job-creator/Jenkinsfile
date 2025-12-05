@@ -123,9 +123,17 @@ pipeline {
                     
                     // folders.groovyを最初に実行（フォルダ構造を作成）
                     dslFiles.add(env.FOLDERS_DSL_PATH)
-                    
-                    // 各ジョブのDSLファイルを追加
-                    jobConfig['jenkins-jobs'].each { jobKey, jobDef ->
+
+                    // AI Workflow関連ジョブを除外
+                    def excludedJobPrefixes = ['ai_workflow_']
+                    def jobsToProcess = jobConfig['jenkins-jobs'].findAll { jobKey, jobDef ->
+                        !excludedJobPrefixes.any { prefix -> jobKey.startsWith(prefix) }
+                    }
+
+                    echo "AI Workflow jobs excluded: ${jobConfig['jenkins-jobs'].size() - jobsToProcess.size()}"
+
+                    // 各ジョブのDSLファイルを追加（AI Workflow関連を除外）
+                    jobsToProcess.each { jobKey, jobDef ->
                         if (jobDef.dslfile) {
                             dslFiles.add(jobDef.dslfile)
                         }
@@ -133,7 +141,7 @@ pipeline {
                     
                     echo "=== Job DSL Execution Plan ==="
                     echo "Total DSL files: ${dslFiles.size()}"
-                    echo "Jobs to create: ${jobConfig['jenkins-jobs'].size()}"
+                    echo "Jobs to create: ${jobsToProcess.size()}"
                     echo "Folders to create: ${folderConfig.folders?.size() ?: 0}"
                     
                     // 追加のパラメータを準備
