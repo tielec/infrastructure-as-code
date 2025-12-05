@@ -18,17 +18,18 @@
     "test_code_strategy": null
   },
   "cost_tracking": {
-    "total_input_tokens": 0,
-    "total_output_tokens": 0,
-    "total_cost_usd": 0
+    "total_input_tokens": 15667,
+    "total_output_tokens": 8482,
+    "total_cost_usd": 0.675031
   },
   "phases": {
     "planning": {
-      "status": "pending",
+      "status": "in_progress",
       "retry_count": 0,
-      "started_at": null,
+      "started_at": "2025-12-05T01:20:46.731Z",
       "completed_at": null,
-      "review_result": null
+      "review_result": null,
+      "current_step": "execute"
     },
     "requirements": {
       "status": "pending",
@@ -100,6 +101,13 @@
     }
   },
   "created_at": "2025-12-05T01:20:40.618Z",
-  "updated_at": "2025-12-05T01:20:40.625Z",
-  "branch_name": "ai-workflow/issue-477"
+  "updated_at": "2025-12-05T01:23:22.719Z",
+  "branch_name": "ai-workflow/issue-477",
+  "base_commit": "67d42f7ad6015e0c94abd626ec31049a0cb9d59b",
+  "pr_number": 478,
+  "pr_url": "https://github.com/tielec/infrastructure-as-code/pull/478",
+  "github_integration": {
+    "progress_comment_id": 3614935290,
+    "progress_comment_url": "https://github.com/tielec/infrastructure-as-code/issues/477#issuecomment-3614935290"
+  }
 }
