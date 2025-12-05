@@ -266,12 +266,12 @@ graph TD
 
 ### Phase 7: ドキュメント (見積もり: 1h)
 
-- [ ] Task 7-1: jenkins/CONTRIBUTION.md更新 (0.5h)
+- [x] Task 7-1: jenkins/CONTRIBUTION.md更新 (0.5h)
   - シードジョブパターンセクションに新シードジョブを追加
   - AI Workflow専用シードジョブの使用方法
   - 既存job-creatorとの使い分け
 
-- [ ] Task 7-2: jenkins/README.md更新 (0.5h)
+- [x] Task 7-2: jenkins/README.md更新 (0.5h)
   - AI Workflowセクションにシードジョブ情報を追加
   - シードジョブ実行手順の記載
 
