@@ -98,8 +98,9 @@ aws ssm get-parameter --name /jenkins-infra/dev/jenkins/admin-password \
   --with-decryption --query 'Parameter.Value' --output text
 
 # 3. シードジョブの実行
-# Jenkins UIから: Admin_Jobs > job-creator を実行
-# AI Workflowジョブは自動的に作成されます
+# Jenkins UIから以下の2つのシードジョブを実行：
+# - Admin_Jobs > job-creator（一般ジョブを生成）
+# - Admin_Jobs > ai-workflow-job-creator（AI Workflowジョブを生成）
 ```
 
 ### 3. 必須プラグイン

@@ -4,8 +4,8 @@ pipeline {
     }
 
     environment {
-        JOB_CONFIG_PATH = 'jenkins/jobs/pipeline/_seed/job-creator/job-config.yaml'
-        FOLDER_CONFIG_PATH = 'jenkins/jobs/pipeline/_seed/job-creator/folder-config.yaml'
+        JOB_CONFIG_PATH = 'jenkins/jobs/pipeline/_seed/ai-workflow-job-creator/job-config.yaml'
+        FOLDER_CONFIG_PATH = 'jenkins/jobs/pipeline/_seed/ai-workflow-job-creator/folder-config.yaml'
         FOLDERS_DSL_PATH = 'jenkins/jobs/dsl/folders.groovy'
     }
 
