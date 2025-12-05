@@ -222,24 +222,24 @@ graph TD
 
 ### Phase 4: 実装 (見積もり: 3〜4h)
 
-- [ ] Task 4-1: 新規シードジョブのJob DSL作成 (0.5h)
+- [x] Task 4-1: 新規シードジョブのJob DSL作成 (0.5h)
   - `jenkins/jobs/dsl/admin/admin_ai_workflow_job_creator.groovy`
   - pipelineJobブロック
   - パラメータ定義
   - リポジトリ・Jenkinsfile指定
 
-- [ ] Task 4-2: 新規シードジョブのJenkinsfile作成 (1.5〜2h)
+- [x] Task 4-2: 新規シードジョブのJenkinsfile作成 (1.5〜2h)
   - `jenkins/jobs/pipeline/_seed/ai-workflow-job-creator/Jenkinsfile`
   - 設定ファイル読み込み（job-config.yaml、folder-config.yaml）
   - folders.groovyの実行（フォルダ生成）
   - AI Workflow専用DSLファイルの実行（5ファイル）
   - エラーハンドリングとログ出力
 
-- [ ] Task 4-3: job-config.yamlへの新シードジョブ定義追加 (0.5h)
+- [x] Task 4-3: job-config.yamlへの新シードジョブ定義追加 (0.5h)
   - `ai_workflow_job_creator`エントリの追加
   - displayName、dslfile、jenkinsfileの設定
 
-- [ ] Task 4-4: 既存job-creatorからのAI Workflow除外 (0.5〜1h)
+- [x] Task 4-4: 既存job-creatorからのAI Workflow除外 (0.5〜1h)
   - Jenkinsfileに除外ロジックを追加
   - AI Workflow関連DSLファイルをスキップ
   - ログ出力の追加（"Skipping AI Workflow DSL files..."）
@@ -384,11 +384,11 @@ Phase 1 → Phase 2 → Phase 3 → Phase 4 → Phase 6 → Phase 7 → Phase 8
 
 ### Phase 4: 実装
 
-- [ ] コーディング規約（jenkins/CONTRIBUTION.md）に準拠している
-- [ ] 新規Job DSLがpipelineJobパターンを使用している
-- [ ] Jenkinsfileにエラーハンドリングが含まれている
-- [ ] 既存job-creatorからの除外ロジックが明確である
-- [ ] job-config.yamlに新シードジョブが正しく定義されている
+- [x] コーディング規約（jenkins/CONTRIBUTION.md）に準拠している
+- [x] 新規Job DSLがpipelineJobパターンを使用している
+- [x] Jenkinsfileにエラーハンドリングが含まれている
+- [x] 既存job-creatorからの除外ロジックが明確である
+- [x] job-config.yamlに新シードジョブが正しく定義されている
 
 ### Phase 6: テスト実行
 
