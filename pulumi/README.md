@@ -124,9 +124,15 @@ pulumi/
 | `jenkins-loadbalancer` | ロードバランサー | security | ALB、ターゲットグループ |
 | `jenkins-controller` | Jenkinsコントローラー | nat, storage, loadbalancer | EC2、Auto Scaling |
 | `jenkins-agent-ami` | エージェントAMI | security | カスタムAMI（Dockerイメージ事前プル機能付き） |
-| `jenkins-agent` | Jenkinsエージェント | controller, agent-ami | EC2 Fleet、Auto Scaling |
+| `jenkins-agent` | Jenkinsエージェント | controller, agent-ami | EC2 Fleet、ECS Fargate（エージェント） |
 | `jenkins-config` | Jenkins設定 | controller | SSMドキュメント、設定 |
 | `jenkins-application` | Jenkinsアプリ | config, agent | ジョブ、プラグイン設定 |
+
+### ECS Fargateエージェント (jenkins-agent)
+
+- ECS Cluster / Task Definition / ECR Repository / CloudWatch Logs を追加し、SSM `/jenkins-infra/{env}/agent/ecs-*` にARN/URLを出力
+- Jenkinsからは `ecs-agent` / `fargate-agent` ラベルで利用（JCasCで自動設定）
+- コンテナイメージは `docker/jenkins-agent-ecs` のDockerfileからビルドし、上記ECRへプッシュ
 
 ### Jenkins SSMバックアップスタック
 

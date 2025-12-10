@@ -60,6 +60,7 @@
   - プラグインの変更
   - セキュリティ設定の変更
   - トラブルシューティング情報の追加
+- **ECS Fargateエージェント**: Pulumi `jenkins-agent`スタックがECS Cluster/Task Definition/ECR/Log GroupとSSM `/agent/ecs-*` を管理。`amazon-ecs`プラグインやJCasC `ecs-fargate` 設定を変える場合はPulumi側と`application-configure-with-casc.sh`も同期すること
 
 ### ⚠️ Jenkinsパラメータ定義ルール
 
