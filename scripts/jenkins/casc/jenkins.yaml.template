@@ -64,14 +64,13 @@ jenkins:
         scaleExecutorsByWeight: false
     - ecs:
         name: "ecs-fargate"
+        credentialsId: ""
         cluster: "${ECS_CLUSTER_ARN}"
         regionName: "${AWS_REGION}"
         jenkinsUrl: "${JENKINS_URL}"
         templates:
-          - templateName: "fargate-agent"
-            label: "ecs-agent fargate-agent"
+          - label: "ecs-agent fargate-agent"
             taskDefinitionOverride: "${ECS_TASK_DEFINITION_ARN}"
-            image: ""
             remoteFSRoot: "/home/jenkins"
             launchType: "FARGATE"
             platformVersion: "LATEST"
@@ -80,7 +79,6 @@ jenkins:
             securityGroups: "${JENKINS_AGENT_SG_ID}"
             subnets: "${PRIVATE_SUBNET_A_ID},${PRIVATE_SUBNET_B_ID}"
             executionRole: "${ECS_EXECUTION_ROLE_ARN}"
-            taskrole: "${ECS_TASK_ROLE_ARN}"
             cpu: 512
             memory: 0
             memoryReservation: 1024
@@ -90,7 +88,6 @@ jenkins:
             enableExecuteCommand: false
             privileged: false
             sharedMemorySize: 0
-            inheritFrom: ""
             containerUser: "jenkins"
   nodes:
     - permanent:
