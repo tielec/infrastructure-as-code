@@ -1,5 +1,7 @@
 #!/bin/bash
 # Jenkins Agent JNLP Entrypoint for ECS Fargate
+# amazon-ecsプラグインからコマンドライン引数を受け取る形式
+# プラグインが渡す引数: -url <jenkins-url> <secret> <agent-name>
 
 set -e
 
@@ -9,41 +11,14 @@ log() {
 
 log "Starting Jenkins Agent..."
 
-if [ -z "${JENKINS_URL}" ]; then
-    log "ERROR: JENKINS_URL is not set"
-    exit 1
-fi
-
-if [ -z "${JENKINS_AGENT_NAME}" ]; then
-    log "ERROR: JENKINS_AGENT_NAME is not set"
-    exit 1
-fi
-
-if [ -z "${JENKINS_SECRET}" ]; then
-    log "ERROR: JENKINS_SECRET is not set"
-    exit 1
-fi
-
-JENKINS_URL="${JENKINS_URL%/}"
-
-log "Jenkins URL: ${JENKINS_URL}"
-log "Agent Name: ${JENKINS_AGENT_NAME}"
-
-TUNNEL_ARG=""
-if [ -n "${JENKINS_TUNNEL}" ]; then
-    TUNNEL_ARG="-tunnel ${JENKINS_TUNNEL}"
-    log "Tunnel: ${JENKINS_TUNNEL}"
-fi
-
-WORKDIR="${JENKINS_AGENT_HOME:-/home/jenkins}/agent"
+JENKINS_AGENT_HOME="${JENKINS_AGENT_HOME:-/home/jenkins}"
+WORKDIR="${JENKINS_AGENT_HOME}/agent"
 mkdir -p "${WORKDIR}"
 
-log "Starting JNLP agent..."
+log "Received arguments: $*"
+log "Working directory: ${WORKDIR}"
 
-exec java \
-    -jar "${JENKINS_AGENT_HOME:-/home/jenkins}/agent.jar" \
-    -url "${JENKINS_URL}" \
-    -secret "${JENKINS_SECRET}" \
-    -name "${JENKINS_AGENT_NAME}" \
+# amazon-ecsプラグインが渡したコマンドライン引数をそのまま使用
+exec java -jar "${JENKINS_AGENT_HOME}/agent.jar" \
     -workDir "${WORKDIR}" \
-    ${TUNNEL_ARG}
+    "$@"
