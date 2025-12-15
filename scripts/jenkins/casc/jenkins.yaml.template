@@ -69,7 +69,7 @@ jenkins:
         regionName: "${AWS_REGION}"
         jenkinsUrl: "${JENKINS_URL}"
         templates:
-          - label: "ecs-agent fargate-agent"
+          - label: "ecs-agent fargate-agent ecs-fargate"
             taskDefinitionOverride: "${ECS_TASK_DEFINITION_ARN}"
             remoteFSRoot: "/home/jenkins"
             launchType: "FARGATE"
