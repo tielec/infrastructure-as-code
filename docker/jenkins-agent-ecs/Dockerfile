@@ -7,7 +7,7 @@
 FROM amazonlinux:2023 AS builder
 
 RUN dnf update -y && \
-    dnf install -y \
+    dnf install -y --allowerasing \
     curl \
     tar \
     gzip \
@@ -38,7 +38,7 @@ ENV JAVA_HOME=/usr/lib/jvm/java-21-amazon-corretto
 
 # Runtime dependencies
 RUN dnf update -y && \
-    dnf install -y \
+    dnf install -y --allowerasing \
     git \
     jq \
     docker \

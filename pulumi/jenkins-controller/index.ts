@@ -343,7 +343,9 @@ const ecsFargatePolicy = new aws.iam.Policy(`jenkins-ecs-fargate-policy`, {
                     "ecs:RegisterTaskDefinition",
                     "ecs:DeregisterTaskDefinition",
                     "ecs:DescribeContainerInstances",
-                    "ecs:ListContainerInstances"
+                    "ecs:ListContainerInstances",
+                    "ecs:TagResource",
+                    "ecs:UntagResource"
                 ],
                 Resource: "*"
             },
