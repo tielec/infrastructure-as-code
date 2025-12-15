@@ -54,6 +54,7 @@ def plugins = [
     "ec2",
     "ec2-fleet",
     "docker-plugin",
+    "amazon-ecs",
     
     // パイプラインとワークフロープラグイン
     "workflow-aggregator",

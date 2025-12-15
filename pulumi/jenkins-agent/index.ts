@@ -488,12 +488,255 @@ const spotFleetNotificationTopic = new aws.sns.Topic(`agent-fleet-notifications`
     },
 });
 
+// ==============================
+// ECS Fargateリソース（新規追加）
+// ==============================
+
+// ECS Cluster（コンテナインサイト有効）
+const ecsCluster = new aws.ecs.Cluster(`agent-ecs-cluster`, {
+    name: pulumi.interpolate`${projectName}-agent-ecs-${environment}`,
+    settings: [{
+        name: "containerInsights",
+        value: "enabled",
+    }],
+    tags: {
+        Name: pulumi.interpolate`${projectName}-agent-ecs-cluster-${environment}`,
+        Environment: environment,
+        ManagedBy: "pulumi",
+        Component: "agent",
+    },
+});
+
+// ECRリポジトリ（スキャン有効 + ライフサイクルポリシー）
+const ecrRepository = new aws.ecr.Repository(`agent-ecs-ecr`, {
+    name: pulumi.interpolate`${projectName}-agent-ecs-${environment}`,
+    imageScanningConfiguration: {
+        scanOnPush: true,
+    },
+    imageTagMutability: "MUTABLE",
+    forceDelete: environment === "dev",
+    tags: {
+        Name: pulumi.interpolate`${projectName}-agent-ecr-${environment}`,
+        Environment: environment,
+        ManagedBy: "pulumi",
+        Component: "agent",
+    },
+});
+
+const ecrLifecyclePolicy = new aws.ecr.LifecyclePolicy(`agent-ecs-ecr-lifecycle`, {
+    repository: ecrRepository.name,
+    policy: JSON.stringify({
+        rules: [{
+            rulePriority: 1,
+            description: "Keep last 10 images",
+            selection: {
+                tagStatus: "any",
+                countType: "imageCountMoreThan",
+                countNumber: 10,
+            },
+            action: {
+                type: "expire",
+            },
+        }],
+    }),
+});
+
+// CloudWatch Logs (30日保持)
+const ecsLogGroup = new aws.cloudwatch.LogGroup(`agent-ecs-logs`, {
+    name: `/jenkins-infra/${environment}/ecs-agent`,
+    retentionInDays: 30,
+    tags: {
+        Environment: environment,
+        ManagedBy: "pulumi",
+        Component: "agent",
+    },
+});
+
+// ECS Task Execution Role
+const ecsExecutionRole = new aws.iam.Role(`agent-ecs-execution-role`, {
+    name: pulumi.interpolate`${projectName}-ecs-execution-role-${environment}`,
+    assumeRolePolicy: JSON.stringify({
+        Version: "2012-10-17",
+        Statement: [{
+            Effect: "Allow",
+            Principal: {
+                Service: "ecs-tasks.amazonaws.com",
+            },
+            Action: "sts:AssumeRole",
+        }],
+    }),
+    managedPolicyArns: [
+        "arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy",
+    ],
+    tags: {
+        Name: pulumi.interpolate`${projectName}-ecs-execution-role-${environment}`,
+        Environment: environment,
+        ManagedBy: "pulumi",
+        Component: "agent",
+    },
+});
+
+// ECS Task Role（ビルド用途で広めの権限を許可）
+const ecsTaskRole = new aws.iam.Role(`agent-ecs-task-role`, {
+    name: pulumi.interpolate`${projectName}-ecs-task-role-${environment}`,
+    assumeRolePolicy: JSON.stringify({
+        Version: "2012-10-17",
+        Statement: [{
+            Effect: "Allow",
+            Principal: {
+                Service: "ecs-tasks.amazonaws.com",
+            },
+            Action: "sts:AssumeRole",
+        }],
+    }),
+    managedPolicyArns: [
+        "arn:aws:iam::aws:policy/AdministratorAccess",
+    ],
+    tags: {
+        Name: pulumi.interpolate`${projectName}-ecs-task-role-${environment}`,
+        Environment: environment,
+        ManagedBy: "pulumi",
+        Component: "agent",
+    },
+});
+
+// Jenkins Agent用Task Definition
+const taskDefinition = new aws.ecs.TaskDefinition(`agent-ecs-task-def`, {
+    family: pulumi.interpolate`${projectName}-agent-ecs-${environment}`,
+    networkMode: "awsvpc",
+    requiresCompatibilities: ["FARGATE"],
+    cpu: "512",
+    memory: "1024",
+    executionRoleArn: ecsExecutionRole.arn,
+    taskRoleArn: ecsTaskRole.arn,
+    containerDefinitions: pulumi.all([ecrRepository.repositoryUrl, ecsLogGroup.name]).apply(
+        ([repoUrl, logGroupName]) => JSON.stringify([{
+            name: "jenkins-agent",
+            image: `${repoUrl}:latest`,
+            essential: true,
+            environment: [
+                { name: "JENKINS_URL", value: "" },
+                { name: "JENKINS_AGENT_NAME", value: "" },
+            ],
+            logConfiguration: {
+                logDriver: "awslogs",
+                options: {
+                    "awslogs-group": logGroupName,
+                    "awslogs-region": aws.config.region || "ap-northeast-1",
+                    "awslogs-stream-prefix": "jenkins-agent",
+                },
+            },
+            linuxParameters: {
+                initProcessEnabled: true,
+            },
+        }])
+    ),
+    tags: {
+        Name: pulumi.interpolate`${projectName}-agent-ecs-task-def-${environment}`,
+        Environment: environment,
+        ManagedBy: "pulumi",
+        Component: "agent",
+    },
+});
+
 // SSMパラメータにスポットフリートIDを保存
 const spotFleetIdParameter = new aws.ssm.Parameter(`agent-spotfleet-id`, {
     name: `${ssmPrefix}/agent/spotFleetRequestId`,
     type: "String",
     value: spotFleetRequest.id,
     description: "Jenkins agent spot fleet request ID",
+    tags: {
+        Environment: environment,
+        ManagedBy: "pulumi",
+        Component: "agent",
+    },
+    overwrite: true,
+});
+
+// ECSリソースのSSMエクスポート
+const ecsClusterArnParam = new aws.ssm.Parameter(`agent-ecs-cluster-arn`, {
+    name: `${ssmPrefix}/agent/ecs-cluster-arn`,
+    type: "String",
+    value: ecsCluster.arn,
+    description: "ECS Cluster ARN for Jenkins agents",
+    tags: {
+        Environment: environment,
+        ManagedBy: "pulumi",
+        Component: "agent",
+    },
+    overwrite: true,
+});
+
+const ecsClusterNameParam = new aws.ssm.Parameter(`agent-ecs-cluster-name`, {
+    name: `${ssmPrefix}/agent/ecs-cluster-name`,
+    type: "String",
+    value: ecsCluster.name,
+    description: "ECS Cluster Name for Jenkins agents",
+    tags: {
+        Environment: environment,
+        ManagedBy: "pulumi",
+        Component: "agent",
+    },
+    overwrite: true,
+});
+
+const taskDefinitionArnParam = new aws.ssm.Parameter(`agent-ecs-task-def-arn`, {
+    name: `${ssmPrefix}/agent/ecs-task-definition-arn`,
+    type: "String",
+    value: taskDefinition.arn,
+    description: "ECS Task Definition ARN for Jenkins agents",
+    tags: {
+        Environment: environment,
+        ManagedBy: "pulumi",
+        Component: "agent",
+    },
+    overwrite: true,
+});
+
+const ecsExecutionRoleArnParam = new aws.ssm.Parameter(`agent-ecs-execution-role-arn`, {
+    name: `${ssmPrefix}/agent/ecs-execution-role-arn`,
+    type: "String",
+    value: ecsExecutionRole.arn,
+    description: "ECS Execution Role ARN",
+    tags: {
+        Environment: environment,
+        ManagedBy: "pulumi",
+        Component: "agent",
+    },
+    overwrite: true,
+});
+
+const ecsTaskRoleArnParam = new aws.ssm.Parameter(`agent-ecs-task-role-arn`, {
+    name: `${ssmPrefix}/agent/ecs-task-role-arn`,
+    type: "String",
+    value: ecsTaskRole.arn,
+    description: "ECS Task Role ARN",
+    tags: {
+        Environment: environment,
+        ManagedBy: "pulumi",
+        Component: "agent",
+    },
+    overwrite: true,
+});
+
+const ecsLogGroupNameParam = new aws.ssm.Parameter(`agent-ecs-log-group-name`, {
+    name: `${ssmPrefix}/agent/ecs-log-group-name`,
+    type: "String",
+    value: ecsLogGroup.name,
+    description: "CloudWatch Log Group Name for ECS agents",
+    tags: {
+        Environment: environment,
+        ManagedBy: "pulumi",
+        Component: "agent",
+    },
+    overwrite: true,
+});
+
+const ecrRepositoryUrlParam = new aws.ssm.Parameter(`agent-ecr-repository-url`, {
+    name: `${ssmPrefix}/agent/ecr-repository-url`,
+    type: "String",
+    value: ecrRepository.repositoryUrl,
+    description: "ECR Repository URL for Jenkins agent images",
     tags: {
         Environment: environment,
         ManagedBy: "pulumi",
@@ -607,3 +850,10 @@ export const minCapacity = minTargetCapacity;
 export const maxCapacity = maxTargetCapacity;
 export const agentKeyPairName = agentKeyPair.keyName;
 export const privateKeyParameterName = agentPrivateKeyParameter.name;
+export const ecsClusterArn = ecsCluster.arn;
+export const ecsClusterName = ecsCluster.name;
+export const ecsTaskDefinitionArn = taskDefinition.arn;
+export const ecsExecutionRoleArn = ecsExecutionRole.arn;
+export const ecsTaskRoleArn = ecsTaskRole.arn;
+export const ecsLogGroupName = ecsLogGroup.name;
+export const ecrRepositoryUrl = ecrRepository.repositoryUrl;

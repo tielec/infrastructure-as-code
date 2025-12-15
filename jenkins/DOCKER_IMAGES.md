@@ -14,6 +14,7 @@
   - [Pulumi系イメージ](#pulumi系イメージ)
   - [Ubuntu系イメージ](#ubuntu系イメージ)
   - [カスタムイメージ](#カスタムイメージ)
+- [ECS Fargateエージェントイメージ](#ecs-fargateエージェントイメージ)
 - [メンテナンス推奨事項](#メンテナンス推奨事項)
 - [バージョン管理方針](#バージョン管理方針)
 
@@ -32,14 +33,15 @@
 
 | イメージファミリー | 使用箇所数 | 割合 |
 |-------------------|-----------|------|
-| Python系 | 3 | 25% |
-| Node.js系 | 2 | 16.7% |
-| Rust系 | 2 | 16.7% |
-| Python + Node.js複合 | 3 | 25% |
-| AWS CLI | 2 | 16.7% |
-| Pulumi | 1 | 8.3% |
-| Ubuntu | 1 | 8.3% |
-| カスタム (Dockerfile) | 1 | 8.3% |
+| Python系 | 3 | 23.1% |
+| Node.js系 | 2 | 15.4% |
+| Rust系 | 2 | 15.4% |
+| Python + Node.js複合 | 3 | 23.1% |
+| AWS CLI | 2 | 15.4% |
+| Pulumi | 1 | 7.7% |
+| Ubuntu | 1 | 7.7% |
+| カスタム (Dockerfile) | 1 | 7.7% |
+| ECS Fargateエージェント | 1 | 7.7% |
 
 ### 使用方法別の分布
 
@@ -48,6 +50,7 @@
 | `agent { docker }` | 9箇所 |
 | `withDockerContainer` | 2箇所 |
 | `agent { dockerfile }` | 1箇所 |
+| ECS Fargateタスク (`agent { label }`) | 1箇所 |
 
 ---
 
@@ -401,6 +404,107 @@ dockerfile {
 
 ---
 
+## ECS Fargateエージェントイメージ
+
+### `jenkins-agent-ecs` (カスタムビルド)
+
+**概要**: ECS Fargate上で動作するJenkinsエージェント用カスタムイメージ
+
+| 項目 | 詳細 |
+|------|------|
+| **ビルド方法** | Dockerfile (マルチステージビルド) |
+| **Dockerfileパス** | `docker/jenkins-agent-ecs/Dockerfile` |
+| **ベースイメージ** | Amazon Corretto 21 (amazoncorretto:21-al2023) |
+| **ビルダーステージ** | Amazon Linux 2023 |
+| **イメージサイズ** | 約500MB (上限: 1GB) |
+| **格納先** | ECR (`/jenkins-infra/{env}/agent/ecs-repository-url`) |
+| **使用方法** | ECS Fargateタスク (amazon-ecsプラグイン経由) |
+
+**含まれるツール**:
+
+| ツール | バージョン | 用途 |
+|-------|-----------|------|
+| Java | 21 (Amazon Corretto) | Jenkins Remoting / ビルドツール |
+| AWS CLI | v2 | AWSリソース操作 |
+| Node.js | 20 | JavaScript/TypeScriptビルド |
+| Python | 3.11 | スクリプト実行 / Ansible |
+| Git | 最新 | バージョン管理 |
+| jq | 最新 | JSON処理 |
+| Pulumi | v3.115.0 | Infrastructure as Code |
+| Ansible | 最新 (pip) | 構成管理 |
+| Docker CLI | 最新 | DinDシナリオ用 |
+
+**エントリーポイント**:
+- `docker/jenkins-agent-ecs/entrypoint.sh`
+- Jenkins Remoting (JNLP) 接続を確立
+- 環境変数 `JENKINS_URL`, `JENKINS_SECRET`, `JENKINS_AGENT_NAME` を使用
+
+**使用箇所**:
+
+1. **ECS Fargateエージェント**
+   - **用途**: オンデマンドのCI/CDジョブ実行
+   - **ラベル**: `ecs-agent`, `fargate-agent`
+   - **設定方法**: JCasC (`jenkins.yaml.template` の `ecs-fargate` クラウド設定)
+   - **プラグイン**: amazon-ecs
+   - **ネットワーク**: プライベートサブネット (assignPublicIp=false)
+   - **ログ**: CloudWatch Logs (`/jenkins-infra/{env}/agent/ecs-log-group`)
+
+**Jenkinsジョブでの利用例**:
+```groovy
+pipeline {
+    agent {
+        label 'ecs-agent'  // または 'fargate-agent'
+    }
+    stages {
+        stage('Build') {
+            steps {
+                sh 'aws --version'
+                sh 'pulumi version'
+                sh 'node --version'
+            }
+        }
+    }
+}
+```
+
+**関連リソース (Pulumi `jenkins-agent` スタック)**:
+- ECS Cluster: `/jenkins-infra/{env}/agent/ecs-cluster-arn`
+- ECR Repository: `/jenkins-infra/{env}/agent/ecs-repository-url`
+- Task Definition: `/jenkins-infra/{env}/agent/ecs-task-definition-arn`
+- Task Role: `/jenkins-infra/{env}/agent/ecs-task-role-arn`
+- Execution Role: `/jenkins-infra/{env}/agent/ecs-execution-role-arn`
+- Log Group: `/jenkins-infra/{env}/agent/ecs-log-group`
+
+**ビルド・プッシュ手順**:
+```bash
+# ECR リポジトリURLを取得
+ECR_URL=$(aws ssm get-parameter --name "/jenkins-infra/${ENVIRONMENT}/agent/ecs-repository-url" --query 'Parameter.Value' --output text)
+
+# ECR ログイン
+aws ecr get-login-password --region ap-northeast-1 | docker login --username AWS --password-stdin ${ECR_URL}
+
+# イメージビルド
+docker build -t jenkins-agent-ecs:latest docker/jenkins-agent-ecs/
+
+# タグ付け・プッシュ
+docker tag jenkins-agent-ecs:latest ${ECR_URL}:latest
+docker push ${ECR_URL}:latest
+```
+
+**特徴**:
+- マルチステージビルドによりランタイムイメージを最小化
+- Amazon Corretto 21でLTS Javaランタイムを提供
+- AWS CLI v2とPulumiをビルダーステージでコンパイル済みインストール
+- 起動時にツール存在チェック (fail fast)
+- 非rootユーザー (jenkins:1000) で実行
+
+**メンテナンス注意点**:
+- Jenkins Remoting バージョン (`JENKINS_REMOTING_VERSION`) はJenkinsサーバーと互換性のあるバージョンに更新
+- ECRイメージは `latest` タグで参照されるため、プッシュ後は即座に新規タスクに反映
+- イメージサイズは1GB以下を維持（ECS Fargateタスク起動時間に影響）
+
+---
+
 ## メンテナンス推奨事項
 
 ### 定期的な更新タスク
@@ -416,6 +520,7 @@ dockerfile {
 | `pulumi/pulumi:latest` | 必要時のみ | Pulumi破壊的変更の確認 |
 | `ubuntu:22.04` | 6ヶ月ごと | LTSサポート状況確認 |
 | `nikolaik/python-nodejs:*` | 3ヶ月ごと | 上流イメージ更新確認 |
+| `jenkins-agent-ecs` (ECR) | 3ヶ月ごと | Jenkins Remotingバージョン、ベースイメージ更新 |
 
 #### 2. セキュリティスキャン
 
@@ -428,6 +533,10 @@ trivy image amazon/aws-cli:latest
 trivy image pulumi/pulumi:latest
 trivy image ubuntu:22.04
 trivy image nikolaik/python-nodejs:python3.11-nodejs20
+
+# ECS Fargateエージェントイメージ（ECRからプル）
+ECR_URL=$(aws ssm get-parameter --name "/jenkins-infra/${ENVIRONMENT}/agent/ecs-repository-url" --query 'Parameter.Value' --output text)
+trivy image ${ECR_URL}:latest
 ```
 
 #### 3. イメージサイズ最適化

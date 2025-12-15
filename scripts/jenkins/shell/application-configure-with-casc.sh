@@ -101,6 +101,43 @@ AWS_DEV_ACCOUNT_IDS=$(retrieve_ssm_parameter \
     "Development Account IDs" \
     "false")
 
+# ECS Fargate関連のパラメータ取得
+log "Retrieving ECS Fargate configuration from SSM Parameter Store..."
+ECS_CLUSTER_ARN=$(retrieve_ssm_parameter \
+    "/jenkins-infra/${ENVIRONMENT}/agent/ecs-cluster-arn" \
+    "ECS Cluster ARN" \
+    "false")
+
+ECS_TASK_DEFINITION_ARN=$(retrieve_ssm_parameter \
+    "/jenkins-infra/${ENVIRONMENT}/agent/ecs-task-definition-arn" \
+    "ECS Task Definition ARN" \
+    "false")
+
+ECS_EXECUTION_ROLE_ARN=$(retrieve_ssm_parameter \
+    "/jenkins-infra/${ENVIRONMENT}/agent/ecs-execution-role-arn" \
+    "ECS Execution Role ARN" \
+    "false")
+
+ECS_TASK_ROLE_ARN=$(retrieve_ssm_parameter \
+    "/jenkins-infra/${ENVIRONMENT}/agent/ecs-task-role-arn" \
+    "ECS Task Role ARN" \
+    "false")
+
+JENKINS_AGENT_SG_ID=$(retrieve_ssm_parameter \
+    "/jenkins-infra/${ENVIRONMENT}/security/jenkins-agent-sg-id" \
+    "Jenkins Agent Security Group ID" \
+    "false")
+
+PRIVATE_SUBNET_A_ID=$(retrieve_ssm_parameter \
+    "/jenkins-infra/${ENVIRONMENT}/network/private-subnet-a-id" \
+    "Private Subnet A ID" \
+    "false")
+
+PRIVATE_SUBNET_B_ID=$(retrieve_ssm_parameter \
+    "/jenkins-infra/${ENVIRONMENT}/network/private-subnet-b-id" \
+    "Private Subnet B ID" \
+    "false")
+
 # 環境変数の設定（まだexportしない）
 SHARED_LIBRARY_REPO="${SHARED_LIBRARY_REPO:-https://github.com/tielec/infrastructure-as-code}"
 SHARED_LIBRARY_BRANCH="${SHARED_LIBRARY_BRANCH:-main}"
@@ -147,6 +184,13 @@ export EC2_IDLE_MINUTES
 export EC2_MIN_SIZE
 export EC2_MAX_SIZE
 export EC2_NUM_EXECUTORS
+export ECS_CLUSTER_ARN
+export ECS_TASK_DEFINITION_ARN
+export ECS_EXECUTION_ROLE_ARN
+export ECS_TASK_ROLE_ARN
+export JENKINS_AGENT_SG_ID
+export PRIVATE_SUBNET_A_ID
+export PRIVATE_SUBNET_B_ID
 
 # JCasC設定ファイルの生成
 log "Generating JCasC configuration file..."
@@ -168,6 +212,13 @@ log_debug_info() {
         log "  AWS_DEV_ACCOUNT_IDS: ${AWS_DEV_ACCOUNT_IDS:-not set}"
         log "  SHARED_LIBRARY_REPO: $SHARED_LIBRARY_REPO"
         log "  SHARED_LIBRARY_PATH: $SHARED_LIBRARY_PATH"
+        log "  ECS_CLUSTER_ARN: ${ECS_CLUSTER_ARN:-not set}"
+        log "  ECS_TASK_DEFINITION_ARN: ${ECS_TASK_DEFINITION_ARN:-not set}"
+        log "  ECS_EXECUTION_ROLE_ARN: ${ECS_EXECUTION_ROLE_ARN:-not set}"
+        log "  ECS_TASK_ROLE_ARN: ${ECS_TASK_ROLE_ARN:-not set}"
+        log "  JENKINS_AGENT_SG_ID: ${JENKINS_AGENT_SG_ID:-not set}"
+        log "  PRIVATE_SUBNET_A_ID: ${PRIVATE_SUBNET_A_ID:-not set}"
+        log "  PRIVATE_SUBNET_B_ID: ${PRIVATE_SUBNET_B_ID:-not set}"
     fi
 }
 
@@ -176,7 +227,7 @@ log_debug_info
 # テンプレートから設定ファイルを生成
 # shellcheckを無効化して変数リストを明示的に指定
 # shellcheck disable=SC2016
-envsubst '$JENKINS_URL $EC2_FLEET_ID $WORKTERMINAL_HOST $AWS_REGION $AWS_PROD_ACCOUNT_IDS $AWS_DEV_ACCOUNT_IDS $SHARED_LIBRARY_REPO $SHARED_LIBRARY_BRANCH $SHARED_LIBRARY_PATH $EC2_IDLE_MINUTES $EC2_MIN_SIZE $EC2_MAX_SIZE $EC2_NUM_EXECUTORS' < "$TEMPLATE_FILE" > "$CASC_CONFIG_FILE"
+envsubst '$JENKINS_URL $EC2_FLEET_ID $WORKTERMINAL_HOST $AWS_REGION $AWS_PROD_ACCOUNT_IDS $AWS_DEV_ACCOUNT_IDS $SHARED_LIBRARY_REPO $SHARED_LIBRARY_BRANCH $SHARED_LIBRARY_PATH $EC2_IDLE_MINUTES $EC2_MIN_SIZE $EC2_MAX_SIZE $EC2_NUM_EXECUTORS $ECS_CLUSTER_ARN $ECS_TASK_DEFINITION_ARN $ECS_EXECUTION_ROLE_ARN $ECS_TASK_ROLE_ARN $JENKINS_AGENT_SG_ID $PRIVATE_SUBNET_A_ID $PRIVATE_SUBNET_B_ID' < "$TEMPLATE_FILE" > "$CASC_CONFIG_FILE"
 
 # 権限設定
 chown jenkins:jenkins "$CASC_CONFIG_FILE"
@@ -210,6 +261,7 @@ print_configuration_summary() {
     log "Components configured:"
     log "  - EC2 Fleet Cloud: ${EC2_FLEET_ID:-Not configured}"
     log "  - Workterminal node: ${WORKTERMINAL_HOST:-Not configured}"
+    log "  - ECS Fargate Cloud: ${ECS_CLUSTER_ARN:-Not configured}"
     log "  - Shared Library: ${SHARED_LIBRARY_REPO##*/}"
     log "  - Security: Markdown formatter enabled"
     
