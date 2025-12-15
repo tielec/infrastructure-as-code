@@ -10,6 +10,16 @@ def jobConfig = jenkinsJobsConfig[jobKey]
 // delivery-management-jobs/commonカテゴリに配置
 def jobPath = "delivery-management-jobs/common/pulumi-dashboard"
 
+// Pulumiプロジェクト設定を取得（新規プロジェクトの選択肢に利用）
+def pulumiProjects = pulumi_projects ?: [:]
+def infrastructureProjects = pulumiProjects['infrastructure-as-code']?.projects ?: [:]
+def projectFilterChoices = ['*']
+infrastructureProjects.each { projectKey, projectConfig ->
+    def normalizedName = projectConfig.project_path?.tokenize('/')?.last() ?: projectKey
+    projectFilterChoices << normalizedName
+}
+projectFilterChoices = projectFilterChoices.unique()
+
 pipelineJob(jobPath) {
     displayName("Pulumi Projects Dashboard")
         
@@ -44,6 +54,7 @@ pipelineJob(jobPath) {
         nonStoredPasswordParam('AWS_SESSION_TOKEN', 'AWS Session Token（オプション） - STS一時認証情報を使用する場合')
         
         // フィルタリングオプション
+        choiceParam('PROJECT_FILTER', projectFilterChoices, '''Pulumiプロジェクトの選択 - 新規プロジェクト（例: Jenkins Agent）を選択できます'''.stripMargin())
         stringParam('PROJECT_FILTER', '*', '''プロジェクトフィルタ - 表示するプロジェクトをフィルタリング
             |* すべて表示: *
             |* 特定プロジェクト: project-name
