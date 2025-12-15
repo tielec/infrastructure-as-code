@@ -67,8 +67,6 @@ jenkins:
         cluster: "${ECS_CLUSTER_ARN}"
         regionName: "${AWS_REGION}"
         jenkinsUrl: "${JENKINS_URL}"
-        tunnel: ""
-        credentialsId: ""
         templates:
           - templateName: "fargate-agent"
             label: "ecs-agent fargate-agent"
