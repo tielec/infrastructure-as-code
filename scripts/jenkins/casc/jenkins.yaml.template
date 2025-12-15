@@ -67,8 +67,6 @@ jenkins:
         cluster: "${ECS_CLUSTER_ARN}"
         regionName: "${AWS_REGION}"
         jenkinsUrl: "${JENKINS_URL}"
-        tunnel: ""
-        credentialsId: ""
         templates:
           - templateName: "fargate-agent"
             label: "ecs-agent fargate-agent"
@@ -84,9 +82,14 @@ jenkins:
             executionRole: "${ECS_EXECUTION_ROLE_ARN}"
             taskrole: "${ECS_TASK_ROLE_ARN}"
             cpu: 512
+            memory: 0
             memoryReservation: 1024
-            idleTerminationMinutes: 5
-            maxInstances: 5
+            cpuArchitecture: "X86_64"
+            operatingSystemFamily: "LINUX"
+            defaultCapacityProvider: false
+            enableExecuteCommand: false
+            privileged: false
+            sharedMemorySize: 0
             inheritFrom: ""
             containerUser: "jenkins"
   nodes:

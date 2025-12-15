@@ -315,10 +315,88 @@ const ec2SpotFleetPolicy = new aws.iam.Policy(`jenkins-ec2-spotfleet-policy`, {
 
 // EC2 Spot Fleet ポリシーのアタッチ
 const ec2SpotFleetPolicyAttachment = new aws.iam.RolePolicyAttachment(
-    `jenkins-ec2-spotfleet-policy-attachment`, 
+    `jenkins-ec2-spotfleet-policy-attachment`,
     {
         role: jenkinsRole.name,
         policyArn: ec2SpotFleetPolicy.arn,
+    }
+);
+
+// ECS Fargate管理用の包括的なポリシー
+const ecsFargatePolicy = new aws.iam.Policy(`jenkins-ecs-fargate-policy`, {
+    description: "Policy for Jenkins controller to manage ECS Fargate tasks",
+    policy: pulumi.output(JSON.stringify({
+        Version: "2012-10-17",
+        Statement: [
+            {
+                // ECS タスクの管理権限
+                Effect: "Allow",
+                Action: [
+                    "ecs:RunTask",
+                    "ecs:StopTask",
+                    "ecs:DescribeTasks",
+                    "ecs:ListTasks",
+                    "ecs:DescribeClusters",
+                    "ecs:ListClusters",
+                    "ecs:DescribeTaskDefinition",
+                    "ecs:ListTaskDefinitions",
+                    "ecs:RegisterTaskDefinition",
+                    "ecs:DeregisterTaskDefinition",
+                    "ecs:DescribeContainerInstances",
+                    "ecs:ListContainerInstances"
+                ],
+                Resource: "*"
+            },
+            {
+                // IAM PassRole権限（ECS TaskのRole/ExecutionRoleに対して）
+                Effect: "Allow",
+                Action: [
+                    "iam:PassRole"
+                ],
+                Resource: [
+                    `arn:aws:iam::*:role/jenkins-infra-ecs-task-role-${environment}`,
+                    `arn:aws:iam::*:role/jenkins-infra-ecs-execution-role-${environment}`
+                ]
+            },
+            {
+                // CloudWatch Logs（ECSタスクログの確認用）
+                Effect: "Allow",
+                Action: [
+                    "logs:CreateLogGroup",
+                    "logs:CreateLogStream",
+                    "logs:PutLogEvents",
+                    "logs:DescribeLogGroups",
+                    "logs:DescribeLogStreams",
+                    "logs:GetLogEvents"
+                ],
+                Resource: [
+                    `arn:aws:logs:*:*:log-group:/ecs/jenkins-agent-${environment}*`,
+                    `arn:aws:logs:*:*:log-group:/ecs/jenkins-agent-${environment}*:*`
+                ]
+            },
+            {
+                // ECR（イメージの取得確認用）
+                Effect: "Allow",
+                Action: [
+                    "ecr:GetAuthorizationToken",
+                    "ecr:BatchCheckLayerAvailability",
+                    "ecr:GetDownloadUrlForLayer",
+                    "ecr:BatchGetImage",
+                    "ecr:DescribeRepositories",
+                    "ecr:ListImages"
+                ],
+                Resource: "*"
+            }
+        ]
+    })),
+});
+
+// ECS Fargate ポリシーのアタッチ
+const ecsFargatePolicyAttachment = new aws.iam.RolePolicyAttachment(
+    `jenkins-ecs-fargate-policy-attachment`,
+    {
+        role: jenkinsRole.name,
+        policyArn: ecsFargatePolicy.arn,
     }
 );
 
