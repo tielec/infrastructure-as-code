@@ -60,7 +60,11 @@
   - プラグインの変更
   - セキュリティ設定の変更
   - トラブルシューティング情報の追加
-- **ECS Fargateエージェント**: Pulumi `jenkins-agent`スタックがECS Cluster/Task Definition/ECR/Log GroupとSSM `/agent/ecs-*` を管理。`amazon-ecs`プラグインやJCasC `ecs-fargate` 設定を変える場合はPulumi側と`application-configure-with-casc.sh`も同期すること
+- **⚠️ ECS Fargate設定の重要な注意**:
+  - `jenkins.yaml.template`のECS設定は`amazon-ecs`プラグインの仕様に厳密に従うこと
+  - **サポートされていない設定項目**: `idleTerminationMinutes`, `maxInstances`（これらを含めるとJenkins起動失敗）
+  - **必須のIAM権限**: ControllerのIAM Roleに`ecs:RunTask`, `ecs:StopTask`, `ecs:DescribeTasks`等のECS操作権限が必要
+  - Pulumi `jenkins-controller`スタックにECS Fargateポリシーが定義されていること
 
 ### ⚠️ Jenkinsパラメータ定義ルール
 
