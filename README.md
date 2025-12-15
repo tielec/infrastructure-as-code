@@ -568,6 +568,7 @@ ansible-playbook playbooks/jenkins/remove/remove_jenkins_config.yml -e "env=dev 
 - VPC、サブネット、ルートテーブル、セキュリティグループなどのネットワークリソース
 - Jenkinsコントローラー用のEC2インスタンス（ブルー/グリーン環境）
 - Jenkinsエージェント用のEC2 SpotFleet（自動スケーリング対応）
+- Jenkinsエージェント用のカスタムAMI（EC2 Image Builder）
 - Jenkinsデータ永続化のためのEFSファイルシステム
 - ブルーグリーンデプロイ用のALB（Application Load Balancer）
 - Jenkins関連リソースのIAMロールとポリシー
@@ -605,6 +606,8 @@ infrastructure-as-code/
 │
 ├─ pulumi/                     # Pulumiインフラコード
 │  ├─ jenkins-*/               # Jenkinsインフラスタック
+│  │  ├─ jenkins-agent/        # Jenkins Agent SpotFleet
+│  │  └─ jenkins-agent-ami/    # Jenkins Agent AMI Builder
 │  └─ lambda-*/                # Lambdaインフラスタック
 │
 ├─ scripts/                    # ユーティリティスクリプト

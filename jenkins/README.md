@@ -130,7 +130,7 @@ aws ssm get-parameter --name /jenkins-infra/dev/jenkins/admin-password \
 | **AI_Workflow** | AI駆動開発自動化 | **[ai-workflow-agentリポジトリに移行](https://github.com/tielec/ai-workflow-agent/tree/main/jenkins)**<br>詳細はai-workflow-agentリポジトリを参照してください |
 | **Code_Quality_Checker** | コード品質分析 | pr-complexity-analyzer（PR複雑度分析）<br>rust-code-analysis（Rustコード解析） |
 | **Document_Generator** | ドキュメント生成 | auto-insert-doxygen-comment（Doxygenコメント自動挿入）<br>generate-doxygen-html（DoxygenHTML生成）<br>technical-docs-writer（技術文書作成）<br>pr-comment-builder（PRコメントビルダー） |
-| **Infrastructure_Management** | インフラ管理 | shutdown-jenkins-environment（Jenkins環境停止）<br>terminate-lambda-nat（Lambda NAT削除）<br>Ansible Playbook実行、Pulumi Stack管理 |
+| **Infrastructure_Management** | インフラ管理 | shutdown-jenkins-environment（Jenkins環境停止）<br>terminate-lambda-nat（Lambda NAT削除）<br>**pulumi-dashboard**（Pulumiプロジェクト管理）<br>Ansible Playbook実行、Pulumi Stack管理 |
 | **Shared_Library** | ライブラリテスト | git-webhook-operation（Git Webhook操作）<br>jenkins-credentials-operation（認証情報操作）<br>aws-sqs-check-operation（SQS操作）<br>github-apps-basic-operation（GitHub Apps操作） |
 
 ### ジョブの実行方法
@@ -602,6 +602,38 @@ pulumi up -y
 # スケジュール無効化
 Jenkins UI > Infrastructure_Management > Terminate_Lambda_NAT > 設定 > ビルドトリガから"Build periodically"のチェックを外す
 ```
+
+#### Infrastructure_Management/Pulumi_Dashboard
+
+**目的**: Pulumiプロジェクトの統一的な管理とデプロイ/削除操作
+
+**機能**:
+- 利用可能なPulumiプロジェクトを一覧表示
+- プロジェクト選択によるデプロイ/削除の実行
+- dev環境のJenkinsプロジェクトも管理対象
+
+**利用可能なプロジェクト**:
+- **Jenkins Agent**: Jenkins Agent Infrastructure (Spot Fleet)
+- **Jenkins Agent AMI**: Jenkins Agent AMI builder using EC2 Image Builder
+- その他のLambda関連プロジェクト
+
+**パラメータ**:
+- `PROJECT_FILTER`: プロジェクト選択（プルダウン形式）
+- `ACTION`: deploy（デプロイ）またはdestroy（削除）
+- `ENVIRONMENT`: 実行環境
+- `BRANCH`: リポジトリブランチ
+- `DRY_RUN`: 実際の実行を行わず確認のみ
+
+**使用方法**:
+1. Jenkins UI > Infrastructure_Management > pulumi-dashboard
+2. 対象プロジェクトを選択（例：Jenkins Agent）
+3. アクション（deploy/destroy）を選択
+4. 環境（dev）を指定して実行
+
+**注意事項**:
+- Jenkins Agent関連プロジェクトはdev環境のみ対応
+- 削除操作は不可逆的なため、実行前に対象を確認
+- プロジェクトの依存関係に注意（例：Agent AMIを削除する前にAgentを削除）
 
 ## トラブルシューティング
 

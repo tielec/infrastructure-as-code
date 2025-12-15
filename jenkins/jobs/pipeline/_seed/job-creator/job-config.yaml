@@ -370,6 +370,21 @@ pulumi-projects:
         description: "Jenkins SSM Parameter Storeバックアップ用S3バケット"
         environments: ['dev', 'prod']  # 両環境に配置
 
+      # Jenkins Agent関連プロジェクト
+      jenkins_agent:
+        project_path: "pulumi/jenkins-agent"
+        display_name: "Jenkins Agent"
+        project_type: "nodejs"
+        description: "Jenkins Agent Infrastructure (Spot Fleet)"
+        environments: ['dev']  # 開発環境のみ
+
+      jenkins_agent_ami:
+        project_path: "pulumi/jenkins-agent-ami"
+        display_name: "Jenkins Agent AMI"
+        project_type: "nodejs"
+        description: "Jenkins Agent AMI builder using EC2 Image Builder"
+        environments: ['dev']  # 開発環境のみ
+
 # Ansibleプレイブック定義
 ansible-playbooks:
   infrastructure-as-code:
