@@ -58,6 +58,7 @@ const alb = new aws.lb.LoadBalancer(`alb`, {
     subnets: publicSubnetIds,
     enableDeletionProtection: environment === "prod",
     ipAddressType: "dualstack",  // IPv4/IPv6デュアルスタック対応
+    idleTimeout: 3600,  // WebSocket接続用に1時間に延長
     tags: {
         Name: pulumi.interpolate`${projectName}-jenkins-alb-${environment}`,
         Environment: environment,
