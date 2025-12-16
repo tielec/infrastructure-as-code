@@ -1,0 +1,161 @@
+---
+# yamllint disable rule:line-length
+name: JenkinsAgentECSSetup
+description: Install and configure Jenkins Agent for ECS Fargate container
+schemaVersion: 1.0
+
+phases:
+  - name: build
+    steps:
+      - name: UpdateSystem
+        action: ExecuteBash
+        inputs:
+          commands:
+            - dnf update -y
+            - dnf clean all
+
+      - name: InstallBasicPackages
+        action: ExecuteBash
+        inputs:
+          commands:
+            - dnf install -y --allowerasing curl tar gzip unzip jq shadow-utils python3 python3-pip git docker openssh-clients findutils
+            - dnf clean all
+
+      - name: InstallJava
+        action: ExecuteBash
+        inputs:
+          commands:
+            - dnf install -y java-21-amazon-corretto
+            - java -version
+            - echo 'export JAVA_HOME=/usr/lib/jvm/java-21-amazon-corretto' >> /etc/profile.d/java.sh
+
+      - name: InstallNodeJS
+        action: ExecuteBash
+        inputs:
+          commands:
+            - curl -fsSL https://rpm.nodesource.com/setup_20.x | bash -
+            - dnf install -y nodejs
+            - npm install -g npm@latest
+            - node --version
+            - npm --version
+
+      - name: InstallAwsCli
+        action: ExecuteBash
+        inputs:
+          commands:
+            - curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
+            - unzip awscliv2.zip
+            - ./aws/install --install-dir /opt/aws-cli --bin-dir /usr/local/bin
+            - rm -rf aws awscliv2.zip
+            - aws --version
+
+      - name: InstallPulumi
+        action: ExecuteBash
+        inputs:
+          commands:
+            - curl -fsSL https://get.pulumi.com/releases/sdk/pulumi-v3.115.0-linux-x64.tar.gz | tar -xz -C /opt
+            - ln -sf /opt/pulumi/pulumi /usr/local/bin/pulumi
+            - pulumi version
+
+      - name: InstallAnsible
+        action: ExecuteBash
+        inputs:
+          commands:
+            - pip3 install --no-cache-dir ansible boto3 botocore
+            - ansible --version
+
+      - name: CreateJenkinsUser
+        action: ExecuteBash
+        inputs:
+          commands:
+            - groupadd -g 1000 jenkins || true
+            - useradd -u 1000 -g jenkins -d /home/jenkins -m jenkins || true
+            - mkdir -p /home/jenkins/.jenkins
+            - chown -R jenkins:jenkins /home/jenkins
+            - usermod -aG docker jenkins || true
+            - echo 'export JENKINS_AGENT_HOME=/home/jenkins' > /etc/profile.d/jenkins.sh
+
+      - name: DownloadJenkinsRemoting
+        action: ExecuteBash
+        inputs:
+          commands:
+            - |
+              REMOTING_VERSION="3206.vb_15dcf73f6a_9"
+              curl -fsSL "https://repo.jenkins-ci.org/public/org/jenkins-ci/main/remoting/${REMOTING_VERSION}/remoting-${REMOTING_VERSION}.jar" \
+                -o /home/jenkins/agent.jar
+              chown jenkins:jenkins /home/jenkins/agent.jar
+
+      - name: SetupEntrypoint
+        action: ExecuteBash
+        inputs:
+          commands:
+            - |
+              cat > /entrypoint.sh << 'ENTRYPOINT_EOF'
+              #!/bin/bash
+              # Jenkins Agent JNLP Entrypoint for ECS Fargate
+              set -e
+
+              log() {
+                  echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*"
+              }
+
+              log "Starting Jenkins Agent..."
+
+              JENKINS_AGENT_HOME="${JENKINS_AGENT_HOME:-/home/jenkins}"
+              WORKDIR="${JENKINS_AGENT_HOME}/agent"
+              mkdir -p "${WORKDIR}"
+
+              log "Received arguments: $*"
+
+              if [ "$1" = "-url" ] && [ $# -eq 4 ]; then
+                  JENKINS_URL="$2"
+                  SECRET="$3"
+                  AGENT_NAME="$4"
+
+                  log "Converted to new format with WebSocket:"
+                  log "  URL: ${JENKINS_URL}"
+                  log "  Agent Name: ${AGENT_NAME}"
+                  log "  Working directory: ${WORKDIR}"
+
+                  exec java -jar "${JENKINS_AGENT_HOME}/agent.jar" \
+                      -url "${JENKINS_URL}" \
+                      -secret "${SECRET}" \
+                      -name "${AGENT_NAME}" \
+                      -workDir "${WORKDIR}" \
+                      -webSocket
+              else
+                  log "Using arguments as-is"
+                  log "Working directory: ${WORKDIR}"
+
+                  exec java -jar "${JENKINS_AGENT_HOME}/agent.jar" \
+                      -workDir "${WORKDIR}" \
+                      "$@"
+              fi
+              ENTRYPOINT_EOF
+            - chmod +x /entrypoint.sh
+            - chown jenkins:jenkins /entrypoint.sh
+
+      - name: CleanupCache
+        action: ExecuteBash
+        inputs:
+          commands:
+            - dnf clean all
+            - rm -rf /var/cache/dnf /root/.cache
+
+  - name: validate
+    steps:
+      - name: ValidateInstallation
+        action: ExecuteBash
+        inputs:
+          commands:
+            - java -version
+            - git --version
+            - node --version
+            - npm --version
+            - python3 --version
+            - aws --version
+            - pulumi version
+            - ansible --version
+            - test -f /home/jenkins/agent.jar
+            - test -x /entrypoint.sh
+            - id jenkins

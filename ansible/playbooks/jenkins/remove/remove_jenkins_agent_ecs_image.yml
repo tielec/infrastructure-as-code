@@ -1,0 +1,59 @@
+---
+# Jenkins Agent ECS Image Builderの削除
+#
+# 実行例
+# ======
+#
+# 削除確認付き:
+#   ansible-playbook playbooks/jenkins/remove/remove_jenkins_agent_ecs_image.yml -e "env=dev confirm=true"
+#
+# スタックも削除:
+#   ansible-playbook playbooks/jenkins/remove/remove_jenkins_agent_ecs_image.yml -e "env=dev confirm=true remove_stack=true"
+#
+
+- name: Remove Jenkins Agent ECS Image Builder
+  hosts: localhost
+  gather_facts: no
+
+  pre_tasks:
+    - name: Load group_vars/all.yml variables
+      ansible.builtin.include_vars:
+        file: "{{ inventory_dir }}/group_vars/all.yml"
+
+    - name: Verify confirmation flag
+      ansible.builtin.fail:
+        msg: "削除を実行するには confirm=true を指定してください"
+      when: not (confirm | default(false)) | bool
+
+    - name: Display removal warning
+      ansible.builtin.debug:
+        msg: |
+          ==========================================
+          ⚠️  Jenkins Agent ECS Image Builder REMOVAL
+          ==========================================
+          Environment: {{ env | default('dev') }}
+          Remove Stack: {{ remove_stack | default(true) }}
+
+          この操作は以下のリソースを削除します：
+          - Image Builder Pipeline
+          - Container Recipe
+          - Infrastructure Configuration
+          - Distribution Configuration
+          - Image Builder Component
+          - IAM Role/Instance Profile
+          - SSM Parameters
+          ==========================================
+
+    - name: Countdown before removal
+      ansible.builtin.pause:
+        seconds: 10
+        prompt: "10秒後に削除を開始します。キャンセルするにはCtrl+Cを押してください..."
+
+  tasks:
+    - name: Execute Jenkins Agent ECS Image Builder removal
+      ansible.builtin.include_role:
+        name: jenkins_agent_ecs_image
+      vars:
+        env_name: "{{ env | default('dev') }}"
+        operation: destroy
+        remove_stack: "{{ remove_stack | default(true) }}"

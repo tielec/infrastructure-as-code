@@ -1,0 +1,309 @@
+{
+  "issue_number": "496",
+  "issue_url": "https://github.com/tielec/infrastructure-as-code/issues/496",
+  "issue_title": "Issue #496",
+  "repository": "tielec/infrastructure-as-code",
+  "target_repository": {
+    "path": "/tmp/ai-workflow-repos-1-bf7774e2/infrastructure-as-code",
+    "github_name": "tielec/infrastructure-as-code",
+    "remote_url": "https://github.com/tielec/infrastructure-as-code.git",
+    "owner": "tielec",
+    "repo": "infrastructure-as-code"
+  },
+  "workflow_version": "1.0.0",
+  "current_phase": "testing",
+  "design_decisions": {
+    "implementation_strategy": null,
+    "test_strategy": null,
+    "test_code_strategy": null
+  },
+  "cost_tracking": {
+    "total_input_tokens": 14097233,
+    "total_output_tokens": 234406,
+    "total_cost_usd": 15.965863800000001
+  },
+  "difficulty_analysis": {
+    "level": "moderate",
+    "confidence": 0.8,
+    "factors": {
+      "estimated_file_changes": 7,
+      "scope": "single_module",
+      "requires_tests": true,
+      "requires_architecture_change": false,
+      "complexity_score": 0.6
+    },
+    "analyzed_at": "2025-12-16T05:53:51.706Z",
+    "analyzer_agent": "claude",
+    "analyzer_model": "sonnet"
+  },
+  "model_config": {
+    "planning": {
+      "execute": {
+        "claudeModel": "opus",
+        "codexModel": "max"
+      },
+      "review": {
+        "claudeModel": "sonnet",
+        "codexModel": "mini"
+      },
+      "revise": {
+        "claudeModel": "sonnet",
+        "codexModel": "mini"
+      }
+    },
+    "requirements": {
+      "execute": {
+        "claudeModel": "opus",
+        "codexModel": "max"
+      },
+      "review": {
+        "claudeModel": "sonnet",
+        "codexModel": "mini"
+      },
+      "revise": {
+        "claudeModel": "sonnet",
+        "codexModel": "mini"
+      }
+    },
+    "design": {
+      "execute": {
+        "claudeModel": "opus",
+        "codexModel": "max"
+      },
+      "review": {
+        "claudeModel": "sonnet",
+        "codexModel": "mini"
+      },
+      "revise": {
+        "claudeModel": "sonnet",
+        "codexModel": "mini"
+      }
+    },
+    "test_scenario": {
+      "execute": {
+        "claudeModel": "opus",
+        "codexModel": "max"
+      },
+      "review": {
+        "claudeModel": "sonnet",
+        "codexModel": "mini"
+      },
+      "revise": {
+        "claudeModel": "sonnet",
+        "codexModel": "mini"
+      }
+    },
+    "implementation": {
+      "execute": {
+        "claudeModel": "opus",
+        "codexModel": "max"
+      },
+      "review": {
+        "claudeModel": "sonnet",
+        "codexModel": "mini"
+      },
+      "revise": {
+        "claudeModel": "opus",
+        "codexModel": "max"
+      }
+    },
+    "test_implementation": {
+      "execute": {
+        "claudeModel": "opus",
+        "codexModel": "max"
+      },
+      "review": {
+        "claudeModel": "sonnet",
+        "codexModel": "mini"
+      },
+      "revise": {
+        "claudeModel": "opus",
+        "codexModel": "max"
+      }
+    },
+    "testing": {
+      "execute": {
+        "claudeModel": "opus",
+        "codexModel": "max"
+      },
+      "review": {
+        "claudeModel": "sonnet",
+        "codexModel": "mini"
+      },
+      "revise": {
+        "claudeModel": "opus",
+        "codexModel": "max"
+      }
+    },
+    "documentation": {
+      "execute": {
+        "claudeModel": "sonnet",
+        "codexModel": "mini"
+      },
+      "review": {
+        "claudeModel": "sonnet",
+        "codexModel": "mini"
+      },
+      "revise": {
+        "claudeModel": "sonnet",
+        "codexModel": "mini"
+      }
+    },
+    "report": {
+      "execute": {
+        "claudeModel": "sonnet",
+        "codexModel": "mini"
+      },
+      "review": {
+        "claudeModel": "sonnet",
+        "codexModel": "mini"
+      },
+      "revise": {
+        "claudeModel": "sonnet",
+        "codexModel": "mini"
+      }
+    },
+    "evaluation": {
+      "execute": {
+        "claudeModel": "opus",
+        "codexModel": "max"
+      },
+      "review": {
+        "claudeModel": "sonnet",
+        "codexModel": "mini"
+      },
+      "revise": {
+        "claudeModel": "sonnet",
+        "codexModel": "mini"
+      }
+    }
+  },
+  "phases": {
+    "planning": {
+      "status": "completed",
+      "retry_count": 0,
+      "started_at": "2025-12-16T04:24:15.682Z",
+      "completed_at": "2025-12-16T04:30:33.467Z",
+      "review_result": null,
+      "current_step": null,
+      "completed_steps": [
+        "execute",
+        "review"
+      ]
+    },
+    "requirements": {
+      "status": "completed",
+      "retry_count": 0,
+      "started_at": "2025-12-16T04:30:34.164Z",
+      "completed_at": "2025-12-16T04:35:27.606Z",
+      "review_result": null,
+      "current_step": null,
+      "completed_steps": [
+        "execute",
+        "review"
+      ]
+    },
+    "design": {
+      "status": "completed",
+      "retry_count": 0,
+      "started_at": "2025-12-16T04:35:28.122Z",
+      "completed_at": "2025-12-16T04:41:18.782Z",
+      "review_result": null,
+      "current_step": null,
+      "completed_steps": [
+        "execute",
+        "review"
+      ]
+    },
+    "test_scenario": {
+      "status": "completed",
+      "retry_count": 0,
+      "started_at": "2025-12-16T04:41:19.443Z",
+      "completed_at": "2025-12-16T04:46:08.612Z",
+      "review_result": null,
+      "current_step": null,
+      "completed_steps": [
+        "execute",
+        "review"
+      ]
+    },
+    "implementation": {
+      "status": "completed",
+      "retry_count": 0,
+      "started_at": "2025-12-16T04:46:09.360Z",
+      "completed_at": "2025-12-16T04:58:25.570Z",
+      "review_result": null,
+      "current_step": null,
+      "completed_steps": [
+        "execute",
+        "review"
+      ]
+    },
+    "test_implementation": {
+      "status": "completed",
+      "retry_count": 1,
+      "started_at": "2025-12-16T04:58:26.161Z",
+      "completed_at": "2025-12-16T05:17:18.013Z",
+      "review_result": null,
+      "current_step": null,
+      "completed_steps": [
+        "execute",
+        "revise",
+        "review"
+      ]
+    },
+    "testing": {
+      "status": "in_progress",
+      "retry_count": 2,
+      "started_at": "2025-12-16T05:17:18.729Z",
+      "completed_at": null,
+      "review_result": null,
+      "current_step": "revise",
+      "completed_steps": [
+        "execute"
+      ]
+    },
+    "documentation": {
+      "status": "pending",
+      "retry_count": 0,
+      "started_at": null,
+      "completed_at": null,
+      "review_result": null,
+      "current_step": null,
+      "completed_steps": []
+    },
+    "report": {
+      "status": "pending",
+      "retry_count": 0,
+      "started_at": null,
+      "completed_at": null,
+      "review_result": null,
+      "current_step": null,
+      "completed_steps": []
+    },
+    "evaluation": {
+      "status": "pending",
+      "retry_count": 0,
+      "started_at": null,
+      "completed_at": null,
+      "review_result": null,
+      "decision": null,
+      "failed_phase": null,
+      "remaining_tasks": [],
+      "created_issue_url": null,
+      "abort_reason": null,
+      "current_step": null,
+      "completed_steps": []
+    }
+  },
+  "created_at": "2025-12-16T04:23:52.408Z",
+  "updated_at": "2025-12-16T05:59:04.557Z",
+  "branch_name": "ai-workflow/issue-496",
+  "base_commit": "938d3da2b35a7542402eb606c0115d82e041bfbc",
+  "pr_number": 498,
+  "pr_url": "https://github.com/tielec/infrastructure-as-code/pull/498",
+  "github_integration": {
+    "progress_comment_id": 3658724112,
+    "progress_comment_url": "https://github.com/tielec/infrastructure-as-code/issues/496#issuecomment-3658724112"
+  }
+}
