@@ -1,0 +1,8 @@
+name: jenkins-agent-ecs-image
+runtime:
+  name: nodejs
+  options:
+    typescript: true
+description: Jenkins Agent ECS container image builder using EC2 Image Builder
+config:
+  aws:region: ap-northeast-1

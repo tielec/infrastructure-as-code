@@ -84,6 +84,7 @@ pulumi/
 │   ├── jenkins-loadbalancer/ # ALB
 │   ├── jenkins-controller/ # Jenkinsコントローラー
 │   ├── jenkins-agent-ami/  # エージェント用AMI
+│   ├── jenkins-agent-ecs-image/ # ECSエージェント用コンテナイメージ
 │   ├── jenkins-agent/      # Jenkinsエージェント
 │   ├── jenkins-config/     # Jenkins設定
 │   └── jenkins-application/ # Jenkinsアプリケーション
@@ -124,6 +125,7 @@ pulumi/
 | `jenkins-loadbalancer` | ロードバランサー | security | ALB、ターゲットグループ |
 | `jenkins-controller` | Jenkinsコントローラー | nat, storage, loadbalancer | EC2、Auto Scaling |
 | `jenkins-agent-ami` | エージェントAMI | security | カスタムAMI（Dockerイメージ事前プル機能付き） |
+| `jenkins-agent-ecs-image` | ECSエージェント用コンテナイメージ | network, security, agent | Image Builder Component/ContainerRecipe/Pipeline（ECR配布、SSM出力） |
 | `jenkins-agent` | Jenkinsエージェント | controller, agent-ami | EC2 Fleet、ECS Fargate（エージェント） |
 | `jenkins-config` | Jenkins設定 | controller | SSMドキュメント、設定 |
 | `jenkins-application` | Jenkinsアプリ | config, agent | ジョブ、プラグイン設定 |
@@ -132,7 +134,7 @@ pulumi/
 
 - ECS Cluster / Task Definition / ECR Repository / CloudWatch Logs を追加し、SSM `/jenkins-infra/{env}/agent/ecs-*` にARN/URLを出力
 - Jenkinsからは `ecs-agent` / `fargate-agent` ラベルで利用（JCasCで自動設定）
-- コンテナイメージは `docker/jenkins-agent-ecs` のDockerfileからビルドし、上記ECRへプッシュ
+- コンテナイメージは `docker/jenkins-agent-ecs` をベースに `jenkins-agent-ecs-image` スタックのImage Builderパイプラインでビルドし、ECRへ配布
 
 ### Jenkins SSMバックアップスタック
 

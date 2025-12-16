@@ -1,0 +1,40 @@
+---
+# Jenkins Agent ECS Image Builderのデプロイ
+#
+# 実行例
+# ======
+#
+# 基本実行:
+#   ansible-playbook playbooks/jenkins/deploy/deploy_jenkins_agent_ecs_image.yml -e "env=dev"
+#
+# パイプラインをトリガーせずにデプロイのみ:
+#   ansible-playbook playbooks/jenkins/deploy/deploy_jenkins_agent_ecs_image.yml -e "env=dev trigger_image_build=false"
+#
+
+- name: Deploy Jenkins Agent ECS Image Builder
+  hosts: localhost
+  gather_facts: no
+
+  pre_tasks:
+    - name: Load group_vars/all.yml variables
+      ansible.builtin.include_vars:
+        file: "{{ inventory_dir }}/group_vars/all.yml"
+
+    - name: Display deployment information
+      ansible.builtin.debug:
+        msg: |
+          ==========================================
+          Jenkins Agent ECS Image Builder Deployment
+          ==========================================
+          Environment: {{ env | default('dev') }}
+          Trigger Build: {{ trigger_image_build | default(true) }}
+          ==========================================
+
+  tasks:
+    - name: Execute Jenkins Agent ECS Image Builder deployment
+      ansible.builtin.include_role:
+        name: jenkins_agent_ecs_image
+      vars:
+        env_name: "{{ env | default('dev') }}"
+        operation: deploy
+        trigger_image_build: "{{ trigger_image_build | default(true) }}"

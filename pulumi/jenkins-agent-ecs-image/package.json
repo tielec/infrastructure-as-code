@@ -1,0 +1,18 @@
+{
+  "name": "jenkins-agent-ecs-image",
+  "main": "index.ts",
+  "scripts": {
+    "build": "tsc",
+    "preview": "pulumi preview",
+    "deploy": "pulumi up -y",
+    "destroy": "pulumi destroy -y"
+  },
+  "devDependencies": {
+    "@types/node": "^16"
+  },
+  "dependencies": {
+    "@pulumi/aws": "^6.0.2",
+    "@pulumi/pulumi": "^3.0.0",
+    "typescript": "^4.5.4"
+  }
+}

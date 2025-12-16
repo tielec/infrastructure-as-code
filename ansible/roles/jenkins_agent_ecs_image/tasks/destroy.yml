@@ -1,0 +1,54 @@
+---
+# Jenkins Agent ECS Image Builder destruction tasks
+
+- name: Display destruction start
+  ansible.builtin.debug:
+    msg: "Destroying Jenkins Agent ECS Image Builder for {{ env_name }} environment"
+
+- name: Destroy ECS Image Builder Infrastructure
+  block:
+    - name: Set destruction variables
+      ansible.builtin.set_fact:
+        pulumi_dir: "{{ pulumi_path }}/jenkins-agent-ecs-image"
+        env: "{{ env_name }}"
+
+    # Pulumiスタック初期化（存在確認）
+    - name: Initialize Pulumi stack for destruction
+      ansible.builtin.include_role:
+        name: pulumi_helper
+        tasks_from: init_stack
+      vars:
+        pulumi_project_path: "{{ pulumi_dir }}"
+        stack_name: "{{ env }}"
+
+    # Pulumiリソース削除
+    - name: Destroy Jenkins Agent ECS Image Builder infrastructure
+      ansible.builtin.include_role:
+        name: pulumi_helper
+        tasks_from: destroy
+      vars:
+        pulumi_project_path: "{{ pulumi_dir }}"
+        force_destroy: "{{ force | default(false) }}"
+
+    # Pulumiスタック削除（オプション）
+    - name: Remove Pulumi stack
+      when: (remove_stack | default(true)) | bool
+      ansible.builtin.include_role:
+        name: pulumi_helper
+        tasks_from: remove_stack
+      vars:
+        pulumi_project_path: "{{ pulumi_dir }}"
+        stack_name: "{{ env }}"
+
+    - name: Display destruction summary
+      ansible.builtin.debug:
+        msg: "Jenkins Agent ECS Image Builder destroyed successfully for {{ env }} environment"
+
+  rescue:
+    - name: Display destruction failure message
+      ansible.builtin.debug:
+        msg: "ERROR: ECS Image Builder destruction failed. See error details above."
+
+    - name: Fail the playbook
+      ansible.builtin.fail:
+        msg: "ECS Image Builder destruction failed"

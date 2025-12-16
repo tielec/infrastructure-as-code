@@ -1,0 +1,81 @@
+---
+# Jenkins Agent ECS Image Builder deployment tasks
+
+- name: Display deployment start
+  ansible.builtin.debug:
+    msg: "Deploying Jenkins Agent ECS Image Builder for {{ env_name }} environment"
+
+- name: Deploy ECS Image Builder Infrastructure with Pulumi
+  block:
+    - name: Set deployment variables
+      ansible.builtin.set_fact:
+        pulumi_dir: "{{ pulumi_path }}/jenkins-agent-ecs-image"
+        env: "{{ env_name }}"
+
+    # Pulumi stack init
+    - name: Initialize Pulumi stack for Jenkins Agent ECS Image
+      ansible.builtin.include_role:
+        name: pulumi_helper
+        tasks_from: init_stack
+      vars:
+        pulumi_project_path: "{{ pulumi_dir }}"
+        stack_name: "{{ env }}"
+
+    # Pulumi preview
+    - name: Preview ECS Image deployment
+      ansible.builtin.include_role:
+        name: pulumi_helper
+        tasks_from: preview
+      vars:
+        pulumi_project_path: "{{ pulumi_dir }}"
+
+    # Pulumi deploy
+    - name: Deploy Jenkins Agent ECS Image Builder infrastructure
+      ansible.builtin.include_role:
+        name: pulumi_helper
+        tasks_from: deploy
+      vars:
+        pulumi_project_path: "{{ pulumi_dir }}"
+
+    # Get pipeline ARN for triggering (only if needed)
+    - name: Get pipeline ARN from SSM Parameter Store
+      when: (trigger_image_build | default(true)) | bool
+      block:
+        - name: Get pipeline ARN from SSM Parameter Store
+          ansible.builtin.include_role:
+            name: ssm_parameter_store
+            tasks_from: get_parameter
+          vars:
+            parameter_name: "/jenkins-infra/{{ env }}/agent-ecs-image/pipeline-arn"
+            store_as: "pipeline_arn"
+
+    - name: Display deployment summary
+      ansible.builtin.debug:
+        msg: "Jenkins Agent ECS Image Builder deployed successfully for {{ env }} environment"
+
+    # パイプラインを自動トリガー（デフォルトで有効）
+    - name: Trigger Image Builder pipeline
+      when:
+        - (trigger_image_build | default(true)) | bool
+        - pipeline_arn is defined
+      ansible.builtin.include_role:
+        name: aws_cli_helper
+        tasks_from: execute
+      vars:
+        aws_command: "aws imagebuilder start-image-pipeline-execution --image-pipeline-arn {{ pipeline_arn }}"
+        operation_name: "Start ECS Image Builder pipeline"
+        parse_output: true
+
+    - name: Display pipeline trigger status
+      when: (trigger_image_build | default(true)) | bool
+      ansible.builtin.debug:
+        msg: "Image Builder pipeline triggered. Container image builds typically take 30-45 minutes."
+
+  rescue:
+    - name: Display deployment failure message
+      ansible.builtin.debug:
+        msg: "ERROR: ECS Image Builder deployment failed. See error details above."
+
+    - name: Fail the playbook
+      ansible.builtin.fail:
+        msg: "ECS Image Builder deployment failed"
