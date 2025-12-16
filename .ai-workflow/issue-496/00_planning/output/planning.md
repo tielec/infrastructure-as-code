@@ -159,16 +159,16 @@
 
 ### Phase 4: 実装 (見積もり: 5〜6h)
 
-- [ ] Task 4-1: Pulumiスタック基盤の作成 (1h)
+- [x] Task 4-1: Pulumiスタック基盤の作成 (1h)
   - `pulumi/jenkins-agent-ecs-image/` ディレクトリ作成
   - `Pulumi.yaml`, `package.json`, `tsconfig.json` の作成
   - 依存パッケージのインストール確認
-- [ ] Task 4-2: Component YAMLの作成 (1.5h)
+- [x] Task 4-2: Component YAMLの作成 (1.5h)
   - `component.yml` の作成
   - Dockerfileの各ステップをImage Builder形式に変換
   - entrypoint.shのコピーとパーミッション設定
   - validate phaseの実装
-- [ ] Task 4-3: Pulumiスタックの実装 (2h)
+- [x] Task 4-3: Pulumiスタックの実装 (2h)
   - `index.ts` の実装
   - IAMロール（Image Builder用）の作成
   - ContainerRecipeの作成
@@ -176,7 +176,7 @@
   - DistributionConfiguration（ECR配布設定）の作成
   - ImagePipelineの作成
   - SSMパラメータへのエクスポート
-- [ ] Task 4-4: Ansibleプレイブック・ロールの作成 (1h)
+- [x] Task 4-4: Ansibleプレイブック・ロールの作成 (1h)
   - `ansible/roles/jenkins_agent_ecs_image/` ロール作成
   - `ansible/playbooks/jenkins/deploy/deploy_jenkins_agent_ecs_image.yml` 作成
   - `ansible/playbooks/jenkins/remove/remove_jenkins_agent_ecs_image.yml` 作成
