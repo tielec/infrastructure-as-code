@@ -1,12 +1,12 @@
 # Codex Agent 実行ログ
 
-開始日時: 2025/12/16 5:03:43
+開始日時: 2025/12/16 5:15:06
 
 ---
 
 ## Turn 1: スレッド開始
 
-**Thread ID**: `019b258a-fa6e-7913-9734-6884db3afbc8`
+**Thread ID**: `019b2595-6418-7f60-833b-2016ad546482`
 
 ## Turn 2: ツール実行
 
@@ -112,6 +112,27 @@ issue-496
 **ステータス**: completed
 
 ## Turn 9: ツール実行
+
+**種別**: コマンド実行
+**コマンド**: `/bin/bash -lc 'ls .ai-workflow/issue-496'`
+**ステータス**: completed (exit_code=0)
+
+```text
+00_planning
+01_requirements
+02_design
+03_test_scenario
+04_implementation
+05_test_implementation
+metadata.json
+```
+
+## Turn 10: ツール実行
+
+**種別**: reasoning
+**ステータス**: completed
+
+## Turn 11: ツール実行
 
 **種別**: コマンド実行
 **コマンド**: `/bin/bash -lc 'cat .ai-workflow/issue-496/00_planning/output/planning.md'`
@@ -279,46 +300,12 @@ issue-496
 ... (truncated)
 ```
 
-## Turn 10: ツール実行
-
-**種別**: reasoning
-**ステータス**: completed
-
-## Turn 11: ツール実行
-
-**種別**: コマンド実行
-**コマンド**: `/bin/bash -lc 'ls tests/integration'`
-**ステータス**: completed (exit_code=0)
-
-```text
-__init__.py
-ecs-fargate
-ecs-image
-test_job_config_yaml.py
-```
-
 ## Turn 12: ツール実行
 
 **種別**: reasoning
 **ステータス**: completed
 
 ## Turn 13: ツール実行
-
-**種別**: コマンド実行
-**コマンド**: `/bin/bash -lc 'ls tests/integration/ecs-image'`
-**ステータス**: completed (exit_code=0)
-
-```text
-test_ansible_playbooks.sh
-test_ecs_image_pipeline.sh
-```
-
-## Turn 14: ツール実行
-
-**種別**: reasoning
-**ステータス**: completed
-
-## Turn 15: ツール実行
 
 **種別**: コマンド実行
 **コマンド**: `/bin/bash -lc 'cat .ai-workflow/issue-496/05_test_implementation/output/test-implementation.md'`
@@ -333,18 +320,56 @@ test_ecs_image_pipeline.sh
 |---------|---------|-----------|
 | `tests/integration/ecs-image/test_ecs_image_pipeline.sh` | 6 | SSM出力、Image Builderパイプライン状態、ContainerRecipe/Distribution/Infrastructure構成、コンポーネント定義 |
 | `tests/integration/ecs-image/test_ansible_playbooks.sh` | 2 | デプロイ/削除プレイブックの構文検証、confirmガードの動作確認 |
+| `tests/integration/ecs-image/test_pulumi_stack.sh` | 2 | Pulumi previewの完走確認、2回目`pulumi up`でのno changes判定（INT-ECS-IMG-013/014） |
+| `tests/integration/ecs-image/test_component_yaml.sh` | 2 | component.ymlの構文/必須フィールド検証、ツール導入・ユーザー作成・entrypoint配置ステップ確認（INT-ECS-IMG-015/016） |
 
 ## テストカバレッジ
 
 - ユニットテスト: 0件
-- 統合テスト: 8件
+- 統合テスト: 12件
 - BDDテスト: 0件
 - カバレッジ率: N/A（AWS統合検証のため未計測）
 
 ## 実行上の補足
 
-- AWS CLIと`jq`、`ansible-playbook`が必要です。`ENVIRONMENT`や`AWS_REGION`を環境変数で上書きしてターゲット環境を切り替えられます。
-- 既存スタックのSSMパラメータが存在する前提で検証を行うため、Pulumiスタックをデプロイ済みの環境で実行してください。
+- AWS CLIと`jq`、`ansible-playbook`、`pulumi`、`npm`、`yamllint`が必要です。`ENVIRONMENT`/`AWS_REGION`や`PULUMI_STACK`を環境変数で上書きしてターゲット環境を切り替えられます。
+- 既存スタックのSSMパラメータが存在する前提で検証を行うため、Pulumiスタックをデプロイ済みの環境で実行してください。Pulumi関連テストはスタック選択後に`pulumi up`を2回実行するため、本番環境での実行時は注意してください。
+
+## 修正履歴
+
+### 修正1: Pulumi preview/idempotence シナリオの自動化
+- **指摘内容**: INT-ECS-IMG-013/014（Pulumi previewと冪等性）のテストが欠落している。
+- **修正内容**: `tests/integration/ecs-image/test_pulumi_stack.sh` を追加し、`npm install`→`pulumi stack select`→`pulumi preview`でリソースタイプを確認し、`pulumi up`を2回連続実行して2回目に`no changes`が出ることを検証。
+- **影響範囲**: `tests/integration/ecs-image/test_pulumi_stack.sh`, `tests/integration/ecs-image/helpers.sh`
+
+### 修正2: Component YAMLの構文/ツール検証の追加
+- **指摘内容**: INT-ECS-IMG-015/016（component.ymlの構文チェックとツールインストール確認）が未実装。
+- **修正内容**: `tests/integration/ecs-image/test_component_yaml.sh` を追加し、`yamllint`による構文検証、必須フィールド（name/description/schemaVersion, build/validateフェーズ）の存在確認、およびJava21・Node.js20・AWS CLI v2・Pulumi・Ansible・Git・Python3・jenkinsユーザー作成・entrypoint配置の各ステップ存在チェックを実装。
+- **影響範囲**: `tests/integration/ecs-image/test_component_yaml.sh`, `pulumi/jenkins-agent-ecs-image/component.yml`（参照のみ）
+
+### 修正3: テストヘルパーの共通化
+- **指摘内容**: Task 5-2の共通ユーティリティ未作成により重複が多い。
+- **修正内容**: `tests/integration/ecs-image/helpers.sh` を新設し、ロギング・コマンド存在確認・SSMパラメータ取得・正規表現/部分一致アサーション・サマリー初期化/テスト実行ヘルパーを集約。既存スクリプトと新規スクリプトで共通利用。
+- **影響範囲**: `tests/integration/ecs-image/helpers.sh`, `tests/integration/ecs-image/test_ecs_image_pipeline.sh`, `tests/integration/ecs-image/test_ansible_playbooks.sh`, `tests/integration/ecs-image/test_pulumi_stack.sh`, `tests/integration/ecs-image/test_component_yaml.sh`
+```
+
+## Turn 14: ツール実行
+
+**種別**: reasoning
+**ステータス**: completed
+
+## Turn 15: ツール実行
+
+**種別**: コマンド実行
+**コマンド**: `/bin/bash -lc 'ls tests/integration/ecs-image'`
+**ステータス**: completed (exit_code=0)
+
+```text
+helpers.sh
+test_ansible_playbooks.sh
+test_component_yaml.sh
+test_ecs_image_pipeline.sh
+test_pulumi_stack.sh
 ```
 
 ## Turn 16: ツール実行
@@ -353,6 +378,680 @@ test_ecs_image_pipeline.sh
 **ステータス**: completed
 
 ## Turn 17: ツール実行
+
+**種別**: コマンド実行
+**コマンド**: `/bin/bash -lc 'cat tests/integration/ecs-image/helpers.sh'`
+**ステータス**: completed (exit_code=0)
+
+```text
+#!/bin/bash
+# Shared helper functions for ECS image integration tests (Issue #496).
+
+# Resolve repository root when not provided by the caller.
+if [ -z "${ROOT_DIR:-}" ]; then
+  ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
+fi
+
+log_info() {
+  echo "[INFO] $*"
+}
+
+log_error() {
+  echo "[ERROR] $*" >&2
+}
+
+log_section() {
+  echo
+  echo "=== $* ==="
+}
+
+require_cmd() {
+  command -v "$1" >/dev/null 2>&1 || {
+    log_error "Required command '$1' not found in PATH"
+    exit 1
+  }
+}
+
+fetch_param() {
+  local name="$1"
+  local description="$2"
+  local value
+
+  value=$(aws ssm get-parameter \
+    --name "$name" \
+    --region "$AWS_REGION" \
+    --query "Parameter.Value" \
+    --output text 2>/dev/null || true)
+
+  if [ -z "$value" ] || [ "$value" = "None" ]; then
+    log_error "SSM parameter missing for ${description}: ${name}"
+    return 1
+  fi
+
+  echo "$value"
+}
+
+assert_regex() {
+  local value="$1"
+  local pattern="$2"
+  local message="$3"
+
+  if [[ "$value" =~ $pattern ]]; then
+    return 0
+  fi
+
+  log_error "$message (value: ${value})"
+  return 1
+}
+
+assert_contains() {
+  local haystack="$1"
+  local needle="$2"
+  local message="$3"
+
+  if [[ "$haystack" == *"$needle"* ]]; then
+    return 0
+  fi
+
+  log_error "$message (missing: ${needle})"
+  return 1
+}
+
+init_summary() {
+  TOTAL=0
+  PASSED=0
+  FAILED=0
+}
+
+run_test() {
+  local name="$1"
+  shift
+  TOTAL=$((TOTAL + 1))
+  if "$@"; then
+    PASSED=$((PASSED + 1))
+  else
+    FAILED=$((FAILED + 1))
+  fi
+}
+```
+
+## Turn 18: ツール実行
+
+**種別**: reasoning
+**ステータス**: completed
+
+## Turn 19: ツール実行
+
+**種別**: コマンド実行
+**コマンド**: `/bin/bash -lc 'cat tests/integration/ecs-image/test_ecs_image_pipeline.sh'`
+**ステータス**: completed (exit_code=0)
+
+```text
+#!/bin/bash
+# Integration test: Validate EC2 Image Builder resources for Jenkins ECS agent image (Issue #496).
+# Covers SSM outputs, pipeline status, container recipe, distribution configuration,
+# infrastructure configuration, and IAM policy attachments to ensure the Pulumi stack deployed correctly.
+
+set -euo pipefail
+
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
+source "${ROOT_DIR}/tests/integration/ecs-image/helpers.sh"
+
+ENVIRONMENT="${ENVIRONMENT:-dev}"
+AWS_REGION="${AWS_REGION:-ap-northeast-1}"
+SSM_PREFIX="/jenkins-infra/${ENVIRONMENT}"
+
+PIPELINE_ARN=""
+COMPONENT_VERSION=""
+RECIPE_VERSION=""
+ECR_REPOSITORY_URL=""
+CONTAINER_RECIPE_ARN=""
+DISTRIBUTION_CONFIG_ARN=""
+INFRA_CONFIG_ARN=""
+COMPONENT_ARN=""
+SUBNET_ID=""
+SECURITY_GROUP_ID=""
+INSTANCE_PROFILE_ROLE=""
+
+test_ssm_parameters_exist() {
+  log_section "INT-ECS-IMG-001: SSM parameter presence and format"
+  local failed=0
+
+  PIPELINE_ARN=$(fetch_param "${SSM_PREFIX}/agent-ecs-image/pipeline-arn" "pipeline ARN") || failed=1
+  COMPONENT_VERSION=$(fetch_param "${SSM_PREFIX}/agent-ecs-image/component-version" "component version") || failed=1
+  RECIPE_VERSION=$(fetch_param "${SSM_PREFIX}/agent-ecs-image/recipe-version" "recipe version") || failed=1
+  ECR_REPOSITORY_URL=$(fetch_param "${SSM_PREFIX}/agent/ecr-repository-url" "ECR repository URL") || failed=1
+  SUBNET_ID=$(fetch_param "${SSM_PREFIX}/network/public-subnet-a-id" "public subnet A ID") || failed=1
+  SECURITY_GROUP_ID=$(fetch_param "${SSM_PREFIX}/security/jenkins-agent-sg-id" "jenkins agent security group ID") || failed=1
+
+  [[ $failed -ne 0 ]] && return 1
+
+  assert_regex "$PIPELINE_ARN" '^arn:aws:imagebuilder:' "Pipeline ARN must be an Image Builder ARN" || failed=1
+  assert_regex "$COMPONENT_VERSION" '^1\.[0-9]{6}\.[0-9]+$' "Component version must follow 1.YYMMDD.seconds format" || failed=1
+  assert_regex "$RECIPE_VERSION" '^1\.[0-9]{6}\.[0-9]+$' "Recipe version must follow 1.YYMMDD.seconds format" || failed=1
+
+  return $failed
+}
+
+test_pipeline_status() {
+  log_section "INT-ECS-IMG-002: Image Builder pipeline status"
+  local pipeline_json status
+
+  pipeline_json=$(aws imagebuilder get-image-pipeline \
+    --image-pipeline-arn "$PIPELINE_ARN" \
+    --region "$AWS_REGION" \
+    --query "imagePipeline" \
+    --output json 2>/dev/null || true)
+
+  if [ -z "$pipeline_json" ] || [ "$pipeline_json" = "null" ]; then
+    log_error "Image pipeline not found for ARN: ${PIPELINE_ARN}"
+    return 1
+  fi
+
+  status=$(echo "$pipeline_json" | jq -r '.status // empty')
+  if [ "$status" != "ENABLED" ]; then
+    log_error "Pipeline status is not ENABLED (current: ${status})"
+    return 1
+  fi
+
+  CONTAINER_RECIPE_ARN=$(echo "$pipeline_json" | jq -r '.containerRecipeArn // empty')
+  DISTRIBUTION_CONFIG_ARN=$(echo "$pipeline_json" | jq -r '.distributionConfigurationArn // empty')
+  INFRA_CONFIG_ARN=$(echo "$pipeline_json" | jq -r '.infrastructureConfigurationArn // empty')
+
+  if [ -z "$CONTAINER_RECIPE_ARN" ] || [ -z "$DISTRIBUTION_CONFIG_ARN" ] || [ -z "$INFRA_CONFIG_ARN" ]; then
+    log_error "Pipeline missing required references (container recipe, distribution config, or infrastructure config)."
+    return 1
+  fi
+
+  log_info "Pipeline ENABLED with recipe: ${CONTAINER_RECIPE_ARN}"
+  return 0
+}
+
+test_container_recipe() {
+  log_section "INT-ECS-IMG-003: Container recipe configuration"
+  local recipe_json container_type target_repo_name component_arn_from_recipe repo_name
+
+  recipe_json=$(aws imagebuilder get-container-recipe \
+    --container-recipe-arn "$CONTAINER_RECIPE_ARN" \
+    --region "$AWS_REGION" \
+    --query "containerRecipe" \
+    --output json 2>/dev/null || true)
+
+  if [ -z "$recipe_json" ] || [ "$recipe_json" = "null" ]; then
+    log_error "Container recipe not found: ${CONTAINER_RECIPE_ARN}"
+    return 1
+  fi
+
+  container_type=$(echo "$recipe_json" | jq -r '.containerType // empty')
+  if [ "$container_type" != "DOCKER" ]; then
+    log_error "Unexpected containerType: ${container_type}"
+    return 1
+  fi
+... (truncated)
+```
+
+## Turn 20: ツール実行
+
+**種別**: reasoning
+**ステータス**: completed
+
+## Turn 21: ツール実行
+
+**種別**: コマンド実行
+**コマンド**: `/bin/bash -lc 'cat tests/integration/ecs-image/test_ansible_playbooks.sh'`
+**ステータス**: completed (exit_code=0)
+
+```text
+#!/bin/bash
+# Integration test: Validate Ansible playbooks for jenkins-agent-ecs-image stack (Issue #496).
+# Ensures deploy/remove playbooks pass syntax checks and removal playbook enforces confirm flag.
+
+set -euo pipefail
+
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
+source "${ROOT_DIR}/tests/integration/ecs-image/helpers.sh"
+ANSIBLE_DIR="${ROOT_DIR}/ansible"
+PLAYBOOK_DEPLOY="playbooks/jenkins/deploy/deploy_jenkins_agent_ecs_image.yml"
+PLAYBOOK_REMOVE="playbooks/jenkins/remove/remove_jenkins_agent_ecs_image.yml"
+ENVIRONMENT="${ENVIRONMENT:-dev}"
+
+test_syntax_checks() {
+  log_info "INT-ECS-IMG-011/012: Running ansible-playbook --syntax-check"
+  ANSIBLE_CONFIG="${ANSIBLE_DIR}/ansible.cfg" \
+    ANSIBLE_STDOUT_CALLBACK=default \
+    ansible-playbook --syntax-check "${PLAYBOOK_DEPLOY}"
+
+  ANSIBLE_CONFIG="${ANSIBLE_DIR}/ansible.cfg" \
+    ANSIBLE_STDOUT_CALLBACK=default \
+    ansible-playbook --syntax-check "${PLAYBOOK_REMOVE}"
+}
+
+test_remove_requires_confirmation() {
+  log_info "INT-ECS-IMG-012: Verifying remove playbook requires confirm=true"
+  local rc=0
+
+  set +e
+  ANSIBLE_CONFIG="${ANSIBLE_DIR}/ansible.cfg" \
+    ANSIBLE_STDOUT_CALLBACK=default \
+    ansible-playbook "${PLAYBOOK_REMOVE}" \
+    -e "env=${ENVIRONMENT}" \
+    --check >/dev/null
+  rc=$?
+  set -e
+
+  if [ $rc -eq 0 ]; then
+    log_error "Removal playbook ran without confirm=true but should fail fast"
+    return 1
+  fi
+
+  log_info "Removal playbook correctly blocks execution without confirm flag"
+  return 0
+}
+
+main() {
+  require_cmd ansible-playbook
+  cd "${ANSIBLE_DIR}"
+
+  init_summary
+
+  echo "=============================================="
+  echo "Ansible playbook validation for ECS image stack"
+  echo "Environment: ${ENVIRONMENT}"
+  echo "Ansible dir: ${ANSIBLE_DIR}"
+  echo "=============================================="
+
+  run_test "Ansible syntax checks" test_syntax_checks
+  run_test "Removal requires confirmation" test_remove_requires_confirmation
+
+  echo
+  echo "=============================================="
+  echo "Test summary: ${PASSED}/${TOTAL} passed, ${FAILED} failed"
+  echo "=============================================="
+
+  if [ "$FAILED" -ne 0 ]; then
+    exit 1
+  fi
+}
+
+main "$@"
+```
+
+## Turn 22: ツール実行
+
+**種別**: reasoning
+**ステータス**: completed
+
+## Turn 23: ツール実行
+
+**種別**: コマンド実行
+**コマンド**: `/bin/bash -lc 'cat tests/integration/ecs-image/test_component_yaml.sh'`
+**ステータス**: completed (exit_code=0)
+
+```text
+#!/bin/bash
+# Integration test: Validate component.yml syntax and required install steps for ECS agent image.
+# Covers INT-ECS-IMG-015 (YAML syntax and required fields) and INT-ECS-IMG-016 (tool install steps).
+
+set -euo pipefail
+
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
+source "${ROOT_DIR}/tests/integration/ecs-image/helpers.sh"
+
+COMPONENT_FILE="${ROOT_DIR}/pulumi/jenkins-agent-ecs-image/component.yml"
+
+test_component_yaml_syntax() {
+  log_section "INT-ECS-IMG-015: component.yml syntax and required fields"
+  local failed=0
+
+  if [ ! -f "$COMPONENT_FILE" ]; then
+    log_error "Component file not found at ${COMPONENT_FILE}"
+    return 1
+  fi
+
+  if ! yamllint "$COMPONENT_FILE"; then
+    log_error "yamllint reported errors for component.yml"
+    return 1
+  fi
+
+  for key in name: description: schemaVersion:; do
+    if ! grep -q "^${key}" "$COMPONENT_FILE"; then
+      log_error "Missing required top-level field: ${key%:}"
+      failed=1
+    fi
+  done
+
+  if ! grep -q "^- name: build" "$COMPONENT_FILE"; then
+    log_error "build phase is not defined in component.yml"
+    failed=1
+  fi
+
+  if ! grep -q "^- name: validate" "$COMPONENT_FILE"; then
+    log_error "validate phase is not defined in component.yml"
+    failed=1
+  fi
+
+  return $failed
+}
+
+test_component_install_steps() {
+  log_section "INT-ECS-IMG-016: component.yml includes required install steps"
+  local content failed=0
+
+  if [ ! -f "$COMPONENT_FILE" ]; then
+    log_error "Component file not found at ${COMPONENT_FILE}"
+    return 1
+  fi
+
+  content=$(cat "$COMPONENT_FILE")
+
+  assert_contains "$content" "java-21-amazon-corretto" "Java 21 install step missing" || failed=1
+  assert_contains "$content" "setup_20.x" "Node.js 20 install step missing" || failed=1
+  assert_contains "$content" "awscli-exe-linux-x86_64.zip" "AWS CLI v2 install step missing" || failed=1
+  assert_contains "$content" "pulumi-v3" "Pulumi install step missing" || failed=1
+  assert_contains "$content" "pip3 install --no-cache-dir ansible" "Ansible install step missing" || failed=1
+  assert_contains "$content" "git --version" "Git verification step missing" || failed=1
+  assert_contains "$content" "python3 --version" "Python3 verification step missing" || failed=1
+  assert_contains "$content" "groupadd -g 1000 jenkins" "jenkins user creation step missing" || failed=1
+  assert_contains "$content" "/entrypoint.sh" "entrypoint.sh placement step missing" || failed=1
+
+  return $failed
+}
+
+main() {
+  require_cmd yamllint
+
+  init_summary
+
+  echo "=============================================="
+  echo "Component YAML validation for ECS agent image"
+  echo "Component file: ${COMPONENT_FILE}"
+  echo "=============================================="
+
+  run_test "INT-ECS-IMG-015 Component YAML syntax" test_component_yaml_syntax
+  run_test "INT-ECS-IMG-016 Component tool steps" test_component_install_steps
+
+  echo
+  echo "=============================================="
+  echo "Test summary: ${PASSED}/${TOTAL} passed, ${FAILED} failed"
+  echo "=============================================="
+
+  if [ "$FAILED" -ne 0 ]; then
+    exit 1
+  fi
+}
+
+main "$@"
+```
+
+## Turn 24: ツール実行
+
+**種別**: reasoning
+**ステータス**: completed
+
+## Turn 25: ツール実行
+
+**種別**: コマンド実行
+**コマンド**: `/bin/bash -lc 'cat tests/integration/ecs-image/test_pulumi_stack.sh'`
+**ステータス**: completed (exit_code=0)
+
+```text
+#!/bin/bash
+# Integration test: Validate Pulumi preview and idempotence for Jenkins ECS agent image stack.
+# Covers INT-ECS-IMG-013 (pulumi preview) and INT-ECS-IMG-014 (idempotent pulumi up).
+
+set -euo pipefail
+
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
+source "${ROOT_DIR}/tests/integration/ecs-image/helpers.sh"
+
+PULUMI_DIR="${ROOT_DIR}/pulumi/jenkins-agent-ecs-image"
+ENVIRONMENT="${ENVIRONMENT:-dev}"
+PULUMI_STACK="${PULUMI_STACK:-$ENVIRONMENT}"
+
+ensure_requirements() {
+  require_cmd pulumi
+  require_cmd npm
+  require_cmd jq
+}
+
+install_node_modules() {
+  if [ ! -d "$PULUMI_DIR" ]; then
+    log_error "Pulumi directory not found: ${PULUMI_DIR}"
+    return 1
+  fi
+
+  if [ -d "${PULUMI_DIR}/node_modules" ]; then
+    log_info "node_modules already present; skipping npm install"
+    return 0
+  fi
+
+  log_info "Installing npm dependencies in ${PULUMI_DIR}"
+  if ! (cd "$PULUMI_DIR" && npm install); then
+    log_error "npm install failed in ${PULUMI_DIR}"
+    return 1
+  fi
+}
+
+select_stack() {
+  log_info "Selecting Pulumi stack ${PULUMI_STACK}"
+  if ! (cd "$PULUMI_DIR" && pulumi stack select "$PULUMI_STACK" --non-interactive); then
+    log_error "Pulumi stack selection failed for ${PULUMI_STACK}"
+    return 1
+  fi
+}
+
+test_pulumi_preview() {
+  log_section "INT-ECS-IMG-013: Pulumi preview executes without errors"
+  local preview_json resource_types types_joined failed=0
+
+  if ! preview_json=$(cd "$PULUMI_DIR" && pulumi preview --stack "$PULUMI_STACK" --non-interactive --json); then
+    log_error "pulumi preview failed for stack ${PULUMI_STACK}"
+    return 1
+  fi
+
+  resource_types=$(echo "$preview_json" | jq -r '
+    select(.sequenceEventType=="resource-pre" or .sequenceEventType=="resource-change")
+    | (.resourcePre.type // .resourceChange.resourceType // .resourceChange.type // empty)
+  ' | sort -u)
+
+  # If the stack is already up-to-date, preview may show no planned changes; fall back to current URNs.
+  if [ -z "$resource_types" ]; then
+    resource_types=$(cd "$PULUMI_DIR" && pulumi stack --stack "$PULUMI_STACK" --show-urns \
+      | awk -F:: '/^urn:/{print $(NF-1)}' | sort -u)
+  fi
+
+  if [ -z "$resource_types" ]; then
+    log_error "No resources detected from pulumi preview or existing stack state"
+    return 1
+  fi
+
+  types_joined=$(echo "$resource_types" | tr '\n' ' ')
+  log_info "Detected Pulumi resource types: ${types_joined}"
+
+  for expected in \
+    "aws:imagebuilder/component:Component" \
+    "aws:imagebuilder/containerRecipe:ContainerRecipe" \
+    "aws:imagebuilder/infrastructureConfiguration:InfrastructureConfiguration" \
+    "aws:imagebuilder/distributionConfiguration:DistributionConfiguration" \
+    "aws:imagebuilder/imagePipeline:ImagePipeline" \
+    "aws:iam/role:Role" \
+    "aws:iam/instanceProfile:InstanceProfile" \
+    "aws:ssm/parameter:Parameter"; do
+    assert_contains "$types_joined" "$expected" "Missing expected resource type in preview/stack" || failed=1
+  done
+
+  return $failed
+}
+
+test_pulumi_idempotence() {
+  log_section "INT-ECS-IMG-014: Pulumi stack is idempotent"
+  local second_output
+
+  log_info "Running first pulumi up --yes --skip-preview"
+  if ! (cd "$PULUMI_DIR" && pulumi up --stack "$PULUMI_STACK" --yes --non-interactive --skip-preview); then
+    log_error "Initial pulumi up failed for stack ${PULUMI_STACK}"
+    return 1
+  fi
+
+  log_info "Running second pulumi up to confirm no changes"
+  if ! second_output=$(cd "$PULUMI_DIR" && pulumi up --stack "$PULUMI_STACK" --yes --non-interactive --skip-preview 2>&1); then
+    log_error "Second pulumi up failed for stack ${PULUMI_STACK}"
+    return 1
+  fi
+
+  if ! echo "$second_output" | grep -qi "no changes"; then
+    log_error "Second pulumi up did not report 'no changes'"
+    return 1
+  fi
+
+  log_info "Pulumi up reported no changes on the second run"
+  return 0
+}
+
+main() {
+  ensure_requirements
+  install_node_modules
+  select_stack
+
+  init_summary
+
+  echo "=============================================="
+  echo "Pulumi validation for ECS
+... (truncated)
+```
+
+## Turn 26: ツール実行
+
+**種別**: reasoning
+**ステータス**: completed
+
+## Turn 27: ツール実行
+
+**種別**: file_change
+**ステータス**: completed
+
+## Turn 28: ツール実行
+
+**種別**: reasoning
+**ステータス**: completed
+
+## Turn 29: ツール実行
+
+**種別**: コマンド実行
+**コマンド**: `/bin/bash -lc 'rg -n "Phase 5" -n .ai-workflow/issue-496/00_planning/output/planning.md'`
+**ステータス**: failed (exit_code=127)
+
+```text
+/bin/bash: line 1: rg: command not found
+```
+
+## Turn 30: ツール実行
+
+**種別**: reasoning
+**ステータス**: completed
+
+## Turn 31: ツール実行
+
+**種別**: コマンド実行
+**コマンド**: `/bin/bash -lc 'grep -n "Phase 5" -n .ai-workflow/issue-496/00_planning/output/planning.md'`
+**ステータス**: completed (exit_code=0)
+
+```text
+187:### Phase 5: テストコード実装 (見積もり: 1〜1.5h)
+236:    P3 --> P5[Phase 5: テスト実装]
+341:### Phase 5: テスト実装
+```
+
+## Turn 32: ツール実行
+
+**種別**: reasoning
+**ステータス**: completed
+
+## Turn 33: ツール実行
+
+**種別**: コマンド実行
+**コマンド**: `/bin/bash -lc "sed -n '187,210p' .ai-workflow/issue-496/00_planning/output/planning.md"`
+**ステータス**: completed (exit_code=0)
+
+```text
+### Phase 5: テストコード実装 (見積もり: 1〜1.5h)
+
+- [x] Task 5-1: 統合テストスクリプトの作成 (1h)
+  - `tests/integration/ecs-image/test_ecs_image_pipeline.sh` の作成
+  - SSMパラメータ存在確認
+  - Image Builderリソース状態確認
+  - ECRリポジトリ設定確認
+- [ ] Task 5-2: テストヘルパーの作成 (0.5h)
+  - 共通ユーティリティ関数の作成（既存パターン踏襲）
+
+### Phase 6: テスト実行 (見積もり: 1〜1.5h)
+
+- [ ] Task 6-1: Pulumiプレビュー実行 (0.5h)
+  - `pulumi preview` でリソース作成計画を確認
+  - エラーがないことを確認
+- [ ] Task 6-2: テストスクリプトのドライラン (0.5h)
+  - 構文チェック（shellcheck）
+  - モック環境での動作確認
+- [ ] Task 6-3: 統合テストレポート作成 (0.5h)
+  - テスト結果のドキュメント化
+  - 手動検証が必要な項目のリスト化
+
+### Phase 7: ドキュメント (見積もり: 0.5〜1h)
+```
+
+## Turn 34: ツール実行
+
+**種別**: reasoning
+**ステータス**: completed
+
+## Turn 35: ツール実行
+
+**種別**: file_change
+**ステータス**: completed
+
+## Turn 36: ツール実行
+
+**種別**: reasoning
+**ステータス**: completed
+
+## Turn 37: ツール実行
+
+**種別**: コマンド実行
+**コマンド**: `/bin/bash -lc "sed -n '187,210p' .ai-workflow/issue-496/00_planning/output/planning.md"`
+**ステータス**: completed (exit_code=0)
+
+```text
+### Phase 5: テストコード実装 (見積もり: 1〜1.5h)
+
+- [x] Task 5-1: 統合テストスクリプトの作成 (1h)
+  - `tests/integration/ecs-image/test_ecs_image_pipeline.sh` の作成
+  - SSMパラメータ存在確認
+  - Image Builderリソース状態確認
+  - ECRリポジトリ設定確認
+- [x] Task 5-2: テストヘルパーの作成 (0.5h)
+  - 共通ユーティリティ関数の作成（既存パターン踏襲）
+
+### Phase 6: テスト実行 (見積もり: 1〜1.5h)
+
+- [ ] Task 6-1: Pulumiプレビュー実行 (0.5h)
+  - `pulumi preview` でリソース作成計画を確認
+  - エラーがないことを確認
+- [ ] Task 6-2: テストスクリプトのドライラン (0.5h)
+  - 構文チェック（shellcheck）
+  - モック環境での動作確認
+- [ ] Task 6-3: 統合テストレポート作成 (0.5h)
+  - テスト結果のドキュメント化
+  - 手動検証が必要な項目のリスト化
+
+### Phase 7: ドキュメント (見積もり: 0.5〜1h)
+```
+
+## Turn 38: ツール実行
+
+**種別**: reasoning
+**ステータス**: completed
+
+## Turn 39: ツール実行
 
 **種別**: コマンド実行
 **コマンド**: `/bin/bash -lc 'cat .ai-workflow/issue-496/03_test_scenario/output/test-scenario.md'`
@@ -542,519 +1241,15 @@ test_ecs_image_pipeline.sh
 ... (truncated)
 ```
 
-## Turn 18: ツール実行
+## Turn 40: ツール実行
 
 **種別**: reasoning
 **ステータス**: completed
 
-## Turn 19: ツール実行
+## Turn 41: ツール実行
 
 **種別**: コマンド実行
-**コマンド**: `/bin/bash -lc "sed -n '1,200p' tests/integration/ecs-image/test_ecs_image_pipeline.sh"`
-**ステータス**: completed (exit_code=0)
-
-```text
-#!/bin/bash
-# Integration test: Validate EC2 Image Builder resources for Jenkins ECS agent image (Issue #496).
-# Covers SSM outputs, pipeline status, container recipe, distribution configuration,
-# infrastructure configuration, and IAM policy attachments to ensure the Pulumi stack deployed correctly.
-
-set -euo pipefail
-
-ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
-ENVIRONMENT="${ENVIRONMENT:-dev}"
-AWS_REGION="${AWS_REGION:-ap-northeast-1}"
-SSM_PREFIX="/jenkins-infra/${ENVIRONMENT}"
-
-PIPELINE_ARN=""
-COMPONENT_VERSION=""
-RECIPE_VERSION=""
-ECR_REPOSITORY_URL=""
-CONTAINER_RECIPE_ARN=""
-DISTRIBUTION_CONFIG_ARN=""
-INFRA_CONFIG_ARN=""
-COMPONENT_ARN=""
-SUBNET_ID=""
-SECURITY_GROUP_ID=""
-INSTANCE_PROFILE_ROLE=""
-
-log_info() {
-  echo "[INFO] $*"
-}
-
-log_error() {
-  echo "[ERROR] $*" >&2
-}
-
-log_section() {
-  echo
-  echo "=== $* ==="
-}
-
-require_cmd() {
-  command -v "$1" >/dev/null 2>&1 || {
-    log_error "Required command '$1' not found in PATH"
-    exit 1
-  }
-}
-
-fetch_param() {
-  local name="$1"
-  local description="$2"
-  local value
-
-  value=$(aws ssm get-parameter \
-    --name "$name" \
-    --region "$AWS_REGION" \
-    --query "Parameter.Value" \
-    --output text 2>/dev/null || true)
-
-  if [ -z "$value" ] || [ "$value" = "None" ]; then
-    log_error "SSM parameter missing for ${description}: ${name}"
-    return 1
-  fi
-
-  echo "$value"
-}
-
-assert_regex() {
-  local value="$1"
-  local pattern="$2"
-  local message="$3"
-
-  if [[ "$value" =~ $pattern ]]; then
-    return 0
-  fi
-
-  log_error "$message (value: ${value})"
-  return 1
-}
-
-test_ssm_parameters_exist() {
-  log_section "INT-ECS-IMG-001: SSM parameter presence and format"
-  local failed=0
-
-  PIPELINE_ARN=$(fetch_param "${SSM_PREFIX}/agent-ecs-image/pipeline-arn" "pipeline ARN") || failed=1
-  COMPONENT_VERSION=$(fetch_param "${SSM_PREFIX}/agent-ecs-image/component-version" "component version") || failed=1
-  RECIPE_VERSION=$(fetch_param "${SSM_PREFIX}/agent-ecs-image/recipe-version" "recipe version") || failed=1
-  ECR_REPOSITORY_URL=$(fetch_param "${SSM_PREFIX}/agent/ecr-repository-url" "ECR repository URL") || failed=1
-  SUBNET_ID=$(fetch_param "${SSM_PREFIX}/network/public-subnet-a-id" "public subnet A ID") || failed=1
-  SECURITY_GROUP_ID=$(fetch_param "${SSM_PREFIX}/security/jenkins-agent-sg-id" "jenkins agent security group ID") || failed=1
-
-  [[ $failed -ne 0 ]] && return 1
-
-  assert_regex "$PIPELINE_ARN" '^arn:aws:imagebuilder:' "Pipeline ARN must be an Image Builder ARN" || failed=1
-  assert_regex "$COMPONENT_VERSION" '^1\.[0-9]{6}\.[0-9]+$' "Component version must follow 1.YYMMDD.seconds format" || failed=1
-  assert_regex "$RECIPE_VERSION" '^1\.[0-9]{6}\.[0-9]+$' "Recipe version must follow 1.YYMMDD.seconds format" || failed=1
-
-  return $failed
-}
-
-test_pipeline_status() {
-  log_section "INT-ECS-IMG-002: Image Builder pipeline status"
-  local pipeline_json status
-
-  pipeline_json=$(aws imagebuilder get-image-pipeline \
-    --image-pipeline-arn "$PIPELINE_ARN" \
-    --region "$AWS_REGION" \
-    --query "imagePipeline" \
-    --output json 2>/dev/null || true)
-
-  if [ -z "$pipeline_json" ] || [ "$pipeline_json" = "null" ]; then
-    log_error "Image pipeline not found for ARN: ${PIPELINE_ARN}"
-    return 1
-  fi
-
-  status=$(echo "$pipeline_json" | jq -r '.status // empty')
-  if [ "$status" != "ENABLED" ]; then
-    log_error "Pipeline status is not ENABLED (current: ${status})"
-    return 1
-  fi
-
-  CONTAINER_RECIPE_ARN=$(echo "$pipeline_json" | jq -r '.containerRecipeArn // empty')
-  DISTRIBUTION_CONFIG_ARN=$(echo "$pipeline_json" | jq -r '.distributionConfigurationArn // empty')
-  INFRA_CONFIG_ARN=$(echo "$pipeline_json" | jq -r '.infrastructureConfigurationArn // empty')
-
-  if [ -z "$CONTAINER_RECIPE_ARN" ] || [ -z "$DISTRIBUTION_CONFIG_ARN" ] || [ -z "$INFRA_CONFIG_ARN" ]; then
-    log_error "Pipeline missing required references (container recipe, distribution config, or infrastructure config)."
-    return 1
-  fi
-
-  log_info "Pipeline ENABLED with recipe: ${CONTAINE
-... (truncated)
-```
-
-## Turn 20: ツール実行
-
-**種別**: reasoning
-**ステータス**: completed
-
-## Turn 21: ツール実行
-
-**種別**: コマンド実行
-**コマンド**: `/bin/bash -lc "sed -n '200,400p' tests/integration/ecs-image/test_ecs_image_pipeline.sh"`
-**ステータス**: completed (exit_code=0)
-
-```text
-}
-
-test_infrastructure_configuration() {
-  log_section "INT-ECS-IMG-005: Infrastructure configuration and IAM role"
-  local infra_json profile_name instance_type subnet_id security_groups terminate role_name policies
-
-  infra_json=$(aws imagebuilder get-infrastructure-configuration \
-    --infrastructure-configuration-arn "$INFRA_CONFIG_ARN" \
-    --region "$AWS_REGION" \
-    --query "infrastructureConfiguration" \
-    --output json 2>/dev/null || true)
-
-  if [ -z "$infra_json" ] || [ "$infra_json" = "null" ]; then
-    log_error "Infrastructure configuration not found: ${INFRA_CONFIG_ARN}"
-    return 1
-  fi
-
-  profile_name=$(echo "$infra_json" | jq -r '.instanceProfileName // empty')
-  instance_type=$(echo "$infra_json" | jq -r '.instanceTypes[0] // empty')
-  subnet_id=$(echo "$infra_json" | jq -r '.subnetId // empty')
-  security_groups=$(echo "$infra_json" | jq -r '.securityGroupIds | join(",")')
-  terminate=$(echo "$infra_json" | jq -r '.terminateInstanceOnFailure // empty')
-
-  if [ -z "$profile_name" ] || [ -z "$instance_type" ] || [ -z "$subnet_id" ] || [ -z "$security_groups" ]; then
-    log_error "Infrastructure configuration missing required fields"
-    return 1
-  fi
-
-  if [ "$instance_type" != "t3.medium" ]; then
-    log_error "Unexpected instance type: ${instance_type}"
-    return 1
-  fi
-
-  if [ "$subnet_id" != "$SUBNET_ID" ]; then
-    log_error "Subnet mismatch (${subnet_id}) expected ${SUBNET_ID}"
-    return 1
-  fi
-
-  if ! echo "$security_groups" | tr ',' '\n' | grep -q "$SECURITY_GROUP_ID"; then
-    log_error "Security group ${SECURITY_GROUP_ID} not attached to infrastructure configuration"
-    return 1
-  fi
-
-  if [ "$terminate" != "true" ]; then
-    log_error "terminateInstanceOnFailure must be true"
-    return 1
-  fi
-
-  role_name=$(aws iam get-instance-profile \
-    --instance-profile-name "$profile_name" \
-    --query "InstanceProfile.Roles[0].RoleName" \
-    --output text 2>/dev/null || true)
-
-  if [ -z "$role_name" ] || [ "$role_name" = "None" ]; then
-    log_error "IAM role not found for instance profile ${profile_name}"
-    return 1
-  fi
-
-  INSTANCE_PROFILE_ROLE="$role_name"
-  policies=$(aws iam list-attached-role-policies \
-    --role-name "$role_name" \
-    --query "AttachedPolicies[].PolicyArn" \
-    --output text 2>/dev/null || true)
-
-  for required in \
-    "EC2InstanceProfileForImageBuilder" \
-    "AmazonSSMManagedInstanceCore" \
-    "EC2InstanceProfileForImageBuilderECRContainerBuilds"; do
-    if ! echo "$policies" | grep -q "$required"; then
-      log_error "Required IAM policy missing from role ${role_name}: ${required}"
-      return 1
-    fi
-  done
-
-  if ! echo "$policies" | grep -q "imagebuilder-ecr-policy"; then
-    log_error "Custom ECR push policy is not attached to role ${role_name}"
-    return 1
-  fi
-
-  log_info "Infrastructure configuration and IAM role validated (profile: ${profile_name}, role: ${role_name})"
-  return 0
-}
-
-test_component_definition() {
-  log_section "INT-ECS-IMG-007: Component definition validation"
-  local component_json platform has_build has_validate
-
-  component_json=$(aws imagebuilder get-component \
-    --component-build-version-arn "$COMPONENT_ARN" \
-    --region "$AWS_REGION" \
-    --query "component" \
-    --output json 2>/dev/null || true)
-
-  if [ -z "$component_json" ] || [ "$component_json" = "null" ]; then
-    log_error "Component not found: ${COMPONENT_ARN}"
-    return 1
-  fi
-
-  platform=$(echo "$component_json" | jq -r '.platform // empty')
-  if [ "$platform" != "Linux" ]; then
-    log_error "Component platform must be Linux (current: ${platform})"
-    return 1
-  fi
-
-  has_build=$(echo "$component_json" | jq -r '.phases[]?.name' | grep -c "^build$" || true)
-  has_validate=$(echo "$component_json" | jq -r '.phases[]?.name' | grep -c "^validate$" || true)
-
-  if [ "$has_build" -eq 0 ] || [ "$has_validate" -eq 0 ]; then
-    log_error "Component is missing build or validate phase definitions"
-    return 1
-  fi
-
-  log_info "Component phases validated (build/validat
-... (truncated)
-```
-
-## Turn 22: ツール実行
-
-**種別**: reasoning
-**ステータス**: completed
-
-## Turn 23: ツール実行
-
-**種別**: コマンド実行
-**コマンド**: `/bin/bash -lc "sed -n '1,200p' tests/integration/ecs-image/test_ansible_playbooks.sh"`
-**ステータス**: completed (exit_code=0)
-
-```text
-#!/bin/bash
-# Integration test: Validate Ansible playbooks for jenkins-agent-ecs-image stack (Issue #496).
-# Ensures deploy/remove playbooks pass syntax checks and removal playbook enforces confirm flag.
-
-set -euo pipefail
-
-ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
-ANSIBLE_DIR="${ROOT_DIR}/ansible"
-PLAYBOOK_DEPLOY="playbooks/jenkins/deploy/deploy_jenkins_agent_ecs_image.yml"
-PLAYBOOK_REMOVE="playbooks/jenkins/remove/remove_jenkins_agent_ecs_image.yml"
-ENVIRONMENT="${ENVIRONMENT:-dev}"
-
-log_info() {
-  echo "[INFO] $*"
-}
-
-log_error() {
-  echo "[ERROR] $*" >&2
-}
-
-require_cmd() {
-  command -v "$1" >/dev/null 2>&1 || {
-    log_error "Required command '$1' not found in PATH"
-    exit 1
-  }
-}
-
-run_test() {
-  local name="$1"
-  shift
-  TOTAL=$((TOTAL + 1))
-  if "$@"; then
-    PASSED=$((PASSED + 1))
-  else
-    FAILED=$((FAILED + 1))
-  fi
-}
-
-test_syntax_checks() {
-  log_info "INT-ECS-IMG-011/012: Running ansible-playbook --syntax-check"
-  ANSIBLE_CONFIG="${ANSIBLE_DIR}/ansible.cfg" \
-    ANSIBLE_STDOUT_CALLBACK=default \
-    ansible-playbook --syntax-check "${PLAYBOOK_DEPLOY}"
-
-  ANSIBLE_CONFIG="${ANSIBLE_DIR}/ansible.cfg" \
-    ANSIBLE_STDOUT_CALLBACK=default \
-    ansible-playbook --syntax-check "${PLAYBOOK_REMOVE}"
-}
-
-test_remove_requires_confirmation() {
-  log_info "INT-ECS-IMG-012: Verifying remove playbook requires confirm=true"
-  local rc=0
-
-  set +e
-  ANSIBLE_CONFIG="${ANSIBLE_DIR}/ansible.cfg" \
-    ANSIBLE_STDOUT_CALLBACK=default \
-    ansible-playbook "${PLAYBOOK_REMOVE}" \
-    -e "env=${ENVIRONMENT}" \
-    --check >/dev/null
-  rc=$?
-  set -e
-
-  if [ $rc -eq 0 ]; then
-    log_error "Removal playbook ran without confirm=true but should fail fast"
-    return 1
-  fi
-
-  log_info "Removal playbook correctly blocks execution without confirm flag"
-  return 0
-}
-
-main() {
-  require_cmd ansible-playbook
-  cd "${ANSIBLE_DIR}"
-
-  TOTAL=0
-  PASSED=0
-  FAILED=0
-
-  echo "=============================================="
-  echo "Ansible playbook validation for ECS image stack"
-  echo "Environment: ${ENVIRONMENT}"
-  echo "Ansible dir: ${ANSIBLE_DIR}"
-  echo "=============================================="
-
-  run_test "Ansible syntax checks" test_syntax_checks
-  run_test "Removal requires confirmation" test_remove_requires_confirmation
-
-  echo
-  echo "=============================================="
-  echo "Test summary: ${PASSED}/${TOTAL} passed, ${FAILED} failed"
-  echo "=============================================="
-
-  if [ "$FAILED" -ne 0 ]; then
-    exit 1
-  fi
-}
-
-main "$@"
-```
-
-## Turn 24: ツール実行
-
-**種別**: reasoning
-**ステータス**: completed
-
-## Turn 25: ツール実行
-
-**種別**: コマンド実行
-**コマンド**: `/bin/bash -lc "sed -n '1,200p' tests/integration/__init__.py"`
-**ステータス**: completed (exit_code=0)
-
-```text
-# Integration tests for Jenkins configuration.
-```
-
-## Turn 26: ツール実行
-
-**種別**: reasoning
-**ステータス**: completed
-
-## Turn 27: ツール実行
-
-**種別**: コマンド実行
-**コマンド**: `/bin/bash -lc 'rg -n "helper" tests/integration'`
-**ステータス**: failed (exit_code=127)
-
-```text
-/bin/bash: line 1: rg: command not found
-```
-
-## Turn 28: ツール実行
-
-**種別**: reasoning
-**ステータス**: completed
-
-## Turn 29: ツール実行
-
-**種別**: コマンド実行
-**コマンド**: `/bin/bash -lc 'grep -R "helper" -n tests/integration'`
-**ステータス**: failed (exit_code=1)
-
-## Turn 30: ツール実行
-
-**種別**: reasoning
-**ステータス**: completed
-
-## Turn 31: ツール実行
-
-**種別**: コマンド実行
-**コマンド**: `/bin/bash -lc 'find tests/integration -maxdepth 2 -type d'`
-**ステータス**: completed (exit_code=0)
-
-```text
-tests/integration
-tests/integration/ecs-fargate
-tests/integration/ecs-image
-```
-
-## Turn 32: ツール実行
-
-**種別**: reasoning
-**ステータス**: completed
-
-## Turn 33: ツール実行
-
-**種別**: コマンド実行
-**コマンド**: `/bin/bash -lc 'grep -R "test_" -n tests/integration/ecs-image'`
-**ステータス**: completed (exit_code=0)
-
-```text
-tests/integration/ecs-image/test_ecs_image_pipeline.sh:77:test_ssm_parameters_exist() {
-tests/integration/ecs-image/test_ecs_image_pipeline.sh:97:test_pipeline_status() {
-tests/integration/ecs-image/test_ecs_image_pipeline.sh:131:test_container_recipe() {
-tests/integration/ecs-image/test_ecs_image_pipeline.sh:170:test_distribution_configuration() {
-tests/integration/ecs-image/test_ecs_image_pipeline.sh:202:test_infrastructure_configuration() {
-tests/integration/ecs-image/test_ecs_image_pipeline.sh:283:test_component_definition() {
-tests/integration/ecs-image/test_ecs_image_pipeline.sh:341:  run_test "INT-ECS-IMG-001 SSM parameters" test_ssm_parameters_exist
-tests/integration/ecs-image/test_ecs_image_pipeline.sh:342:  run_test "INT-ECS-IMG-002 Pipeline status" test_pipeline_status
-tests/integration/ecs-image/test_ecs_image_pipeline.sh:343:  run_test "INT-ECS-IMG-003 Container recipe" test_container_recipe
-tests/integration/ecs-image/test_ecs_image_pipeline.sh:344:  run_test "INT-ECS-IMG-004 Distribution configuration" test_distribution_configuration
-tests/integration/ecs-image/test_ecs_image_pipeline.sh:345:  run_test "INT-ECS-IMG-005 Infrastructure configuration" test_infrastructure_configuration
-tests/integration/ecs-image/test_ecs_image_pipeline.sh:346:  run_test "INT-ECS-IMG-007 Component definition" test_component_definition
-tests/integration/ecs-image/test_ansible_playbooks.sh:39:test_syntax_checks() {
-tests/integration/ecs-image/test_ansible_playbooks.sh:50:test_remove_requires_confirmation() {
-tests/integration/ecs-image/test_ansible_playbooks.sh:86:  run_test "Ansible syntax checks" test_syntax_checks
-tests/integration/ecs-image/test_ansible_playbooks.sh:87:  run_test "Removal requires confirmation" test_remove_requires_confirmation
-```
-
-## Turn 34: ツール実行
-
-**種別**: reasoning
-**ステータス**: completed
-
-## Turn 35: ツール実行
-
-**種別**: コマンド実行
-**コマンド**: `/bin/bash -lc 'grep -R "component.yml" -n'`
-**ステータス**: completed (exit_code=0)
-
-```text
-grep: .git/index: binary file matches
-.ai-workflow/issue-440/00_planning/output/planning.md:24:- 既存のcomponent.ymlファイルの構造理解: 0.5h
-.ai-workflow/issue-440/00_planning/output/planning.md:355:4. EC2インスタンスにSSMエージェントがインストール済みであることを確認（既存のcomponent.ymlで確認済み）
-.ai-workflow/issue-496/00_planning/output/planning.md:58:- 新規のComponent YAML（`component.yml`）を作成
-.ai-workflow/issue-496/00_planning/output/planning.md:139:  - `component.yml` の構造設計
-.ai-workflow/issue-496/00_planning/output/planning.md:167:  - `component.yml` の作成
-.ai-workflow/issue-496/00_planning/execute/prompt.txt:44:- [ ] コンポーネント定義YAMLを作成（`component.yml`）
-.ai-workflow/issue-496/00_planning/execute/agent_log_raw.txt:92:{"type":"assistant","message":{"model":"claude-opus-4-5-20251101","id":"msg_01YACwKaaH58GvkCaQRPDkkC","type":"message","role":"assistant","content":[{"type":"tool_use","id":"toolu_01Nnfpi7q31UPSancTYW4bPT","name":"Write","input":{"file_path":"/tmp/ai-workflow-repos-2-53f9e8c1/infrastructure-as-code/.ai-workflow/issue-496/00_planning/output/planning.md","content":"# プロジェクト計画書: Issue #496\n\n## EC2 Image BuilderでECS Fargate Agent Dockerイメージの自動ビルド\n\n**作成日**: 2025-01-14\n**Issue URL**: https://github.com/tielec/infrastructure-as-code/issues/496\n\n---\n\n## 1. Issue分析\n\n### 1.1 概要\n現在、ECS Fargate Agent用のDockerイメージは手作業でビルド・ECRへプッシュしている。既存の`jenkins-agent-ami`スタックで使用しているEC2 Image Builder（AMI作成用）と同様のアプローチで、コンテナイメージのビルドも自動化する。\n\n### 1.2 複雑度: **中程度**\n\n**判定理由**:\n- 既存の`jenkins-agent-ami`スタックが参考実装として存在し、パターンを踏襲可能\n- EC2 Image BuilderのContainerRecipe機能は既存のImageRecipeと類似のAPI構造\n- 新規Pulumiスタックの作成が必要だが、既存パターンに従う\n- DockerfileからImage Builder Component形式への変換が必要（技術的な変換作業）\n- AnsibleプレイブックやSSMパラメータの追加が必要\n\n### 1.3 見積もり工数: **12〜16時間**\n\n| フェーズ | 見積もり |\n|---------|---------|\n| 要件定義 | 1〜2h |\n| 設計 | 2〜3h |\n| テストシナリオ | 1〜2h |\n| 実装 | 5〜6h |\n| テスト実装・実行 | 2〜3h |\n| ドキュメント | 0.5〜1h |\n| レポート | 0.5h |\n\n**根拠**:\n- 参考実装（jenkins-agent-ami）があり、パターン踏襲で効率的に実装可能\n- EC2 Image Builder ContainerRecipeはPulumiで十分サポートされている\n- 既存のDockerfile（約100行）をComponent YAML形式に変換する作業が主要な技術作業\n- 統合テストは実際のAWSリソース作成を伴うため時間がかかる可能性\n\n### 1.4 リスク評価: **中**\n\n**理由**:\n- EC2 Image Builderのコンテナビルドは、Dockerfileの一部機能に制限あり（multi-stage build等）\n- entrypoint.shの扱いをComponent YAMLで対応する必要あり\n- 実際のイメージビルドには30分〜1時間程度かかり、デバッグサイクルが長い\n\n---\n\n## 2. 実装戦略判断\n\n### 2.1 実装戦略: **CREATE**\n\n**判断根拠**:\n- 新規Pulumiスタック `pulumi/jenkins-agent-ecs-image/` を完全に新規作成\n- 既存の `pulumi/jenkins-agent-ami/index.ts` をテンプレートとして使用するが、コードは新規作成\n- 新規のComponent YAML（`component.yml`）を作成\n- 新規のAnsibleプレイブック・ロールの作成\n- 既存コードの修正ではなく、新規モジュールの追加が中心\n\n### 2.2 テスト戦略: **INTEGRATION_ONLY**\n\n**判断根拠**:\n- Pulumiスタックは主にAWSリソースのプロビジョニングを行う\n- ユニットテストの対象となる複雑なビジネスロジックは存在しない\n- 実際のAWSリソース（ECR、Image Builder）との統合確認が主なテスト対象\n- BDDはエンドユーザー向け機能ではないため不要\n- 既存の`tests/integration/ecs-fargate/`パターンに従う\n\n### 2.3 テストコード戦略: **CREATE_TEST**\n\n**判断根拠**:\n- 新規機能のため、新規テストファイルを作成\n- `tests/integration/ecs-image/` ディレクトリを新規作成\n- テストスクリプト: `test_ecs_image_pipeline.sh`（パイプラインリソース検証）\n- 既存のテストファイルへの追加は不要\n\n---\n\n## 3. 影響範囲分析\n\n### 3.1 既存コードへの影響\n\n| ファイル/ディレクトリ | 影響 | 詳細 |\n|----------------------|------|------|\n| `pulumi/` | 新規追加 | `jenkins-agent-ecs-image/` スタック追加 |\n| `ansible/playbooks/jenkins/deploy/` | 新規追加 | デプロイ用プレイブック追加 |\n| `ansible/playbooks/jenkins/remove/` | 新規追加 | 削除用プレイブック追加 |\n| `ansible/roles/` | 新規追加 | `jenkins_agent_ecs_image` ロール追加 |\n| `pulumi/jenkins-agent/index.ts` | 変更なし | 既存のECRリポジトリ定義はそのまま使用 |\n| `docker/jenkins-agent-ecs/` | 変更なし | 既存Dockerfile/entrypoint.shは参照のみ |\n\n### 3.2 依存関係の変更\n\n**新規依存の追加**:\n- `jenkins-agent-ecs-image` スタックは以下に依存:\n  - `jenkins-network`（VPC、サブネット）\n  - `jenkins-security`（セキュリティグループ）\n  - `jenkins-agent`（ECRリポジトリ）← 既存のECRを使用\n\n**既存依存の変更**:\n- なし（新規スタックの追加のみ）\n\n### 3.3 マイグレーション要否\n\n**データベーススキーマ変更**: 不要\n\n**設定ファイル変更**:\n- SSMパラメータの追加（`/jenkins-infra/{env}/agent-ecs-image/*`）\n- Ansible変数の追加（`ansible/inventory/group_vars/all.yml`への項目追加は検討）\n\n---\n\n## 4. タスク分割\n\n### Phase 1: 要件定義 (見積もり: 1〜2h)\n\n- [ ] Task 1-1: 機能要件の詳細化 (0.5h)
-... (truncated)
-```
-
-## Turn 36: ツール実行
-
-**種別**: reasoning
-**ステータス**: completed
-
-## Turn 37: ツール実行
-
-**種別**: file_change
-**ステータス**: completed
-
-## Turn 38: ツール実行
-
-**種別**: reasoning
-**ステータス**: completed
-
-## Turn 39: ツール実行
-
-**種別**: コマンド実行
-**コマンド**: `/bin/bash -lc "nl -ba tests/integration/ecs-image/test_ecs_image_pipeline.sh | sed -n '1,200p'"`
+**コマンド**: `/bin/bash -lc 'nl -ba tests/integration/ecs-image/test_ecs_image_pipeline.sh | head -n 60'`
 **ステータス**: completed (exit_code=0)
 
 ```text
@@ -1066,220 +1261,58 @@ grep: .git/index: binary file matches
      6	set -euo pipefail
      7	
      8	ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
-     9	ENVIRONMENT="${ENVIRONMENT:-dev}"
-    10	AWS_REGION="${AWS_REGION:-ap-northeast-1}"
-    11	SSM_PREFIX="/jenkins-infra/${ENVIRONMENT}"
-    12	
-    13	PIPELINE_ARN=""
-    14	COMPONENT_VERSION=""
-    15	RECIPE_VERSION=""
-    16	ECR_REPOSITORY_URL=""
-    17	CONTAINER_RECIPE_ARN=""
-    18	DISTRIBUTION_CONFIG_ARN=""
-    19	INFRA_CONFIG_ARN=""
-    20	COMPONENT_ARN=""
-    21	SUBNET_ID=""
-    22	SECURITY_GROUP_ID=""
-    23	INSTANCE_PROFILE_ROLE=""
-    24	
-    25	log_info() {
-    26	  echo "[INFO] $*"
-    27	}
-    28	
-    29	log_error() {
-    30	  echo "[ERROR] $*" >&2
-    31	}
-    32	
-    33	log_section() {
-    34	  echo
-    35	  echo "=== $* ==="
-    36	}
+     9	source "${ROOT_DIR}/tests/integration/ecs-image/helpers.sh"
+    10	
+    11	ENVIRONMENT="${ENVIRONMENT:-dev}"
+    12	AWS_REGION="${AWS_REGION:-ap-northeast-1}"
+    13	SSM_PREFIX="/jenkins-infra/${ENVIRONMENT}"
+    14	
+    15	PIPELINE_ARN=""
+    16	COMPONENT_VERSION=""
+    17	RECIPE_VERSION=""
+    18	ECR_REPOSITORY_URL=""
+    19	CONTAINER_RECIPE_ARN=""
+    20	DISTRIBUTION_CONFIG_ARN=""
+    21	INFRA_CONFIG_ARN=""
+    22	COMPONENT_ARN=""
+    23	SUBNET_ID=""
+    24	SECURITY_GROUP_ID=""
+    25	INSTANCE_PROFILE_ROLE=""
+    26	
+    27	test_ssm_parameters_exist() {
+    28	  log_section "INT-ECS-IMG-001: SSM parameter presence and format"
+    29	  local failed=0
+    30	
+    31	  PIPELINE_ARN=$(fetch_param "${SSM_PREFIX}/agent-ecs-image/pipeline-arn" "pipeline ARN") || failed=1
+    32	  COMPONENT_VERSION=$(fetch_param "${SSM_PREFIX}/agent-ecs-image/component-version" "component version") || failed=1
+    33	  RECIPE_VERSION=$(fetch_param "${SSM_PREFIX}/agent-ecs-image/recipe-version" "recipe version") || failed=1
+    34	  ECR_REPOSITORY_URL=$(fetch_param "${SSM_PREFIX}/agent/ecr-repository-url" "ECR repository URL") || failed=1
+    35	  SUBNET_ID=$(fetch_param "${SSM_PREFIX}/network/public-subnet-a-id" "public subnet A ID") || failed=1
+    36	  SECURITY_GROUP_ID=$(fetch_param "${SSM_PREFIX}/security/jenkins-agent-sg-id" "jenkins agent security group ID") || failed=1
     37	
-    38	require_cmd() {
-    39	  command -v "$1" >/dev/null 2>&1 || {
-    40	    log_error "Required command '$1' not found in PATH"
-    41	    exit 1
-    42	  }
-    43	}
-    44	
-    45	fetch_param() {
-    46	  local name="$1"
-    47	  local description="$2"
-    48	  local value
-    49	
-    50	  value=$(aws ssm get-parameter \
-    51	    --name "$name" \
-    52	    --region "$AWS_REGION" \
-    53	    --query "Parameter.Value" \
-    54	    --output text 2>/dev/null || true)
-    55	
-    56	  if [ -z "$value" ] || [ "$value" = "None" ]; then
-    57	    log_error "SSM parameter missing for ${description}: ${name}"
-    58	    return 1
-    59	  fi
-    60	
-    61	  echo "$value"
-    62	}
-    63	
-    64	assert_regex() {
-    65	  local value="$1"
-    66	  local pattern="$2"
-    67	  local message="$3"
-    68	
-    69	  if [[ "$value" =~ $pattern ]]; then
-    70	    return 0
-    71	  fi
-    72	
-    73	  log_error "$message (value: ${value})"
-    74	  return 1
-    75	}
-    76	
-    77	test_ssm_parameters_exist() {
-    78	  log_section "INT-ECS-IMG-001: SSM parameter presence and format"
-    79	  local failed=0
-    80	
-    81	  PIPELINE_ARN=$(fetch_param "${SSM_PREFIX}/agent-ecs-image/pipeline-arn" "pipeline ARN") || failed=1
-    82	  COMPONENT_VERSION=$(fetch_param "${SSM_PREFIX}/agent-ecs-image/component-version" "component version") || failed=1
-    83	  RECIPE_VERSION=$(fetch_param "${SSM_PREFIX}/agent-ecs-image/recipe-version" "recipe version") || failed=1
-    84	  ECR_REPOSITORY_URL=$(fetch_param "${SSM_PREFIX}/agent/ecr-repository-url" "ECR repository URL") || failed=1
-    85	  SUBNET_ID=$(fetch_param "${SSM_PREFIX}/network/public-subnet-a-id" "public subnet A ID") || failed=1
-    86	  SECURITY_GROUP_ID=$(fetch_param "${SSM_PREFIX}/security/jenkins-agent-sg-id" "jenkins agent security group ID") || failed=1
-    87	
-    88	  [[ $failed -ne 0 ]] && return 1
-    89	
-    90	  assert_regex "$PIPELINE_ARN" '^arn:aws:imagebuilder:' "Pipeline ARN must be an Image Builder ARN" || failed=1
-    91	  assert_regex "$COMPONENT_VERSION" '^1\.[0-9]{6}\.[0-9]+$' "Component version must follow 1.YYMMDD.seconds format" || failed=1
-    92	  assert_regex "$RECIPE_VERSION" '^1\.[0-9]{6}\.[0-9]+$' "Recipe version must follow 1.YYMMDD.seconds format" || failed=1
-    93	
-    94	  return $failed
-    95	}
-    96	
-    97	test_pipeline_status() {
-    98	  log_section "INT-ECS-IMG-002: Image Builder pipeline status"
-    99	  local pipeline_json status
-   100	
-   101	  pipeline_json=$(aws imagebuilder get-image-pipeline \
-   102	    --image-pipeline-arn "$PIPELINE_ARN" \
-   103	    --region "$AWS_REGION" \
-   104	    --query "imagePipeline" \
-   105	    --output json 2>/dev/null || true)
-   106	
-   107	  if [ -z "$pipeline_json" ] || [ "$pipeline_json" = "null" ]; then
-   108	    log_error "Image pipeline not found for ARN: ${PIPELINE_ARN}"
-   109	    return 1
-   110	  fi
-   11
-... (truncated)
-```
-
-## Turn 40: ツール実行
-
-**種別**: reasoning
-**ステータス**: completed
-
-## Turn 41: ツール実行
-
-**種別**: コマンド実行
-**コマンド**: `/bin/bash -lc "nl -ba tests/integration/ecs-image/test_ecs_image_pipeline.sh | sed -n '200,400p'"`
-**ステータス**: completed (exit_code=0)
-
-```text
-200	}
-   201	
-   202	test_infrastructure_configuration() {
-   203	  log_section "INT-ECS-IMG-005: Infrastructure configuration and IAM role"
-   204	  local infra_json profile_name instance_type subnet_id security_groups terminate role_name policies
-   205	
-   206	  infra_json=$(aws imagebuilder get-infrastructure-configuration \
-   207	    --infrastructure-configuration-arn "$INFRA_CONFIG_ARN" \
-   208	    --region "$AWS_REGION" \
-   209	    --query "infrastructureConfiguration" \
-   210	    --output json 2>/dev/null || true)
-   211	
-   212	  if [ -z "$infra_json" ] || [ "$infra_json" = "null" ]; then
-   213	    log_error "Infrastructure configuration not found: ${INFRA_CONFIG_ARN}"
-   214	    return 1
-   215	  fi
-   216	
-   217	  profile_name=$(echo "$infra_json" | jq -r '.instanceProfileName // empty')
-   218	  instance_type=$(echo "$infra_json" | jq -r '.instanceTypes[0] // empty')
-   219	  subnet_id=$(echo "$infra_json" | jq -r '.subnetId // empty')
-   220	  security_groups=$(echo "$infra_json" | jq -r '.securityGroupIds | join(",")')
-   221	  terminate=$(echo "$infra_json" | jq -r '.terminateInstanceOnFailure // empty')
-   222	
-   223	  if [ -z "$profile_name" ] || [ -z "$instance_type" ] || [ -z "$subnet_id" ] || [ -z "$security_groups" ]; then
-   224	    log_error "Infrastructure configuration missing required fields"
-   225	    return 1
-   226	  fi
-   227	
-   228	  if [ "$instance_type" != "t3.medium" ]; then
-   229	    log_error "Unexpected instance type: ${instance_type}"
-   230	    return 1
-   231	  fi
-   232	
-   233	  if [ "$subnet_id" != "$SUBNET_ID" ]; then
-   234	    log_error "Subnet mismatch (${subnet_id}) expected ${SUBNET_ID}"
-   235	    return 1
-   236	  fi
-   237	
-   238	  if ! echo "$security_groups" | tr ',' '\n' | grep -q "$SECURITY_GROUP_ID"; then
-   239	    log_error "Security group ${SECURITY_GROUP_ID} not attached to infrastructure configuration"
-   240	    return 1
-   241	  fi
-   242	
-   243	  if [ "$terminate" != "true" ]; then
-   244	    log_error "terminateInstanceOnFailure must be true"
-   245	    return 1
-   246	  fi
-   247	
-   248	  role_name=$(aws iam get-instance-profile \
-   249	    --instance-profile-name "$profile_name" \
-   250	    --query "InstanceProfile.Roles[0].RoleName" \
-   251	    --output text 2>/dev/null || true)
-   252	
-   253	  if [ -z "$role_name" ] || [ "$role_name" = "None" ]; then
-   254	    log_error "IAM role not found for instance profile ${profile_name}"
-   255	    return 1
-   256	  fi
-   257	
-   258	  INSTANCE_PROFILE_ROLE="$role_name"
-   259	  policies=$(aws iam list-attached-role-policies \
-   260	    --role-name "$role_name" \
-   261	    --query "AttachedPolicies[].PolicyArn" \
-   262	    --output text 2>/dev/null || true)
-   263	
-   264	  for required in \
-   265	    "EC2InstanceProfileForImageBuilder" \
-   266	    "AmazonSSMManagedInstanceCore" \
-   267	    "EC2InstanceProfileForImageBuilderECRContainerBuilds"; do
-   268	    if ! echo "$policies" | grep -q "$required"; then
-   269	      log_error "Required IAM policy missing from role ${role_name}: ${required}"
-   270	      return 1
-   271	    fi
-   272	  done
-   273	
-   274	  if ! echo "$policies" | grep -q "imagebuilder-ecr-policy"; then
-   275	    log_error "Custom ECR push policy is not attached to role ${role_name}"
-   276	    return 1
-   277	  fi
-   278	
-   279	  log_info "Infrastructure configuration and IAM role validated (profile: ${profile_name}, role: ${role_name})"
-   280	  return 0
-   281	}
-   282	
-   283	test_component_definition() {
-   284	  log_section "INT-ECS-IMG-007: Component definition validation"
-   285	  local component_json platform has_build has_validate
-   286	
-   287	  component_json=$(aws imagebuilder get-component \
-   288	    --component-build-version-arn "$COMPONENT_ARN" \
-   289	    --region "$AWS_REGION" \
-   290	    --query "component" \
-   291	    --output json 2>/dev/null || true)
-   292	
-   293	  if [ -z "$component_json" ] || [ "$component_json" = "null" ]; then
-   294	    l
-... (truncated)
+    38	  [[ $failed -ne 0 ]] && return 1
+    39	
+    40	  assert_regex "$PIPELINE_ARN" '^arn:aws:imagebuilder:' "Pipeline ARN must be an Image Builder ARN" || failed=1
+    41	  assert_regex "$COMPONENT_VERSION" '^1\.[0-9]{6}\.[0-9]+$' "Component version must follow 1.YYMMDD.seconds format" || failed=1
+    42	  assert_regex "$RECIPE_VERSION" '^1\.[0-9]{6}\.[0-9]+$' "Recipe version must follow 1.YYMMDD.seconds format" || failed=1
+    43	
+    44	  return $failed
+    45	}
+    46	
+    47	test_pipeline_status() {
+    48	  log_section "INT-ECS-IMG-002: Image Builder pipeline status"
+    49	  local pipeline_json status
+    50	
+    51	  pipeline_json=$(aws imagebuilder get-image-pipeline \
+    52	    --image-pipeline-arn "$PIPELINE_ARN" \
+    53	    --region "$AWS_REGION" \
+    54	    --query "imagePipeline" \
+    55	    --output json 2>/dev/null || true)
+    56	
+    57	  if [ -z "$pipeline_json" ] || [ "$pipeline_json" = "null" ]; then
+    58	    log_error "Image pipeline not found for ARN: ${PIPELINE_ARN}"
+    59	    return 1
+    60	  fi
 ```
 
 ## Turn 42: ツール実行
@@ -1301,98 +1334,71 @@ grep: .git/index: binary file matches
      5	set -euo pipefail
      6	
      7	ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
-     8	ANSIBLE_DIR="${ROOT_DIR}/ansible"
-     9	PLAYBOOK_DEPLOY="playbooks/jenkins/deploy/deploy_jenkins_agent_ecs_image.yml"
-    10	PLAYBOOK_REMOVE="playbooks/jenkins/remove/remove_jenkins_agent_ecs_image.yml"
-    11	ENVIRONMENT="${ENVIRONMENT:-dev}"
-    12	
-    13	log_info() {
-    14	  echo "[INFO] $*"
-    15	}
-    16	
-    17	log_error() {
-    18	  echo "[ERROR] $*" >&2
-    19	}
-    20	
-    21	require_cmd() {
-    22	  command -v "$1" >/dev/null 2>&1 || {
-    23	    log_error "Required command '$1' not found in PATH"
-    24	    exit 1
-    25	  }
-    26	}
-    27	
-    28	run_test() {
-    29	  local name="$1"
-    30	  shift
-    31	  TOTAL=$((TOTAL + 1))
-    32	  if "$@"; then
-    33	    PASSED=$((PASSED + 1))
-    34	  else
-    35	    FAILED=$((FAILED + 1))
-    36	  fi
-    37	}
-    38	
-    39	test_syntax_checks() {
-    40	  log_info "INT-ECS-IMG-011/012: Running ansible-playbook --syntax-check"
-    41	  ANSIBLE_CONFIG="${ANSIBLE_DIR}/ansible.cfg" \
-    42	    ANSIBLE_STDOUT_CALLBACK=default \
-    43	    ansible-playbook --syntax-check "${PLAYBOOK_DEPLOY}"
-    44	
-    45	  ANSIBLE_CONFIG="${ANSIBLE_DIR}/ansible.cfg" \
-    46	    ANSIBLE_STDOUT_CALLBACK=default \
-    47	    ansible-playbook --syntax-check "${PLAYBOOK_REMOVE}"
-    48	}
-    49	
-    50	test_remove_requires_confirmation() {
-    51	  log_info "INT-ECS-IMG-012: Verifying remove playbook requires confirm=true"
-    52	  local rc=0
-    53	
-    54	  set +e
-    55	  ANSIBLE_CONFIG="${ANSIBLE_DIR}/ansible.cfg" \
-    56	    ANSIBLE_STDOUT_CALLBACK=default \
-    57	    ansible-playbook "${PLAYBOOK_REMOVE}" \
-    58	    -e "env=${ENVIRONMENT}" \
-    59	    --check >/dev/null
-    60	  rc=$?
-    61	  set -e
-    62	
-    63	  if [ $rc -eq 0 ]; then
-    64	    log_error "Removal playbook ran without confirm=true but should fail fast"
-    65	    return 1
-    66	  fi
-    67	
-    68	  log_info "Removal playbook correctly blocks execution without confirm flag"
-    69	  return 0
+     8	source "${ROOT_DIR}/tests/integration/ecs-image/helpers.sh"
+     9	ANSIBLE_DIR="${ROOT_DIR}/ansible"
+    10	PLAYBOOK_DEPLOY="playbooks/jenkins/deploy/deploy_jenkins_agent_ecs_image.yml"
+    11	PLAYBOOK_REMOVE="playbooks/jenkins/remove/remove_jenkins_agent_ecs_image.yml"
+    12	ENVIRONMENT="${ENVIRONMENT:-dev}"
+    13	
+    14	test_syntax_checks() {
+    15	  log_info "INT-ECS-IMG-011/012: Running ansible-playbook --syntax-check"
+    16	  ANSIBLE_CONFIG="${ANSIBLE_DIR}/ansible.cfg" \
+    17	    ANSIBLE_STDOUT_CALLBACK=default \
+    18	    ansible-playbook --syntax-check "${PLAYBOOK_DEPLOY}"
+    19	
+    20	  ANSIBLE_CONFIG="${ANSIBLE_DIR}/ansible.cfg" \
+    21	    ANSIBLE_STDOUT_CALLBACK=default \
+    22	    ansible-playbook --syntax-check "${PLAYBOOK_REMOVE}"
+    23	}
+    24	
+    25	test_remove_requires_confirmation() {
+    26	  log_info "INT-ECS-IMG-012: Verifying remove playbook requires confirm=true"
+    27	  local rc=0
+    28	
+    29	  set +e
+    30	  ANSIBLE_CONFIG="${ANSIBLE_DIR}/ansible.cfg" \
+    31	    ANSIBLE_STDOUT_CALLBACK=default \
+    32	    ansible-playbook "${PLAYBOOK_REMOVE}" \
+    33	    -e "env=${ENVIRONMENT}" \
+    34	    --check >/dev/null
+    35	  rc=$?
+    36	  set -e
+    37	
+    38	  if [ $rc -eq 0 ]; then
+    39	    log_error "Removal playbook ran without confirm=true but should fail fast"
+    40	    return 1
+    41	  fi
+    42	
+    43	  log_info "Removal playbook correctly blocks execution without confirm flag"
+    44	  return 0
+    45	}
+    46	
+    47	main() {
+    48	  require_cmd ansible-playbook
+    49	  cd "${ANSIBLE_DIR}"
+    50	
+    51	  init_summary
+    52	
+    53	  echo "=============================================="
+    54	  echo "Ansible playbook validation for ECS image stack"
+    55	  echo "Environment: ${ENVIRONMENT}"
+    56	  echo "Ansible dir: ${ANSIBLE_DIR}"
+    57	  echo "=============================================="
+    58	
+    59	  run_test "Ansible syntax checks" test_syntax_checks
+    60	  run_test "Removal requires confirmation" test_remove_requires_confirmation
+    61	
+    62	  echo
+    63	  echo "=============================================="
+    64	  echo "Test summary: ${PASSED}/${TOTAL} passed, ${FAILED} failed"
+    65	  echo "=============================================="
+    66	
+    67	  if [ "$FAILED" -ne 0 ]; then
+    68	    exit 1
+    69	  fi
     70	}
     71	
-    72	main() {
-    73	  require_cmd ansible-playbook
-    74	  cd "${ANSIBLE_DIR}"
-    75	
-    76	  TOTAL=0
-    77	  PASSED=0
-    78	  FAILED=0
-    79	
-    80	  echo "=============================================="
-    81	  echo "Ansible playbook validation for ECS image stack"
-    82	  echo "Environment: ${ENVIRONMENT}"
-    83	  echo "Ansible dir: ${ANSIBLE_DIR}"
-    84	  echo "=============================================="
-    85	
-    86	  run_test "Ansible syntax checks" test_syntax_checks
-    87	  run_test "Removal requires confirmation" test_remove_requires_confirmation
-    88	
-    89	  echo
-    90	  echo "=============================================="
-    91	  echo "Test summary: ${PASSED}/${TOTAL} passed, ${FAILED} failed"
-    92	  echo "=============================================="
-    93	
-    94	  if [ "$FAILED" -ne 0 ]; then
-    95	    exit 1
-    96	  fi
-    97	}
-    98	
-    99	main "$@"
+    72	main "$@"
 ```
 
 ## Turn 44: ツール実行
@@ -1403,13 +1409,103 @@ grep: .git/index: binary file matches
 ## Turn 45: ツール実行
 
 **種別**: コマンド実行
-**コマンド**: `/bin/bash -lc 'grep -n "INT-ECS-IMG-013" -n .ai-workflow/issue-496/03_test_scenario/output/test-scenario.md'`
+**コマンド**: `/bin/bash -lc 'nl -ba tests/integration/ecs-image/test_component_yaml.sh'`
 **ステータス**: completed (exit_code=0)
 
 ```text
-372:#### INT-ECS-IMG-013: Pulumiプレビュー実行
-411:- INT-ECS-IMG-013が成功
-712:└── INT-ECS-IMG-013: Pulumiプレビュー実行
+1	#!/bin/bash
+     2	# Integration test: Validate component.yml syntax and required install steps for ECS agent image.
+     3	# Covers INT-ECS-IMG-015 (YAML syntax and required fields) and INT-ECS-IMG-016 (tool install steps).
+     4	
+     5	set -euo pipefail
+     6	
+     7	ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
+     8	source "${ROOT_DIR}/tests/integration/ecs-image/helpers.sh"
+     9	
+    10	COMPONENT_FILE="${ROOT_DIR}/pulumi/jenkins-agent-ecs-image/component.yml"
+    11	
+    12	test_component_yaml_syntax() {
+    13	  log_section "INT-ECS-IMG-015: component.yml syntax and required fields"
+    14	  local failed=0
+    15	
+    16	  if [ ! -f "$COMPONENT_FILE" ]; then
+    17	    log_error "Component file not found at ${COMPONENT_FILE}"
+    18	    return 1
+    19	  fi
+    20	
+    21	  if ! yamllint "$COMPONENT_FILE"; then
+    22	    log_error "yamllint reported errors for component.yml"
+    23	    return 1
+    24	  fi
+    25	
+    26	  for key in name: description: schemaVersion:; do
+    27	    if ! grep -q "^${key}" "$COMPONENT_FILE"; then
+    28	      log_error "Missing required top-level field: ${key%:}"
+    29	      failed=1
+    30	    fi
+    31	  done
+    32	
+    33	  if ! grep -q "^- name: build" "$COMPONENT_FILE"; then
+    34	    log_error "build phase is not defined in component.yml"
+    35	    failed=1
+    36	  fi
+    37	
+    38	  if ! grep -q "^- name: validate" "$COMPONENT_FILE"; then
+    39	    log_error "validate phase is not defined in component.yml"
+    40	    failed=1
+    41	  fi
+    42	
+    43	  return $failed
+    44	}
+    45	
+    46	test_component_install_steps() {
+    47	  log_section "INT-ECS-IMG-016: component.yml includes required install steps"
+    48	  local content failed=0
+    49	
+    50	  if [ ! -f "$COMPONENT_FILE" ]; then
+    51	    log_error "Component file not found at ${COMPONENT_FILE}"
+    52	    return 1
+    53	  fi
+    54	
+    55	  content=$(cat "$COMPONENT_FILE")
+    56	
+    57	  assert_contains "$content" "java-21-amazon-corretto" "Java 21 install step missing" || failed=1
+    58	  assert_contains "$content" "setup_20.x" "Node.js 20 install step missing" || failed=1
+    59	  assert_contains "$content" "awscli-exe-linux-x86_64.zip" "AWS CLI v2 install step missing" || failed=1
+    60	  assert_contains "$content" "pulumi-v3" "Pulumi install step missing" || failed=1
+    61	  assert_contains "$content" "pip3 install --no-cache-dir ansible" "Ansible install step missing" || failed=1
+    62	  assert_contains "$content" "git --version" "Git verification step missing" || failed=1
+    63	  assert_contains "$content" "python3 --version" "Python3 verification step missing" || failed=1
+    64	  assert_contains "$content" "groupadd -g 1000 jenkins" "jenkins user creation step missing" || failed=1
+    65	  assert_contains "$content" "/entrypoint.sh" "entrypoint.sh placement step missing" || failed=1
+    66	
+    67	  return $failed
+    68	}
+    69	
+    70	main() {
+    71	  require_cmd yamllint
+    72	
+    73	  init_summary
+    74	
+    75	  echo "=============================================="
+    76	  echo "Component YAML validation for ECS agent image"
+    77	  echo "Component file: ${COMPONENT_FILE}"
+    78	  echo "=============================================="
+    79	
+    80	  run_test "INT-ECS-IMG-015 Component YAML syntax" test_component_yaml_syntax
+    81	  run_test "INT-ECS-IMG-016 Component tool steps" test_component_install_steps
+    82	
+    83	  echo
+    84	  echo "=============================================="
+    85	  echo "Test summary: ${PASSED}/${TOTAL} passed, ${FAILED} failed"
+    86	  echo "=============================================="
+    87	
+    88	  if [ "$FAILED" -ne 0 ]; then
+    89	    exit 1
+    90	  fi
+    91	}
+    92	
+    93	main "$@"
 ```
 
 ## Turn 46: ツール実行
@@ -1420,12 +1516,107 @@ grep: .git/index: binary file matches
 ## Turn 47: ツール実行
 
 **種別**: コマンド実行
-**コマンド**: `/bin/bash -lc 'grep -n "INT-ECS-IMG-014" .ai-workflow/issue-496/03_test_scenario/output/test-scenario.md'`
+**コマンド**: `/bin/bash -lc 'nl -ba tests/integration/ecs-image/test_pulumi_stack.sh'`
 **ステータス**: completed (exit_code=0)
 
 ```text
-406:#### INT-ECS-IMG-014: Pulumiスタックの冪等性確認
-725:└── INT-ECS-IMG-014: Pulumiスタック冪等性確認
+1	#!/bin/bash
+     2	# Integration test: Validate Pulumi preview and idempotence for Jenkins ECS agent image stack.
+     3	# Covers INT-ECS-IMG-013 (pulumi preview) and INT-ECS-IMG-014 (idempotent pulumi up).
+     4	
+     5	set -euo pipefail
+     6	
+     7	ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
+     8	source "${ROOT_DIR}/tests/integration/ecs-image/helpers.sh"
+     9	
+    10	PULUMI_DIR="${ROOT_DIR}/pulumi/jenkins-agent-ecs-image"
+    11	ENVIRONMENT="${ENVIRONMENT:-dev}"
+    12	PULUMI_STACK="${PULUMI_STACK:-$ENVIRONMENT}"
+    13	
+    14	ensure_requirements() {
+    15	  require_cmd pulumi
+    16	  require_cmd npm
+    17	  require_cmd jq
+    18	}
+    19	
+    20	install_node_modules() {
+    21	  if [ ! -d "$PULUMI_DIR" ]; then
+    22	    log_error "Pulumi directory not found: ${PULUMI_DIR}"
+    23	    return 1
+    24	  fi
+    25	
+    26	  if [ -d "${PULUMI_DIR}/node_modules" ]; then
+    27	    log_info "node_modules already present; skipping npm install"
+    28	    return 0
+    29	  fi
+    30	
+    31	  log_info "Installing npm dependencies in ${PULUMI_DIR}"
+    32	  if ! (cd "$PULUMI_DIR" && npm install); then
+    33	    log_error "npm install failed in ${PULUMI_DIR}"
+    34	    return 1
+    35	  fi
+    36	}
+    37	
+    38	select_stack() {
+    39	  log_info "Selecting Pulumi stack ${PULUMI_STACK}"
+    40	  if ! (cd "$PULUMI_DIR" && pulumi stack select "$PULUMI_STACK" --non-interactive); then
+    41	    log_error "Pulumi stack selection failed for ${PULUMI_STACK}"
+    42	    return 1
+    43	  fi
+    44	}
+    45	
+    46	test_pulumi_preview() {
+    47	  log_section "INT-ECS-IMG-013: Pulumi preview executes without errors"
+    48	  local preview_json resource_types types_joined failed=0
+    49	
+    50	  if ! preview_json=$(cd "$PULUMI_DIR" && pulumi preview --stack "$PULUMI_STACK" --non-interactive --json); then
+    51	    log_error "pulumi preview failed for stack ${PULUMI_STACK}"
+    52	    return 1
+    53	  fi
+    54	
+    55	  resource_types=$(echo "$preview_json" | jq -r '
+    56	    select(.sequenceEventType=="resource-pre" or .sequenceEventType=="resource-change")
+    57	    | (.resourcePre.type // .resourceChange.resourceType // .resourceChange.type // empty)
+    58	  ' | sort -u)
+    59	
+    60	  # If the stack is already up-to-date, preview may show no planned changes; fall back to current URNs.
+    61	  if [ -z "$resource_types" ]; then
+    62	    resource_types=$(cd "$PULUMI_DIR" && pulumi stack --stack "$PULUMI_STACK" --show-urns \
+    63	      | awk -F:: '/^urn:/{print $(NF-1)}' | sort -u)
+    64	  fi
+    65	
+    66	  if [ -z "$resource_types" ]; then
+    67	    log_error "No resources detected from pulumi preview or existing stack state"
+    68	    return 1
+    69	  fi
+    70	
+    71	  types_joined=$(echo "$resource_types" | tr '\n' ' ')
+    72	  log_info "Detected Pulumi resource types: ${types_joined}"
+    73	
+    74	  for expected in \
+    75	    "aws:imagebuilder/component:Component" \
+    76	    "aws:imagebuilder/containerRecipe:ContainerRecipe" \
+    77	    "aws:imagebuilder/infrastructureConfiguration:InfrastructureConfiguration" \
+    78	    "aws:imagebuilder/distributionConfiguration:DistributionConfiguration" \
+    79	    "aws:imagebuilder/imagePipeline:ImagePipeline" \
+    80	    "aws:iam/role:Role" \
+    81	    "aws:iam/instanceProfile:InstanceProfile" \
+    82	    "aws:ssm/parameter:Parameter"; do
+    83	    assert_contains "$types_joined" "$expected" "Missing expected resource type in preview/stack" || failed=1
+    84	  done
+    85	
+    86	  return $failed
+    87	}
+    88	
+    89	test_pulumi_idempotence() {
+    90	  log_section "INT-ECS-IMG-014: Pulumi stack is idempotent"
+    91	  local second_output
+    92	
+    93	  log_info "Running first pulumi up --yes --skip-preview"
+    94	  if ! (cd "$PULUMI_DIR" && pulumi up --stack "$PULUMI_STACK" --yes --non-interactive --skip-preview); then
+    95	    log_error "Initial pulumi up failed for stack ${PULUMI_STACK}"
+    96	    return 1
+... (truncated)
 ```
 
 ## Turn 48: ツール実行
@@ -1436,13 +1627,99 @@ grep: .git/index: binary file matches
 ## Turn 49: ツール実行
 
 **種別**: コマンド実行
-**コマンド**: `/bin/bash -lc 'grep -n "INT-ECS-IMG-015" .ai-workflow/issue-496/03_test_scenario/output/test-scenario.md'`
+**コマンド**: `/bin/bash -lc 'nl -ba tests/integration/ecs-image/helpers.sh'`
 **ステータス**: completed (exit_code=0)
 
 ```text
-431:#### INT-ECS-IMG-015: Component YAMLの構文検証
-466:- INT-ECS-IMG-015が成功
-708:├── INT-ECS-IMG-015: Component YAML構文検証
+1	#!/bin/bash
+     2	# Shared helper functions for ECS image integration tests (Issue #496).
+     3	
+     4	# Resolve repository root when not provided by the caller.
+     5	if [ -z "${ROOT_DIR:-}" ]; then
+     6	  ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
+     7	fi
+     8	
+     9	log_info() {
+    10	  echo "[INFO] $*"
+    11	}
+    12	
+    13	log_error() {
+    14	  echo "[ERROR] $*" >&2
+    15	}
+    16	
+    17	log_section() {
+    18	  echo
+    19	  echo "=== $* ==="
+    20	}
+    21	
+    22	require_cmd() {
+    23	  command -v "$1" >/dev/null 2>&1 || {
+    24	    log_error "Required command '$1' not found in PATH"
+    25	    exit 1
+    26	  }
+    27	}
+    28	
+    29	fetch_param() {
+    30	  local name="$1"
+    31	  local description="$2"
+    32	  local value
+    33	
+    34	  value=$(aws ssm get-parameter \
+    35	    --name "$name" \
+    36	    --region "$AWS_REGION" \
+    37	    --query "Parameter.Value" \
+    38	    --output text 2>/dev/null || true)
+    39	
+    40	  if [ -z "$value" ] || [ "$value" = "None" ]; then
+    41	    log_error "SSM parameter missing for ${description}: ${name}"
+    42	    return 1
+    43	  fi
+    44	
+    45	  echo "$value"
+    46	}
+    47	
+    48	assert_regex() {
+    49	  local value="$1"
+    50	  local pattern="$2"
+    51	  local message="$3"
+    52	
+    53	  if [[ "$value" =~ $pattern ]]; then
+    54	    return 0
+    55	  fi
+    56	
+    57	  log_error "$message (value: ${value})"
+    58	  return 1
+    59	}
+    60	
+    61	assert_contains() {
+    62	  local haystack="$1"
+    63	  local needle="$2"
+    64	  local message="$3"
+    65	
+    66	  if [[ "$haystack" == *"$needle"* ]]; then
+    67	    return 0
+    68	  fi
+    69	
+    70	  log_error "$message (missing: ${needle})"
+    71	  return 1
+    72	}
+    73	
+    74	init_summary() {
+    75	  TOTAL=0
+    76	  PASSED=0
+    77	  FAILED=0
+    78	}
+    79	
+    80	run_test() {
+    81	  local name="$1"
+    82	  shift
+    83	  TOTAL=$((TOTAL + 1))
+    84	  if "$@"; then
+    85	    PASSED=$((PASSED + 1))
+    86	  else
+    87	    FAILED=$((FAILED + 1))
+    88	  fi
+    89	}
 ```
 
 ## Turn 50: ツール実行
@@ -1453,122 +1730,11 @@ grep: .git/index: binary file matches
 ## Turn 51: ツール実行
 
 **種別**: コマンド実行
-**コマンド**: `/bin/bash -lc 'grep -n "INT-ECS-IMG-016" .ai-workflow/issue-496/03_test_scenario/output/test-scenario.md'`
-**ステータス**: completed (exit_code=0)
-
-```text
-461:#### INT-ECS-IMG-016: Component YAMLのツールインストール検証
-709:└── INT-ECS-IMG-016: Component YAMLツールインストール検証
-```
-
-## Turn 52: ツール実行
-
-**種別**: reasoning
-**ステータス**: completed
-
-## Turn 53: ツール実行
-
-**種別**: コマンド実行
-**コマンド**: `/bin/bash -lc "nl -ba .ai-workflow/issue-496/00_planning/output/planning.md | sed -n '150,230p'"`
-**ステータス**: completed (exit_code=0)
-
-```text
-150	
-   151	- [x] Task 3-1: 統合テストシナリオ定義 (1h)
-   152	  - Pulumiリソース作成の検証シナリオ
-   153	  - SSMパラメータ出力の検証シナリオ
-   154	  - Image Builderパイプライン状態の検証シナリオ
-   155	- [x] Task 3-2: 手動検証シナリオ定義 (0.5h)
-   156	  - パイプライン実行テストシナリオ
-   157	  - ECRへのイメージプッシュ確認シナリオ
-   158	  - イメージからのコンテナ起動確認シナリオ
-   159	
-   160	### Phase 4: 実装 (見積もり: 5〜6h)
-   161	
-   162	- [x] Task 4-1: Pulumiスタック基盤の作成 (1h)
-   163	  - `pulumi/jenkins-agent-ecs-image/` ディレクトリ作成
-   164	  - `Pulumi.yaml`, `package.json`, `tsconfig.json` の作成
-   165	  - 依存パッケージのインストール確認
-   166	- [x] Task 4-2: Component YAMLの作成 (1.5h)
-   167	  - `component.yml` の作成
-   168	  - Dockerfileの各ステップをImage Builder形式に変換
-   169	  - entrypoint.shのコピーとパーミッション設定
-   170	  - validate phaseの実装
-   171	- [x] Task 4-3: Pulumiスタックの実装 (2h)
-   172	  - `index.ts` の実装
-   173	  - IAMロール（Image Builder用）の作成
-   174	  - ContainerRecipeの作成
-   175	  - InfrastructureConfigurationの作成
-   176	  - DistributionConfiguration（ECR配布設定）の作成
-   177	  - ImagePipelineの作成
-   178	  - SSMパラメータへのエクスポート
-   179	- [x] Task 4-4: Ansibleプレイブック・ロールの作成 (1h)
-   180	  - `ansible/roles/jenkins_agent_ecs_image/` ロール作成
-   181	  - `ansible/playbooks/jenkins/deploy/deploy_jenkins_agent_ecs_image.yml` 作成
-   182	  - `ansible/playbooks/jenkins/remove/remove_jenkins_agent_ecs_image.yml` 作成
-   183	- [ ] Task 4-5: パイプライン統合 (0.5h)
-   184	  - `jenkins_setup_pipeline.yml` への統合（オプション）
-   185	  - タグ `ecs-image` の追加
-   186	
-   187	### Phase 5: テストコード実装 (見積もり: 1〜1.5h)
-   188	
-   189	- [x] Task 5-1: 統合テストスクリプトの作成 (1h)
-   190	  - `tests/integration/ecs-image/test_ecs_image_pipeline.sh` の作成
-   191	  - SSMパラメータ存在確認
-   192	  - Image Builderリソース状態確認
-   193	  - ECRリポジトリ設定確認
-   194	- [ ] Task 5-2: テストヘルパーの作成 (0.5h)
-   195	  - 共通ユーティリティ関数の作成（既存パターン踏襲）
-   196	
-   197	### Phase 6: テスト実行 (見積もり: 1〜1.5h)
-   198	
-   199	- [ ] Task 6-1: Pulumiプレビュー実行 (0.5h)
-   200	  - `pulumi preview` でリソース作成計画を確認
-   201	  - エラーがないことを確認
-   202	- [ ] Task 6-2: テストスクリプトのドライラン (0.5h)
-   203	  - 構文チェック（shellcheck）
-   204	  - モック環境での動作確認
-   205	- [ ] Task 6-3: 統合テストレポート作成 (0.5h)
-   206	  - テスト結果のドキュメント化
-   207	  - 手動検証が必要な項目のリスト化
-   208	
-   209	### Phase 7: ドキュメント (見積もり: 0.5〜1h)
-   210	
-   211	- [ ] Task 7-1: README.mdの更新 (0.5h)
-   212	  - `pulumi/README.md` への新スタック追加
-   213	  - 依存関係図の更新
-   214	- [ ] Task 7-2: CONTRIBUTION.mdの確認 (0.25h)
-   215	  - 開発ガイドラインへの適合確認
-   216	- [ ] Task 7-3: 運用ドキュメントの追加 (0.25h)
-   217	  - パイプライン手動実行手順
-   218	  - トラブルシューティング情報
-   219	
-   220	### Phase 8: レポート (見積もり: 0.5h)
-   221	
-   222	- [ ] Task 8-1: 完了レポートの作成 (0.5h)
-   223	  - 実装サマリー
-   224	  - テスト結果サマリー
-   225	  - 残課題・今後の改善提案
-   226	
-   227	---
-   228	
-   229	## 5. 依存関係
-   230
-```
-
-## Turn 54: ツール実行
-
-**種別**: reasoning
-**ステータス**: completed
-
-## Turn 55: ツール実行
-
-**種別**: コマンド実行
 **コマンド**: `/bin/bash -lc 'git status -sb'`
 **ステータス**: completed (exit_code=0)
 
 ```text
-## ai-workflow/issue-496...origin/main [ahead 14]
+## ai-workflow/issue-496...origin/main [ahead 15]
  M .ai-workflow/issue-496/00_planning/output/planning.md
  M .ai-workflow/issue-496/metadata.json
 ?? .ai-workflow/issue-496/00_planning/execute/agent_log_raw.txt
@@ -1593,32 +1759,30 @@ grep: .git/index: binary file matches
 ?? .ai-workflow/issue-496/04_implementation/review/prompt.txt
 ?? .ai-workflow/issue-496/05_test_implementation/execute/agent_log_raw.txt
 ?? .ai-workflow/issue-496/05_test_implementation/execute/prompt.txt
-?? .ai-workflow/issue-496/05_test_implementation/review/
+?? .ai-workflow/issue-496/05_test_implementation/review/agent_log_raw.txt
+?? .ai-workflow/issue-496/05_test_implementation/review/prompt.txt
+?? .ai-workflow/issue-496/05_test_implementation/revise/agent_log_raw.txt
+?? .ai-workflow/issue-496/05_test_implementation/revise/prompt.txt
 ```
 
-## Turn 56: ツール実行
+## Turn 52: ツール実行
 
 **種別**: reasoning
 **ステータス**: completed
 
-## Turn 57: ツール実行
-
-**種別**: reasoning
-**ステータス**: completed
-
-## Turn 58: ツール実行
+## Turn 53: ツール実行
 
 **種別**: agent_message
 **ステータス**: completed
 
-## Turn 59: 実行完了
+## Turn 54: 実行完了
 
 **ステータス**: completed
-**所要時間**: 186267ms
+**所要時間**: 129231ms
 **ターン数**: N/A
 
 ---
 
-**経過時間**: 186267ms
-**開始**: 2025-12-16T05:03:43.651Z
-**終了**: 2025-12-16T05:06:49.918Z
+**経過時間**: 129231ms
+**開始**: 2025-12-16T05:15:06.057Z
+**終了**: 2025-12-16T05:17:15.288Z

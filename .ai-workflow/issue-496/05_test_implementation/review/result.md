@@ -2,109 +2,95 @@
 
 **⚠️ 重要: 各項目に対して明示的にPASS/FAILを判定してください。1つでもFAILがあれば最終判定は自動的にFAILです。**
 
-- [x/  ] **Phase 3のテストシナリオがすべて実装されている**: **FAIL** - Pipeline and playbook scripts cover INT-ECS-IMG-001～007 and INT-ECS-IMG-011/012 (`tests/integration/ecs-image/test_ecs_image_pipeline.sh:77` and `tests/integration/ecs-image/test_ansible_playbooks.sh:39`), but no automation addresses INT-ECS-IMG-013 (Pulumi preview/idempotence) through INT-ECS-IMG-016 (component YAML checks) as defined at `.ai-workflow/issue-496/03_test_scenario/output/test-scenario.md:372`, `.ai-workflow/issue-496/03_test_scenario/output/test-scenario.md:406`, `.ai-workflow/issue-496/03_test_scenario/output/test-scenario.md:431`, and `.ai-workflow/issue-496/03_test_scenario/output/test-scenario.md:461`, so the Phase 3 coverage requirement is still unmet.
-- [x/  ] **テストコードが実行可能である**: **PASS** - Both scripts declare `set -euo pipefail` and verify required binaries (`aws`, `jq`, `ansible-playbook`) via `require_cmd`, so any missing dependency fails fast before reaching the assertions (`tests/integration/ecs-image/test_ecs_image_pipeline.sh:6,38` and `tests/integration/ecs-image/test_ansible_playbooks.sh:5,21`).
-- [x/  ] **テストの意図がコメントで明確**: **PASS** - Header comments describe the integration scenarios that each script targets (`tests/integration/ecs-image/test_ecs_image_pipeline.sh:2-4` and `tests/integration/ecs-image/test_ansible_playbooks.sh:2-3`).
+- [x/  ] **Phase 3のテストシナリオがすべて実装されている**: **PASS** - `test_ecs_image_pipeline.sh`, `test_ansible_playbooks.sh`, `test_pulumi_stack.sh`, and `test_component_yaml.sh` each map to INT-ECS-IMG-001〜016, exercising SSM/pipeline/container recipe validations, Ansible syntax/confirm guards, Pulumi preview/idempotence, and component YAML requirements (`tests/integration/ecs-image/test_ecs_image_pipeline.sh:1`, `tests/integration/ecs-image/test_ansible_playbooks.sh:1`, `tests/integration/ecs-image/test_pulumi_stack.sh:1`, `tests/integration/ecs-image/test_component_yaml.sh:1`).
+- [x/  ] **テストコードが実行可能である**: **PASS** - every script sets `set -euo pipefail` and uses the shared helpers to enforce required commands (`helpers.sh:22-45`), so failures surface immediately and handy logging summarizes pass/fail counts (`helpers.sh:74-89`).
+- [x/  ] **テストの意図がコメントで明確**: **PASS** - each shell script begins with a concise header explaining the covered INT-ECS-IMG IDs and scope, and log helpers (`log_section/log_info`) provide clear Given/When/Then demarcation during execution (`tests/integration/ecs-image/test_ecs_image_pipeline.sh:2-4`, `tests/integration/ecs-image/test_ansible_playbooks.sh:2-3`, `tests/integration/ecs-image/test_pulumi_stack.sh:2-3`, `tests/integration/ecs-image/test_component_yaml.sh:2-3`).
 
-**品質ゲート総合判定: FAIL**  
-- Phase 3シナリオ（Pulumi preview/idempotence and component YAML validation）を自動化していないため、品質ゲートに必要なカバレッジが揃っていません。
+**品質ゲート総合判定: PASS**
 
 ## 詳細レビュー
 
 ### 1. テストシナリオとの整合性
 
 **良好な点**:
-- `test_ecs_image_pipeline.sh` sequentially verifies SSM outputs, pipeline status, container recipe, distribution/infrastructure configuration, and IAM policies, matching INT-ECS-IMG-001～007 (`tests/integration/ecs-image/test_ecs_image_pipeline.sh:77-314`).
-- `test_ansible_playbooks.sh` confirms deploy/remove syntax and enforce the removal confirm flag, covering INT-ECS-IMG-011/012 (`tests/integration/ecs-image/test_ansible_playbooks.sh:39-69`).
-- The implementation report lists those two scripts as the completed tests, showing that the implemented cases were intentional (`.ai-workflow/issue-496/05_test_implementation/output/test-implementation.md:3`).
+- `test_ecs_image_pipeline.sh` walks through INT-ECS-IMG-001〜007 with dedicated sections for SSM outputs, pipeline status, container recipe, distribution configuration, infrastructure configuration, and component definition, tying each assertion back to the control plane represented in the scenario document (`tests/integration/ecs-image/test_ecs_image_pipeline.sh:27-182`).
+- `test_component_yaml.sh` and `test_ansible_playbooks.sh` respectively fulfill INT-ECS-IMG-015/016 and INT-ECS-IMG-011/012 by validating the component manifest and ensuring Ansible playbooks are syntactically correct and guarded by the confirm flag (`tests/integration/ecs-image/test_component_yaml.sh:12-82`, `tests/integration/ecs-image/test_ansible_playbooks.sh:14-45`).
 
 **懸念点**:
-- INT-ECS-IMG-013（Pulumi preview）および INT-ECS-IMG-014（冪等性）と、INT-ECS-IMG-015/016（component.ymlの構文/ツールインストール検証）は `.ai-workflow/issue-496/03_test_scenario/output/test-scenario.md:372`, `:406`, `:431`, `:461` で明記されていますが、該当する自動化スクリプトが存在しないためシナリオの整合性が完了していません。
+- INT-ECS-IMG-008 explicitly asks to compare the configured subnet against both the public subnet and its parent VPC, but the current script only pulls the subnet and security group IDs from SSM (`tests/integration/ecs-image/test_ecs_image_pipeline.sh:31-36`) without ever fetching `/jenkins-infra/${env}/network/vpc-id`, so the VPC alignment step is missing.
+- The Ansible scenario in the test plan also wanted to “confirm the required roles exist,” yet `test_ansible_playbooks.sh` focuses solely on syntax and confirm gating; there is no assertion that `roles/jenkins_agent_ecs_image/` or its dependencies are present, which leaves part of INT-ECS-IMG-011/012 unverified (`tests/integration/ecs-image/test_ansible_playbooks.sh:14-45`).
 
 ### 2. テストカバレッジ
 
 **良好な点**:
-- パイプラインテストは `aws imagebuilder`/`aws iam` を複数回呼び出して実際のリソース構成（ステータス、ターゲットECR、セキュリティグループ、ポリシーなど）を確認しており、主要な構成要素に対する正常系をカバーしています（`tests/integration/ecs-image/test_ecs_image_pipeline.sh:97-314`）。
+- `test_pulumi_stack.sh` exercises INT-ECS-IMG-013/014 by running `pulumi preview` (observing resource types for Image Builder components, IAM roles, instance profiles, and SSM parameters via JSON parsing) and then `pulumi up` twice to ensure idempotence (`tests/integration/ecs-image/test_pulumi_stack.sh:46-128`).
+- Component coverage is strong: `test_component_yaml.sh` not only runs `yamllint` but also scans for the key tool installation steps listed in Phase 3, providing an upfront smoke test for the build tools embedded in the component manifest (`tests/integration/ecs-image/test_component_yaml.sh:12-68`).
 
 **改善の余地**:
-- Phase 3の残りのシナリオ（Pulumi preview/idempotence、component YAMLの構文・ツールインストール検証）は未着手なので、テストカバレッジが十分とは言えません（シナリオ定義 `.ai-workflow/issue-496/03_test_scenario/output/test-scenario.md:372-466` を参照）。
+- The manual scenarios INT-ECS-IMG-MAN-001〜004 remain uncovered by automation (no helper / script calls to start the pipeline, list ECR images, or inspect a running container), so the current suite relies on documentation and manual execution for those valuable end-to-end checks; automating even the verification part would close that gap.
 
 ### 3. テストの独立性
 
 **良好な点**:
-- `run_test` ハーネスにより各サブテストの pass/fail がまとめて出力され、全体でのパス/フェイルを把握しやすくなっています（`tests/integration/ecs-image/test_ecs_image_pipeline.sh:316-355`）。
+- The shared helper (`helpers.sh:74-89`) isolates each test into a `run_test` block so failures are tallied but do not abort the entire script until after all checks, and the scripts uniformly derive configuration from environment variables with sane defaults, allowing each test to run independently in any stage/environment (`helpers.sh:9-45`).
 
 **懸念点**:
-- 各サブテストは `PIPELINE_ARN`/`COMPONENT_ARN` などのグローバル変数に依存しており、初回の `test_ssm_parameters_exist` 実行なしでは後続のテストが失敗するため、個別実行や再実行がしにくくなっています（状態の初期化に `tests/integration/ecs-image/test_ecs_image_pipeline.sh:13-166` を参照）。
+- `test_pulumi_stack.sh` executes two actual `pulumi up` runs against the target stack (`tests/integration/ecs-image/test_pulumi_stack.sh:90-111`), which mutates shared infrastructure; without a dedicated throwaway stack or stricter cleanup, those tests can interfere with other teams running the same stack concurrently, so consider gating them behind a flag or pointing them at a disposable stack to keep runs independent.
 
 ### 4. テストの可読性
 
 **良好な点**:
-- `log_section`/`log_info` を使って各シナリオ名を出力し、`log_error` で失敗理由を明示しているので、実行ログから何を検証しているか追いやすいです（`tests/integration/ecs-image/test_ecs_image_pipeline.sh:25-74`）。
-- Ansible スクリプトも `log_info` を使って用途を明示しており、構造が読みやすくなっています（`tests/integration/ecs-image/test_ansible_playbooks.sh:13-69`）。
+- All scripts use explicit `log_section`/`log_info` calls and descriptive test names, making the Given-When-Then flow easy to follow when reviewing raw logs (`helpers.sh:17-20`, `tests/integration/ecs-image/test_ecs_image_pipeline.sh:27-114`, `tests/integration/ecs-image/test_pulumi_stack.sh:46-111`).
 
 **改善の余地**:
-- `fetch_param` で期待するパラメータ名の説明が少し簡略なため、初見のレビュアー向けにコメントで “このパラメータはPulumi stackの○○” のような文を補うと見通しがよくなります（`tests/integration/ecs-image/test_ecs_image_pipeline.sh:45-61`）。
+- `test_component_yaml.sh` inspects the YAML using `grep`/`cat`, which is fragile if the YAML formatting or ordering changes; parsing the manifest with a tool like `yq` would make the assertions more resilient and easier to read (`tests/integration/ecs-image/test_component_yaml.sh:26-65`).
 
 ### 5. モック・スタブの使用
 
 **良好な点**:
-- これらの統合テストは実際に AWS CLI を叩いてイメージビルダーや IAM を確認する構成で、外部依存を排除せずそのまま検証しているので、Integration-only戦略に忠実です（`tests/integration/ecs-image/test_ecs_image_pipeline.sh:101-279`）。
+- Given the scope (Pulumi + AWS Image Builder), it is appropriate that the scripts talk to real AWS services; locking down command requirements via the helper ensures that missing tools fail fast, and there are no mock layers to keep in sync (`helpers.sh:22-45`).
 
 **懸念点**:
-- 実環境が前提になるため実行環境の整備（Pulumi stack, SSMパラメータ）が必要で、CI 上ではセットアップ/認証の自動化を検討した方が安定するかもしれません。
+- Because there are no stubs, running these tests requires real AWS resources (and `pulumi up` actually changes them), which makes the suite costly and slow in CI; documenting a lightweight stubbed mode or spun-up test environment could make the suite more CI-friendly (`tests/integration/ecs-image/test_pulumi_stack.sh:90-111`).
 
 ### 6. テストコードの品質
 
 **良好な点**:
-- 両スクリプトで `set -euo pipefail` を使っており、依存コマンドの存在確認も行っているので、シンタックス的に壊れる可能性は低いです（`tests/integration/ecs-image/test_ecs_image_pipeline.sh:6` および `tests/integration/ecs-image/test_ansible_playbooks.sh:5`）。
+- All scripts declare `set -euo pipefail`, wrap assertions in helper functions, and reuse summary/command-checking utilities, so the code is consistent and fail-fast (`tests/integration/ecs-image/test_ecs_image_pipeline.sh:6`, `helpers.sh:22-89`, `tests/integration/ecs-image/test_pulumi_stack.sh:5`, `tests/integration/ecs-image/test_ansible_playbooks.sh:5`).
 
 **懸念点**:
-- `test_remove_requires_confirmation` で `set +e`→`set -e` を使っているので安全ですが、失敗時に標準出力を捨ててしまっており、失敗ログを取得するために `--check` 実行時の stderr をファイルに残すようにするとトラブルシュートしやすくなります（`tests/integration/ecs-image/test_ansible_playbooks.sh:50-69`）。
-
-## ブロッカー（BLOCKER）
-
-**次フェーズに進めない重大な問題**
-
-1. **Phase 3のシナリオ欠落**
-   - 問題: INT-ECS-IMG-013～016（Pulumi preview/idempotence、component.ymlの構文・ツールインストール検証）が `.ai-workflow/issue-496/03_test_scenario/output/test-scenario.md:372`, `:406`, `:431`, `:461` で定義されているにもかかわらず、手元のテスト群に対応するスクリプトが存在しません（`tests/integration/ecs-image/test_ecs_image_pipeline.sh` および `tests/integration/ecs-image/test_ansible_playbooks.sh` に該当コードなし）。
-   - 影響: Phase 3の品質ゲートが突破できず、テスト実行フェーズに進めません。
-   - 対策: `pulumi/jenkins-agent-ecs-image` を `pulumi preview` してエラーなし/冪等性を確認するスクリプトと、`component.yml` の `yamllint` + `aws imagebuilder get-component` でのツールインストール検証を追加してください。
+- `test_ansible_playbooks.sh` temporarily toggles `set +e` when running the removal playbook to capture a failure, but the script still swallows the playbook output (`ansible-playbook ... >/dev/null`), making post-failure debugging harder; capturing or streaming that output would improve triage when the guard fails (`tests/integration/ecs-image/test_ansible_playbooks.sh:25-42`).
 
 ## 改善提案（SUGGESTION）
 
-1. **Pulumi preview と冪等性の自動検証**
-   - 現状: INT-ECS-IMG-013/014 はシナリオに記載されていますが、スクリプトとして実装されていません（`.ai-workflow/issue-496/03_test_scenario/output/test-scenario.md:372`, `.ai-workflow/issue-496/03_test_scenario/output/test-scenario.md:406`）。
-   - 提案: `pulumi/jenkins-agent-ecs-image` ディレクトリで `npm ci` → `pulumi preview` を実行するスクリプトを追加し、続けて `pulumi up --yes` を2回実行して“no changes”を確認することで idempotence を自動化しましょう。
-   - 効果: Phase 3カバレッジが完全になり、Pulumi構成の破綻が早期に検出できます。
+1. **Add the VPC ID assertion for INT-ECS-IMG-008**  
+   - 現状: `test_ecs_image_pipeline.sh` only compares the infrastructure subnet against `/jenkins-infra/${env}/network/public-subnet-a-id` (`tests/integration/ecs-image/test_ecs_image_pipeline.sh:31-36`).  
+   - 提案: Fetch `/jenkins-infra/${env}/network/vpc-id` and assert that the infrastructure configuration’s subnet belongs to that VPC (e.g., by calling `aws ec2 describe-subnets` or comparing the subnet’s `VpcId`).  
+   - 効果: Closes the gap between the test scenario and automation, ensuring the stack hooks into the correct VPC.
 
-2. **Component YAML の構文／ツール検証**
-   - 現状: INT-ECS-IMG-015/016 が強調する `component.yml` の構文チェックやツールインストールステップの存在を確認するテストがありません（`.ai-workflow/issue-496/03_test_scenario/output/test-scenario.md:431`, `.ai-workflow/issue-496/03_test_scenario/output/test-scenario.md:461`）。
-   - 提案: `yamllint pulumi/jenkins-agent-ecs-image/component.yml` と `aws imagebuilder get-component` でフェーズ一覧／`validate` などの必須コマンドが含まれていることを検証するスクリプトを追加してください。
-   - 効果: Component の内容が設計どおりであることが保証され、Image Builder の失敗リスクが減ります。
+2. **Assert required Ansible roles are present before syntax check**  
+   - 現状: `test_ansible_playbooks.sh` only verifies syntax/confirm behavior (`tests/integration/ecs-image/test_ansible_playbooks.sh:14-45`).  
+   - 提案: Extend the script to check for `ansible/roles/jenkins_agent_ecs_image/` and the annotated dependency roles (aws_setup, aws_cli_helper, etc.) before running the playbooks.  
+   - 効果: Provides coverage for the plan’s expectation that required roles exist, catching missing role commits earlier.
 
-3. **共通ヘルパー/ユーティリティの整理**
-   - 現状: `tests/integration/ecs-image/test_ecs_image_pipeline.sh` 内で `fetch_param`/`assert_regex` などのヘルパーが定義されており、今後のテスト追加でも同じパターンをコピーすることになりますが、Planning Task 5-2 はまだ `[ ]` です（`.ai-workflow/issue-496/00_planning/output/planning.md:194`）。
-   - 提案: `tests/integration/helpers` 的な共通スクリプトにパラメータ取得/ロギング/ラン結果の集約を切り出し、新規スクリプトから読み込むようにしましょう。
-   - 効果: テスト追加時の重複が減り、`Task 5-2` が完了することで Planning のチェックリストもクリアになります。
-
-## Planning Phaseチェックリスト照合結果: FAIL
-
-以下のタスクが未完了です：
-
-- [ ] Task 5-2: テストヘルパーの作成（共通ユーティリティ関数の作成） - 現在 `tests/integration/ecs-image` 以下に共通モジュールがなく、このタスクは未完了のままです（`.ai-workflow/issue-496/00_planning/output/planning.md:194`）。
+3. **Contain Pulumi up runs to disposable stacks or use a dry-run switch**  
+   - 現状: `test_pulumi_stack.sh` runs `pulumi up` twice against the chosen stack (`tests/integration/ecs-image/test_pulumi_stack.sh:93-107`).  
+   - 提案: Prep a dedicated `pulumi` stack for testing (documented via ENV var) or add a `DRY_RUN` guard so the test can skip the actual `up` in contexts where mutating shared stacks is risky.  
+   - 効果: Keeps the tests safer to run in shared environments and avoids accidental drift while still validating idempotence when enabled.
 
 ## 総合評価
 
-主な強み:
-- SSM、Image Builder、IAM、Ansible という主要な統合ポイントをシェルスクリプトで丁寧に検証しており、実行ログの追跡も明快です（`tests/integration/ecs-image/test_ecs_image_pipeline.sh` と `test_ansible_playbooks.sh`）。
-- 依存コマンドがそろっていない環境で即失敗するため、実行前提を明確にしています。
+**主な強み**:
+- シナリオに沿ったテストファイル群（SSM/pipeline/container recipe/Ansible/Pulumi/component）を揃え、helpers を中心にコマンドチェック・ログ・集計が一貫しているため読みやすく実行性が高い。
+- Pulumi preview/idempotence や component を静的に検証する構成は、実際の AWS リソースに対する自動ガードとして十分に機能する。
 
-主な改善提案:
-- Pulumi preview/冪等性と component.yml に関するテストを追加して Phase 3シナリオを全てカバーしてください。
-- 共通ヘルパー化によって Task 5-2 を完了し、今後のスクリプト追加・保守を容易にしてください。
+**主な改善提案**:
+- VPC ID/role 依存のチェックを追加してシナリオのすべての期待項目をコード化する。
+- `pulumi up` や Ansible 実行ログの扱いをもう少し柔軟にし、共有環境での使用性とデバッグ性を高める。
 
-**主な次のアクション**: Pulumi preview/idempotence の自動化、component.yml の構文・ツール検証、共有ヘルパーの追加を行ってから再レビューをお願いします。
+Next steps:
+1. Extend `test_ecs_image_pipeline.sh` with the VPC check/role awareness and re-run the suite to confirm new assertions are green.
+2. Document or gate the heavy `pulumi up` runs so that teams can opt into them safely for idempotence verification.
 
 ---
-**判定: FAIL**
+**判定: PASS_WITH_SUGGESTIONS**
