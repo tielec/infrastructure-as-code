@@ -251,11 +251,17 @@ test_component_definition() {
     return 1
   fi
 
-  has_build=$(echo "$component_json" | jq -r '.phases[]?.name' | grep -c "^build$" || true)
-  has_validate=$(echo "$component_json" | jq -r '.phases[]?.name' | grep -c "^validate$" || true)
+  component_data=$(echo "$component_json" | jq -r '.data // empty')
+  if [ -z "$component_data" ] || [ "$component_data" = "null" ]; then
+    log_error "Component data payload is empty"
+    return 1
+  fi
+
+  has_build=$(echo "$component_data" | grep -cE '^[[:space:]]*- name: build' || true)
+  has_validate=$(echo "$component_data" | grep -cE '^[[:space:]]*- name: validate' || true)
 
   if [ "$has_build" -eq 0 ] || [ "$has_validate" -eq 0 ]; then
-    log_error "Component is missing build or validate phase definitions"
+    log_error "Component is missing build or validate phase definitions in data payload"
     return 1
   fi
 
