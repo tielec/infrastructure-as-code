@@ -1,3 +1,5 @@
+---
+# yamllint disable rule:line-length
 name: JenkinsAgentECSSetup
 description: Install and configure Jenkins Agent for ECS Fargate container
 schemaVersion: 1.0

@@ -30,12 +30,12 @@ test_component_yaml_syntax() {
     fi
   done
 
-  if ! grep -q "^- name: build" "$COMPONENT_FILE"; then
+  if ! grep -q "^[[:space:]]*- name: build" "$COMPONENT_FILE"; then
     log_error "build phase is not defined in component.yml"
     failed=1
   fi
 
-  if ! grep -q "^- name: validate" "$COMPONENT_FILE"; then
+  if ! grep -q "^[[:space:]]*- name: validate" "$COMPONENT_FILE"; then
     log_error "validate phase is not defined in component.yml"
     failed=1
   fi
