@@ -131,18 +131,18 @@
 
 ### Phase 2: 設計 (見積もり: 2〜3h)
 
-- [ ] Task 2-1: Pulumiスタック設計 (1h)
+- [x] Task 2-1: Pulumiスタック設計 (1h)
   - `pulumi/jenkins-agent-ecs-image/index.ts` の構造設計
   - リソース定義（ContainerRecipe, InfrastructureConfiguration, DistributionConfiguration, ImagePipeline）
   - SSMパラメータ出力の設計
-- [ ] Task 2-2: Component YAML設計 (1h)
+- [x] Task 2-2: Component YAML設計 (1h)
   - `component.yml` の構造設計
   - Dockerfileからの変換マッピング
   - entrypoint.shのコピー/設定方法の設計
-- [ ] Task 2-3: Ansibleプレイブック設計 (0.5h)
+- [x] Task 2-3: Ansibleプレイブック設計 (0.5h)
   - デプロイ/削除プレイブックの構造
   - ロール定義の設計
-- [ ] Task 2-4: 依存関係とデプロイ順序の設計 (0.5h)
+- [x] Task 2-4: 依存関係とデプロイ順序の設計 (0.5h)
   - `jenkins-agent` → `jenkins-agent-ecs-image` の依存関係確認
   - jenkins_setup_pipeline.ymlへの統合方法
 
