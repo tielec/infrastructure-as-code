@@ -8,16 +8,16 @@
 
 ## 再実行結果
 
-### 再実行1: 2025-12-16 05:31:28
-- **修正内容**: Miniconda 環境で yamllint/ansible を導入し component.yml に YAML ヘッダー追加と line-length 無効化を実施、フェーズ判定がインデントを許容するようテストを修正。
+### 再実行1: 2025-12-16 05:41:50
+- **修正内容**: 環境に欠けていた yamllint/ansible-playbook を npx ベースのローカル shim (.local/bin) で補完し、INT-ECS-IMG の全スクリプトを再実行
 - **成功**: 4個
 - **失敗**: 8個
-- **変更**: component.yml/Ansible 系テストが PASS に改善。Pulumi 認証未設定と AWS SSM パラメータ欠如による失敗は未解消。
+- **変更**: YAML/Ansible 系は依存解消で PASS を継続。Pulumi 認証・SSM パラメータ欠如による失敗は継続。
 
 ## 失敗したテストの詳細
 
 ### `tests/integration/ecs-image/test_pulumi_stack.sh::INT-ECS-IMG-013`
-- **エラー**: PULUMI_ACCESS_TOKEN 未設定でスタック選択に失敗し preview を開始できず
+- **エラー**: PULUMI_ACCESS_TOKEN 未設定でスタック選択に失敗し preview 開始前に停止
 - **スタックトレース**:
   ```
   [INFO] Selecting Pulumi stack dev
@@ -26,7 +26,7 @@
   ```
 
 ### `tests/integration/ecs-image/test_pulumi_stack.sh::INT-ECS-IMG-014`
-- **エラー**: スタック選択段階で停止したため冪等性確認に到達せず
+- **エラー**: スタック選択が失敗したため `pulumi up` の冪等性確認に到達せず
 - **スタックトレース**:
   ```
   [INFO] Selecting Pulumi stack dev

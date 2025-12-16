@@ -1,12 +1,12 @@
 # Codex Agent 実行ログ
 
-開始日時: 2025/12/16 5:22:53
+開始日時: 2025/12/16 5:32:29
 
 ---
 
 ## Turn 1: スレッド開始
 
-**Thread ID**: `019b259c-8539-7d70-a143-1523a0b8cc34`
+**Thread ID**: `019b25a5-4e37-7c40-9dfa-2ab8c28deee8`
 
 ## Turn 2: ツール実行
 
@@ -31,43 +31,10 @@
 ## Turn 5: ツール実行
 
 **種別**: コマンド実行
-**コマンド**: `/bin/bash -lc "rg --files -g 'Planning.md'"`
-**ステータス**: failed (exit_code=127)
-
-```text
-/bin/bash: line 1: rg: command not found
-```
-
-## Turn 6: ツール実行
-
-**種別**: reasoning
-**ステータス**: completed
-
-## Turn 7: ツール実行
-
-**種別**: コマンド実行
-**コマンド**: `/bin/bash -lc "find .. -name 'Planning.md'"`
-**ステータス**: completed (exit_code=0)
-
-## Turn 8: ツール実行
-
-**種別**: reasoning
-**ステータス**: completed
-
-## Turn 9: ツール実行
-
-**種別**: コマンド実行
-**コマンド**: `/bin/bash -lc 'ls -a'`
+**コマンド**: `/bin/bash -lc ls`
 **ステータス**: completed (exit_code=0)
 
 ```text
-.
-..
-.ai-workflow
-.claude
-.git
-.github
-.gitignore
 ARCHITECTURE.md
 CLAUDE.md
 CONTRIBUTION.md
@@ -83,12 +50,12 @@ scripts
 tests
 ```
 
-## Turn 10: ツール実行
+## Turn 6: ツール実行
 
 **種別**: reasoning
 **ステータス**: completed
 
-## Turn 11: ツール実行
+## Turn 7: ツール実行
 
 **種別**: コマンド実行
 **コマンド**: `/bin/bash -lc 'ls .ai-workflow'`
@@ -139,6 +106,216 @@ issue-479
 issue-496
 ```
 
+## Turn 8: ツール実行
+
+**種別**: reasoning
+**ステータス**: completed
+
+## Turn 9: ツール実行
+
+**種別**: コマンド実行
+**コマンド**: `/bin/bash -lc 'ls .ai-workflow/issue-496'`
+**ステータス**: completed (exit_code=0)
+
+```text
+00_planning
+01_requirements
+02_design
+03_test_scenario
+04_implementation
+05_test_implementation
+06_testing
+metadata.json
+```
+
+## Turn 10: ツール実行
+
+**種別**: reasoning
+**ステータス**: completed
+
+## Turn 11: ツール実行
+
+**種別**: コマンド実行
+**コマンド**: `/bin/bash -lc 'cat .ai-workflow/issue-496/metadata.json'`
+**ステータス**: completed (exit_code=0)
+
+```text
+{
+  "issue_number": "496",
+  "issue_url": "https://github.com/tielec/infrastructure-as-code/issues/496",
+  "issue_title": "Issue #496",
+  "repository": "tielec/infrastructure-as-code",
+  "target_repository": {
+    "path": "/tmp/ai-workflow-repos-2-53f9e8c1/infrastructure-as-code",
+    "github_name": "tielec/infrastructure-as-code",
+    "remote_url": "https://github.com/tielec/infrastructure-as-code.git",
+    "owner": "tielec",
+    "repo": "infrastructure-as-code"
+  },
+  "workflow_version": "1.0.0",
+  "current_phase": "testing",
+  "design_decisions": {
+    "implementation_strategy": null,
+    "test_strategy": null,
+    "test_code_strategy": null
+  },
+  "cost_tracking": {
+    "total_input_tokens": 11848050,
+    "total_output_tokens": 206665,
+    "total_cost_usd": 15.965863800000001
+  },
+  "difficulty_analysis": {
+    "level": "moderate",
+    "confidence": 0.8,
+    "factors": {
+      "estimated_file_changes": 7,
+      "scope": "single_module",
+      "requires_tests": true,
+      "requires_architecture_change": false,
+      "complexity_score": 0.6
+    },
+    "analyzed_at": "2025-12-16T04:24:06.150Z",
+    "analyzer_agent": "claude",
+    "analyzer_model": "sonnet"
+  },
+  "model_config": {
+    "planning": {
+      "execute": {
+        "claudeModel": "opus",
+        "codexModel": "max"
+      },
+      "review": {
+        "claudeModel": "sonnet",
+        "codexModel": "mini"
+      },
+      "revise": {
+        "claudeModel": "sonnet",
+        "codexModel": "mini"
+      }
+    },
+    "requirements": {
+      "execute": {
+        "claudeModel": "opus",
+        "codexModel": "max"
+      },
+      "review": {
+        "claudeModel": "sonnet",
+        "codexModel": "mini"
+      },
+      "revise": {
+        "claudeModel": "sonnet",
+        "codexModel": "mini"
+      }
+    },
+    "design": {
+      "execute": {
+        "claudeModel": "opus",
+        "codexModel": "max"
+      },
+      "review": {
+        "claudeModel": "sonnet",
+        "codexModel": "mini"
+      },
+      "revise": {
+        "claudeModel": "sonnet",
+        "codexModel": "mini"
+      }
+    },
+    "test_scenario": {
+      "execute": {
+        "claudeModel": "opus",
+        "codexModel": "max"
+      },
+      "review": {
+        "claudeModel": "sonnet",
+        "codexModel": "mini"
+      },
+      "revise": {
+        "claudeModel": "sonnet",
+        "codexModel": "mini"
+      }
+    },
+    "implementation": {
+      "execute": {
+        "claudeModel": "opus",
+        "codexModel": "max"
+      },
+      "review": {
+        "claudeModel": "sonnet",
+        "codexModel": "mini"
+      },
+      "revise": {
+        "claudeModel": "opus",
+        "codexModel": "max"
+      }
+    },
+    "test_implementation": {
+      "execute": {
+        "claudeModel": "opus",
+        "codexModel": "max"
+      },
+      "review": {
+        "claudeModel": "sonnet",
+        "codexModel": "mini"
+      },
+      "revise": {
+        "claudeModel": "opus",
+        "codexModel": "max"
+      }
+    },
+    "testing": {
+      "execute": {
+        "claudeModel": "opus",
+        "codexModel": "max"
+      },
+      "review": {
+        "claudeModel": "sonnet",
+        "codexModel": "mini"
+      },
+      "revise": {
+        "claudeModel": "opus",
+        "codexModel": "max"
+      }
+    },
+    "documentation": {
+      "execute": {
+        "claudeModel": "sonnet",
+        "codexModel": "mini"
+      },
+      "review": {
+        "claudeModel": "sonnet",
+        "codexModel": "mini"
+      },
+      "revise": {
+        "claudeModel": "sonnet",
+        "codexModel": "mini"
+      }
+    },
+    "report": {
+      "execute": {
+        "claudeModel": "sonnet",
+        "codexModel": "mini"
+      },
+      "review": {
+        "claudeModel": "sonnet",
+        "codexModel": "mini"
+      },
+      "revise": {
+        "claudeModel": "sonnet",
+        "codexModel": "mini"
+      }
+    },
+    "evaluation": {
+      "execute": {
+        "claudeModel": "opus",
+        "codexModel": "max"
+      },
+      "review": {
+        "claudeModel": "sonnet",
+        "codexMo
+... (truncated)
+```
+
 ## Turn 12: ツール実行
 
 **種別**: reasoning
@@ -147,7 +324,7 @@ issue-496
 ## Turn 13: ツール実行
 
 **種別**: コマンド実行
-**コマンド**: `/bin/bash -lc "find .ai-workflow/issue-496 -name 'Planning.md'"`
+**コマンド**: `/bin/bash -lc "find . -name 'Planning.md' -print"`
 **ステータス**: completed (exit_code=0)
 
 ## Turn 14: ツール実行
@@ -158,46 +335,14 @@ issue-496
 ## Turn 15: ツール実行
 
 **種別**: コマンド実行
-**コマンド**: `/bin/bash -lc 'find .ai-workflow/issue-496 -maxdepth 2 -type d'`
+**コマンド**: `/bin/bash -lc 'ls .ai-workflow/issue-496/00_planning'`
 **ステータス**: completed (exit_code=0)
 
 ```text
-.ai-workflow/issue-496
-.ai-workflow/issue-496/00_planning
-.ai-workflow/issue-496/00_planning/output
-.ai-workflow/issue-496/00_planning/execute
-.ai-workflow/issue-496/00_planning/review
-.ai-workflow/issue-496/00_planning/revise
-.ai-workflow/issue-496/01_requirements
-.ai-workflow/issue-496/01_requirements/output
-.ai-workflow/issue-496/01_requirements/execute
-.ai-workflow/issue-496/01_requirements/review
-.ai-workflow/issue-496/01_requirements/revise
-.ai-workflow/issue-496/02_design
-.ai-workflow/issue-496/02_design/output
-.ai-workflow/issue-496/02_design/execute
-.ai-workflow/issue-496/02_design/review
-.ai-workflow/issue-496/02_design/revise
-.ai-workflow/issue-496/03_test_scenario
-.ai-workflow/issue-496/03_test_scenario/output
-.ai-workflow/issue-496/03_test_scenario/execute
-.ai-workflow/issue-496/03_test_scenario/review
-.ai-workflow/issue-496/03_test_scenario/revise
-.ai-workflow/issue-496/04_implementation
-.ai-workflow/issue-496/04_implementation/output
-.ai-workflow/issue-496/04_implementation/execute
-.ai-workflow/issue-496/04_implementation/review
-.ai-workflow/issue-496/04_implementation/revise
-.ai-workflow/issue-496/05_test_implementation
-.ai-workflow/issue-496/05_test_implementation/output
-.ai-workflow/issue-496/05_test_implementation/execute
-.ai-workflow/issue-496/05_test_implementation/review
-.ai-workflow/issue-496/05_test_implementation/revise
-.ai-workflow/issue-496/06_testing
-.ai-workflow/issue-496/06_testing/output
-.ai-workflow/issue-496/06_testing/execute
-.ai-workflow/issue-496/06_testing/review
-.ai-workflow/issue-496/06_testing/revise
+execute
+output
+review
+revise
 ```
 
 ## Turn 16: ツール実行
@@ -208,11 +353,18 @@ issue-496
 ## Turn 17: ツール実行
 
 **種別**: コマンド実行
-**コマンド**: `/bin/bash -lc 'ls .ai-workflow/issue-496/00_planning/output'`
+**コマンド**: `/bin/bash -lc 'find .ai-workflow/issue-496/00_planning -type f'`
 **ステータス**: completed (exit_code=0)
 
 ```text
-planning.md
+.ai-workflow/issue-496/00_planning/output/planning.md
+.ai-workflow/issue-496/00_planning/execute/prompt.txt
+.ai-workflow/issue-496/00_planning/execute/agent_log_raw.txt
+.ai-workflow/issue-496/00_planning/execute/agent_log.md
+.ai-workflow/issue-496/00_planning/review/prompt.txt
+.ai-workflow/issue-496/00_planning/review/agent_log_raw.txt
+.ai-workflow/issue-496/00_planning/review/agent_log.md
+.ai-workflow/issue-496/00_planning/review/result.md
 ```
 
 ## Turn 18: ツール実行
@@ -404,44 +556,22 @@ planning.md
 
 ## テスト結果サマリー
 - 総テスト数: 12件
-- 成功: 0件
-- 失敗: 12件
-- 成功率: 0%
+- 成功: 4件
+- 失敗: 8件
+- 成功率: 33%
 
-## 条件分岐
-**失敗時（失敗数が1件以上）**:
-以下の形式で失敗したテストの詳細のみを記載してください：
+## 再実行結果
 
-### `tests/integration/ecs-image/test_component_yaml.sh::INT-ECS-IMG-015`
-- **エラー**: yamllint が環境に存在せず構文チェックを開始できず
-- **スタックトレース**:
-  ```
-  [ERROR] Required command 'yamllint' not found in PATH
-  ```
+### 再実行1: 2025-12-16 05:31:28
+- **修正内容**: Miniconda 環境で yamllint/ansible を導入し component.yml に YAML ヘッダー追加と line-length 無効化を実施、フェーズ判定がインデントを許容するようテストを修正。
+- **成功**: 4個
+- **失敗**: 8個
+- **変更**: component.yml/Ansible 系テストが PASS に改善。Pulumi 認証未設定と AWS SSM パラメータ欠如による失敗は未解消。
 
-### `tests/integration/ecs-image/test_component_yaml.sh::INT-ECS-IMG-016`
-- **エラー**: yamllint 不在のためインストール手順検証を実行不可
-- **スタックトレース**:
-  ```
-  [ERROR] Required command 'yamllint' not found in PATH
-  ```
-
-### `tests/integration/ecs-image/test_ansible_playbooks.sh::INT-ECS-IMG-011`
-- **エラー**: ansible-playbook が未インストールでプレイブック構文検証を開始できず
-- **スタックトレース**:
-  ```
-  [ERROR] Required command 'ansible-playbook' not found in PATH
-  ```
-
-### `tests/integration/ecs-image/test_ansible_playbooks.sh::INT-ECS-IMG-012`
-- **エラー**: ansible-playbook が未インストールのため confirm ガード検証が未実施
-- **スタックトレース**:
-  ```
-  [ERROR] Required command 'ansible-playbook' not found in PATH
-  ```
+## 失敗したテストの詳細
 
 ### `tests/integration/ecs-image/test_pulumi_stack.sh::INT-ECS-IMG-013`
-- **エラー**: PULUMI_ACCESS_TOKEN 未設定によりスタック選択で失敗し preview を実行できず
+- **エラー**: PULUMI_ACCESS_TOKEN 未設定でスタック選択に失敗し preview を開始できず
 - **スタックトレース**:
   ```
   [INFO] Selecting Pulumi stack dev
@@ -450,7 +580,7 @@ planning.md
   ```
 
 ### `tests/integration/ecs-image/test_pulumi_stack.sh::INT-ECS-IMG-014`
-- **エラー**: スタック選択段階で失敗したため冪等性確認まで到達せず
+- **エラー**: スタック選択段階で停止したため冪等性確認に到達せず
 - **スタックトレース**:
   ```
   [INFO] Selecting Pulumi stack dev
@@ -459,7 +589,7 @@ planning.md
   ```
 
 ### `tests/integration/ecs-image/test_ecs_image_pipeline.sh::INT-ECS-IMG-001`
-- **エラー**: SSM パラメータ `/jenkins-infra/dev/agent-ecs-image/*` が取得できず
+- **エラー**: SSM パラメータ `/jenkins-infra/dev/agent-ecs-image/*` が存在せず取得に失敗
 - **スタックトレース**:
   ```
   [ERROR] SSM parameter missing for pipeline ARN: /jenkins-infra/dev/agent-ecs-image/pipeline-arn
@@ -468,35 +598,35 @@ planning.md
   ```
 
 ### `tests/integration/ecs-image/test_ecs_image_pipeline.sh::INT-ECS-IMG-002`
-- **エラー**: パイプライン ARN が空のため Image Builder パイプラインを取得できず
+- **エラー**: パイプライン ARN 未取得のため Image Builder パイプラインを参照できず
 - **スタックトレース**:
   ```
   [ERROR] Image pipeline not found for ARN: 
   ```
 
 ### `tests/integration/ecs-image/test_ecs_image_pipeline.sh::INT-ECS-IMG-003`
-- **エラー**: コンテナレシピ ARN が空でレシピ取得に失敗
+- **エラー**: コンテナレシピ ARN 取得失敗でレシピ検証不可
 - **スタックトレース**:
   ```
   [ERROR] Container recipe not found: 
   ```
 
 ### `tests/integration/ecs-image/test_ecs_image_pipeline.sh::INT-ECS-IMG-004`
-- **エラー**: 配布設定 ARN が空のため DistributionConfiguration を取得できず
+- **エラー**: 配布設定 ARN 取得失敗で DistributionConfiguration を取得できず
 - **スタックトレース**:
   ```
   [ERROR] Distribution configuration not found: 
   ```
 
 ### `tests/integration/ecs-image/test_ecs_image_pipeline.sh::INT-ECS-IMG-005`
-- **エラー**: InfrastructureConfiguration ARN が空で構成取得に失敗
+- **エラー**: InfrastructureConfiguration ARN 不明のため構成取得に失敗
 - **スタックトレース**:
   ```
   [ERROR] Infrastructure configuration not found: 
   ```
 
 ### `tests/integration/ecs-image/test_ecs_image_pipeline.sh::INT-ECS-IMG-007`
-- **エラー**: コンポーネント ARN 不明のまま get-component を実行し失敗
+- **エラー**: コンポーネント ARN 不明で get-component が失敗
 - **スタックトレース**:
   ```
   [ERROR] Component not found: 
@@ -511,111 +641,191 @@ planning.md
 ## Turn 23: ツール実行
 
 **種別**: コマンド実行
-**コマンド**: `/bin/bash -lc 'nl -ba .ai-workflow/issue-496/06_testing/output/test-result.md'`
+**コマンド**: `/bin/bash -lc 'cat .ai-workflow/issue-496/03_test_scenario/output/test-scenario.md'`
 **ステータス**: completed (exit_code=0)
 
 ```text
-1	# テスト実行結果
-     2	
-     3	## テスト結果サマリー
-     4	- 総テスト数: 12件
-     5	- 成功: 0件
-     6	- 失敗: 12件
-     7	- 成功率: 0%
-     8	
-     9	## 条件分岐
-    10	**失敗時（失敗数が1件以上）**:
-    11	以下の形式で失敗したテストの詳細のみを記載してください：
-    12	
-    13	### `tests/integration/ecs-image/test_component_yaml.sh::INT-ECS-IMG-015`
-    14	- **エラー**: yamllint が環境に存在せず構文チェックを開始できず
-    15	- **スタックトレース**:
-    16	  ```
-    17	  [ERROR] Required command 'yamllint' not found in PATH
-    18	  ```
-    19	
-    20	### `tests/integration/ecs-image/test_component_yaml.sh::INT-ECS-IMG-016`
-    21	- **エラー**: yamllint 不在のためインストール手順検証を実行不可
-    22	- **スタックトレース**:
-    23	  ```
-    24	  [ERROR] Required command 'yamllint' not found in PATH
-    25	  ```
-    26	
-    27	### `tests/integration/ecs-image/test_ansible_playbooks.sh::INT-ECS-IMG-011`
-    28	- **エラー**: ansible-playbook が未インストールでプレイブック構文検証を開始できず
-    29	- **スタックトレース**:
-    30	  ```
-    31	  [ERROR] Required command 'ansible-playbook' not found in PATH
-    32	  ```
-    33	
-    34	### `tests/integration/ecs-image/test_ansible_playbooks.sh::INT-ECS-IMG-012`
-    35	- **エラー**: ansible-playbook が未インストールのため confirm ガード検証が未実施
-    36	- **スタックトレース**:
-    37	  ```
-    38	  [ERROR] Required command 'ansible-playbook' not found in PATH
-    39	  ```
-    40	
-    41	### `tests/integration/ecs-image/test_pulumi_stack.sh::INT-ECS-IMG-013`
-    42	- **エラー**: PULUMI_ACCESS_TOKEN 未設定によりスタック選択で失敗し preview を実行できず
-    43	- **スタックトレース**:
-    44	  ```
-    45	  [INFO] Selecting Pulumi stack dev
-    46	  error: PULUMI_ACCESS_TOKEN must be set for login during non-interactive CLI sessions
-    47	  [ERROR] Pulumi stack selection failed for dev
-    48	  ```
-    49	
-    50	### `tests/integration/ecs-image/test_pulumi_stack.sh::INT-ECS-IMG-014`
-    51	- **エラー**: スタック選択段階で失敗したため冪等性確認まで到達せず
-    52	- **スタックトレース**:
-    53	  ```
-    54	  [INFO] Selecting Pulumi stack dev
-    55	  error: PULUMI_ACCESS_TOKEN must be set for login during non-interactive CLI sessions
-    56	  [ERROR] Pulumi stack selection failed for dev
-    57	  ```
-    58	
-    59	### `tests/integration/ecs-image/test_ecs_image_pipeline.sh::INT-ECS-IMG-001`
-    60	- **エラー**: SSM パラメータ `/jenkins-infra/dev/agent-ecs-image/*` が取得できず
-    61	- **スタックトレース**:
-    62	  ```
-    63	  [ERROR] SSM parameter missing for pipeline ARN: /jenkins-infra/dev/agent-ecs-image/pipeline-arn
-    64	  [ERROR] SSM parameter missing for component version: /jenkins-infra/dev/agent-ecs-image/component-version
-    65	  [ERROR] SSM parameter missing for recipe version: /jenkins-infra/dev/agent-ecs-image/recipe-version
-    66	  ```
-    67	
-    68	### `tests/integration/ecs-image/test_ecs_image_pipeline.sh::INT-ECS-IMG-002`
-    69	- **エラー**: パイプライン ARN が空のため Image Builder パイプラインを取得できず
-    70	- **スタックトレース**:
-    71	  ```
-    72	  [ERROR] Image pipeline not found for ARN: 
-    73	  ```
-    74	
-    75	### `tests/integration/ecs-image/test_ecs_image_pipeline.sh::INT-ECS-IMG-003`
-    76	- **エラー**: コンテナレシピ ARN が空でレシピ取得に失敗
-    77	- **スタックトレース**:
-    78	  ```
-    79	  [ERROR] Container recipe not found: 
-    80	  ```
-    81	
-    82	### `tests/integration/ecs-image/test_ecs_image_pipeline.sh::INT-ECS-IMG-004`
-    83	- **エラー**: 配布設定 ARN が空のため DistributionConfiguration を取得できず
-    84	- **スタックトレース**:
-    85	  ```
-    86	  [ERROR] Distribution configuration not found: 
-    87	  ```
-    88	
-    89	### `tests/integration/ecs-image/test_ecs_image_pipeline.sh::INT-ECS-IMG-005`
-    90	- **エラー**: InfrastructureConfiguration ARN が空で構成取得に失敗
-    91	- **スタックトレース**:
-    92	  ```
-    93	  [ERROR] Infrastructure configuration not found: 
-    94	  ```
-    95	
-    96	### `tests/integration/ecs-image/test_ecs_image_pipeline.sh::INT-ECS-IMG-007`
-    97	- **エラー**: コンポーネント ARN 不明のまま get-component を実行し失敗
-    98	- **スタックトレース**:
-    99	  ```
-   100	  [ERROR] Component not found: 
-   101	  ```
+# テストシナリオ: Issue #496
+
+## EC2 Image BuilderでECS Fargate Agent Dockerイメージの自動ビルド
+
+**作成日**: 2025-01-14
+**Issue URL**: https://github.com/tielec/infrastructure-as-code/issues/496
+**対応する設計書**: `.ai-workflow/issue-496/02_design/output/design.md`
+
+---
+
+## 1. テスト戦略サマリー
+
+### 1.1 選択されたテスト戦略
+
+**テスト戦略**: INTEGRATION_ONLY
+
+**判断根拠**（設計書Phase 2より）:
+- Pulumiスタックは主にAWSリソースのプロビジョニングを行う
+- ユニットテストの対象となる複雑なビジネスロジックは存在しない
+- 実際のAWSリソース（ECR、Image Builder）との統合確認が主なテスト対象
+- BDDはエンドユーザー向け機能ではないため不要
+- 既存の`tests/integration/ecs-fargate/`パターンに従う
+
+### 1.2 テスト対象の範囲
+
+| カテゴリ | テスト対象 |
+|---------|-----------|
+| Pulumiリソース | Component, ContainerRecipe, InfrastructureConfiguration, DistributionConfiguration, ImagePipeline |
+| IAMリソース | Image Builder用IAMロール、インスタンスプロファイル |
+| SSMパラメータ | pipeline-arn, component-version, recipe-version |
+| 既存リソース統合 | ECRリポジトリ（jenkins-agentスタック所有）との連携 |
+| Ansibleプレイブック | デプロイ/削除プレイブックの実行 |
+
+### 1.3 テストの目的
+
+1. **インフラ整合性**: Pulumiスタックが正常にデプロイされ、必要なAWSリソースが作成されることを検証
+2. **リソース連携**: 既存のネットワーク/セキュリティ/ECRリソースとの統合が正常に機能することを検証
+3. **設定の正確性**: SSMパラメータが正しい値で保存されることを検証
+4. **運用可能性**: Ansibleプレイブックによるデプロイ/削除が正常に機能することを検証
+
+---
+
+## 2. 統合テストシナリオ
+
+### 2.1 Pulumiリソース検証テスト
+
+#### INT-ECS-IMG-001: SSMパラメータの存在確認
+
+**目的**: jenkins-agent-ecs-imageスタックがデプロイされた後、必要なSSMパラメータが作成されていることを検証
+
+**前提条件**:
+- jenkins-agent-ecs-imageスタックがデプロイ済み
+- AWS CLIが設定済み
+- jqがインストール済み
+
+**テスト手順**:
+1. 以下のSSMパラメータの存在を確認
+   - `/jenkins-infra/{env}/agent-ecs-image/pipeline-arn`
+   - `/jenkins-infra/{env}/agent-ecs-image/component-version`
+   - `/jenkins-infra/{env}/agent-ecs-image/recipe-version`
+2. 各パラメータの値が空でないことを確認
+3. パラメータの形式を検証
+   - pipeline-arn: `arn:aws:imagebuilder:` で始まる
+   - component-version: `1.YYMMDD.SSSSS` 形式
+   - recipe-version: `1.YYMMDD.SSSSS` 形式
+
+**期待結果**:
+- すべてのパラメータが存在する
+- 各パラメータの値が期待される形式である
+
+**確認項目**:
+- [ ] pipeline-arnパラメータが存在し、ARN形式である
+- [ ] component-versionパラメータが存在し、バージョン形式である
+- [ ] recipe-versionパラメータが存在し、バージョン形式である
+
+---
+
+#### INT-ECS-IMG-002: Image Builderパイプラインのステータス確認
+
+**目的**: Image Builderパイプラインが正常に作成され、ENABLED状態であることを検証
+
+**前提条件**:
+- INT-ECS-IMG-001が成功
+- pipeline-arnがSSMパラメータから取得可能
+
+**テスト手順**:
+1. SSMパラメータからpipeline-arnを取得
+2. `aws imagebuilder get-image-pipeline`でパイプライン情報を取得
+3. パイプラインのステータスを確認
+
+**期待結果**:
+- パイプラインが存在する
+- ステータスが`ENABLED`である
+
+**確認項目**:
+- [ ] パイプラインが取得可能
+- [ ] status = "ENABLED"
+
+---
+
+#### INT-ECS-IMG-003: ContainerRecipeの存在確認
+
+**目的**: Image BuilderのContainerRecipeが正しく作成されていることを検証
+
+**前提条件**:
+- INT-ECS-IMG-002が成功
+- パイプラインARNが取得済み
+
+**テスト手順**:
+1. パイプラインからcontainerRecipeArnを取得
+2. `aws imagebuilder get-container-recipe`でレシピ情報を取得
+3. レシピの設定内容を確認
+   - containerType: "DOCKER"
+   - targetRepository設定の存在
+
+**期待結果**:
+- ContainerRecipeが存在する
+- containerTypeが"DOCKER"である
+- targetRepository設定が存在する
+
+**確認項目**:
+- [ ] containerRecipeArnが取得可能
+- [ ] containerType = "DOCKER"
+- [ ] targetRepository設定が存在
+
+---
+
+#### INT-ECS-IMG-004: ECRリポジトリ配布設定の確認
+
+**目的**: 既存のECRリポジトリへの配布設定が正しく構成されていることを検証
+
+**前提条件**:
+- INT-ECS-IMG-003が成功
+- jenkins-agentスタックでECRリポジトリがデプロイ済み
+
+**テスト手順**:
+1. SSMパラメータ`/jenkins-infra/{env}/agent/ecr-repository-url`を取得
+2. パイプラインのdistributionConfigurationArnを取得
+3. DistributionConfigurationの設定を確認
+4. ターゲットリポジトリがECR URLと一致することを確認
+
+**期待結果**:
+- ECRリポジトリURLが取得可能
+- DistributionConfigurationが存在する
+- ターゲットリポジトリが既存ECRを指している
+
+**確認項目**:
+- [ ] ECRリポジトリURLがSSMから取得可能
+- [ ] distributionConfigurationArnが存在
+- [ ] ターゲットリポジトリが正しいECRを指している
+
+---
+
+#### INT-ECS-IMG-005: IAMロールの権限確認
+
+**目的**: Image Builder用のIAMロールが正しい権限を持っていることを検証
+
+**前提条件**:
+- jenkins-agent-ecs-imageスタックがデプロイ済み
+
+**テスト手順**:
+1. IAMロール`jenkins-infra-imagebuilder-role-{env}`の存在を確認
+2. アタッチされたポリシーを一覧取得
+3. 必要なポリシーがアタッチされていることを確認
+   - EC2InstanceProfileForImageBuilder
+   - AmazonSSMManagedInstanceCore
+   - EC2InstanceProfileForImageBuilderECRContainerBuilds
+4. インスタンスプロファイルの存在を確認
+
+**期待結果**:
+- IAMロールが存在する
+- 必要なポリシーがアタッチされている
+- インスタンスプロファイルが存在する
+
+**確認項目**:
+- [ ] IAMロールが存在
+- [ ] EC2InstanceProfileForImageBuilderポリシーがアタッチ
+- [ ] AmazonSSMManagedInstanceCoreポリシーがアタッチ
+- [ ] EC2InstanceProfileForImageBuilderECRContainerBuildsポリシーがアタッチ
+- [ ]
+... (truncated)
 ```
 
 ## Turn 24: ツール実行
@@ -625,22 +835,190 @@ planning.md
 
 ## Turn 25: ツール実行
 
+**種別**: reasoning
+**ステータス**: completed
+
+## Turn 26: ツール実行
+
 **種別**: コマンド実行
-**コマンド**: `/bin/bash -lc "nl -ba .ai-workflow/issue-496/00_planning/output/planning.md | sed -n '180,260p'"`
+**コマンド**: `/bin/bash -lc 'rg -n "Task 6" -n .ai-workflow/issue-496/00_planning/output/planning.md'`
+**ステータス**: failed (exit_code=127)
+
+```text
+/bin/bash: line 1: rg: command not found
+```
+
+## Turn 27: ツール実行
+
+**種別**: reasoning
+**ステータス**: completed
+
+## Turn 28: ツール実行
+
+**種別**: コマンド実行
+**コマンド**: `/bin/bash -lc 'grep -n "Task 6" -n .ai-workflow/issue-496/00_planning/output/planning.md'`
 **ステータス**: completed (exit_code=0)
 
 ```text
-180	  - `ansible/roles/jenkins_agent_ecs_image/` ロール作成
-   181	  - `ansible/playbooks/jenkins/deploy/deploy_jenkins_agent_ecs_image.yml` 作成
-   182	  - `ansible/playbooks/jenkins/remove/remove_jenkins_agent_ecs_image.yml` 作成
-   183	- [ ] Task 4-5: パイプライン統合 (0.5h)
-   184	  - `jenkins_setup_pipeline.yml` への統合（オプション）
-   185	  - タグ `ecs-image` の追加
-   186	
-   187	### Phase 5: テストコード実装 (見積もり: 1〜1.5h)
-   188	
-   189	- [x] Task 5-1: 統合テストスクリプトの作成 (1h)
-   190	  - `tests/integration/ecs-image/test_ecs_image_pipeline.sh` の作成
+199:- [ ] Task 6-1: Pulumiプレビュー実行 (0.5h)
+202:- [ ] Task 6-2: テストスクリプトのドライラン (0.5h)
+205:- [ ] Task 6-3: 統合テストレポート作成 (0.5h)
+259:| Task 6-1 | Task 4-3 | Pulumiスタック完成後にプレビュー可能 |
+```
+
+## Turn 29: ツール実行
+
+**種別**: reasoning
+**ステータス**: completed
+
+## Turn 30: ツール実行
+
+**種別**: コマンド実行
+**コマンド**: `/bin/bash -lc "sed -n '190,212p' .ai-workflow/issue-496/00_planning/output/planning.md"`
+**ステータス**: completed (exit_code=0)
+
+```text
+- `tests/integration/ecs-image/test_ecs_image_pipeline.sh` の作成
+  - SSMパラメータ存在確認
+  - Image Builderリソース状態確認
+  - ECRリポジトリ設定確認
+- [x] Task 5-2: テストヘルパーの作成 (0.5h)
+  - 共通ユーティリティ関数の作成（既存パターン踏襲）
+
+### Phase 6: テスト実行 (見積もり: 1〜1.5h)
+
+- [ ] Task 6-1: Pulumiプレビュー実行 (0.5h)
+  - `pulumi preview` でリソース作成計画を確認
+  - エラーがないことを確認
+- [ ] Task 6-2: テストスクリプトのドライラン (0.5h)
+  - 構文チェック（shellcheck）
+  - モック環境での動作確認
+- [ ] Task 6-3: 統合テストレポート作成 (0.5h)
+  - テスト結果のドキュメント化
+  - 手動検証が必要な項目のリスト化
+
+### Phase 7: ドキュメント (見積もり: 0.5〜1h)
+
+- [ ] Task 7-1: README.mdの更新 (0.5h)
+  - `pulumi/README.md` への新スタック追加
+```
+
+## Turn 31: ツール実行
+
+**種別**: reasoning
+**ステータス**: completed
+
+## Turn 32: ツール実行
+
+**種別**: file_change
+**ステータス**: completed
+
+## Turn 33: ツール実行
+
+**種別**: reasoning
+**ステータス**: completed
+
+## Turn 34: ツール実行
+
+**種別**: コマンド実行
+**コマンド**: `/bin/bash -lc 'nl -ba .ai-workflow/issue-496/06_testing/output/test-result.md'`
+**ステータス**: completed (exit_code=0)
+
+```text
+1	# テスト実行結果
+     2	
+     3	## テスト結果サマリー
+     4	- 総テスト数: 12件
+     5	- 成功: 4件
+     6	- 失敗: 8件
+     7	- 成功率: 33%
+     8	
+     9	## 再実行結果
+    10	
+    11	### 再実行1: 2025-12-16 05:31:28
+    12	- **修正内容**: Miniconda 環境で yamllint/ansible を導入し component.yml に YAML ヘッダー追加と line-length 無効化を実施、フェーズ判定がインデントを許容するようテストを修正。
+    13	- **成功**: 4個
+    14	- **失敗**: 8個
+    15	- **変更**: component.yml/Ansible 系テストが PASS に改善。Pulumi 認証未設定と AWS SSM パラメータ欠如による失敗は未解消。
+    16	
+    17	## 失敗したテストの詳細
+    18	
+    19	### `tests/integration/ecs-image/test_pulumi_stack.sh::INT-ECS-IMG-013`
+    20	- **エラー**: PULUMI_ACCESS_TOKEN 未設定でスタック選択に失敗し preview を開始できず
+    21	- **スタックトレース**:
+    22	  ```
+    23	  [INFO] Selecting Pulumi stack dev
+    24	  error: PULUMI_ACCESS_TOKEN must be set for login during non-interactive CLI sessions
+    25	  [ERROR] Pulumi stack selection failed for dev
+    26	  ```
+    27	
+    28	### `tests/integration/ecs-image/test_pulumi_stack.sh::INT-ECS-IMG-014`
+    29	- **エラー**: スタック選択段階で停止したため冪等性確認に到達せず
+    30	- **スタックトレース**:
+    31	  ```
+    32	  [INFO] Selecting Pulumi stack dev
+    33	  error: PULUMI_ACCESS_TOKEN must be set for login during non-interactive CLI sessions
+    34	  [ERROR] Pulumi stack selection failed for dev
+    35	  ```
+    36	
+    37	### `tests/integration/ecs-image/test_ecs_image_pipeline.sh::INT-ECS-IMG-001`
+    38	- **エラー**: SSM パラメータ `/jenkins-infra/dev/agent-ecs-image/*` が存在せず取得に失敗
+    39	- **スタックトレース**:
+    40	  ```
+    41	  [ERROR] SSM parameter missing for pipeline ARN: /jenkins-infra/dev/agent-ecs-image/pipeline-arn
+    42	  [ERROR] SSM parameter missing for component version: /jenkins-infra/dev/agent-ecs-image/component-version
+    43	  [ERROR] SSM parameter missing for recipe version: /jenkins-infra/dev/agent-ecs-image/recipe-version
+    44	  ```
+    45	
+    46	### `tests/integration/ecs-image/test_ecs_image_pipeline.sh::INT-ECS-IMG-002`
+    47	- **エラー**: パイプライン ARN 未取得のため Image Builder パイプラインを参照できず
+    48	- **スタックトレース**:
+    49	  ```
+    50	  [ERROR] Image pipeline not found for ARN: 
+    51	  ```
+    52	
+    53	### `tests/integration/ecs-image/test_ecs_image_pipeline.sh::INT-ECS-IMG-003`
+    54	- **エラー**: コンテナレシピ ARN 取得失敗でレシピ検証不可
+    55	- **スタックトレース**:
+    56	  ```
+    57	  [ERROR] Container recipe not found: 
+    58	  ```
+    59	
+    60	### `tests/integration/ecs-image/test_ecs_image_pipeline.sh::INT-ECS-IMG-004`
+    61	- **エラー**: 配布設定 ARN 取得失敗で DistributionConfiguration を取得できず
+    62	- **スタックトレース**:
+    63	  ```
+    64	  [ERROR] Distribution configuration not found: 
+    65	  ```
+    66	
+    67	### `tests/integration/ecs-image/test_ecs_image_pipeline.sh::INT-ECS-IMG-005`
+    68	- **エラー**: InfrastructureConfiguration ARN 不明のため構成取得に失敗
+    69	- **スタックトレース**:
+    70	  ```
+    71	  [ERROR] Infrastructure configuration not found: 
+    72	  ```
+    73	
+    74	### `tests/integration/ecs-image/test_ecs_image_pipeline.sh::INT-ECS-IMG-007`
+    75	- **エラー**: コンポーネント ARN 不明で get-component が失敗
+    76	- **スタックトレース**:
+    77	  ```
+    78	  [ERROR] Component not found: 
+    79	  ```
+```
+
+## Turn 35: ツール実行
+
+**種別**: reasoning
+**ステータス**: completed
+
+## Turn 36: ツール実行
+
+**種別**: コマンド実行
+**コマンド**: `/bin/bash -lc "nl -ba .ai-workflow/issue-496/00_planning/output/planning.md | sed -n '190,210p'"`
+**ステータス**: completed (exit_code=0)
+
+```text
+190	  - `tests/integration/ecs-image/test_ecs_image_pipeline.sh` の作成
    191	  - SSMパラメータ存在確認
    192	  - Image Builderリソース状態確認
    193	  - ECRリポジトリ設定確認
@@ -655,87 +1033,32 @@ planning.md
    202	- [ ] Task 6-2: テストスクリプトのドライラン (0.5h)
    203	  - 構文チェック（shellcheck）
    204	  - モック環境での動作確認
-   205	- [ ] Task 6-3: 統合テストレポート作成 (0.5h)
+   205	- [x] Task 6-3: 統合テストレポート作成 (0.5h)
    206	  - テスト結果のドキュメント化
    207	  - 手動検証が必要な項目のリスト化
    208	
    209	### Phase 7: ドキュメント (見積もり: 0.5〜1h)
-   210	
-   211	- [ ] Task 7-1: README.mdの更新 (0.5h)
-   212	  - `pulumi/README.md` への新スタック追加
-   213	  - 依存関係図の更新
-   214	- [ ] Task 7-2: CONTRIBUTION.mdの確認 (0.25h)
-   215	  - 開発ガイドラインへの適合確認
-   216	- [ ] Task 7-3: 運用ドキュメントの追加 (0.25h)
-   217	  - パイプライン手動実行手順
-   218	  - トラブルシューティング情報
-   219	
-   220	### Phase 8: レポート (見積もり: 0.5h)
-   221	
-   222	- [ ] Task 8-1: 完了レポートの作成 (0.5h)
-   223	  - 実装サマリー
-   224	  - テスト結果サマリー
-   225	  - 残課題・今後の改善提案
-   226	
-   227	---
-   228	
-   229	## 5. 依存関係
-   230	
-   231	```mermaid
-   232	graph TD
-   233	    P1[Phase 1: 要件定義] --> P2[Phase 2: 設計]
-   234	    P2 --> P3[Phase 3: テストシナリオ]
-   235	    P2 --> P4[Phase 4: 実装]
-   236	    P3 --> P5[Phase 5: テスト実装]
-   237	    P4 --> P5
-   238	    P5 --> P6[Phase 6: テスト実行]
-   239	    P6 --> P7[Phase 7: ドキュメント]
-   240	    P7 --> P8[Phase 8: レポート]
-   241	
-   242	    subgraph "Phase 4 内部依存"
-   243	        T41[Task 4-1: 基盤作成] --> T42[Task 4-2: Component YAML]
-   244	        T41 --> T43[Task 4-3: Pulumi実装]
-   245	        T42 --> T43
-   246	        T43 --> T44[Task 4-4: Ansible]
-   247	        T44 --> T45[Task 4-5: 統合]
-   248	    end
-   249	```
-   250	
-   251	### タスク間の依存関係詳細
-   252	
-   253	| タスク | 前提タスク | 説明 |
-   254	|--------|-----------|------|
-   255	| Task 4-2 | Task 4-1 | 基盤ディレクトリ作成後にComponent YAML作成 |
-   256	| Task 4-3 | Task 4-1, 4-2 | Component YAMLを読み込むため |
-   257	| Task 4-4 | Task 4-3 | Pulumiスタック完成後にAnsibleラッパー作成 |
-   258	| Task 5-1 | Task 4-3 | テスト対象のリソース定義が必要 |
-   259	| Task 6-1 | Task 4-3 | Pulumiスタック完成後にプレビュー可能 |
-   260
+   210
 ```
 
-## Turn 26: ツール実行
+## Turn 37: ツール実行
 
 **種別**: reasoning
 **ステータス**: completed
 
-## Turn 27: ツール実行
-
-**種別**: reasoning
-**ステータス**: completed
-
-## Turn 28: ツール実行
+## Turn 38: ツール実行
 
 **種別**: agent_message
 **ステータス**: completed
 
-## Turn 29: 実行完了
+## Turn 39: 実行完了
 
 **ステータス**: completed
-**所要時間**: 79505ms
+**所要時間**: 83050ms
 **ターン数**: N/A
 
 ---
 
-**経過時間**: 79505ms
-**開始**: 2025-12-16T05:22:53.296Z
-**終了**: 2025-12-16T05:24:12.801Z
+**経過時間**: 83050ms
+**開始**: 2025-12-16T05:32:29.022Z
+**終了**: 2025-12-16T05:33:52.072Z
