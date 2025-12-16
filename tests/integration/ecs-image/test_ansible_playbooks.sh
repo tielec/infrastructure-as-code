@@ -5,36 +5,11 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
+source "${ROOT_DIR}/tests/integration/ecs-image/helpers.sh"
 ANSIBLE_DIR="${ROOT_DIR}/ansible"
 PLAYBOOK_DEPLOY="playbooks/jenkins/deploy/deploy_jenkins_agent_ecs_image.yml"
 PLAYBOOK_REMOVE="playbooks/jenkins/remove/remove_jenkins_agent_ecs_image.yml"
 ENVIRONMENT="${ENVIRONMENT:-dev}"
-
-log_info() {
-  echo "[INFO] $*"
-}
-
-log_error() {
-  echo "[ERROR] $*" >&2
-}
-
-require_cmd() {
-  command -v "$1" >/dev/null 2>&1 || {
-    log_error "Required command '$1' not found in PATH"
-    exit 1
-  }
-}
-
-run_test() {
-  local name="$1"
-  shift
-  TOTAL=$((TOTAL + 1))
-  if "$@"; then
-    PASSED=$((PASSED + 1))
-  else
-    FAILED=$((FAILED + 1))
-  fi
-}
 
 test_syntax_checks() {
   log_info "INT-ECS-IMG-011/012: Running ansible-playbook --syntax-check"
@@ -73,9 +48,7 @@ main() {
   require_cmd ansible-playbook
   cd "${ANSIBLE_DIR}"
 
-  TOTAL=0
-  PASSED=0
-  FAILED=0
+  init_summary
 
   echo "=============================================="
   echo "Ansible playbook validation for ECS image stack"

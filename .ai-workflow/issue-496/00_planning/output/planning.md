@@ -186,7 +186,7 @@
 
 ### Phase 5: テストコード実装 (見積もり: 1〜1.5h)
 
-- [ ] Task 5-1: 統合テストスクリプトの作成 (1h)
+- [x] Task 5-1: 統合テストスクリプトの作成 (1h)
   - `tests/integration/ecs-image/test_ecs_image_pipeline.sh` の作成
   - SSMパラメータ存在確認
   - Image Builderリソース状態確認

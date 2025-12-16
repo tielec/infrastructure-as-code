@@ -6,6 +6,8 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
+source "${ROOT_DIR}/tests/integration/ecs-image/helpers.sh"
+
 ENVIRONMENT="${ENVIRONMENT:-dev}"
 AWS_REGION="${AWS_REGION:-ap-northeast-1}"
 SSM_PREFIX="/jenkins-infra/${ENVIRONMENT}"
@@ -21,58 +23,6 @@ COMPONENT_ARN=""
 SUBNET_ID=""
 SECURITY_GROUP_ID=""
 INSTANCE_PROFILE_ROLE=""
-
-log_info() {
-  echo "[INFO] $*"
-}
-
-log_error() {
-  echo "[ERROR] $*" >&2
-}
-
-log_section() {
-  echo
-  echo "=== $* ==="
-}
-
-require_cmd() {
-  command -v "$1" >/dev/null 2>&1 || {
-    log_error "Required command '$1' not found in PATH"
-    exit 1
-  }
-}
-
-fetch_param() {
-  local name="$1"
-  local description="$2"
-  local value
-
-  value=$(aws ssm get-parameter \
-    --name "$name" \
-    --region "$AWS_REGION" \
-    --query "Parameter.Value" \
-    --output text 2>/dev/null || true)
-
-  if [ -z "$value" ] || [ "$value" = "None" ]; then
-    log_error "SSM parameter missing for ${description}: ${name}"
-    return 1
-  fi
-
-  echo "$value"
-}
-
-assert_regex() {
-  local value="$1"
-  local pattern="$2"
-  local message="$3"
-
-  if [[ "$value" =~ $pattern ]]; then
-    return 0
-  fi
-
-  log_error "$message (value: ${value})"
-  return 1
-}
 
 test_ssm_parameters_exist() {
   log_section "INT-ECS-IMG-001: SSM parameter presence and format"
@@ -313,24 +263,11 @@ test_component_definition() {
   return 0
 }
 
-run_test() {
-  local name="$1"
-  shift
-  TOTAL=$((TOTAL + 1))
-  if "$@"; then
-    PASSED=$((PASSED + 1))
-  else
-    FAILED=$((FAILED + 1))
-  fi
-}
-
 main() {
   require_cmd aws
   require_cmd jq
 
-  TOTAL=0
-  PASSED=0
-  FAILED=0
+  init_summary
 
   echo "=============================================="
   echo "ECS Image Builder Pipeline Integration Tests"
