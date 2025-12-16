@@ -116,15 +116,15 @@
 
 ### Phase 1: 要件定義 (見積もり: 1〜2h)
 
-- [ ] Task 1-1: 機能要件の詳細化 (0.5h)
+- [x] Task 1-1: 機能要件の詳細化 (0.5h)
   - EC2 Image Builder ContainerRecipeの仕様確認
   - 既存Dockerfileの分析と変換可能性の確認
   - entrypoint.shの取り扱い方法の決定
-- [ ] Task 1-2: 技術要件の明確化 (0.5h)
+- [x] Task 1-2: 技術要件の明確化 (0.5h)
   - Pulumi ContainerRecipe APIの確認
   - ECRリポジトリとの連携方法の確認
   - 既存の`jenkins-agent`スタックとの統合方法の決定
-- [ ] Task 1-3: 受け入れ基準の定義 (0.5h)
+- [x] Task 1-3: 受け入れ基準の定義 (0.5h)
   - Image Builderパイプラインが正常に作成される
   - パイプライン実行後、ECRにイメージがプッシュされる
   - SSMパラメータにパイプラインARN等が保存される
