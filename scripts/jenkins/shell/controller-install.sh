@@ -90,7 +90,25 @@ log "Jenkins UID:GID = $JENKINS_UID:$JENKINS_GID"
 
 # Jenkinsディレクトリ所有権確認
 log "Jenkinsディレクトリの所有権を確認"
-chown -R jenkins:jenkins $JENKINS_HOME_DIR
+
+# 初回セットアップフラグの確認（EFS上の大量ファイルに対するchown -Rを避けるため）
+SETUP_FLAG="$JENKINS_HOME_DIR/.ownership_set"
+
+if [ ! -f "$SETUP_FLAG" ]; then
+    log "初回セットアップ: 全ファイルの所有権を設定します（時間がかかる場合があります）"
+    chown -R jenkins:jenkins $JENKINS_HOME_DIR
+    # フラグファイルを作成
+    touch "$SETUP_FLAG"
+    chown jenkins:jenkins "$SETUP_FLAG"
+    log "所有権の設定が完了しました"
+else
+    log "所有権は既に設定済みです。トップレベルディレクトリのみ確認します"
+    # トップレベルディレクトリの所有権のみ確認（高速）
+    chown jenkins:jenkins $JENKINS_HOME_DIR
+    # 新規作成される可能性のあるディレクトリのみ確認
+    [ -d "$JENKINS_HOME_DIR/logs" ] && chown jenkins:jenkins "$JENKINS_HOME_DIR/logs"
+    [ -d "$JENKINS_HOME_DIR/plugins" ] && chown jenkins:jenkins "$JENKINS_HOME_DIR/plugins"
+fi
 
 # Jenkinsのインストール
 log "Jenkinsパッケージリポジトリの設定"
