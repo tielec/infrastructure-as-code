@@ -153,6 +153,12 @@ ALB_DNS=$(retrieve_ssm_parameter \
     "ALB DNS" \
     "false")
 
+# VPC内部用のプライベートURL取得（新規追加 - Issue #497対応）
+ALB_INTERNAL_DNS=$(retrieve_ssm_parameter \
+    "/jenkins-infra/${ENVIRONMENT}/loadbalancer/jenkins-internal-url" \
+    "ALB Internal DNS" \
+    "false")
+
 # Jenkins URLの設定
 setup_jenkins_url() {
     if [ -n "$ALB_DNS" ] && [ "$ALB_DNS" != "None" ]; then
@@ -167,11 +173,26 @@ setup_jenkins_url() {
     fi
 }
 
+# VPC内部用URL設定関数（新規追加 - Issue #497対応）
+# ECS FargateエージェントがNAT Instance経由せずにALBに直接接続するため
+setup_jenkins_internal_url() {
+    if [ -n "$ALB_INTERNAL_DNS" ] && [ "$ALB_INTERNAL_DNS" != "None" ]; then
+        echo "${ALB_INTERNAL_DNS}"
+    else
+        # フォールバック：プライベートURLがなければパブリックURLを使用
+        setup_jenkins_url
+    fi
+}
+
 JENKINS_URL=$(setup_jenkins_url)
 log "✓ Jenkins URL: $JENKINS_URL"
 
+JENKINS_INTERNAL_URL=$(setup_jenkins_internal_url)
+log "✓ Jenkins Internal URL: $JENKINS_INTERNAL_URL"
+
 # すべての環境変数を一度にエクスポート（envsubstで使用するため）
 export JENKINS_URL
+export JENKINS_INTERNAL_URL
 export EC2_FLEET_ID
 export WORKTERMINAL_HOST
 export AWS_REGION
@@ -206,6 +227,7 @@ log_debug_info() {
     if [ "${DEBUG_CASC:-false}" = "true" ]; then
         log "Environment variables for template substitution:"
         log "  JENKINS_URL: $JENKINS_URL"
+        log "  JENKINS_INTERNAL_URL: $JENKINS_INTERNAL_URL"
         log "  EC2_FLEET_ID: $EC2_FLEET_ID"
         log "  WORKTERMINAL_HOST: $WORKTERMINAL_HOST"
         log "  AWS_PROD_ACCOUNT_IDS: ${AWS_PROD_ACCOUNT_IDS:-not set}"
@@ -227,7 +249,7 @@ log_debug_info
 # テンプレートから設定ファイルを生成
 # shellcheckを無効化して変数リストを明示的に指定
 # shellcheck disable=SC2016
-envsubst '$JENKINS_URL $EC2_FLEET_ID $WORKTERMINAL_HOST $AWS_REGION $AWS_PROD_ACCOUNT_IDS $AWS_DEV_ACCOUNT_IDS $SHARED_LIBRARY_REPO $SHARED_LIBRARY_BRANCH $SHARED_LIBRARY_PATH $EC2_IDLE_MINUTES $EC2_MIN_SIZE $EC2_MAX_SIZE $EC2_NUM_EXECUTORS $ECS_CLUSTER_ARN $ECS_TASK_DEFINITION_ARN $ECS_EXECUTION_ROLE_ARN $ECS_TASK_ROLE_ARN $JENKINS_AGENT_SG_ID $PRIVATE_SUBNET_A_ID $PRIVATE_SUBNET_B_ID' < "$TEMPLATE_FILE" > "$CASC_CONFIG_FILE"
+envsubst '$JENKINS_URL $JENKINS_INTERNAL_URL $EC2_FLEET_ID $WORKTERMINAL_HOST $AWS_REGION $AWS_PROD_ACCOUNT_IDS $AWS_DEV_ACCOUNT_IDS $SHARED_LIBRARY_REPO $SHARED_LIBRARY_BRANCH $SHARED_LIBRARY_PATH $EC2_IDLE_MINUTES $EC2_MIN_SIZE $EC2_MAX_SIZE $EC2_NUM_EXECUTORS $ECS_CLUSTER_ARN $ECS_TASK_DEFINITION_ARN $ECS_EXECUTION_ROLE_ARN $ECS_TASK_ROLE_ARN $JENKINS_AGENT_SG_ID $PRIVATE_SUBNET_A_ID $PRIVATE_SUBNET_B_ID' < "$TEMPLATE_FILE" > "$CASC_CONFIG_FILE"
 
 # 権限設定
 chown jenkins:jenkins "$CASC_CONFIG_FILE"

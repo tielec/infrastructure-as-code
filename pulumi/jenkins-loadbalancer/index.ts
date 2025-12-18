@@ -215,6 +215,53 @@ const albZoneIdParam = new aws.ssm.Parameter(`alb-zone-id`, {
     },
 });
 
+// ========================================
+// Route 53プライベートホストゾーン（VPC内部アクセス用）
+// ========================================
+// ECS FargateエージェントがNAT Instance経由せずにALBに直接接続するため
+// Issue #497: WebSocket接続が約6分で切断される問題の解決策
+
+// Route 53プライベートホストゾーンの作成
+const privateZone = new aws.route53.Zone(`jenkins-private-zone`, {
+    name: `jenkins.internal`,
+    vpcs: [{
+        vpcId: vpcId,
+    }],
+    comment: `Private hosted zone for Jenkins internal access - ${environment}`,
+    tags: {
+        Name: pulumi.interpolate`${projectName}-jenkins-private-zone-${environment}`,
+        Environment: environment,
+        ManagedBy: "pulumi",
+        Component: "loadbalancer",
+    },
+});
+
+// ALBへのALIASレコード（VPC内部ではALBのプライベートIPに解決される）
+const albPrivateRecord = new aws.route53.Record(`alb-private-record`, {
+    zoneId: privateZone.zoneId,
+    name: `jenkins.internal`,
+    type: "A",
+    aliases: [{
+        name: alb.dnsName,
+        zoneId: alb.zoneId,
+        evaluateTargetHealth: true,
+    }],
+});
+
+// VPC内部アクセス用のプライベートURL（新規追加）
+const jenkinsInternalUrlParam = new aws.ssm.Parameter(`jenkins-internal-url`, {
+    name: `${ssmPrefix}/loadbalancer/jenkins-internal-url`,
+    type: "String",
+    value: `http://jenkins.internal/`,
+    overwrite: true,  // 初期設定スタックのため許可
+    description: "Jenkins URL for internal VPC access (ECS Fargate)",
+    tags: {
+        Environment: environment,
+        ManagedBy: "pulumi",
+        Component: "loadbalancer",
+    },
+});
+
 // Blue Target GroupのARNをSSMパラメータに保存
 const blueTargetGroupArnParam = new aws.ssm.Parameter(`blue-tg-arn`, {
     name: `${ssmPrefix}/loadbalancer/blue-target-group-arn`,
@@ -280,3 +327,8 @@ export const httpsListenerArn = undefined; // 現在未実装
 export const httpDirectListenerArn = httpDirectListener.arn;
 export const activeEnvironment = activeEnvironmentParam.value;
 export const jenkinsUrl = jenkinsUrlParam.value;
+
+// Route 53プライベートホストゾーン関連のエクスポート（VPC内部アクセス用）
+export const privateZoneId = privateZone.zoneId;
+export const privateZoneName = privateZone.name;
+export const jenkinsInternalUrl = jenkinsInternalUrlParam.value;

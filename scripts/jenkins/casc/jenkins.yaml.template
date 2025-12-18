@@ -67,7 +67,8 @@ jenkins:
         credentialsId: ""
         cluster: "${ECS_CLUSTER_ARN}"
         regionName: "${AWS_REGION}"
-        jenkinsUrl: "${JENKINS_URL}"
+        # VPC内部URL使用（Issue #497対応）- NAT Instance経由せずALBに直接接続
+        jenkinsUrl: "${JENKINS_INTERNAL_URL}"
         templates:
           - label: "ecs-agent fargate-agent ecs-fargate"
             taskDefinitionOverride: "${ECS_TASK_DEFINITION_ARN}"
