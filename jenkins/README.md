@@ -276,6 +276,7 @@ Jenkins設定は以下の方法で管理されています：
 - JCasCで`ecs-fargate`クラウドと`fargate-agent`テンプレートを登録（ラベル: `ecs-agent fargate-agent`）
 - 事前に `docker/jenkins-agent-ecs` イメージをビルドしてECRへプッシュ（Task Definitionは`latest`タグを参照）
 - ネットワークは既存の`jenkins-agent-sg`とプライベートサブネットA/Bを使用し、assignPublicIp=false（JNLP:50000）
+- **VPC内部接続**: Route 53プライベートホストゾーン（`jenkins.internal`）でWebSocket接続を安定化（Issue #497対応）
 
 ## セキュリティ
 

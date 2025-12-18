@@ -53,6 +53,7 @@ Infrastructure as Code (IaC) を実現するPulumiスタック集です。AWS上
 - CloudFormation読み取り（既存リソース参照用）
 - Lambda（サーバーレス構築時）
 - EFS、RDS等（使用するサービスに応じて）
+- Route 53（プライベートホストゾーン管理用）
 
 ### 環境セットアップ
 
@@ -121,7 +122,7 @@ pulumi/
 | `jenkins-security` | セキュリティ設定 | network | セキュリティグループ、IAMロール |
 | `jenkins-nat` | NATゲートウェイ | security | NAT Gateway、Elastic IP |
 | `jenkins-storage` | ストレージ | security | EFS、バックアップ設定 |
-| `jenkins-loadbalancer` | ロードバランサー | security | ALB、ターゲットグループ |
+| `jenkins-loadbalancer` | ロードバランサー | security | ALB、ターゲットグループ、Route 53プライベートホストゾーン |
 | `jenkins-controller` | Jenkinsコントローラー | nat, storage, loadbalancer | EC2、Auto Scaling |
 | `jenkins-agent-ami` | エージェントAMI | security | カスタムAMI（Dockerイメージ事前プル機能付き） |
 | `jenkins-agent` | Jenkinsエージェント | controller, agent-ami | EC2 Fleet、ECS Fargate（エージェント） |
@@ -133,6 +134,7 @@ pulumi/
 - ECS Cluster / Task Definition / ECR Repository / CloudWatch Logs を追加し、SSM `/jenkins-infra/{env}/agent/ecs-*` にARN/URLを出力
 - Jenkinsからは `ecs-agent` / `fargate-agent` ラベルで利用（JCasCで自動設定）
 - コンテナイメージは `docker/jenkins-agent-ecs` のDockerfileからビルドし、上記ECRへプッシュ
+- **VPC内部接続**: Route 53プライベートホストゾーン（`jenkins.internal`）を使用してWebSocket接続を安定化
 
 ### Jenkins SSMバックアップスタック
 
@@ -339,6 +341,18 @@ pulumi up
 ```
 
 詳細は[Ansible Lambda Pipeline](../ansible/README.md#lambda-api-setup-pipeline)を参照してください。
+
+#### Jenkins環境のSSMパラメータ (jenkins-loadbalancer)
+
+Jenkins環境では、以下のSSMパラメータが管理されます：
+
+**外部・内部アクセス用URL設定:**
+- `/jenkins-infra/{env}/loadbalancer/jenkins-url` - 外部アクセス用Jenkins URL（ALB パブリックDNS）
+- `/jenkins-infra/{env}/loadbalancer/jenkins-internal-url` - VPC内部アクセス用Jenkins URL（`http://jenkins.internal/`）
+
+**VPC内部DNS設定:**
+- Route 53プライベートホストゾーン（`jenkins.internal`）がVPC内でのみ解決
+- ECS FargateエージェントのWebSocket接続安定性を向上（NAT Instanceタイムアウト回避）
 
 ## トラブルシューティング
 
