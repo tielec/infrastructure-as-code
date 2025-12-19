@@ -34,7 +34,9 @@ if [ "$1" = "-url" ] && [ $# -eq 4 ]; then
     log "  Agent Name: ${AGENT_NAME}"
     log "  Working directory: ${WORKDIR}"
 
-    exec java -jar "${JENKINS_AGENT_HOME}/agent.jar" \
+    exec java \
+        -Dhudson.remoting.Launcher.pingIntervalSec=10 \
+        -jar "${JENKINS_AGENT_HOME}/agent.jar" \
         -url "${JENKINS_URL}" \
         -secret "${SECRET}" \
         -name "${AGENT_NAME}" \
@@ -45,7 +47,9 @@ else
     log "Using arguments as-is"
     log "Working directory: ${WORKDIR}"
 
-    exec java -jar "${JENKINS_AGENT_HOME}/agent.jar" \
+    exec java \
+        -Dhudson.remoting.Launcher.pingIntervalSec=10 \
+        -jar "${JENKINS_AGENT_HOME}/agent.jar" \
         -workDir "${WORKDIR}" \
         "$@"
 fi
