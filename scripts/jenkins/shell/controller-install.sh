@@ -142,7 +142,7 @@ Group=jenkins
 Environment="JENKINS_HOME=$JENKINS_HOME_DIR"
 Environment="JENKINS_WAR=/usr/share/java/jenkins.war"
 Environment="JENKINS_LOG=$JENKINS_HOME_DIR/logs/jenkins.log"
-Environment="JAVA_OPTS=-Djava.awt.headless=true -Djenkins.install.runSetupWizard=false -Dhudson.model.DownloadService.noSignatureCheck=true -Djenkins.security.canSetSecurityRealm=true -Djenkins.websocket.pingInterval=15 -Djenkins.websocket.idleTimeout=600 -Dhudson.slaves.ChannelPinger.pingIntervalSeconds=15 -Dhudson.slaves.ChannelPinger.timeoutSeconds=60"
+Environment="JAVA_OPTS=-Djava.awt.headless=true -Djenkins.install.runSetupWizard=false -Dhudson.model.DownloadService.noSignatureCheck=true -Djenkins.security.canSetSecurityRealm=true -Djenkins.websocket.pingInterval=15 -Djenkins.websocket.idleTimeout=600 -Djenkins.websocket.enforceKeepAlive=true -Dhudson.slaves.ChannelPinger.pingIntervalSeconds=15 -Dhudson.slaves.ChannelPinger.timeoutSeconds=60"
 Environment="JENKINS_OPTS=--httpPort=8080"
 WorkingDirectory=$JENKINS_HOME_DIR
 StandardOutput=append:$JENKINS_HOME_DIR/logs/jenkins.log
