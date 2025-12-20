@@ -46,6 +46,10 @@ pipelineJob(fullJobName) {
 
     // パラメータ定義
     parameters {
+        // AGENT_LABELパラメータ
+        choiceParam('AGENT_LABEL', ['ec2-fleet-micro', 'ec2-fleet-small', 'ec2-fleet-medium'],
+            'Jenkins エージェントのラベル（small: 2並列/2GB, medium: 3並列/4GB, micro: 1並列/1GB）')
+
         stringParam('AWS_REGION', 'ap-northeast-1', 'AWSリージョン')
         stringParam('TEST_PARAMETER_PATH', '/jenkins/test', 'テスト用パラメータのパス')
         choiceParam('TEST_TYPE', ['all', 'single', 'multiple', 'path', 'withEnv'], 'テストタイプの選択')

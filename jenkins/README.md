@@ -175,6 +175,7 @@ aws ssm get-parameter --name /jenkins-infra/dev/jenkins/admin-password \
 
 | パラメータ名 | 説明 | デフォルト値 |
 |------------|------|------------|
+| AGENT_LABEL | Jenkins エージェントのラベル（small: 2並列/2GB, medium: 3並列/4GB, micro: 1並列/1GB） | small（カテゴリによりmedium/micro） |
 | ENVIRONMENT | 実行環境 | dev |
 | BRANCH | 対象ブランチ | main |
 | SKIP_TESTS | テストをスキップ | false |

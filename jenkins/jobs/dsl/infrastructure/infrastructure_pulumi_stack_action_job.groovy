@@ -69,8 +69,12 @@ pulumiProjects.each { repoKey, repoConfig ->
                 
                 // パラメータ定義
                 parameters {
+                    // === AGENT_LABELパラメータ ===
+                    choiceParam('AGENT_LABEL', ['ec2-fleet-medium', 'ec2-fleet-small', 'ec2-fleet-micro'],
+                        'Jenkins エージェントのラベル（small: 2並列/2GB, medium: 3並列/4GB, micro: 1並列/1GB）')
+
                     // === 基本パラメータ ===
-                    
+
                     // 環境（読み取り専用として表示）
                     choiceParam('ENVIRONMENT', [env], '環境（自動設定） - この値は変更できません。ジョブの配置場所により自動的に決定されます。')
                     

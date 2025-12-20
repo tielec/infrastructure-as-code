@@ -47,6 +47,10 @@ pipelineJob(fullJobName) {
 
     // パラメータ設定
     parameters {
+        // AGENT_LABELパラメータ
+        choiceParam('AGENT_LABEL', ['ec2-fleet-small', 'ec2-fleet-medium', 'ec2-fleet-micro'],
+            'Jenkins エージェントのラベル（small: 2並列/2GB, medium: 3並列/4GB, micro: 1並列/1GB）')
+
         choiceParam('ENVIRONMENT', ['dev', 'prod'], '環境を選択')
         booleanParam('DRY_RUN', false, 'ドライランモード（実際のバックアップは実行しない）')
         stringParam('JENKINSFILE_BRANCH', 'main', 'Jenkinsfileが格納されているブランチ')

@@ -57,6 +57,10 @@ def createDocumentGeneratorJob(repoConfig) {
 
         // パラメータ設定
         parameters {
+            // AGENT_LABELパラメータ
+            choiceParam('AGENT_LABEL', ['ec2-fleet-small', 'ec2-fleet-medium', 'ec2-fleet-micro'],
+                'Jenkins エージェントのラベル（small: 2並列/2GB, medium: 3並列/4GB, micro: 1並列/1GB）')
+
             stringParam('REPO_URL', repoConfig.url, 'リポジトリURL')
             stringParam('TARGET_BRANCH', repoConfig.branch, 'ドキュメント生成元のブランチ')
             stringParam('PR_TARGET_BRANCH', repoConfig.docBranch, 'PRのマージ先ブランチ')

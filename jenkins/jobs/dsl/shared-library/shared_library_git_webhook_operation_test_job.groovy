@@ -24,6 +24,10 @@ pipelineJob(fullJobName) {
 
     // パラメータ定義
     parameters {
+        // AGENT_LABELパラメータ
+        choiceParam('AGENT_LABEL', ['ec2-fleet-micro', 'ec2-fleet-small', 'ec2-fleet-medium'],
+            'Jenkins エージェントのラベル（small: 2並列/2GB, medium: 3並列/4GB, micro: 1並列/1GB）')
+
         choiceParam('TEST_TYPE', ['ALL', 'CREATE_UPDATE', 'BATCH_CREATE', 'LIST_ONLY'], 'テストする操作を選択')
         stringParam('REPO_URL', 'https://github.com/tielec/infrastructure-as-code', 'リポジトリのURL')
         stringParam('WEBHOOK_URL', 'https://webhook.site/fa61f672-940a-406f-9850-848c8bdf8315', 'テスト用WebhookURL (webhook.siteを推奨)')

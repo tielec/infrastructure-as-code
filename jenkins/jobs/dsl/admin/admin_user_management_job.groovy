@@ -48,6 +48,10 @@ pipelineJob(fullJobName) {
 
     // パラメータ設定
     parameters {
+        // AGENT_LABELパラメータ
+        choiceParam('AGENT_LABEL', ['ec2-fleet-small', 'ec2-fleet-medium', 'ec2-fleet-micro'],
+            'Jenkins エージェントのラベル（small: 2並列/2GB, medium: 3並列/4GB, micro: 1並列/1GB）')
+
         choiceParam('EXECUTION_MODE', ['EXECUTE', 'DRY_RUN'], 'EXECUTE: apply changes, DRY_RUN: check only')
         booleanParam('CLEANUP_USERS', false, 'Enable user cleanup functionality')
         textParam('USERS_TO_DELETE', '', 'Comma-separated list of usernames to delete (e.g., user1,user2,user3). Only works when CLEANUP_USERS is true.')

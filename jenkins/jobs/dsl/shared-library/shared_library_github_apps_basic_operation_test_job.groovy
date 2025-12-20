@@ -25,6 +25,10 @@ pipelineJob(fullJobName) {
 
     // パラメータ定義
     parameters {
+        // AGENT_LABELパラメータ
+        choiceParam('AGENT_LABEL', ['ec2-fleet-micro', 'ec2-fleet-small', 'ec2-fleet-medium'],
+            'Jenkins エージェントのラベル（small: 2並列/2GB, medium: 3並列/4GB, micro: 1並列/1GB）')
+
         choiceParam('AUTH_TYPE', ['GITHUB_APP', 'PAT'], 'GitHub認証タイプの選択')
         stringParam('GITHUB_APP_CREDENTIALS_ID', System.getenv("GITHUB_APP_CREDENTIALS_ID") ?: 'github-app-credentials', 'GitHub App認証用のJenkins認証情報ID')
         stringParam('PAT_CREDENTIALS_ID', 'github-pat', 'Personal Access Token用のJenkins認証情報ID')

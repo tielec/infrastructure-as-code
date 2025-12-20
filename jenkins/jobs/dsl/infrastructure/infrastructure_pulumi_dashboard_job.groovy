@@ -38,6 +38,10 @@ pipelineJob(jobPath) {
         
     // パラメータ定義
     parameters {
+        // AGENT_LABELパラメータ
+        choiceParam('AGENT_LABEL', ['ec2-fleet-medium', 'ec2-fleet-small', 'ec2-fleet-micro'],
+            'Jenkins エージェントのラベル（small: 2並列/2GB, medium: 3並列/4GB, micro: 1並列/1GB）')
+
         // 環境（common固定）
         choiceParam('ENVIRONMENT', ['common'], '環境（common固定）')
         

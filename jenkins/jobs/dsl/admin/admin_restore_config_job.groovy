@@ -56,6 +56,10 @@ pipelineJob(fullJobName) {
     
     // パラメータ設定
     parameters {
+        // AGENT_LABELパラメータ
+        choiceParam('AGENT_LABEL', ['ec2-fleet-small', 'ec2-fleet-medium', 'ec2-fleet-micro'],
+            'Jenkins エージェントのラベル（small: 2並列/2GB, medium: 3並列/4GB, micro: 1並列/1GB）')
+
         stringParam('TARGET_BRANCH', 'main', 'リストア対象のブランチ')
         stringParam('CONFIG_FILE', 'jenkins/config/casc/jenkins.yaml', 'リストア対象の設定ファイルパス')
         booleanParam('RESTART_JENKINS', false, 'リストア後にJenkinsを再起動するか')
