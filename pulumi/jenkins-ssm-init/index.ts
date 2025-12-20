@@ -180,12 +180,13 @@ const agentInstanceTypeParam = new aws.ssm.Parameter("agent-instance-type", {
     },
 });
 
+// 後方互換性のための既存パラメータ（medium用として継続使用）
 const agentMinCapacityParam = new aws.ssm.Parameter("agent-min-capacity", {
     name: `${ssmPrefix}/config/agent-min-capacity`,
     type: "String",
     value: "0",
     overwrite: true,
-    description: "Minimum number of Jenkins agents",
+    description: "Minimum number of Jenkins agents (legacy, same as medium)",
     tags: {
         Environment: environment,
         ManagedBy: "pulumi",
@@ -198,7 +199,88 @@ const agentMaxCapacityParam = new aws.ssm.Parameter("agent-max-capacity", {
     type: "String",
     value: "10",
     overwrite: true,
-    description: "Maximum number of Jenkins agents",
+    description: "Maximum number of Jenkins agents (legacy, same as medium)",
+    tags: {
+        Environment: environment,
+        ManagedBy: "pulumi",
+        Component: "config",
+    },
+});
+
+// Medium インスタンス用のキャパシティ設定（明示的）
+const agentMediumMinCapacityParam = new aws.ssm.Parameter("agent-medium-min-capacity", {
+    name: `${ssmPrefix}/config/agent-medium-min-capacity`,
+    type: "String",
+    value: "0",
+    overwrite: true,
+    description: "Minimum number of Jenkins agents (medium instances)",
+    tags: {
+        Environment: environment,
+        ManagedBy: "pulumi",
+        Component: "config",
+    },
+});
+
+const agentMediumMaxCapacityParam = new aws.ssm.Parameter("agent-medium-max-capacity", {
+    name: `${ssmPrefix}/config/agent-medium-max-capacity`,
+    type: "String",
+    value: "10",
+    overwrite: true,
+    description: "Maximum number of Jenkins agents (medium instances)",
+    tags: {
+        Environment: environment,
+        ManagedBy: "pulumi",
+        Component: "config",
+    },
+});
+
+// Small インスタンス用のキャパシティ設定
+const agentSmallMinCapacityParam = new aws.ssm.Parameter("agent-small-min-capacity", {
+    name: `${ssmPrefix}/config/agent-small-min-capacity`,
+    type: "String",
+    value: "0",
+    overwrite: true,
+    description: "Minimum number of Jenkins agents (small instances)",
+    tags: {
+        Environment: environment,
+        ManagedBy: "pulumi",
+        Component: "config",
+    },
+});
+
+const agentSmallMaxCapacityParam = new aws.ssm.Parameter("agent-small-max-capacity", {
+    name: `${ssmPrefix}/config/agent-small-max-capacity`,
+    type: "String",
+    value: "10",
+    overwrite: true,
+    description: "Maximum number of Jenkins agents (small instances)",
+    tags: {
+        Environment: environment,
+        ManagedBy: "pulumi",
+        Component: "config",
+    },
+});
+
+// Micro インスタンス用のキャパシティ設定
+const agentMicroMinCapacityParam = new aws.ssm.Parameter("agent-micro-min-capacity", {
+    name: `${ssmPrefix}/config/agent-micro-min-capacity`,
+    type: "String",
+    value: "0",
+    overwrite: true,
+    description: "Minimum number of Jenkins agents (micro instances)",
+    tags: {
+        Environment: environment,
+        ManagedBy: "pulumi",
+        Component: "config",
+    },
+});
+
+const agentMicroMaxCapacityParam = new aws.ssm.Parameter("agent-micro-max-capacity", {
+    name: `${ssmPrefix}/config/agent-micro-max-capacity`,
+    type: "String",
+    value: "10",
+    overwrite: true,
+    description: "Maximum number of Jenkins agents (micro instances)",
     tags: {
         Environment: environment,
         ManagedBy: "pulumi",

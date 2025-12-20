@@ -18,6 +18,7 @@ const ssmPrefix = `/jenkins-infra/${environment}`;
 const projectNameParam = aws.ssm.getParameter({
     name: `${ssmPrefix}/config/project-name`,
 });
+// 後方互換性のための既存パラメータ
 const maxTargetCapacityParam = aws.ssm.getParameter({
     name: `${ssmPrefix}/config/agent-max-capacity`,
 });
@@ -29,6 +30,30 @@ const spotPriceParam = aws.ssm.getParameter({
 });
 const instanceTypeParam = aws.ssm.getParameter({
     name: `${ssmPrefix}/config/agent-instance-type`,
+});
+
+// Medium インスタンス用のキャパシティ設定（明示的）
+const mediumMinTargetCapacityParam = aws.ssm.getParameter({
+    name: `${ssmPrefix}/config/agent-medium-min-capacity`,
+});
+const mediumMaxTargetCapacityParam = aws.ssm.getParameter({
+    name: `${ssmPrefix}/config/agent-medium-max-capacity`,
+});
+
+// Small インスタンス用のキャパシティ設定
+const smallMinTargetCapacityParam = aws.ssm.getParameter({
+    name: `${ssmPrefix}/config/agent-small-min-capacity`,
+});
+const smallMaxTargetCapacityParam = aws.ssm.getParameter({
+    name: `${ssmPrefix}/config/agent-small-max-capacity`,
+});
+
+// Micro インスタンス用のキャパシティ設定
+const microMinTargetCapacityParam = aws.ssm.getParameter({
+    name: `${ssmPrefix}/config/agent-micro-min-capacity`,
+});
+const microMaxTargetCapacityParam = aws.ssm.getParameter({
+    name: `${ssmPrefix}/config/agent-micro-max-capacity`,
 });
 
 // ネットワークリソースのSSMパラメータを取得
@@ -49,10 +74,23 @@ const jenkinsAgentSecurityGroupIdParam = aws.ssm.getParameter({
 
 // 設定値を変数に設定
 const projectName = pulumi.output(projectNameParam).apply(p => p.value);
+// 後方互換性のための既存変数（mediumと同じ値）
 const maxTargetCapacity = pulumi.output(maxTargetCapacityParam).apply(p => parseInt(p.value));
 const minTargetCapacity = pulumi.output(minTargetCapacityParam).apply(p => parseInt(p.value));
 const spotPrice = pulumi.output(spotPriceParam).apply(p => p.value);
 const instanceType = pulumi.output(instanceTypeParam).apply(p => p.value);
+
+// Medium インスタンス用の設定値
+const mediumMinTargetCapacity = pulumi.output(mediumMinTargetCapacityParam).apply(p => parseInt(p.value));
+const mediumMaxTargetCapacity = pulumi.output(mediumMaxTargetCapacityParam).apply(p => parseInt(p.value));
+
+// Small インスタンス用の設定値
+const smallMinTargetCapacity = pulumi.output(smallMinTargetCapacityParam).apply(p => parseInt(p.value));
+const smallMaxTargetCapacity = pulumi.output(smallMaxTargetCapacityParam).apply(p => parseInt(p.value));
+
+// Micro インスタンス用の設定値
+const microMinTargetCapacity = pulumi.output(microMinTargetCapacityParam).apply(p => parseInt(p.value));
+const microMaxTargetCapacity = pulumi.output(microMaxTargetCapacityParam).apply(p => parseInt(p.value));
 
 // ネットワークリソースIDを取得
 const vpcId = pulumi.output(vpcIdParam).apply(p => p.value);
@@ -419,11 +457,11 @@ const agentLaunchTemplateArm = new aws.ec2.LaunchTemplate(`agent-lt-arm`, {
     },
 });
 
-// SpotFleetリクエスト設定（複数の起動テンプレートを使用、AZ別に最適化）
+// Medium インスタンス専用のSpotFleetリクエスト設定（複数の起動テンプレートを使用、AZ別に最適化）
 const spotFleetRequest = new aws.ec2.SpotFleetRequest(`agent-spot-fleet`, {
     iamFleetRole: spotFleetRole.arn,
     spotPrice: spotPrice,
-    targetCapacity: minTargetCapacity,
+    targetCapacity: mediumMinTargetCapacity,
     terminateInstancesWithExpiration: true,
     instanceInterruptionBehaviour: "terminate",
     allocationStrategy: "lowestPrice", // 最も安価なインスタンスを優先
@@ -496,8 +534,175 @@ const spotFleetRequest = new aws.ec2.SpotFleetRequest(`agent-spot-fleet`, {
         return configs;
     }),
     tags: {
-        Name: `jenkins-infra-agent-fleet-${environment}`,
+        Name: `jenkins-infra-agent-fleet-medium-${environment}`,
         Environment: environment,
+        InstanceSize: "medium",
+    },
+});
+
+// Small インスタンス専用のSpotFleetリクエスト設定（AZ別に最適化）
+const spotFleetRequestSmall = new aws.ec2.SpotFleetRequest(`agent-spot-fleet-small`, {
+    iamFleetRole: spotFleetRole.arn,
+    spotPrice: spotPrice,
+    targetCapacity: smallMinTargetCapacity,
+    terminateInstancesWithExpiration: true,
+    instanceInterruptionBehaviour: "terminate",
+    allocationStrategy: "lowestPrice", // 最も安価なインスタンスを優先
+    replaceUnhealthyInstances: true,
+    launchTemplateConfigs: pulumi.all([privateSubnetIds]).apply(([subnetIds]) => {
+        const configs: any[] = [];
+
+        // 各サブネットのAZ情報を取得して適切なインスタンスタイプを設定
+        subnetIds.forEach((subnetId: string) => {
+            // ARM64 small インスタンス用の設定（t4g.small）- 全AZで利用可能
+            configs.push({
+                launchTemplateSpecification: {
+                    id: agentLaunchTemplateArm.id,
+                    version: agentLaunchTemplateArm.latestVersion.apply(v => v.toString()),
+                },
+                overrides: [{
+                    subnetId: subnetId,
+                    instanceType: "t4g.small",
+                    spotPrice: spotPrice,
+                    priority: 1, // 最優先
+                }],
+            });
+
+            // x86_64 small インスタンス用の設定
+            // サブネットAZ取得のため、AWSリソースから情報を取得
+            const subnet = aws.ec2.getSubnetOutput({ id: subnetId });
+            const azSuffix = subnet.availabilityZone.apply(az => az.slice(-1)); // 'a' or 'c'
+
+            // ap-northeast-1a: t3a.smallが利用可能
+            // ap-northeast-1c: t3a.smallは利用不可
+            const x86SmallOverrides = azSuffix.apply(suffix => {
+                if (suffix === 'a') {
+                    // ap-northeast-1a: t3a.small, t3.small の順
+                    return [
+                        {
+                            subnetId: subnetId,
+                            instanceType: "t3a.small",
+                            spotPrice: spotPrice,
+                            priority: 2,
+                        },
+                        {
+                            subnetId: subnetId,
+                            instanceType: "t3.small",
+                            spotPrice: spotPrice,
+                            priority: 3,
+                        }
+                    ];
+                } else {
+                    // ap-northeast-1c: t3.small のみ（t3a.smallは除外）
+                    return [
+                        {
+                            subnetId: subnetId,
+                            instanceType: "t3.small",
+                            spotPrice: spotPrice,
+                            priority: 2,
+                        }
+                    ];
+                }
+            });
+
+            configs.push({
+                launchTemplateSpecification: {
+                    id: agentLaunchTemplate.id,
+                    version: agentLaunchTemplate.latestVersion.apply(v => v.toString()),
+                },
+                overrides: x86SmallOverrides,
+            });
+        });
+
+        return configs;
+    }),
+    tags: {
+        Name: `jenkins-infra-agent-fleet-small-${environment}`,
+        Environment: environment,
+        InstanceSize: "small",
+    },
+});
+
+// Micro インスタンス専用のSpotFleetリクエスト設定（AZ別に最適化）
+const spotFleetRequestMicro = new aws.ec2.SpotFleetRequest(`agent-spot-fleet-micro`, {
+    iamFleetRole: spotFleetRole.arn,
+    spotPrice: spotPrice,
+    targetCapacity: microMinTargetCapacity,
+    terminateInstancesWithExpiration: true,
+    instanceInterruptionBehaviour: "terminate",
+    allocationStrategy: "lowestPrice", // 最も安価なインスタンスを優先
+    replaceUnhealthyInstances: true,
+    launchTemplateConfigs: pulumi.all([privateSubnetIds]).apply(([subnetIds]) => {
+        const configs: any[] = [];
+
+        // 各サブネットのAZ情報を取得して適切なインスタンスタイプを設定
+        subnetIds.forEach((subnetId: string) => {
+            // ARM64 micro インスタンス用の設定（t4g.micro）- 全AZで利用可能
+            configs.push({
+                launchTemplateSpecification: {
+                    id: agentLaunchTemplateArm.id,
+                    version: agentLaunchTemplateArm.latestVersion.apply(v => v.toString()),
+                },
+                overrides: [{
+                    subnetId: subnetId,
+                    instanceType: "t4g.micro",
+                    spotPrice: spotPrice,
+                    priority: 1, // 最優先
+                }],
+            });
+
+            // x86_64 micro インスタンス用の設定
+            // サブネットAZ取得のため、AWSリソースから情報を取得
+            const subnet = aws.ec2.getSubnetOutput({ id: subnetId });
+            const azSuffix = subnet.availabilityZone.apply(az => az.slice(-1)); // 'a' or 'c'
+
+            // ap-northeast-1a: t3a.microが利用可能
+            // ap-northeast-1c: t3a.microは利用不可
+            const x86MicroOverrides = azSuffix.apply(suffix => {
+                if (suffix === 'a') {
+                    // ap-northeast-1a: t3a.micro, t3.micro の順
+                    return [
+                        {
+                            subnetId: subnetId,
+                            instanceType: "t3a.micro",
+                            spotPrice: spotPrice,
+                            priority: 2,
+                        },
+                        {
+                            subnetId: subnetId,
+                            instanceType: "t3.micro",
+                            spotPrice: spotPrice,
+                            priority: 3,
+                        }
+                    ];
+                } else {
+                    // ap-northeast-1c: t3.micro のみ（t3a.microは除外）
+                    return [
+                        {
+                            subnetId: subnetId,
+                            instanceType: "t3.micro",
+                            spotPrice: spotPrice,
+                            priority: 2,
+                        }
+                    ];
+                }
+            });
+
+            configs.push({
+                launchTemplateSpecification: {
+                    id: agentLaunchTemplate.id,
+                    version: agentLaunchTemplate.latestVersion.apply(v => v.toString()),
+                },
+                overrides: x86MicroOverrides,
+            });
+        });
+
+        return configs;
+    }),
+    tags: {
+        Name: `jenkins-infra-agent-fleet-micro-${environment}`,
+        Environment: environment,
+        InstanceSize: "micro",
     },
 });
 
@@ -661,12 +866,54 @@ const taskDefinition = new aws.ecs.TaskDefinition(`agent-ecs-task-def`, {
     },
 });
 
-// SSMパラメータにスポットフリートIDを保存
+// SSMパラメータにスポットフリートIDを保存（後方互換性のため、medium用として保存）
 const spotFleetIdParameter = new aws.ssm.Parameter(`agent-spotfleet-id`, {
     name: `${ssmPrefix}/agent/spotFleetRequestId`,
     type: "String",
     value: spotFleetRequest.id,
-    description: "Jenkins agent spot fleet request ID",
+    description: "Jenkins agent spot fleet request ID (legacy, medium instances)",
+    tags: {
+        Environment: environment,
+        ManagedBy: "pulumi",
+        Component: "agent",
+    },
+    overwrite: true,
+});
+
+// Medium Spot Fleet IDをSSMパラメータに保存（明示的）
+const spotFleetMediumIdParameter = new aws.ssm.Parameter(`agent-spotfleet-medium-id`, {
+    name: `${ssmPrefix}/agent/spotFleetRequestId-medium`,
+    type: "String",
+    value: spotFleetRequest.id,
+    description: "Jenkins agent spot fleet request ID (medium instances)",
+    tags: {
+        Environment: environment,
+        ManagedBy: "pulumi",
+        Component: "agent",
+    },
+    overwrite: true,
+});
+
+// Small Spot Fleet IDをSSMパラメータに保存
+const spotFleetSmallIdParameter = new aws.ssm.Parameter(`agent-spotfleet-small-id`, {
+    name: `${ssmPrefix}/agent/spotFleetRequestId-small`,
+    type: "String",
+    value: spotFleetRequestSmall.id,
+    description: "Jenkins agent spot fleet request ID (small instances)",
+    tags: {
+        Environment: environment,
+        ManagedBy: "pulumi",
+        Component: "agent",
+    },
+    overwrite: true,
+});
+
+// Micro Spot Fleet IDをSSMパラメータに保存
+const spotFleetMicroIdParameter = new aws.ssm.Parameter(`agent-spotfleet-micro-id`, {
+    name: `${ssmPrefix}/agent/spotFleetRequestId-micro`,
+    type: "String",
+    value: spotFleetRequestMicro.id,
+    description: "Jenkins agent spot fleet request ID (micro instances)",
     tags: {
         Environment: environment,
         ManagedBy: "pulumi",
@@ -861,15 +1108,28 @@ const keyPairNameParameter = new aws.ssm.Parameter(`agent-keypair-name`, {
 // エクスポート
 export const agentRoleArn = jenkinsAgentRole.arn;
 export const agentProfileArn = jenkinsAgentProfile.arn;
+// 後方互換性のためのexport（mediumと同じ）
 export const spotFleetRequestId = spotFleetRequest.id;
+// インスタンスサイズ別のSpot Fleet ID
+export const spotFleetRequestMediumId = spotFleetRequest.id;
+export const spotFleetRequestSmallId = spotFleetRequestSmall.id;
+export const spotFleetRequestMicroId = spotFleetRequestMicro.id;
 export const launchTemplateId = agentLaunchTemplate.id;
 export const launchTemplateArmId = agentLaunchTemplateArm.id;
 export const launchTemplateLatestVersion = agentLaunchTemplate.latestVersion;
 export const launchTemplateArmLatestVersion = agentLaunchTemplateArm.latestVersion;
 export const spotFleetRoleArn = spotFleetRole.arn;
 export const notificationTopicArn = spotFleetNotificationTopic.arn;
+// 後方互換性のためのexport（mediumと同じ）
 export const minCapacity = minTargetCapacity;
 export const maxCapacity = maxTargetCapacity;
+// インスタンスサイズ別のcapacity
+export const mediumMinCapacity = mediumMinTargetCapacity;
+export const mediumMaxCapacity = mediumMaxTargetCapacity;
+export const smallMinCapacity = smallMinTargetCapacity;
+export const smallMaxCapacity = smallMaxTargetCapacity;
+export const microMinCapacity = microMinTargetCapacity;
+export const microMaxCapacity = microMaxTargetCapacity;
 export const agentKeyPairName = agentKeyPair.keyName;
 export const privateKeyParameterName = agentPrivateKeyParameter.name;
 export const ecsClusterArn = ecsCluster.arn;
