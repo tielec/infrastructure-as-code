@@ -24,6 +24,10 @@ pipelineJob(fullJobName) {
 
     // パラメータ定義
     parameters {
+        // AGENT_LABELパラメータ
+        choiceParam('AGENT_LABEL', ['ec2-fleet-micro', 'ec2-fleet-small', 'ec2-fleet-medium'],
+            'Jenkins エージェントのラベル（small: 2並列/2GB, medium: 3並列/4GB, micro: 1並列/1GB）')
+
         choiceParam('TEST_TYPE', ['ALL', 'CREATE_UPDATE', 'BATCH_CREATE', 'SEARCH', 'LIST_ONLY'], 'テストする操作を選択')
         stringParam('DEPLOY_KEY_TITLE', 'Jenkins Test Key', 'テスト用Deploy Keyのタイトル')
         booleanParam('CLEANUP_AFTER_TEST', true, 'テスト後にリソースを削除する')
