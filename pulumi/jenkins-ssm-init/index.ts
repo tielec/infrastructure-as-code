@@ -344,6 +344,49 @@ const agentSpotPriceMicroParam = new aws.ssm.Parameter("agent-spot-price-micro",
     },
 });
 
+// インスタンスサイズ別のExecutor数設定
+// Medium インスタンス用のExecutor数（明示的）
+const agentNumExecutorsMediumParam = new aws.ssm.Parameter("agent-num-executors-medium", {
+    name: `${ssmPrefix}/config/agent-num-executors-medium`,
+    type: "String",
+    value: "3",
+    overwrite: true,
+    description: "Number of executors per Jenkins agent (medium instances)",
+    tags: {
+        Environment: environment,
+        ManagedBy: "pulumi",
+        Component: "config",
+    },
+});
+
+// Small インスタンス用のExecutor数
+const agentNumExecutorsSmallParam = new aws.ssm.Parameter("agent-num-executors-small", {
+    name: `${ssmPrefix}/config/agent-num-executors-small`,
+    type: "String",
+    value: "2",
+    overwrite: true,
+    description: "Number of executors per Jenkins agent (small instances)",
+    tags: {
+        Environment: environment,
+        ManagedBy: "pulumi",
+        Component: "config",
+    },
+});
+
+// Micro インスタンス用のExecutor数
+const agentNumExecutorsMicroParam = new aws.ssm.Parameter("agent-num-executors-micro", {
+    name: `${ssmPrefix}/config/agent-num-executors-micro`,
+    type: "String",
+    value: "1",
+    overwrite: true,
+    description: "Number of executors per Jenkins agent (micro instances)",
+    tags: {
+        Environment: environment,
+        ManagedBy: "pulumi",
+        Component: "config",
+    },
+});
+
 // Git設定
 const gitRepoParam = new aws.ssm.Parameter("git-repo", {
     name: `${ssmPrefix}/config/git-repo`,

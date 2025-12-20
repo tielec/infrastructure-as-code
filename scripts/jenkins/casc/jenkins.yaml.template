@@ -71,7 +71,7 @@ jenkins:
         idleMinutes: ${EC2_IDLE_MINUTES}
         minSize: ${EC2_FLEET_MEDIUM_MIN_SIZE}
         maxSize: ${EC2_FLEET_MEDIUM_MAX_SIZE}
-        numExecutors: ${EC2_NUM_EXECUTORS}
+        numExecutors: ${EC2_FLEET_MEDIUM_NUM_EXECUTORS}
         computerConnector:
           sSHConnector:
             credentialsId: "ec2-agent-keypair"
@@ -102,7 +102,7 @@ jenkins:
         idleMinutes: ${EC2_IDLE_MINUTES}
         minSize: ${EC2_FLEET_SMALL_MIN_SIZE}
         maxSize: ${EC2_FLEET_SMALL_MAX_SIZE}
-        numExecutors: ${EC2_NUM_EXECUTORS}
+        numExecutors: ${EC2_FLEET_SMALL_NUM_EXECUTORS}
         computerConnector:
           sSHConnector:
             credentialsId: "ec2-agent-keypair"
@@ -133,7 +133,7 @@ jenkins:
         idleMinutes: ${EC2_IDLE_MINUTES}
         minSize: ${EC2_FLEET_MICRO_MIN_SIZE}
         maxSize: ${EC2_FLEET_MICRO_MAX_SIZE}
-        numExecutors: ${EC2_NUM_EXECUTORS}
+        numExecutors: ${EC2_FLEET_MICRO_NUM_EXECUTORS}
         computerConnector:
           sSHConnector:
             credentialsId: "ec2-agent-keypair"
