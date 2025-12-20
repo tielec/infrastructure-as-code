@@ -156,31 +156,105 @@ PRIVATE_SUBNET_B_ID=$(retrieve_ssm_parameter \
     "Private Subnet B ID" \
     "false")
 
-# 環境変数の設定（まだexportしない）
+# Agent Capacity設定の取得
+log "Retrieving Agent Capacity configuration from SSM Parameter Store..."
+
+# 後方互換性のための既存パラメータ（medium用として継続使用）
+EC2_MIN_SIZE=$(retrieve_ssm_parameter \
+    "/jenkins-infra/${ENVIRONMENT}/config/agent-min-capacity" \
+    "Agent Min Capacity (legacy)" \
+    "false")
+
+EC2_MAX_SIZE=$(retrieve_ssm_parameter \
+    "/jenkins-infra/${ENVIRONMENT}/config/agent-max-capacity" \
+    "Agent Max Capacity (legacy)" \
+    "false")
+
+# Medium インスタンス用のCapacity設定
+EC2_FLEET_MEDIUM_MIN_SIZE=$(retrieve_ssm_parameter \
+    "/jenkins-infra/${ENVIRONMENT}/config/agent-medium-min-capacity" \
+    "Medium Fleet Min Capacity" \
+    "false")
+
+EC2_FLEET_MEDIUM_MAX_SIZE=$(retrieve_ssm_parameter \
+    "/jenkins-infra/${ENVIRONMENT}/config/agent-medium-max-capacity" \
+    "Medium Fleet Max Capacity" \
+    "false")
+
+# Small インスタンス用のCapacity設定
+EC2_FLEET_SMALL_MIN_SIZE=$(retrieve_ssm_parameter \
+    "/jenkins-infra/${ENVIRONMENT}/config/agent-small-min-capacity" \
+    "Small Fleet Min Capacity" \
+    "false")
+
+EC2_FLEET_SMALL_MAX_SIZE=$(retrieve_ssm_parameter \
+    "/jenkins-infra/${ENVIRONMENT}/config/agent-small-max-capacity" \
+    "Small Fleet Max Capacity" \
+    "false")
+
+# Micro インスタンス用のCapacity設定
+EC2_FLEET_MICRO_MIN_SIZE=$(retrieve_ssm_parameter \
+    "/jenkins-infra/${ENVIRONMENT}/config/agent-micro-min-capacity" \
+    "Micro Fleet Min Capacity" \
+    "false")
+
+EC2_FLEET_MICRO_MAX_SIZE=$(retrieve_ssm_parameter \
+    "/jenkins-infra/${ENVIRONMENT}/config/agent-micro-max-capacity" \
+    "Micro Fleet Max Capacity" \
+    "false")
+
+# Agent NumExecutors設定の取得
+log "Retrieving Agent NumExecutors configuration from SSM Parameter Store..."
+
+# 後方互換性のためのExecutor数（mediumと同じ）
+EC2_NUM_EXECUTORS="${EC2_NUM_EXECUTORS:-3}"
+
+# Medium インスタンス用のExecutor数
+EC2_FLEET_MEDIUM_NUM_EXECUTORS=$(retrieve_ssm_parameter \
+    "/jenkins-infra/${ENVIRONMENT}/config/agent-num-executors-medium" \
+    "Medium Fleet Num Executors" \
+    "false")
+
+# Small インスタンス用のExecutor数
+EC2_FLEET_SMALL_NUM_EXECUTORS=$(retrieve_ssm_parameter \
+    "/jenkins-infra/${ENVIRONMENT}/config/agent-num-executors-small" \
+    "Small Fleet Num Executors" \
+    "false")
+
+# Micro インスタンス用のExecutor数
+EC2_FLEET_MICRO_NUM_EXECUTORS=$(retrieve_ssm_parameter \
+    "/jenkins-infra/${ENVIRONMENT}/config/agent-num-executors-micro" \
+    "Micro Fleet Num Executors" \
+    "false")
+
+# Agent Idle Minutes設定の取得
+log "Retrieving Agent Idle Minutes configuration from SSM Parameter Store..."
+
+# 後方互換性のための既存設定
+EC2_IDLE_MINUTES="${EC2_IDLE_MINUTES:-15}"
+
+# Medium インスタンス用のIdle Minutes
+EC2_FLEET_MEDIUM_IDLE_MINUTES=$(retrieve_ssm_parameter \
+    "/jenkins-infra/${ENVIRONMENT}/config/agent-idle-minutes-medium" \
+    "Medium Fleet Idle Minutes" \
+    "false")
+
+# Small インスタンス用のIdle Minutes
+EC2_FLEET_SMALL_IDLE_MINUTES=$(retrieve_ssm_parameter \
+    "/jenkins-infra/${ENVIRONMENT}/config/agent-idle-minutes-small" \
+    "Small Fleet Idle Minutes" \
+    "false")
+
+# Micro インスタンス用のIdle Minutes
+EC2_FLEET_MICRO_IDLE_MINUTES=$(retrieve_ssm_parameter \
+    "/jenkins-infra/${ENVIRONMENT}/config/agent-idle-minutes-micro" \
+    "Micro Fleet Idle Minutes" \
+    "false")
+
+# その他の環境変数の設定
 SHARED_LIBRARY_REPO="${SHARED_LIBRARY_REPO:-https://github.com/tielec/infrastructure-as-code}"
 SHARED_LIBRARY_BRANCH="${SHARED_LIBRARY_BRANCH:-main}"
 SHARED_LIBRARY_PATH="${SHARED_LIBRARY_PATH:-jenkins/jobs/shared/}"
-EC2_IDLE_MINUTES="${EC2_IDLE_MINUTES:-15}"
-# 後方互換性のための既存変数
-EC2_MIN_SIZE="${EC2_MIN_SIZE:-0}"
-EC2_MAX_SIZE="${EC2_MAX_SIZE:-1}"
-# インスタンスサイズ別の設定（デフォルト値）
-EC2_FLEET_MEDIUM_MIN_SIZE="${EC2_FLEET_MEDIUM_MIN_SIZE:-0}"
-EC2_FLEET_MEDIUM_MAX_SIZE="${EC2_FLEET_MEDIUM_MAX_SIZE:-1}"
-EC2_FLEET_SMALL_MIN_SIZE="${EC2_FLEET_SMALL_MIN_SIZE:-0}"
-EC2_FLEET_SMALL_MAX_SIZE="${EC2_FLEET_SMALL_MAX_SIZE:-1}"
-EC2_FLEET_MICRO_MIN_SIZE="${EC2_FLEET_MICRO_MIN_SIZE:-0}"
-EC2_FLEET_MICRO_MAX_SIZE="${EC2_FLEET_MICRO_MAX_SIZE:-1}"
-# 後方互換性のためのExecutor数（mediumと同じ）
-EC2_NUM_EXECUTORS="${EC2_NUM_EXECUTORS:-3}"
-# インスタンスサイズ別のExecutor数
-EC2_FLEET_MEDIUM_NUM_EXECUTORS="${EC2_FLEET_MEDIUM_NUM_EXECUTORS:-3}"
-EC2_FLEET_SMALL_NUM_EXECUTORS="${EC2_FLEET_SMALL_NUM_EXECUTORS:-2}"
-EC2_FLEET_MICRO_NUM_EXECUTORS="${EC2_FLEET_MICRO_NUM_EXECUTORS:-1}"
-# インスタンスサイズ別のIdle Minutes
-EC2_FLEET_MEDIUM_IDLE_MINUTES="${EC2_FLEET_MEDIUM_IDLE_MINUTES:-15}"
-EC2_FLEET_SMALL_IDLE_MINUTES="${EC2_FLEET_SMALL_IDLE_MINUTES:-10}"
-EC2_FLEET_MICRO_IDLE_MINUTES="${EC2_FLEET_MICRO_IDLE_MINUTES:-5}"
 
 # Jenkins URLの取得
 ALB_DNS=$(retrieve_ssm_parameter \
