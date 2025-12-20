@@ -197,7 +197,7 @@ const agentMinCapacityParam = new aws.ssm.Parameter("agent-min-capacity", {
 const agentMaxCapacityParam = new aws.ssm.Parameter("agent-max-capacity", {
     name: `${ssmPrefix}/config/agent-max-capacity`,
     type: "String",
-    value: "10",
+    value: "1",
     overwrite: true,
     description: "Maximum number of Jenkins agents (legacy, same as medium)",
     tags: {
@@ -224,7 +224,7 @@ const agentMediumMinCapacityParam = new aws.ssm.Parameter("agent-medium-min-capa
 const agentMediumMaxCapacityParam = new aws.ssm.Parameter("agent-medium-max-capacity", {
     name: `${ssmPrefix}/config/agent-medium-max-capacity`,
     type: "String",
-    value: "10",
+    value: "1",
     overwrite: true,
     description: "Maximum number of Jenkins agents (medium instances)",
     tags: {
@@ -251,7 +251,7 @@ const agentSmallMinCapacityParam = new aws.ssm.Parameter("agent-small-min-capaci
 const agentSmallMaxCapacityParam = new aws.ssm.Parameter("agent-small-max-capacity", {
     name: `${ssmPrefix}/config/agent-small-max-capacity`,
     type: "String",
-    value: "10",
+    value: "2",
     overwrite: true,
     description: "Maximum number of Jenkins agents (small instances)",
     tags: {
@@ -278,7 +278,7 @@ const agentMicroMinCapacityParam = new aws.ssm.Parameter("agent-micro-min-capaci
 const agentMicroMaxCapacityParam = new aws.ssm.Parameter("agent-micro-max-capacity", {
     name: `${ssmPrefix}/config/agent-micro-max-capacity`,
     type: "String",
-    value: "10",
+    value: "4",
     overwrite: true,
     description: "Maximum number of Jenkins agents (micro instances)",
     tags: {
