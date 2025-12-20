@@ -29,7 +29,7 @@ if [ "$1" = "-url" ] && [ $# -eq 4 ]; then
     SECRET="$3"
     AGENT_NAME="$4"
 
-    log "Converted to new format with WebSocket:"
+    log "Converted to new JNLP format:"
     log "  URL: ${JENKINS_URL}"
     log "  Agent Name: ${AGENT_NAME}"
     log "  Working directory: ${WORKDIR}"
@@ -40,8 +40,7 @@ if [ "$1" = "-url" ] && [ $# -eq 4 ]; then
         -url "${JENKINS_URL}" \
         -secret "${SECRET}" \
         -name "${AGENT_NAME}" \
-        -workDir "${WORKDIR}" \
-        -webSocket
+        -workDir "${WORKDIR}"
 else
     # 既に新しい形式の場合はそのまま渡す
     log "Using arguments as-is"
