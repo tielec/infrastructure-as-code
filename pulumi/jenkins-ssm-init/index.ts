@@ -344,6 +344,49 @@ const agentSpotPriceMicroParam = new aws.ssm.Parameter("agent-spot-price-micro",
     },
 });
 
+// インスタンスサイズ別のIdle Minutes設定
+// Medium インスタンス用のIdle Minutes（明示的）
+const agentIdleMinutesMediumParam = new aws.ssm.Parameter("agent-idle-minutes-medium", {
+    name: `${ssmPrefix}/config/agent-idle-minutes-medium`,
+    type: "String",
+    value: "15",
+    overwrite: true,
+    description: "Idle minutes before scaledown for Jenkins agent (medium instances)",
+    tags: {
+        Environment: environment,
+        ManagedBy: "pulumi",
+        Component: "config",
+    },
+});
+
+// Small インスタンス用のIdle Minutes
+const agentIdleMinutesSmallParam = new aws.ssm.Parameter("agent-idle-minutes-small", {
+    name: `${ssmPrefix}/config/agent-idle-minutes-small`,
+    type: "String",
+    value: "10",
+    overwrite: true,
+    description: "Idle minutes before scaledown for Jenkins agent (small instances)",
+    tags: {
+        Environment: environment,
+        ManagedBy: "pulumi",
+        Component: "config",
+    },
+});
+
+// Micro インスタンス用のIdle Minutes
+const agentIdleMinutesMicroParam = new aws.ssm.Parameter("agent-idle-minutes-micro", {
+    name: `${ssmPrefix}/config/agent-idle-minutes-micro`,
+    type: "String",
+    value: "5",
+    overwrite: true,
+    description: "Idle minutes before scaledown for Jenkins agent (micro instances)",
+    tags: {
+        Environment: environment,
+        ManagedBy: "pulumi",
+        Component: "config",
+    },
+});
+
 // インスタンスサイズ別のExecutor数設定
 // Medium インスタンス用のExecutor数（明示的）
 const agentNumExecutorsMediumParam = new aws.ssm.Parameter("agent-num-executors-medium", {

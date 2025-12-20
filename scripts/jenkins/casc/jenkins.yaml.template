@@ -68,7 +68,7 @@ jenkins:
         name: "ec2-fleet-medium"
         fleet: "${EC2_FLEET_MEDIUM_ID}"
         region: "${AWS_REGION}"
-        idleMinutes: ${EC2_IDLE_MINUTES}
+        idleMinutes: ${EC2_FLEET_MEDIUM_IDLE_MINUTES}
         minSize: ${EC2_FLEET_MEDIUM_MIN_SIZE}
         maxSize: ${EC2_FLEET_MEDIUM_MAX_SIZE}
         numExecutors: ${EC2_FLEET_MEDIUM_NUM_EXECUTORS}
@@ -99,7 +99,7 @@ jenkins:
         name: "ec2-fleet-small"
         fleet: "${EC2_FLEET_SMALL_ID}"
         region: "${AWS_REGION}"
-        idleMinutes: ${EC2_IDLE_MINUTES}
+        idleMinutes: ${EC2_FLEET_SMALL_IDLE_MINUTES}
         minSize: ${EC2_FLEET_SMALL_MIN_SIZE}
         maxSize: ${EC2_FLEET_SMALL_MAX_SIZE}
         numExecutors: ${EC2_FLEET_SMALL_NUM_EXECUTORS}
@@ -130,7 +130,7 @@ jenkins:
         name: "ec2-fleet-micro"
         fleet: "${EC2_FLEET_MICRO_ID}"
         region: "${AWS_REGION}"
-        idleMinutes: ${EC2_IDLE_MINUTES}
+        idleMinutes: ${EC2_FLEET_MICRO_IDLE_MINUTES}
         minSize: ${EC2_FLEET_MICRO_MIN_SIZE}
         maxSize: ${EC2_FLEET_MICRO_MAX_SIZE}
         numExecutors: ${EC2_FLEET_MICRO_NUM_EXECUTORS}
