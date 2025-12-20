@@ -419,7 +419,7 @@ const agentLaunchTemplateArm = new aws.ec2.LaunchTemplate(`agent-lt-arm`, {
     },
 });
 
-// SpotFleetリクエスト設定（複数の起動テンプレートを使用）
+// SpotFleetリクエスト設定（複数の起動テンプレートを使用、AZ別に最適化）
 const spotFleetRequest = new aws.ec2.SpotFleetRequest(`agent-spot-fleet`, {
     iamFleetRole: spotFleetRole.arn,
     spotPrice: spotPrice,
@@ -430,9 +430,10 @@ const spotFleetRequest = new aws.ec2.SpotFleetRequest(`agent-spot-fleet`, {
     replaceUnhealthyInstances: true,
     launchTemplateConfigs: pulumi.all([privateSubnetIds]).apply(([subnetIds]) => {
         const configs: any[] = [];
-        
-        // ARM64インスタンス用の設定（t4g.small）- 全AZで利用可能
+
+        // 各サブネットのAZ情報を取得して適切なインスタンスタイプを設定
         subnetIds.forEach((subnetId: string) => {
+            // ARM64インスタンス用の設定（t4g.medium）- 全AZで利用可能
             configs.push({
                 launchTemplateSpecification: {
                     id: agentLaunchTemplateArm.id,
@@ -445,32 +446,53 @@ const spotFleetRequest = new aws.ec2.SpotFleetRequest(`agent-spot-fleet`, {
                     priority: 1, // 最優先
                 }],
             });
-        });
-        
-        // x86_64インスタンス用の設定 - t3.smallとt2.smallのみ（全AZで利用可能）
-        subnetIds.forEach((subnetId: string) => {
+
+            // x86_64インスタンス用の設定
+            // サブネットAZ取得のため、AWSリソースから情報を取得
+            const subnet = aws.ec2.getSubnetOutput({ id: subnetId });
+            const azSuffix = subnet.availabilityZone.apply(az => az.slice(-1)); // 'a' or 'c'
+
+            // ap-northeast-1a: t3a.mediumが利用可能
+            // ap-northeast-1c: t3a.mediumは利用不可
+            const x86Overrides = azSuffix.apply(suffix => {
+                if (suffix === 'a') {
+                    // ap-northeast-1a: t3a.medium, t3.medium の順
+                    return [
+                        {
+                            subnetId: subnetId,
+                            instanceType: "t3a.medium",
+                            spotPrice: spotPrice,
+                            priority: 2,
+                        },
+                        {
+                            subnetId: subnetId,
+                            instanceType: "t3.medium",
+                            spotPrice: spotPrice,
+                            priority: 3,
+                        }
+                    ];
+                } else {
+                    // ap-northeast-1c: t3.medium のみ（t3a.mediumは除外）
+                    return [
+                        {
+                            subnetId: subnetId,
+                            instanceType: "t3.medium",
+                            spotPrice: spotPrice,
+                            priority: 2,
+                        }
+                    ];
+                }
+            });
+
             configs.push({
                 launchTemplateSpecification: {
                     id: agentLaunchTemplate.id,
                     version: agentLaunchTemplate.latestVersion.apply(v => v.toString()),
                 },
-                overrides: [
-                    {
-                        subnetId: subnetId,
-                        instanceType: "t3a.medium",
-                        spotPrice: spotPrice,
-                        priority: 2,
-                    },
-                    {
-                        subnetId: subnetId,
-                        instanceType: "t3.medium",
-                        spotPrice: spotPrice,
-                        priority: 3,
-                    }
-                ],
+                overrides: x86Overrides,
             });
         });
-        
+
         return configs;
     }),
     tags: {
