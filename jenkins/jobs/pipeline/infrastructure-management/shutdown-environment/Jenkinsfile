@@ -50,13 +50,23 @@ def getResourceIdFromSSM(paramName, resourceType) {
 def getAllResourceIds() {
     env.CONTROLLER_INSTANCE_ID = getResourceIdFromSSM(CONTROLLER_INSTANCE_ID_PARAM, "Controller Instance")
     env.NAT_INSTANCE_ID = getResourceIdFromSSM(NAT_INSTANCE_ID_PARAM, "NAT Instance")
-    env.SPOTFLEET_REQUEST_ID = getResourceIdFromSSM(SPOTFLEET_REQUEST_ID_PARAM, "SpotFleet Request")
-    
+
+    // 後方互換性のため既存パラメータも取得（medium用）
+    env.SPOTFLEET_REQUEST_ID = getResourceIdFromSSM(SPOTFLEET_REQUEST_ID_PARAM, "SpotFleet Request (legacy)")
+
+    // インスタンスサイズ別のSpot Fleet ID取得
+    env.SPOTFLEET_MEDIUM_ID = getResourceIdFromSSM(SPOTFLEET_MEDIUM_ID_PARAM, "SpotFleet Medium")
+    env.SPOTFLEET_SMALL_ID = getResourceIdFromSSM(SPOTFLEET_SMALL_ID_PARAM, "SpotFleet Small")
+    env.SPOTFLEET_MICRO_ID = getResourceIdFromSSM(SPOTFLEET_MICRO_ID_PARAM, "SpotFleet Micro")
+
     echo """
         |停止対象リソース:
         |- Controller Instance: ${env.CONTROLLER_INSTANCE_ID ?: 'Not found'}
         |- NAT Instance: ${env.NAT_INSTANCE_ID ?: 'Not found'}
-        |- SpotFleet Request: ${env.SPOTFLEET_REQUEST_ID ?: 'Not found'}
+        |- SpotFleet Request (legacy): ${env.SPOTFLEET_REQUEST_ID ?: 'Not found'}
+        |- SpotFleet Medium: ${env.SPOTFLEET_MEDIUM_ID ?: 'Not found'}
+        |- SpotFleet Small: ${env.SPOTFLEET_SMALL_ID ?: 'Not found'}
+        |- SpotFleet Micro: ${env.SPOTFLEET_MICRO_ID ?: 'Not found'}
     """.stripMargin()
 }
 
@@ -301,23 +311,17 @@ def waitForAgentJobsCompletion(timeoutMinutes) {
 }
 
 /**
- * EC2 Fleetをスケールダウン
+ * 単一のSpot Fleetをスケールダウン（graceful/immediateモード対応）
  */
-def scaleDownEC2Fleet() {
-    if (!env.SPOTFLEET_REQUEST_ID || params.DRY_RUN) {
-        return
-    }
-
-    echo "=== EC2 Fleet (SpotFleet) のスケールダウン ==="
-
+def scaleDownSingleSpotFleet(spotFleetId, fleetName, isFirstFleet) {
     try {
-        def currentCapacity = getSpotFleetCapacity(env.SPOTFLEET_REQUEST_ID)
-        echo "現在のキャパシティ: ${currentCapacity}"
+        def currentCapacity = getSpotFleetCapacity(spotFleetId)
+        echo "${fleetName} - 現在のキャパシティ: ${currentCapacity}"
 
         if (currentCapacity != "0") {
-            // gracefulモードの場合
-            if (params.SHUTDOWN_MODE == 'graceful') {
-                echo "--- Gracefulモードでスケールダウン ---"
+            if (params.SHUTDOWN_MODE == 'graceful' && isFirstFleet) {
+                // 最初のFleetでのみQuietDown設定とジョブ待機を実行
+                echo "--- Gracefulモードでスケールダウン (${fleetName}) ---"
 
                 // ステップ1: QuietDown設定
                 echo "ステップ1: Jenkins QuietDownモードを有効化"
@@ -326,32 +330,84 @@ def scaleDownEC2Fleet() {
                 // ステップ2: エージェントジョブ完了待機
                 echo "ステップ2: エージェントジョブの完了を待機"
                 waitForAgentJobsCompletion(params.WAIT_TIMEOUT_MINUTES.toInteger())
+            }
 
-                // ステップ3: SpotFleetスケールダウン
-                echo "ステップ3: SpotFleetのキャパシティを0に設定"
-                scaleDownSpotFleet(env.SPOTFLEET_REQUEST_ID)
+            // SpotFleetスケールダウン
+            echo "SpotFleet ${fleetName} のキャパシティを0に設定"
+            scaleDownSpotFleet(spotFleetId)
 
-                // ステップ4: インスタンス終了待機
-                echo "ステップ4: インスタンスの終了を待機"
-                waitForSpotFleetTermination(env.SPOTFLEET_REQUEST_ID, params.WAIT_TIMEOUT_MINUTES.toInteger())
-
-                // ステップ5: QuietDownキャンセル（念のため）
-                echo "ステップ5: Jenkins QuietDownモードをキャンセル"
-                setJenkinsQuietMode(false)
-
-            } else {
-                // immediateモードの場合（既存の動作）
-                echo "--- Immediateモードでスケールダウン ---"
-                scaleDownSpotFleet(env.SPOTFLEET_REQUEST_ID)
-
-                // インスタンス終了待機はスキップ
-                echo "Immediateモードのため、インスタンス終了待機をスキップします"
+            if (params.SHUTDOWN_MODE == 'graceful') {
+                // インスタンス終了待機
+                echo "インスタンスの終了を待機 (${fleetName})"
+                waitForSpotFleetTermination(spotFleetId, params.WAIT_TIMEOUT_MINUTES.toInteger())
             }
         } else {
-            echo "SpotFleetのキャパシティは既に0です"
+            echo "${fleetName} のキャパシティは既に0です"
         }
     } catch (Exception e) {
-        echo "SpotFleetのスケールダウンでエラー: ${e.message}"
+        echo "警告: ${fleetName} のスケールダウンでエラー: ${e.message}"
+
+        if (params.SHUTDOWN_MODE == 'immediate') {
+            throw e  // immediateモードではエラーを再スロー
+        }
+        // gracefulモードでは警告ログを出力して続行
+    }
+}
+
+/**
+ * 全EC2 Fleetをスケールダウン
+ */
+def scaleDownEC2Fleet() {
+    if (params.DRY_RUN) {
+        echo "DRY_RUN: EC2 Fleetのスケールダウンをスキップします"
+        return
+    }
+
+    echo "=== EC2 Fleet (SpotFleet) のスケールダウン ==="
+
+    try {
+        // スケールダウン対象のFleetリストを作成
+        def fleetsToScale = []
+
+        // Medium Fleet（後方互換性のため既存パラメータも確認）
+        if (env.SPOTFLEET_MEDIUM_ID) {
+            fleetsToScale.add([id: env.SPOTFLEET_MEDIUM_ID, name: "Medium Fleet"])
+        } else if (env.SPOTFLEET_REQUEST_ID) {
+            fleetsToScale.add([id: env.SPOTFLEET_REQUEST_ID, name: "Fleet (legacy)"])
+        }
+
+        // Small Fleet
+        if (env.SPOTFLEET_SMALL_ID) {
+            fleetsToScale.add([id: env.SPOTFLEET_SMALL_ID, name: "Small Fleet"])
+        }
+
+        // Micro Fleet
+        if (env.SPOTFLEET_MICRO_ID) {
+            fleetsToScale.add([id: env.SPOTFLEET_MICRO_ID, name: "Micro Fleet"])
+        }
+
+        if (fleetsToScale.size() == 0) {
+            echo "スケールダウン対象のSpot Fleetが見つかりません"
+            return
+        }
+
+        echo "スケールダウン対象: ${fleetsToScale.size()}個のFleet"
+
+        // 各Fleetをスケールダウン
+        def isFirstFleet = true
+        fleetsToScale.each { fleet ->
+            scaleDownSingleSpotFleet(fleet.id, fleet.name, isFirstFleet)
+            isFirstFleet = false
+        }
+
+        // QuietDownキャンセル（最後に実行）
+        if (params.SHUTDOWN_MODE == 'graceful') {
+            echo "全Fleet処理完了: Jenkins QuietDownモードをキャンセル"
+            setJenkinsQuietMode(false)
+        }
+
+    } catch (Exception e) {
+        echo "EC2 Fleetのスケールダウンでエラー: ${e.message}"
 
         // gracefulモードでのエラーの場合、QuietDownをキャンセル（念のため）
         if (params.SHUTDOWN_MODE == 'graceful') {
@@ -361,10 +417,10 @@ def scaleDownEC2Fleet() {
 
         // immediateモードではエラーを再スロー（既存の動作）
         if (params.SHUTDOWN_MODE == 'immediate') {
-            error("SpotFleetのスケールダウンに失敗しました")
+            error("EC2 Fleetのスケールダウンに失敗しました")
         } else {
             // gracefulモードでは警告ログを出力して続行
-            echo "警告: SpotFleetのスケールダウンでエラーが発生しましたが、処理を続行します"
+            echo "警告: EC2 Fleetのスケールダウンでエラーが発生しましたが、処理を続行します"
         }
     }
 }
@@ -456,13 +512,30 @@ def stopNATAndControllerInstances() {
  * 実行サマリーを表示
  */
 def showExecutionSummary() {
+    // Fleetのスケールダウン状況を収集
+    def fleetStatus = []
+    if (env.SPOTFLEET_MEDIUM_ID) {
+        fleetStatus.add("Medium Fleet: キャパシティを0に設定")
+    } else if (env.SPOTFLEET_REQUEST_ID) {
+        fleetStatus.add("Fleet (legacy): キャパシティを0に設定")
+    }
+    if (env.SPOTFLEET_SMALL_ID) {
+        fleetStatus.add("Small Fleet: キャパシティを0に設定")
+    }
+    if (env.SPOTFLEET_MICRO_ID) {
+        fleetStatus.add("Micro Fleet: キャパシティを0に設定")
+    }
+
+    def fleetSummary = fleetStatus.size() > 0 ? fleetStatus.join('\n   ') : 'スキップ（ID未検出）'
+
     echo """
         |===================================
         |環境停止ジョブが完了しました
         |===================================
         |
         |実行された操作:
-        |1. EC2 Fleet (SpotFleet): ${env.SPOTFLEET_REQUEST_ID ? 'キャパシティを0に設定' : 'スキップ（ID未検出）'}
+        |1. EC2 Fleet (SpotFleet):
+        |   ${fleetSummary}
         |2. NAT & Controller インスタンス: ${(env.NAT_INSTANCE_ID || env.CONTROLLER_INSTANCE_ID) ? '停止コマンド送信' : 'スキップ（ID未検出）'}
         |
         |注意: Controllerの停止により、このJenkinsへのアクセスは間もなく失われます。
@@ -482,11 +555,14 @@ def showDryRunSummary() {
         |以下のリソースが停止対象として検出されました:
         |
         |1. EC2 Fleet (SpotFleet)
-        |   - Request ID: ${env.SPOTFLEET_REQUEST_ID ?: 'Not found'}
-        |   
+        |   - Fleet (legacy): ${env.SPOTFLEET_REQUEST_ID ?: 'Not found'}
+        |   - Medium Fleet: ${env.SPOTFLEET_MEDIUM_ID ?: 'Not found'}
+        |   - Small Fleet: ${env.SPOTFLEET_SMALL_ID ?: 'Not found'}
+        |   - Micro Fleet: ${env.SPOTFLEET_MICRO_ID ?: 'Not found'}
+        |
         |2. NAT インスタンス
         |   - Instance ID: ${env.NAT_INSTANCE_ID ?: 'Not found'}
-        |   
+        |
         |3. Controller インスタンス
         |   - Instance ID: ${env.CONTROLLER_INSTANCE_ID ?: 'Not found'}
         |
@@ -506,15 +582,20 @@ pipeline {
     environment {
         // AWS認証情報
         AWS_REGION = "${params.AWS_REGION}"
-        
+
         // 環境名（dev/staging/prod）
         ENVIRONMENT = "${params.ENVIRONMENT}"
-        
+
         // SSMパラメータ名
         CONTROLLER_INSTANCE_ID_PARAM = "/jenkins-infra/${ENVIRONMENT}/controller/instance-id"
         NAT_INSTANCE_ID_PARAM = "/jenkins-infra/${ENVIRONMENT}/nat/instance-id"
+
+        // SpotFleet IDパラメータ（後方互換性のため既存も維持）
         SPOTFLEET_REQUEST_ID_PARAM = "/jenkins-infra/${ENVIRONMENT}/agent/spotFleetRequestId"
-        
+        SPOTFLEET_MEDIUM_ID_PARAM = "/jenkins-infra/${ENVIRONMENT}/agent/spotFleetRequestId-medium"
+        SPOTFLEET_SMALL_ID_PARAM = "/jenkins-infra/${ENVIRONMENT}/agent/spotFleetRequestId-small"
+        SPOTFLEET_MICRO_ID_PARAM = "/jenkins-infra/${ENVIRONMENT}/agent/spotFleetRequestId-micro"
+
         // タグフィルター
         PROJECT_NAME = 'jenkins-infra'
     }
@@ -539,8 +620,11 @@ pipeline {
 
         stage('Scale Down EC2 Fleet') {
             when {
-                expression { 
-                    return env.SPOTFLEET_REQUEST_ID && !params.DRY_RUN 
+                expression {
+                    // いずれかのSpot Fleetが存在すれば実行
+                    return (env.SPOTFLEET_REQUEST_ID || env.SPOTFLEET_MEDIUM_ID ||
+                            env.SPOTFLEET_SMALL_ID || env.SPOTFLEET_MICRO_ID) &&
+                           !params.DRY_RUN
                 }
             }
             steps {

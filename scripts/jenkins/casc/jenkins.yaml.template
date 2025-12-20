@@ -32,6 +32,7 @@ jenkins:
       - key: "GIT_INFRASTRUCTURE_REPO_URL"
         value: "https://github.com/tielec/infrastructure-as-code.git"
   clouds:
+    # 後方互換性のため既存のec2-fleet設定を維持（medium用と同じ設定）
     - eC2Fleet:
         name: "ec2-fleet"
         fleet: "${EC2_FLEET_ID}"
@@ -49,6 +50,99 @@ jenkins:
             retryWaitTime: 15
             sshHostKeyVerificationStrategy: "nonVerifyingKeyVerificationStrategy"
         labelString: "ec2-fleet"
+        privateIpUsed: true
+        addNodeOnlyIfRunning: false
+        alwaysReconnect: false
+        cloudStatusIntervalSec: 30
+        disableTaskResubmit: false
+        executorScaler: "noScaler"
+        initOnlineCheckIntervalSec: 15
+        initOnlineTimeoutSec: 900
+        maxTotalUses: -1
+        minSpareSize: 0
+        noDelayProvision: false
+        restrictUsage: false
+        scaleExecutorsByWeight: false
+    # Medium インスタンス専用Fleet（t4g.medium/t3a.medium/t3.medium）
+    - eC2Fleet:
+        name: "ec2-fleet-medium"
+        fleet: "${EC2_FLEET_MEDIUM_ID}"
+        region: "${AWS_REGION}"
+        idleMinutes: ${EC2_FLEET_MEDIUM_IDLE_MINUTES}
+        minSize: ${EC2_FLEET_MEDIUM_MIN_SIZE}
+        maxSize: ${EC2_FLEET_MEDIUM_MAX_SIZE}
+        numExecutors: ${EC2_FLEET_MEDIUM_NUM_EXECUTORS}
+        computerConnector:
+          sSHConnector:
+            credentialsId: "ec2-agent-keypair"
+            port: 22
+            launchTimeoutSeconds: 60
+            maxNumRetries: 10
+            retryWaitTime: 15
+            sshHostKeyVerificationStrategy: "nonVerifyingKeyVerificationStrategy"
+        labelString: "ec2-fleet-medium medium"
+        privateIpUsed: true
+        addNodeOnlyIfRunning: false
+        alwaysReconnect: false
+        cloudStatusIntervalSec: 30
+        disableTaskResubmit: false
+        executorScaler: "noScaler"
+        initOnlineCheckIntervalSec: 15
+        initOnlineTimeoutSec: 900
+        maxTotalUses: -1
+        minSpareSize: 0
+        noDelayProvision: false
+        restrictUsage: false
+        scaleExecutorsByWeight: false
+    # Small インスタンス専用Fleet（t4g.small/t3a.small/t3.small）
+    - eC2Fleet:
+        name: "ec2-fleet-small"
+        fleet: "${EC2_FLEET_SMALL_ID}"
+        region: "${AWS_REGION}"
+        idleMinutes: ${EC2_FLEET_SMALL_IDLE_MINUTES}
+        minSize: ${EC2_FLEET_SMALL_MIN_SIZE}
+        maxSize: ${EC2_FLEET_SMALL_MAX_SIZE}
+        numExecutors: ${EC2_FLEET_SMALL_NUM_EXECUTORS}
+        computerConnector:
+          sSHConnector:
+            credentialsId: "ec2-agent-keypair"
+            port: 22
+            launchTimeoutSeconds: 60
+            maxNumRetries: 10
+            retryWaitTime: 15
+            sshHostKeyVerificationStrategy: "nonVerifyingKeyVerificationStrategy"
+        labelString: "ec2-fleet-small small"
+        privateIpUsed: true
+        addNodeOnlyIfRunning: false
+        alwaysReconnect: false
+        cloudStatusIntervalSec: 30
+        disableTaskResubmit: false
+        executorScaler: "noScaler"
+        initOnlineCheckIntervalSec: 15
+        initOnlineTimeoutSec: 900
+        maxTotalUses: -1
+        minSpareSize: 0
+        noDelayProvision: false
+        restrictUsage: false
+        scaleExecutorsByWeight: false
+    # Micro インスタンス専用Fleet（t4g.micro/t3a.micro/t3.micro）
+    - eC2Fleet:
+        name: "ec2-fleet-micro"
+        fleet: "${EC2_FLEET_MICRO_ID}"
+        region: "${AWS_REGION}"
+        idleMinutes: ${EC2_FLEET_MICRO_IDLE_MINUTES}
+        minSize: ${EC2_FLEET_MICRO_MIN_SIZE}
+        maxSize: ${EC2_FLEET_MICRO_MAX_SIZE}
+        numExecutors: ${EC2_FLEET_MICRO_NUM_EXECUTORS}
+        computerConnector:
+          sSHConnector:
+            credentialsId: "ec2-agent-keypair"
+            port: 22
+            launchTimeoutSeconds: 60
+            maxNumRetries: 10
+            retryWaitTime: 15
+            sshHostKeyVerificationStrategy: "nonVerifyingKeyVerificationStrategy"
+        labelString: "ec2-fleet-micro micro"
         privateIpUsed: true
         addNodeOnlyIfRunning: false
         alwaysReconnect: false

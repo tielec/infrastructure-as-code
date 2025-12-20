@@ -180,12 +180,13 @@ const agentInstanceTypeParam = new aws.ssm.Parameter("agent-instance-type", {
     },
 });
 
+// 後方互換性のための既存パラメータ（medium用として継続使用）
 const agentMinCapacityParam = new aws.ssm.Parameter("agent-min-capacity", {
     name: `${ssmPrefix}/config/agent-min-capacity`,
     type: "String",
     value: "0",
     overwrite: true,
-    description: "Minimum number of Jenkins agents",
+    description: "Minimum number of Jenkins agents (legacy, same as medium)",
     tags: {
         Environment: environment,
         ManagedBy: "pulumi",
@@ -196,9 +197,9 @@ const agentMinCapacityParam = new aws.ssm.Parameter("agent-min-capacity", {
 const agentMaxCapacityParam = new aws.ssm.Parameter("agent-max-capacity", {
     name: `${ssmPrefix}/config/agent-max-capacity`,
     type: "String",
-    value: "10",
+    value: "1",
     overwrite: true,
-    description: "Maximum number of Jenkins agents",
+    description: "Maximum number of Jenkins agents (legacy, same as medium)",
     tags: {
         Environment: environment,
         ManagedBy: "pulumi",
@@ -206,12 +207,222 @@ const agentMaxCapacityParam = new aws.ssm.Parameter("agent-max-capacity", {
     },
 });
 
+// Medium インスタンス用のキャパシティ設定（明示的）
+const agentMediumMinCapacityParam = new aws.ssm.Parameter("agent-medium-min-capacity", {
+    name: `${ssmPrefix}/config/agent-medium-min-capacity`,
+    type: "String",
+    value: "0",
+    overwrite: true,
+    description: "Minimum number of Jenkins agents (medium instances)",
+    tags: {
+        Environment: environment,
+        ManagedBy: "pulumi",
+        Component: "config",
+    },
+});
+
+const agentMediumMaxCapacityParam = new aws.ssm.Parameter("agent-medium-max-capacity", {
+    name: `${ssmPrefix}/config/agent-medium-max-capacity`,
+    type: "String",
+    value: "1",
+    overwrite: true,
+    description: "Maximum number of Jenkins agents (medium instances)",
+    tags: {
+        Environment: environment,
+        ManagedBy: "pulumi",
+        Component: "config",
+    },
+});
+
+// Small インスタンス用のキャパシティ設定
+const agentSmallMinCapacityParam = new aws.ssm.Parameter("agent-small-min-capacity", {
+    name: `${ssmPrefix}/config/agent-small-min-capacity`,
+    type: "String",
+    value: "0",
+    overwrite: true,
+    description: "Minimum number of Jenkins agents (small instances)",
+    tags: {
+        Environment: environment,
+        ManagedBy: "pulumi",
+        Component: "config",
+    },
+});
+
+const agentSmallMaxCapacityParam = new aws.ssm.Parameter("agent-small-max-capacity", {
+    name: `${ssmPrefix}/config/agent-small-max-capacity`,
+    type: "String",
+    value: "2",
+    overwrite: true,
+    description: "Maximum number of Jenkins agents (small instances)",
+    tags: {
+        Environment: environment,
+        ManagedBy: "pulumi",
+        Component: "config",
+    },
+});
+
+// Micro インスタンス用のキャパシティ設定
+const agentMicroMinCapacityParam = new aws.ssm.Parameter("agent-micro-min-capacity", {
+    name: `${ssmPrefix}/config/agent-micro-min-capacity`,
+    type: "String",
+    value: "0",
+    overwrite: true,
+    description: "Minimum number of Jenkins agents (micro instances)",
+    tags: {
+        Environment: environment,
+        ManagedBy: "pulumi",
+        Component: "config",
+    },
+});
+
+const agentMicroMaxCapacityParam = new aws.ssm.Parameter("agent-micro-max-capacity", {
+    name: `${ssmPrefix}/config/agent-micro-max-capacity`,
+    type: "String",
+    value: "4",
+    overwrite: true,
+    description: "Maximum number of Jenkins agents (micro instances)",
+    tags: {
+        Environment: environment,
+        ManagedBy: "pulumi",
+        Component: "config",
+    },
+});
+
+// 後方互換性のための既存パラメータ（medium用として継続使用）
 const agentSpotPriceParam = new aws.ssm.Parameter("agent-spot-price", {
     name: `${ssmPrefix}/config/agent-spot-price`,
     type: "String",
-    value: "0.10",
+    value: "0.027",  // 50% of t3.medium on-demand price (~$0.054)
     overwrite: true,
-    description: "Maximum spot price for Jenkins agents",
+    description: "Maximum spot price for Jenkins agents (legacy, same as medium)",
+    tags: {
+        Environment: environment,
+        ManagedBy: "pulumi",
+        Component: "config",
+    },
+});
+
+// Medium インスタンス用のスポット価格設定（明示的）
+const agentSpotPriceMediumParam = new aws.ssm.Parameter("agent-spot-price-medium", {
+    name: `${ssmPrefix}/config/agent-spot-price-medium`,
+    type: "String",
+    value: "0.027",  // 50% of t3.medium on-demand price (~$0.054)
+    overwrite: true,
+    description: "Maximum spot price for Jenkins agents (medium instances)",
+    tags: {
+        Environment: environment,
+        ManagedBy: "pulumi",
+        Component: "config",
+    },
+});
+
+// Small インスタンス用のスポット価格設定
+const agentSpotPriceSmallParam = new aws.ssm.Parameter("agent-spot-price-small", {
+    name: `${ssmPrefix}/config/agent-spot-price-small`,
+    type: "String",
+    value: "0.014",  // 50% of t3.small on-demand price (~$0.027)
+    overwrite: true,
+    description: "Maximum spot price for Jenkins agents (small instances)",
+    tags: {
+        Environment: environment,
+        ManagedBy: "pulumi",
+        Component: "config",
+    },
+});
+
+// Micro インスタンス用のスポット価格設定
+const agentSpotPriceMicroParam = new aws.ssm.Parameter("agent-spot-price-micro", {
+    name: `${ssmPrefix}/config/agent-spot-price-micro`,
+    type: "String",
+    value: "0.007",  // 50% of t3.micro on-demand price (~$0.014)
+    overwrite: true,
+    description: "Maximum spot price for Jenkins agents (micro instances)",
+    tags: {
+        Environment: environment,
+        ManagedBy: "pulumi",
+        Component: "config",
+    },
+});
+
+// インスタンスサイズ別のIdle Minutes設定
+// Medium インスタンス用のIdle Minutes（明示的）
+const agentIdleMinutesMediumParam = new aws.ssm.Parameter("agent-idle-minutes-medium", {
+    name: `${ssmPrefix}/config/agent-idle-minutes-medium`,
+    type: "String",
+    value: "15",
+    overwrite: true,
+    description: "Idle minutes before scaledown for Jenkins agent (medium instances)",
+    tags: {
+        Environment: environment,
+        ManagedBy: "pulumi",
+        Component: "config",
+    },
+});
+
+// Small インスタンス用のIdle Minutes
+const agentIdleMinutesSmallParam = new aws.ssm.Parameter("agent-idle-minutes-small", {
+    name: `${ssmPrefix}/config/agent-idle-minutes-small`,
+    type: "String",
+    value: "10",
+    overwrite: true,
+    description: "Idle minutes before scaledown for Jenkins agent (small instances)",
+    tags: {
+        Environment: environment,
+        ManagedBy: "pulumi",
+        Component: "config",
+    },
+});
+
+// Micro インスタンス用のIdle Minutes
+const agentIdleMinutesMicroParam = new aws.ssm.Parameter("agent-idle-minutes-micro", {
+    name: `${ssmPrefix}/config/agent-idle-minutes-micro`,
+    type: "String",
+    value: "5",
+    overwrite: true,
+    description: "Idle minutes before scaledown for Jenkins agent (micro instances)",
+    tags: {
+        Environment: environment,
+        ManagedBy: "pulumi",
+        Component: "config",
+    },
+});
+
+// インスタンスサイズ別のExecutor数設定
+// Medium インスタンス用のExecutor数（明示的）
+const agentNumExecutorsMediumParam = new aws.ssm.Parameter("agent-num-executors-medium", {
+    name: `${ssmPrefix}/config/agent-num-executors-medium`,
+    type: "String",
+    value: "3",
+    overwrite: true,
+    description: "Number of executors per Jenkins agent (medium instances)",
+    tags: {
+        Environment: environment,
+        ManagedBy: "pulumi",
+        Component: "config",
+    },
+});
+
+// Small インスタンス用のExecutor数
+const agentNumExecutorsSmallParam = new aws.ssm.Parameter("agent-num-executors-small", {
+    name: `${ssmPrefix}/config/agent-num-executors-small`,
+    type: "String",
+    value: "2",
+    overwrite: true,
+    description: "Number of executors per Jenkins agent (small instances)",
+    tags: {
+        Environment: environment,
+        ManagedBy: "pulumi",
+        Component: "config",
+    },
+});
+
+// Micro インスタンス用のExecutor数
+const agentNumExecutorsMicroParam = new aws.ssm.Parameter("agent-num-executors-micro", {
+    name: `${ssmPrefix}/config/agent-num-executors-micro`,
+    type: "String",
+    value: "1",
+    overwrite: true,
+    description: "Number of executors per Jenkins agent (micro instances)",
     tags: {
         Environment: environment,
         ManagedBy: "pulumi",
