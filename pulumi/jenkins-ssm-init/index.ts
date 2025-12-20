@@ -288,12 +288,55 @@ const agentMicroMaxCapacityParam = new aws.ssm.Parameter("agent-micro-max-capaci
     },
 });
 
+// 後方互換性のための既存パラメータ（medium用として継続使用）
 const agentSpotPriceParam = new aws.ssm.Parameter("agent-spot-price", {
     name: `${ssmPrefix}/config/agent-spot-price`,
     type: "String",
-    value: "0.10",
+    value: "0.027",  // 50% of t3.medium on-demand price (~$0.054)
     overwrite: true,
-    description: "Maximum spot price for Jenkins agents",
+    description: "Maximum spot price for Jenkins agents (legacy, same as medium)",
+    tags: {
+        Environment: environment,
+        ManagedBy: "pulumi",
+        Component: "config",
+    },
+});
+
+// Medium インスタンス用のスポット価格設定（明示的）
+const agentSpotPriceMediumParam = new aws.ssm.Parameter("agent-spot-price-medium", {
+    name: `${ssmPrefix}/config/agent-spot-price-medium`,
+    type: "String",
+    value: "0.027",  // 50% of t3.medium on-demand price (~$0.054)
+    overwrite: true,
+    description: "Maximum spot price for Jenkins agents (medium instances)",
+    tags: {
+        Environment: environment,
+        ManagedBy: "pulumi",
+        Component: "config",
+    },
+});
+
+// Small インスタンス用のスポット価格設定
+const agentSpotPriceSmallParam = new aws.ssm.Parameter("agent-spot-price-small", {
+    name: `${ssmPrefix}/config/agent-spot-price-small`,
+    type: "String",
+    value: "0.014",  // 50% of t3.small on-demand price (~$0.027)
+    overwrite: true,
+    description: "Maximum spot price for Jenkins agents (small instances)",
+    tags: {
+        Environment: environment,
+        ManagedBy: "pulumi",
+        Component: "config",
+    },
+});
+
+// Micro インスタンス用のスポット価格設定
+const agentSpotPriceMicroParam = new aws.ssm.Parameter("agent-spot-price-micro", {
+    name: `${ssmPrefix}/config/agent-spot-price-micro`,
+    type: "String",
+    value: "0.007",  // 50% of t3.micro on-demand price (~$0.014)
+    overwrite: true,
+    description: "Maximum spot price for Jenkins agents (micro instances)",
     tags: {
         Environment: environment,
         ManagedBy: "pulumi",

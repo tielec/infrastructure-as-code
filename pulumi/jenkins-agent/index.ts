@@ -25,11 +25,23 @@ const maxTargetCapacityParam = aws.ssm.getParameter({
 const minTargetCapacityParam = aws.ssm.getParameter({
     name: `${ssmPrefix}/config/agent-min-capacity`,
 });
+// 後方互換性のための既存パラメータ（medium用として継続使用）
 const spotPriceParam = aws.ssm.getParameter({
     name: `${ssmPrefix}/config/agent-spot-price`,
 });
 const instanceTypeParam = aws.ssm.getParameter({
     name: `${ssmPrefix}/config/agent-instance-type`,
+});
+
+// インスタンスサイズ別のスポット価格設定
+const spotPriceMediumParam = aws.ssm.getParameter({
+    name: `${ssmPrefix}/config/agent-spot-price-medium`,
+});
+const spotPriceSmallParam = aws.ssm.getParameter({
+    name: `${ssmPrefix}/config/agent-spot-price-small`,
+});
+const spotPriceMicroParam = aws.ssm.getParameter({
+    name: `${ssmPrefix}/config/agent-spot-price-micro`,
 });
 
 // Medium インスタンス用のキャパシティ設定（明示的）
@@ -79,6 +91,11 @@ const maxTargetCapacity = pulumi.output(maxTargetCapacityParam).apply(p => parse
 const minTargetCapacity = pulumi.output(minTargetCapacityParam).apply(p => parseInt(p.value));
 const spotPrice = pulumi.output(spotPriceParam).apply(p => p.value);
 const instanceType = pulumi.output(instanceTypeParam).apply(p => p.value);
+
+// インスタンスサイズ別のスポット価格設定値
+const spotPriceMedium = pulumi.output(spotPriceMediumParam).apply(p => p.value);
+const spotPriceSmall = pulumi.output(spotPriceSmallParam).apply(p => p.value);
+const spotPriceMicro = pulumi.output(spotPriceMicroParam).apply(p => p.value);
 
 // Medium インスタンス用の設定値
 const mediumMinTargetCapacity = pulumi.output(mediumMinTargetCapacityParam).apply(p => parseInt(p.value));
@@ -460,7 +477,7 @@ const agentLaunchTemplateArm = new aws.ec2.LaunchTemplate(`agent-lt-arm`, {
 // Medium インスタンス専用のSpotFleetリクエスト設定（複数の起動テンプレートを使用、AZ別に最適化）
 const spotFleetRequest = new aws.ec2.SpotFleetRequest(`agent-spot-fleet`, {
     iamFleetRole: spotFleetRole.arn,
-    spotPrice: spotPrice,
+    spotPrice: spotPriceMedium,
     targetCapacity: mediumMinTargetCapacity,
     terminateInstancesWithExpiration: true,
     instanceInterruptionBehaviour: "terminate",
@@ -480,7 +497,7 @@ const spotFleetRequest = new aws.ec2.SpotFleetRequest(`agent-spot-fleet`, {
                 overrides: [{
                     subnetId: subnetId,
                     instanceType: "t4g.medium",
-                    spotPrice: spotPrice,
+                    spotPrice: spotPriceMedium,
                     priority: 1, // 最優先
                 }],
             });
@@ -499,13 +516,13 @@ const spotFleetRequest = new aws.ec2.SpotFleetRequest(`agent-spot-fleet`, {
                         {
                             subnetId: subnetId,
                             instanceType: "t3a.medium",
-                            spotPrice: spotPrice,
+                            spotPrice: spotPriceMedium,
                             priority: 2,
                         },
                         {
                             subnetId: subnetId,
                             instanceType: "t3.medium",
-                            spotPrice: spotPrice,
+                            spotPrice: spotPriceMedium,
                             priority: 3,
                         }
                     ];
@@ -515,7 +532,7 @@ const spotFleetRequest = new aws.ec2.SpotFleetRequest(`agent-spot-fleet`, {
                         {
                             subnetId: subnetId,
                             instanceType: "t3.medium",
-                            spotPrice: spotPrice,
+                            spotPrice: spotPriceMedium,
                             priority: 2,
                         }
                     ];
@@ -543,7 +560,7 @@ const spotFleetRequest = new aws.ec2.SpotFleetRequest(`agent-spot-fleet`, {
 // Small インスタンス専用のSpotFleetリクエスト設定（AZ別に最適化）
 const spotFleetRequestSmall = new aws.ec2.SpotFleetRequest(`agent-spot-fleet-small`, {
     iamFleetRole: spotFleetRole.arn,
-    spotPrice: spotPrice,
+    spotPrice: spotPriceSmall,
     targetCapacity: smallMinTargetCapacity,
     terminateInstancesWithExpiration: true,
     instanceInterruptionBehaviour: "terminate",
@@ -563,7 +580,7 @@ const spotFleetRequestSmall = new aws.ec2.SpotFleetRequest(`agent-spot-fleet-sma
                 overrides: [{
                     subnetId: subnetId,
                     instanceType: "t4g.small",
-                    spotPrice: spotPrice,
+                    spotPrice: spotPriceSmall,
                     priority: 1, // 最優先
                 }],
             });
@@ -582,13 +599,13 @@ const spotFleetRequestSmall = new aws.ec2.SpotFleetRequest(`agent-spot-fleet-sma
                         {
                             subnetId: subnetId,
                             instanceType: "t3a.small",
-                            spotPrice: spotPrice,
+                            spotPrice: spotPriceSmall,
                             priority: 2,
                         },
                         {
                             subnetId: subnetId,
                             instanceType: "t3.small",
-                            spotPrice: spotPrice,
+                            spotPrice: spotPriceSmall,
                             priority: 3,
                         }
                     ];
@@ -598,7 +615,7 @@ const spotFleetRequestSmall = new aws.ec2.SpotFleetRequest(`agent-spot-fleet-sma
                         {
                             subnetId: subnetId,
                             instanceType: "t3.small",
-                            spotPrice: spotPrice,
+                            spotPrice: spotPriceSmall,
                             priority: 2,
                         }
                     ];
@@ -626,7 +643,7 @@ const spotFleetRequestSmall = new aws.ec2.SpotFleetRequest(`agent-spot-fleet-sma
 // Micro インスタンス専用のSpotFleetリクエスト設定（AZ別に最適化）
 const spotFleetRequestMicro = new aws.ec2.SpotFleetRequest(`agent-spot-fleet-micro`, {
     iamFleetRole: spotFleetRole.arn,
-    spotPrice: spotPrice,
+    spotPrice: spotPriceMicro,
     targetCapacity: microMinTargetCapacity,
     terminateInstancesWithExpiration: true,
     instanceInterruptionBehaviour: "terminate",
@@ -646,7 +663,7 @@ const spotFleetRequestMicro = new aws.ec2.SpotFleetRequest(`agent-spot-fleet-mic
                 overrides: [{
                     subnetId: subnetId,
                     instanceType: "t4g.micro",
-                    spotPrice: spotPrice,
+                    spotPrice: spotPriceMicro,
                     priority: 1, // 最優先
                 }],
             });
@@ -665,13 +682,13 @@ const spotFleetRequestMicro = new aws.ec2.SpotFleetRequest(`agent-spot-fleet-mic
                         {
                             subnetId: subnetId,
                             instanceType: "t3a.micro",
-                            spotPrice: spotPrice,
+                            spotPrice: spotPriceMicro,
                             priority: 2,
                         },
                         {
                             subnetId: subnetId,
                             instanceType: "t3.micro",
-                            spotPrice: spotPrice,
+                            spotPrice: spotPriceMicro,
                             priority: 3,
                         }
                     ];
@@ -681,7 +698,7 @@ const spotFleetRequestMicro = new aws.ec2.SpotFleetRequest(`agent-spot-fleet-mic
                         {
                             subnetId: subnetId,
                             instanceType: "t3.micro",
-                            spotPrice: spotPrice,
+                            spotPrice: spotPriceMicro,
                             priority: 2,
                         }
                     ];
