@@ -36,7 +36,8 @@ pipelineJob(fullJobName) {
         // === 基本パラメータ ===
         choiceParam('ENVIRONMENT', ['dev'], 'デプロイ先環境')
         choiceParam('ACTION', ['preview', 'deploy', 'destroy'], '実行するアクション')
-        
+        choiceParam('AGENT_LABEL', ['ec2-fleet-small', 'ec2-fleet-medium', 'ec2-fleet-micro'], 'Jenkins エージェントのラベル')
+
         // === AWS認証情報 ===
         stringParam('AWS_ACCESS_KEY_ID', '', 'AWS Access Key ID')
         nonStoredPasswordParam('AWS_SECRET_ACCESS_KEY', 'AWS Secret Access Key')
