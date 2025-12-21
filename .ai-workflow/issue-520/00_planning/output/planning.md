@@ -108,14 +108,14 @@
 
 ### Phase 1: 要件定義 (見積もり: 1~2h)
 
-- [ ] Task 1-1: 現状のCI/CD環境の詳細分析 (0.5h)
+- [x] Task 1-1: 現状のCI/CD環境の詳細分析 (0.5h)
   - 既存のJenkinsパイプラインの確認
   - GitHub Actionsとの役割分担の明確化
-- [ ] Task 1-2: CIゲートの品質基準定義 (0.5h)
+- [x] Task 1-2: CIゲートの品質基準定義 (0.5h)
   - Ansible lint通過基準
   - Pulumi preview成功基準
   - pytest通過基準
-- [ ] Task 1-3: ワークフロートリガー条件の定義 (0.5h)
+- [x] Task 1-3: ワークフロートリガー条件の定義 (0.5h)
   - PRイベント（opened, synchronize）
   - 対象ファイルパターン（paths filter）
   - ブランチ制限
