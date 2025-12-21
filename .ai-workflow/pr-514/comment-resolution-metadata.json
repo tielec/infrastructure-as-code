@@ -1,0 +1,74 @@
+{
+  "version": "1.0.0",
+  "pr": {
+    "number": 514,
+    "url": "https://github.com/tielec/infrastructure-as-code/pull/514",
+    "title": "[TASK] JenkinsfileでAGENT_LABELパラメータを使用 (#505)",
+    "branch": "ai-workflow/issue-507",
+    "base_branch": "main",
+    "state": "open"
+  },
+  "repository": {
+    "owner": "tielec",
+    "repo": "infrastructure-as-code",
+    "path": "/tmp/ai-workflow-repos-1-89640597/infrastructure-as-code",
+    "remote_url": "https://github.com/tielec/infrastructure-as-code.git"
+  },
+  "comments": {
+    "2637461117": {
+      "comment": {
+        "id": 2637461117,
+        "node_id": "PRRC_kwDOOFhF986dNHZ9",
+        "path": "jenkins/jobs/dsl/infrastructure/infrastructure_pulumi_dashboard_job.groovy",
+        "line": 63,
+        "start_line": null,
+        "end_line": null,
+        "body": "PROJECT_FILTER　が重複定義されています。間違った修正です。",
+        "user": "yuto-takashi",
+        "created_at": "2025-12-21T00:39:54Z",
+        "updated_at": "2025-12-21T00:40:44Z",
+        "diff_hunk": "",
+        "thread_id": "PRRT_kwDOOFhF985m5Pv1",
+        "pr_number": 514
+      },
+      "status": "pending",
+      "started_at": null,
+      "completed_at": null,
+      "retry_count": 0,
+      "resolution": null,
+      "reply_comment_id": null,
+      "resolved_at": null,
+      "error": null
+    }
+  },
+  "summary": {
+    "total": 1,
+    "by_status": {
+      "pending": 1,
+      "in_progress": 0,
+      "completed": 0,
+      "skipped": 0,
+      "failed": 0
+    },
+    "by_type": {
+      "code_change": 0,
+      "reply": 0,
+      "discussion": 0,
+      "skip": 0
+    }
+  },
+  "cost_tracking": {
+    "total_input_tokens": 0,
+    "total_output_tokens": 0,
+    "total_cost_usd": 0
+  },
+  "created_at": "2025-12-21T00:48:47.366Z",
+  "updated_at": "2025-12-21T00:48:47.366Z",
+  "analyze_completed_at": null,
+  "execute_completed_at": null,
+  "response_plan_path": null,
+  "execution_result_path": null,
+  "analyzer_agent": null,
+  "analyzer_error": null,
+  "analyzer_error_type": null
+}
