@@ -6,7 +6,7 @@
  */
 pipeline {
     agent {
-        label 'ec2-fleet'
+        label params.AGENT_LABEL ?: 'ec2-fleet-medium'
     }
     
     environment {
@@ -45,7 +45,7 @@ pipeline {
         stage('Collect Pulumi States') {
             agent {
                 docker {
-                    label 'ec2-fleet'
+                    label params.AGENT_LABEL ?: 'ec2-fleet-medium'
                     image 'amazon/aws-cli:latest'
                     args "--entrypoint='' -v ${WORKSPACE}:/workspace -w /workspace -u root"
                     reuseNode true
@@ -68,7 +68,7 @@ pipeline {
         stage('Process State Data') {
             agent {
                 docker {
-                    label 'ec2-fleet'
+                    label params.AGENT_LABEL ?: 'ec2-fleet-medium'
                     image 'pulumi/pulumi:latest'
                     args "--entrypoint='' -v ${WORKSPACE}:/workspace -w /workspace -u root"
                     reuseNode true

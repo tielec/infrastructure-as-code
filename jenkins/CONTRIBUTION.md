@@ -728,19 +728,21 @@ folderConfig.dynamic_folders?.each { rule ->
 
 ```groovy
 pipeline {
-    agent { label 'docker && linux' }
-    
+    // ⚠️ 重要: AGENT_LABELパラメータでエージェントを動的に選択
+    // DSLでchoiceParamとして定義済み、Elvis演算子でフォールバック値を指定
+    agent { label params.AGENT_LABEL ?: 'ec2-fleet-small' }
+
     options {
         timestamps()
         ansiColor('xterm')
         timeout(time: 1, unit: 'HOURS')
         disableConcurrentBuilds()
     }
-    
+
     environment {
         // 環境変数
     }
-    
+
     stages {
         stage('Stage Name') {
             when {
@@ -751,7 +753,7 @@ pipeline {
             }
         }
     }
-    
+
     post {
         always { /* 必ず実行 */ }
         success { /* 成功時 */ }
@@ -759,6 +761,29 @@ pipeline {
     }
 }
 ```
+
+##### AGENT_LABELパラメータの使用ルール
+
+| パターン | 実装方法 | フォールバック値 |
+|----------|----------|------------------|
+| トップレベルagent | `agent { label params.AGENT_LABEL ?: 'デフォルト' }` | カテゴリ別に設定 |
+| dockerブロック内 | `agent { docker { label params.AGENT_LABEL ?: 'デフォルト' ... } }` | 同上 |
+| ステージ内agent | 各ステージでも同じパターンを使用 | 同上 |
+
+**カテゴリ別デフォルト値**:
+
+| カテゴリ | フォールバック値 | 理由 |
+|----------|------------------|------|
+| shared-library | `'ec2-fleet-micro'` | 軽量テストジョブ |
+| admin | `'ec2-fleet-small'` | 標準的な管理ジョブ |
+| code-quality-checker | `'ec2-fleet-small'` | コード解析ジョブ |
+| docs-generator | `'ec2-fleet-small'` | ドキュメント生成ジョブ |
+| infrastructure | `'ec2-fleet-small'` または `'ec2-fleet-medium'` | リソース要件に応じて選択 |
+
+**重要**:
+- **Elvis演算子（?:）は必須**: 初回実行時に`params.AGENT_LABEL`がnullになる可能性があるため
+- **ハードコードしない**: `label 'ec2-fleet'`のような直接指定は禁止
+- **DSLと整合させる**: フォールバック値はDSLの`choiceParam`の最初の選択肢と一致させること
 
 #### 2.2.2 Groovy実装パターン
 
