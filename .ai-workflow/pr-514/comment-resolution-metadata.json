@@ -31,12 +31,24 @@
         "thread_id": "PRRT_kwDOOFhF985m5Pv1",
         "pr_number": 514
       },
-      "status": "pending",
-      "started_at": null,
-      "completed_at": null,
+      "status": "completed",
+      "started_at": "2025-12-21T00:51:01.138Z",
+      "completed_at": "2025-12-21T00:51:02.032Z",
       "retry_count": 0,
-      "resolution": null,
-      "reply_comment_id": null,
+      "resolution": {
+        "type": "code_change",
+        "confidence": "high",
+        "reply": "ご指摘ありがとうございます。`PROJECT_FILTER` が choice と string で二重定義されていたので、ドロップダウンのみを残して重複を削除します。",
+        "changes": [
+          {
+            "path": "jenkins/jobs/dsl/infrastructure/infrastructure_pulumi_dashboard_job.groovy",
+            "change_type": "modify",
+            "content": "// jenkins/jobs/dsl/infrastructure/infrastructure_pulumi_dashboard_job.groovy\n\n// 共通設定を取得\ndef jenkinsPipelineRepo = commonSettings['jenkins-pipeline-repo']\n\n// ジョブ設定を取得\ndef jobKey = 'infrastructure_pulumi_dashboard_job'\ndef jobConfig = jenkinsJobsConfig[jobKey]\n\n// delivery-management-jobs/commonカテゴリに配置\ndef jobPath = \"delivery-management-jobs/common/pulumi-dashboard\"\n\n// Pulumiプロジェクト設定を取得（新規プロジェクトの選択肢に利用）\ndef pulumiProjects = pulumi_projects ?: [:]\ndef infrastructureProjects = pulumiProjects['infrastructure-as-code']?.projects ?: [:]\ndef projectFilterChoices = ['*']\ninfrastructureProjects.each { projectKey, projectConfig ->\n    def normalizedName = projectConfig.project_path?.tokenize('/')?.last() ?: projectKey\n    projectFilterChoices << normalizedName\n}\nprojectFilterChoices = projectFilterChoices.unique()\n\npipelineJob(jobPath) {\n    displayName(\"Pulumi Projects Dashboard\")\n        \n    description(\"\"\"\n        |Pulumi プロジェクトの統合ダッシュボード\n        |\n        |このジョブは、S3バックエンドに保存されているすべてのPulumiプロジェクトの状態を収集し、\n        |統合ダッシュボードとして表示します。\n        |\n        |**機能**:\n        |• 全プロジェクトの一覧表示\n        |• 各スタックのリソース数とステータス\n        |• 最終更新日時の表示\n        |• リソースタイプ別の集計\n        |\"\"\".stripMargin())\n        \n    // パラメータ定義\n    parameters {\n        // AGENT_LABELパラメータ\n        choiceParam('AGENT_LABEL', ['ec2-fleet-medium', 'ec2-fleet-small', 'ec2-fleet-micro'],\n            'Jenkins エージェントのラベル（small: 2並列/2GB, medium: 3並列/4GB, micro: 1並列/1GB）')\n\n        // 環境（common固定）\n        choiceParam('ENVIRONMENT', ['common'], '環境（common固定）')\n        \n        // S3バケット設定\n        stringParam('S3_BUCKET', '', 'Pulumi State S3バケット名')\n        \n        choiceParam('AWS_REGION', ['ap-northeast-1'], 'AWSリージョン')\n            \n        // AWS認証情報\n        stringParam('AWS_ACCESS_KEY_ID', '', \"AWS Access Key ID - S3バケットへの読み取りアクセス権限が必要です\")\n        \n        nonStoredPasswordParam('AWS_SECRET_ACCESS_KEY', 'AWS Secret Access Key - セキュリティのため保存されません')\n        \n        nonStoredPasswordParam('AWS_SESSION_TOKEN', 'AWS Session Token（オプション） - STS一時認証情報を使用する場合')\n        \n        // フィルタリングオプション\n        choiceParam('PROJECT_FILTER', projectFilterChoices, '''Pulumiプロジェクトの選択 - 新規プロジェクト（例: Jenkins Agent）を選択できます'''.stripMargin())\n\n        stringParam('STACK_FILTER', '*', '''スタックフィルタ - 表示するスタックをフィルタリング\n            |* すべて表示: *\n            |* 特定スタック: dev, prod\n            |'''.stripMargin())\n        \n        // Jenkinsfileブランチ\n        stringParam('JENKINSFILE_BRANCH', 'main', 'Jenkinsfileが格納されているブランチ')\n    }\n    \n    // ログローテーション設定\n    logRotator {\n        numToKeep(30)\n        artifactNumToKeep(10)\n    }\n    \n    // プロパティ設定\n    properties {\n        // 同時実行を制限\n        disableConcurrentBuilds()\n        \n        // 再ビルド設定\n        rebuild {\n            autoRebuild(false)\n            rebuildDisabled(false)\n        }\n    }\n    \n    // トリガー設定\n    triggers {\n        // 毎日1回実行（JST 23:00 = UTC 14:00）\n        cron('H 14 * * *')\n    }\n    \n    // パイプライン定義\n    definition {\n        cpsScm {\n            scm {\n                git {\n                    remote {\n                        url(jenkinsPipelineRepo.url)\n                        credentials(jenkinsPipelineRepo.credentials)\n                    }\n                    branch('${JENKINSFILE_BRANCH}')\n                }\n            }\n            scriptPath(jobConfig.jenkinsfile)\n            lightweight(true)\n        }\n    }\n    \n    // ジョブの無効化状態\n    disabled(false)\n}\n\nprintln \"=== Pulumi dashboard jobs creation completed ===\"\n"
+          }
+        ],
+        "analysis_notes": "The parameters block defines PROJECT_FILTER twice (choice and string), which is invalid in Jenkins Job DSL and would override the intended dropdown. The README documents PROJECT_FILTER as a dropdown, so we should keep a single choiceParam and remove the duplicate stringParam."
+      },
+      "reply_comment_id": 2637467505,
       "resolved_at": null,
       "error": null
     }
@@ -44,14 +56,14 @@
   "summary": {
     "total": 1,
     "by_status": {
-      "pending": 1,
+      "pending": 0,
       "in_progress": 0,
-      "completed": 0,
+      "completed": 1,
       "skipped": 0,
       "failed": 0
     },
     "by_type": {
-      "code_change": 0,
+      "code_change": 1,
       "reply": 0,
       "discussion": 0,
       "skip": 0
@@ -63,7 +75,7 @@
     "total_cost_usd": 0
   },
   "created_at": "2025-12-21T00:48:47.366Z",
-  "updated_at": "2025-12-21T00:50:50.560Z",
+  "updated_at": "2025-12-21T00:51:02.032Z",
   "analyze_completed_at": "2025-12-21T00:50:50.554Z",
   "execute_completed_at": null,
   "response_plan_path": "/tmp/ai-workflow-repos-1-89640597/infrastructure-as-code/.ai-workflow/pr-514/output/response-plan.md",
