@@ -9,11 +9,12 @@ import os
 import argparse
 import logging
 import re
-from typing import Dict, Any, List, Tuple, Optional
+from typing import Dict, Any, List, Tuple
 from openai import OpenAI
 from datetime import datetime
 from dataclasses import dataclass
 import time
+from prompt_builder import PromptBuilder, CommentFormatter
 
 # ロギング設定
 logging.basicConfig(
@@ -25,7 +26,19 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class ComplexityThresholds:
-    """複雑度の閾値設定"""
+    """
+    複雑度の閾値設定
+
+    コード複雑度を評価する際の基準値を保持します。
+    循環的複雑度と認知的複雑度それぞれに対して、
+    閾値（超過で警告）と警告レベル（注意が必要）を設定します。
+
+    Attributes:
+        cyclomatic: 循環的複雑度の閾値（この値を超えると高複雑度と判定）
+        cognitive: 認知的複雑度の閾値（この値を超えると高複雑度と判定）
+        cyclomatic_warning: 循環的複雑度の警告レベル（閾値の70%程度）
+        cognitive_warning: 認知的複雑度の警告レベル（閾値の70%程度）
+    """
     cyclomatic: int
     cognitive: int
     cyclomatic_warning: int
@@ -34,7 +47,22 @@ class ComplexityThresholds:
 
 @dataclass
 class FunctionMetrics:
-    """関数のメトリクス情報"""
+    """
+    関数のメトリクス情報
+
+    個別の関数に対する複雑度メトリクスを保持します。
+    関数の識別情報（名前、ファイル、行番号）と
+    複雑度指標（循環的、認知的、行数）を含みます。
+
+    Attributes:
+        name: 関数名（クラス名::メソッド名 形式の場合あり）
+        file: 関数が定義されているファイルパス
+        cyclomatic: 循環的複雑度（条件分岐の数に基づく）
+        cognitive: 認知的複雑度（コードの理解しやすさの指標）
+        lines: 関数のコード行数
+        start_line: 関数定義の開始行番号
+        end_line: 関数定義の終了行番号
+    """
     name: str
     file: str
     cyclomatic: int
@@ -46,7 +74,25 @@ class FunctionMetrics:
 
 @dataclass
 class ComplexityStatistics:
-    """複雑度統計情報"""
+    """
+    複雑度統計情報
+
+    解析対象全体の複雑度統計を保持します。
+    総関数数、平均・最大複雑度、閾値超過関数のリストなど、
+    PRコメント生成に必要な全ての統計情報を含みます。
+
+    Attributes:
+        total_functions: 解析対象の総関数数
+        total_files: 解析対象の総ファイル数
+        avg_cyclomatic: 循環的複雑度の平均値
+        avg_cognitive: 認知的複雑度の平均値
+        max_cyclomatic: 循環的複雑度の最大値
+        max_cognitive: 認知的複雑度の最大値
+        thresholds: 適用された複雑度閾値設定
+        functions_above_threshold: 閾値を超える関数の数（種別ごと）
+        high_complexity_functions: 閾値を超える関数のリスト
+        warning_level_functions: 警告レベルの関数のリスト
+    """
     total_functions: int
     total_files: int
     avg_cyclomatic: float
@@ -61,7 +107,19 @@ class ComplexityStatistics:
 
 @dataclass
 class OpenAIConfig:
-    """OpenAI API設定"""
+    """
+    OpenAI API設定
+
+    OpenAI APIへの接続と生成パラメータを保持します。
+    APIキー、使用モデル、生成制御パラメータを管理します。
+
+    Attributes:
+        api_key: OpenAI APIキー（環境変数から取得推奨）
+        model: 使用するGPTモデル名（デフォルト: gpt-4.1）
+        temperature: 生成のランダム性（0.0-2.0、デフォルト: 0.7）
+        max_tokens: 生成する最大トークン数（デフォルト: 3000）
+        debug_mode: デバッグモードの有効/無効（デフォルト: False）
+    """
     api_key: str
     model: str = "gpt-4.1"
     temperature: float = 0.7
@@ -148,84 +206,6 @@ class StatisticsCalculator:
         return sum(values) / len(values) if values else 0.0
 
 
-class CommentFormatter:
-    """コメントフォーマットを担当するクラス"""
-    
-    @staticmethod
-    def format_function_header(func: Dict[str, Any], index: int) -> List[str]:
-        """関数のヘッダー情報をフォーマット"""
-        return [
-            f"\n{index}. **{func.get('name', 'Unknown')}**",
-            f"   - ファイル: {func.get('file', 'Unknown')}",
-            f"   - 行: {func.get('start_line', 0)}-{func.get('end_line', 0)}",
-        ]
-    
-    @staticmethod
-    def format_complexity_metrics(func: Dict[str, Any], thresholds: ComplexityThresholds) -> List[str]:
-        """複雑度メトリクスをフォーマット"""
-        return [
-            f"   - 認知的複雑度: {func.get('cognitive', 0)} (閾値: {thresholds.cognitive})",
-            f"   - 循環的複雑度: {func.get('cyclomatic', 0)} (閾値: {thresholds.cyclomatic})",
-            f"   - コード行数: {func.get('lines', 0)}",
-        ]
-    
-    @staticmethod
-    def format_warning_metrics(func: Dict[str, Any], thresholds: ComplexityThresholds) -> List[str]:
-        """警告レベルのメトリクスをフォーマット"""
-        return [
-            f"   - 認知的複雑度: {func.get('cognitive', 0)} "
-            f"(警告: {thresholds.cognitive_warning}, 閾値: {thresholds.cognitive})",
-            f"   - 循環的複雑度: {func.get('cyclomatic', 0)} "
-            f"(警告: {thresholds.cyclomatic_warning}, 閾値: {thresholds.cyclomatic})",
-        ]
-    
-    @staticmethod
-    def create_summary_section(stats: ComplexityStatistics, pr_info: Dict[str, Any]) -> List[str]:
-        """サマリーセクションを作成"""
-        return [
-            "# 🔍 コード複雑度解析レポート",
-            "",
-            "## 📊 解析サマリー",
-            f"PR #{pr_info.get('pr_number', 'N/A')}の複雑度解析が完了しました。",
-            f"- 解析ファイル数: {stats.total_files}",
-            f"- 総関数数: {stats.total_functions}",
-            f"- 平均循環的複雑度: {stats.avg_cyclomatic:.2f}",
-            f"- 平均認知的複雑度: {stats.avg_cognitive:.2f}",
-            "",
-        ]
-    
-    @staticmethod
-    def create_threshold_section(thresholds: ComplexityThresholds) -> List[str]:
-        """閾値セクションを作成"""
-        return [
-            "## 📏 複雑度の閾値",
-            f"- 認知的複雑度: 警告 {thresholds.cognitive_warning}, 閾値 {thresholds.cognitive}",
-            f"- 循環的複雑度: 警告 {thresholds.cyclomatic_warning}, 閾値 {thresholds.cyclomatic}",
-            "",
-        ]
-    
-    @staticmethod
-    def create_recommendations_section(has_complex_functions: bool) -> List[str]:
-        """推奨事項セクションを作成"""
-        if has_complex_functions:
-            return [
-                "",
-                "## 💡 推奨事項",
-                "1. 🔴 閾値を超える関数は優先的にリファクタリングしてください",
-                "2. 単一責任の原則に従って関数を分割することを検討してください",
-                "3. 条件分岐が多い場合は、早期リターンやガード句を活用してください",
-                "4. ネストレベルを減らすために、処理を別関数に抽出してください",
-            ]
-        else:
-            return [
-                "",
-                "## 💡 推奨事項",
-                "- 現在の良好な状態を維持してください",
-                "- 新機能追加時も複雑度を意識した実装を心がけてください",
-                "- 定期的なコードレビューで複雑度をモニタリングしてください",
-            ]
-
-
 class PRComplexityCommentGenerator:
     """PR複雑度解析結果からコメントを生成するクラス"""
     
@@ -272,9 +252,9 @@ class PRComplexityCommentGenerator:
         """
         # 統計情報を準備
         stats = self._prepare_statistics(analysis_result)
-        
-        # プロンプトを構築
-        prompt = self._build_prompt(analysis_result, stats)
+
+        prompt_builder = PromptBuilder(stats, analysis_result)
+        prompt = prompt_builder.build_prompt()
         
         # プロンプトの表示と保存
         self._handle_prompt_output(prompt)
@@ -469,246 +449,6 @@ class PRComplexityCommentGenerator:
             warning_level_functions=warning_level
         )
     
-    def _build_prompt(self, analysis_result: Dict[str, Any], stats: ComplexityStatistics) -> str:
-        """OpenAI API用のプロンプトを構築"""
-        
-        # 高複雑度関数の詳細リスト
-        high_complexity_details = self._format_function_details(
-            stats.high_complexity_functions,
-            stats.warning_level_functions,
-            stats.thresholds
-        )
-        
-        # 全関数の概要を追加
-        all_functions_summary = self._format_all_functions_summary(
-            analysis_result.get('all_functions', []),
-            stats.thresholds
-        )
-        
-        # 閾値を超える関数がない場合の追加指示
-        no_complex_functions_instructions = ""
-        if stats.functions_above_threshold['cognitive'] == 0 and stats.functions_above_threshold['cyclomatic'] == 0:
-            no_complex_functions_instructions = """
-# 特記事項
-閾値を超える関数は検出されませんでした。以下の観点でフィードバックを提供してください：
-- 現在の良好な実装パターンを具体的に評価
-- 最も複雑度が高い関数（閾値未満でも）について、将来的な改善の余地があるか検討
-- チーム全体で共有すべきベストプラクティスの抽出
-- 今後の開発で維持すべき品質基準の提案
-"""
-        
-        prompt = f"""以下のコード複雑度解析結果に基づいて、GitHub PRコメントを生成してください。
-
-# 解析結果サマリー
-- 解析ファイル数: {stats.total_files}
-- 総関数数: {stats.total_functions}
-- 平均循環的複雑度: {stats.avg_cyclomatic:.2f}
-- 平均認知的複雑度: {stats.avg_cognitive:.2f}
-- 最大循環的複雑度: {stats.max_cyclomatic}
-- 最大認知的複雑度: {stats.max_cognitive}
-
-# 設定された閾値
-- 循環的複雑度の閾値: {stats.thresholds.cyclomatic} (警告レベル: {stats.thresholds.cyclomatic_warning})
-- 認知的複雑度の閾値: {stats.thresholds.cognitive} (警告レベル: {stats.thresholds.cognitive_warning})
-
-# 閾値を超える関数
-- 循環的複雑度が閾値を超える関数: {stats.functions_above_threshold['cyclomatic']}個
-- 認知的複雑度が閾値を超える関数: {stats.functions_above_threshold['cognitive']}個
-
-# 関数の詳細情報
-{high_complexity_details}
-
-# 全関数の概要
-{all_functions_summary}
-{no_complex_functions_instructions}
-# PR情報
-- PR番号: #{analysis_result.get('pr_number', 'N/A')}
-- タイトル: {analysis_result.get('pr_title', 'N/A')}
-
-以下の形式でMarkdownコメントを生成してください：
-
-1. **解析サマリー**: 全体的な評価を2-3文で簡潔に（平均値と最大値に基づいて）
-   - 平均複雑度が低い場合は、その良好な状態を評価
-   - 最大複雑度も閾値内の場合は、それも明記
-
-2. **重要な発見事項**:
-   - 🚨 **優先的に対応が必要な関数**: 認知的複雑度が閾値を超える関数（{stats.thresholds.cognitive}以上）を具体的にリストし、なぜ複雑なのか、どうリファクタリングすべきか提案
-   - ⚠️ **注意が必要な領域**: 警告レベル（認知的: {stats.thresholds.cognitive_warning}-{stats.thresholds.cognitive-1}、循環的: {stats.thresholds.cyclomatic_warning}-{stats.thresholds.cyclomatic-1}）の関数を具体的にリスト
-   - ✅ **良好な実装**: 特に複雑度が低く、良い実装パターンとなっている関数を2-3個具体的に挙げて評価
-
-3. **具体的な改善提案**: 
-   - 高複雑度関数がある場合：
-     * 関数の分割（単一責任の原則）
-     * 条件分岐の簡略化
-     * ネストレベルの削減
-     * 早期リターンの活用
-   - 高複雑度関数がない場合：
-     * 現在の良好な実装を維持するためのガイドライン
-     * さらなる改善の余地がある関数への提案（あれば）
-     * チーム全体で共有すべきコーディング規約
-
-4. **メトリクス詳細**: 主要な数値を表形式でまとめる
-   | メトリクス | 値 | 評価 |
-   |----------|-----|------|
-   | 平均認知的複雑度 | X.XX | 🟢/🟡/🔴 |
-   | 平均循環的複雑度 | X.XX | 🟢/🟡/🔴 |
-   | 最大認知的複雑度 | XX | 🟢/🟡/🔴 |
-   | 最大循環的複雑度 | XX | 🟢/🟡/🔴 |
-
-5. **次のステップ**: 
-   - 高複雑度関数がある場合：優先順位付けされたアクション項目
-   - 高複雑度関数がない場合：品質を維持するための推奨事項
-
-重要な注意事項:
-- 必ず具体的な関数名と複雑度の数値を含めてください
-- 警告レベルの関数も具体的な名前と数値を含めて記載してください
-- 認知的複雑度を循環的複雑度より優先して説明してください（認知的複雑度の方が実際の理解しやすさを表すため）
-- 改善提案は実装可能で具体的なものにしてください
-- 閾値を超える関数がない場合でも、建設的で有用なフィードバックを提供してください
-- トーンは建設的で協力的に保ってください
-- 出力にマークダウンのコードブロック記号（```）を含めないでください
-- 純粋なMarkdown形式で出力してください（```markdownなどのタグは不要）"""
-        
-        return prompt
-    
-    def _format_function_details(self, high_complexity_functions: List[Dict], 
-                               warning_functions: List[Dict],
-                               thresholds: ComplexityThresholds) -> str:
-        """関数の詳細情報をフォーマット（リファクタリング済み）"""
-        if not high_complexity_functions and not warning_functions:
-            return "## 閾値を超える関数・警告レベルの関数はありません"
-        
-        result = []
-        
-        # 高複雑度関数をフォーマット
-        if high_complexity_functions:
-            result.extend(self._format_high_complexity_functions(high_complexity_functions, thresholds))
-        
-        # 警告レベル関数をフォーマット
-        if warning_functions:
-            result.extend(self._format_warning_level_functions(warning_functions, thresholds))
-        
-        return "\n".join(result)
-    
-    def _format_all_functions_summary(self, all_functions: List[Dict], 
-                                    thresholds: ComplexityThresholds) -> str:
-        """全関数の概要をフォーマット"""
-        if not all_functions:
-            return "関数の詳細情報が取得できませんでした。"
-        
-        result = [f"総関数数: {len(all_functions)}個"]
-        
-        # 複雑度の分布を追加
-        result.extend(self._format_complexity_distribution(all_functions))
-        
-        # 最も複雑な関数を追加
-        result.extend(self._format_most_complex_functions(all_functions))
-        
-        # 最も単純な関数を追加
-        result.extend(self._format_simplest_functions(all_functions))
-        
-        return "\n".join(result)
-    
-    def _format_complexity_distribution(self, all_functions: List[Dict]) -> List[str]:
-        """複雑度の分布をフォーマット"""
-        distribution = self._calculate_complexity_distribution(all_functions)
-        
-        result = ["\n複雑度の分布:"]
-        for level, count in distribution.items():
-            if count > 0:
-                percentage = (count / len(all_functions)) * 100
-                result.append(f"- {level}: {count}個 ({percentage:.1f}%)")
-        
-        return result
-    
-    def _calculate_complexity_distribution(self, all_functions: List[Dict]) -> Dict[str, int]:
-        """複雑度の分布を計算"""
-        distribution = {
-            '低（認知的 < 5）': 0,
-            '中（認知的 5-9）': 0,
-            '高（認知的 10-14）': 0,
-            '警告（認知的 15-19）': 0,
-            '危険（認知的 20+）': 0
-        }
-        
-        for func in all_functions:
-            cognitive = func.get('cognitive', 0)
-            if cognitive < 5:
-                distribution['低（認知的 < 5）'] += 1
-            elif cognitive < 10:
-                distribution['中（認知的 5-9）'] += 1
-            elif cognitive < 15:
-                distribution['高（認知的 10-14）'] += 1
-            elif cognitive < 20:
-                distribution['警告（認知的 15-19）'] += 1
-            else:
-                distribution['危険（認知的 20+）'] += 1
-        
-        return distribution
-    
-    def _format_most_complex_functions(self, all_functions: List[Dict]) -> List[str]:
-        """最も複雑な関数をフォーマット"""
-        # 複雑度でソート（認知的複雑度優先）
-        sorted_functions = sorted(all_functions, 
-                                key=lambda x: (x.get('cognitive', 0), x.get('cyclomatic', 0)), 
-                                reverse=True)
-        
-        result = ["\n最も複雑な関数（上位5個）:"]
-        for i, func in enumerate(sorted_functions[:5], 1):
-            result.append(self._format_function_summary(i, func))
-        
-        return result
-    
-    def _format_simplest_functions(self, all_functions: List[Dict]) -> List[str]:
-        """最も単純な関数をフォーマット"""
-        # 単純な関数をソート
-        simple_functions = sorted(all_functions, 
-                                key=lambda x: (x.get('cognitive', 0), x.get('cyclomatic', 0)))
-        
-        # 非常に単純な関数（認知的複雑度 <= 3）のみをフィルタリング
-        very_simple_functions = [func for func in simple_functions if func.get('cognitive', 0) <= 3]
-        
-        if len(very_simple_functions) >= 3:
-            result = ["\n最も単純で良好な実装（例）:"]
-            for i, func in enumerate(very_simple_functions[:3], 1):
-                result.append(self._format_function_summary(i, func))
-            return result
-        
-        return []
-    
-    def _format_function_summary(self, index: int, func: Dict[str, Any]) -> str:
-        """個別の関数サマリーをフォーマット"""
-        name = func.get('name', 'Unknown')
-        cognitive = func.get('cognitive', 0)
-        cyclomatic = func.get('cyclomatic', 0)
-        return f"{index}. `{name}` (認知的: {cognitive}, 循環的: {cyclomatic})"
-    
-    def _format_high_complexity_functions(self, functions: List[Dict], 
-                                        thresholds: ComplexityThresholds) -> List[str]:
-        """高複雑度関数をフォーマット"""
-        result = ["## 🔴 閾値を超える関数（優先的な対応が必要）:"]
-        
-        sorted_functions = sorted(functions, key=lambda x: x.get('cognitive', 0), reverse=True)
-        
-        for i, func in enumerate(sorted_functions[:10], 1):
-            result.extend(self.comment_formatter.format_function_header(func, i))
-            result.extend(self.comment_formatter.format_complexity_metrics(func, thresholds))
-        
-        return result
-    
-    def _format_warning_level_functions(self, functions: List[Dict], 
-                                      thresholds: ComplexityThresholds) -> List[str]:
-        """警告レベル関数をフォーマット"""
-        result = ["\n## 🟡 警告レベルの関数（将来的な改善を検討）:"]
-        
-        sorted_functions = sorted(functions, key=lambda x: x.get('cognitive', 0), reverse=True)
-        
-        for i, func in enumerate(sorted_functions[:10], 1):
-            result.extend(self.comment_formatter.format_function_header(func, i))
-            result.extend(self.comment_formatter.format_warning_metrics(func, thresholds))
-        
-        return result
-    
     def _generate_fallback_comment(self, analysis_result: Dict[str, Any], 
                                   stats: ComplexityStatistics) -> str:
         """APIエラー時のフォールバックコメント生成（リファクタリング済み）"""
@@ -837,7 +577,8 @@ def main():
     if args.save_prompt or args.show_prompt or args.debug:
         # プロンプトを再生成して結果に含める
         stats = generator._prepare_statistics(analysis_result)
-        prompt = generator._build_prompt(analysis_result, stats)
+        prompt_builder = PromptBuilder(stats, analysis_result)
+        prompt = prompt_builder.build_prompt()
         result['generation_metadata']['prompt'] = prompt
         result['generation_metadata']['prompt_length'] = len(prompt)
         result['generation_metadata']['estimated_prompt_tokens'] = len(prompt) // 4
