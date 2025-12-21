@@ -76,7 +76,7 @@ def buildAnsibleCommand(playbook, params) {
 
 pipeline {
     agent {
-        label params.AGENT_LABEL ?: 'ec2-fleet-small'
+        label params.AGENT_LABEL ?: 'ec2-fleet-micro'
     }
     
     options {

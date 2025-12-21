@@ -56,7 +56,7 @@ def createPRComplexityAnalyzerTriggerJob(repoConfig) {
         }
         
         // ノード制約
-        label('ec2-fleet')
+        label('ec2-fleet-micro')
         
         // ジョブのプロパティ設定
         properties {

@@ -730,7 +730,8 @@ folderConfig.dynamic_folders?.each { rule ->
 pipeline {
     // ⚠️ 重要: AGENT_LABELパラメータでエージェントを動的に選択
     // DSLでchoiceParamとして定義済み、Elvis演算子でフォールバック値を指定
-    agent { label params.AGENT_LABEL ?: 'ec2-fleet-small' }
+    // Issue #515: デフォルトはec2-fleet-microに統一
+    agent { label params.AGENT_LABEL ?: 'ec2-fleet-micro' }
 
     options {
         timestamps()
@@ -772,18 +773,21 @@ pipeline {
 
 **カテゴリ別デフォルト値**:
 
+Issue #515により、全カテゴリのデフォルト値は`ec2-fleet-micro`に統一されました。
+
 | カテゴリ | フォールバック値 | 理由 |
 |----------|------------------|------|
 | shared-library | `'ec2-fleet-micro'` | 軽量テストジョブ |
-| admin | `'ec2-fleet-small'` | 標準的な管理ジョブ |
-| code-quality-checker | `'ec2-fleet-small'` | コード解析ジョブ |
-| docs-generator | `'ec2-fleet-small'` | ドキュメント生成ジョブ |
-| infrastructure | `'ec2-fleet-small'` または `'ec2-fleet-medium'` | リソース要件に応じて選択 |
+| admin | `'ec2-fleet-micro'` | EC2コスト削減のため統一 |
+| code-quality-checker | `'ec2-fleet-micro'` | EC2コスト削減のため統一 |
+| docs-generator | `'ec2-fleet-micro'` | EC2コスト削減のため統一 |
+| infrastructure | `'ec2-fleet-micro'` | EC2コスト削減のため統一 |
 
 **重要**:
 - **Elvis演算子（?:）は必須**: 初回実行時に`params.AGENT_LABEL`がnullになる可能性があるため
 - **ハードコードしない**: `label 'ec2-fleet'`のような直接指定は禁止
-- **DSLと整合させる**: フォールバック値はDSLの`choiceParam`の最初の選択肢と一致させること
+- **DSLと整合させる**: フォールバック値はDSLの`choiceParam`の最初の選択肢（`ec2-fleet-micro`）と一致させること
+- **必要に応じて手動選択可能**: choiceParamには`ec2-fleet-small`、`ec2-fleet-medium`も選択肢として残っているため、リソースが必要な場合は手動で選択可能
 
 #### 2.2.2 Groovy実装パターン
 

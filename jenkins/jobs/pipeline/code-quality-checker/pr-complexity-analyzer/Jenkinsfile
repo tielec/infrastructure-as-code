@@ -22,7 +22,7 @@ def DIRECTORIES = [
 
 pipeline {
     agent {
-        label params.AGENT_LABEL ?: 'ec2-fleet-small'
+        label params.AGENT_LABEL ?: 'ec2-fleet-micro'
     }
         
     environment {
@@ -99,7 +99,7 @@ pipeline {
         stage('Docker環境での解析実行') {
             agent {
                 docker {
-                    label params.AGENT_LABEL ?: 'ec2-fleet-small'
+                    label params.AGENT_LABEL ?: 'ec2-fleet-micro'
                     image CONSTANTS.DOCKER_IMAGE
                     args "--entrypoint='' -v ${WORKSPACE}:/workspace -w /workspace -u root"
                     reuseNode true

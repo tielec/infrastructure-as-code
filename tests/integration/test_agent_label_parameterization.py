@@ -1,7 +1,6 @@
 """Integration checks for AGENT_LABEL parameterization across Jenkinsfiles."""
 
 import re
-import subprocess
 import unittest
 from pathlib import Path
 
@@ -10,33 +9,33 @@ PIPELINE_ROOT = Path(__file__).resolve().parents[2] / "jenkins" / "jobs" / "pipe
 
 # Expected fallback values aligned with the DSL defaults per category.
 AGENT_FALLBACKS = {
-    "admin/backup-config/Jenkinsfile": "ec2-fleet-small",
-    "admin/github-webhooks-setting/Jenkinsfile": "ec2-fleet-small",
-    "admin/ssm-backup/Jenkinsfile": "ec2-fleet-small",
-    "admin/ssm-restore/Jenkinsfile": "ec2-fleet-small",
-    "admin/user-management/Jenkinsfile": "ec2-fleet-small",
-    "account-setup/user-self-activation/Jenkinsfile": "ec2-fleet-small",
-    "code-quality-checker/pr-complexity-analyzer/Jenkinsfile": "ec2-fleet-small",
-    "code-quality-checker/rust-code-analysis-check/Jenkinsfile": "ec2-fleet-small",
-    "docs-generator/auto-insert-doxygen-comment/Jenkinsfile": "ec2-fleet-small",
-    "docs-generator/auto-insert-doxygen-comment/tests/Jenkinsfile": "ec2-fleet-small",
-    "docs-generator/diagram-generator/Jenkinsfile": "ec2-fleet-small",
-    "docs-generator/generate-doxygen-html/Jenkinsfile": "ec2-fleet-small",
-    "docs-generator/mermaid-generator/Jenkinsfile": "ec2-fleet-small",
-    "docs-generator/multi-pull-request-comment-builder/Jenkinsfile": "ec2-fleet-small",
-    "docs-generator/pull-request-comment-builder/Jenkinsfile": "ec2-fleet-small",
-    "docs-generator/technical-docs-writer/Jenkinsfile": "ec2-fleet-small",
-    "infrastructure/ansible-playbook-executor/Jenkinsfile": "ec2-fleet-small",
-    "infrastructure/lambda-verification/Jenkinsfile": "ec2-fleet-small",
-    "infrastructure/pulumi-dashboard/Jenkinsfile": "ec2-fleet-medium",
-    "infrastructure/ssm-dashboard/Jenkinsfile": "ec2-fleet-small",
+    "admin/backup-config/Jenkinsfile": "ec2-fleet-micro",
+    "admin/github-webhooks-setting/Jenkinsfile": "ec2-fleet-micro",
+    "admin/ssm-backup/Jenkinsfile": "ec2-fleet-micro",
+    "admin/ssm-restore/Jenkinsfile": "ec2-fleet-micro",
+    "admin/user-management/Jenkinsfile": "ec2-fleet-micro",
+    "account-setup/user-self-activation/Jenkinsfile": "ec2-fleet-small",  # lightweight self-activation flow stays on small
+    "code-quality-checker/pr-complexity-analyzer/Jenkinsfile": "ec2-fleet-micro",
+    "code-quality-checker/rust-code-analysis-check/Jenkinsfile": "ec2-fleet-micro",
+    "docs-generator/auto-insert-doxygen-comment/Jenkinsfile": "ec2-fleet-micro",
+    "docs-generator/auto-insert-doxygen-comment/tests/Jenkinsfile": "ec2-fleet-small",  # test harness needs more headroom
+    "docs-generator/diagram-generator/Jenkinsfile": "ec2-fleet-small",  # image rendering remains on small
+    "docs-generator/generate-doxygen-html/Jenkinsfile": "ec2-fleet-micro",
+    "docs-generator/mermaid-generator/Jenkinsfile": "ec2-fleet-small",  # mermaid generation uses small agents
+    "docs-generator/multi-pull-request-comment-builder/Jenkinsfile": "ec2-fleet-micro",
+    "docs-generator/pull-request-comment-builder/Jenkinsfile": "ec2-fleet-micro",
+    "docs-generator/technical-docs-writer/Jenkinsfile": "ec2-fleet-micro",
+    "infrastructure/ansible-playbook-executor/Jenkinsfile": "ec2-fleet-micro",
+    "infrastructure/lambda-verification/Jenkinsfile": "ec2-fleet-micro",
+    "infrastructure/pulumi-dashboard/Jenkinsfile": "ec2-fleet-micro",
+    "infrastructure/ssm-dashboard/Jenkinsfile": "ec2-fleet-micro",
     "shared-library/test-aws-utils/sqs-check-operation/Jenkinsfile": "ec2-fleet-micro",
     "shared-library/test-git-utils/deploykeys-operation/Jenkinsfile": "ec2-fleet-micro",
     "shared-library/test-git-utils/github-apps-basic-operation/Jenkinsfile": "ec2-fleet-micro",
     "shared-library/test-git-utils/webhook-operation/Jenkinsfile": "ec2-fleet-micro",
     "shared-library/test-jenkins-utils/credentials-operation/Jenkinsfile": "ec2-fleet-micro",
     "shared-library/test-ssm-parameter/Jenkinsfile": "ec2-fleet-micro",
-    "infrastructure/pulumi-stack-action/Jenkinsfile": "ec2-fleet-medium",
+    "infrastructure/pulumi-stack-action/Jenkinsfile": "ec2-fleet-medium",  # Pulumi stack actions stay on medium for capacity
 }
 
 # Files intentionally left on built-in to ensure controller-executed jobs stay untouched.
@@ -54,16 +53,12 @@ class AgentLabelParameterizationTests(unittest.TestCase):
 
     def test_ec2_fleet_label_removed(self):
         """Static guard: old ec2-fleet label must be fully removed."""
-        result = subprocess.run(
-            ["grep", "-R", "label 'ec2-fleet'", str(PIPELINE_ROOT)],
-            capture_output=True,
-            text=True,
-        )
-        self.assertEqual(
-            result.returncode,
-            1,
-            msg=f"Found legacy ec2-fleet labels:\n{result.stdout}{result.stderr}",
-        )
+        offenders = []
+        for path in self.jenkinsfiles:
+            if "label 'ec2-fleet'" in path.read_text():
+                offenders.append(path.relative_to(PIPELINE_ROOT))
+
+        self.assertFalse(offenders, msg=f"Found legacy ec2-fleet labels in: {offenders}")
 
     def test_params_agent_label_present_on_expected_files(self):
         agent_label_files = {
@@ -75,8 +70,8 @@ class AgentLabelParameterizationTests(unittest.TestCase):
 
         self.assertGreaterEqual(
             len(agent_label_files),
-            27,
-            "At least 27 Jenkinsfiles should use params.AGENT_LABEL (26 updated + existing pulumi-stack-action).",
+            len(AGENT_FALLBACKS),
+            f"At least {len(AGENT_FALLBACKS)} Jenkinsfiles should use params.AGENT_LABEL (including pulumi-stack-action medium default).",
         )
         self.assertTrue(
             expected_paths.issubset(agent_label_files),
