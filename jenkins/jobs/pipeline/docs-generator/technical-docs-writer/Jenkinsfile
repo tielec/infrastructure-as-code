@@ -9,7 +9,7 @@
 pipeline {
     agent {
         docker {
-            label 'ec2-fleet'
+            label params.AGENT_LABEL ?: 'ec2-fleet-small'
             image 'nikolaik/python-nodejs:python3.11-nodejs20'
             args '-v ${WORKSPACE}:/workspace -w /workspace -u root'
         }

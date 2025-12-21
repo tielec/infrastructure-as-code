@@ -6,7 +6,7 @@
  */
 pipeline {
     agent {
-        label 'ec2-fleet'
+        label params.AGENT_LABEL ?: 'ec2-fleet-small'
     }
     
     environment {
@@ -43,7 +43,7 @@ pipeline {
         stage('Collect SSM Parameters') {
             agent {
                 docker {
-                    label 'ec2-fleet'
+                    label params.AGENT_LABEL ?: 'ec2-fleet-small'
                     image 'amazon/aws-cli:latest'
                     args "--entrypoint='' -v ${WORKSPACE}:/workspace -w /workspace -u root"
                     reuseNode true

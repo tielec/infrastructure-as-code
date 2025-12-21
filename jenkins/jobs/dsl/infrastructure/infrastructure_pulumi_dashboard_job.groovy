@@ -59,6 +59,8 @@ pipelineJob(jobPath) {
         
         // フィルタリングオプション
         choiceParam('PROJECT_FILTER', projectFilterChoices, '''Pulumiプロジェクトの選択 - 新規プロジェクト（例: Jenkins Agent）を選択できます'''.stripMargin())
+        // 新規プロジェクトや任意文字列での絞り込みに対応
+        stringParam('PROJECT_FILTER', '*', '''自由入力プロジェクトフィルタ - ワイルドカード（例: *, dev, prod, jenkins-agent）で絞り込み'''.stripMargin())
 
         stringParam('STACK_FILTER', '*', '''スタックフィルタ - 表示するスタックをフィルタリング
             |* すべて表示: *

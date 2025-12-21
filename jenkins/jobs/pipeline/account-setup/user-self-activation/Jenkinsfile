@@ -6,7 +6,7 @@ def userEmail = ''
 pipeline {
     
     agent { 
-        label 'ec2-fleet' 
+        label params.AGENT_LABEL ?: 'ec2-fleet-small' 
     }
     
     environment {

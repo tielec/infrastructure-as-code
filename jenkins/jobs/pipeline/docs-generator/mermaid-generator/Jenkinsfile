@@ -3,7 +3,7 @@
 pipeline {
     agent {
         docker {
-            label 'ec2-fleet'
+            label params.AGENT_LABEL ?: 'ec2-fleet-small'
             // Node.js ベースのイメージを使用し、Mermaid CLIをインストールするため
             image 'node:18-slim'
             args '''
