@@ -46,8 +46,8 @@ pipelineJob(fullJobName) {
     // パラメータ定義
     parameters {
         // AGENT_LABELパラメータ
-        choiceParam('AGENT_LABEL', ['ec2-fleet-small', 'ec2-fleet-medium', 'ec2-fleet-micro'],
-            'Jenkins エージェントのラベル（small: 2並列/2GB, medium: 3並列/4GB, micro: 1並列/1GB）')
+        choiceParam('AGENT_LABEL', ['ec2-fleet-micro', 'ec2-fleet-small', 'ec2-fleet-medium'],
+            'Jenkins エージェントのラベル（micro: 1並列/1GB, small: 2並列/2GB, medium: 3並列/4GB）')
 
         // 基本設定
         stringParam('REPO_URL', 'https://github.com/tielec/infrastructure-as-code', 'GitHubリポジトリのURL (必須)')

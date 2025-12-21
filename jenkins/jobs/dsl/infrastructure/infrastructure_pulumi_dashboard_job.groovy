@@ -39,8 +39,8 @@ pipelineJob(jobPath) {
     // パラメータ定義
     parameters {
         // AGENT_LABELパラメータ
-        choiceParam('AGENT_LABEL', ['ec2-fleet-medium', 'ec2-fleet-small', 'ec2-fleet-micro'],
-            'Jenkins エージェントのラベル（small: 2並列/2GB, medium: 3並列/4GB, micro: 1並列/1GB）')
+        choiceParam('AGENT_LABEL', ['ec2-fleet-micro', 'ec2-fleet-small', 'ec2-fleet-medium'],
+            'Jenkins エージェントのラベル（micro: 1並列/1GB, small: 2並列/2GB, medium: 3並列/4GB）')
 
         // 環境（common固定）
         choiceParam('ENVIRONMENT', ['common'], '環境（common固定）')
@@ -58,6 +58,7 @@ pipelineJob(jobPath) {
         nonStoredPasswordParam('AWS_SESSION_TOKEN', 'AWS Session Token（オプション） - STS一時認証情報を使用する場合')
         
         // フィルタリングオプション
+        stringParam('PROJECT_FILTER', '', '''プロジェクト名フィルタ（Jenkins Agent 名も含む） - パターン入力で自由に絞り込み'''.stripMargin())
         choiceParam('PROJECT_FILTER', projectFilterChoices, '''Pulumiプロジェクトの選択 - 新規プロジェクト（例: Jenkins Agent）を選択できます'''.stripMargin())
 
         stringParam('STACK_FILTER', '*', '''スタックフィルタ - 表示するスタックをフィルタリング

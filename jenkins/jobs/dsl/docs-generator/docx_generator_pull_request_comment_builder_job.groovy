@@ -61,8 +61,8 @@ repositories.each { repo ->
         // パラメータ設定
         parameters {
             // AGENT_LABELパラメータ
-            choiceParam('AGENT_LABEL', ['ec2-fleet-small', 'ec2-fleet-medium', 'ec2-fleet-micro'],
-                'Jenkins エージェントのラベル（small: 2並列/2GB, medium: 3並列/4GB, micro: 1並列/1GB）')
+            choiceParam('AGENT_LABEL', ['ec2-fleet-micro', 'ec2-fleet-small', 'ec2-fleet-medium'],
+                'Jenkins エージェントのラベル（micro: 1並列/1GB, small: 2並列/2GB, medium: 3並列/4GB）')
 
             stringParam('REPO_URL', repo.url, 'リポジトリURL')
             stringParam('PR_NUMBER', 'Latest', 'プルリクエスト番号（"Latest"の場合は最新のPRを対象）')

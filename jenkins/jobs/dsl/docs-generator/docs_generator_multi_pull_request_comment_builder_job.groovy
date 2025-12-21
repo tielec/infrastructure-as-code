@@ -61,8 +61,8 @@ repositories.each { repo ->
         // パラメータの設定
         parameters {
             // AGENT_LABELパラメータ
-            choiceParam('AGENT_LABEL', ['ec2-fleet-small', 'ec2-fleet-medium', 'ec2-fleet-micro'],
-                'Jenkins エージェントのラベル（small: 2並列/2GB, medium: 3並列/4GB, micro: 1並列/1GB）')
+            choiceParam('AGENT_LABEL', ['ec2-fleet-micro', 'ec2-fleet-small', 'ec2-fleet-medium'],
+                'Jenkins エージェントのラベル（micro: 1並列/1GB, small: 2並列/2GB, medium: 3並列/4GB）')
 
             // PRの範囲指定
             stringParam('START_PR_NUMBER', null, '処理を開始するPR番号')

@@ -59,8 +59,8 @@ def createDoxygenHtmlJob(repoConfig) {
         // パラメータ設定
         parameters {
             // AGENT_LABELパラメータ
-            choiceParam('AGENT_LABEL', ['ec2-fleet-small', 'ec2-fleet-medium', 'ec2-fleet-micro'],
-                'Jenkins エージェントのラベル（small: 2並列/2GB, medium: 3並列/4GB, micro: 1並列/1GB）')
+            choiceParam('AGENT_LABEL', ['ec2-fleet-micro', 'ec2-fleet-small', 'ec2-fleet-medium'],
+                'Jenkins エージェントのラベル（micro: 1並列/1GB, small: 2並列/2GB, medium: 3並列/4GB）')
 
             stringParam('GIT_SOURCE_REPO_URL', repoConfig.url, 'ドキュメント生成対象のソースコードリポジトリURL')
             stringParam('GIT_SOURCE_REPO_BRANCH', repoConfig.docBranch, 'ドキュメント生成対象のブランチ名')
