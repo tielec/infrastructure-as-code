@@ -49,7 +49,7 @@ pipeline {
                         |# 2. scriptApprovalセクションの削除
                         |sed '/^  scriptApproval:/,/^[a-z]/{/^[a-z]/!d;/^  scriptApproval:/d;}' jenkins_new_temp_1.yaml > jenkins_new_temp_2.yaml
                         |
-                        |# 3. インスタンスIDを含むラベルの削除 (built-inとec2-fleetは保持)
+                        |# 3. インスタンスIDを含むラベルの削除 (built-inとec2-fleet-micro/small/mediumは保持)
                         |sed '/^  labelAtoms:/,/^[a-z]/{/name: "i-[a-z0-9]*"/d;}' jenkins_new_temp_2.yaml > jenkins_new_temp_3.yaml
                         |
                         |# 4. clientSecretの置換
@@ -67,7 +67,7 @@ pipeline {
                         |# 2. scriptApprovalセクションの削除
                         |sed '/^  scriptApproval:/,/^[a-z]/{/^[a-z]/!d;/^  scriptApproval:/d;}' jenkins_old_temp_1.yaml > jenkins_old_temp_2.yaml
                         |
-                        |# 3. インスタンスIDを含むラベルの削除 (built-inとec2-fleetは保持)
+                        |# 3. インスタンスIDを含むラベルの削除 (built-inとec2-fleet-micro/small/mediumは保持)
                         |sed '/^  labelAtoms:/,/^[a-z]/{/name: "i-[a-z0-9]*"/d;}' jenkins_old_temp_2.yaml > jenkins_old_temp_3.yaml
                         |
                         |# 4. clientSecretの置換

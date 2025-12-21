@@ -78,12 +78,6 @@ retrieve_ssm_parameter() {
 # 必要なパラメータをSSMから取得
 log "Retrieving configuration from SSM Parameter Store..."
 
-# Fleet IDの取得（後方互換性のため既存パラメータも取得）
-EC2_FLEET_ID=$(retrieve_ssm_parameter \
-    "/jenkins-infra/${ENVIRONMENT}/agent/spotFleetRequestId" \
-    "Fleet ID (legacy)" \
-    "false")
-
 # Medium Fleet IDの取得
 EC2_FLEET_MEDIUM_ID=$(retrieve_ssm_parameter \
     "/jenkins-infra/${ENVIRONMENT}/agent/spotFleetRequestId-medium" \
@@ -159,17 +153,6 @@ PRIVATE_SUBNET_B_ID=$(retrieve_ssm_parameter \
 # Agent Capacity設定の取得
 log "Retrieving Agent Capacity configuration from SSM Parameter Store..."
 
-# 後方互換性のための既存パラメータ（medium用として継続使用）
-EC2_MIN_SIZE=$(retrieve_ssm_parameter \
-    "/jenkins-infra/${ENVIRONMENT}/config/agent-min-capacity" \
-    "Agent Min Capacity (legacy)" \
-    "false")
-
-EC2_MAX_SIZE=$(retrieve_ssm_parameter \
-    "/jenkins-infra/${ENVIRONMENT}/config/agent-max-capacity" \
-    "Agent Max Capacity (legacy)" \
-    "false")
-
 # Medium インスタンス用のCapacity設定
 EC2_FLEET_MEDIUM_MIN_SIZE=$(retrieve_ssm_parameter \
     "/jenkins-infra/${ENVIRONMENT}/config/agent-medium-min-capacity" \
@@ -206,9 +189,6 @@ EC2_FLEET_MICRO_MAX_SIZE=$(retrieve_ssm_parameter \
 # Agent NumExecutors設定の取得
 log "Retrieving Agent NumExecutors configuration from SSM Parameter Store..."
 
-# 後方互換性のためのExecutor数（mediumと同じ）
-EC2_NUM_EXECUTORS="${EC2_NUM_EXECUTORS:-3}"
-
 # Medium インスタンス用のExecutor数
 EC2_FLEET_MEDIUM_NUM_EXECUTORS=$(retrieve_ssm_parameter \
     "/jenkins-infra/${ENVIRONMENT}/config/agent-num-executors-medium" \
@@ -229,9 +209,6 @@ EC2_FLEET_MICRO_NUM_EXECUTORS=$(retrieve_ssm_parameter \
 
 # Agent Idle Minutes設定の取得
 log "Retrieving Agent Idle Minutes configuration from SSM Parameter Store..."
-
-# 後方互換性のための既存設定
-EC2_IDLE_MINUTES="${EC2_IDLE_MINUTES:-15}"
 
 # Medium インスタンス用のIdle Minutes
 EC2_FLEET_MEDIUM_IDLE_MINUTES=$(retrieve_ssm_parameter \
@@ -302,8 +279,6 @@ log "✓ Jenkins Internal URL: $JENKINS_INTERNAL_URL"
 # すべての環境変数を一度にエクスポート（envsubstで使用するため）
 export JENKINS_URL
 export JENKINS_INTERNAL_URL
-# Fleet ID（後方互換性）
-export EC2_FLEET_ID
 # インスタンスサイズ別Fleet ID
 export EC2_FLEET_MEDIUM_ID
 export EC2_FLEET_SMALL_ID
@@ -315,10 +290,6 @@ export AWS_DEV_ACCOUNT_IDS
 export SHARED_LIBRARY_REPO
 export SHARED_LIBRARY_BRANCH
 export SHARED_LIBRARY_PATH
-export EC2_IDLE_MINUTES
-# Fleet サイズ設定（後方互換性）
-export EC2_MIN_SIZE
-export EC2_MAX_SIZE
 # インスタンスサイズ別Fleet サイズ設定
 export EC2_FLEET_MEDIUM_MIN_SIZE
 export EC2_FLEET_MEDIUM_MAX_SIZE
@@ -326,7 +297,6 @@ export EC2_FLEET_SMALL_MIN_SIZE
 export EC2_FLEET_SMALL_MAX_SIZE
 export EC2_FLEET_MICRO_MIN_SIZE
 export EC2_FLEET_MICRO_MAX_SIZE
-export EC2_NUM_EXECUTORS
 # インスタンスサイズ別のExecutor数
 export EC2_FLEET_MEDIUM_NUM_EXECUTORS
 export EC2_FLEET_SMALL_NUM_EXECUTORS
@@ -358,7 +328,6 @@ log_debug_info() {
         log "Environment variables for template substitution:"
         log "  JENKINS_URL: $JENKINS_URL"
         log "  JENKINS_INTERNAL_URL: $JENKINS_INTERNAL_URL"
-        log "  EC2_FLEET_ID: $EC2_FLEET_ID (legacy)"
         log "  EC2_FLEET_MEDIUM_ID: ${EC2_FLEET_MEDIUM_ID:-not set}"
         log "  EC2_FLEET_SMALL_ID: ${EC2_FLEET_SMALL_ID:-not set}"
         log "  EC2_FLEET_MICRO_ID: ${EC2_FLEET_MICRO_ID:-not set}"
@@ -382,7 +351,7 @@ log_debug_info
 # テンプレートから設定ファイルを生成
 # shellcheckを無効化して変数リストを明示的に指定
 # shellcheck disable=SC2016
-envsubst '$JENKINS_URL $JENKINS_INTERNAL_URL $EC2_FLEET_ID $EC2_FLEET_MEDIUM_ID $EC2_FLEET_SMALL_ID $EC2_FLEET_MICRO_ID $WORKTERMINAL_HOST $AWS_REGION $AWS_PROD_ACCOUNT_IDS $AWS_DEV_ACCOUNT_IDS $SHARED_LIBRARY_REPO $SHARED_LIBRARY_BRANCH $SHARED_LIBRARY_PATH $EC2_IDLE_MINUTES $EC2_MIN_SIZE $EC2_MAX_SIZE $EC2_FLEET_MEDIUM_MIN_SIZE $EC2_FLEET_MEDIUM_MAX_SIZE $EC2_FLEET_SMALL_MIN_SIZE $EC2_FLEET_SMALL_MAX_SIZE $EC2_FLEET_MICRO_MIN_SIZE $EC2_FLEET_MICRO_MAX_SIZE $EC2_NUM_EXECUTORS $EC2_FLEET_MEDIUM_NUM_EXECUTORS $EC2_FLEET_SMALL_NUM_EXECUTORS $EC2_FLEET_MICRO_NUM_EXECUTORS $EC2_FLEET_MEDIUM_IDLE_MINUTES $EC2_FLEET_SMALL_IDLE_MINUTES $EC2_FLEET_MICRO_IDLE_MINUTES $ECS_CLUSTER_ARN $ECS_TASK_DEFINITION_ARN $ECS_EXECUTION_ROLE_ARN $ECS_TASK_ROLE_ARN $JENKINS_AGENT_SG_ID $PRIVATE_SUBNET_A_ID $PRIVATE_SUBNET_B_ID' < "$TEMPLATE_FILE" > "$CASC_CONFIG_FILE"
+envsubst '$JENKINS_URL $JENKINS_INTERNAL_URL $EC2_FLEET_MEDIUM_ID $EC2_FLEET_SMALL_ID $EC2_FLEET_MICRO_ID $WORKTERMINAL_HOST $AWS_REGION $AWS_PROD_ACCOUNT_IDS $AWS_DEV_ACCOUNT_IDS $SHARED_LIBRARY_REPO $SHARED_LIBRARY_BRANCH $SHARED_LIBRARY_PATH $EC2_FLEET_MEDIUM_MIN_SIZE $EC2_FLEET_MEDIUM_MAX_SIZE $EC2_FLEET_SMALL_MIN_SIZE $EC2_FLEET_SMALL_MAX_SIZE $EC2_FLEET_MICRO_MIN_SIZE $EC2_FLEET_MICRO_MAX_SIZE $EC2_FLEET_MEDIUM_NUM_EXECUTORS $EC2_FLEET_SMALL_NUM_EXECUTORS $EC2_FLEET_MICRO_NUM_EXECUTORS $EC2_FLEET_MEDIUM_IDLE_MINUTES $EC2_FLEET_SMALL_IDLE_MINUTES $EC2_FLEET_MICRO_IDLE_MINUTES $ECS_CLUSTER_ARN $ECS_TASK_DEFINITION_ARN $ECS_EXECUTION_ROLE_ARN $ECS_TASK_ROLE_ARN $JENKINS_AGENT_SG_ID $PRIVATE_SUBNET_A_ID $PRIVATE_SUBNET_B_ID' < "$TEMPLATE_FILE" > "$CASC_CONFIG_FILE"
 
 # 権限設定
 chown jenkins:jenkins "$CASC_CONFIG_FILE"
@@ -414,7 +383,6 @@ print_configuration_summary() {
     
     log ""
     log "Components configured:"
-    log "  - EC2 Fleet Cloud (legacy): ${EC2_FLEET_ID:-Not configured}"
     log "  - EC2 Fleet Cloud (medium): ${EC2_FLEET_MEDIUM_ID:-Not configured}"
     log "  - EC2 Fleet Cloud (small): ${EC2_FLEET_SMALL_ID:-Not configured}"
     log "  - EC2 Fleet Cloud (micro): ${EC2_FLEET_MICRO_ID:-Not configured}"
