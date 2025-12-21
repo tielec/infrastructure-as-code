@@ -32,7 +32,7 @@ environments.each { envKey, envConfig ->
 
 **環境**: ${envConfig.displayEnv} (${envKey})
 **スクリプト**: scripts/lambda/verify-deployment.sh
-**実行ノード**: ec2-fleet
+**実行ノード**: ec2-fleet-micro（AGENT_LABELでサイズ選択可）
 
 **検証項目**:
 - SSMパラメータの確認（API ID、エンドポイント、APIキー）

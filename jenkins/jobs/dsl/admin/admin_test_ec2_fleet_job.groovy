@@ -32,8 +32,8 @@ job(fullJobName) {
         |* 実行結果はビルドログに出力されます
         |'''.stripMargin())
 
-    // EC2 Fleet エージェントでのみ実行
-    label('ec2-fleet')
+    // サイズ別Fleetの最小構成で実行
+    label('ec2-fleet-micro')
 
     // ログローテーション設定
     logRotator {
