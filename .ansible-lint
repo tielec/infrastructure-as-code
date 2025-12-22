@@ -1,0 +1,19 @@
+---
+# ansible-lint設定ファイル
+# 既存コードとの互換性を考慮し、moderateプロファイルから段階的に適用する
+
+profile: moderate
+
+exclude_paths:
+  - .cache/
+  - .github/
+  - .git/
+  - .ai-workflow/
+
+skip_list:
+  - yaml[line-length]
+
+strict: false
+offline: false
+
+var_naming_pattern: "^[a-z_][a-z0-9_]*$"

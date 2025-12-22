@@ -1,0 +1,35 @@
+---
+# yamllint設定ファイル
+# Ansible用YAML構文チェック設定（プロジェクト規約に準拠）
+
+extends: default
+
+rules:
+  line-length:
+    max: 120
+    level: warning
+    allow-non-breakable-words: true
+    allow-non-breakable-inline-mappings: true
+
+  indentation:
+    spaces: 2
+    indent-sequences: true
+    check-multi-line-strings: false
+
+  document-start:
+    present: true
+
+  document-end: disable
+
+  trailing-spaces: enable
+  new-line-at-end-of-file: enable
+
+  comments:
+    require-starting-space: true
+    min-spaces-from-content: 1
+
+  comments-indentation: enable
+
+  truthy:
+    allowed-values: ['true', 'false']
+    check-keys: false
