@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import shutil
 import subprocess
 import unittest
@@ -17,6 +18,7 @@ class AnsibleLintIntegrationTests(unittest.TestCase):
         cls.repo_root = Path(__file__).resolve().parents[2]
         cls.ansible_dir = cls.repo_root / "ansible"
         cls.bootstrap_playbook = cls.ansible_dir / "playbooks" / "bootstrap-setup.yml"
+        cls.tools_dir = cls.repo_root / "tools" / "bin"
         cls._ensure_tools_available(("ansible-lint", "ansible-playbook"))
 
     @classmethod
@@ -28,11 +30,17 @@ class AnsibleLintIntegrationTests(unittest.TestCase):
 
     def run_command(self, args: List[str], description: str) -> subprocess.CompletedProcess[str]:
         """Run a subprocess with working directory set to the repo root."""
+        env = os.environ.copy()
+        env["ANSIBLE_CONFIG"] = str(self.ansible_dir / "ansible.cfg")
+        tools_path = getattr(self, "tools_dir", None)
+        if tools_path:
+            env["PATH"] = f"{tools_path}{os.pathsep}{env.get('PATH', os.defpath)}"
         result = subprocess.run(
             args,
             cwd=self.repo_root,
             text=True,
             capture_output=True,
+            env=env,
         )
         self.assertEqual(
             0,
