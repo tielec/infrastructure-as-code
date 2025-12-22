@@ -41,16 +41,69 @@ class AnsibleLintIntegrationTests(unittest.TestCase):
         )
         return result
 
+    def _run_ansible_lint(self, target: Path | str) -> subprocess.CompletedProcess[str]:
+        """Run ansible-lint against the requested target."""
+        target_path = Path(target) if isinstance(target, (str, Path)) else target
+        description = f"ansible-lint on {target_path}"
+        return self.run_command(["ansible-lint", str(target_path)], description)
+
+    def _run_playbook(self, playbook: Path, extra_args: List[str], description: str) -> subprocess.CompletedProcess[str]:
+        """Execute the provided playbook with the given ansible-playbook arguments."""
+        command = ["ansible-playbook", *extra_args, str(playbook)]
+        return self.run_command(command, description)
+
+    def test_ansible_directory_ansible_lint(self):
+        """Scenario 1: Ensure ansible-lint passes across the entire ansible/ tree."""
+        self._run_ansible_lint(self.ansible_dir)
+
+    def test_bootstrap_playbook_ansible_lint(self):
+        """Scenario 1: Run ansible-lint specifically on bootstrap-setup.yml."""
+        self._run_ansible_lint(self.bootstrap_playbook)
+
     def test_group_vars_all_ansible_lint(self):
         """Run ansible-lint on the group vars file that previously lacked a newline."""
-        self.run_command(
-            ["ansible-lint", str(self.ansible_dir / "inventory" / "group_vars" / "all.yml")],
-            "ansible-lint on ansible/inventory/group_vars/all.yml",
-        )
+        self._run_ansible_lint(self.ansible_dir / "inventory" / "group_vars" / "all.yml")
 
     def test_bootstrap_playbook_syntax_check(self):
         """Verify updated bootstrap playbook passes Ansible syntax check."""
-        self.run_command(
-            ["ansible-playbook", "--syntax-check", str(self.bootstrap_playbook)],
+        self._run_playbook(
+            self.bootstrap_playbook,
+            ["--syntax-check"],
             "ansible-playbook --syntax-check for bootstrap-setup.yml",
         )
+
+    def test_bootstrap_playbook_syntax_check_with_jenkins_roles(self):
+        """Scenario 2: Syntax check when Jenkins roles are referenced via extra vars."""
+        self._run_playbook(
+            self.bootstrap_playbook,
+            ["--syntax-check", "--extra-vars", "check_jenkins_roles=true"],
+            "ansible-playbook --syntax-check bootstrap-setup.yml --extra-vars check_jenkins_roles=true",
+        )
+
+    def test_all_playbooks_syntax_check(self):
+        """Scenario 2: Run syntax check on every playbook under ansible/playbooks."""
+        playbook_dir = self.ansible_dir / "playbooks"
+        playbooks = sorted(playbook_dir.rglob("*.yml"))
+        for playbook in playbooks:
+            self._run_playbook(
+                playbook,
+                ["--syntax-check"],
+                f"ansible-playbook --syntax-check {playbook}",
+            )
+
+    def test_jenkins_roles_ansible_lint(self):
+        """Scenario 1: Lint the Jenkins roles that include the updated Jinja2 fragments."""
+        roles = ("jenkins_cleanup_agent_amis", "jenkins_agent_ami")
+        for role in roles:
+            role_path = self.ansible_dir / "roles" / role
+            self._run_ansible_lint(role_path)
+
+    def test_bootstrap_playbook_dry_run_modes(self):
+        """Scenario 3: Execute the bootstrap playbook in dry-run/check modes to surface runtime issues."""
+        dry_run_variants = [
+            (["--check", "--diff"], "ansible-playbook --check --diff bootstrap-setup.yml"),
+            (["--check", "--tags", "debug,facts"], "ansible-playbook --check --tags debug,facts bootstrap-setup.yml"),
+            (["--check", "--diff", "--extra-vars", "debug_mode=true"], "ansible-playbook --check --diff bootstrap-setup.yml --extra-vars debug_mode=true"),
+        ]
+        for args, description in dry_run_variants:
+            self._run_playbook(self.bootstrap_playbook, args, description)
