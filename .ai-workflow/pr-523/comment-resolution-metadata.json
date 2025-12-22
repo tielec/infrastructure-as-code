@@ -62,12 +62,18 @@
         "thread_id": "PRRT_kwDOOFhF985m8kLG",
         "pr_number": 523
       },
-      "status": "pending",
-      "started_at": null,
-      "completed_at": null,
+      "status": "completed",
+      "started_at": "2025-12-22T12:16:43.302Z",
+      "completed_at": "2025-12-22T12:16:44.683Z",
       "retry_count": 0,
-      "resolution": null,
-      "reply_comment_id": null,
+      "resolution": {
+        "type": "discussion",
+        "confidence": "high",
+        "reply": "PR目的外の差分を洗い出して既存状態に戻します。特に気になる箇所があれば教えてください。",
+        "changes": [],
+        "analysis_notes": "Reviewer flagged potential out-of-scope changes and asked to revert; the appropriate action is to confirm investigation/cleanup rather than prescribe a specific code edit yet."
+      },
+      "reply_comment_id": 2639690591,
       "resolved_at": null,
       "error": null
     },
@@ -87,12 +93,18 @@
         "thread_id": "PRRT_kwDOOFhF985m8kLG",
         "pr_number": 523
       },
-      "status": "pending",
-      "started_at": null,
-      "completed_at": null,
+      "status": "completed",
+      "started_at": "2025-12-22T12:16:44.684Z",
+      "completed_at": "2025-12-22T12:16:45.668Z",
       "retry_count": 0,
-      "resolution": null,
-      "reply_comment_id": null,
+      "resolution": {
+        "type": "discussion",
+        "confidence": "high",
+        "reply": "再度差分を確認し、意図しない変更を取り除いた上で改めてpushします。進捗が分かり次第共有します。",
+        "changes": [],
+        "analysis_notes": "Reviewer still sees diffs in the file and reports something is off; we need to re-check and clean unintended changes before proposing a concrete edit."
+      },
+      "reply_comment_id": 2639690647,
       "resolved_at": null,
       "error": null
     }
@@ -100,16 +112,16 @@
   "summary": {
     "total": 3,
     "by_status": {
-      "pending": 2,
+      "pending": 0,
       "in_progress": 0,
-      "completed": 1,
+      "completed": 3,
       "skipped": 0,
       "failed": 0
     },
     "by_type": {
       "code_change": 0,
       "reply": 0,
-      "discussion": 1,
+      "discussion": 3,
       "skip": 0
     }
   },
@@ -119,7 +131,7 @@
     "total_cost_usd": 0
   },
   "created_at": "2025-12-22T03:58:49.191Z",
-  "updated_at": "2025-12-22T12:16:35.850Z",
+  "updated_at": "2025-12-22T12:16:45.668Z",
   "analyze_completed_at": "2025-12-22T12:16:35.847Z",
   "execute_completed_at": null,
   "response_plan_path": "/tmp/ai-workflow-repos-57-44fbb4e1/infrastructure-as-code/.ai-workflow/pr-523/output/response-plan.md",
