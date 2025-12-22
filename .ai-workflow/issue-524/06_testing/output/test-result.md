@@ -40,3 +40,7 @@
 2. `ansible/roles/jenkins_cleanup_agent_amis` および `ansible/roles/aws_cli_helper` 内の変数命名を `jenkins_cleanup_agent_amis_`/`aws_cli_helper_` プレフィックスで統一し、末尾改行や行長制限、Jinja name フォーマットを修正する。
 3. `ansible.cfg` もしくは実行環境から `community.general.yaml` コールバックへの依存を除去し、`ansible.builtin.default` の `result_format=yaml` で標準出力のフォーマットを制御する（`community.general` v12 以降で削除済）。
 4. 上記修正後、再度 ansible-lint/ansible-playbook を実行して 0 件のエラー・警告を確認し、Phase 6 を再実行する。
+
+## Phase 4への復帰記録
+- **理由**: 主要な lint テスト (`tests.integration.test_ansible_lint_integration` 内の `test_ansible_directory_ansible_lint`, `test_bootstrap_playbook_ansible_lint`, `test_jenkins_roles_ansible_lint`) と dry-run (`test_bootstrap_playbook_dry_run_modes`) が実装上のルール違反により fail し、環境では対処できないため実装を修正する必要がある。
+- **必要な対応**: `bootstrap-setup.yml` や対象ロールに対して lint 違反をすべて潰し、コールバック依存を標準に切り替えて ansible-core 2.20+ で再実行できる状態に整えた後、Phase 4 の `revise()` を実行する。
