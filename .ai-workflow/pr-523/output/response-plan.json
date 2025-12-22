@@ -1,0 +1,18 @@
+{
+  "pr_number": 523,
+  "analyzer_agent": "codex",
+  "comments": [
+    {
+      "comment_id": "2638556073",
+      "file": "jenkins/jobs/dsl/infrastructure/infrastructure_pulumi_dashboard_job.groovy",
+      "line": 63,
+      "author": "yuto-takashi",
+      "body": "今回の対応範囲じゃない修正がされています。直してください。",
+      "type": "discussion",
+      "confidence": "medium",
+      "rationale": "The reviewer notes scope creep but no diff is shown, so we need to confirm which unintended change to revert before making a safe edit.",
+      "proposed_changes": [],
+      "reply_message": "ご指摘ありがとうございます。このPRの目的外の差分が混ざっていそうなので、該当箇所を特定して既存状態に戻します。特に気になっている部分があれば教えてください。"
+    }
+  ]
+}
