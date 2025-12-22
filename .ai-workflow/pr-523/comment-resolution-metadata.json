@@ -31,12 +31,18 @@
         "thread_id": "PRRT_kwDOOFhF985m8kLG",
         "pr_number": 523
       },
-      "status": "pending",
-      "started_at": null,
-      "completed_at": null,
+      "status": "completed",
+      "started_at": "2025-12-22T03:59:34.082Z",
+      "completed_at": "2025-12-22T03:59:35.254Z",
       "retry_count": 0,
-      "resolution": null,
-      "reply_comment_id": null,
+      "resolution": {
+        "type": "discussion",
+        "confidence": "medium",
+        "reply": "ご指摘ありがとうございます。このPRの目的外の差分が混ざっていそうなので、該当箇所を特定して既存状態に戻します。特に気になっている部分があれば教えてください。",
+        "changes": [],
+        "analysis_notes": "The reviewer notes scope creep but no diff is shown, so we need to confirm which unintended change to revert before making a safe edit."
+      },
+      "reply_comment_id": 2638559437,
       "resolved_at": null,
       "error": null
     }
@@ -44,16 +50,16 @@
   "summary": {
     "total": 1,
     "by_status": {
-      "pending": 1,
+      "pending": 0,
       "in_progress": 0,
-      "completed": 0,
+      "completed": 1,
       "skipped": 0,
       "failed": 0
     },
     "by_type": {
       "code_change": 0,
       "reply": 0,
-      "discussion": 0,
+      "discussion": 1,
       "skip": 0
     }
   },
@@ -63,7 +69,7 @@
     "total_cost_usd": 0
   },
   "created_at": "2025-12-22T03:58:49.191Z",
-  "updated_at": "2025-12-22T03:59:27.811Z",
+  "updated_at": "2025-12-22T03:59:35.254Z",
   "analyze_completed_at": "2025-12-22T03:59:27.807Z",
   "execute_completed_at": null,
   "response_plan_path": "/tmp/ai-workflow-repos-1-3dbc2e17/infrastructure-as-code/.ai-workflow/pr-523/output/response-plan.md",
