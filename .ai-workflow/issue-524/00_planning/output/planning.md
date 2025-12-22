@@ -135,7 +135,7 @@
 
 ### Phase 5: テストコード実装 (見積もり: 0.1h)
 
-- [ ] Task 5-1: CI環境でのansible-lint実行確認 (0.1h)
+- [x] Task 5-1: CI環境でのansible-lint実行確認 (0.1h)
   - 既存GitHub Actions等でansible-lint実行が含まれることの確認
   - 必要に応じてlintチェックの追加
 
@@ -250,8 +250,8 @@ graph TD
 - [x] 修正により新たな構文エラーが発生していない
 
 ### Phase 5: テストコード実装
-- [ ] CI環境でansible-lint実行が設定されている
-- [ ] 継続的な品質チェック体制が構築されている
+- [x] CI環境でansible-lint実行が設定されている
+- [x] 継続的な品質チェック体制が構築されている
 
 ### Phase 6: テスト実行
 - [ ] ansible-lint実行でエラー・警告が解消されている
