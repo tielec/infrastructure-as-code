@@ -42,8 +42,8 @@
     # 世代管理の適用
     - name: Apply retention policy to pipeline outputs
       ansible.builtin.set_fact:
-        outputs_to_keep: "{{ sorted_executions[:retention_count | int] | default([]) }}"
-        outputs_to_delete: "{{ sorted_executions[retention_count | int:] | default([]) }}"
+        outputs_to_keep: "{{ sorted_executions[ : retention_count | int ] | default([]) }}"
+        outputs_to_delete: "{{ sorted_executions[ retention_count | int : ] | default([]) }}"
       when: sorted_executions is defined
 
     # 削除対象の出力イメージARNを収集
@@ -59,11 +59,11 @@
         tasks_from: execute
       vars:
         aws_command: "aws imagebuilder delete-image --image-build-version-arn \"{{ item }}\""
-        operation_name: "Delete pipeline output {{ item.split('/')[-1] }}"
+        operation_name: "Delete pipeline output {{ item.split('/')[ -1 ] }}"
         parse_output: false
       loop: "{{ output_arns_to_delete | default([]) }}"
       loop_control:
-        label: "{{ item.split('/')[-1] }}"
+        label: "{{ item.split('/')[ -1 ] }}"
       when: 
         - not dry_run | bool
         - output_arns_to_delete is defined
