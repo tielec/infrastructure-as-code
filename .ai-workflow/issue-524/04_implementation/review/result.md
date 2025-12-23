@@ -1,102 +1,101 @@
 ## 品質ゲート評価
 
-**⚠️ 重要: 各項目に対して明示的にPASS/FAILを判定してください。1つでもFAILがあれば最終判定は自動的にFAILです。**
+**⚠️ 重要: 各項目に対して明示的にPASS/FAILを判定してください。1つでもFAILがあれば全体判定はFAILになります。**
 
-- [x/  ] **Phase 2の設計に沿った実装である**: **FAIL** - 詳細設計書では「ファイル内容の修正のみ、インターフェースの変更なし」と明記していますが（`.ai-workflow/issue-524/02_design/output/design.md:231`）、実装ではロール変数に `jenkins_cleanup_agent_amis_*` プレフィックスを付けて API を変え、`aws_cli_helper` に大幅な制御ロジックを追加するなど想定外のリファクタリングが入っており、設計との整合性が取れていません。
-- [x/  ] **既存コードの規約に準拠している**: **PASS** - `aws_cli_helper` などでドキュメントコメントや `assert`/`failed_when: false`/`rescue` を丁寧に使い、Ansible モジュール呼び出しの書き方も従来のスタイルに沿っています（例：`ansible/roles/aws_cli_helper/tasks/execute.yml:1`）。ただし、変数名の混在（`dry_run` vs `jenkins_cleanup_agent_amis_dry_run`）はメンテ性を下げるため注意が必要です。
-- [x/  ] **基本的なエラーハンドリングがある**: **PASS** - 主要タスクは `assert` で前提を検証し、`failed_when: false` + `rescue` で AWS CLI の実行結果を捕捉するなど、基本的な失敗処理が整っています（例：`ansible/roles/aws_cli_helper/tasks/execute.yml:1` や `ansible/roles/jenkins_cleanup_agent_amis/tasks/main.yml:4`）。
-- [x/  ] **明らかなバグがない**: **FAIL** - ① ロール本体が `jenkins_cleanup_agent_amis_retention_count`/`jenkins_cleanup_agent_amis_dry_run` を必須としながら、呼び出し元プレイブックは依然 `retention_count`/`dry_run` を渡しているため CLI 引数が無視されます（`ansible/roles/jenkins_cleanup_agent_amis/tasks/main.yml:4` と `ansible/playbooks/jenkins/maintenance/cleanup_image_builder_amis.yml:82`）。② `cleanup_pipeline_outputs.yml` ではまだ `dry_run: "{{ dry_run }}"` を記録しており、存在しない変数を参照して実行時エラーになります（`ansible/roles/jenkins_cleanup_agent_amis/tasks/cleanup_pipeline_outputs.yml:58`）。これらは致命的な不整合です。
+- [x/  ] **Phase 2の設計に沿った実装である**: **FAIL** - 実装は `ansible/roles/jenkins_cleanup_agent_amis/tasks/main.yml:4` での `set_fact` と `ansible/roles/jenkins_cleanup_agent_amis/tasks/cleanup_pipeline_outputs.yml:58` における `dry_run` 記録のみにとどまり、設計書（`02_design/output/design.md`）で指定された `bootstrap-setup.yml` や各 `process_*`/`cleanup_*` 関連ファイルの lint/styling 修正が一切行われていません。該当ファイルに差分がなく、想定した ansible-lint ルール違反の解消が未着手のままなので設計不一致です。
+- [x/  ] **既存コードの規約に準拠している**: **PASS** - 追加されたブロックでは FQCN（`ansible.builtin.set_fact`）を使い、既存のデバッグ/アサートのスタイルと整合しており、宣言的なタスク名・タグも本プロジェクトの慣習に沿っています（`ansible/roles/jenkins_cleanup_agent_amis/tasks/main.yml:4-8`）。
+- [x/  ] **基本的なエラーハンドリングがある**: **PASS** - 前提チェックに `assert` を使って必須変数を保証し（`ansible/roles/jenkins_cleanup_agent_amis/tasks/main.yml:10`）、パイプライン処理で `rescue` 節を配置して失敗時に警告フラグを立てている（`ansible/roles/jenkins_cleanup_agent_amis/tasks/cleanup_pipeline_outputs.yml:61-69`）、基本的な逸脱を拾う仕組みはいい方向です。
+- [x/  ] **明らかなバグがない**: **PASS** - 正常系では `jenkins_cleanup_agent_amis_dry_run` を記録・参照するようになっており、`cleanup_pipeline_outputs.yml:58` で未定義の `dry_run` を参照してクラッシュするケースは解消されています。既存コードとも矛盾は確認できません。
 
 **品質ゲート総合判定: FAIL**
-- FAIL: 上記4項目のうちPhase 2整合性とバグ対応でFAILのため総合FAILとなります。
+- 最初の項目（設計の整合性）で FAIL になっているため、品質ゲート全体も FAIL になります。
 
 ## 詳細レビュー
 
 ### 1. 設計との整合性
 
 **良好な点**:
-- Bootstrap Playbook と Jenkins ロールの動作については lint に合わせた構成へ踏み込んでおり、`ansible.cfg` も新しい `stdout_callback`/`result_format` に寄せているため、CI での実行環境への適応は意図しています（`.ai-workflow/issue-524/04_implementation/output/implementation.md:6-17`）。
+- 既存の `dry_run`/`retention_count` パラメータを新しい接頭辞付き変数に自動的にマッピングするノーマライザを追加し（`ansible/roles/jenkins_cleanup_agent_amis/tasks/main.yml:4-8`）、呼び出し元を変更せずに新命名を採用できるようになったのは互換性確保として有効です。
 
 **懸念点**:
-- 設計書では「インターフェースや設定に変更なし」と明言していたにもかかわらず（`.ai-workflow/issue-524/02_design/output/design.md:231`）、ロールの外部 API を `jenkins_cleanup_agent_amis_*` に書き換えており、Plan/Design を逸脱する実装になっています。これによりユーザーが従来通り `retention_count`/`dry_run` を指定してもロールが受け取らず、期待する挙動になりません（`ansible/roles/jenkins_cleanup_agent_amis/tasks/main.yml:4` vs `ansible/playbooks/jenkins/maintenance/cleanup_image_builder_amis.yml:82`）。設計に従った段階的改善を再検討してください。
+- 設計書では Phase 4 で `bootstrap-setup.yml` や `all.yml`、複数の `process_*`/`cleanup_*` の Jinja2 表現を ansible-lint 規約に合わせて修正することになっていましたが、実際のコミットでは該当ファイルに差分がなく、スタイル違反がそのまま残っています。Phase 4 の目的が達成されておらず、次フェーズに進む前にこの整合性を取る必要があります。
 
 ### 2. コーディング規約への準拠
 
 **良好な点**:
-- `aws_cli_helper` では assert + detailed debug log + JSON 解析/タイムアウト判定といった粒度の細かい構成で、既存コードと同様の Ansible スタイルを踏襲しつつログ出力に配慮しています（`ansible/roles/aws_cli_helper/tasks/execute.yml:1`）。
-- ロール内でも slow loops を分割し、`loop_control.label` を併用するなど可読性向上が図られています。
+- 新規タスクでは `ansible.builtin` を明示したモジュール呼び出しとすっきりした `set_fact`/`assert` で構成されており、既存コードと同じ呼び方をしています（`ansible/roles/jenkins_cleanup_agent_amis/tasks/main.yml:4-17`）。
 
 **懸念点**:
-- 主要な変数に `jenkins_cleanup_agent_amis_*` プレフィックスを追加したものの、記録やプレイブック側で旧変数が混在している箇所（`cleanup_pipeline_outputs.yml` の dry_run やプレイブック内の include-vars）では統一性を欠き、後続のメンテナンスコストにつながります（`ansible/roles/jenkins_cleanup_agent_amis/tasks/cleanup_pipeline_outputs.yml:58`）。
+- 特にありません。
 
 ### 3. エラーハンドリング
 
 **良好な点**:
-- AWS CLI 実行は `failed_when: false` → `failed` かつ `_is_timeout` を判定 → `check_error.yml` に委譲する構成になっており、再試行処理とエラーログを区別して記録できています（`ansible/roles/aws_cli_helper/tasks/execute.yml:1`）。
-- Jenkins ロールは `ansible.builtin.assert` で事前条件を確認し、`rescue` 節で warning flag を立てるなど、失敗時のフォールバックも整えています（`ansible/roles/jenkins_cleanup_agent_amis/tasks/cleanup_amis.yml:61` ほか）。
+- `ansible.builtin.assert` によるパラメータバリデーション、`rescue` 節＋警告フラグで pipeline 処理の失敗を捕捉しているので、実行時の逸脱への備えは十分です（`ansible/roles/jenkins_cleanup_agent_amis/tasks/main.yml:10`, `.../cleanup_pipeline_outputs.yml:61-69`）。
 
 **改善の余地**:
-- `cleanup_pipeline_outputs` の `dry_run: "{{ dry_run }}"` 参照が失敗時に `undefined variable` を出すため、エラー処理の前にチェックが必要です（`ansible/roles/jenkins_cleanup_agent_amis/tasks/cleanup_pipeline_outputs.yml:58`）。
+- `pipeline_cleanup_results` などの集計を `jenkins_cleanup_agent_amis_dry_run` で保持していますが、ログにも明示的に dry-run であることを追加すると更に追跡しやすくなります（`cleanup_pipeline_outputs.yml:52-59`）。
 
 ### 4. バグの有無
 
 **良好な点**:
-- 変更後の `aws_cli_helper` と Jenkins ロールは、同期された変数名を使って一貫したログとレポートを出力しようという意図が見えます。
+- 既存の `dry_run` を直接参照する箇所（`pipeline_cleanup_results.dry_run`）が新しい変数へ差し替えられており、未定義参照によるクラッシュは回避されています（`ansible/roles/jenkins_cleanup_agent_amis/tasks/cleanup_pipeline_outputs.yml:58`）。
 
 **懸念点**:
-1. `.ai-workflow/issue-524/02_design/output/design.md:231` ではインターフェース変更をしないと明記されていたにもかかわらず、実装で変数名と必須項目を変えてしまったため、既存プレイブックからのオーバーライドが効かなくなっています。CLI 引数 `dry_run`/`retention_count` はもう受け取られず、ユーザーの動作が変わる可能性があります（`ansible/roles/jenkins_cleanup_agent_amis/tasks/main.yml:4` vs `ansible/playbooks/jenkins/maintenance/cleanup_image_builder_amis.yml:82`）。
-2. `cleanup_pipeline_outputs.yml` の `pipeline_cleanup_results` で `dry_run: "{{ dry_run }}"` を埋めていますが、ロール本体には `dry_run` 変数が存在しないため、タスク実行が `undefined variable` で死にます（`ansible/roles/jenkins_cleanup_agent_amis/tasks/cleanup_pipeline_outputs.yml:58`）。このためパイプライン出力の削除を実行すると即時失敗します。
+- とはいえ、そもそも lint 対応予定だったファイルに変更がなく `ansible-lint` の `package-latest`/`yaml[truthy]` などが未解消のままなので、テストフェーズで大量の違反が残っている可能性が高く、この状態で次フェーズに進むのはリスクです（実装ログに ansible-lint を叩く試行があるが依然失敗していた点も合わせてフォローが必要です）。
 
 ### 5. 保守性
 
 **良好な点**:
-- `aws_cli_helper` の構造化されたログ/エラー解析は、今後の追加命令やデバッグに役立つ土台になっています（`ansible/roles/aws_cli_helper/tasks/execute.yml:1`）。
-- すべてのロール設定を `jenkins_cleanup_agent_amis_` で統一したことで、新しいルールの適用が一目で分かるようになっています（`ansible/roles/jenkins_cleanup_agent_amis/defaults/main.yml:1`）。
+- 変数名に `jenkins_cleanup_agent_amis_` プレフィックスを定義ファイルで統一したため、今後のコード検索やローカルの設定変更がしやすくなっています（`ansible/roles/jenkins_cleanup_agent_amis/defaults/main.yml` を参照）。
 
 **改善の余地**:
-- 既存プレイブックが旧変数名を使い続けているため、名称の移行ドキュメントやバインドの shim がないと混乱するだけでなく、ユーザーは CLI で `dry_run` を指定しても効果がなく、メンテナンス性が大きく下がります。
-- 実行環境には `ansible-lint` がインストールされていないため、Implementation ログではテストが走っていません（`.ai-workflow/issue-524/04_implementation/output/implementation.md:19`）。CI 側で再確認が必要です。
+- 本来の目的であった llint 対応（トレーリングスペース除去や Jinja2 の bracket スペーシング整理）が未完なので、可読性・保守性改善が空振りしている状態です。対象ファイルに対する作業を完了することで恩恵が出ます。
 
 ## ブロッカー（BLOCKER）
 
-1. **設計と実装の乖離**
-   - 問題: 設計書ではファイルのフォーマット修正のみでインターフェース変更なしとしながら、実装ではロールの公開変数を `jenkins_cleanup_agent_amis_*` に変更し、既存プレイブックの使い方も変えるほどの API 変更が入っている。
-   - 影響: Phase 2 の設計に保守的に従うという前提を大きく破っており、レビュー/承認フローで混乱を招き、既存ユーザーが動作を予測できなくなる。
-   - 対策: 変更範囲を設計書に即して再整理し、必要なら設計を修正してユーザーへの通知も含めた移行を行う。
+**次フェーズに進めない重大な問題**
 
-2. **変数名の不一致による設定無効化**
-   - 問題: ロール本体が `jenkins_cleanup_agent_amis_dry_run`/`jenkins_cleanup_agent_amis_retention_count` を使い、これを必須チェックしているのに、呼び出し元プレイブックでは今でも `dry_run`/`retention_count` を渡しているため、想定どおりのオーバーライドが反映されない（`ansible/playbooks/jenkins/maintenance/cleanup_image_builder_amis.yml:82`）。
-   - 影響: CLI or playbook から `dry_run=false` を指定しても実際には `false` にならず、誤って削除処理が実行されたり、逆に何も行われなかったりして意図しない状態になる。
-   - 対策: 旧変数を新しい名前にマッピングするか、プレイブック/ドキュメントを更新して前方互換を再確立する。
-
-3. **undefined variable による実行失敗**
-   - 問題: `cleanup_pipeline_outputs.yml` で `pipeline_cleanup_results` に `dry_run: "{{ dry_run }}"` を記録しているが、該当変数が定義されていないため実行時にエラーになる（`ansible/roles/jenkins_cleanup_agent_amis/tasks/cleanup_pipeline_outputs.yml:58`）。
-   - 影響: パイプライン出力処理を含む実行は即座に失敗し、role 全体が動かなくなる。
-   - 対策: `jenkins_cleanup_agent_amis_dry_run` を使うか、結果記録を条件付きに変更する。
+1. **予定されたスタイル修正未着手**
+   - 問題: Phase 4 の設計では `ansible/playbooks/bootstrap-setup.yml`、`ansible/inventory/group_vars/all.yml`、複数の `ansible/roles/jenkins_cleanup_agent_amis/tasks/process_*.yml`/`cleanup_*.yml` などに対して ansible-lint で検出されるスタイル違反（`yaml[truthy]`, `document-start`, `jinja2-brackets` など）を修正することになっていましたが、実際の差分ではそれらに一切手が入っておらず lint エラーがそのまま残っています。既存 issue の本質が「フォーマット違反の除去」であるためこのままではテストフェーズへ進めません。
+   - 影響: 本来の changelist を検証することができず、ansible-lint の結果は依然大量の違反を吐き続けると予想されます。
+   - 対策: 予定されたファイル群のスタイル修正を実施し、該当ルールについて再度 lint を通してから次フェーズへ進めてください。
 
 ## 改善提案（SUGGESTION）
 
-1. **バックポート用ラッパー変数**
-   - 現状: 変数名を一気にプレフィックス付きにしたため既存の CLI/vars ファイルが動作しない。
-   - 提案: ロール内で `jenkins_cleanup_agent_amis_dry_run: "{{ dry_run | default(jenkins_cleanup_agent_amis_dry_run | default(false)) }}"` のような shim を追加し、「古い名前 → 新しい名前」へのマッピングを維持すると変更コストが下がります。
-   - 効果: 既存ドキュメントや `ansible-playbook` 実行コマンドの変更を強制せず、段階的な移行が可能になります。
+**次フェーズに進めるが、改善が望ましい事項**
 
-2. **Lint 環境の検証結果の記録**
-   - 現状: `ansible-lint` コマンドがないため Implementation ログではテストがスキップされた (`.ai-workflow/issue-524/04_implementation/output/implementation.md:19`)。
-   - 提案: CI/ローカルで `ansible-lint` が使える環境を用意し、成功ログを添付して再実行することで Phase 6 以降の検証が進められます。
-   - 効果: 後続フェーズでの再レビューが不要になり、品質保証が強化されます。
+1. **予定の lint ルールによる再検証**
+   - 現状: Phase 4 で対処予定だった `bootstrap-setup.yml` などが untouched なので、lint 実行前提の設計とのギャップが生じています。
+   - 提案: まず `ansible/playbooks/bootstrap-setup.yml` の `yes/no` → `true/false` などを整理し、`process_*` タスクに対して `{{ var[ key ] }}` のスペースを統一することで、ansible-lint の warning/interception を確実に潰すようにしてください。
+   - 効果: テストフェーズでの lint と syntax-check の成功率が向上し、報告・レビュー時の差分も意味のあるものになります。
+
+2. **テスト環境の整備**
+   - 現状: 実装ログには `ansible-lint` 実行が Python/ツール不足で失敗した記録が残っています。テストチームが再実行しやすいように “ansible-lint が存在する環境” の前提を明記した README などを併せて更新すると、次フェーズ以降の確認がスムーズです。
 
 ## 総合評価
 
+本件は、現在の変更内容が「Style/formatting 修正」という Phase 4 の要件と乖離しているため、品質ゲートの一部（設計との整合性）が FAIL となり、プロジェクトを次フェーズに進めるには追加作業が必要です。コード自体は互換性確保やエラー防止の仕組みを含んでいますが、本来想定されていた ansible-lint 対応が未完なので、テスト/レビューチェックに意味のある差分が残っていません。
+
 **主な強み**:
-- `aws_cli_helper` などでエラーハンドリングが充実し、実行ロジックが整理された点は保守性を高めている。
-- `bootstrap-setup.yml` の構成変更や `ansible.cfg` の調整など、lint 対策に対する改修が一通り行われている。
+- `dry_run`/`retention_count` の既存呼び出しを壊さずに新しい接頭辞名を導入する互換性レイヤーがあり、正常系の挙動を壊していない。
+- `ansible.builtin` ベースの記述や `assert`+`rescue` によってエラー制御は保守されている。
 
 **主な改善提案**:
-- 既存設計／CLI との整合性（旧変数 vs 新変数）を回復させ、実装のスコープを設計書に合わせる。
-- `dry_run` を使う箇所をすべて新しい名前に統一し、未定義変数による実行失敗を防ぐ。
-- lint/ansible-playbook の検証が実行できる環境で再テストを行う。
+- Plan/設計で想定された `bootstrap-setup.yml` や Jenkins ロールのスタイル修正を一通り実施して lint 要件を満たすこと。
+- ansible-lint 実行環境を整え、予定ルールがクリアされるまでテストフェーズを遅らせない。
 
-このままでは Phase 4 の品質ゲート 1 および 4 を満たしておらず、次フェーズに進める状態ではありません。対処後に再レビューをお願いします。
-
+これらをクリアして再提出してください。  
+---
 **判定: FAIL**
+
+## Planning Phaseチェックリスト照合結果: FAIL
+
+以下のタスクが未完了です：
+
+- [ ] Task 4-1: フォーマット関連修正の実装
+  - 未着手: `ansible/playbooks/bootstrap-setup.yml` や `ansible/inventory/group_vars/all.yml` に対する trailing-space/`yaml[truthy]`/document-start/nl-at-end-of-file の修正差分が存在せず、lint 観点の変更が実装に反映されていません。
+- [ ] Task 4-2: Jinja2スペーシング修正の実装
+  - 未着手: `ansible/roles/jenkins_cleanup_agent_amis/tasks/process_*` および `delete_snapshots.yml`/`cleanup_amis.yml` への bracket spacing 修正がなく、計画された `jinja2-brackets` 対応が備わっていません。
+
+該当チェックボックスについては planning.md を未完了のまま維持しました。

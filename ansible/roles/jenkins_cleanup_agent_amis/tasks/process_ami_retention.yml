@@ -37,8 +37,8 @@
     # 保持するAMIと削除するAMIを分離
     - name: Identify AMIs to keep and delete
       ansible.builtin.set_fact:
-        amis_to_keep: "{{ sorted_amis[ : jenkins_cleanup_agent_amis_retention_count | int ] | default([]) }}"
-        amis_to_delete: "{{ sorted_amis[ jenkins_cleanup_agent_amis_retention_count | int : ] | default([]) }}"
+        amis_to_keep: "{{ sorted_amis[: jenkins_cleanup_agent_amis_retention_count | int] | default([]) }}"
+        amis_to_delete: "{{ sorted_amis[jenkins_cleanup_agent_amis_retention_count | int:] | default([]) }}"
       when: sorted_amis is defined
 
     # 安全チェック：猶予期間内のAMIを除外

@@ -30,7 +30,8 @@
         aws_command: "aws ec2 delete-snapshot --snapshot-id {{ item.snapshot_id }}"
         operation_name: "Delete snapshot {{ item.snapshot_id }} from AMI {{ item.ami_name }}"
         parse_output: false
-      loop: "{{ all_snapshot_ids[ : jenkins_cleanup_agent_amis_max_parallel_deletions | int ] if jenkins_cleanup_agent_amis_parallel_deletion else all_snapshot_ids }}"
+      loop: >
+        {{ all_snapshot_ids[: jenkins_cleanup_agent_amis_max_parallel_deletions | int] if jenkins_cleanup_agent_amis_parallel_deletion | bool else all_snapshot_ids }}
       loop_control:
         label: "{{ item.snapshot_id }}"
       when: all_snapshot_ids | length > 0
@@ -47,9 +48,9 @@
         parse_output: false
       loop_control:
         label: "{{ item.snapshot_id }}"
-      loop: "{{ all_snapshot_ids[ jenkins_cleanup_agent_amis_max_parallel_deletions | int : ] }}"
+      loop: "{{ all_snapshot_ids[jenkins_cleanup_agent_amis_max_parallel_deletions | int:] }}"
       when: 
-        - jenkins_cleanup_agent_amis_parallel_deletion
+        - jenkins_cleanup_agent_amis_parallel_deletion | bool
         - all_snapshot_ids | length > jenkins_cleanup_agent_amis_max_parallel_deletions | int
 
     - name: Record snapshot deletion results

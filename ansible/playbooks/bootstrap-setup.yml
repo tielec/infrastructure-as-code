@@ -1,4 +1,5 @@
 ---
+
 # bootstrap-setup.yml
 # Jenkinsインフラをデプロイするためのブートストラップ環境の設定
 # ARM64 (t4g) インスタンス対応版 - Amazon Linux 2023
@@ -165,7 +166,7 @@
       register: pulumi_check
 
     - name: Install Pulumi
-      when: not pulumi_check.stat.exists
+      when: not (pulumi_check.stat.exists | bool)
       block:
         - name: Download Pulumi installer
           ansible.builtin.get_url:
@@ -393,7 +394,7 @@
       ansible.builtin.file:
         path: "{{ inventory_dir }}/../../bootstrap/verify-installation.sh"
         mode: '0755'
-      when: verify_script.stat.exists
+      when: verify_script.stat.exists | bool
 
     - name: Note about verification script
       ansible.builtin.debug:

@@ -36,19 +36,21 @@
 # AMIのクリーンアップ
 - name: Cleanup AMIs and Snapshots
   ansible.builtin.include_tasks: cleanup_amis.yml
-  when: jenkins_cleanup_agent_amis_cleanup_targets.amis or jenkins_cleanup_agent_amis_cleanup_targets.snapshots
+  when: >
+    (jenkins_cleanup_agent_amis_cleanup_targets.amis | default(false) | bool) or
+    (jenkins_cleanup_agent_amis_cleanup_targets.snapshots | default(false) | bool)
 
 # Image Builderイメージバージョンのクリーンアップ
 - name: Cleanup Image Builder Versions
   ansible.builtin.include_tasks: cleanup_image_versions.yml
-  when: jenkins_cleanup_agent_amis_cleanup_targets.image_builder_versions
+  when: jenkins_cleanup_agent_amis_cleanup_targets.image_builder_versions | default(false) | bool
 
 # Image Builderパイプライン出力のクリーンアップ
 - name: Cleanup Image Builder Pipeline Outputs
   ansible.builtin.include_tasks: cleanup_pipeline_outputs.yml
-  when: jenkins_cleanup_agent_amis_cleanup_targets.image_builder_pipelines
+  when: jenkins_cleanup_agent_amis_cleanup_targets.image_builder_pipelines | default(false) | bool
 
 # レポート生成
 - name: Generate cleanup report
   ansible.builtin.include_tasks: generate_report.yml
-  when: jenkins_cleanup_agent_amis_generate_report
+  when: jenkins_cleanup_agent_amis_generate_report | default(false) | bool

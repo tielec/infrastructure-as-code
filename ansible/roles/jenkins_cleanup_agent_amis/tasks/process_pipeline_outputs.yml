@@ -42,8 +42,8 @@
     # 世代管理の適用
     - name: Apply retention policy to pipeline outputs
       ansible.builtin.set_fact:
-        outputs_to_keep: "{{ sorted_executions[ : jenkins_cleanup_agent_amis_retention_count | int ] | default([]) }}"
-        outputs_to_delete: "{{ sorted_executions[ jenkins_cleanup_agent_amis_retention_count | int : ] | default([]) }}"
+        outputs_to_keep: "{{ sorted_executions[: jenkins_cleanup_agent_amis_retention_count | int] | default([]) }}"
+        outputs_to_delete: "{{ sorted_executions[jenkins_cleanup_agent_amis_retention_count | int:] | default([]) }}"
       when: sorted_executions is defined
 
     # 削除対象の出力イメージARNを収集
@@ -59,13 +59,13 @@
         tasks_from: execute
       vars:
         aws_command: "aws imagebuilder delete-image --image-build-version-arn \"{{ item }}\""
-        operation_name: "Delete pipeline output {{ item.split('/')[ -1 ] }}"
+        operation_name: "Delete pipeline output {{ item.split('/')[-1] }}"
         parse_output: false
       loop: "{{ output_arns_to_delete | default([]) }}"
       loop_control:
-        label: "{{ item.split('/')[ -1 ] }}"
+        label: "{{ item.split('/')[-1] }}"
       when: 
-        - not jenkins_cleanup_agent_amis_dry_run | bool
+        - not (jenkins_cleanup_agent_amis_dry_run | bool)
         - output_arns_to_delete is defined
         - output_arns_to_delete | length > 0
 
@@ -78,7 +78,7 @@
             'pipeline_arn': pipeline_arn,
             'total_outputs': pipeline_executions | length,
             'outputs_kept': outputs_to_keep | default([]) | length,
-            'outputs_deleted': outputs_to_delete | default([]) | length if not jenkins_cleanup_agent_amis_dry_run else 0
+            'outputs_deleted': outputs_to_delete | default([]) | length if not (jenkins_cleanup_agent_amis_dry_run | bool) else 0
           }] }}
 
     # サマリー表示

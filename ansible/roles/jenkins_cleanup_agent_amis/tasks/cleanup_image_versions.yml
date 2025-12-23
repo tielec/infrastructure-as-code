@@ -91,7 +91,7 @@
       loop_control:
         label: "{{ item.name }} - {{ item.version }}"
       when: 
-        - not jenkins_cleanup_agent_amis_dry_run | bool
+        - not (jenkins_cleanup_agent_amis_dry_run | bool)
         - all_versions_to_delete | length > 0
       register: version_deletion_results
 
@@ -111,14 +111,14 @@
           {%- endfor -%}
           {{ verify_items }}
       when: 
-        - not jenkins_cleanup_agent_amis_dry_run | bool
+        - not (jenkins_cleanup_agent_amis_dry_run | bool)
         - all_versions_to_delete | length > 0
 
     # 削除後の検証（Image Builderバージョン）
     - name: Verify Image Builder version deletion
       ansible.builtin.include_tasks: verify_deletion.yml
       when: 
-        - not jenkins_cleanup_agent_amis_dry_run | bool
+        - not (jenkins_cleanup_agent_amis_dry_run | bool)
         - image_versions_to_verify | default([]) | length > 0
 
     # 結果の記録
@@ -126,8 +126,8 @@
       ansible.builtin.set_fact:
         image_builder_cleanup_results:
           total_images: "{{ filtered_builder_images | length }}"
-          total_versions_deleted: "{{ all_versions_to_delete | length if not jenkins_cleanup_agent_amis_dry_run else 0 }}"
-          deleted_versions: "{{ all_versions_to_delete if not jenkins_cleanup_agent_amis_dry_run else [] }}"
+          total_versions_deleted: "{{ all_versions_to_delete | length if not (jenkins_cleanup_agent_amis_dry_run | bool) else 0 }}"
+          deleted_versions: "{{ all_versions_to_delete if not (jenkins_cleanup_agent_amis_dry_run | bool) else [] }}"
           dry_run: "{{ jenkins_cleanup_agent_amis_dry_run }}"
           timestamp: "{{ ansible_date_time.iso8601 }}"
           verification: "{{ deletion_verification_summary | default({}) }}"
