@@ -1,6 +1,12 @@
 ---
 # Main tasks file for cleanup_image_builder_amis
 
+- name: Normalize cleanup variables so older callers keep working
+  ansible.builtin.set_fact:
+    jenkins_cleanup_agent_amis_retention_count: "{{ retention_count | default(jenkins_cleanup_agent_amis_retention_count | default(1)) }}"
+    jenkins_cleanup_agent_amis_dry_run: "{{ dry_run | default(jenkins_cleanup_agent_amis_dry_run | default(false)) }}"
+  tags: normalization
+
 - name: Validate required variables
   ansible.builtin.assert:
     that:
