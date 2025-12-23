@@ -2,7 +2,7 @@
 # SSMステータスチェックのループ処理
 # wait_for_ssm.yml から呼び出される内部タスク
 
-- name: "Check SSM agent status (attempt {{ _ssm_current_attempt + 1 }}/{{ _ssm_max_attempts }})"
+- name: Check SSM agent status
   ansible.builtin.include_tasks: execute.yml
   vars:
     aws_command: "aws ssm describe-instance-information --instance-information-filter-list key=InstanceIds,valueSet={{ instance_id }} --query 'InstanceInformationList[0].PingStatus' --output text"

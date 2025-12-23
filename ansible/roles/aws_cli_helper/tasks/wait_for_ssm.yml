@@ -38,7 +38,6 @@
         aws_command: "aws ssm describe-instance-information --instance-information-filter-list key=InstanceIds,valueSet={{ instance_id }} --output json"
         operation_name: "Get SSM debug info for {{ instance_id }}"
         parse_output: true
-      ignore_errors: true
 
     - name: Display SSM agent status
       ansible.builtin.debug:

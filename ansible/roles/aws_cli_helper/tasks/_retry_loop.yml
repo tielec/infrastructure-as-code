@@ -5,7 +5,7 @@
   ansible.builtin.set_fact:
     _retry_attempt: "{{ (_retry_attempt | int) + 1 }}"
 
-- name: "Attempt {{ _retry_attempt }}/{{ max_attempts }}"
+- name: Retry loop iteration
   when: not _retry_success and (_retry_attempt | int) <= (max_attempts | int)
   block:
     - name: Execute AWS command

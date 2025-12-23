@@ -1,7 +1,7 @@
 ---
 # 特定のImage Builderイメージのバージョンを処理
 
-- name: Process versions for image {{ image_name }}
+- name: Process Image Builder versions
   block:
     # イメージのビルドバージョンを取得
     - name: List image build versions
@@ -27,14 +27,14 @@
     # 世代管理の適用
     - name: Apply retention policy
       ansible.builtin.set_fact:
-        versions_to_keep: "{{ sorted_versions[ : retention_count | int ] | default([]) }}"
-        versions_to_delete: "{{ sorted_versions[ retention_count | int : ] | default([]) }}"
+        versions_to_keep: "{{ sorted_versions[ : jenkins_cleanup_agent_amis_retention_count | int ] | default([]) }}"
+        versions_to_delete: "{{ sorted_versions[ jenkins_cleanup_agent_amis_retention_count | int : ] | default([]) }}"
       when: sorted_versions is defined
 
     # 安全チェック：最小保持数の確認
     - name: Ensure minimum retention
       ansible.builtin.set_fact:
-        versions_to_delete: "{{ versions_to_delete if (sorted_versions | length - versions_to_delete | length) >= safety_checks.minimum_retention | int else [] }}"
+        versions_to_delete: "{{ versions_to_delete if (sorted_versions | length - versions_to_delete | length) >= jenkins_cleanup_agent_amis_safety_checks.minimum_retention | int else [] }}"
       when: versions_to_delete is defined
 
     # 結果を記録

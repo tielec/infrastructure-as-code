@@ -29,9 +29,7 @@
 
     # システムアップデート
     - name: Update system packages
-      ansible.builtin.dnf:
-        name: '*'
-        state: latest
+      ansible.builtin.command: dnf upgrade -y
       become: true
 
     # 必要な開発ツールのインストール
@@ -63,7 +61,7 @@
 
     # AWS CLI v2のインストール (ARM64対応)
     - name: Check if AWS CLI v2 is installed
-      ansible.builtin.shell: aws --version
+      ansible.builtin.command: aws --version
       register: aws_cli_check
       changed_when: false
       failed_when: false
@@ -103,7 +101,7 @@
 
     # Node.js 20 LTSのインストール (NodeSource経由)
     - name: Check if Node.js is installed
-      ansible.builtin.shell: node --version
+      ansible.builtin.command: node --version
       register: node_check
       changed_when: false
       failed_when: false
@@ -111,9 +109,22 @@
     - name: Install Node.js {{ nodejs_version }}
       when: node_check.rc != 0 or nodejs_version not in node_check.stdout
       block:
-        - name: Add NodeSource repository
-          ansible.builtin.shell: |
-            curl -fsSL https://rpm.nodesource.com/setup_{{ nodejs_version }}.x | sudo bash -
+        - name: Download NodeSource setup script
+          ansible.builtin.get_url:
+            url: "https://rpm.nodesource.com/setup_{{ nodejs_version }}.x"
+            dest: "/tmp/nodesource_setup_{{ nodejs_version }}.sh"
+            mode: '0755'
+          become: yes
+
+        - name: Execute NodeSource setup script
+          ansible.builtin.command: "/tmp/nodesource_setup_{{ nodejs_version }}.sh"
+          become: yes
+
+        - name: Remove NodeSource setup script
+          ansible.builtin.file:
+            path: "/tmp/nodesource_setup_{{ nodejs_version }}.sh"
+            state: absent
+          become: yes
 
         - name: Install Node.js
           ansible.builtin.dnf:
@@ -123,13 +134,13 @@
 
     # Java 21のインストール (Amazon Corretto - ARM64対応)
     - name: Check if Java {{ java_version }} is installed
-      ansible.builtin.shell: java -version 2>&1 | grep -E 'version "{{ java_version }}'
+      ansible.builtin.command: java -version
       register: java_check
       changed_when: false
       failed_when: false
 
     - name: Install Java {{ java_version }} (Amazon Corretto)
-      when: java_check.rc != 0
+      when: java_check.rc != 0 or (java_check.stderr | default('')) is not search('version "{{ java_version }}"')
       block:
         - name: Install Amazon Corretto {{ java_version }}
           ansible.builtin.dnf:
@@ -156,12 +167,27 @@
     - name: Install Pulumi
       when: not pulumi_check.stat.exists
       block:
-        - name: Download and install Pulumi
-          ansible.builtin.shell: |
-            curl -fsSL https://get.pulumi.com | sh -s -- --version latest
+        - name: Download Pulumi installer
+          ansible.builtin.get_url:
+            url: "https://get.pulumi.com"
+            dest: "/tmp/pulumi_install.sh"
+            mode: '0755'
           environment:
             PULUMI_INSTALL_ARCH: "{{ 'arm64' if arch == 'aarch64' else 'amd64' }}"
             HOME: "/home/ec2-user"
+          become: no
+
+        - name: Run Pulumi installer
+          ansible.builtin.command: "/tmp/pulumi_install.sh --version latest"
+          environment:
+            PULUMI_INSTALL_ARCH: "{{ 'arm64' if arch == 'aarch64' else 'amd64' }}"
+            HOME: "/home/ec2-user"
+          become: no
+
+        - name: Remove Pulumi installer
+          ansible.builtin.file:
+            path: "/tmp/pulumi_install.sh"
+            state: absent
           become: no
 
         - name: Create Pulumi symlink in system path
@@ -196,7 +222,8 @@
           - python3-cryptography
           - python3-pyyaml
           - python3-jsonschema
-        state: latest
+        state: present
+        update_cache: yes
       become: yes
 
     # 追加のPythonパッケージ（pipで管理）
@@ -217,8 +244,8 @@
           - boto3
           - botocore
           - jmespath
-        state: latest
-        extra_args: --user
+        state: present
+        extra_args: "--user --upgrade"
       become: no
       environment:
         PATH: "/home/ec2-user/.local/bin:/usr/local/bin:/usr/bin:/bin"
@@ -237,8 +264,8 @@
         - name: Install Mitogen for Ansible
           ansible.builtin.pip:
             name: mitogen
-            state: latest
-            extra_args: --user
+            state: present
+            extra_args: "--user --upgrade"
           become: no
           environment:
             PATH: "/home/ec2-user/.local/bin:/usr/local/bin:/usr/bin:/bin"
@@ -282,32 +309,26 @@
           become: yes
 
         - name: Check existing Ansible collections
-          ansible.builtin.shell: |
-            export ANSIBLE_COLLECTIONS_PATH=/usr/share/ansible/collections
-            ansible-galaxy collection list 2>/dev/null | grep -E "(amazon\.aws|community\.aws|community\.general|ansible\.posix|community\.docker)" || true
+          ansible.builtin.command:
+            cmd: ansible-galaxy collection list
+          environment:
+            ANSIBLE_COLLECTIONS_PATH: "/usr/share/ansible/collections"
+            PATH: "/home/ec2-user/.local/bin:/usr/local/bin:/usr/bin:/bin"
           register: existing_collections
           changed_when: false
           failed_when: false
 
         - name: Install or update Ansible collections
-          ansible.builtin.shell: |
-            export PATH=/home/ec2-user/.local/bin:$PATH
-            export ANSIBLE_COLLECTIONS_PATH=/usr/share/ansible/collections
-            # ansible-galaxyコマンドのパスを取得
-            ANSIBLE_GALAXY=$(which ansible-galaxy 2>/dev/null || echo "/home/ec2-user/.local/bin/ansible-galaxy")
-
-            if [ -x "$ANSIBLE_GALAXY" ]; then
-              echo "Using ansible-galaxy from: $ANSIBLE_GALAXY"
-              # システム全体にインストール（重複を避けるため --force は使わない）
-              sudo -E $ANSIBLE_GALAXY collection install -r /etc/ansible/collections/requirements.yml -p /usr/share/ansible/collections --upgrade
-            else
-              echo "ansible-galaxy not found, skipping collection installation"
-              exit 1
-            fi
+          ansible.builtin.command:
+            cmd: >
+              ansible-galaxy collection install
+              -r /etc/ansible/collections/requirements.yml
+              -p /usr/share/ansible/collections
+              --upgrade
           environment:
             ANSIBLE_COLLECTIONS_PATH: "/usr/share/ansible/collections"
             PATH: "/home/ec2-user/.local/bin:/usr/local/bin:/usr/bin:/bin"
-          become: no
+          become: yes
           register: collection_install
           changed_when: "'Installing' in collection_install.stdout or 'Upgrading' in collection_install.stdout"
           failed_when: false
@@ -321,9 +342,11 @@
           become: yes
 
         - name: Verify collections installation
-          ansible.builtin.shell: |
-            export ANSIBLE_COLLECTIONS_PATH=/usr/share/ansible/collections
-            ansible-galaxy collection list 2>/dev/null | grep -E "(amazon\.aws|community\.aws|community\.general|ansible\.posix|community\.docker)" || echo "No collections found"
+          ansible.builtin.command:
+            cmd: ansible-galaxy collection list
+          environment:
+            ANSIBLE_COLLECTIONS_PATH: "/usr/share/ansible/collections"
+            PATH: "/home/ec2-user/.local/bin:/usr/local/bin:/usr/bin:/bin"
           register: installed_collections
           changed_when: false
 
@@ -355,7 +378,10 @@
             groups: docker
             append: yes
           become: yes
-      ignore_errors: yes  # Dockerのインストールが失敗してもセットアップを続行
+      rescue:
+        - name: Warn about Docker installation failure
+          ansible.builtin.debug:
+            msg: "Docker installation failed; continuing without Docker support."
 
     # インストール検証スクリプトの確認
     - name: Check if verify-installation.sh exists in repository
