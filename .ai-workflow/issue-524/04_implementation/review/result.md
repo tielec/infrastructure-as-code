@@ -1,101 +1,80 @@
 ## 品質ゲート評価
 
-**⚠️ 重要: 各項目に対して明示的にPASS/FAILを判定してください。1つでもFAILがあれば全体判定はFAILになります。**
+**⚠️ 重要: 各項目に対して明示的にPASS/FAILを判定してください。1つでもFAILがあれば最終判定は自動的にFAILです。**
 
-- [x/  ] **Phase 2の設計に沿った実装である**: **FAIL** - 実装は `ansible/roles/jenkins_cleanup_agent_amis/tasks/main.yml:4` での `set_fact` と `ansible/roles/jenkins_cleanup_agent_amis/tasks/cleanup_pipeline_outputs.yml:58` における `dry_run` 記録のみにとどまり、設計書（`02_design/output/design.md`）で指定された `bootstrap-setup.yml` や各 `process_*`/`cleanup_*` 関連ファイルの lint/styling 修正が一切行われていません。該当ファイルに差分がなく、想定した ansible-lint ルール違反の解消が未着手のままなので設計不一致です。
-- [x/  ] **既存コードの規約に準拠している**: **PASS** - 追加されたブロックでは FQCN（`ansible.builtin.set_fact`）を使い、既存のデバッグ/アサートのスタイルと整合しており、宣言的なタスク名・タグも本プロジェクトの慣習に沿っています（`ansible/roles/jenkins_cleanup_agent_amis/tasks/main.yml:4-8`）。
-- [x/  ] **基本的なエラーハンドリングがある**: **PASS** - 前提チェックに `assert` を使って必須変数を保証し（`ansible/roles/jenkins_cleanup_agent_amis/tasks/main.yml:10`）、パイプライン処理で `rescue` 節を配置して失敗時に警告フラグを立てている（`ansible/roles/jenkins_cleanup_agent_amis/tasks/cleanup_pipeline_outputs.yml:61-69`）、基本的な逸脱を拾う仕組みはいい方向です。
-- [x/  ] **明らかなバグがない**: **PASS** - 正常系では `jenkins_cleanup_agent_amis_dry_run` を記録・参照するようになっており、`cleanup_pipeline_outputs.yml:58` で未定義の `dry_run` を参照してクラッシュするケースは解消されています。既存コードとも矛盾は確認できません。
+- [x/  ] **Phase 2の設計に沿った実装である**: **PASS** - `bootstrap-setup.yml` now has the expected `---`/blank header and explicit `| bool` guards around Pulumi/verify checks (`ansible/playbooks/bootstrap-setup.yml:1`, `ansible/playbooks/bootstrap-setup.yml:169`), and the shared vars file mirrors the `document-start` requirement (`ansible/inventory/group_vars/all.yml:1`), matching the design.
+- [x/  ] **既存コードの規約に準拠している**: **PASS** - Cleanup tasks wrap all target flags in `| default(false) | bool`, and slicing/splitting expressions follow the tightened style shown in the design (`ansible/roles/jenkins_cleanup_agent_amis/tasks/main.yml:1`, `ansible/roles/jenkins_cleanup_agent_amis/tasks/process_pipeline_outputs.yml:1`, `ansible/roles/jenkins_cleanup_agent_amis/tasks/delete_snapshots.yml:1`).
+- [x/  ] **基本的なエラーハンドリングがある**: **PASS** - Critical paths such as `cleanup_amis.yml` and `delete_snapshots.yml` include `rescue` blocks that log failures and set flags, so the playbooks degrade gracefully rather than blowing up (`ansible/roles/jenkins_cleanup_agent_amis/tasks/cleanup_amis.yml:1`, `ansible/roles/jenkins_cleanup_agent_amis/tasks/delete_snapshots.yml:1`).
+- [x/  ] **明らかなバグがない**: **PASS** - Guard clauses with `| default([])` keep loops and report-generation helpers from dereferencing `undefined` values, and the new `| bool` conversions keep dry-run behaviour consistent (`ansible/roles/jenkins_cleanup_agent_amis/tasks/process_pipeline_outputs.yml:1`, `ansible/roles/jenkins_cleanup_agent_amis/tasks/generate_report.yml:1`).
 
-**品質ゲート総合判定: FAIL**
-- 最初の項目（設計の整合性）で FAIL になっているため、品質ゲート全体も FAIL になります。
+**品質ゲート総合判定: PASS**
 
 ## 詳細レビュー
 
 ### 1. 設計との整合性
 
 **良好な点**:
-- 既存の `dry_run`/`retention_count` パラメータを新しい接頭辞付き変数に自動的にマッピングするノーマライザを追加し（`ansible/roles/jenkins_cleanup_agent_amis/tasks/main.yml:4-8`）、呼び出し元を変更せずに新命名を採用できるようになったのは互換性確保として有効です。
+- `bootstrap-setup.yml` now opens with `---` plus a blank line and uses explicit `| bool` guards for key `when` clauses, satisfying the `document-start`/truthiness fixes laid out in the design (`ansible/playbooks/bootstrap-setup.yml:1`, `ansible/playbooks/bootstrap-setup.yml:169`).
+- The shared vars file also starts with the required document marker, keeping the environment consistent (`ansible/inventory/group_vars/all.yml:1`).
 
 **懸念点**:
-- 設計書では Phase 4 で `bootstrap-setup.yml` や `all.yml`、複数の `process_*`/`cleanup_*` の Jinja2 表現を ansible-lint 規約に合わせて修正することになっていましたが、実際のコミットでは該当ファイルに差分がなく、スタイル違反がそのまま残っています。Phase 4 の目的が達成されておらず、次フェーズに進む前にこの整合性を取る必要があります。
+- なし
 
 ### 2. コーディング規約への準拠
 
 **良好な点**:
-- 新規タスクでは `ansible.builtin` を明示したモジュール呼び出しとすっきりした `set_fact`/`assert` で構成されており、既存コードと同じ呼び方をしています（`ansible/roles/jenkins_cleanup_agent_amis/tasks/main.yml:4-17`）。
+- Cleanup targets and report generation flags are normalized through `| default(false) | bool`, aligning with the ansible-lint guidance (`ansible/roles/jenkins_cleanup_agent_amis/tasks/main.yml:1`, `ansible/roles/jenkins_cleanup_agent_amis/tasks/generate_report.yml:1`).
+- The processing tasks now use consistent slicing and splitting (e.g., `process_pipeline_outputs` uses `{{ item.split('/')[-1] }}` and the cleaned loops keep whitespace inside the brackets tidy, matching the lint rule): (`ansible/roles/jenkins_cleanup_agent_amis/tasks/process_pipeline_outputs.yml:1`, `ansible/roles/jenkins_cleanup_agent_amis/tasks/delete_snapshots.yml:1`).
 
 **懸念点**:
-- 特にありません。
+- なし
 
 ### 3. エラーハンドリング
 
 **良好な点**:
-- `ansible.builtin.assert` によるパラメータバリデーション、`rescue` 節＋警告フラグで pipeline 処理の失敗を捕捉しているので、実行時の逸脱への備えは十分です（`ansible/roles/jenkins_cleanup_agent_amis/tasks/main.yml:10`, `.../cleanup_pipeline_outputs.yml:61-69`）。
+- The cleanup blocks include `rescue` sections that log failures and set diagnostic flags, so the playbook can continue even if AWS operations fail (`ansible/roles/jenkins_cleanup_agent_amis/tasks/cleanup_amis.yml:1`, `ansible/roles/jenkins_cleanup_agent_amis/tasks/delete_snapshots.yml:1`).
 
 **改善の余地**:
-- `pipeline_cleanup_results` などの集計を `jenkins_cleanup_agent_amis_dry_run` で保持していますが、ログにも明示的に dry-run であることを追加すると更に追跡しやすくなります（`cleanup_pipeline_outputs.yml:52-59`）。
+- なし
 
 ### 4. バグの有無
 
 **良好な点**:
-- 既存の `dry_run` を直接参照する箇所（`pipeline_cleanup_results.dry_run`）が新しい変数へ差し替えられており、未定義参照によるクラッシュは回避されています（`ansible/roles/jenkins_cleanup_agent_amis/tasks/cleanup_pipeline_outputs.yml:58`）。
+- All critical loops and reports build on facts that are either defined or defaulted, preventing undefined-value errors when, for example, no pipeline outputs exist (`ansible/roles/jenkins_cleanup_agent_amis/tasks/process_pipeline_outputs.yml:1`).
 
 **懸念点**:
-- とはいえ、そもそも lint 対応予定だったファイルに変更がなく `ansible-lint` の `package-latest`/`yaml[truthy]` などが未解消のままなので、テストフェーズで大量の違反が残っている可能性が高く、この状態で次フェーズに進むのはリスクです（実装ログに ansible-lint を叩く試行があるが依然失敗していた点も合わせてフォローが必要です）。
+- なし
 
 ### 5. 保守性
 
 **良好な点**:
-- 変数名に `jenkins_cleanup_agent_amis_` プレフィックスを定義ファイルで統一したため、今後のコード検索やローカルの設定変更がしやすくなっています（`ansible/roles/jenkins_cleanup_agent_amis/defaults/main.yml` を参照）。
+- The report task centralizes dry-run detection and summarises cleanup results cleanly, improving observability for future maintainers (`ansible/roles/jenkins_cleanup_agent_amis/tasks/generate_report.yml:1`).
 
 **改善の余地**:
-- 本来の目的であった llint 対応（トレーリングスペース除去や Jinja2 の bracket スペーシング整理）が未完なので、可読性・保守性改善が空振りしている状態です。対象ファイルに対する作業を完了することで恩恵が出ます。
+- The Jenkins agent AMI cleanup still uses the older slicing style (`x86_amis[ retention_count | int : ]`/`arm_amis[ retention_count | int : ]`), which is the pattern that originally triggered `jinja2-brackets`; consider aligning this file with the tighter spacing used elsewhere to keep lint guidance consistent (`ansible/roles/jenkins_agent_ami/tasks/cleanup_amis.yml:60`).
 
-## ブロッカー（BLOCKER）
+## 改善提案
 
-**次フェーズに進めない重大な問題**
+1. **ansible-lint を再実行**  
+   - 現状、`implementation.md` に記録された`ansible-lint`コマンドが実行できていない（`command not found`）ため、ツールが利用可能な環境で再度`ansible-lint ansible/...`を走らせてエラーゼロを確認してください（`.ai-workflow/issue-524/04_implementation/output/implementation.md:28`）。  
+   - 効果: 問題が潰されたことをCI/レビューでも証明できる。
 
-1. **予定されたスタイル修正未着手**
-   - 問題: Phase 4 の設計では `ansible/playbooks/bootstrap-setup.yml`、`ansible/inventory/group_vars/all.yml`、複数の `ansible/roles/jenkins_cleanup_agent_amis/tasks/process_*.yml`/`cleanup_*.yml` などに対して ansible-lint で検出されるスタイル違反（`yaml[truthy]`, `document-start`, `jinja2-brackets` など）を修正することになっていましたが、実際の差分ではそれらに一切手が入っておらず lint エラーがそのまま残っています。既存 issue の本質が「フォーマット違反の除去」であるためこのままではテストフェーズへ進めません。
-   - 影響: 本来の changelist を検証することができず、ansible-lint の結果は依然大量の違反を吐き続けると予想されます。
-   - 対策: 予定されたファイル群のスタイル修正を実施し、該当ルールについて再度 lint を通してから次フェーズへ進めてください。
-
-## 改善提案（SUGGESTION）
-
-**次フェーズに進めるが、改善が望ましい事項**
-
-1. **予定の lint ルールによる再検証**
-   - 現状: Phase 4 で対処予定だった `bootstrap-setup.yml` などが untouched なので、lint 実行前提の設計とのギャップが生じています。
-   - 提案: まず `ansible/playbooks/bootstrap-setup.yml` の `yes/no` → `true/false` などを整理し、`process_*` タスクに対して `{{ var[ key ] }}` のスペースを統一することで、ansible-lint の warning/interception を確実に潰すようにしてください。
-   - 効果: テストフェーズでの lint と syntax-check の成功率が向上し、報告・レビュー時の差分も意味のあるものになります。
-
-2. **テスト環境の整備**
-   - 現状: 実装ログには `ansible-lint` 実行が Python/ツール不足で失敗した記録が残っています。テストチームが再実行しやすいように “ansible-lint が存在する環境” の前提を明記した README などを併せて更新すると、次フェーズ以降の確認がスムーズです。
+2. **Jenkins Agent AMI cleanup のスライス記法統一**  
+   - `ansible/roles/jenkins_agent_ami/tasks/cleanup_amis.yml` の `x86_amis[ retention_count | int : ]` や `arm_amis[ retention_count | int : ]` も `{{ list[: count] }}`スタイルに揃えると `jinja2-brackets` ルールの再検出を避けられます（`ansible/roles/jenkins_agent_ami/tasks/cleanup_amis.yml:60`）。  
+   - 効果: リント警告の再発を防ぎ、保守性をさらに高める。
 
 ## 総合評価
 
-本件は、現在の変更内容が「Style/formatting 修正」という Phase 4 の要件と乖離しているため、品質ゲートの一部（設計との整合性）が FAIL となり、プロジェクトを次フェーズに進めるには追加作業が必要です。コード自体は互換性確保やエラー防止の仕組みを含んでいますが、本来想定されていた ansible-lint 対応が未完なので、テスト/レビューチェックに意味のある差分が残っていません。
+変更は設計の意図に忠実で、Ansible側の lint ルールに沿って `document-start` と `truthy` の指摘を潰し、cleanup フローの `when`/`loop` ロジックを安定化させているため、次フェーズに進める状態です。
 
 **主な強み**:
-- `dry_run`/`retention_count` の既存呼び出しを壊さずに新しい接頭辞名を導入する互換性レイヤーがあり、正常系の挙動を壊していない。
-- `ansible.builtin` ベースの記述や `assert`+`rescue` によってエラー制御は保守されている。
+- Bootstrap playbook/group vars headers plus normalized truthiness now match the documented lint fixes, and cleanup tasks consistently guard on `| bool` so the pipeline sees predictable behaviour (`ansible/playbooks/bootstrap-setup.yml:1`, `ansible/roles/jenkins_cleanup_agent_amis/tasks/main.yml:1`).
+- Rescue blocks throughout cleanup tasks keep the run from failing hard, and the report task documents the results for troubleshooting (`ansible/roles/jenkins_cleanup_agent_amis/tasks/cleanup_amis.yml:1`, `ansible/roles/jenkins_cleanup_agent_amis/tasks/generate_report.yml:1`).
 
 **主な改善提案**:
-- Plan/設計で想定された `bootstrap-setup.yml` や Jenkins ロールのスタイル修正を一通り実施して lint 要件を満たすこと。
-- ansible-lint 実行環境を整え、予定ルールがクリアされるまでテストフェーズを遅らせない。
+- Ensure `ansible-lint` is installed in the test runner before rerunning the suite so the lint success can be validated (`.ai-workflow/issue-524/04_implementation/output/implementation.md:28`).
+- Align the slicing expressions in the `jenkins_agent_ami` cleanup role with the new bracket style to avoid repeat lint hits (`ansible/roles/jenkins_agent_ami/tasks/cleanup_amis.yml:60`).
 
-これらをクリアして再提出してください。  
+次フェーズでは上記の点をクリアすれば問題なく進められます。  
 ---
-**判定: FAIL**
-
-## Planning Phaseチェックリスト照合結果: FAIL
-
-以下のタスクが未完了です：
-
-- [ ] Task 4-1: フォーマット関連修正の実装
-  - 未着手: `ansible/playbooks/bootstrap-setup.yml` や `ansible/inventory/group_vars/all.yml` に対する trailing-space/`yaml[truthy]`/document-start/nl-at-end-of-file の修正差分が存在せず、lint 観点の変更が実装に反映されていません。
-- [ ] Task 4-2: Jinja2スペーシング修正の実装
-  - 未着手: `ansible/roles/jenkins_cleanup_agent_amis/tasks/process_*` および `delete_snapshots.yml`/`cleanup_amis.yml` への bracket spacing 修正がなく、計画された `jinja2-brackets` 対応が備わっていません。
-
-該当チェックボックスについては planning.md を未完了のまま維持しました。
+**判定: PASS_WITH_SUGGESTIONS**

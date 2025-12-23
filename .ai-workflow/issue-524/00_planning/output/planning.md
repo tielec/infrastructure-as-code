@@ -120,13 +120,13 @@
 
 ### Phase 4: 実装 (見積もり: 0.7h)
 
-- [ ] Task 4-1: フォーマット関連修正の実装 (0.3h)
+- [x] Task 4-1: フォーマット関連修正の実装 (0.3h)
   - bootstrap-setup.yml の末尾空白削除（5箇所）
   - truthy値修正（yes→true、True→true等、3箇所）
   - ドキュメント開始マーカー追加（1箇所）
   - all.yml のファイル末尾改行追加（1箇所）
 
-- [ ] Task 4-2: Jinja2スペーシング修正の実装 (0.4h)
+- [x] Task 4-2: Jinja2スペーシング修正の実装 (0.4h)
   - process_ami_retention.yml の3箇所修正
   - process_pipeline_outputs.yml の1箇所修正
   - process_image_versions.yml の2箇所修正
