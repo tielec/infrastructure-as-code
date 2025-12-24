@@ -1,19 +1,19 @@
 {
   "issue_number": "524",
-  "issue_url": "https://github.com/tielec/infrastructure-as-code/issues/524",
+  "issue_url": "https://github.com/tielec/[REDACTED_TOKEN]/issues/524",
   "issue_title": "Issue #524",
-  "repository": "tielec/infrastructure-as-code",
+  "repository": "tielec/[REDACTED_TOKEN]",
   "target_repository": {
-    "path": "/tmp/ai-workflow-repos-6-b6dc6b2b/infrastructure-as-code",
-    "github_name": "tielec/infrastructure-as-code",
-    "remote_url": "https://github.com/tielec/infrastructure-as-code.git",
+    "path": "/tmp/[REDACTED_TOKEN]/[REDACTED_TOKEN]",
+    "github_name": "tielec/[REDACTED_TOKEN]",
+    "remote_url": "https://github.com/tielec/[REDACTED_TOKEN].git",
     "owner": "tielec",
-    "repo": "infrastructure-as-code"
+    "repo": "[REDACTED_TOKEN]"
   },
   "workflow_version": "1.0.0",
   "current_phase": "testing",
   "design_decisions": {
-    "implementation_strategy": null,
+    "[REDACTED_TOKEN]": null,
     "test_strategy": null,
     "test_code_strategy": null
   },
@@ -26,13 +26,13 @@
     "level": "simple",
     "confidence": 0.9,
     "factors": {
-      "estimated_file_changes": 7,
+      "[REDACTED_TOKEN]": 8,
       "scope": "single_module",
-      "requires_tests": true,
-      "requires_architecture_change": false,
+      "requires_tests": false,
+      "[REDACTED_TOKEN]": false,
       "complexity_score": 0.2
     },
-    "analyzed_at": "2025-12-24T05:43:26.215Z",
+    "analyzed_at": "2025-12-24T14:20:30.820Z",
     "analyzer_agent": "claude",
     "analyzer_model": "sonnet"
   },
@@ -301,14 +301,14 @@
     }
   },
   "created_at": "2025-12-22T12:37:22.840Z",
-  "updated_at": "2025-12-24T05:47:20.404Z",
+  "updated_at": "2025-12-24T14:20:30.823Z",
   "branch_name": "ai-workflow/issue-524",
-  "base_commit": "a40c4a5a04636a4a1de861a9f832b3df4c380de4",
+  "base_commit": "[REDACTED_TOKEN]",
   "pr_number": 525,
-  "pr_url": "https://github.com/tielec/infrastructure-as-code/pull/525",
+  "pr_url": "https://github.com/tielec/[REDACTED_TOKEN]/pull/525",
   "github_integration": {
     "progress_comment_id": 3681938393,
-    "progress_comment_url": "https://github.com/tielec/infrastructure-as-code/issues/524#issuecomment-3681938393"
+    "[REDACTED_TOKEN]": "https://github.com/tielec/[REDACTED_TOKEN]/issues/524#[REDACTED_TOKEN]"
   },
   "rollback_history": [
     {
