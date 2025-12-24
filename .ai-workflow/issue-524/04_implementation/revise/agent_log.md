@@ -6,7 +6,7 @@
 
 ## Turn 1: スレッド開始
 
-**Thread ID**: `019b4ab4-f2b2-7912-986a-e9c6fd408ba4`
+**Thread ID**: `[REDACTED_TOKEN]`
 
 ## Turn 2: ツール実行
 
@@ -20,7 +20,7 @@
 **ステータス**: completed (exit_code=0)
 
 ```text
-/tmp/ai-workflow-repos-9-b33178e4/infrastructure-as-code
+/tmp/[REDACTED_TOKEN]/[REDACTED_TOKEN]
 ```
 
 ## Turn 4: ツール実行
@@ -54,9 +54,9 @@
   vars:
     nodejs_version: "20"  # LTS version
     user_home: "/home/ec2-user"
-    aws_credentials_script_path: "{{ inventory_dir }}/../../scripts/aws/setup-aws-credentials.sh"
+    [REDACTED_TOKEN]: "{{ inventory_dir }}/../../scripts/aws/[REDACTED_TOKEN].sh"
     java_version: "21"
-    arch: "{{ ansible_architecture }}"
+    arch: "{{ [REDACTED_TOKEN] }}"
     # ec2-userのローカルbinディレクトリを含むPATH
     ansible_env_path: "/home/ec2-user/.local/bin:/usr/local/bin:/usr/bin:/bin"
 
@@ -67,7 +67,7 @@
           Starting Bootstrap Environment Setup
           - Architecture: {{ arch }}
           - OS: Amazon Linux 2023
-          - Python: {{ ansible_python_version }}
+          - Python: {{ [REDACTED_TOKEN] }}
 
     # システムアップデート
     - name: Update system packages
@@ -113,7 +113,7 @@
       block:
         - name: Set AWS CLI download URL based on architecture
           ansible.builtin.set_fact:
-            aws_cli_url: "{{ 'https://awscli.amazonaws.com/awscli-exe-linux-aarch64.zip' if arch == 'aarch64' else 'https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip' }}"
+            aws_cli_url: "{{ 'https://awscli.amazonaws.com/[REDACTED_TOKEN].zip' if arch == 'aarch64' else 'https://awscli.amazonaws.com/[REDACTED_TOKEN].zip' }}"
 
         - name: Download AWS CLI v2 installer
           ansible.builtin.get_url:
@@ -196,7 +196,7 @@
     # Python環境の確認（Amazon Linux 2023はPython 3.9+を標準搭載）
     - name: Display Python version
       ansible.builtin.debug:
-        msg: "Current Python version: {{ ansible_python_version }}"
+        msg: "Current Python version: {{ [REDACTED_TOKEN] }}"
 
     # Python パッケージの最新版インストール
     - name: Install Python packages for AWS (system-wide)
@@ -206,7 +206,7 @@
           - python3-botocore
           - python3-jmespath
           - python3-urllib3
-          - python3-cryptography
+          - [REDACTED_TOKEN]
           - python3-pyyaml
           - python3-jsonschema
         state: present
@@ -299,7 +299,7 @@
           ansible.builtin.command:
             cmd: ansible-galaxy collection list
           environment:
-            ANSIBLE_COLLECTIONS_PATH: "/usr/share/ansible/collections"
+            [REDACTED_TOKEN]: "/usr/share/ansible/collections"
             PATH:
 ... (truncated)
 ```
@@ -318,10 +318,10 @@
 ```text
 msg: |
           Verification script is available at:
-          ~/infrastructure-as-code/bootstrap/verify-installation.sh
+          ~/[REDACTED_TOKEN]/bootstrap/verify-installation.sh
 
           You can also create a symlink for convenience:
-          ln -s ~/infrastructure-as-code/bootstrap/verify-installation.sh ~/verify-installation.sh
+          ln -s ~/[REDACTED_TOKEN]/bootstrap/verify-installation.sh ~/verify-installation.sh
 
     # Jenkins Agent接続用のディレクトリ作成
     - name: Create Jenkins agent work directory
@@ -371,7 +371,7 @@ msg: |
              source /etc/profile.d/bootstrap-env.sh
 
           2. Verify installation:
-             cd ~/infrastructure-as-code/bootstrap
+             cd ~/[REDACTED_TOKEN]/bootstrap
              ./verify-installation.sh
 
           3. Install Ansible collections:
@@ -387,13 +387,13 @@ msg: |
              pulumi login s3://$(aws ssm get-parameter --name /bootstrap/pulumi/s3bucket-name --query 'Parameter.Value' --output text)
 
           6. Set up Git SSH keys:
-             ssh-keygen -t ed25519 -C "your_email@example.com"
+             ssh-keygen -t ed25519 -C "[REDACTED_EMAIL]"
              cat ~/.ssh/id_ed25519.pub
              # Add the public key to your GitHub account
 
           7. Deploy infrastructure:
-             cd ~/infrastructure-as-code/ansible/playbooks
-             ansible-playbook jenkins_setup_pipeline.yml -e "env=dev"
+             cd ~/[REDACTED_TOKEN]/ansible/playbooks
+             ansible-playbook [REDACTED_TOKEN].yml -e "env=dev"
 
           === Jenkins Agent Configuration ===
 
@@ -418,7 +418,7 @@ msg: |
           - Python packages from dnf are preferred over pip for system packages
           - User-specific tools are installed with --user flag
           - PATH includes ~/.local/bin for user-installed tools
-          - ANSIBLE_COLLECTIONS_PATH is set to /usr/share/ansible/collections
+          - [REDACTED_TOKEN] is set to /usr/share/ansible/collections
 
           For issues or updates, chec
 ... (truncated)
@@ -432,20 +432,20 @@ msg: |
 ## Turn 12: ツール実行
 
 **種別**: コマンド実行
-**コマンド**: `/bin/bash -lc 'ls ansible/roles/jenkins_cleanup_agent_amis/tasks'`
+**コマンド**: `/bin/bash -lc 'ls ansible/roles/[REDACTED_TOKEN]/tasks'`
 **ステータス**: completed (exit_code=0)
 
 ```text
 cleanup_amis.yml
-cleanup_image_versions.yml
-cleanup_pipeline_outputs.yml
+[REDACTED_TOKEN].yml
+[REDACTED_TOKEN].yml
 delete_snapshots.yml
-find_amis_by_pattern.yml
+[REDACTED_TOKEN].yml
 generate_report.yml
 main.yml
-process_ami_retention.yml
-process_image_versions.yml
-process_pipeline_outputs.yml
+[REDACTED_TOKEN].yml
+[REDACTED_TOKEN].yml
+[REDACTED_TOKEN].yml
 verify_deletion.yml
 ```
 
@@ -457,7 +457,7 @@ verify_deletion.yml
 ## Turn 14: ツール実行
 
 **種別**: コマンド実行
-**コマンド**: `/bin/bash -lc "sed -n '1,200p' ansible/roles/jenkins_cleanup_agent_amis/tasks/process_ami_retention.yml"`
+**コマンド**: `/bin/bash -lc "sed -n '1,200p' ansible/roles/[REDACTED_TOKEN]/tasks/[REDACTED_TOKEN].yml"`
 **ステータス**: completed (exit_code=0)
 
 ```text
@@ -500,16 +500,16 @@ verify_deletion.yml
     # 保持するAMIと削除するAMIを分離
     - name: Identify AMIs to keep and delete
       ansible.builtin.set_fact:
-        amis_to_keep: "{{ sorted_amis[ : jenkins_cleanup_agent_amis_retention_count | int ] | default([]) }}"
-        amis_to_delete: "{{ sorted_amis[ jenkins_cleanup_agent_amis_retention_count | int : ] | default([]) }}"
+        amis_to_keep: "{{ sorted_amis[ : [REDACTED_TOKEN] | int ] | default([]) }}"
+        amis_to_delete: "{{ sorted_amis[ [REDACTED_TOKEN] | int : ] | default([]) }}"
       when: sorted_amis is defined
 
     # 安全チェック：猶予期間内のAMIを除外
     - name: Apply grace period filter
       ansible.builtin.set_fact:
-        filtered_amis_to_delete: >-
+        [REDACTED_TOKEN]: >-
           {%- set result = [] -%}
-          {%- set grace_date = (ansible_date_time.epoch | int - (jenkins_cleanup_agent_amis_safety_checks.grace_period_days | int * 86400)) -%}
+          {%- set grace_date = (ansible_date_time.epoch | int - ([REDACTED_TOKEN].grace_period_days | int * 86400)) -%}
           {%- for ami in amis_to_delete | default([]) -%}
             {%- set ami_epoch = ami.CreationDate | to_datetime('%Y-%m-%dT%H:%M:%S.%fZ') | int -%}
             {%- if ami_epoch < grace_date -%}
@@ -524,7 +524,7 @@ verify_deletion.yml
     # 削除リストに追加
     - name: Add to deletion list
       ansible.builtin.set_fact:
-        ami_deletion_lists: "{{ ami_deletion_lists | default([]) + [{'pattern': pattern, 'to_keep': amis_to_keep | default([]), 'to_delete': filtered_amis_to_delete | default([])}] }}"
+        ami_deletion_lists: "{{ ami_deletion_lists | default([]) + [{'pattern': pattern, 'to_keep': amis_to_keep | default([]), 'to_delete': [REDACTED_TOKEN] | default([])}] }}"
 
     # パターンごとのサマリー表示
     - name: Display retention summary for pattern
@@ -533,7 +533,7 @@ verify_deletion.yml
           - "Pattern: {{ pattern }}"
           - "  Found: {{ pattern_amis | length }}"
           - "  Keep: {{ amis_to_keep | default([]) | length }}"
-          - "  Delete: {{ filtered_amis_to_delete | default([]) | length }}"
+          - "  Delete: {{ [REDACTED_TOKEN] | default([]) | length }}"
       when: verbose_logging
 ```
 
@@ -545,7 +545,7 @@ verify_deletion.yml
 ## Turn 16: ツール実行
 
 **種別**: コマンド実行
-**コマンド**: `/bin/bash -lc "sed -n '1,200p' ansible/roles/jenkins_cleanup_agent_amis/tasks/process_image_versions.yml"`
+**コマンド**: `/bin/bash -lc "sed -n '1,200p' ansible/roles/[REDACTED_TOKEN]/tasks/[REDACTED_TOKEN].yml"`
 **ステータス**: completed (exit_code=0)
 
 ```text
@@ -560,7 +560,7 @@ verify_deletion.yml
         name: aws_cli_helper
         tasks_from: execute
       vars:
-        aws_command: "aws imagebuilder list-image-build-versions --image-version-arn '{{ image_arn }}' --output json"
+        aws_command: "aws imagebuilder [REDACTED_TOKEN] --image-version-arn '{{ image_arn }}' --output json"
         operation_name: "List versions for {{ image_name }}"
         parse_output: true
 
@@ -578,21 +578,21 @@ verify_deletion.yml
     # 世代管理の適用
     - name: Apply retention policy
       ansible.builtin.set_fact:
-        versions_to_keep: "{{ sorted_versions[ : jenkins_cleanup_agent_amis_retention_count | int ] | default([]) }}"
-        versions_to_delete: "{{ sorted_versions[ jenkins_cleanup_agent_amis_retention_count | int : ] | default([]) }}"
+        versions_to_keep: "{{ sorted_versions[ : [REDACTED_TOKEN] | int ] | default([]) }}"
+        versions_to_delete: "{{ sorted_versions[ [REDACTED_TOKEN] | int : ] | default([]) }}"
       when: sorted_versions is defined
 
     # 安全チェック：最小保持数の確認
     - name: Ensure minimum retention
       ansible.builtin.set_fact:
-        versions_to_delete: "{{ versions_to_delete if (sorted_versions | length - versions_to_delete | length) >= jenkins_cleanup_agent_amis_safety_checks.minimum_retention | int else [] }}"
+        versions_to_delete: "{{ versions_to_delete if (sorted_versions | length - versions_to_delete | length) >= [REDACTED_TOKEN].minimum_retention | int else [] }}"
       when: versions_to_delete is defined
 
     # 結果を記録
     - name: Record version processing results
       ansible.builtin.set_fact:
-        image_version_results: >-
-          {{ image_version_results | default([]) + [{
+        [REDACTED_TOKEN]: >-
+          {{ [REDACTED_TOKEN] | default([]) + [{
             'image_name': image_name,
             'image_arn': image_arn,
             'total_versions': image_versions | length,
@@ -619,7 +619,7 @@ verify_deletion.yml
 ## Turn 18: ツール実行
 
 **種別**: コマンド実行
-**コマンド**: `/bin/bash -lc "sed -n '1,200p' ansible/roles/jenkins_cleanup_agent_amis/tasks/process_pipeline_outputs.yml"`
+**コマンド**: `/bin/bash -lc "sed -n '1,200p' ansible/roles/[REDACTED_TOKEN]/tasks/[REDACTED_TOKEN].yml"`
 **ステータス**: completed (exit_code=0)
 
 ```text
@@ -649,7 +649,7 @@ verify_deletion.yml
         name: aws_cli_helper
         tasks_from: execute
       vars:
-        aws_command: "aws imagebuilder list-image-pipeline-images --image-pipeline-arn '{{ pipeline_arn }}' --output json"
+        aws_command: "aws imagebuilder [REDACTED_TOKEN] --image-pipeline-arn '{{ pipeline_arn }}' --output json"
         operation_name: "List executions for pipeline {{ pipeline_name }}"
         parse_output: true
 
@@ -667,14 +667,14 @@ verify_deletion.yml
     # 世代管理の適用
     - name: Apply retention policy to pipeline outputs
       ansible.builtin.set_fact:
-        outputs_to_keep: "{{ sorted_executions[ : jenkins_cleanup_agent_amis_retention_count | int ] | default([]) }}"
-        outputs_to_delete: "{{ sorted_executions[ jenkins_cleanup_agent_amis_retention_count | int : ] | default([]) }}"
+        outputs_to_keep: "{{ sorted_executions[ : [REDACTED_TOKEN] | int ] | default([]) }}"
+        outputs_to_delete: "{{ sorted_executions[ [REDACTED_TOKEN] | int : ] | default([]) }}"
       when: sorted_executions is defined
 
     # 削除対象の出力イメージARNを収集
     - name: Collect output image ARNs to delete
       ansible.builtin.set_fact:
-        output_arns_to_delete: "{{ outputs_to_delete | map(attribute='arn') | list }}"
+        [REDACTED_TOKEN]: "{{ outputs_to_delete | map(attribute='arn') | list }}"
       when: outputs_to_delete is defined and outputs_to_delete | length > 0
 
     # ドライランモードでない場合、出力イメージを削除
@@ -683,27 +683,27 @@ verify_deletion.yml
         name: aws_cli_helper
         tasks_from: execute
       vars:
-        aws_command: "aws imagebuilder delete-image --image-build-version-arn \"{{ item }}\""
+        aws_command: "aws imagebuilder delete-image --[REDACTED_TOKEN] \"{{ item }}\""
         operation_name: "Delete pipeline output {{ item.split('/')[ -1 ] }}"
         parse_output: false
-      loop: "{{ output_arns_to_delete | default([]) }}"
+      loop: "{{ [REDACTED_TOKEN] | default([]) }}"
       loop_control:
         label: "{{ item.split('/')[ -1 ] }}"
       when: 
-        - not jenkins_cleanup_agent_amis_dry_run | bool
-        - output_arns_to_delete is defined
-        - output_arns_to_delete | length > 0
+        - not [REDACTED_TOKEN] | bool
+        - [REDACTED_TOKEN] is defined
+        - [REDACTED_TOKEN] | length > 0
 
     # 結果を記録
     - name: Record pipeline output processing results
       ansible.builtin.set_fact:
-        pipeline_output_results: >-
-          {{ pipeline_output_results | default([]) + [{
+        [REDACTED_TOKEN]: >-
+          {{ [REDACTED_TOKEN] | default([]) + [{
             'pipeline_name': pipeline_name,
             'pipeline_arn': pipeline_arn,
             'total_outputs': pipeline_executions | length,
             'outputs_kept': outputs_to_keep | default([]) | length,
-            'outputs_deleted': outputs_to_delete | default([]) | length if not jenkins_cleanup_agent_amis_dry_run else 0
+            'outputs_deleted': outputs_to_delete | default([]) | length if not [REDACTED_TOKEN] else 0
           }] }}
 
     # サマリー表示
@@ -730,7 +730,7 @@ verify_deletion.yml
 ## Turn 20: ツール実行
 
 **種別**: コマンド実行
-**コマンド**: `/bin/bash -lc "sed -n '1,200p' ansible/roles/jenkins_cleanup_agent_amis/tasks/cleanup_amis.yml"`
+**コマンド**: `/bin/bash -lc "sed -n '1,200p' ansible/roles/[REDACTED_TOKEN]/tasks/cleanup_amis.yml"`
 **ステータス**: completed (exit_code=0)
 
 ```text
@@ -741,10 +741,10 @@ verify_deletion.yml
   block:
     # 全パターンに対してAMIを検索
     - name: Find all AMIs for each pattern
-      ansible.builtin.include_tasks: find_amis_by_pattern.yml
+      ansible.builtin.include_tasks: [REDACTED_TOKEN].yml
       vars:
         pattern: "{{ item }}"
-      loop: "{{ jenkins_cleanup_agent_amis_ami_name_patterns }}"
+      loop: "{{ [REDACTED_TOKEN] }}"
       register: ami_search_results
 
     # デバッグ: ami_pattern_resultsの内容確認
@@ -766,10 +766,10 @@ verify_deletion.yml
 
     # 各パターンごとに世代管理
     - name: Process retention for each AMI pattern
-      ansible.builtin.include_tasks: process_ami_retention.yml
+      ansible.builtin.include_tasks: [REDACTED_TOKEN].yml
       vars:
         pattern: "{{ item }}"
-      loop: "{{ jenkins_cleanup_agent_amis_ami_name_patterns }}"
+      loop: "{{ [REDACTED_TOKEN] }}"
 
     # 削除対象AMIの集約
     - name: Aggregate AMIs to delete
@@ -811,7 +811,7 @@ verify_deletion.yml
     - name: Dry run mode - skip actual deletion
       ansible.builtin.debug:
         msg: "DRY RUN MODE - No resources will be deleted"
-      when: jenkins_cleanup_agent_amis_dry_run | bool
+      when: [REDACTED_TOKEN] | bool
 
     # AMIの削除
     - name: Deregister AMIs
@@ -826,17 +826,17 @@ verify_deletion.yml
       loop_control:
         label: "{{ item.Name }} ({{ item.ImageId }})"
       when: 
-        - not jenkins_cleanup_agent_amis_dry_run | bool
-        - jenkins_cleanup_agent_amis_cleanup_targets.amis
+        - not [REDACTED_TOKEN] | bool
+        - [REDACTED_TOKEN].amis
         - all_amis_to_delete | length > 0
-      register: ami_deregister_results
+      register: [REDACTED_TOKEN]
 
     # スナップショットの削除
     - name: Delete associated snapshots
       ansible.builtin.include_tasks: delete_snapshots.yml
       when: 
-        - not jenkins_cleanup_agent_amis_dry_run | bool
-        - jenkins_cleanup_agent_amis_cleanup_targets.snapshots
+        - not [REDACTED_TOKEN] | bool
+        - [REDACTED_TOKEN].snapshots
         - all_amis_to_delete | length > 0
 
     # 削除検証の準備
@@ -845,7 +845,7 @@ verify_deletion.yml
         amis_to_verify: "{{ all_amis_to_delete }}"
         snapshots_to_verify: "{{ all_snapshot_ids | default([]) }}"
       when: 
-        - not jenkins_cleanup_agent_amis_dry_run | bool
+        - not [REDACTED_TOKEN] | bool
         - all_amis_to_delete | len
 ... (truncated)
 ```
@@ -890,7 +890,7 @@ scripts_dir: "{{ inventory_dir }}/../../scripts"
 pulumi_path: "{{ inventory_dir }}/../../pulumi"
 
 # AWS認証スクリプトのパス
-aws_credentials_script_path: "{{ scripts_dir }}/aws/setup-aws-credentials.sh"
+[REDACTED_TOKEN]: "{{ scripts_dir }}/aws/[REDACTED_TOKEN].sh"
 
 # ============================================================
 # Pulumi設定
@@ -919,7 +919,7 @@ projects:
 ## Turn 24: ツール実行
 
 **種別**: コマンド実行
-**コマンド**: `/bin/bash -lc "sed -n '1,200p' ansible/roles/jenkins_cleanup_agent_amis/tasks/cleanup_pipeline_outputs.yml"`
+**コマンド**: `/bin/bash -lc "sed -n '1,200p' ansible/roles/[REDACTED_TOKEN]/tasks/[REDACTED_TOKEN].yml"`
 **ステータス**: completed (exit_code=0)
 
 ```text
@@ -934,10 +934,10 @@ projects:
         name: aws_cli_helper
         tasks_from: execute
       vars:
-        aws_command: "aws imagebuilder list-image-pipelines --output json"
+        aws_command: "aws imagebuilder [REDACTED_TOKEN] --output json"
         operation_name: "List Image Builder pipelines"
         parse_output: true
-        aws_cli_helper_timeout: 60  # パイプライン検索も時間がかかる可能性があるため延長
+        [REDACTED_TOKEN]: 60  # パイプライン検索も時間がかかる可能性があるため延長
 
     - name: Parse pipelines
       ansible.builtin.set_fact:
@@ -965,7 +965,7 @@ projects:
 
     # 各パイプラインの出力イメージを処理
     - name: Process each pipeline's output images
-      ansible.builtin.include_tasks: process_pipeline_outputs.yml
+      ansible.builtin.include_tasks: [REDACTED_TOKEN].yml
       vars:
         pipeline_arn: "{{ item.arn }}"
         pipeline_name: "{{ item.name }}"
@@ -977,10 +977,10 @@ projects:
     # 結果の記録
     - name: Record pipeline cleanup results
       ansible.builtin.set_fact:
-        pipeline_cleanup_results:
+        [REDACTED_TOKEN]:
           total_pipelines: "{{ project_pipelines | length }}"
-          processed_pipelines: "{{ pipeline_output_results | default([]) | length }}"
-          dry_run: "{{ jenkins_cleanup_agent_amis_dry_run }}"
+          processed_pipelines: "{{ [REDACTED_TOKEN] | default([]) | length }}"
+          dry_run: "{{ [REDACTED_TOKEN] }}"
           timestamp: "{{ ansible_date_time.iso8601 }}"
 
   rescue:
@@ -988,11 +988,11 @@ projects:
       ansible.builtin.debug:
         msg:
           - "WARNING: Pipeline cleanup encountered errors"
-          - "Error: {{ ansible_failed_result.msg | default('Unknown error') }}"
+          - "Error: {{ [REDACTED_TOKEN].msg | default('Unknown error') }}"
       
     - name: Set warning flag
       ansible.builtin.set_fact:
-        pipeline_cleanup_warning: true
+        [REDACTED_TOKEN]: true
 ```
 
 ## Turn 25: ツール実行
@@ -1003,7 +1003,7 @@ projects:
 ## Turn 26: ツール実行
 
 **種別**: コマンド実行
-**コマンド**: `/bin/bash -lc "sed -n '1,200p' ansible/roles/jenkins_cleanup_agent_amis/tasks/cleanup_image_versions.yml"`
+**コマンド**: `/bin/bash -lc "sed -n '1,200p' ansible/roles/[REDACTED_TOKEN]/tasks/[REDACTED_TOKEN].yml"`
 **ステータス**: completed (exit_code=0)
 
 ```text
@@ -1021,7 +1021,7 @@ projects:
         aws_command: "aws imagebuilder list-images --owner Self --output json"
         operation_name: "List Image Builder images"
         parse_output: true
-        aws_cli_helper_timeout: 60  # Image Builder検索も時間がかかる可能性があるため延長
+        [REDACTED_TOKEN]: 60  # Image Builder検索も時間がかかる可能性があるため延長
 
     - name: Parse Image Builder images
       ansible.builtin.set_fact:
@@ -1031,10 +1031,10 @@ projects:
     # パターンマッチングでフィルタリング
     - name: Filter images by patterns
       ansible.builtin.set_fact:
-        filtered_builder_images: >-
+        [REDACTED_TOKEN]: >-
           {%- set images = [] -%}
           {%- for image in all_builder_images | default([]) -%}
-          {%- for pattern in jenkins_cleanup_agent_amis_image_builder_name_patterns -%}
+          {%- for pattern in [REDACTED_TOKEN] -%}
               {%- if image.name is match(pattern | regex_replace('\\*', '.*')) -%}
                 {%- set _ = images.append(image) -%}
               {%- endif -%}
@@ -1045,27 +1045,27 @@ projects:
     - name: Display found Image Builder images
       ansible.builtin.debug:
         msg:
-          - "Found {{ filtered_builder_images | length }} Image Builder image(s)"
-          - "Images: {{ filtered_builder_images | map(attribute='name') | list }}"
+          - "Found {{ [REDACTED_TOKEN] | length }} Image Builder image(s)"
+          - "Images: {{ [REDACTED_TOKEN] | map(attribute='name') | list }}"
       when: verbose_logging
 
     # 各イメージのビルドバージョンを取得して世代管理
     - name: Process each Image Builder image
-      ansible.builtin.include_tasks: process_image_versions.yml
+      ansible.builtin.include_tasks: [REDACTED_TOKEN].yml
       vars:
         image_arn: "{{ item.arn }}"
         image_name: "{{ item.name }}"
-      loop: "{{ filtered_builder_images }}"
+      loop: "{{ [REDACTED_TOKEN] }}"
       loop_control:
         label: "{{ item.name }}"
-      when: filtered_builder_images | length > 0
+      when: [REDACTED_TOKEN] | length > 0
 
     # 削除対象バージョンの集約
     - name: Aggregate versions to delete
       ansible.builtin.set_fact:
-        all_versions_to_delete: >-
+        [REDACTED_TOKEN]: >-
           {%- set versions = [] -%}
-          {%- for image_result in image_version_results | default([]) -%}
+          {%- for image_result in [REDACTED_TOKEN] | default([]) -%}
             {%- for version in image_result.to_delete | default([]) -%}
               {%- set _ = versions.append(version) -%}
             {%- endfor -%}
@@ -1078,14 +1078,14 @@ projects:
           - "=========================================="
           - "Image Builder Version Deletion Summary"
           - "=========================================="
-          - "Total versions to delete: {{ all_versions_to_delete | length }}"
+          - "Total versions to delete: {{ [REDACTED_TOKEN] | length }}"
           - "=========================================="
 
     # ドライランモードの確認
     - name: Dry run mode - skip version deletion
       ansible.builtin.debug:
         msg: "DRY RUN MODE - No Image Builder versions will be deleted"
-      when: jenkins_cleanup_agent_amis_dry_run | bool
+      when: [REDACTED_TOKEN] | bool
 
     # イメージバージョンの削除
     - name: Delete Image Builder versions
@@ -1093,23 +1093,23 @@ projects:
         name: aws_cli_helper
         tasks_from: execute
       vars:
-        aws_command: "aws imagebuilder delete-image --image-build-version-arn \"{{ item.arn }}\""
+        aws_command: "aws imagebuilder delete-image --[REDACTED_TOKEN] \"{{ item.arn }}\""
         operation_name: "Delete image version {{ item.version }}"
         parse_output: false
-      loop: "{{ all_versions_to_delete }}"
+      loop: "{{ [REDACTED_TOKEN] }}"
       loop_control:
         label: "{{ item.name }} - {{ item.version }}"
       when: 
-        - not jenkins_cleanup_agent_amis_dry_run | bool
-        - all_versions_to_delete | length > 0
-      register: version_deletion_results
+        - not [REDACTED_TOKEN] | bool
+        - [REDACTED_TOKEN] | length > 0
+      register: [REDACTED_TOKEN]
 
     # 削除検証の準備
     - name: Prepare Image Builder versions for verification
       ansible.builtin.set_fact:
-        image_versions_to_verify: >-
+        [REDACTED_TOKEN]: >-
           {%- set verify_items = [] -%}
-          {%- for image_result in image_version_results | default([]) -%}
+          {%- for image_result in [REDACTED_TOKEN] | default([]) -%}
             {%- if image_result.to_delete | default([]) | length > 0 -%}
               {%- set
 ... (truncated)
@@ -1123,7 +1123,7 @@ projects:
 ## Turn 28: ツール実行
 
 **種別**: コマンド実行
-**コマンド**: `/bin/bash -lc "sed -n '1,200p' ansible/roles/jenkins_cleanup_agent_amis/tasks/delete_snapshots.yml"`
+**コマンド**: `/bin/bash -lc "sed -n '1,200p' ansible/roles/[REDACTED_TOKEN]/tasks/delete_snapshots.yml"`
 **ステータス**: completed (exit_code=0)
 
 ```text
@@ -1159,11 +1159,11 @@ projects:
         aws_command: "aws ec2 delete-snapshot --snapshot-id {{ item.snapshot_id }}"
         operation_name: "Delete snapshot {{ item.snapshot_id }} from AMI {{ item.ami_name }}"
         parse_output: false
-      loop: "{{ all_snapshot_ids[ : jenkins_cleanup_agent_amis_max_parallel_deletions | int ] if jenkins_cleanup_agent_amis_parallel_deletion else all_snapshot_ids }}"
+      loop: "{{ all_snapshot_ids[ : [REDACTED_TOKEN] | int ] if [REDACTED_TOKEN] else all_snapshot_ids }}"
       loop_control:
         label: "{{ item.snapshot_id }}"
       when: all_snapshot_ids | length > 0
-      register: snapshot_deletion_batch1
+      register: [REDACTED_TOKEN]
 
     # 残りのスナップショットを削除（並列処理の場合）
     - name: Delete remaining snapshots
@@ -1176,14 +1176,14 @@ projects:
         parse_output: false
       loop_control:
         label: "{{ item.snapshot_id }}"
-      loop: "{{ all_snapshot_ids[ jenkins_cleanup_agent_amis_max_parallel_deletions | int : ] }}"
+      loop: "{{ all_snapshot_ids[ [REDACTED_TOKEN] | int : ] }}"
       when: 
-        - jenkins_cleanup_agent_amis_parallel_deletion
-        - all_snapshot_ids | length > jenkins_cleanup_agent_amis_max_parallel_deletions | int
+        - [REDACTED_TOKEN]
+        - all_snapshot_ids | length > [REDACTED_TOKEN] | int
 
     - name: Record snapshot deletion results
       ansible.builtin.set_fact:
-        snapshot_cleanup_results:
+        [REDACTED_TOKEN]:
           total_deleted: "{{ all_snapshot_ids | length }}"
           deleted_snapshots: "{{ all_snapshot_ids }}"
 
@@ -1192,11 +1192,11 @@ projects:
       ansible.builtin.debug:
         msg:
           - "WARNING: Some snapshots may not have been deleted"
-          - "Error: {{ ansible_failed_result.msg | default('Unknown error') }}"
+          - "Error: {{ [REDACTED_TOKEN].msg | default('Unknown error') }}"
       
     - name: Continue despite errors
       ansible.builtin.set_fact:
-        snapshot_cleanup_warning: true
+        [REDACTED_TOKEN]: true
 ```
 
 ## Turn 29: ツール実行
@@ -1266,12 +1266,12 @@ projects:
 ## Turn 35: ツール実行
 
 **種別**: コマンド実行
-**コマンド**: `/bin/bash -lc 'grep -n "when:" ansible/roles/jenkins_cleanup_agent_amis/tasks/cleanup_amis.yml'`
+**コマンド**: `/bin/bash -lc 'grep -n "when:" ansible/roles/[REDACTED_TOKEN]/tasks/cleanup_amis.yml'`
 **ステータス**: completed (exit_code=0)
 
 ```text
 70:      when: 
-78:      when: jenkins_cleanup_agent_amis_dry_run | bool
+78:      when: [REDACTED_TOKEN] | bool
 92:      when: 
 101:      when: 
 111:      when: 
@@ -1286,7 +1286,7 @@ projects:
 ## Turn 37: ツール実行
 
 **種別**: コマンド実行
-**コマンド**: `/bin/bash -lc "sed -n '60,140p' ansible/roles/jenkins_cleanup_agent_amis/tasks/cleanup_amis.yml"`
+**コマンド**: `/bin/bash -lc "sed -n '60,140p' ansible/roles/[REDACTED_TOKEN]/tasks/cleanup_amis.yml"`
 **ステータス**: completed (exit_code=0)
 
 ```text
@@ -1308,7 +1308,7 @@ projects:
     - name: Dry run mode - skip actual deletion
       ansible.builtin.debug:
         msg: "DRY RUN MODE - No resources will be deleted"
-      when: jenkins_cleanup_agent_amis_dry_run | bool
+      when: [REDACTED_TOKEN] | bool
 
     # AMIの削除
     - name: Deregister AMIs
@@ -1323,17 +1323,17 @@ projects:
       loop_control:
         label: "{{ item.Name }} ({{ item.ImageId }})"
       when: 
-        - not jenkins_cleanup_agent_amis_dry_run | bool
-        - jenkins_cleanup_agent_amis_cleanup_targets.amis
+        - not [REDACTED_TOKEN] | bool
+        - [REDACTED_TOKEN].amis
         - all_amis_to_delete | length > 0
-      register: ami_deregister_results
+      register: [REDACTED_TOKEN]
 
     # スナップショットの削除
     - name: Delete associated snapshots
       ansible.builtin.include_tasks: delete_snapshots.yml
       when: 
-        - not jenkins_cleanup_agent_amis_dry_run | bool
-        - jenkins_cleanup_agent_amis_cleanup_targets.snapshots
+        - not [REDACTED_TOKEN] | bool
+        - [REDACTED_TOKEN].snapshots
         - all_amis_to_delete | length > 0
 
     # 削除検証の準備
@@ -1342,14 +1342,14 @@ projects:
         amis_to_verify: "{{ all_amis_to_delete }}"
         snapshots_to_verify: "{{ all_snapshot_ids | default([]) }}"
       when: 
-        - not jenkins_cleanup_agent_amis_dry_run | bool
+        - not [REDACTED_TOKEN] | bool
         - all_amis_to_delete | length > 0
 
     # 削除後の検証（非ドライランモードのみ）
     - name: Verify deletion
       ansible.builtin.include_tasks: verify_deletion.yml
       when: 
-        - not jenkins_cleanup_agent_amis_dry_run | bool
+        - not [REDACTED_TOKEN] | bool
         - (all_amis_to_delete | length > 0 or all_snapshot_ids | default([]) | length > 0)
 
     # 結果の記録
@@ -1357,18 +1357,18 @@ projects:
       ansible.builtin.set_fact:
         ami_cleanup_results:
           total_found: "{{ all_found_amis | length }}"
-          total_deleted: "{{ all_amis_to_delete | length if not jenkins_cleanup_agent_amis_dry_run else 0 }}"
-          deleted_amis: "{{ all_amis_to_delete if not jenkins_cleanup_agent_amis_dry_run else [] }}"
-          dry_run: "{{ jenkins_cleanup_agent_amis_dry_run }}"
+          total_deleted: "{{ all_amis_to_delete | length if not [REDACTED_TOKEN] else 0 }}"
+          deleted_amis: "{{ all_amis_to_delete if not [REDACTED_TOKEN] else [] }}"
+          dry_run: "{{ [REDACTED_TOKEN] }}"
           timestamp: "{{ ansible_date_time.iso8601 }}"
-          verification: "{{ deletion_verification_summary | default({}) }}"
+          verification: "{{ [REDACTED_TOKEN] | default({}) }}"
 
   rescue:
     - name: Handle cleanup errors
       ansible.builtin.debug:
         msg:
           - "ERROR: AMI cleanup failed"
-          - "Error: {{ ansible_failed_result.msg | default('Unknown error') }}"
+          - "Error: {{ [REDACTED_TOKEN].msg | default('Unknown error') }}"
       
     - name: Set error flag
 ```
@@ -1381,18 +1381,18 @@ projects:
 ## Turn 39: ツール実行
 
 **種別**: コマンド実行
-**コマンド**: `/bin/bash -lc 'grep -n "when:.*jenkins_cleanup_agent_amis" ansible/roles/jenkins_cleanup_agent_amis/tasks/*.yml'`
+**コマンド**: `/bin/bash -lc 'grep -n "when:.*[REDACTED_TOKEN]" ansible/roles/[REDACTED_TOKEN]/tasks/*.yml'`
 **ステータス**: completed (exit_code=0)
 
 ```text
-ansible/roles/jenkins_cleanup_agent_amis/tasks/cleanup_amis.yml:78:      when: jenkins_cleanup_agent_amis_dry_run | bool
-ansible/roles/jenkins_cleanup_agent_amis/tasks/cleanup_image_versions.yml:79:      when: jenkins_cleanup_agent_amis_dry_run | bool
-ansible/roles/jenkins_cleanup_agent_amis/tasks/generate_report.yml:52:      when: jenkins_cleanup_agent_amis_report_format == 'json'
-ansible/roles/jenkins_cleanup_agent_amis/tasks/generate_report.yml:59:      when: jenkins_cleanup_agent_amis_report_format == 'yaml'
-ansible/roles/jenkins_cleanup_agent_amis/tasks/main.yml:39:  when: jenkins_cleanup_agent_amis_cleanup_targets.amis or jenkins_cleanup_agent_amis_cleanup_targets.snapshots
-ansible/roles/jenkins_cleanup_agent_amis/tasks/main.yml:44:  when: jenkins_cleanup_agent_amis_cleanup_targets.image_builder_versions
-ansible/roles/jenkins_cleanup_agent_amis/tasks/main.yml:49:  when: jenkins_cleanup_agent_amis_cleanup_targets.image_builder_pipelines
-ansible/roles/jenkins_cleanup_agent_amis/tasks/main.yml:54:  when: jenkins_cleanup_agent_amis_generate_report
+ansible/roles/[REDACTED_TOKEN]/tasks/cleanup_amis.yml:78:      when: [REDACTED_TOKEN] | bool
+ansible/roles/[REDACTED_TOKEN]/tasks/[REDACTED_TOKEN].yml:79:      when: [REDACTED_TOKEN] | bool
+ansible/roles/[REDACTED_TOKEN]/tasks/generate_report.yml:52:      when: [REDACTED_TOKEN] == 'json'
+ansible/roles/[REDACTED_TOKEN]/tasks/generate_report.yml:59:      when: [REDACTED_TOKEN] == 'yaml'
+ansible/roles/[REDACTED_TOKEN]/tasks/main.yml:39:  when: [REDACTED_TOKEN].amis or [REDACTED_TOKEN].snapshots
+ansible/roles/[REDACTED_TOKEN]/tasks/main.yml:44:  when: [REDACTED_TOKEN].[REDACTED_TOKEN]
+ansible/roles/[REDACTED_TOKEN]/tasks/main.yml:49:  when: [REDACTED_TOKEN].[REDACTED_TOKEN]
+ansible/roles/[REDACTED_TOKEN]/tasks/main.yml:54:  when: [REDACTED_TOKEN]
 ```
 
 ## Turn 40: ツール実行
@@ -1403,7 +1403,7 @@ ansible/roles/jenkins_cleanup_agent_amis/tasks/main.yml:54:  when: jenkins_clean
 ## Turn 41: ツール実行
 
 **種別**: コマンド実行
-**コマンド**: `/bin/bash -lc "sed -n '1,200p' ansible/roles/jenkins_cleanup_agent_amis/tasks/generate_report.yml"`
+**コマンド**: `/bin/bash -lc "sed -n '1,200p' ansible/roles/[REDACTED_TOKEN]/tasks/generate_report.yml"`
 **ステータス**: completed (exit_code=0)
 
 ```text
@@ -1420,52 +1420,52 @@ ansible/roles/jenkins_cleanup_agent_amis/tasks/main.yml:54:  when: jenkins_clean
             timestamp: "{{ ansible_date_time.iso8601 }}"
             environment: "{{ env_name }}"
             region: "{{ aws_region }}"
-            dry_run: "{{ jenkins_cleanup_agent_amis_dry_run }}"
-            retention_count: "{{ jenkins_cleanup_agent_amis_retention_count }}"
+            dry_run: "{{ [REDACTED_TOKEN] }}"
+            retention_count: "{{ [REDACTED_TOKEN] }}"
           configuration:
-            ami_patterns: "{{ jenkins_cleanup_agent_amis_ami_name_patterns }}"
-            image_builder_patterns: "{{ jenkins_cleanup_agent_amis_image_builder_name_patterns }}"
-            cleanup_targets: "{{ jenkins_cleanup_agent_amis_cleanup_targets }}"
-            safety_checks: "{{ jenkins_cleanup_agent_amis_safety_checks }}"
+            ami_patterns: "{{ [REDACTED_TOKEN] }}"
+            [REDACTED_TOKEN]: "{{ [REDACTED_TOKEN] }}"
+            cleanup_targets: "{{ [REDACTED_TOKEN] }}"
+            safety_checks: "{{ [REDACTED_TOKEN] }}"
           results:
             amis:
               success: "{{ not (ami_cleanup_failed | default(false)) }}"
               summary: "{{ ami_cleanup_results | default({}) }}"
             snapshots:
-              success: "{{ not (snapshot_cleanup_warning | default(false)) }}"
-              summary: "{{ snapshot_cleanup_results | default({}) }}"
-            image_builder_versions:
-              success: "{{ not (image_builder_cleanup_failed | default(false)) }}"
-              summary: "{{ image_builder_cleanup_results | default({}) }}"
+              success: "{{ not ([REDACTED_TOKEN] | default(false)) }}"
+              summary: "{{ [REDACTED_TOKEN] | default({}) }}"
+            [REDACTED_TOKEN]:
+              success: "{{ not ([REDACTED_TOKEN] | default(false)) }}"
+              summary: "{{ [REDACTED_TOKEN] | default({}) }}"
             pipeline_outputs:
-              success: "{{ not (pipeline_cleanup_warning | default(false)) }}"
-              summary: "{{ pipeline_cleanup_results | default({}) }}"
+              success: "{{ not ([REDACTED_TOKEN] | default(false)) }}"
+              summary: "{{ [REDACTED_TOKEN] | default({}) }}"
           statistics:
             total_amis_deleted: "{{ ami_cleanup_results.total_deleted | default(0) }}"
-            total_snapshots_deleted: "{{ snapshot_cleanup_results.total_deleted | default(0) }}"
-            total_image_versions_deleted: "{{ image_builder_cleanup_results.total_versions_deleted | default(0) }}"
-            total_pipeline_outputs_processed: "{{ pipeline_cleanup_results.processed_pipelines | default(0) }}"
+            [REDACTED_TOKEN]: "{{ [REDACTED_TOKEN].total_deleted | default(0) }}"
+            [REDACTED_TOKEN]: "{{ [REDACTED_TOKEN].[REDACTED_TOKEN] | default(0) }}"
+            [REDACTED_TOKEN]: "{{ [REDACTED_TOKEN].processed_pipelines | default(0) }}"
           verification:
-            performed: "{{ not jenkins_cleanup_agent_amis_dry_run }}"
-            summary: "{{ deletion_verification_summary | default({}) }}"
-            ami_failures: "{{ deletion_verification_summary.ami_failures | default(0) }}"
-            snapshot_failures: "{{ deletion_verification_summary.snapshot_failures | default(0) }}"
-            version_failures: "{{ deletion_verification_summary.version_failures | default(0) }}"
-            all_successful: "{{ deletion_verification_summary.all_successful | default(false) }}"
+            performed: "{{ not [REDACTED_TOKEN] }}"
+            summary: "{{ [REDACTED_TOKEN] | default({}) }}"
+            ami_failures: "{{ [REDACTED_TOKEN].ami_failures | default(0) }}"
+            snapshot_failures: "{{ [REDACTED_TOKEN].snapshot_failures | default(0) }}"
+            version_failures: "{{ [REDACTED_TOKEN].version_failures | default(0) }}"
+            all_successful: "{{ [REDACTED_TOKEN].all_successful | default(false) }}"
 
     # JSONレポートの生成
     - name: Write JSON report
       ansible.builtin.copy:
         content: "{{ cleanup_report | to_nice_json }}"
-        dest: "{{ jenkins_cleanup_agent_amis_report_path }}"
-      when: jenkins_cleanup_agent_amis_report_format == 'json'
+        dest: "{{ [REDACTED_TOKEN] }}"
+      when: [REDACTED_TOKEN] == 'json'
 
     # YAMLレポートの生成
     - name: Write YAML report
       ansible.builtin.copy:
         content: "{{ cleanup_report | to_nice_yaml }}"
-        dest: "{{ jenkins_cleanup_agent_amis_report_path | regex_replace('\\.json$', '.yaml') }}"
-      when: jenkins_cleanup_agent_amis_report_format == 'yaml'
+        dest: "{{ [REDACTED_TOKEN] | regex_replace('\\.json$', '.yaml') }}"
+      when: [REDACTED_TOKEN] == 'yaml'
 
     # コンソールサマリーの表示
     - name: Display cleanup summary
@@ -1475,16 +1475,16 @@ ansible/roles/jenkins_cleanup_agent_amis/tasks/main.yml:54:  when: jenkins_clean
           - "Image Builder AMI Cleanup Complete"
           - "=========================================="
           - "Environment: {{ env_name }}"
-          - "Dry Run: {{ jenkins_cleanup_agent_amis_dry_run }}"
+          - "Dry Run: {{ [REDACTED_TOKEN] }}"
           - ""
           - "Results:"
           - "  AMIs deleted: {{ ami_cleanup_results.total_deleted | default(0) }}"
-          - "  Snapshots deleted: {{ snapshot_cleanup_results.total_deleted | default(0) }}"
-          - "  Image versions deleted: {{ image_builder_cleanup_results.total_versions_deleted | default(0) }}"
-          - "  Pipeline outputs processed: {{ pipeline_cleanup_results.processed_pipelines | default(0) }}"
+          - "  Snapshots deleted: {{ [REDACTED_TOKEN].total_deleted | default(0) }}"
+          - "  Image versions deleted: {{ [REDACTED_TOKEN].[REDACTED_TOKEN] | default(0) }}"
+          - "  Pipeline outputs processed: {{ [REDACTED_TOKEN].processed_pipelines | default(0) }}"
           - ""
           - "Verification Status:"
-          - "  {% if not jenkins_cleanup_agent_amis_dry_run %}✅
+          - "  {% if not [REDACTED_TOKEN] %}✅
 ... (truncated)
 ```
 
@@ -1627,7 +1627,7 @@ become: yes
     # Python環境の確認（Amazon Linux 2023はPython 3.9+を標準搭載）
     - name: Display Python version
       ansible.builtin.debug:
-        msg: "Current Python version: {{ ansible_python_version }}"
+        msg: "Current Python version: {{ [REDACTED_TOKEN] }}"
 
     # Python パッケージの最新版インストール
     - name: Install Python packages for AWS (system-wide)
@@ -1702,10 +1702,10 @@ become: yes
       ansible.builtin.debug:
         msg: |
           Verification script is available at:
-          ~/infrastructure-as-code/bootstrap/verify-installation.sh
+          ~/[REDACTED_TOKEN]/bootstrap/verify-installation.sh
 
           You can also create a symlink for convenience:
-          ln -s ~/infrastructure-as-code/bootstrap/verify-installation.sh ~/verify-installation.sh
+          ln -s ~/[REDACTED_TOKEN]/bootstrap/verify-installation.sh ~/verify-installation.sh
 
     # Jenkins Agent接続用のディレクトリ作成
     - name: Create Jenkins agent work directory
@@ -1819,17 +1819,17 @@ PY"`
 ## Turn 70: ツール実行
 
 **種別**: コマンド実行
-**コマンド**: `/bin/bash -lc "sed -n '1,200p' ansible/roles/jenkins_cleanup_agent_amis/tasks/main.yml"`
+**コマンド**: `/bin/bash -lc "sed -n '1,200p' ansible/roles/[REDACTED_TOKEN]/tasks/main.yml"`
 **ステータス**: completed (exit_code=0)
 
 ```text
 ---
-# Main tasks file for cleanup_image_builder_amis
+# Main tasks file for [REDACTED_TOKEN]
 
 - name: Normalize cleanup variables so older callers keep working
   ansible.builtin.set_fact:
-    jenkins_cleanup_agent_amis_retention_count: "{{ retention_count | default(jenkins_cleanup_agent_amis_retention_count | default(1)) }}"
-    jenkins_cleanup_agent_amis_dry_run: "{{ dry_run | default(jenkins_cleanup_agent_amis_dry_run | default(false)) }}"
+    [REDACTED_TOKEN]: "{{ retention_count | default([REDACTED_TOKEN] | default(1)) }}"
+    [REDACTED_TOKEN]: "{{ dry_run | default([REDACTED_TOKEN] | default(false)) }}"
   tags: normalization
 
 - name: Validate required variables
@@ -1837,9 +1837,9 @@ PY"`
     that:
       - env_name is defined
       - aws_region is defined
-      - jenkins_cleanup_agent_amis_retention_count is defined
-      - jenkins_cleanup_agent_amis_retention_count | int >= jenkins_cleanup_agent_amis_safety_checks.minimum_retention | int
-    fail_msg: "Required variables are not defined or jenkins_cleanup_agent_amis_retention_count is too low"
+      - [REDACTED_TOKEN] is defined
+      - [REDACTED_TOKEN] | int >= [REDACTED_TOKEN].minimum_retention | int
+    fail_msg: "Required variables are not defined or [REDACTED_TOKEN] is too low"
 
 - name: Display cleanup configuration
   ansible.builtin.debug:
@@ -1849,34 +1849,34 @@ PY"`
       - "=========================================="
       - "Environment: {{ env_name }}"
       - "Region: {{ aws_region }}"
-      - "Retention Count: {{ jenkins_cleanup_agent_amis_retention_count }}"
-      - "Dry Run: {{ jenkins_cleanup_agent_amis_dry_run }}"
+      - "Retention Count: {{ [REDACTED_TOKEN] }}"
+      - "Dry Run: {{ [REDACTED_TOKEN] }}"
       - "Cleanup Targets:"
-      - "  - AMIs: {{ jenkins_cleanup_agent_amis_cleanup_targets.amis }}"
-      - "  - Snapshots: {{ jenkins_cleanup_agent_amis_cleanup_targets.snapshots }}"
-      - "  - Image Builder Versions: {{ jenkins_cleanup_agent_amis_cleanup_targets.image_builder_versions }}"
-      - "  - Image Builder Pipelines: {{ jenkins_cleanup_agent_amis_cleanup_targets.image_builder_pipelines }}"
+      - "  - AMIs: {{ [REDACTED_TOKEN].amis }}"
+      - "  - Snapshots: {{ [REDACTED_TOKEN].snapshots }}"
+      - "  - Image Builder Versions: {{ [REDACTED_TOKEN].[REDACTED_TOKEN] }}"
+      - "  - Image Builder Pipelines: {{ [REDACTED_TOKEN].[REDACTED_TOKEN] }}"
       - "=========================================="
 
 # AMIのクリーンアップ
 - name: Cleanup AMIs and Snapshots
   ansible.builtin.include_tasks: cleanup_amis.yml
-  when: jenkins_cleanup_agent_amis_cleanup_targets.amis or jenkins_cleanup_agent_amis_cleanup_targets.snapshots
+  when: [REDACTED_TOKEN].amis or [REDACTED_TOKEN].snapshots
 
 # Image Builderイメージバージョンのクリーンアップ
 - name: Cleanup Image Builder Versions
-  ansible.builtin.include_tasks: cleanup_image_versions.yml
-  when: jenkins_cleanup_agent_amis_cleanup_targets.image_builder_versions
+  ansible.builtin.include_tasks: [REDACTED_TOKEN].yml
+  when: [REDACTED_TOKEN].[REDACTED_TOKEN]
 
 # Image Builderパイプライン出力のクリーンアップ
 - name: Cleanup Image Builder Pipeline Outputs
-  ansible.builtin.include_tasks: cleanup_pipeline_outputs.yml
-  when: jenkins_cleanup_agent_amis_cleanup_targets.image_builder_pipelines
+  ansible.builtin.include_tasks: [REDACTED_TOKEN].yml
+  when: [REDACTED_TOKEN].[REDACTED_TOKEN]
 
 # レポート生成
 - name: Generate cleanup report
   ansible.builtin.include_tasks: generate_report.yml
-  when: jenkins_cleanup_agent_amis_generate_report
+  when: [REDACTED_TOKEN]
 ```
 
 ## Turn 71: ツール実行
@@ -1887,12 +1887,12 @@ PY"`
 ## Turn 72: ツール実行
 
 **種別**: コマンド実行
-**コマンド**: `/bin/bash -lc "grep -n \"\\[ -\" ansible/roles/jenkins_cleanup_agent_amis/tasks/*.yml"`
+**コマンド**: `/bin/bash -lc "grep -n \"\\[ -\" ansible/roles/[REDACTED_TOKEN]/tasks/*.yml"`
 **ステータス**: completed (exit_code=0)
 
 ```text
-ansible/roles/jenkins_cleanup_agent_amis/tasks/process_pipeline_outputs.yml:62:        operation_name: "Delete pipeline output {{ item.split('/')[ -1 ] }}"
-ansible/roles/jenkins_cleanup_agent_amis/tasks/process_pipeline_outputs.yml:66:        label: "{{ item.split('/')[ -1 ] }}"
+ansible/roles/[REDACTED_TOKEN]/tasks/[REDACTED_TOKEN].yml:62:        operation_name: "Delete pipeline output {{ item.split('/')[ -1 ] }}"
+ansible/roles/[REDACTED_TOKEN]/tasks/[REDACTED_TOKEN].yml:66:        label: "{{ item.split('/')[ -1 ] }}"
 ```
 
 ## Turn 73: ツール実行
@@ -1903,20 +1903,20 @@ ansible/roles/jenkins_cleanup_agent_amis/tasks/process_pipeline_outputs.yml:66: 
 ## Turn 74: ツール実行
 
 **種別**: コマンド実行
-**コマンド**: `/bin/bash -lc "grep -n \"\\[ \" ansible/roles/jenkins_cleanup_agent_amis/tasks/*.yml"`
+**コマンド**: `/bin/bash -lc "grep -n \"\\[ \" ansible/roles/[REDACTED_TOKEN]/tasks/*.yml"`
 **ステータス**: completed (exit_code=0)
 
 ```text
-ansible/roles/jenkins_cleanup_agent_amis/tasks/delete_snapshots.yml:33:      loop: "{{ all_snapshot_ids[ : jenkins_cleanup_agent_amis_max_parallel_deletions | int ] if jenkins_cleanup_agent_amis_parallel_deletion else all_snapshot_ids }}"
-ansible/roles/jenkins_cleanup_agent_amis/tasks/delete_snapshots.yml:50:      loop: "{{ all_snapshot_ids[ jenkins_cleanup_agent_amis_max_parallel_deletions | int : ] }}"
-ansible/roles/jenkins_cleanup_agent_amis/tasks/process_ami_retention.yml:40:        amis_to_keep: "{{ sorted_amis[ : jenkins_cleanup_agent_amis_retention_count | int ] | default([]) }}"
-ansible/roles/jenkins_cleanup_agent_amis/tasks/process_ami_retention.yml:41:        amis_to_delete: "{{ sorted_amis[ jenkins_cleanup_agent_amis_retention_count | int : ] | default([]) }}"
-ansible/roles/jenkins_cleanup_agent_amis/tasks/process_image_versions.yml:30:        versions_to_keep: "{{ sorted_versions[ : jenkins_cleanup_agent_amis_retention_count | int ] | default([]) }}"
-ansible/roles/jenkins_cleanup_agent_amis/tasks/process_image_versions.yml:31:        versions_to_delete: "{{ sorted_versions[ jenkins_cleanup_agent_amis_retention_count | int : ] | default([]) }}"
-ansible/roles/jenkins_cleanup_agent_amis/tasks/process_pipeline_outputs.yml:45:        outputs_to_keep: "{{ sorted_executions[ : jenkins_cleanup_agent_amis_retention_count | int ] | default([]) }}"
-ansible/roles/jenkins_cleanup_agent_amis/tasks/process_pipeline_outputs.yml:46:        outputs_to_delete: "{{ sorted_executions[ jenkins_cleanup_agent_amis_retention_count | int : ] | default([]) }}"
-ansible/roles/jenkins_cleanup_agent_amis/tasks/process_pipeline_outputs.yml:62:        operation_name: "Delete pipeline output {{ item.split('/')[ -1 ] }}"
-ansible/roles/jenkins_cleanup_agent_amis/tasks/process_pipeline_outputs.yml:66:        label: "{{ item.split('/')[ -1 ] }}"
+ansible/roles/[REDACTED_TOKEN]/tasks/delete_snapshots.yml:33:      loop: "{{ all_snapshot_ids[ : [REDACTED_TOKEN] | int ] if [REDACTED_TOKEN] else all_snapshot_ids }}"
+ansible/roles/[REDACTED_TOKEN]/tasks/delete_snapshots.yml:50:      loop: "{{ all_snapshot_ids[ [REDACTED_TOKEN] | int : ] }}"
+ansible/roles/[REDACTED_TOKEN]/tasks/[REDACTED_TOKEN].yml:40:        amis_to_keep: "{{ sorted_amis[ : [REDACTED_TOKEN] | int ] | default([]) }}"
+ansible/roles/[REDACTED_TOKEN]/tasks/[REDACTED_TOKEN].yml:41:        amis_to_delete: "{{ sorted_amis[ [REDACTED_TOKEN] | int : ] | default([]) }}"
+ansible/roles/[REDACTED_TOKEN]/tasks/[REDACTED_TOKEN].yml:30:        versions_to_keep: "{{ sorted_versions[ : [REDACTED_TOKEN] | int ] | default([]) }}"
+ansible/roles/[REDACTED_TOKEN]/tasks/[REDACTED_TOKEN].yml:31:        versions_to_delete: "{{ sorted_versions[ [REDACTED_TOKEN] | int : ] | default([]) }}"
+ansible/roles/[REDACTED_TOKEN]/tasks/[REDACTED_TOKEN].yml:45:        outputs_to_keep: "{{ sorted_executions[ : [REDACTED_TOKEN] | int ] | default([]) }}"
+ansible/roles/[REDACTED_TOKEN]/tasks/[REDACTED_TOKEN].yml:46:        outputs_to_delete: "{{ sorted_executions[ [REDACTED_TOKEN] | int : ] | default([]) }}"
+ansible/roles/[REDACTED_TOKEN]/tasks/[REDACTED_TOKEN].yml:62:        operation_name: "Delete pipeline output {{ item.split('/')[ -1 ] }}"
+ansible/roles/[REDACTED_TOKEN]/tasks/[REDACTED_TOKEN].yml:66:        label: "{{ item.split('/')[ -1 ] }}"
 ```
 
 ## Turn 75: ツール実行
@@ -1967,12 +1967,12 @@ ansible/roles/jenkins_cleanup_agent_amis/tasks/process_pipeline_outputs.yml:66: 
 ## Turn 84: ツール実行
 
 **種別**: コマンド実行
-**コマンド**: `/bin/bash -lc "grep -n \"\\[ \" ansible/roles/jenkins_cleanup_agent_amis/tasks/*.yml"`
+**コマンド**: `/bin/bash -lc "grep -n \"\\[ \" ansible/roles/[REDACTED_TOKEN]/tasks/*.yml"`
 **ステータス**: completed (exit_code=0)
 
 ```text
-ansible/roles/jenkins_cleanup_agent_amis/tasks/delete_snapshots.yml:33:      loop: "{{ all_snapshot_ids[ : jenkins_cleanup_agent_amis_max_parallel_deletions | int ] if jenkins_cleanup_agent_amis_parallel_deletion else all_snapshot_ids }}"
-ansible/roles/jenkins_cleanup_agent_amis/tasks/delete_snapshots.yml:50:      loop: "{{ all_snapshot_ids[ jenkins_cleanup_agent_amis_max_parallel_deletions | int : ] }}"
+ansible/roles/[REDACTED_TOKEN]/tasks/delete_snapshots.yml:33:      loop: "{{ all_snapshot_ids[ : [REDACTED_TOKEN] | int ] if [REDACTED_TOKEN] else all_snapshot_ids }}"
+ansible/roles/[REDACTED_TOKEN]/tasks/delete_snapshots.yml:50:      loop: "{{ all_snapshot_ids[ [REDACTED_TOKEN] | int : ] }}"
 ```
 
 ## Turn 85: ツール実行
@@ -1993,7 +1993,7 @@ ansible/roles/jenkins_cleanup_agent_amis/tasks/delete_snapshots.yml:50:      loo
 ## Turn 88: ツール実行
 
 **種別**: コマンド実行
-**コマンド**: `/bin/bash -lc "sed -n '1,120p' ansible/roles/jenkins_cleanup_agent_amis/tasks/delete_snapshots.yml"`
+**コマンド**: `/bin/bash -lc "sed -n '1,120p' ansible/roles/[REDACTED_TOKEN]/tasks/delete_snapshots.yml"`
 **ステータス**: completed (exit_code=0)
 
 ```text
@@ -2030,11 +2030,11 @@ ansible/roles/jenkins_cleanup_agent_amis/tasks/delete_snapshots.yml:50:      loo
         operation_name: "Delete snapshot {{ item.snapshot_id }} from AMI {{ item.ami_name }}"
         parse_output: false
       loop: >
-        {{ all_snapshot_ids[: jenkins_cleanup_agent_amis_max_parallel_deletions | int] if jenkins_cleanup_agent_amis_parallel_deletion | bool else all_snapshot_ids }}
+        {{ all_snapshot_ids[: [REDACTED_TOKEN] | int] if [REDACTED_TOKEN] | bool else all_snapshot_ids }}
       loop_control:
         label: "{{ item.snapshot_id }}"
       when: all_snapshot_ids | length > 0
-      register: snapshot_deletion_batch1
+      register: [REDACTED_TOKEN]
 
     # 残りのスナップショットを削除（並列処理の場合）
     - name: Delete remaining snapshots
@@ -2047,14 +2047,14 @@ ansible/roles/jenkins_cleanup_agent_amis/tasks/delete_snapshots.yml:50:      loo
         parse_output: false
       loop_control:
         label: "{{ item.snapshot_id }}"
-      loop: "{{ all_snapshot_ids[jenkins_cleanup_agent_amis_max_parallel_deletions | int:] }}"
+      loop: "{{ all_snapshot_ids[[REDACTED_TOKEN] | int:] }}"
       when: 
-        - jenkins_cleanup_agent_amis_parallel_deletion
-        - all_snapshot_ids | length > jenkins_cleanup_agent_amis_max_parallel_deletions | int
+        - [REDACTED_TOKEN]
+        - all_snapshot_ids | length > [REDACTED_TOKEN] | int
 
     - name: Record snapshot deletion results
       ansible.builtin.set_fact:
-        snapshot_cleanup_results:
+        [REDACTED_TOKEN]:
           total_deleted: "{{ all_snapshot_ids | length }}"
           deleted_snapshots: "{{ all_snapshot_ids }}"
 
@@ -2063,11 +2063,11 @@ ansible/roles/jenkins_cleanup_agent_amis/tasks/delete_snapshots.yml:50:      loo
       ansible.builtin.debug:
         msg:
           - "WARNING: Some snapshots may not have been deleted"
-          - "Error: {{ ansible_failed_result.msg | default('Unknown error') }}"
+          - "Error: {{ [REDACTED_TOKEN].msg | default('Unknown error') }}"
       
     - name: Continue despite errors
       ansible.builtin.set_fact:
-        snapshot_cleanup_warning: true
+        [REDACTED_TOKEN]: true
 ```
 
 ## Turn 89: ツール実行
@@ -2088,18 +2088,18 @@ ansible/roles/jenkins_cleanup_agent_amis/tasks/delete_snapshots.yml:50:      loo
 ## Turn 92: ツール実行
 
 **種別**: コマンド実行
-**コマンド**: `/bin/bash -lc 'grep -n "when:.*jenkins_cleanup_agent_amis" ansible/roles/jenkins_cleanup_agent_amis/tasks/*.yml'`
+**コマンド**: `/bin/bash -lc 'grep -n "when:.*[REDACTED_TOKEN]" ansible/roles/[REDACTED_TOKEN]/tasks/*.yml'`
 **ステータス**: completed (exit_code=0)
 
 ```text
-ansible/roles/jenkins_cleanup_agent_amis/tasks/cleanup_amis.yml:78:      when: jenkins_cleanup_agent_amis_dry_run | bool
-ansible/roles/jenkins_cleanup_agent_amis/tasks/cleanup_image_versions.yml:79:      when: jenkins_cleanup_agent_amis_dry_run | bool
-ansible/roles/jenkins_cleanup_agent_amis/tasks/generate_report.yml:52:      when: jenkins_cleanup_agent_amis_report_format == 'json'
-ansible/roles/jenkins_cleanup_agent_amis/tasks/generate_report.yml:59:      when: jenkins_cleanup_agent_amis_report_format == 'yaml'
-ansible/roles/jenkins_cleanup_agent_amis/tasks/main.yml:39:  when: jenkins_cleanup_agent_amis_cleanup_targets.amis or jenkins_cleanup_agent_amis_cleanup_targets.snapshots
-ansible/roles/jenkins_cleanup_agent_amis/tasks/main.yml:44:  when: jenkins_cleanup_agent_amis_cleanup_targets.image_builder_versions
-ansible/roles/jenkins_cleanup_agent_amis/tasks/main.yml:49:  when: jenkins_cleanup_agent_amis_cleanup_targets.image_builder_pipelines
-ansible/roles/jenkins_cleanup_agent_amis/tasks/main.yml:54:  when: jenkins_cleanup_agent_amis_generate_report
+ansible/roles/[REDACTED_TOKEN]/tasks/cleanup_amis.yml:78:      when: [REDACTED_TOKEN] | bool
+ansible/roles/[REDACTED_TOKEN]/tasks/[REDACTED_TOKEN].yml:79:      when: [REDACTED_TOKEN] | bool
+ansible/roles/[REDACTED_TOKEN]/tasks/generate_report.yml:52:      when: [REDACTED_TOKEN] == 'json'
+ansible/roles/[REDACTED_TOKEN]/tasks/generate_report.yml:59:      when: [REDACTED_TOKEN] == 'yaml'
+ansible/roles/[REDACTED_TOKEN]/tasks/main.yml:39:  when: [REDACTED_TOKEN].amis or [REDACTED_TOKEN].snapshots
+ansible/roles/[REDACTED_TOKEN]/tasks/main.yml:44:  when: [REDACTED_TOKEN].[REDACTED_TOKEN]
+ansible/roles/[REDACTED_TOKEN]/tasks/main.yml:49:  when: [REDACTED_TOKEN].[REDACTED_TOKEN]
+ansible/roles/[REDACTED_TOKEN]/tasks/main.yml:54:  when: [REDACTED_TOKEN]
 ```
 
 ## Turn 93: ツール実行
@@ -2110,7 +2110,7 @@ ansible/roles/jenkins_cleanup_agent_amis/tasks/main.yml:54:  when: jenkins_clean
 ## Turn 94: ツール実行
 
 **種別**: コマンド実行
-**コマンド**: `/bin/bash -lc "sed -n '60,120p' ansible/roles/jenkins_cleanup_agent_amis/tasks/cleanup_image_versions.yml"`
+**コマンド**: `/bin/bash -lc "sed -n '60,120p' ansible/roles/[REDACTED_TOKEN]/tasks/[REDACTED_TOKEN].yml"`
 **ステータス**: completed (exit_code=0)
 
 ```text
@@ -2126,14 +2126,14 @@ ansible/roles/jenkins_cleanup_agent_amis/tasks/main.yml:54:  when: jenkins_clean
           - "=========================================="
           - "Image Builder Version Deletion Summary"
           - "=========================================="
-          - "Total versions to delete: {{ all_versions_to_delete | length }}"
+          - "Total versions to delete: {{ [REDACTED_TOKEN] | length }}"
           - "=========================================="
 
     # ドライランモードの確認
     - name: Dry run mode - skip version deletion
       ansible.builtin.debug:
         msg: "DRY RUN MODE - No Image Builder versions will be deleted"
-      when: jenkins_cleanup_agent_amis_dry_run | bool
+      when: [REDACTED_TOKEN] | bool
 
     # イメージバージョンの削除
     - name: Delete Image Builder versions
@@ -2141,23 +2141,23 @@ ansible/roles/jenkins_cleanup_agent_amis/tasks/main.yml:54:  when: jenkins_clean
         name: aws_cli_helper
         tasks_from: execute
       vars:
-        aws_command: "aws imagebuilder delete-image --image-build-version-arn \"{{ item.arn }}\""
+        aws_command: "aws imagebuilder delete-image --[REDACTED_TOKEN] \"{{ item.arn }}\""
         operation_name: "Delete image version {{ item.version }}"
         parse_output: false
-      loop: "{{ all_versions_to_delete }}"
+      loop: "{{ [REDACTED_TOKEN] }}"
       loop_control:
         label: "{{ item.name }} - {{ item.version }}"
       when: 
-        - not jenkins_cleanup_agent_amis_dry_run | bool
-        - all_versions_to_delete | length > 0
-      register: version_deletion_results
+        - not [REDACTED_TOKEN] | bool
+        - [REDACTED_TOKEN] | length > 0
+      register: [REDACTED_TOKEN]
 
     # 削除検証の準備
     - name: Prepare Image Builder versions for verification
       ansible.builtin.set_fact:
-        image_versions_to_verify: >-
+        [REDACTED_TOKEN]: >-
           {%- set verify_items = [] -%}
-          {%- for image_result in image_version_results | default([]) -%}
+          {%- for image_result in [REDACTED_TOKEN] | default([]) -%}
             {%- if image_result.to_delete | default([]) | length > 0 -%}
               {%- set _ = verify_items.append({
                 'image_name': image_result.image_name,
@@ -2168,8 +2168,8 @@ ansible/roles/jenkins_cleanup_agent_amis/tasks/main.yml:54:  when: jenkins_clean
           {%- endfor -%}
           {{ verify_items }}
       when: 
-        - not jenkins_cleanup_agent_amis_dry_run | bool
-        - all_versions_to_delete | length > 0
+        - not [REDACTED_TOKEN] | bool
+        - [REDACTED_TOKEN] | length > 0
 
     # 削除後の検証（Image Builderバージョン）
     - name: Verify Image Builder version deletion
@@ -2185,26 +2185,26 @@ ansible/roles/jenkins_cleanup_agent_amis/tasks/main.yml:54:  when: jenkins_clean
 ## Turn 96: ツール実行
 
 **種別**: コマンド実行
-**コマンド**: `/bin/bash -lc 'grep -R -n "not jenkins_cleanup_agent_amis_dry_run" ansible/roles/jenkins_cleanup_agent_amis/tasks'`
+**コマンド**: `/bin/bash -lc 'grep -R -n "not [REDACTED_TOKEN]" ansible/roles/[REDACTED_TOKEN]/tasks'`
 **ステータス**: completed (exit_code=0)
 
 ```text
-ansible/roles/jenkins_cleanup_agent_amis/tasks/cleanup_amis.yml:93:        - not jenkins_cleanup_agent_amis_dry_run | bool
-ansible/roles/jenkins_cleanup_agent_amis/tasks/cleanup_amis.yml:102:        - not jenkins_cleanup_agent_amis_dry_run | bool
-ansible/roles/jenkins_cleanup_agent_amis/tasks/cleanup_amis.yml:112:        - not jenkins_cleanup_agent_amis_dry_run | bool
-ansible/roles/jenkins_cleanup_agent_amis/tasks/cleanup_amis.yml:119:        - not jenkins_cleanup_agent_amis_dry_run | bool
-ansible/roles/jenkins_cleanup_agent_amis/tasks/cleanup_amis.yml:127:          total_deleted: "{{ all_amis_to_delete | length if not jenkins_cleanup_agent_amis_dry_run else 0 }}"
-ansible/roles/jenkins_cleanup_agent_amis/tasks/cleanup_amis.yml:128:          deleted_amis: "{{ all_amis_to_delete if not jenkins_cleanup_agent_amis_dry_run else [] }}"
-ansible/roles/jenkins_cleanup_agent_amis/tasks/cleanup_image_versions.yml:94:        - not jenkins_cleanup_agent_amis_dry_run | bool
-ansible/roles/jenkins_cleanup_agent_amis/tasks/cleanup_image_versions.yml:114:        - not jenkins_cleanup_agent_amis_dry_run | bool
-ansible/roles/jenkins_cleanup_agent_amis/tasks/cleanup_image_versions.yml:121:        - not jenkins_cleanup_agent_amis_dry_run | bool
-ansible/roles/jenkins_cleanup_agent_amis/tasks/cleanup_image_versions.yml:129:          total_versions_deleted: "{{ all_versions_to_delete | length if not jenkins_cleanup_agent_amis_dry_run else 0 }}"
-ansible/roles/jenkins_cleanup_agent_amis/tasks/cleanup_image_versions.yml:130:          deleted_versions: "{{ all_versions_to_delete if not jenkins_cleanup_agent_amis_dry_run else [] }}"
-ansible/roles/jenkins_cleanup_agent_amis/tasks/generate_report.yml:40:            performed: "{{ not jenkins_cleanup_agent_amis_dry_run }}"
-ansible/roles/jenkins_cleanup_agent_amis/tasks/generate_report.yml:78:          - "  {% if not jenkins_cleanup_agent_amis_dry_run %}✅ Deletion verification performed{% else %}⏭️  Verification skipped (dry run){% endif %}"
-ansible/roles/jenkins_cleanup_agent_amis/tasks/generate_report.yml:79:          - "  {% if deletion_verification_summary.all_successful | default(false) %}✅ All deletions verified{% elif not jenkins_cleanup_agent_amis_dry_run %}⚠️  Some deletions could not be verified{% endif %}"
-ansible/roles/jenkins_cleanup_agent_amis/tasks/process_pipeline_outputs.yml:68:        - not jenkins_cleanup_agent_amis_dry_run | bool
-ansible/roles/jenkins_cleanup_agent_amis/tasks/process_pipeline_outputs.yml:81:            'outputs_deleted': outputs_to_delete | default([]) | length if not jenkins_cleanup_agent_amis_dry_run else 0
+ansible/roles/[REDACTED_TOKEN]/tasks/cleanup_amis.yml:93:        - not [REDACTED_TOKEN] | bool
+ansible/roles/[REDACTED_TOKEN]/tasks/cleanup_amis.yml:102:        - not [REDACTED_TOKEN] | bool
+ansible/roles/[REDACTED_TOKEN]/tasks/cleanup_amis.yml:112:        - not [REDACTED_TOKEN] | bool
+ansible/roles/[REDACTED_TOKEN]/tasks/cleanup_amis.yml:119:        - not [REDACTED_TOKEN] | bool
+ansible/roles/[REDACTED_TOKEN]/tasks/cleanup_amis.yml:127:          total_deleted: "{{ all_amis_to_delete | length if not [REDACTED_TOKEN] else 0 }}"
+ansible/roles/[REDACTED_TOKEN]/tasks/cleanup_amis.yml:128:          deleted_amis: "{{ all_amis_to_delete if not [REDACTED_TOKEN] else [] }}"
+ansible/roles/[REDACTED_TOKEN]/tasks/[REDACTED_TOKEN].yml:94:        - not [REDACTED_TOKEN] | bool
+ansible/roles/[REDACTED_TOKEN]/tasks/[REDACTED_TOKEN].yml:114:        - not [REDACTED_TOKEN] | bool
+ansible/roles/[REDACTED_TOKEN]/tasks/[REDACTED_TOKEN].yml:121:        - not [REDACTED_TOKEN] | bool
+ansible/roles/[REDACTED_TOKEN]/tasks/[REDACTED_TOKEN].yml:129:          [REDACTED_TOKEN]: "{{ [REDACTED_TOKEN] | length if not [REDACTED_TOKEN] else 0 }}"
+ansible/roles/[REDACTED_TOKEN]/tasks/[REDACTED_TOKEN].yml:130:          deleted_versions: "{{ [REDACTED_TOKEN] if not [REDACTED_TOKEN] else [] }}"
+ansible/roles/[REDACTED_TOKEN]/tasks/generate_report.yml:40:            performed: "{{ not [REDACTED_TOKEN] }}"
+ansible/roles/[REDACTED_TOKEN]/tasks/generate_report.yml:78:          - "  {% if not [REDACTED_TOKEN] %}✅ Deletion verification performed{% else %}⏭️  Verification skipped (dry run){% endif %}"
+ansible/roles/[REDACTED_TOKEN]/tasks/generate_report.yml:79:          - "  {% if [REDACTED_TOKEN].all_successful | default(false) %}✅ All deletions verified{% elif not [REDACTED_TOKEN] %}⚠️  Some deletions could not be verified{% endif %}"
+ansible/roles/[REDACTED_TOKEN]/tasks/[REDACTED_TOKEN].yml:68:        - not [REDACTED_TOKEN] | bool
+ansible/roles/[REDACTED_TOKEN]/tasks/[REDACTED_TOKEN].yml:81:            'outputs_deleted': outputs_to_delete | default([]) | length if not [REDACTED_TOKEN] else 0
 ```
 
 ## Turn 97: ツール実行
@@ -2215,7 +2215,7 @@ ansible/roles/jenkins_cleanup_agent_amis/tasks/process_pipeline_outputs.yml:81: 
 ## Turn 98: ツール実行
 
 **種別**: コマンド実行
-**コマンド**: `/bin/bash -lc "perl -0pi -e 's/not jenkins_cleanup_agent_amis_dry_run \\| bool/not (jenkins_cleanup_agent_amis_dry_run | bool)/g' ansible/roles/jenkins_cleanup_agent_amis/tasks/cleanup_amis.yml"`
+**コマンド**: `/bin/bash -lc "perl -0pi -e 's/not [REDACTED_TOKEN] \\| bool/not ([REDACTED_TOKEN] | bool)/g' ansible/roles/[REDACTED_TOKEN]/tasks/cleanup_amis.yml"`
 **ステータス**: completed (exit_code=0)
 
 ## Turn 99: ツール実行
@@ -2226,7 +2226,7 @@ ansible/roles/jenkins_cleanup_agent_amis/tasks/process_pipeline_outputs.yml:81: 
 ## Turn 100: ツール実行
 
 **種別**: コマンド実行
-**コマンド**: `/bin/bash -lc "grep -n \"not \\(jenkins_cleanup_agent_amis_dry_run\" -n ansible/roles/jenkins_cleanup_agent_amis/tasks/cleanup_amis.yml"`
+**コマンド**: `/bin/bash -lc "grep -n \"not \\([REDACTED_TOKEN]\" -n ansible/roles/[REDACTED_TOKEN]/tasks/cleanup_amis.yml"`
 **ステータス**: failed (exit_code=2)
 
 ```text
@@ -2241,14 +2241,14 @@ grep: Unmatched ( or \(
 ## Turn 102: ツール実行
 
 **種別**: コマンド実行
-**コマンド**: `/bin/bash -lc 'grep -n "not (jenkins" ansible/roles/jenkins_cleanup_agent_amis/tasks/cleanup_amis.yml'`
+**コマンド**: `/bin/bash -lc 'grep -n "not (jenkins" ansible/roles/[REDACTED_TOKEN]/tasks/cleanup_amis.yml'`
 **ステータス**: completed (exit_code=0)
 
 ```text
-93:        - not (jenkins_cleanup_agent_amis_dry_run | bool)
-102:        - not (jenkins_cleanup_agent_amis_dry_run | bool)
-112:        - not (jenkins_cleanup_agent_amis_dry_run | bool)
-119:        - not (jenkins_cleanup_agent_amis_dry_run | bool)
+93:        - not ([REDACTED_TOKEN] | bool)
+102:        - not ([REDACTED_TOKEN] | bool)
+112:        - not ([REDACTED_TOKEN] | bool)
+119:        - not ([REDACTED_TOKEN] | bool)
 ```
 
 ## Turn 103: ツール実行
@@ -2259,7 +2259,7 @@ grep: Unmatched ( or \(
 ## Turn 104: ツール実行
 
 **種別**: コマンド実行
-**コマンド**: `/bin/bash -lc "perl -0pi -e 's/not jenkins_cleanup_agent_amis_dry_run \\| bool/not (jenkins_cleanup_agent_amis_dry_run | bool)/g' ansible/roles/jenkins_cleanup_agent_amis/tasks/cleanup_image_versions.yml"`
+**コマンド**: `/bin/bash -lc "perl -0pi -e 's/not [REDACTED_TOKEN] \\| bool/not ([REDACTED_TOKEN] | bool)/g' ansible/roles/[REDACTED_TOKEN]/tasks/[REDACTED_TOKEN].yml"`
 **ステータス**: completed (exit_code=0)
 
 ## Turn 105: ツール実行
@@ -2270,7 +2270,7 @@ grep: Unmatched ( or \(
 ## Turn 106: ツール実行
 
 **種別**: コマンド実行
-**コマンド**: `/bin/bash -lc "perl -0pi -e 's/not jenkins_cleanup_agent_amis_dry_run \\| bool/not (jenkins_cleanup_agent_amis_dry_run | bool)/g' ansible/roles/jenkins_cleanup_agent_amis/tasks/process_pipeline_outputs.yml"`
+**コマンド**: `/bin/bash -lc "perl -0pi -e 's/not [REDACTED_TOKEN] \\| bool/not ([REDACTED_TOKEN] | bool)/g' ansible/roles/[REDACTED_TOKEN]/tasks/[REDACTED_TOKEN].yml"`
 **ステータス**: completed (exit_code=0)
 
 ## Turn 107: ツール実行
@@ -2281,18 +2281,18 @@ grep: Unmatched ( or \(
 ## Turn 108: ツール実行
 
 **種別**: コマンド実行
-**コマンド**: `/bin/bash -lc 'grep -R -n "not (jenkins_cleanup_agent_amis_dry_run" ansible/roles/jenkins_cleanup_agent_amis/tasks'`
+**コマンド**: `/bin/bash -lc 'grep -R -n "not ([REDACTED_TOKEN]" ansible/roles/[REDACTED_TOKEN]/tasks'`
 **ステータス**: completed (exit_code=0)
 
 ```text
-ansible/roles/jenkins_cleanup_agent_amis/tasks/cleanup_amis.yml:93:        - not (jenkins_cleanup_agent_amis_dry_run | bool)
-ansible/roles/jenkins_cleanup_agent_amis/tasks/cleanup_amis.yml:102:        - not (jenkins_cleanup_agent_amis_dry_run | bool)
-ansible/roles/jenkins_cleanup_agent_amis/tasks/cleanup_amis.yml:112:        - not (jenkins_cleanup_agent_amis_dry_run | bool)
-ansible/roles/jenkins_cleanup_agent_amis/tasks/cleanup_amis.yml:119:        - not (jenkins_cleanup_agent_amis_dry_run | bool)
-ansible/roles/jenkins_cleanup_agent_amis/tasks/cleanup_image_versions.yml:94:        - not (jenkins_cleanup_agent_amis_dry_run | bool)
-ansible/roles/jenkins_cleanup_agent_amis/tasks/cleanup_image_versions.yml:114:        - not (jenkins_cleanup_agent_amis_dry_run | bool)
-ansible/roles/jenkins_cleanup_agent_amis/tasks/cleanup_image_versions.yml:121:        - not (jenkins_cleanup_agent_amis_dry_run | bool)
-ansible/roles/jenkins_cleanup_agent_amis/tasks/process_pipeline_outputs.yml:68:        - not (jenkins_cleanup_agent_amis_dry_run | bool)
+ansible/roles/[REDACTED_TOKEN]/tasks/cleanup_amis.yml:93:        - not ([REDACTED_TOKEN] | bool)
+ansible/roles/[REDACTED_TOKEN]/tasks/cleanup_amis.yml:102:        - not ([REDACTED_TOKEN] | bool)
+ansible/roles/[REDACTED_TOKEN]/tasks/cleanup_amis.yml:112:        - not ([REDACTED_TOKEN] | bool)
+ansible/roles/[REDACTED_TOKEN]/tasks/cleanup_amis.yml:119:        - not ([REDACTED_TOKEN] | bool)
+ansible/roles/[REDACTED_TOKEN]/tasks/[REDACTED_TOKEN].yml:94:        - not ([REDACTED_TOKEN] | bool)
+ansible/roles/[REDACTED_TOKEN]/tasks/[REDACTED_TOKEN].yml:114:        - not ([REDACTED_TOKEN] | bool)
+ansible/roles/[REDACTED_TOKEN]/tasks/[REDACTED_TOKEN].yml:121:        - not ([REDACTED_TOKEN] | bool)
+ansible/roles/[REDACTED_TOKEN]/tasks/[REDACTED_TOKEN].yml:68:        - not ([REDACTED_TOKEN] | bool)
 ```
 
 ## Turn 109: ツール実行
@@ -2313,12 +2313,12 @@ ansible/roles/jenkins_cleanup_agent_amis/tasks/process_pipeline_outputs.yml:68: 
 ## Turn 112: ツール実行
 
 **種別**: コマンド実行
-**コマンド**: `/bin/bash -lc 'grep -n "cleanup_targets" ansible/roles/jenkins_cleanup_agent_amis/tasks/cleanup_amis.yml'`
+**コマンド**: `/bin/bash -lc 'grep -n "cleanup_targets" ansible/roles/[REDACTED_TOKEN]/tasks/cleanup_amis.yml'`
 **ステータス**: completed (exit_code=0)
 
 ```text
-94:        - jenkins_cleanup_agent_amis_cleanup_targets.amis
-103:        - jenkins_cleanup_agent_amis_cleanup_targets.snapshots
+94:        - [REDACTED_TOKEN].amis
+103:        - [REDACTED_TOKEN].snapshots
 ```
 
 ## Turn 113: ツール実行
@@ -2329,22 +2329,22 @@ ansible/roles/jenkins_cleanup_agent_amis/tasks/process_pipeline_outputs.yml:68: 
 ## Turn 114: ツール実行
 
 **種別**: コマンド実行
-**コマンド**: `/bin/bash -lc 'grep -R -n "cleanup_targets" ansible/roles/jenkins_cleanup_agent_amis'`
+**コマンド**: `/bin/bash -lc 'grep -R -n "cleanup_targets" ansible/roles/[REDACTED_TOKEN]'`
 **ステータス**: completed (exit_code=0)
 
 ```text
-ansible/roles/jenkins_cleanup_agent_amis/defaults/main.yml:21:jenkins_cleanup_agent_amis_cleanup_targets:
-ansible/roles/jenkins_cleanup_agent_amis/tasks/cleanup_amis.yml:94:        - jenkins_cleanup_agent_amis_cleanup_targets.amis
-ansible/roles/jenkins_cleanup_agent_amis/tasks/cleanup_amis.yml:103:        - jenkins_cleanup_agent_amis_cleanup_targets.snapshots
-ansible/roles/jenkins_cleanup_agent_amis/tasks/generate_report.yml:19:            cleanup_targets: "{{ jenkins_cleanup_agent_amis_cleanup_targets }}"
-ansible/roles/jenkins_cleanup_agent_amis/tasks/main.yml:30:      - "  - AMIs: {{ jenkins_cleanup_agent_amis_cleanup_targets.amis }}"
-ansible/roles/jenkins_cleanup_agent_amis/tasks/main.yml:31:      - "  - Snapshots: {{ jenkins_cleanup_agent_amis_cleanup_targets.snapshots }}"
-ansible/roles/jenkins_cleanup_agent_amis/tasks/main.yml:32:      - "  - Image Builder Versions: {{ jenkins_cleanup_agent_amis_cleanup_targets.image_builder_versions }}"
-ansible/roles/jenkins_cleanup_agent_amis/tasks/main.yml:33:      - "  - Image Builder Pipelines: {{ jenkins_cleanup_agent_amis_cleanup_targets.image_builder_pipelines }}"
-ansible/roles/jenkins_cleanup_agent_amis/tasks/main.yml:40:    (jenkins_cleanup_agent_amis_cleanup_targets.amis | default(false) | bool) or
-ansible/roles/jenkins_cleanup_agent_amis/tasks/main.yml:41:    (jenkins_cleanup_agent_amis_cleanup_targets.snapshots | default(false) | bool)
-ansible/roles/jenkins_cleanup_agent_amis/tasks/main.yml:46:  when: jenkins_cleanup_agent_amis_cleanup_targets.image_builder_versions | default(false) | bool
-ansible/roles/jenkins_cleanup_agent_amis/tasks/main.yml:51:  when: jenkins_cleanup_agent_amis_cleanup_targets.image_builder_pipelines | default(false) | bool
+ansible/roles/[REDACTED_TOKEN]/defaults/main.yml:21:[REDACTED_TOKEN]:
+ansible/roles/[REDACTED_TOKEN]/tasks/cleanup_amis.yml:94:        - [REDACTED_TOKEN].amis
+ansible/roles/[REDACTED_TOKEN]/tasks/cleanup_amis.yml:103:        - [REDACTED_TOKEN].snapshots
+ansible/roles/[REDACTED_TOKEN]/tasks/generate_report.yml:19:            cleanup_targets: "{{ [REDACTED_TOKEN] }}"
+ansible/roles/[REDACTED_TOKEN]/tasks/main.yml:30:      - "  - AMIs: {{ [REDACTED_TOKEN].amis }}"
+ansible/roles/[REDACTED_TOKEN]/tasks/main.yml:31:      - "  - Snapshots: {{ [REDACTED_TOKEN].snapshots }}"
+ansible/roles/[REDACTED_TOKEN]/tasks/main.yml:32:      - "  - Image Builder Versions: {{ [REDACTED_TOKEN].[REDACTED_TOKEN] }}"
+ansible/roles/[REDACTED_TOKEN]/tasks/main.yml:33:      - "  - Image Builder Pipelines: {{ [REDACTED_TOKEN].[REDACTED_TOKEN] }}"
+ansible/roles/[REDACTED_TOKEN]/tasks/main.yml:40:    ([REDACTED_TOKEN].amis | default(false) | bool) or
+ansible/roles/[REDACTED_TOKEN]/tasks/main.yml:41:    ([REDACTED_TOKEN].snapshots | default(false) | bool)
+ansible/roles/[REDACTED_TOKEN]/tasks/main.yml:46:  when: [REDACTED_TOKEN].[REDACTED_TOKEN] | default(false) | bool
+ansible/roles/[REDACTED_TOKEN]/tasks/main.yml:51:  when: [REDACTED_TOKEN].[REDACTED_TOKEN] | default(false) | bool
 ```
 
 ## Turn 115: ツール実行
@@ -2365,21 +2365,21 @@ ansible/roles/jenkins_cleanup_agent_amis/tasks/main.yml:51:  when: jenkins_clean
 ## Turn 118: ツール実行
 
 **種別**: コマンド実行
-**コマンド**: `/bin/bash -lc 'grep -R -n "cleanup_targets" ansible/roles/jenkins_cleanup_agent_amis/tasks'`
+**コマンド**: `/bin/bash -lc 'grep -R -n "cleanup_targets" ansible/roles/[REDACTED_TOKEN]/tasks'`
 **ステータス**: completed (exit_code=0)
 
 ```text
-ansible/roles/jenkins_cleanup_agent_amis/tasks/cleanup_amis.yml:94:        - jenkins_cleanup_agent_amis_cleanup_targets.amis | default(false) | bool
-ansible/roles/jenkins_cleanup_agent_amis/tasks/cleanup_amis.yml:103:        - jenkins_cleanup_agent_amis_cleanup_targets.snapshots | default(false) | bool
-ansible/roles/jenkins_cleanup_agent_amis/tasks/generate_report.yml:19:            cleanup_targets: "{{ jenkins_cleanup_agent_amis_cleanup_targets }}"
-ansible/roles/jenkins_cleanup_agent_amis/tasks/main.yml:30:      - "  - AMIs: {{ jenkins_cleanup_agent_amis_cleanup_targets.amis }}"
-ansible/roles/jenkins_cleanup_agent_amis/tasks/main.yml:31:      - "  - Snapshots: {{ jenkins_cleanup_agent_amis_cleanup_targets.snapshots }}"
-ansible/roles/jenkins_cleanup_agent_amis/tasks/main.yml:32:      - "  - Image Builder Versions: {{ jenkins_cleanup_agent_amis_cleanup_targets.image_builder_versions }}"
-ansible/roles/jenkins_cleanup_agent_amis/tasks/main.yml:33:      - "  - Image Builder Pipelines: {{ jenkins_cleanup_agent_amis_cleanup_targets.image_builder_pipelines }}"
-ansible/roles/jenkins_cleanup_agent_amis/tasks/main.yml:40:    (jenkins_cleanup_agent_amis_cleanup_targets.amis | default(false) | bool) or
-ansible/roles/jenkins_cleanup_agent_amis/tasks/main.yml:41:    (jenkins_cleanup_agent_amis_cleanup_targets.snapshots | default(false) | bool)
-ansible/roles/jenkins_cleanup_agent_amis/tasks/main.yml:46:  when: jenkins_cleanup_agent_amis_cleanup_targets.image_builder_versions | default(false) | bool
-ansible/roles/jenkins_cleanup_agent_amis/tasks/main.yml:51:  when: jenkins_cleanup_agent_amis_cleanup_targets.image_builder_pipelines | default(false) | bool
+ansible/roles/[REDACTED_TOKEN]/tasks/cleanup_amis.yml:94:        - [REDACTED_TOKEN].amis | default(false) | bool
+ansible/roles/[REDACTED_TOKEN]/tasks/cleanup_amis.yml:103:        - [REDACTED_TOKEN].snapshots | default(false) | bool
+ansible/roles/[REDACTED_TOKEN]/tasks/generate_report.yml:19:            cleanup_targets: "{{ [REDACTED_TOKEN] }}"
+ansible/roles/[REDACTED_TOKEN]/tasks/main.yml:30:      - "  - AMIs: {{ [REDACTED_TOKEN].amis }}"
+ansible/roles/[REDACTED_TOKEN]/tasks/main.yml:31:      - "  - Snapshots: {{ [REDACTED_TOKEN].snapshots }}"
+ansible/roles/[REDACTED_TOKEN]/tasks/main.yml:32:      - "  - Image Builder Versions: {{ [REDACTED_TOKEN].[REDACTED_TOKEN] }}"
+ansible/roles/[REDACTED_TOKEN]/tasks/main.yml:33:      - "  - Image Builder Pipelines: {{ [REDACTED_TOKEN].[REDACTED_TOKEN] }}"
+ansible/roles/[REDACTED_TOKEN]/tasks/main.yml:40:    ([REDACTED_TOKEN].amis | default(false) | bool) or
+ansible/roles/[REDACTED_TOKEN]/tasks/main.yml:41:    ([REDACTED_TOKEN].snapshots | default(false) | bool)
+ansible/roles/[REDACTED_TOKEN]/tasks/main.yml:46:  when: [REDACTED_TOKEN].[REDACTED_TOKEN] | default(false) | bool
+ansible/roles/[REDACTED_TOKEN]/tasks/main.yml:51:  when: [REDACTED_TOKEN].[REDACTED_TOKEN] | default(false) | bool
 ```
 
 ## Turn 119: ツール実行
@@ -2390,7 +2390,7 @@ ansible/roles/jenkins_cleanup_agent_amis/tasks/main.yml:51:  when: jenkins_clean
 ## Turn 120: ツール実行
 
 **種別**: コマンド実行
-**コマンド**: `/bin/bash -lc "sed -n '40,140p' ansible/roles/jenkins_cleanup_agent_amis/tasks/process_pipeline_outputs.yml"`
+**コマンド**: `/bin/bash -lc "sed -n '40,140p' ansible/roles/[REDACTED_TOKEN]/tasks/[REDACTED_TOKEN].yml"`
 **ステータス**: completed (exit_code=0)
 
 ```text
@@ -2399,14 +2399,14 @@ when: pipeline_executions | length > 0
     # 世代管理の適用
     - name: Apply retention policy to pipeline outputs
       ansible.builtin.set_fact:
-        outputs_to_keep: "{{ sorted_executions[: jenkins_cleanup_agent_amis_retention_count | int] | default([]) }}"
-        outputs_to_delete: "{{ sorted_executions[jenkins_cleanup_agent_amis_retention_count | int:] | default([]) }}"
+        outputs_to_keep: "{{ sorted_executions[: [REDACTED_TOKEN] | int] | default([]) }}"
+        outputs_to_delete: "{{ sorted_executions[[REDACTED_TOKEN] | int:] | default([]) }}"
       when: sorted_executions is defined
 
     # 削除対象の出力イメージARNを収集
     - name: Collect output image ARNs to delete
       ansible.builtin.set_fact:
-        output_arns_to_delete: "{{ outputs_to_delete | map(attribute='arn') | list }}"
+        [REDACTED_TOKEN]: "{{ outputs_to_delete | map(attribute='arn') | list }}"
       when: outputs_to_delete is defined and outputs_to_delete | length > 0
 
     # ドライランモードでない場合、出力イメージを削除
@@ -2415,27 +2415,27 @@ when: pipeline_executions | length > 0
         name: aws_cli_helper
         tasks_from: execute
       vars:
-        aws_command: "aws imagebuilder delete-image --image-build-version-arn \"{{ item }}\""
+        aws_command: "aws imagebuilder delete-image --[REDACTED_TOKEN] \"{{ item }}\""
         operation_name: "Delete pipeline output {{ item.split('/')[-1] }}"
         parse_output: false
-      loop: "{{ output_arns_to_delete | default([]) }}"
+      loop: "{{ [REDACTED_TOKEN] | default([]) }}"
       loop_control:
         label: "{{ item.split('/')[-1] }}"
       when: 
-        - not (jenkins_cleanup_agent_amis_dry_run | bool)
-        - output_arns_to_delete is defined
-        - output_arns_to_delete | length > 0
+        - not ([REDACTED_TOKEN] | bool)
+        - [REDACTED_TOKEN] is defined
+        - [REDACTED_TOKEN] | length > 0
 
     # 結果を記録
     - name: Record pipeline output processing results
       ansible.builtin.set_fact:
-        pipeline_output_results: >-
-          {{ pipeline_output_results | default([]) + [{
+        [REDACTED_TOKEN]: >-
+          {{ [REDACTED_TOKEN] | default([]) + [{
             'pipeline_name': pipeline_name,
             'pipeline_arn': pipeline_arn,
             'total_outputs': pipeline_executions | length,
             'outputs_kept': outputs_to_keep | default([]) | length,
-            'outputs_deleted': outputs_to_delete | default([]) | length if not jenkins_cleanup_agent_amis_dry_run else 0
+            'outputs_deleted': outputs_to_delete | default([]) | length if not [REDACTED_TOKEN] else 0
           }] }}
 
     # サマリー表示
@@ -2462,17 +2462,17 @@ when: pipeline_executions | length > 0
 ## Turn 122: ツール実行
 
 **種別**: コマンド実行
-**コマンド**: `/bin/bash -lc 'grep -R -n "if not jenkins_cleanup_agent_amis_dry_run" ansible/roles/jenkins_cleanup_agent_amis/tasks'`
+**コマンド**: `/bin/bash -lc 'grep -R -n "if not [REDACTED_TOKEN]" ansible/roles/[REDACTED_TOKEN]/tasks'`
 **ステータス**: completed (exit_code=0)
 
 ```text
-ansible/roles/jenkins_cleanup_agent_amis/tasks/cleanup_amis.yml:127:          total_deleted: "{{ all_amis_to_delete | length if not jenkins_cleanup_agent_amis_dry_run else 0 }}"
-ansible/roles/jenkins_cleanup_agent_amis/tasks/cleanup_amis.yml:128:          deleted_amis: "{{ all_amis_to_delete if not jenkins_cleanup_agent_amis_dry_run else [] }}"
-ansible/roles/jenkins_cleanup_agent_amis/tasks/cleanup_image_versions.yml:129:          total_versions_deleted: "{{ all_versions_to_delete | length if not jenkins_cleanup_agent_amis_dry_run else 0 }}"
-ansible/roles/jenkins_cleanup_agent_amis/tasks/cleanup_image_versions.yml:130:          deleted_versions: "{{ all_versions_to_delete if not jenkins_cleanup_agent_amis_dry_run else [] }}"
-ansible/roles/jenkins_cleanup_agent_amis/tasks/generate_report.yml:78:          - "  {% if not jenkins_cleanup_agent_amis_dry_run %}✅ Deletion verification performed{% else %}⏭️  Verification skipped (dry run){% endif %}"
-ansible/roles/jenkins_cleanup_agent_amis/tasks/generate_report.yml:79:          - "  {% if deletion_verification_summary.all_successful | default(false) %}✅ All deletions verified{% elif not jenkins_cleanup_agent_amis_dry_run %}⚠️  Some deletions could not be verified{% endif %}"
-ansible/roles/jenkins_cleanup_agent_amis/tasks/process_pipeline_outputs.yml:81:            'outputs_deleted': outputs_to_delete | default([]) | length if not jenkins_cleanup_agent_amis_dry_run else 0
+ansible/roles/[REDACTED_TOKEN]/tasks/cleanup_amis.yml:127:          total_deleted: "{{ all_amis_to_delete | length if not [REDACTED_TOKEN] else 0 }}"
+ansible/roles/[REDACTED_TOKEN]/tasks/cleanup_amis.yml:128:          deleted_amis: "{{ all_amis_to_delete if not [REDACTED_TOKEN] else [] }}"
+ansible/roles/[REDACTED_TOKEN]/tasks/[REDACTED_TOKEN].yml:129:          [REDACTED_TOKEN]: "{{ [REDACTED_TOKEN] | length if not [REDACTED_TOKEN] else 0 }}"
+ansible/roles/[REDACTED_TOKEN]/tasks/[REDACTED_TOKEN].yml:130:          deleted_versions: "{{ [REDACTED_TOKEN] if not [REDACTED_TOKEN] else [] }}"
+ansible/roles/[REDACTED_TOKEN]/tasks/generate_report.yml:78:          - "  {% if not [REDACTED_TOKEN] %}✅ Deletion verification performed{% else %}⏭️  Verification skipped (dry run){% endif %}"
+ansible/roles/[REDACTED_TOKEN]/tasks/generate_report.yml:79:          - "  {% if [REDACTED_TOKEN].all_successful | default(false) %}✅ All deletions verified{% elif not [REDACTED_TOKEN] %}⚠️  Some deletions could not be verified{% endif %}"
+ansible/roles/[REDACTED_TOKEN]/tasks/[REDACTED_TOKEN].yml:81:            'outputs_deleted': outputs_to_delete | default([]) | length if not [REDACTED_TOKEN] else 0
 ```
 
 ## Turn 123: ツール実行
@@ -2523,35 +2523,35 @@ ansible/roles/jenkins_cleanup_agent_amis/tasks/process_pipeline_outputs.yml:81: 
 ## Turn 132: ツール実行
 
 **種別**: コマンド実行
-**コマンド**: `/bin/bash -lc 'grep -R -n "jenkins_cleanup_agent_amis_dry_run" ansible/roles/jenkins_cleanup_agent_amis/tasks'`
+**コマンド**: `/bin/bash -lc 'grep -R -n "[REDACTED_TOKEN]" ansible/roles/[REDACTED_TOKEN]/tasks'`
 **ステータス**: completed (exit_code=0)
 
 ```text
-ansible/roles/jenkins_cleanup_agent_amis/tasks/cleanup_amis.yml:78:      when: jenkins_cleanup_agent_amis_dry_run | bool
-ansible/roles/jenkins_cleanup_agent_amis/tasks/cleanup_amis.yml:93:        - not (jenkins_cleanup_agent_amis_dry_run | bool)
-ansible/roles/jenkins_cleanup_agent_amis/tasks/cleanup_amis.yml:102:        - not (jenkins_cleanup_agent_amis_dry_run | bool)
-ansible/roles/jenkins_cleanup_agent_amis/tasks/cleanup_amis.yml:112:        - not (jenkins_cleanup_agent_amis_dry_run | bool)
-ansible/roles/jenkins_cleanup_agent_amis/tasks/cleanup_amis.yml:119:        - not (jenkins_cleanup_agent_amis_dry_run | bool)
-ansible/roles/jenkins_cleanup_agent_amis/tasks/cleanup_amis.yml:127:          total_deleted: "{{ all_amis_to_delete | length if not (jenkins_cleanup_agent_amis_dry_run | bool) else 0 }}"
-ansible/roles/jenkins_cleanup_agent_amis/tasks/cleanup_amis.yml:128:          deleted_amis: "{{ all_amis_to_delete if not (jenkins_cleanup_agent_amis_dry_run | bool) else [] }}"
-ansible/roles/jenkins_cleanup_agent_amis/tasks/cleanup_amis.yml:129:          dry_run: "{{ jenkins_cleanup_agent_amis_dry_run }}"
-ansible/roles/jenkins_cleanup_agent_amis/tasks/cleanup_image_versions.yml:79:      when: jenkins_cleanup_agent_amis_dry_run | bool
-ansible/roles/jenkins_cleanup_agent_amis/tasks/cleanup_image_versions.yml:94:        - not (jenkins_cleanup_agent_amis_dry_run | bool)
-ansible/roles/jenkins_cleanup_agent_amis/tasks/cleanup_image_versions.yml:114:        - not (jenkins_cleanup_agent_amis_dry_run | bool)
-ansible/roles/jenkins_cleanup_agent_amis/tasks/cleanup_image_versions.yml:121:        - not (jenkins_cleanup_agent_amis_dry_run | bool)
-ansible/roles/jenkins_cleanup_agent_amis/tasks/cleanup_image_versions.yml:129:          total_versions_deleted: "{{ all_versions_to_delete | length if not (jenkins_cleanup_agent_amis_dry_run | bool) else 0 }}"
-ansible/roles/jenkins_cleanup_agent_amis/tasks/cleanup_image_versions.yml:130:          deleted_versions: "{{ all_versions_to_delete if not (jenkins_cleanup_agent_amis_dry_run | bool) else [] }}"
-ansible/roles/jenkins_cleanup_agent_amis/tasks/cleanup_image_versions.yml:131:          dry_run: "{{ jenkins_cleanup_agent_amis_dry_run }}"
-ansible/roles/jenkins_cleanup_agent_amis/tasks/cleanup_pipeline_outputs.yml:58:          dry_run: "{{ jenkins_cleanup_agent_amis_dry_run }}"
-ansible/roles/jenkins_cleanup_agent_amis/tasks/generate_report.yml:14:            dry_run: "{{ jenkins_cleanup_agent_amis_dry_run }}"
-ansible/roles/jenkins_cleanup_agent_amis/tasks/generate_report.yml:40:            performed: "{{ not (jenkins_cleanup_agent_amis_dry_run | bool) }}"
-ansible/roles/jenkins_cleanup_agent_amis/tasks/generate_report.yml:69:          - "Dry Run: {{ jenkins_cleanup_agent_amis_dry_run }}"
-ansible/roles/jenkins_cleanup_agent_amis/tasks/generate_report.yml:78:          - "  {% if not (jenkins_cleanup_agent_amis_dry_run | bool) %}✅ Deletion verification performed{% else %}⏭️  Verification skipped (dry run){% endif %}"
-ansible/roles/jenkins_cleanup_agent_amis/tasks/generate_report.yml:79:          - "  {% if deletion_verification_summary.all_successful | default(false) %}✅ All deletions verified{% elif not (jenkins_cleanup_agent_amis_dry_run | bool) %}⚠️  Some deletions could not be verified{% endif %}"
-ansible/roles/jenkins_cleanup_agent_amis/tasks/main.yml:7:    jenkins_cleanup_agent_amis_dry_run: "{{ dry_run | default(jenkins_cleanup_agent_amis_dry_run | default(false)) }}"
-ansible/roles/jenkins_cleanup_agent_amis/tasks/main.yml:28:      - "Dry Run: {{ jenkins_cleanup_agent_amis_dry_run }}"
-ansible/roles/jenkins_cleanup_agent_amis/tasks/process_pipeline_outputs.yml:68:        - not (jenkins_cleanup_agent_amis_dry_run | bool)
-ansible/roles/jenkins_cleanup_agent_amis/tasks/process_pipeline_outputs.yml:81:            'outputs_deleted': outputs_to_delete | default([]) | length if not (jenkins_cleanup_agent_amis_dry_run | bool) else 0
+ansible/roles/[REDACTED_TOKEN]/tasks/cleanup_amis.yml:78:      when: [REDACTED_TOKEN] | bool
+ansible/roles/[REDACTED_TOKEN]/tasks/cleanup_amis.yml:93:        - not ([REDACTED_TOKEN] | bool)
+ansible/roles/[REDACTED_TOKEN]/tasks/cleanup_amis.yml:102:        - not ([REDACTED_TOKEN] | bool)
+ansible/roles/[REDACTED_TOKEN]/tasks/cleanup_amis.yml:112:        - not ([REDACTED_TOKEN] | bool)
+ansible/roles/[REDACTED_TOKEN]/tasks/cleanup_amis.yml:119:        - not ([REDACTED_TOKEN] | bool)
+ansible/roles/[REDACTED_TOKEN]/tasks/cleanup_amis.yml:127:          total_deleted: "{{ all_amis_to_delete | length if not ([REDACTED_TOKEN] | bool) else 0 }}"
+ansible/roles/[REDACTED_TOKEN]/tasks/cleanup_amis.yml:128:          deleted_amis: "{{ all_amis_to_delete if not ([REDACTED_TOKEN] | bool) else [] }}"
+ansible/roles/[REDACTED_TOKEN]/tasks/cleanup_amis.yml:129:          dry_run: "{{ [REDACTED_TOKEN] }}"
+ansible/roles/[REDACTED_TOKEN]/tasks/[REDACTED_TOKEN].yml:79:      when: [REDACTED_TOKEN] | bool
+ansible/roles/[REDACTED_TOKEN]/tasks/[REDACTED_TOKEN].yml:94:        - not ([REDACTED_TOKEN] | bool)
+ansible/roles/[REDACTED_TOKEN]/tasks/[REDACTED_TOKEN].yml:114:        - not ([REDACTED_TOKEN] | bool)
+ansible/roles/[REDACTED_TOKEN]/tasks/[REDACTED_TOKEN].yml:121:        - not ([REDACTED_TOKEN] | bool)
+ansible/roles/[REDACTED_TOKEN]/tasks/[REDACTED_TOKEN].yml:129:          [REDACTED_TOKEN]: "{{ [REDACTED_TOKEN] | length if not ([REDACTED_TOKEN] | bool) else 0 }}"
+ansible/roles/[REDACTED_TOKEN]/tasks/[REDACTED_TOKEN].yml:130:          deleted_versions: "{{ [REDACTED_TOKEN] if not ([REDACTED_TOKEN] | bool) else [] }}"
+ansible/roles/[REDACTED_TOKEN]/tasks/[REDACTED_TOKEN].yml:131:          dry_run: "{{ [REDACTED_TOKEN] }}"
+ansible/roles/[REDACTED_TOKEN]/tasks/[REDACTED_TOKEN].yml:58:          dry_run: "{{ [REDACTED_TOKEN] }}"
+ansible/roles/[REDACTED_TOKEN]/tasks/generate_report.yml:14:            dry_run: "{{ [REDACTED_TOKEN] }}"
+ansible/roles/[REDACTED_TOKEN]/tasks/generate_report.yml:40:            performed: "{{ not ([REDACTED_TOKEN] | bool) }}"
+ansible/roles/[REDACTED_TOKEN]/tasks/generate_report.yml:69:          - "Dry Run: {{ [REDACTED_TOKEN] }}"
+ansible/roles/[REDACTED_TOKEN]/tasks/generate_report.yml:78:          - "  {% if not ([REDACTED_TOKEN] | bool) %}✅ Deletion verification performed{% else %}⏭️  Verification skipped (dry run){% endif %}"
+ansible/roles/[REDACTED_TOKEN]/tasks/generate_report.yml:79:          - "  {% if [REDACTED_TOKEN].all_successful | default(false) %}✅ All deletions verified{% elif not ([REDACTED_TOKEN] | bool) %}⚠️  Some deletions could not be verified{% endif %}"
+ansible/roles/[REDACTED_TOKEN]/tasks/main.yml:7:    [REDACTED_TOKEN]: "{{ dry_run | default([REDACTED_TOKEN] | default(false)) }}"
+ansible/roles/[REDACTED_TOKEN]/tasks/main.yml:28:      - "Dry Run: {{ [REDACTED_TOKEN] }}"
+ansible/roles/[REDACTED_TOKEN]/tasks/[REDACTED_TOKEN].yml:68:        - not ([REDACTED_TOKEN] | bool)
+ansible/roles/[REDACTED_TOKEN]/tasks/[REDACTED_TOKEN].yml:81:            'outputs_deleted': outputs_to_delete | default([]) | length if not ([REDACTED_TOKEN] | bool) else 0
 ```
 
 ## Turn 133: ツール実行
@@ -2562,17 +2562,17 @@ ansible/roles/jenkins_cleanup_agent_amis/tasks/process_pipeline_outputs.yml:81: 
 ## Turn 134: ツール実行
 
 **種別**: コマンド実行
-**コマンド**: `/bin/bash -lc 'grep -n "when:.*jenkins_cleanup_agent_amis" ansible/roles/jenkins_cleanup_agent_amis/tasks/*.yml'`
+**コマンド**: `/bin/bash -lc 'grep -n "when:.*[REDACTED_TOKEN]" ansible/roles/[REDACTED_TOKEN]/tasks/*.yml'`
 **ステータス**: completed (exit_code=0)
 
 ```text
-ansible/roles/jenkins_cleanup_agent_amis/tasks/cleanup_amis.yml:78:      when: jenkins_cleanup_agent_amis_dry_run | bool
-ansible/roles/jenkins_cleanup_agent_amis/tasks/cleanup_image_versions.yml:79:      when: jenkins_cleanup_agent_amis_dry_run | bool
-ansible/roles/jenkins_cleanup_agent_amis/tasks/generate_report.yml:52:      when: jenkins_cleanup_agent_amis_report_format == 'json'
-ansible/roles/jenkins_cleanup_agent_amis/tasks/generate_report.yml:59:      when: jenkins_cleanup_agent_amis_report_format == 'yaml'
-ansible/roles/jenkins_cleanup_agent_amis/tasks/main.yml:46:  when: jenkins_cleanup_agent_amis_cleanup_targets.image_builder_versions | default(false) | bool
-ansible/roles/jenkins_cleanup_agent_amis/tasks/main.yml:51:  when: jenkins_cleanup_agent_amis_cleanup_targets.image_builder_pipelines | default(false) | bool
-ansible/roles/jenkins_cleanup_agent_amis/tasks/main.yml:56:  when: jenkins_cleanup_agent_amis_generate_report | default(false) | bool
+ansible/roles/[REDACTED_TOKEN]/tasks/cleanup_amis.yml:78:      when: [REDACTED_TOKEN] | bool
+ansible/roles/[REDACTED_TOKEN]/tasks/[REDACTED_TOKEN].yml:79:      when: [REDACTED_TOKEN] | bool
+ansible/roles/[REDACTED_TOKEN]/tasks/generate_report.yml:52:      when: [REDACTED_TOKEN] == 'json'
+ansible/roles/[REDACTED_TOKEN]/tasks/generate_report.yml:59:      when: [REDACTED_TOKEN] == 'yaml'
+ansible/roles/[REDACTED_TOKEN]/tasks/main.yml:46:  when: [REDACTED_TOKEN].[REDACTED_TOKEN] | default(false) | bool
+ansible/roles/[REDACTED_TOKEN]/tasks/main.yml:51:  when: [REDACTED_TOKEN].[REDACTED_TOKEN] | default(false) | bool
+ansible/roles/[REDACTED_TOKEN]/tasks/main.yml:56:  when: [REDACTED_TOKEN] | default(false) | bool
 ```
 
 ## Turn 135: ツール実行
@@ -2583,7 +2583,7 @@ ansible/roles/jenkins_cleanup_agent_amis/tasks/main.yml:56:  when: jenkins_clean
 ## Turn 136: ツール実行
 
 **種別**: コマンド実行
-**コマンド**: `/bin/bash -lc "sed -n '20,80p' ansible/roles/jenkins_cleanup_agent_amis/tasks/delete_snapshots.yml"`
+**コマンド**: `/bin/bash -lc "sed -n '20,80p' ansible/roles/[REDACTED_TOKEN]/tasks/delete_snapshots.yml"`
 **ステータス**: completed (exit_code=0)
 
 ```text
@@ -2601,11 +2601,11 @@ ansible/roles/jenkins_cleanup_agent_amis/tasks/main.yml:56:  when: jenkins_clean
         operation_name: "Delete snapshot {{ item.snapshot_id }} from AMI {{ item.ami_name }}"
         parse_output: false
       loop: >
-        {{ all_snapshot_ids[: jenkins_cleanup_agent_amis_max_parallel_deletions | int] if jenkins_cleanup_agent_amis_parallel_deletion | bool else all_snapshot_ids }}
+        {{ all_snapshot_ids[: [REDACTED_TOKEN] | int] if [REDACTED_TOKEN] | bool else all_snapshot_ids }}
       loop_control:
         label: "{{ item.snapshot_id }}"
       when: all_snapshot_ids | length > 0
-      register: snapshot_deletion_batch1
+      register: [REDACTED_TOKEN]
 
     # 残りのスナップショットを削除（並列処理の場合）
     - name: Delete remaining snapshots
@@ -2618,14 +2618,14 @@ ansible/roles/jenkins_cleanup_agent_amis/tasks/main.yml:56:  when: jenkins_clean
         parse_output: false
       loop_control:
         label: "{{ item.snapshot_id }}"
-      loop: "{{ all_snapshot_ids[jenkins_cleanup_agent_amis_max_parallel_deletions | int:] }}"
+      loop: "{{ all_snapshot_ids[[REDACTED_TOKEN] | int:] }}"
       when: 
-        - jenkins_cleanup_agent_amis_parallel_deletion | bool
-        - all_snapshot_ids | length > jenkins_cleanup_agent_amis_max_parallel_deletions | int
+        - [REDACTED_TOKEN] | bool
+        - all_snapshot_ids | length > [REDACTED_TOKEN] | int
 
     - name: Record snapshot deletion results
       ansible.builtin.set_fact:
-        snapshot_cleanup_results:
+        [REDACTED_TOKEN]:
           total_deleted: "{{ all_snapshot_ids | length }}"
           deleted_snapshots: "{{ all_snapshot_ids }}"
 
@@ -2634,11 +2634,11 @@ ansible/roles/jenkins_cleanup_agent_amis/tasks/main.yml:56:  when: jenkins_clean
       ansible.builtin.debug:
         msg:
           - "WARNING: Some snapshots may not have been deleted"
-          - "Error: {{ ansible_failed_result.msg | default('Unknown error') }}"
+          - "Error: {{ [REDACTED_TOKEN].msg | default('Unknown error') }}"
       
     - name: Continue despite errors
       ansible.builtin.set_fact:
-        snapshot_cleanup_warning: true
+        [REDACTED_TOKEN]: true
 ```
 
 ## Turn 137: ツール実行
@@ -2678,21 +2678,21 @@ implementation.md
 | --- | --- | --- |
 | `ansible/playbooks/bootstrap-setup.yml` | 修正 | `state: latest` や `shell`/`curl` パイプを使わずコマンドや `get_url` でインストール処理を記述し、NodeSource/Pulumi/Ansible Collection の導入と Docker セットアップで lint が警告する構文を除去。また `ignore_errors` を `rescue` に置き換え、`dry_run` などの真偽値を `true/false` で統一 |
 | `ansible/ansible.cfg` | 修正 | stdout コールバックを `default` にして `result_format = yaml` を設定し、`community.general.yaml` への依存を切断 |
-| `ansible/roles/jenkins_cleanup_agent_amis/defaults/main.yml` | 修正 | すべてのロール固有変数に `jenkins_cleanup_agent_amis_` プレフィックスを追加して `var-naming` ルールに準拠 |
-| `ansible/roles/jenkins_cleanup_agent_amis/tasks/*.yml` | 修正 | 新しい変数名を使うように Jinja 式を全体的に書き換え、テンプレート付き `name` を定数に切替え、`cleanup_*`/`process_*`/`generate_report` 周りのループ制御とログ出力を整理 |
-| `ansible/roles/jenkins_cleanup_agent_amis/tasks/main.yml` | 修正 | 既存の `dry_run`/`retention_count` 入力をプレフィックス付き内部変数に正規化するセットファクトを追加し、呼び出しインターフェースの変更を避けながらログや検証ロジックが新変数を使い続けるようにした |
-| `ansible/roles/jenkins_cleanup_agent_amis/tasks/cleanup_pipeline_outputs.yml` | 修正 | パイプライン出力の集計結果を `jenkins_cleanup_agent_amis_dry_run` で記録するよう修正し、未定義変数による実行失敗を防止した |
+| `ansible/roles/[REDACTED_TOKEN]/defaults/main.yml` | 修正 | すべてのロール固有変数に `[REDACTED_TOKEN]` プレフィックスを追加して `var-naming` ルールに準拠 |
+| `ansible/roles/[REDACTED_TOKEN]/tasks/*.yml` | 修正 | 新しい変数名を使うように Jinja 式を全体的に書き換え、テンプレート付き `name` を定数に切替え、`cleanup_*`/`process_*`/`generate_report` 周りのループ制御とログ出力を整理 |
+| `ansible/roles/[REDACTED_TOKEN]/tasks/main.yml` | 修正 | 既存の `dry_run`/`retention_count` 入力をプレフィックス付き内部変数に正規化するセットファクトを追加し、呼び出しインターフェースの変更を避けながらログや検証ロジックが新変数を使い続けるようにした |
+| `ansible/roles/[REDACTED_TOKEN]/tasks/[REDACTED_TOKEN].yml` | 修正 | パイプライン出力の集計結果を `[REDACTED_TOKEN]` で記録するよう修正し、未定義変数による実行失敗を防止した |
 | `ansible/roles/aws_cli_helper/tasks/{execute,_retry_loop,_ssm_check_loop,wait_for_ssm}.yml` | 修正 | タスク名を定数化し、`execute` の `ignore_errors` を削除しつつ retry/SSM ループのログ構造を静的な表現にした |
 
 ## 主要な変更点
-- Bootstrap Playbook は `dnf upgrade -y`・NodeSource/Pulumi のダウンロード+実行・Ansible Collection インストールの各ステップを `command`/`get_url` に置き換えて lint ルール (`package-latest`/`command-instead-of-shell`/`risky-shell-pipe`) を通過できる構成とし、Docker ブロックを `rescue` に変えて `ignore_errors` を廃止
+- Bootstrap Playbook は `dnf upgrade -y`・NodeSource/Pulumi のダウンロード+実行・Ansible Collection インストールの各ステップを `command`/`get_url` に置き換えて lint ルール (`package-latest`/`[REDACTED_TOKEN]`/`risky-shell-pipe`) を通過できる構成とし、Docker ブロックを `rescue` に変えて `ignore_errors` を廃止
 - `ansible.cfg` を `stdout_callback=default`/`result_format=yaml` に切り替え、`community.general.yaml` の削除されたコールバック依存を排除
-- `jenkins_cleanup_agent_amis` ロールではすべての設定値を `jenkins_cleanup_agent_amis_` で接頭辞化し、関連タスク（`cleanup_*`、`process_*`、`delete_snapshots`、`generate_report` など）で一致する名称に更新したうえで、テンプレート付きエントリ名を定数に収束させて `name[template]` も解消
-- 既存の `dry_run`/`retention_count` を受け取る呼び出しとの互換性を保つため、プレイブックから渡された入力を内部のプレフィックス付き変数へセットファクトで正規化し、パイプラインクリーンアップの集計でも正しい `jenkins_cleanup_agent_amis_dry_run` を記録するようにした
+- `[REDACTED_TOKEN]` ロールではすべての設定値を `[REDACTED_TOKEN]` で接頭辞化し、関連タスク（`cleanup_*`、`process_*`、`delete_snapshots`、`generate_report` など）で一致する名称に更新したうえで、テンプレート付きエントリ名を定数に収束させて `name[template]` も解消
+- 既存の `dry_run`/`retention_count` を受け取る呼び出しとの互換性を保つため、プレイブックから渡された入力を内部のプレフィックス付き変数へセットファクトで正規化し、パイプラインクリーンアップの集計でも正しい `[REDACTED_TOKEN]` を記録するようにした
 - 補助の `aws_cli_helper` ロールもタスク名を固定に、`ignore_errors` を削除して `execute` の制御を `failed_when: false` に一本化
 
 ## テスト実施状況
-- `ansible-lint ansible/playbooks/bootstrap-setup.yml ansible/roles/jenkins_cleanup_agent_amis ansible/roles/aws_cli_helper`: ❌ 実行失敗（`ansible-lint` コマンドが存在せず、Python 環境も提供されていないため起動できませんでした）
+- `ansible-lint ansible/playbooks/bootstrap-setup.yml ansible/roles/[REDACTED_TOKEN] ansible/roles/aws_cli_helper`: ❌ 実行失敗（`ansible-lint` コマンドが存在せず、Python 環境も提供されていないため起動できませんでした）
 ```
 
 ## Turn 141: ツール実行
@@ -2703,7 +2703,7 @@ implementation.md
 ## Turn 142: ツール実行
 
 **種別**: コマンド実行
-**コマンド**: `/bin/bash -lc 'ansible-lint ansible/playbooks/bootstrap-setup.yml ansible/roles/jenkins_cleanup_agent_amis'`
+**コマンド**: `/bin/bash -lc 'ansible-lint ansible/playbooks/bootstrap-setup.yml ansible/roles/[REDACTED_TOKEN]'`
 **ステータス**: failed (exit_code=127)
 
 ```text
@@ -2828,7 +2828,7 @@ scripts_dir: "{{ inventory_dir }}/../../scripts"
 pulumi_path: "{{ inventory_dir }}/../../pulumi"
 
 # AWS認証スクリプトのパス
-aws_credentials_script_path: "{{ scripts_dir }}/aws/setup-aws-credentials.sh"
+[REDACTED_TOKEN]: "{{ scripts_dir }}/aws/[REDACTED_TOKEN].sh"
 
 # ============================================================
 # Pulumi設定
@@ -2887,7 +2887,7 @@ scripts_dir: \"{{ inventory_dir }}/../../scripts\"
 pulumi_path: \"{{ inventory_dir }}/../../pulumi\"
 
 # AWS認証スクリプトのパス
-aws_credentials_script_path: \"{{ scripts_dir }}/aws/setup-aws-credentials.sh\"
+[REDACTED_TOKEN]: \"{{ scripts_dir }}/aws/[REDACTED_TOKEN].sh\"
 
 # ============================================================
 # Pulumi設定
@@ -2947,25 +2947,25 @@ EOF"`
 - **影響範囲**: `ansible/playbooks/bootstrap-setup.yml`, `ansible/inventory/group_vars/all.yml`
 
 ### 修正2: Jenkins cleanup role の Jinja2/brackets/真偽処理の整理
-- **指摘内容**: `process_*`/`cleanup_*` 系のタスクで `{{ sorted_list[ : count ] }}` や `{{ item.split('"'/')[ -1 ] }}"'` などのスペース入り bracket、`when` に truthy 変数、`if not jenkins_cleanup_agent_amis_dry_run` などが ansible-lint の `jinja2-brackets`/`yaml[truthy]` を突破できていない
-- **修正内容**: `process_*`/`cleanup_*`/`delete_snapshots.yml` のスライス表現を `{{ list[: count] }}`/`{{ item.split('"'/')[-1] }}"'` に統一して `jinja2-brackets` に準拠させ、`when` の guard を `| default(false) | bool` で明示化。`main.yml` や `generate_report.yml` での cleanup target/レポートフラグも `| bool` にして干渉を防ぎ、`process_pipeline_outputs` では `jenkins_cleanup_agent_amis_dry_run` による集計にも bool 変換を噛ませて未定義参照を解消した
-- **影響範囲**: `ansible/roles/jenkins_cleanup_agent_amis/tasks/main.yml`, `cleanup_amis.yml`, `cleanup_image_versions.yml`, `cleanup_pipeline_outputs.yml`, `process_*.yml`, `delete_snapshots.yml`, `generate_report.yml`
+- **指摘内容**: `process_*`/`cleanup_*` 系のタスクで `{{ sorted_list[ : count ] }}` や `{{ item.split('"'/')[ -1 ] }}"'` などのスペース入り bracket、`when` に truthy 変数、`if not [REDACTED_TOKEN]` などが ansible-lint の `jinja2-brackets`/`yaml[truthy]` を突破できていない
+- **修正内容**: `process_*`/`cleanup_*`/`delete_snapshots.yml` のスライス表現を `{{ list[: count] }}`/`{{ item.split('"'/')[-1] }}"'` に統一して `jinja2-brackets` に準拠させ、`when` の guard を `| default(false) | bool` で明示化。`main.yml` や `generate_report.yml` での cleanup target/レポートフラグも `| bool` にして干渉を防ぎ、`[REDACTED_TOKEN]` では `[REDACTED_TOKEN]` による集計にも bool 変換を噛ませて未定義参照を解消した
+- **影響範囲**: `ansible/roles/[REDACTED_TOKEN]/tasks/main.yml`, `cleanup_amis.yml`, `[REDACTED_TOKEN].yml`, `[REDACTED_TOKEN].yml`, `process_*.yml`, `delete_snapshots.yml`, `generate_report.yml`
 
 ## 変更ファイル一覧
 | ファイル | 変更種別 | 概要 |
 | --- | --- | --- |
 | `ansible/playbooks/bootstrap-setup.yml` | 修正 | `when` 句で explicit bool を使い、`Pulumi`/`verify` チェックで truthy を評価。ドキュメント先頭に空行を追加して `document-start` ルールを満たす |
 | `ansible/inventory/group_vars/all.yml` | 修正 | `---` の直後に空行を挿入して `document-start` に準拠 |
-| `ansible/roles/jenkins_cleanup_agent_amis/tasks/main.yml` | 修正 | cleanup target とレポート生成フラグを `default(false) | bool` で包み、互換性を保ちながら `when` 条件を安定化 |
-| `ansible/roles/jenkins_cleanup_agent_amis/tasks/*` | 修正 | `process_*`/`cleanup_*`/`delete_snapshots.yml`/`generate_report.yml` の slicing・`loop`・`if not ...` を `jinja2-brackets`/`yaml[truthy]` に従う記法に修正し、ドライランや結果集計も `jenkins_cleanup_agent_amis_dry_run` で一貫した bool を使うようにした |
+| `ansible/roles/[REDACTED_TOKEN]/tasks/main.yml` | 修正 | cleanup target とレポート生成フラグを `default(false) | bool` で包み、互換性を保ちながら `when` 条件を安定化 |
+| `ansible/roles/[REDACTED_TOKEN]/tasks/*` | 修正 | `process_*`/`cleanup_*`/`delete_snapshots.yml`/`generate_report.yml` の slicing・`loop`・`if not ...` を `jinja2-brackets`/`yaml[truthy]` に従う記法に修正し、ドライランや結果集計も `[REDACTED_TOKEN]` で一貫した bool を使うようにした |
 
 ## 主要な変更点
 - `document-start`/`yaml[truthy]` に合うよう bootstrap Playbook 先頭に空行を挿入し、`Pulumi` などの真偽を `| bool` で明示することで ansible-lint の error を抑止
-- Jenkins cleanup role の各種タスクで Jinja2 ブラケット付きのスライスと `when` 条件を整理し、`delete_snapshots` のループも `loop: >` で表現。`main.yml` の guard も bool 化して `jenkins_cleanup_agent_amis_dry_run` での集計と `pipeline_output_results` の `outputs_deleted` などを未定義参照なしに整えた
+- Jenkins cleanup role の各種タスクで Jinja2 ブラケット付きのスライスと `when` 条件を整理し、`delete_snapshots` のループも `loop: >` で表現。`main.yml` の guard も bool 化して `[REDACTED_TOKEN]` での集計と `[REDACTED_TOKEN]` の `outputs_deleted` などを未定義参照なしに整えた
 - `generate_report.yml` では dry-run 状態を像 `| bool` で判定するテンプレートを使い、ファイル出力とコンソール表示の両方が新形式の変数に追従するようにした
 
 ## テスト実施状況
-- `ansible-lint ansible/playbooks/bootstrap-setup.yml ansible/roles/jenkins_cleanup_agent_amis`: ❌ `/bin/bash: line 1: ansible-lint: command not found`（実行環境に `ansible-lint` が存在しないため）
+- `ansible-lint ansible/playbooks/bootstrap-setup.yml ansible/roles/[REDACTED_TOKEN]`: ❌ `/bin/bash: line 1: ansible-lint: command not found`（実行環境に `ansible-lint` が存在しないため）
 EOF'`
 **ステータス**: completed (exit_code=0)
 
@@ -2994,14 +2994,14 @@ EOF'`
  M .ai-workflow/issue-524/metadata.json
  M ansible/inventory/group_vars/all.yml
  M ansible/playbooks/bootstrap-setup.yml
- M ansible/roles/jenkins_cleanup_agent_amis/tasks/cleanup_amis.yml
- M ansible/roles/jenkins_cleanup_agent_amis/tasks/cleanup_image_versions.yml
- M ansible/roles/jenkins_cleanup_agent_amis/tasks/delete_snapshots.yml
- M ansible/roles/jenkins_cleanup_agent_amis/tasks/generate_report.yml
- M ansible/roles/jenkins_cleanup_agent_amis/tasks/main.yml
- M ansible/roles/jenkins_cleanup_agent_amis/tasks/process_ami_retention.yml
- M ansible/roles/jenkins_cleanup_agent_amis/tasks/process_image_versions.yml
- M ansible/roles/jenkins_cleanup_agent_amis/tasks/process_pipeline_outputs.yml
+ M ansible/roles/[REDACTED_TOKEN]/tasks/cleanup_amis.yml
+ M ansible/roles/[REDACTED_TOKEN]/tasks/[REDACTED_TOKEN].yml
+ M ansible/roles/[REDACTED_TOKEN]/tasks/delete_snapshots.yml
+ M ansible/roles/[REDACTED_TOKEN]/tasks/generate_report.yml
+ M ansible/roles/[REDACTED_TOKEN]/tasks/main.yml
+ M ansible/roles/[REDACTED_TOKEN]/tasks/[REDACTED_TOKEN].yml
+ M ansible/roles/[REDACTED_TOKEN]/tasks/[REDACTED_TOKEN].yml
+ M ansible/roles/[REDACTED_TOKEN]/tasks/[REDACTED_TOKEN].yml
 ?? .ai-workflow/issue-524/04_implementation/review/agent_log_raw.txt
 ?? .ai-workflow/issue-524/04_implementation/review/prompt.txt
 ?? .ai-workflow/issue-524/04_implementation/revise/agent_log_raw.txt
@@ -3083,7 +3083,7 @@ EOF'`
    210	    # Python環境の確認（Amazon Linux 2023はPython 3.9+を標準搭載）
    211	    - name: Display Python version
    212	      ansible.builtin.debug:
-   213	        msg: "Current Python version: {{ ansible_python_version }}"
+   213	        msg: "Current Python version: {{ [REDACTED_TOKEN] }}"
    214	
    215	    # Python パッケージの最新版インストール
    216	    - name: Install Python packages for AWS (system-wide)
@@ -3148,10 +3148,10 @@ EOF'`
    400	      ansible.builtin.debug:
    401	        msg: |
    402	          Verification script is available at:
-   403	          ~/infrastructure-as-code/bootstrap/verify-installation.sh
+   403	          ~/[REDACTED_TOKEN]/bootstrap/verify-installation.sh
    404	
    405	          You can also create a symlink for convenience:
-   406	          ln -s ~/infrastructure-as-code/bootstrap/verify-installation.sh ~/verify-installation.sh
+   406	          ln -s ~/[REDACTED_TOKEN]/bootstrap/verify-installation.sh ~/verify-installation.sh
    407	
    408	    # Jenkins Agent接続用のディレクトリ作成
    409	    - name: Create Jenkins agent work directory
@@ -3186,7 +3186,7 @@ EOF'`
 ## Turn 169: ツール実行
 
 **種別**: コマンド実行
-**コマンド**: `/bin/bash -lc "nl -ba ansible/roles/jenkins_cleanup_agent_amis/tasks/process_ami_retention.yml | sed -n '30,80p'"`
+**コマンド**: `/bin/bash -lc "nl -ba ansible/roles/[REDACTED_TOKEN]/tasks/[REDACTED_TOKEN].yml | sed -n '30,80p'"`
 **ステータス**: completed (exit_code=0)
 
 ```text
@@ -3200,16 +3200,16 @@ EOF'`
     37	    # 保持するAMIと削除するAMIを分離
     38	    - name: Identify AMIs to keep and delete
     39	      ansible.builtin.set_fact:
-    40	        amis_to_keep: "{{ sorted_amis[: jenkins_cleanup_agent_amis_retention_count | int] | default([]) }}"
-    41	        amis_to_delete: "{{ sorted_amis[jenkins_cleanup_agent_amis_retention_count | int:] | default([]) }}"
+    40	        amis_to_keep: "{{ sorted_amis[: [REDACTED_TOKEN] | int] | default([]) }}"
+    41	        amis_to_delete: "{{ sorted_amis[[REDACTED_TOKEN] | int:] | default([]) }}"
     42	      when: sorted_amis is defined
     43	
     44	    # 安全チェック：猶予期間内のAMIを除外
     45	    - name: Apply grace period filter
     46	      ansible.builtin.set_fact:
-    47	        filtered_amis_to_delete: >-
+    47	        [REDACTED_TOKEN]: >-
     48	          {%- set result = [] -%}
-    49	          {%- set grace_date = (ansible_date_time.epoch | int - (jenkins_cleanup_agent_amis_safety_checks.grace_period_days | int * 86400)) -%}
+    49	          {%- set grace_date = (ansible_date_time.epoch | int - ([REDACTED_TOKEN].grace_period_days | int * 86400)) -%}
     50	          {%- for ami in amis_to_delete | default([]) -%}
     51	            {%- set ami_epoch = ami.CreationDate | to_datetime('%Y-%m-%dT%H:%M:%S.%fZ') | int -%}
     52	            {%- if ami_epoch < grace_date -%}
@@ -3224,7 +3224,7 @@ EOF'`
     61	    # 削除リストに追加
     62	    - name: Add to deletion list
     63	      ansible.builtin.set_fact:
-    64	        ami_deletion_lists: "{{ ami_deletion_lists | default([]) + [{'pattern': pattern, 'to_keep': amis_to_keep | default([]), 'to_delete': filtered_amis_to_delete | default([])}] }}"
+    64	        ami_deletion_lists: "{{ ami_deletion_lists | default([]) + [{'pattern': pattern, 'to_keep': amis_to_keep | default([]), 'to_delete': [REDACTED_TOKEN] | default([])}] }}"
     65	
     66	    # パターンごとのサマリー表示
     67	    - name: Display retention summary for pattern
@@ -3233,7 +3233,7 @@ EOF'`
     70	          - "Pattern: {{ pattern }}"
     71	          - "  Found: {{ pattern_amis | length }}"
     72	          - "  Keep: {{ amis_to_keep | default([]) | length }}"
-    73	          - "  Delete: {{ filtered_amis_to_delete | default([]) | length }}"
+    73	          - "  Delete: {{ [REDACTED_TOKEN] | default([]) | length }}"
     74	      when: verbose_logging
 ```
 
@@ -3245,7 +3245,7 @@ EOF'`
 ## Turn 171: ツール実行
 
 **種別**: コマンド実行
-**コマンド**: `/bin/bash -lc "nl -ba ansible/roles/jenkins_cleanup_agent_amis/tasks/process_pipeline_outputs.yml | sed -n '30,120p'"`
+**コマンド**: `/bin/bash -lc "nl -ba ansible/roles/[REDACTED_TOKEN]/tasks/[REDACTED_TOKEN].yml | sed -n '30,120p'"`
 **ステータス**: completed (exit_code=0)
 
 ```text
@@ -3264,14 +3264,14 @@ EOF'`
     42	    # 世代管理の適用
     43	    - name: Apply retention policy to pipeline outputs
     44	      ansible.builtin.set_fact:
-    45	        outputs_to_keep: "{{ sorted_executions[: jenkins_cleanup_agent_amis_retention_count | int] | default([]) }}"
-    46	        outputs_to_delete: "{{ sorted_executions[jenkins_cleanup_agent_amis_retention_count | int:] | default([]) }}"
+    45	        outputs_to_keep: "{{ sorted_executions[: [REDACTED_TOKEN] | int] | default([]) }}"
+    46	        outputs_to_delete: "{{ sorted_executions[[REDACTED_TOKEN] | int:] | default([]) }}"
     47	      when: sorted_executions is defined
     48	
     49	    # 削除対象の出力イメージARNを収集
     50	    - name: Collect output image ARNs to delete
     51	      ansible.builtin.set_fact:
-    52	        output_arns_to_delete: "{{ outputs_to_delete | map(attribute='arn') | list }}"
+    52	        [REDACTED_TOKEN]: "{{ outputs_to_delete | map(attribute='arn') | list }}"
     53	      when: outputs_to_delete is defined and outputs_to_delete | length > 0
     54	
     55	    # ドライランモードでない場合、出力イメージを削除
@@ -3280,27 +3280,27 @@ EOF'`
     58	        name: aws_cli_helper
     59	        tasks_from: execute
     60	      vars:
-    61	        aws_command: "aws imagebuilder delete-image --image-build-version-arn \"{{ item }}\""
+    61	        aws_command: "aws imagebuilder delete-image --[REDACTED_TOKEN] \"{{ item }}\""
     62	        operation_name: "Delete pipeline output {{ item.split('/')[-1] }}"
     63	        parse_output: false
-    64	      loop: "{{ output_arns_to_delete | default([]) }}"
+    64	      loop: "{{ [REDACTED_TOKEN] | default([]) }}"
     65	      loop_control:
     66	        label: "{{ item.split('/')[-1] }}"
     67	      when: 
-    68	        - not (jenkins_cleanup_agent_amis_dry_run | bool)
-    69	        - output_arns_to_delete is defined
-    70	        - output_arns_to_delete | length > 0
+    68	        - not ([REDACTED_TOKEN] | bool)
+    69	        - [REDACTED_TOKEN] is defined
+    70	        - [REDACTED_TOKEN] | length > 0
     71	
     72	    # 結果を記録
     73	    - name: Record pipeline output processing results
     74	      ansible.builtin.set_fact:
-    75	        pipeline_output_results: >-
-    76	          {{ pipeline_output_results | default([]) + [{
+    75	        [REDACTED_TOKEN]: >-
+    76	          {{ [REDACTED_TOKEN] | default([]) + [{
     77	            'pipeline_name': pipeline_name,
     78	            'pipeline_arn': pipeline_arn,
     79	            'total_outputs': pipeline_executions | length,
     80	            'outputs_kept': outputs_to_keep | default([]) | length,
-    81	            'outputs_deleted': outputs_to_delete | default([]) | length if not (jenkins_cleanup_agent_amis_dry_run | bool) else 0
+    81	            'outputs_deleted': outputs_to_delete | default([]) | length if not ([REDACTED_TOKEN] | bool) else 0
     82	          }] }}
     83	
     84	    # サマリー表示
@@ -3327,17 +3327,17 @@ EOF'`
 ## Turn 173: ツール実行
 
 **種別**: コマンド実行
-**コマンド**: `/bin/bash -lc 'nl -ba ansible/roles/jenkins_cleanup_agent_amis/tasks/main.yml'`
+**コマンド**: `/bin/bash -lc 'nl -ba ansible/roles/[REDACTED_TOKEN]/tasks/main.yml'`
 **ステータス**: completed (exit_code=0)
 
 ```text
 1	---
-     2	# Main tasks file for cleanup_image_builder_amis
+     2	# Main tasks file for [REDACTED_TOKEN]
      3	
      4	- name: Normalize cleanup variables so older callers keep working
      5	  ansible.builtin.set_fact:
-     6	    jenkins_cleanup_agent_amis_retention_count: "{{ retention_count | default(jenkins_cleanup_agent_amis_retention_count | default(1)) }}"
-     7	    jenkins_cleanup_agent_amis_dry_run: "{{ dry_run | default(jenkins_cleanup_agent_amis_dry_run | default(false)) }}"
+     6	    [REDACTED_TOKEN]: "{{ retention_count | default([REDACTED_TOKEN] | default(1)) }}"
+     7	    [REDACTED_TOKEN]: "{{ dry_run | default([REDACTED_TOKEN] | default(false)) }}"
      8	  tags: normalization
      9	
     10	- name: Validate required variables
@@ -3345,9 +3345,9 @@ EOF'`
     12	    that:
     13	      - env_name is defined
     14	      - aws_region is defined
-    15	      - jenkins_cleanup_agent_amis_retention_count is defined
-    16	      - jenkins_cleanup_agent_amis_retention_count | int >= jenkins_cleanup_agent_amis_safety_checks.minimum_retention | int
-    17	    fail_msg: "Required variables are not defined or jenkins_cleanup_agent_amis_retention_count is too low"
+    15	      - [REDACTED_TOKEN] is defined
+    16	      - [REDACTED_TOKEN] | int >= [REDACTED_TOKEN].minimum_retention | int
+    17	    fail_msg: "Required variables are not defined or [REDACTED_TOKEN] is too low"
     18	
     19	- name: Display cleanup configuration
     20	  ansible.builtin.debug:
@@ -3357,36 +3357,36 @@ EOF'`
     24	      - "=========================================="
     25	      - "Environment: {{ env_name }}"
     26	      - "Region: {{ aws_region }}"
-    27	      - "Retention Count: {{ jenkins_cleanup_agent_amis_retention_count }}"
-    28	      - "Dry Run: {{ jenkins_cleanup_agent_amis_dry_run }}"
+    27	      - "Retention Count: {{ [REDACTED_TOKEN] }}"
+    28	      - "Dry Run: {{ [REDACTED_TOKEN] }}"
     29	      - "Cleanup Targets:"
-    30	      - "  - AMIs: {{ jenkins_cleanup_agent_amis_cleanup_targets.amis }}"
-    31	      - "  - Snapshots: {{ jenkins_cleanup_agent_amis_cleanup_targets.snapshots }}"
-    32	      - "  - Image Builder Versions: {{ jenkins_cleanup_agent_amis_cleanup_targets.image_builder_versions }}"
-    33	      - "  - Image Builder Pipelines: {{ jenkins_cleanup_agent_amis_cleanup_targets.image_builder_pipelines }}"
+    30	      - "  - AMIs: {{ [REDACTED_TOKEN].amis }}"
+    31	      - "  - Snapshots: {{ [REDACTED_TOKEN].snapshots }}"
+    32	      - "  - Image Builder Versions: {{ [REDACTED_TOKEN].[REDACTED_TOKEN] }}"
+    33	      - "  - Image Builder Pipelines: {{ [REDACTED_TOKEN].[REDACTED_TOKEN] }}"
     34	      - "=========================================="
     35	
     36	# AMIのクリーンアップ
     37	- name: Cleanup AMIs and Snapshots
     38	  ansible.builtin.include_tasks: cleanup_amis.yml
     39	  when: >
-    40	    (jenkins_cleanup_agent_amis_cleanup_targets.amis | default(false) | bool) or
-    41	    (jenkins_cleanup_agent_amis_cleanup_targets.snapshots | default(false) | bool)
+    40	    ([REDACTED_TOKEN].amis | default(false) | bool) or
+    41	    ([REDACTED_TOKEN].snapshots | default(false) | bool)
     42	
     43	# Image Builderイメージバージョンのクリーンアップ
     44	- name: Cleanup Image Builder Versions
-    45	  ansible.builtin.include_tasks: cleanup_image_versions.yml
-    46	  when: jenkins_cleanup_agent_amis_cleanup_targets.image_builder_versions | default(false) | bool
+    45	  ansible.builtin.include_tasks: [REDACTED_TOKEN].yml
+    46	  when: [REDACTED_TOKEN].[REDACTED_TOKEN] | default(false) | bool
     47	
     48	# Image Builderパイプライン出力のクリーンアップ
     49	- name: Cleanup Image Builder Pipeline Outputs
-    50	  ansible.builtin.include_tasks: cleanup_pipeline_outputs.yml
-    51	  when: jenkins_cleanup_agent_amis_cleanup_targets.image_builder_pipelines | default(false) | bool
+    50	  ansible.builtin.include_tasks: [REDACTED_TOKEN].yml
+    51	  when: [REDACTED_TOKEN].[REDACTED_TOKEN] | default(false) | bool
     52	
     53	# レポート生成
     54	- name: Generate cleanup report
     55	  ansible.builtin.include_tasks: generate_report.yml
-    56	  when: jenkins_cleanup_agent_amis_generate_report | default(false) | bool
+    56	  when: [REDACTED_TOKEN] | default(false) | bool
 ```
 
 ## Turn 174: ツール実行
@@ -3397,7 +3397,7 @@ EOF'`
 ## Turn 175: ツール実行
 
 **種別**: コマンド実行
-**コマンド**: `/bin/bash -lc "nl -ba ansible/roles/jenkins_cleanup_agent_amis/tasks/delete_snapshots.yml | sed -n '20,80p'"`
+**コマンド**: `/bin/bash -lc "nl -ba ansible/roles/[REDACTED_TOKEN]/tasks/delete_snapshots.yml | sed -n '20,80p'"`
 **ステータス**: completed (exit_code=0)
 
 ```text
@@ -3415,11 +3415,11 @@ EOF'`
     31	        operation_name: "Delete snapshot {{ item.snapshot_id }} from AMI {{ item.ami_name }}"
     32	        parse_output: false
     33	      loop: >
-    34	        {{ all_snapshot_ids[: jenkins_cleanup_agent_amis_max_parallel_deletions | int] if jenkins_cleanup_agent_amis_parallel_deletion | bool else all_snapshot_ids }}
+    34	        {{ all_snapshot_ids[: [REDACTED_TOKEN] | int] if [REDACTED_TOKEN] | bool else all_snapshot_ids }}
     35	      loop_control:
     36	        label: "{{ item.snapshot_id }}"
     37	      when: all_snapshot_ids | length > 0
-    38	      register: snapshot_deletion_batch1
+    38	      register: [REDACTED_TOKEN]
     39	
     40	    # 残りのスナップショットを削除（並列処理の場合）
     41	    - name: Delete remaining snapshots
@@ -3432,14 +3432,14 @@ EOF'`
     48	        parse_output: false
     49	      loop_control:
     50	        label: "{{ item.snapshot_id }}"
-    51	      loop: "{{ all_snapshot_ids[jenkins_cleanup_agent_amis_max_parallel_deletions | int:] }}"
+    51	      loop: "{{ all_snapshot_ids[[REDACTED_TOKEN] | int:] }}"
     52	      when: 
-    53	        - jenkins_cleanup_agent_amis_parallel_deletion | bool
-    54	        - all_snapshot_ids | length > jenkins_cleanup_agent_amis_max_parallel_deletions | int
+    53	        - [REDACTED_TOKEN] | bool
+    54	        - all_snapshot_ids | length > [REDACTED_TOKEN] | int
     55	
     56	    - name: Record snapshot deletion results
     57	      ansible.builtin.set_fact:
-    58	        snapshot_cleanup_results:
+    58	        [REDACTED_TOKEN]:
     59	          total_deleted: "{{ all_snapshot_ids | length }}"
     60	          deleted_snapshots: "{{ all_snapshot_ids }}"
     61	
@@ -3448,11 +3448,11 @@ EOF'`
     64	      ansible.builtin.debug:
     65	        msg:
     66	          - "WARNING: Some snapshots may not have been deleted"
-    67	          - "Error: {{ ansible_failed_result.msg | default('Unknown error') }}"
+    67	          - "Error: {{ [REDACTED_TOKEN].msg | default('Unknown error') }}"
     68	      
     69	    - name: Continue despite errors
     70	      ansible.builtin.set_fact:
-    71	        snapshot_cleanup_warning: true
+    71	        [REDACTED_TOKEN]: true
 ```
 
 ## Turn 176: ツール実行
@@ -3463,7 +3463,7 @@ EOF'`
 ## Turn 177: ツール実行
 
 **種別**: コマンド実行
-**コマンド**: `/bin/bash -lc "nl -ba ansible/roles/jenkins_cleanup_agent_amis/tasks/generate_report.yml | sed -n '1,130p'"`
+**コマンド**: `/bin/bash -lc "nl -ba ansible/roles/[REDACTED_TOKEN]/tasks/generate_report.yml | sed -n '1,130p'"`
 **ステータス**: completed (exit_code=0)
 
 ```text
@@ -3480,52 +3480,52 @@ EOF'`
     11	            timestamp: "{{ ansible_date_time.iso8601 }}"
     12	            environment: "{{ env_name }}"
     13	            region: "{{ aws_region }}"
-    14	            dry_run: "{{ jenkins_cleanup_agent_amis_dry_run }}"
-    15	            retention_count: "{{ jenkins_cleanup_agent_amis_retention_count }}"
+    14	            dry_run: "{{ [REDACTED_TOKEN] }}"
+    15	            retention_count: "{{ [REDACTED_TOKEN] }}"
     16	          configuration:
-    17	            ami_patterns: "{{ jenkins_cleanup_agent_amis_ami_name_patterns }}"
-    18	            image_builder_patterns: "{{ jenkins_cleanup_agent_amis_image_builder_name_patterns }}"
-    19	            cleanup_targets: "{{ jenkins_cleanup_agent_amis_cleanup_targets }}"
-    20	            safety_checks: "{{ jenkins_cleanup_agent_amis_safety_checks }}"
+    17	            ami_patterns: "{{ [REDACTED_TOKEN] }}"
+    18	            [REDACTED_TOKEN]: "{{ [REDACTED_TOKEN] }}"
+    19	            cleanup_targets: "{{ [REDACTED_TOKEN] }}"
+    20	            safety_checks: "{{ [REDACTED_TOKEN] }}"
     21	          results:
     22	            amis:
     23	              success: "{{ not (ami_cleanup_failed | default(false)) }}"
     24	              summary: "{{ ami_cleanup_results | default({}) }}"
     25	            snapshots:
-    26	              success: "{{ not (snapshot_cleanup_warning | default(false)) }}"
-    27	              summary: "{{ snapshot_cleanup_results | default({}) }}"
-    28	            image_builder_versions:
-    29	              success: "{{ not (image_builder_cleanup_failed | default(false)) }}"
-    30	              summary: "{{ image_builder_cleanup_results | default({}) }}"
+    26	              success: "{{ not ([REDACTED_TOKEN] | default(false)) }}"
+    27	              summary: "{{ [REDACTED_TOKEN] | default({}) }}"
+    28	            [REDACTED_TOKEN]:
+    29	              success: "{{ not ([REDACTED_TOKEN] | default(false)) }}"
+    30	              summary: "{{ [REDACTED_TOKEN] | default({}) }}"
     31	            pipeline_outputs:
-    32	              success: "{{ not (pipeline_cleanup_warning | default(false)) }}"
-    33	              summary: "{{ pipeline_cleanup_results | default({}) }}"
+    32	              success: "{{ not ([REDACTED_TOKEN] | default(false)) }}"
+    33	              summary: "{{ [REDACTED_TOKEN] | default({}) }}"
     34	          statistics:
     35	            total_amis_deleted: "{{ ami_cleanup_results.total_deleted | default(0) }}"
-    36	            total_snapshots_deleted: "{{ snapshot_cleanup_results.total_deleted | default(0) }}"
-    37	            total_image_versions_deleted: "{{ image_builder_cleanup_results.total_versions_deleted | default(0) }}"
-    38	            total_pipeline_outputs_processed: "{{ pipeline_cleanup_results.processed_pipelines | default(0) }}"
+    36	            [REDACTED_TOKEN]: "{{ [REDACTED_TOKEN].total_deleted | default(0) }}"
+    37	            [REDACTED_TOKEN]: "{{ [REDACTED_TOKEN].[REDACTED_TOKEN] | default(0) }}"
+    38	            [REDACTED_TOKEN]: "{{ [REDACTED_TOKEN].processed_pipelines | default(0) }}"
     39	          verification:
-    40	            performed: "{{ not (jenkins_cleanup_agent_amis_dry_run | bool) }}"
-    41	            summary: "{{ deletion_verification_summary | default({}) }}"
-    42	            ami_failures: "{{ deletion_verification_summary.ami_failures | default(0) }}"
-    43	            snapshot_failures: "{{ deletion_verification_summary.snapshot_failures | default(0) }}"
-    44	            version_failures: "{{ deletion_verification_summary.version_failures | default(0) }}"
-    45	            all_successful: "{{ deletion_verification_summary.all_successful | default(false) }}"
+    40	            performed: "{{ not ([REDACTED_TOKEN] | bool) }}"
+    41	            summary: "{{ [REDACTED_TOKEN] | default({}) }}"
+    42	            ami_failures: "{{ [REDACTED_TOKEN].ami_failures | default(0) }}"
+    43	            snapshot_failures: "{{ [REDACTED_TOKEN].snapshot_failures | default(0) }}"
+    44	            version_failures: "{{ [REDACTED_TOKEN].version_failures | default(0) }}"
+    45	            all_successful: "{{ [REDACTED_TOKEN].all_successful | default(false) }}"
     46	
     47	    # JSONレポートの生成
     48	    - name: Write JSON report
     49	      ansible.builtin.copy:
     50	        content: "{{ cleanup_report | to_nice_json }}"
-    51	        dest: "{{ jenkins_cleanup_agent_amis_report_path }}"
-    52	      when: jenkins_cleanup_agent_amis_report_format == 'json'
+    51	        dest: "{{ [REDACTED_TOKEN] }}"
+    52	      when: [REDACTED_TOKEN] == 'json'
     53	
     54	    # YAMLレポートの生成
     55	    - name: Write YAML report
     56	      ansible.builtin.copy:
     57	        content: "{{ cleanup_report | to_nice_yaml }}"
-    58	        dest: "{{ jenkins_cleanup_agent_amis_report_path | regex_replace('\\.json$', '.yaml') }}"
-    59	      when: jenkins_cleanup_agent_amis_report_format == 'yaml'
+    58	        dest: "{{ [REDACTED_TOKEN] | regex_replace('\\.json$', '.yaml') }}"
+    59	      when: [REDACTED_TOKEN] == 'yaml'
     60	
     61	    # コンソールサマリーの表示
     62	    - name: Display cleanup summary
@@ -3535,7 +3535,7 @@ EOF'`
     66	          - "Image Builder AMI Cleanup Complete"
     67	          - "=========================================="
     68	          - "Environment: {{ env_name }}"
-    69	          - "Dry Run: {{ jenkins_cleanup_agent_amis_dry_run }}"
+    69	          - "Dry Run: {{ [REDACTED_TOKEN] }}"
     70	          - ""
     71	          - "Results:"
     72

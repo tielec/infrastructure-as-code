@@ -6,8 +6,8 @@
 
 ## Turn 1: システム初期化
 
-**セッションID**: `3684301d-e617-4c00-bee4-b045e69279c8`
-**モデル**: claude-sonnet-4-20250514
+**セッションID**: `[REDACTED_TOKEN]`
+**モデル**: [REDACTED_TOKEN]
 **権限モード**: bypassPermissions
 **利用可能ツール**: Task, Bash, Glob, Grep, ExitPlanMode, Read, Edit, Write, NotebookEdit, WebFetch, TodoWrite, WebSearch, BashOutput, KillShell, Skill, SlashCommand
 

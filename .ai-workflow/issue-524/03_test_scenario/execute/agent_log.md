@@ -6,8 +6,8 @@
 
 ## Turn 1: システム初期化
 
-**セッションID**: `4f48b72b-e8e7-4dc8-a1e4-1c8f7f7330ae`
-**モデル**: claude-sonnet-4-20250514
+**セッションID**: `[REDACTED_TOKEN]`
+**モデル**: [REDACTED_TOKEN]
 **権限モード**: bypassPermissions
 **利用可能ツール**: Task, Bash, Glob, Grep, ExitPlanMode, Read, Edit, Write, NotebookEdit, WebFetch, TodoWrite, WebSearch, BashOutput, KillShell, Skill, SlashCommand
 
@@ -76,7 +76,7 @@
 **ツール**: `Bash`
 
 **パラメータ**:
-- `command`: `ls -la /tmp/ai-workflow-repos-7-738ec53c/infrastructure-as-code/.ai-workflow/issue-524/`
+- `command`: `ls -la /tmp/[REDACTED_TOKEN]/[REDACTED_TOKEN]/.ai-workflow/issue-524/`
 - `description`: `Issue 524の作業ディレクトリ構造を確認`
 
 ## Turn 10: ツール使用
@@ -84,7 +84,7 @@
 **ツール**: `Bash`
 
 **パラメータ**:
-- `command`: `ls -la /tmp/ai-workflow-repos-7-738ec53c/infrastructure-as-code/.ai-workflow/issue-524/03_test_scena...`
+- `command`: `ls -la /tmp/[REDACTED_TOKEN]/[REDACTED_TOKEN]/.ai-workflow/issue-524/03_test_scena...`
 - `description`: `テストシナリオディレクトリ構造を確認`
 
 ## Turn 11: ツール使用
@@ -92,7 +92,7 @@
 **ツール**: `Write`
 
 **パラメータ**:
-- `file_path`: `/tmp/ai-workflow-repos-7-738ec53c/infrastructure-as-code/.ai-workflow/issue-524/03_test_scenario/out...`
+- `file_path`: `/tmp/[REDACTED_TOKEN]/[REDACTED_TOKEN]/.ai-workflow/issue-524/03_test_scenario/out...`
 - `content`: `# テストシナリオ書: ansible-lint スタイル違反の修正 (Issue #524)
 
 ## 0. テスト戦略サマリー

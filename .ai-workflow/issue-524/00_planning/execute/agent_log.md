@@ -6,8 +6,8 @@
 
 ## Turn 1: システム初期化
 
-**セッションID**: `35ab0035-fa19-4dc9-987a-4d416ad8f7c7`
-**モデル**: claude-sonnet-4-20250514
+**セッションID**: `[REDACTED_TOKEN]`
+**モデル**: [REDACTED_TOKEN]
 **権限モード**: bypassPermissions
 **利用可能ツール**: Task, Bash, Glob, Grep, ExitPlanMode, Read, Edit, Write, NotebookEdit, WebFetch, TodoWrite, WebSearch, BashOutput, KillShell, Skill, SlashCommand
 
@@ -39,14 +39,14 @@ Issueで指摘されている対象ファイルを詳細に確認いたします
 **ツール**: `Read`
 
 **パラメータ**:
-- `file_path`: `/tmp/ai-workflow-repos-7-738ec53c/infrastructure-as-code/ansible/playbooks/bootstrap-setup.yml`
+- `file_path`: `/tmp/[REDACTED_TOKEN]/[REDACTED_TOKEN]/ansible/playbooks/bootstrap-setup.yml`
 
 ## Turn 7: ツール使用
 
 **ツール**: `Read`
 
 **パラメータ**:
-- `file_path`: `/tmp/ai-workflow-repos-7-738ec53c/infrastructure-as-code/ansible/inventory/group_vars/all.yml`
+- `file_path`: `/tmp/[REDACTED_TOKEN]/[REDACTED_TOKEN]/ansible/inventory/group_vars/all.yml`
 
 ## Turn 8: AI応答
 
@@ -57,7 +57,7 @@ Issueで指摘されている対象ファイルを詳細に確認いたします
 **ツール**: `Read`
 
 **パラメータ**:
-- `file_path`: `/tmp/ai-workflow-repos-7-738ec53c/infrastructure-as-code/ansible/roles/jenkins_cleanup_agent_amis/ta...`
+- `file_path`: `/tmp/[REDACTED_TOKEN]/[REDACTED_TOKEN]/ansible/roles/[REDACTED_TOKEN]/ta...`
 - `limit`: `50`
 
 ## Turn 10: AI応答

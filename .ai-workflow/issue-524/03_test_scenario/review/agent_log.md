@@ -6,8 +6,8 @@
 
 ## Turn 1: システム初期化
 
-**セッションID**: `0daa616a-9039-48f1-81d5-e185584e5e9a`
-**モデル**: claude-sonnet-4-20250514
+**セッションID**: `[REDACTED_TOKEN]`
+**モデル**: [REDACTED_TOKEN]
 **権限モード**: bypassPermissions
 **利用可能ツール**: Task, Bash, Glob, Grep, ExitPlanMode, Read, Edit, Write, NotebookEdit, WebFetch, TodoWrite, WebSearch, BashOutput, KillShell, Skill, SlashCommand
 
@@ -20,7 +20,7 @@
 **ツール**: `Read`
 
 **パラメータ**:
-- `file_path`: `/tmp/ai-workflow-repos-7-738ec53c/infrastructure-as-code/.ai-workflow/issue-524/planning.md`
+- `file_path`: `/tmp/[REDACTED_TOKEN]/[REDACTED_TOKEN]/.ai-workflow/issue-524/planning.md`
 
 ## Turn 4: AI応答
 
@@ -118,7 +118,7 @@ Planning Documentが見つからないため、チェックリスト照合をス
 このテストシナリオは、ansible-lintスタイル違反修正という特定のリファクタリングタスクに対して、実践的で効率的なテストアプローチを提供しています。INTEGRATION_ONLYテスト戦略に基づく統合テストに特化し、主要な正常系・異常系をカバーし、明確な期待結果と実行可能な手順が定義されており、実装フェーズに進む準備が整っています。
 
 ---
-**判定: PASS_WITH_SUGGESTIONS**
+**判定: [REDACTED_TOKEN]**
 
 ## Turn 5: 実行完了
 
@@ -220,7 +220,7 @@ Planning Documentが見つからないため、チェックリスト照合をス
 このテストシナリオは、ansible-lintスタイル違反修正という特定のリファクタリングタスクに対して、実践的で効率的なテストアプローチを提供しています。INTEGRATION_ONLYテスト戦略に基づく統合テストに特化し、主要な正常系・異常系をカバーし、明確な期待結果と実行可能な手順が定義されており、実装フェーズに進む準備が整っています。
 
 ---
-**判定: PASS_WITH_SUGGESTIONS**
+**判定: [REDACTED_TOKEN]**
 
 
 ---

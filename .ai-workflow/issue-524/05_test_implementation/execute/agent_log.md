@@ -6,7 +6,7 @@
 
 ## Turn 1: スレッド開始
 
-**Thread ID**: `019b4ac0-e28f-7052-84ed-20fbcdcb6529`
+**Thread ID**: `[REDACTED_TOKEN]`
 
 ## Turn 2: ツール実行
 
@@ -20,7 +20,7 @@
 **ステータス**: completed (exit_code=0)
 
 ```text
-/tmp/ai-workflow-repos-9-b33178e4/infrastructure-as-code
+/tmp/[REDACTED_TOKEN]/[REDACTED_TOKEN]
 ```
 
 ## Turn 4: ツール実行
@@ -186,10 +186,10 @@ issue-524
 **直接影響があるファイル**:
 1. `ansible/playbooks/bootstrap-setup.yml` - 10個のフォーマット修正
 2. `ansible/inventory/group_vars/all.yml` - 1個のフォーマット修正
-3. `ansible/roles/jenkins_cleanup_agent_amis/tasks/process_ami_retention.yml` - 3個のJinja2修正
-4. `ansible/roles/jenkins_cleanup_agent_amis/tasks/process_pipeline_outputs.yml` - 1個のJinja2修正
-5. `ansible/roles/jenkins_cleanup_agent_amis/tasks/process_image_versions.yml` - 2個のJinja2修正
-6. `ansible/roles/jenkins_cleanup_agent_amis/tasks/delete_snapshots.yml` - 2個のJinja2修正
+3. `ansible/roles/[REDACTED_TOKEN]/tasks/[REDACTED_TOKEN].yml` - 3個のJinja2修正
+4. `ansible/roles/[REDACTED_TOKEN]/tasks/[REDACTED_TOKEN].yml` - 1個のJinja2修正
+5. `ansible/roles/[REDACTED_TOKEN]/tasks/[REDACTED_TOKEN].yml` - 2個のJinja2修正
+6. `ansible/roles/[REDACTED_TOKEN]/tasks/delete_snapshots.yml` - 2個のJinja2修正
 7. `ansible/roles/jenkins_agent_ami/tasks/cleanup_amis.yml` - 2個のJinja2修正
 
 **間接影響**: なし（フォーマットのみの変更）
@@ -248,9 +248,9 @@ issue-524
   - all.yml のファイル末尾改行追加（1箇所）
 
 - [x] Task 4-2: Jinja2スペーシング修正の実装 (0.4h)
-  - process_ami_retention.yml の3箇所修正
-  - process_pipeline_outputs.yml の1箇所修正
-  - process_image_versions.yml の2箇所修正
+  - [REDACTED_TOKEN].yml の3箇所修正
+  - [REDACTED_TOKEN].yml の1箇所修正
+  - [REDACTED_TOKEN].yml の2箇所修正
   - delete_snapshots.yml の2箇所修正
   - cleanup_amis.yml の2箇所修正
 
@@ -339,10 +339,10 @@ issue-524
 1. **修正対象ファイル（7ファイル）**:
    - `ansible/playbooks/bootstrap-setup.yml`
    - `ansible/inventory/group_vars/all.yml`
-   - `ansible/roles/jenkins_cleanup_agent_amis/tasks/process_ami_retention.yml`
-   - `ansible/roles/jenkins_cleanup_agent_amis/tasks/process_pipeline_outputs.yml`
-   - `ansible/roles/jenkins_cleanup_agent_amis/tasks/process_image_versions.yml`
-   - `ansible/roles/jenkins_cleanup_agent_amis/tasks/delete_snapshots.yml`
+   - `ansible/roles/[REDACTED_TOKEN]/tasks/[REDACTED_TOKEN].yml`
+   - `ansible/roles/[REDACTED_TOKEN]/tasks/[REDACTED_TOKEN].yml`
+   - `ansible/roles/[REDACTED_TOKEN]/tasks/[REDACTED_TOKEN].yml`
+   - `ansible/roles/[REDACTED_TOKEN]/tasks/delete_snapshots.yml`
    - `ansible/roles/jenkins_agent_ami/tasks/cleanup_amis.yml`
 
 2. **修正内容**:
@@ -365,7 +365,7 @@ issue-524
 **前提条件**:
 - ansible-lint v6.0以上がインストール済み
 - 修正対象の全7ファイルの修正が完了している
-- 作業ディレクトリがリポジトリルート（`/tmp/ai-workflow-repos-7-738ec53c/infrastructure-as-code/`）である
+- 作業ディレクトリがリポジトリルート（`/tmp/[REDACTED_TOKEN]/[REDACTED_TOKEN]/`）である
 
 **テスト手順**:
 1. **全ファイル対象でのansible-lint実行**
@@ -385,7 +385,7 @@ issue-524
 
 4. **個別ファイル検証 - Jenkins関連ロール**
    ```bash
-   ansible-lint ansible/roles/jenkins_cleanup_agent_amis/
+   ansible-lint ansible/roles/[REDACTED_TOKEN]/
    ansible-lint ansible/roles/jenkins_agent_ami/
    ```
 
@@ -395,7 +395,7 @@ issue-524
 - 実行ステータス: 成功（exit code 0）
 
 **確認項目**:
-- [ ] フォーマット関連エラー（trailing-spaces, yaml[truthy], yaml[document-start], yaml[new-line-at-end-of-file]）が0件
+- [ ] フォーマット関連エラー（trailing-spaces, yaml[truthy], yaml[document-start], yaml[[REDACTED_TOKEN]]）が0件
 - [ ] Jinja2スペーシング警告が0件
 - [ ] 新たなlintエラーが発生していない
 - [ ] CI環境でのansible-lint実行が成功する
@@ -496,25 +496,25 @@ issue-524
 - **影響範囲**: `ansible/playbooks/bootstrap-setup.yml`, `ansible/inventory/group_vars/all.yml`
 
 ### 修正2: Jenkins cleanup role の Jinja2/brackets/真偽処理の整理
-- **指摘内容**: `process_*`/`cleanup_*` 系のタスクで `{{ sorted_list[ : count ] }}` や `{{ item.split('/')[ -1 ] }}` などのスペース入り bracket、`when` に truthy 変数、`if not jenkins_cleanup_agent_amis_dry_run` などが ansible-lint の `jinja2-brackets`/`yaml[truthy]` を突破できていない
-- **修正内容**: `process_*`/`cleanup_*`/`delete_snapshots.yml` のスライス表現を `{{ list[: count] }}`/`{{ item.split('/')[-1] }}` に統一して `jinja2-brackets` に準拠させ、`when` の guard を `| default(false) | bool` で明示化。`main.yml` や `generate_report.yml` での cleanup target/レポートフラグも `| bool` にして干渉を防ぎ、`process_pipeline_outputs` では `jenkins_cleanup_agent_amis_dry_run` による集計にも bool 変換を噛ませて未定義参照を解消した
-- **影響範囲**: `ansible/roles/jenkins_cleanup_agent_amis/tasks/main.yml`, `cleanup_amis.yml`, `cleanup_image_versions.yml`, `cleanup_pipeline_outputs.yml`, `process_*.yml`, `delete_snapshots.yml`, `generate_report.yml`
+- **指摘内容**: `process_*`/`cleanup_*` 系のタスクで `{{ sorted_list[ : count ] }}` や `{{ item.split('/')[ -1 ] }}` などのスペース入り bracket、`when` に truthy 変数、`if not [REDACTED_TOKEN]` などが ansible-lint の `jinja2-brackets`/`yaml[truthy]` を突破できていない
+- **修正内容**: `process_*`/`cleanup_*`/`delete_snapshots.yml` のスライス表現を `{{ list[: count] }}`/`{{ item.split('/')[-1] }}` に統一して `jinja2-brackets` に準拠させ、`when` の guard を `| default(false) | bool` で明示化。`main.yml` や `generate_report.yml` での cleanup target/レポートフラグも `| bool` にして干渉を防ぎ、`[REDACTED_TOKEN]` では `[REDACTED_TOKEN]` による集計にも bool 変換を噛ませて未定義参照を解消した
+- **影響範囲**: `ansible/roles/[REDACTED_TOKEN]/tasks/main.yml`, `cleanup_amis.yml`, `[REDACTED_TOKEN].yml`, `[REDACTED_TOKEN].yml`, `process_*.yml`, `delete_snapshots.yml`, `generate_report.yml`
 
 ## 変更ファイル一覧
 | ファイル | 変更種別 | 概要 |
 | --- | --- | --- |
 | `ansible/playbooks/bootstrap-setup.yml` | 修正 | `when` 句で explicit bool を使い、`Pulumi`/`verify` チェックで truthy を評価。ドキュメント先頭に空行を追加して `document-start` ルールを満たす |
 | `ansible/inventory/group_vars/all.yml` | 修正 | `---` の直後に空行を挿入して `document-start` に準拠 |
-| `ansible/roles/jenkins_cleanup_agent_amis/tasks/main.yml` | 修正 | cleanup target とレポート生成フラグを `default(false) | bool` で包み、互換性を保ちながら `when` 条件を安定化 |
-| `ansible/roles/jenkins_cleanup_agent_amis/tasks/*` | 修正 | `process_*`/`cleanup_*`/`delete_snapshots.yml`/`generate_report.yml` の slicing・`loop`・`if not ...` を `jinja2-brackets`/`yaml[truthy]` に従う記法に修正し、ドライランや結果集計も `jenkins_cleanup_agent_amis_dry_run` で一貫した bool を使うようにした |
+| `ansible/roles/[REDACTED_TOKEN]/tasks/main.yml` | 修正 | cleanup target とレポート生成フラグを `default(false) | bool` で包み、互換性を保ちながら `when` 条件を安定化 |
+| `ansible/roles/[REDACTED_TOKEN]/tasks/*` | 修正 | `process_*`/`cleanup_*`/`delete_snapshots.yml`/`generate_report.yml` の slicing・`loop`・`if not ...` を `jinja2-brackets`/`yaml[truthy]` に従う記法に修正し、ドライランや結果集計も `[REDACTED_TOKEN]` で一貫した bool を使うようにした |
 
 ## 主要な変更点
 - `document-start`/`yaml[truthy]` に合うよう bootstrap Playbook 先頭に空行を挿入し、`Pulumi` などの真偽を `| bool` で明示することで ansible-lint の error を抑止
-- Jenkins cleanup role の各種タスクで Jinja2 ブラケット付きのスライスと `when` 条件を整理し、`delete_snapshots` のループも `loop: >` で表現。`main.yml` の guard も bool 化して `jenkins_cleanup_agent_amis_dry_run` での集計と `pipeline_output_results` の `outputs_deleted` などを未定義参照なしに整えた
+- Jenkins cleanup role の各種タスクで Jinja2 ブラケット付きのスライスと `when` 条件を整理し、`delete_snapshots` のループも `loop: >` で表現。`main.yml` の guard も bool 化して `[REDACTED_TOKEN]` での集計と `[REDACTED_TOKEN]` の `outputs_deleted` などを未定義参照なしに整えた
 - `generate_report.yml` では dry-run 状態を像 `| bool` で判定するテンプレートを使い、ファイル出力とコンソール表示の両方が新形式の変数に追従するようにした
 
 ## テスト実施状況
-- `ansible-lint ansible/playbooks/bootstrap-setup.yml ansible/roles/jenkins_cleanup_agent_amis`: ❌ `/bin/bash: line 1: ansible-lint: command not found`（実行環境に `ansible-lint` が存在しないため）
+- `ansible-lint ansible/playbooks/bootstrap-setup.yml ansible/roles/[REDACTED_TOKEN]`: ❌ `/bin/bash: line 1: ansible-lint: command not found`（実行環境に `ansible-lint` が存在しないため）
 ```
 
 ## Turn 13: ツール実行
@@ -547,12 +547,12 @@ integration
 ```text
 __init__.py
 ecs-fargate
-test_agent_label_parameterization.py
-test_ansible_lint_integration.py
-test_ec2_fleet_removal.py
-test_job_config_yaml.py
-test_job_dsl_agent_labels.py
-test_seed_job_dynamic_scenarios.py
+[REDACTED_TOKEN].py
+[REDACTED_TOKEN].py
+[REDACTED_TOKEN].py
+[REDACTED_TOKEN].py
+[REDACTED_TOKEN].py
+[REDACTED_TOKEN].py
 ```
 
 ## Turn 17: ツール実行
@@ -563,7 +563,7 @@ test_seed_job_dynamic_scenarios.py
 ## Turn 18: ツール実行
 
 **種別**: コマンド実行
-**コマンド**: `/bin/bash -lc "sed -n '1,200p' tests/integration/test_ansible_lint_integration.py"`
+**コマンド**: `/bin/bash -lc "sed -n '1,200p' tests/integration/[REDACTED_TOKEN].py"`
 **ステータス**: completed (exit_code=0)
 
 ```text
@@ -579,7 +579,7 @@ from pathlib import Path
 from typing import Iterable, List
 
 
-class AnsibleLintIntegrationTests(unittest.TestCase):
+class [REDACTED_TOKEN](unittest.TestCase):
     """Runs the lint/syntax verification commands referenced by the test scenario."""
 
     @classmethod
@@ -588,10 +588,10 @@ class AnsibleLintIntegrationTests(unittest.TestCase):
         cls.ansible_dir = cls.repo_root / "ansible"
         cls.bootstrap_playbook = cls.ansible_dir / "playbooks" / "bootstrap-setup.yml"
         cls.tools_dir = cls.repo_root / "tools" / "bin"
-        cls._ensure_tools_available(("ansible-lint", "ansible-playbook"))
+        cls.[REDACTED_TOKEN](("ansible-lint", "ansible-playbook"))
 
     @classmethod
-    def _ensure_tools_available(cls, tools: Iterable[str]) -> None:
+    def [REDACTED_TOKEN](cls, tools: Iterable[str]) -> None:
         """Skip all tests if a required CLI tool is not on PATH."""
         missing = [tool for tool in tools if shutil.which(tool) is None]
         if missing:
@@ -629,19 +629,19 @@ class AnsibleLintIntegrationTests(unittest.TestCase):
         command = ["ansible-playbook", *extra_args, str(playbook)]
         return self.run_command(command, description)
 
-    def test_ansible_directory_ansible_lint(self):
+    def [REDACTED_TOKEN](self):
         """Scenario 1: Ensure ansible-lint passes across the entire ansible/ tree."""
         self._run_ansible_lint(self.ansible_dir)
 
-    def test_bootstrap_playbook_ansible_lint(self):
+    def [REDACTED_TOKEN](self):
         """Scenario 1: Run ansible-lint specifically on bootstrap-setup.yml."""
         self._run_ansible_lint(self.bootstrap_playbook)
 
-    def test_group_vars_all_ansible_lint(self):
+    def [REDACTED_TOKEN](self):
         """Run ansible-lint on the group vars file that previously lacked a newline."""
         self._run_ansible_lint(self.ansible_dir / "inventory" / "group_vars" / "all.yml")
 
-    def test_bootstrap_playbook_syntax_check(self):
+    def [REDACTED_TOKEN](self):
         """Verify updated bootstrap playbook passes Ansible syntax check."""
         self._run_playbook(
             self.bootstrap_playbook,
@@ -649,7 +649,7 @@ class AnsibleLintIntegrationTests(unittest.TestCase):
             "ansible-playbook --syntax-check for bootstrap-setup.yml",
         )
 
-    def test_bootstrap_playbook_syntax_check_with_jenkins_roles(self):
+    def [REDACTED_TOKEN](self):
         """Scenario 2: Syntax check when Jenkins roles are referenced via extra vars."""
         self._run_playbook(
             self.bootstrap_playbook,
@@ -657,7 +657,7 @@ class AnsibleLintIntegrationTests(unittest.TestCase):
             "ansible-playbook --syntax-check bootstrap-setup.yml --extra-vars check_jenkins_roles=true",
         )
 
-    def test_all_playbooks_syntax_ch
+    def [REDACTED_TOKEN]
 ... (truncated)
 ```
 
@@ -678,10 +678,10 @@ class AnsibleLintIntegrationTests(unittest.TestCase):
 02_design
 03_test_scenario
 04_implementation
-05_test_implementation
+[REDACTED_TOKEN]
 06_testing
 metadata.json
-metadata.json.backup_20251223_021956
+metadata.json.[REDACTED_TOKEN]
 ```
 
 ## Turn 21: ツール実行
@@ -692,7 +692,7 @@ metadata.json.backup_20251223_021956
 ## Turn 22: ツール実行
 
 **種別**: コマンド実行
-**コマンド**: `/bin/bash -lc 'ls .ai-workflow/issue-524/05_test_implementation'`
+**コマンド**: `/bin/bash -lc 'ls .ai-workflow/issue-524/[REDACTED_TOKEN]'`
 **ステータス**: completed (exit_code=0)
 
 ```text
@@ -710,7 +710,7 @@ revise
 ## Turn 24: ツール実行
 
 **種別**: コマンド実行
-**コマンド**: `/bin/bash -lc 'ls .ai-workflow/issue-524/05_test_implementation/output'`
+**コマンド**: `/bin/bash -lc 'ls .ai-workflow/issue-524/[REDACTED_TOKEN]/output'`
 **ステータス**: completed (exit_code=0)
 
 ```text
@@ -720,7 +720,7 @@ test-implementation.md
 ## Turn 25: ツール実行
 
 **種別**: コマンド実行
-**コマンド**: `/bin/bash -lc 'cat .ai-workflow/issue-524/05_test_implementation/output/test-implementation.md'`
+**コマンド**: `/bin/bash -lc 'cat .ai-workflow/issue-524/[REDACTED_TOKEN]/output/test-implementation.md'`
 **ステータス**: completed (exit_code=0)
 
 ```text
@@ -730,7 +730,7 @@ test-implementation.md
 
 | ファイル | テスト数 | カバー対象 |
 | --- | --- | --- |
-| `tests/integration/test_ansible_lint_integration.py` | 8 | `ansible-lint ansible/`, bootstrap-setup, group_vars, Jenkins roles; `ansible-playbook --syntax-check` (bootstrap, extra-vars, every playbook); dry-run (`--check`, `--diff`, `--tags`, `--extra-vars`) 多様な実行モード |
+| `tests/integration/[REDACTED_TOKEN].py` | 8 | `ansible-lint ansible/`, bootstrap-setup, group_vars, Jenkins roles; `ansible-playbook --syntax-check` (bootstrap, extra-vars, every playbook); dry-run (`--check`, `--diff`, `--tags`, `--extra-vars`) 多様な実行モード |
 
 ## テストカバレッジ
 - ユニットテスト: 0件
@@ -742,8 +742,8 @@ test-implementation.md
 
 ### 修正1: Phase 3/4 テストシナリオを統合テストへ追加
 - **指摘内容**: 既存の統合テストは `group_vars/all.yml` への lint と bootstrap playbook の syntax check に限定されており、Phase 3 で求められる「ansible/ 全体の lint」「Jenkins ロールの lint」「Dry-run モード」「CI 上での lint 実行」といったシナリオがカバーされていなかった。
-- **修正内容**: `tests/integration/test_ansible_lint_integration.py` に `ansible-lint ansible/` や個別ファイル（bootstrap/playbooks/..., group_vars, Jenkins roles）を走らせるテスト、`ansible-playbook --syntax-check` や `--extra-vars` 付き syntax check、全 playbook を対象とした構文チェック、Dry-run 変種（`--check`, `--diff`, `--tags`, `--extra-vars`）のテストを追加し、CI 実行にも該当する lint コマンドが成功することを検証する。
-- **影響範囲**: `tests/integration/test_ansible_lint_integration.py`
+- **修正内容**: `tests/integration/[REDACTED_TOKEN].py` に `ansible-lint ansible/` や個別ファイル（bootstrap/playbooks/..., group_vars, Jenkins roles）を走らせるテスト、`ansible-playbook --syntax-check` や `--extra-vars` 付き syntax check、全 playbook を対象とした構文チェック、Dry-run 変種（`--check`, `--diff`, `--tags`, `--extra-vars`）のテストを追加し、CI 実行にも該当する lint コマンドが成功することを検証する。
+- **影響範囲**: `tests/integration/[REDACTED_TOKEN].py`
 ```
 
 ## Turn 26: ツール実行
@@ -764,7 +764,7 @@ test-implementation.md
 ?? .ai-workflow/issue-524/04_implementation/review/prompt.txt
 ?? .ai-workflow/issue-524/04_implementation/revise/agent_log_raw.txt
 ?? .ai-workflow/issue-524/04_implementation/revise/prompt.txt
-?? .ai-workflow/issue-524/05_test_implementation/execute/prompt.txt
+?? .ai-workflow/issue-524/[REDACTED_TOKEN]/execute/prompt.txt
 ```
 
 ## Turn 28: ツール実行
@@ -843,7 +843,7 @@ test-implementation.md
 ## Turn 33: ツール実行
 
 **種別**: コマンド実行
-**コマンド**: `/bin/bash -lc 'nl -ba tests/integration/test_ansible_lint_integration.py'`
+**コマンド**: `/bin/bash -lc 'nl -ba tests/integration/[REDACTED_TOKEN].py'`
 **ステータス**: completed (exit_code=0)
 
 ```text
@@ -859,7 +859,7 @@ test-implementation.md
     10	from typing import Iterable, List
     11	
     12	
-    13	class AnsibleLintIntegrationTests(unittest.TestCase):
+    13	class [REDACTED_TOKEN](unittest.TestCase):
     14	    """Runs the lint/syntax verification commands referenced by the test scenario."""
     15	
     16	    @classmethod
@@ -868,10 +868,10 @@ test-implementation.md
     19	        cls.ansible_dir = cls.repo_root / "ansible"
     20	        cls.bootstrap_playbook = cls.ansible_dir / "playbooks" / "bootstrap-setup.yml"
     21	        cls.tools_dir = cls.repo_root / "tools" / "bin"
-    22	        cls._ensure_tools_available(("ansible-lint", "ansible-playbook"))
+    22	        cls.[REDACTED_TOKEN](("ansible-lint", "ansible-playbook"))
     23	
     24	    @classmethod
-    25	    def _ensure_tools_available(cls, tools: Iterable[str]) -> None:
+    25	    def [REDACTED_TOKEN](cls, tools: Iterable[str]) -> None:
     26	        """Skip all tests if a required CLI tool is not on PATH."""
     27	        missing = [tool for tool in tools if shutil.which(tool) is None]
     28	        if missing:
@@ -909,19 +909,19 @@ test-implementation.md
     60	        command = ["ansible-playbook", *extra_args, str(playbook)]
     61	        return self.run_command(command, description)
     62	
-    63	    def test_ansible_directory_ansible_lint(self):
+    63	    def [REDACTED_TOKEN](self):
     64	        """Scenario 1: Ensure ansible-lint passes across the entire ansible/ tree."""
     65	        self._run_ansible_lint(self.ansible_dir)
     66	
-    67	    def test_bootstrap_playbook_ansible_lint(self):
+    67	    def [REDACTED_TOKEN](self):
     68	        """Scenario 1: Run ansible-lint specifically on bootstrap-setup.yml."""
     69	        self._run_ansible_lint(self.bootstrap_playbook)
     70	
-    71	    def test_group_vars_all_ansible_lint(self):
+    71	    def [REDACTED_TOKEN](self):
     72	        """Run ansible-lint on the group vars file that previously lacked a newline."""
     73	        self._run_ansible_lint(self.ansible_dir / "inventory" / "group_vars" / "all.yml")
     74	
-    75	    def test_bootstrap_playbook_syntax_check(self):
+    75	    def [REDACTED_TOKEN](self):
     76	        """Verify updated bootstrap playbook passes Ansible syntax check."""
     77	        self._run_playbook(
     78	            self.bootstrap_playbook,
@@ -948,7 +948,7 @@ test-implementation.md
 ## Turn 37: ツール実行
 
 **種別**: コマンド実行
-**コマンド**: `/bin/bash -lc 'nl -ba .ai-workflow/issue-524/05_test_implementation/output/test-implementation.md'`
+**コマンド**: `/bin/bash -lc 'nl -ba .ai-workflow/issue-524/[REDACTED_TOKEN]/output/test-implementation.md'`
 **ステータス**: completed (exit_code=0)
 
 ```text
@@ -958,7 +958,7 @@ test-implementation.md
      4	
      5	| ファイル | テスト数 | カバー対象 |
      6	| --- | --- | --- |
-     7	| `tests/integration/test_ansible_lint_integration.py` | 8 | `ansible-lint ansible/`, bootstrap-setup, group_vars, Jenkins roles; `ansible-playbook --syntax-check` (bootstrap, extra-vars, every playbook); dry-run (`--check`, `--diff`, `--tags`, `--extra-vars`) 多様な実行モード |
+     7	| `tests/integration/[REDACTED_TOKEN].py` | 8 | `ansible-lint ansible/`, bootstrap-setup, group_vars, Jenkins roles; `ansible-playbook --syntax-check` (bootstrap, extra-vars, every playbook); dry-run (`--check`, `--diff`, `--tags`, `--extra-vars`) 多様な実行モード |
      8	
      9	## テストカバレッジ
     10	- ユニットテスト: 0件
@@ -970,8 +970,8 @@ test-implementation.md
     16	
     17	### 修正1: Phase 3/4 テストシナリオを統合テストへ追加
     18	- **指摘内容**: 既存の統合テストは `group_vars/all.yml` への lint と bootstrap playbook の syntax check に限定されており、Phase 3 で求められる「ansible/ 全体の lint」「Jenkins ロールの lint」「Dry-run モード」「CI 上での lint 実行」といったシナリオがカバーされていなかった。
-    19	- **修正内容**: `tests/integration/test_ansible_lint_integration.py` に `ansible-lint ansible/` や個別ファイル（bootstrap/playbooks/..., group_vars, Jenkins roles）を走らせるテスト、`ansible-playbook --syntax-check` や `--extra-vars` 付き syntax check、全 playbook を対象とした構文チェック、Dry-run 変種（`--check`, `--diff`, `--tags`, `--extra-vars`）のテストを追加し、CI 実行にも該当する lint コマンドが成功することを検証する。
-    20	- **影響範囲**: `tests/integration/test_ansible_lint_integration.py`
+    19	- **修正内容**: `tests/integration/[REDACTED_TOKEN].py` に `ansible-lint ansible/` や個別ファイル（bootstrap/playbooks/..., group_vars, Jenkins roles）を走らせるテスト、`ansible-playbook --syntax-check` や `--extra-vars` 付き syntax check、全 playbook を対象とした構文チェック、Dry-run 変種（`--check`, `--diff`, `--tags`, `--extra-vars`）のテストを追加し、CI 実行にも該当する lint コマンドが成功することを検証する。
+    20	- **影響範囲**: `tests/integration/[REDACTED_TOKEN].py`
 ```
 
 ## Turn 38: ツール実行
