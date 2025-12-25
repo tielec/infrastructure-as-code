@@ -30,7 +30,10 @@
 
     # システムアップデート
     - name: Update system packages
-      ansible.builtin.command: dnf upgrade -y
+      ansible.builtin.dnf:
+        name: '*'
+        state: latest
+        update_cache: yes
       become: true
 
     # 必要な開発ツールのインストール
@@ -49,17 +52,18 @@
         state: present
       become: true
 
-    # curlがインストールされているか確認（curl-minimalでも可）
-    - name: Check curl availability
-      ansible.builtin.command: curl --version
-      register: curl_check
-      changed_when: false
-      failed_when: false
+    # curlが利用可能であることを保証
+    - name: Ensure curl is installed
+      ansible.builtin.package:
+        name: curl
+        state: present
+      become: true
+      register: curl_package
 
-    - name: Display curl status
+    - name: Display curl installation status
       ansible.builtin.debug:
-        msg: "Curl status: {{ 'Available' if curl_check.rc == 0 else 'Not available' }}"
-
+        msg: >
+          Curl installation {{ 'updated' if curl_package.changed else 'already satisfied' }}.
     # AWS CLI v2のインストール (ARM64対応)
     - name: Check if AWS CLI v2 is installed
       ansible.builtin.command: aws --version
@@ -134,13 +138,13 @@
           become: yes
 
     # Java 21のインストール (Amazon Corretto - ARM64対応)
-    - name: Check if Java {{ java_version }} is installed
+    - name: "Check if Java is installed ({{ java_version }})"
       ansible.builtin.command: java -version
       register: java_check
       changed_when: false
       failed_when: false
 
-    - name: Install Java {{ java_version }} (Amazon Corretto)
+    - name: "Install Java (Amazon Corretto) {{ java_version }}"
       when: java_check.rc != 0 or (java_check.stderr | default('')) is not search('version "{{ java_version }}"')
       block:
         - name: Install Amazon Corretto {{ java_version }}
@@ -237,7 +241,11 @@
 
     - name: Display current ansible-core version
       ansible.builtin.debug:
-        msg: "Current ansible-core: {{ ansible_core_check.stdout | regex_search('Version: ([0-9.]+)', '\\1') | first if ansible_core_check.rc == 0 else 'Not installed' }}"
+        msg: >
+          Current ansible-core: {{
+            (ansible_core_check.stdout | regex_search('Version: ([0-9.]+)', '\\1') | first)
+            if ansible_core_check.rc == 0 else 'Not installed'
+          }}
 
     - name: Ensure additional Python packages are installed for ec2-user
       ansible.builtin.pip:
