@@ -1,10 +1,11 @@
 import importlib
+import json
 import sys
 import types
 
 import pytest
 
-from pr_comment_generator.models import FileChange
+from pr_comment_generator.models import FileChange, PRInfo
 from pr_comment_generator.prompt_manager import PromptTemplateManager
 
 
@@ -198,3 +199,58 @@ def test_calculate_optimal_chunk_size_single(monkeypatch, tmp_path):
     changes = [FileChange(filename="solo.py", status="modified", additions=10, deletions=1, changes=11)]
 
     assert client._calculate_optimal_chunk_size(changes) == 1
+
+
+def test_save_prompt_and_result_writes_files(monkeypatch, tmp_path):
+    _, client = _create_openai_client(monkeypatch, tmp_path)
+    monkeypatch.setenv("SAVE_PROMPTS", "true")
+    output_dir = tmp_path / "prompts"
+    monkeypatch.setenv("PROMPT_OUTPUT_DIR", str(output_dir))
+    client.pr_info = PRInfo(
+        title="t",
+        number=42,
+        body="b",
+        author="dev",
+        base_branch="main",
+        head_branch="feature",
+        base_sha="1",
+        head_sha="2",
+    )
+    client.usage_stats["prompt_tokens"] = 3
+    client.usage_stats["completion_tokens"] = 7
+
+    client._save_prompt_and_result("prompt text", "result text", chunk_index=2, phase="summary")
+
+    pr_dirs = list(output_dir.iterdir())
+    assert len(pr_dirs) == 1
+    pr_dir = pr_dirs[0]
+    assert pr_dir.name.startswith("pr_42_")
+    assert (pr_dir / "summary_chunk2_prompt.txt").read_text(encoding="utf-8") == "prompt text"
+    assert (pr_dir / "summary_chunk2_result.txt").read_text(encoding="utf-8") == "result text"
+    meta = json.loads((pr_dir / "summary_chunk2_meta.json").read_text(encoding="utf-8"))
+    assert meta["pr_number"] == 42
+    assert meta["chunk_index"] == 2
+    assert meta["phase"] == "summary"
+    assert meta["usage_stats"]["prompt_tokens"] == 3
+    assert meta["usage_stats"]["completion_tokens"] == 7
+
+
+def test_save_prompt_and_result_skips_when_disabled(monkeypatch, tmp_path):
+    _, client = _create_openai_client(monkeypatch, tmp_path)
+    monkeypatch.setenv("SAVE_PROMPTS", "false")
+    output_dir = tmp_path / "no_write"
+    monkeypatch.setenv("PROMPT_OUTPUT_DIR", str(output_dir))
+    client.pr_info = PRInfo(
+        title="t",
+        number=99,
+        body="b",
+        author="dev",
+        base_branch="main",
+        head_branch="feature",
+        base_sha="1",
+        head_sha="2",
+    )
+
+    client._save_prompt_and_result("prompt text", "result text", chunk_index=0, phase="chunk")
+
+    assert not output_dir.exists()

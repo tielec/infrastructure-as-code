@@ -76,7 +76,10 @@ class TestPromptTemplateManager:
         prompt = manager.get_chunk_analysis_prompt()
 
         # Then
-        assert prompt == "Analyze chunk {chunk_index} with {file_count} files"
+        assert prompt == (
+            "Base prompt for PR #{pr_number} by {author}\n\n"
+            "Analyze chunk {chunk_index} with {file_count} files"
+        )
 
     def test_get_summary_prompt_正常系(self, temp_template_dir):
         """
@@ -91,7 +94,10 @@ class TestPromptTemplateManager:
         prompt = manager.get_summary_prompt()
 
         # Then
-        assert prompt == "Generate summary from {analysis_count} analyses"
+        assert prompt == (
+            "Base prompt for PR #{pr_number} by {author}\n\n"
+            "Generate summary from {analysis_count} analyses"
+        )
 
     def test_format_prompt_正常系(self, temp_template_dir):
         """

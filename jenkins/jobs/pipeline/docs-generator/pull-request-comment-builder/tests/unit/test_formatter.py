@@ -90,8 +90,8 @@ More text
         formatted = formatter.format_chunk_analyses(analyses)
 
         # Then
-        assert "## チャンク 1 の分析" in formatted
-        assert "## チャンク 2 の分析" in formatted
+        assert "=== チャンク 1 ===" in formatted
+        assert "=== チャンク 2 ===" in formatted
         assert "Analysis of chunk 1" in formatted
         assert "Analysis of chunk 2" in formatted
 
@@ -123,7 +123,7 @@ More text
         formatted = formatter.format_chunk_analyses(analyses)
 
         # Then
-        assert "## チャンク 1 の分析" in formatted
+        assert "=== チャンク 1 ===" in formatted
         assert "Single chunk analysis" in formatted
 
     def test_format_file_list_正常系(self, formatter):
@@ -253,7 +253,8 @@ More text
         # Then
         assert "# 変更内容サマリー" in comment
         assert summary in comment
-        assert "## チャンク 1 の分析" in comment
+        assert "=== チャンク 1 ===" in comment
+        assert "=== チャンク 2 ===" in comment
         assert "## 変更されたファイル" in comment
 
     def test_format_final_comment_正常系_スキップファイルあり(self, formatter):
