@@ -163,18 +163,18 @@
 
 ### Phase 5: テストコード実装 (見積もり: 8〜12h)
 
-- [ ] Task 5-1: OpenAIClientのユニットテスト (3〜4h)
+- [x] Task 5-1: OpenAIClientのユニットテスト (3〜4h)
   - モック設定
   - 正常系テスト
   - エラーハンドリングテスト
   - リトライロジックテスト
-- [ ] Task 5-2: ChunkAnalyzerのユニットテスト (2〜3h)
+- [x] Task 5-2: ChunkAnalyzerのユニットテスト (2〜3h)
   - チャンク分割テスト
   - 最適化ロジックテスト
-- [ ] Task 5-3: PRCommentGeneratorのユニットテスト (2〜3h)
+- [x] Task 5-3: PRCommentGeneratorのユニットテスト (2〜3h)
   - コメント生成テスト
   - エラーハンドリングテスト
-- [ ] Task 5-4: CLIのユニットテスト (1〜2h)
+- [x] Task 5-4: CLIのユニットテスト (1〜2h)
   - 引数パーステスト
   - 出力フォーマットテスト
 

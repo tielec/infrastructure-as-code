@@ -42,6 +42,14 @@ def _prepare_openai_client(monkeypatch, tmp_path):
     return oc, prompt_manager
 
 
+def _create_openai_client(monkeypatch, tmp_path, retry_config=None):
+    """Helper to build OpenAIClient with a stubbed openai module."""
+    oc, prompt_manager = _prepare_openai_client(monkeypatch, tmp_path)
+    monkeypatch.setenv("OPENAI_API_KEY", "test-key")
+    client = oc.OpenAIClient(prompt_manager, retry_config=retry_config)
+    return oc, client
+
+
 def test_init_without_api_key_raises(monkeypatch, tmp_path):
     oc, prompt_manager = _prepare_openai_client(monkeypatch, tmp_path)
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
@@ -79,5 +87,114 @@ def test_calculate_optimal_chunk_size_handles_large_file(monkeypatch, tmp_path):
     client = oc.OpenAIClient(prompt_manager)
 
     changes = [FileChange(filename="big.py", status="modified", additions=0, deletions=0, changes=400)]
+
+    assert client._calculate_optimal_chunk_size(changes) == 1
+
+
+def test_call_api_success_updates_usage(monkeypatch, tmp_path):
+    oc, client = _create_openai_client(monkeypatch, tmp_path)
+    monkeypatch.setattr(client, "_save_prompt_and_result_if_needed", lambda *_, **__: None)
+
+    result = client._call_openai_api([{"role": "user", "content": "hello"}], max_tokens=50)
+
+    assert result == "ok"
+    assert client.usage_stats["prompt_tokens"] == 5
+    assert client.usage_stats["completion_tokens"] == 5
+    assert client.usage_stats["retries"] == 0
+
+
+def test_call_api_retries_on_rate_limit_then_succeeds(monkeypatch, tmp_path):
+    oc, client = _create_openai_client(monkeypatch, tmp_path)
+    waits = []
+    monkeypatch.setattr(client, "_wait_before_retry", lambda sleep_time: waits.append(sleep_time))
+    monkeypatch.setattr(client, "_save_prompt_and_result_if_needed", lambda *_, **__: None)
+
+    class RateLimitError(Exception):
+        def __init__(self, message, status_code=429):
+            super().__init__(message)
+            self.status_code = status_code
+
+    success_response = types.SimpleNamespace(
+        choices=[types.SimpleNamespace(message=types.SimpleNamespace(content="recovered"))],
+        usage=types.SimpleNamespace(prompt_tokens=7, completion_tokens=9, total_tokens=16),
+    )
+    responses = iter(
+        [
+            RateLimitError("rate limit: retry after 2 seconds"),
+            RateLimitError("rate limit: retry after 2 seconds"),
+            success_response,
+        ]
+    )
+
+    def fake_make_api_request(messages, max_tokens):
+        next_item = next(responses)
+        if isinstance(next_item, Exception):
+            raise next_item
+        return next_item
+
+    monkeypatch.setattr(client, "_make_api_request", fake_make_api_request)
+
+    result = client._call_openai_api([{"role": "user", "content": "need retry"}])
+
+    assert result == "recovered"
+    assert client.usage_stats["retries"] == 2
+    assert waits == [2, 2]
+
+
+def test_call_api_raises_after_max_retries(monkeypatch, tmp_path):
+    _, client = _create_openai_client(
+        monkeypatch,
+        tmp_path,
+        retry_config={"max_retries": 2, "initial_backoff": 0, "max_backoff": 0},
+    )
+    waits = []
+    monkeypatch.setattr(client, "_wait_before_retry", lambda sleep_time: waits.append(sleep_time))
+    monkeypatch.setattr(client, "_save_prompt_and_result_if_needed", lambda *_, **__: None)
+
+    call_count = {"attempts": 0}
+
+    def always_fail(messages, max_tokens=0):
+        call_count["attempts"] += 1
+        raise RuntimeError("unrecoverable")
+
+    monkeypatch.setattr(client, "_make_api_request", always_fail)
+
+    with pytest.raises(RuntimeError):
+        client._call_openai_api([{"role": "user", "content": "boom"}], max_tokens=10)
+
+    assert call_count["attempts"] == 2
+    assert client.usage_stats["retries"] == 2
+    assert waits == [0]
+
+
+def test_calculate_optimal_chunk_size_small_pr(monkeypatch, tmp_path):
+    _, client = _create_openai_client(monkeypatch, tmp_path)
+    changes = [
+        FileChange(filename=f"file{i}.py", status="modified", additions=50, deletions=50, changes=100)
+        for i in range(3)
+    ]
+
+    assert client._calculate_optimal_chunk_size(changes) == 3
+
+
+def test_calculate_optimal_chunk_size_large_pr(monkeypatch, tmp_path):
+    _, client = _create_openai_client(monkeypatch, tmp_path)
+    changes = [
+        FileChange(filename=f"file{i}.py", status="modified", additions=250, deletions=250, changes=500)
+        for i in range(20)
+    ]
+
+    assert client._calculate_optimal_chunk_size(changes) == 1
+
+
+def test_calculate_optimal_chunk_size_empty(monkeypatch, tmp_path):
+    _, client = _create_openai_client(monkeypatch, tmp_path)
+
+    assert client._calculate_optimal_chunk_size([]) == 0
+
+
+def test_calculate_optimal_chunk_size_single(monkeypatch, tmp_path):
+    _, client = _create_openai_client(monkeypatch, tmp_path)
+    changes = [FileChange(filename="solo.py", status="modified", additions=10, deletions=1, changes=11)]
 
     assert client._calculate_optimal_chunk_size(changes) == 1

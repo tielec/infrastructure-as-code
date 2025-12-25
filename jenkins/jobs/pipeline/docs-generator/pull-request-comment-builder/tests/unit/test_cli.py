@@ -60,6 +60,26 @@ def test_setup_environment_from_args_creates_prompt_dir(monkeypatch, tmp_path):
     assert prompt_dir.exists()
 
 
+def test_setup_environment_from_args_defaults_keep_env_clean(monkeypatch):
+    cli = _import_cli_with_stub(monkeypatch)
+    monkeypatch.delenv("PARALLEL_PROCESSING", raising=False)
+    monkeypatch.delenv("SAVE_PROMPTS", raising=False)
+    args = types.SimpleNamespace(
+        pr_diff="d",
+        pr_info="i",
+        output="o",
+        log_level="INFO",
+        parallel=False,
+        save_prompts=False,
+        prompt_output_dir="/tmp/prompts",
+    )
+
+    cli.setup_environment_from_args(args)
+
+    assert os.environ.get("SAVE_PROMPTS") is None
+    assert os.environ.get("PARALLEL_PROCESSING") is None
+
+
 def test_main_writes_output_file(monkeypatch, tmp_path):
     cli = _import_cli_with_stub(monkeypatch)
 
@@ -117,3 +137,35 @@ def test_main_writes_output_file(monkeypatch, tmp_path):
     assert output_path.exists()
     data = json.loads(output_path.read_text(encoding="utf-8"))
     assert data["comment"] == "ok"
+
+
+def test_main_writes_error_json_on_exception(monkeypatch, tmp_path):
+    cli = _import_cli_with_stub(monkeypatch)
+
+    class ExplodingGenerator:
+        def __init__(self, log_level=logging.INFO):
+            self.log_level = log_level
+
+        def generate_comment(self, pr_info, pr_diff):
+            raise ValueError("missing input files")
+
+    monkeypatch.setattr(cli, "PRCommentGenerator", ExplodingGenerator)
+
+    output_path = tmp_path / "error.json"
+    sys.argv = [
+        "prog",
+        "--pr-diff",
+        str(tmp_path / "nonexistent_diff.json"),
+        "--pr-info",
+        str(tmp_path / "nonexistent_info.json"),
+        "--output",
+        str(output_path),
+    ]
+
+    with pytest.raises(SystemExit):
+        cli.main()
+
+    assert output_path.exists()
+    data = json.loads(output_path.read_text(encoding="utf-8"))
+    assert data["error"] == "missing input files"
+    assert "traceback" in data
