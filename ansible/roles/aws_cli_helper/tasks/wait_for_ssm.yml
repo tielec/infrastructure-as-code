@@ -12,12 +12,12 @@
 
 - name: Set SSM wait parameters
   ansible.builtin.set_fact:
-    _ssm_max_wait: "{{ max_wait_time | default(300) }}"
-    _ssm_interval: "{{ check_interval | default(10) }}"
-    _ssm_target_status: "{{ target_status | default('Online') }}"
-    _ssm_region: "{{ aws_region }}"
-    _ssm_max_attempts: "{{ ((max_wait_time | default(300) | int) / (check_interval | default(10) | int)) | int }}"
-    _ssm_current_attempt: 0
+    aws_cli_helper_ssm_max_wait: "{{ max_wait_time | default(300) }}"
+    aws_cli_helper_ssm_interval: "{{ check_interval | default(10) }}"
+    aws_cli_helper_ssm_target_status: "{{ target_status | default('Online') }}"
+    aws_cli_helper_ssm_region: "{{ aws_region }}"
+    aws_cli_helper_ssm_max_attempts: "{{ ((max_wait_time | default(300) | int) / (check_interval | default(10) | int)) | int }}"
+    aws_cli_helper_ssm_current_attempt: 0
 
 - name: Wait for SSM agent to be ready
   block:
@@ -28,7 +28,7 @@
       ansible.builtin.assert:
         that:
           - ssm_agent_ready | default(false)
-        fail_msg: "SSM agent did not become ready within {{ _ssm_max_wait }} seconds"
+        fail_msg: "SSM agent did not become ready within {{ aws_cli_helper_ssm_max_wait }} seconds"
         success_msg: "SSM agent is ready on instance {{ instance_id }}"
 
   rescue:
@@ -38,7 +38,6 @@
         aws_command: "aws ssm describe-instance-information --instance-information-filter-list key=InstanceIds,valueSet={{ instance_id }} --output json"
         operation_name: "Get SSM debug info for {{ instance_id }}"
         parse_output: true
-      ignore_errors: true
 
     - name: Display SSM agent status
       ansible.builtin.debug:
@@ -49,4 +48,4 @@
           
     - name: Fail with detailed error
       ansible.builtin.fail:
-        msg: "SSM agent did not become ready within {{ _ssm_max_wait }} seconds for instance {{ instance_id }}"
+        msg: "SSM agent did not become ready within {{ aws_cli_helper_ssm_max_wait }} seconds for instance {{ instance_id }}"

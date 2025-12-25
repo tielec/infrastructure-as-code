@@ -8,8 +8,8 @@
 
 - name: Initialize retry counter
   ansible.builtin.set_fact:
-    _retry_attempt: 0
-    _retry_success: false
+    aws_cli_helper_retry_attempt: 0
+    aws_cli_helper_retry_success: false
 
 - name: Execute with retry loop
   ansible.builtin.include_tasks: _retry_loop.yml

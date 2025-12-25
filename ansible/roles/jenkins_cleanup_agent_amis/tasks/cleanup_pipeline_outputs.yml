@@ -55,7 +55,7 @@
         pipeline_cleanup_results:
           total_pipelines: "{{ project_pipelines | length }}"
           processed_pipelines: "{{ pipeline_output_results | default([]) | length }}"
-          dry_run: "{{ dry_run }}"
+          dry_run: "{{ jenkins_cleanup_agent_amis_dry_run }}"
           timestamp: "{{ ansible_date_time.iso8601 }}"
 
   rescue:

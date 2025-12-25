@@ -59,14 +59,14 @@
     
     - name: Identify x86_64 AMIs to delete
       ansible.builtin.set_fact:
-        x86_amis_to_delete: "{{ x86_amis[retention_count | int:] | default([]) }}"
+        x86_amis_to_delete: "{{ x86_amis[ retention_count | int : ] | default([]) }}"
       when: 
         - x86_amis is defined
         - x86_amis | length > retention_count | int
     
     - name: Identify ARM64 AMIs to delete
       ansible.builtin.set_fact:
-        arm_amis_to_delete: "{{ arm_amis[retention_count | int:] | default([]) }}"
+        arm_amis_to_delete: "{{ arm_amis[ retention_count | int : ] | default([]) }}"
       when:
         - arm_amis is defined
         - arm_amis | length > retention_count | int

@@ -1,7 +1,7 @@
 ---
 # 特定のパターンでAMIを検索
 
-- name: Find AMIs by pattern {{ pattern }}
+- name: Find AMIs by pattern
   block:
     - name: List AMIs matching pattern
       ansible.builtin.include_role:

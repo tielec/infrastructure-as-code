@@ -52,7 +52,7 @@
       }}
 
 # AWS CLIコマンドを実行
-- name: "Execute AWS CLI: {{ operation_name }}"
+- name: Execute AWS CLI command
   ansible.builtin.shell: |
     set -o pipefail
     {{ _aws_command_with_region }}
@@ -63,7 +63,6 @@
   failed_when: false
   timeout: "{{ timeout | default(aws_cli_helper_timeout) }}"
   environment: "{{ _aws_environment }}"
-  ignore_errors: true  # タイムアウトエラーも含めてキャッチ
 
 # タイムアウトチェック
 - name: Check for timeout
