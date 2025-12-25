@@ -242,7 +242,7 @@ class TestPRCommentGenerationBDD:
         assert "src/large_module.py" in comment
         assert len(skipped_files) > 0
 
-    def test_scenario_互換性レイヤーを使用したPR コメント生成(self, logger, temp_template_dir):
+    def test_scenario_互換性レイヤーを使用したPRコメント生成(self, logger, temp_template_dir):
         """
         Scenario: 旧インポートパスでのPRコメント生成
 
@@ -253,12 +253,15 @@ class TestPRCommentGenerationBDD:
           And: PRコメントが正しく生成される
         """
         import warnings
+        import importlib
+        import pr_comment_generator
 
         # 警告をキャッチ
         with warnings.catch_warnings(record=True) as w:
             warnings.simplefilter("always")
 
-            # Given: 旧インポートパスを使用
+            # Given: 旧インポートパスを使用（再読み込みで非推奨警告を確実に捕捉）
+            importlib.reload(pr_comment_generator)
             from pr_comment_generator import PRInfo, FileChange, CommentFormatter
 
             # PR情報を作成
