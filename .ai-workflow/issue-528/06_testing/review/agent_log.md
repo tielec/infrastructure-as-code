@@ -1,6 +1,6 @@
 # Codex Agent 実行ログ
 
-開始日時: 2025/12/25 14:42:54
+開始日時: 2025/12/25 14:51:05
 
 ---
 
@@ -74,7 +74,7 @@ tests
 ## Turn 9: ツール実行
 
 **種別**: コマンド実行
-**コマンド**: `/bin/bash -lc 'find .. -name Planning.md'`
+**コマンド**: `/bin/bash -lc "find . -name 'Planning.md' -print"`
 **ステータス**: completed (exit_code=0)
 
 ## Turn 10: ツール実行
@@ -85,34 +85,43 @@ tests
 ## Turn 11: ツール実行
 
 **種別**: コマンド実行
-**コマンド**: `/bin/bash -lc 'ls -a'`
+**コマンド**: `/bin/bash -lc "find . -iname '*planning*.md' -print"`
 **ステータス**: completed (exit_code=0)
 
 ```text
-.
-..
-.ai-workflow
-.claude
-.coverage
-.git
-.github
-.gitignore
-.pytest_cache
-.python
-ARCHITECTURE.md
-CLAUDE.md
-CONTRIBUTION.md
-LICENSE
-README.md
-ansible
-bootstrap
-docker
-docs
-jenkins
-pulumi
-run_tests_issue_322.sh
-scripts
-tests
+./.ai-workflow/issue-193/00_planning/output/planning.md
+./.ai-workflow/issue-319/00_planning/output/planning.md
+./.ai-workflow/issue-320/00_planning/output/planning.md
+./.ai-workflow/issue-322/00_planning/output/planning.md
+./.ai-workflow/issue-324/00_planning/output/planning.md
+./.ai-workflow/issue-355/00_planning/output/planning.md
+./.ai-workflow/issue-360/00_planning/output/planning.md
+./.ai-workflow/issue-362/00_planning/output/planning.md
+./.ai-workflow/issue-363/00_planning/output/planning.md
+./.ai-workflow/issue-369/00_planning/output/planning.md
+./.ai-workflow/issue-370/00_planning/output/planning.md
+./.ai-workflow/issue-396/00_planning/output/planning.md
+./.ai-workflow/issue-398/00_planning/output/planning.md
+./.ai-workflow/issue-411/00_planning/output/planning.md
+./.ai-workflow/issue-415/00_planning/output/planning.md
+./.ai-workflow/issue-423/00_planning/output/planning.md
+./.ai-workflow/issue-431/00_planning/output/planning.md
+./.ai-workflow/issue-437/00_planning/output/planning.md
+./.ai-workflow/issue-440/00_planning/output/planning.md
+./.ai-workflow/issue-445/00_planning/output/planning.md
+./.ai-workflow/issue-453/00_planning/output/planning.md
+./.ai-workflow/issue-455/00_planning/output/planning.md
+./.ai-workflow/issue-456/00_planning/output/planning.md
+./.ai-workflow/issue-460/00_planning/output/planning.md
+./.ai-workflow/issue-461/00_planning/output/planning.md
+./.ai-workflow/issue-462/00_planning/output/planning.md
+./.ai-workflow/issue-463/00_planning/output/planning.md
+./.ai-workflow/issue-464/00_planning/output/planning.md
+./.ai-workflow/issue-465/00_planning/output/planning.md
+./.ai-workflow/issue-475/00_planning/output/planning.md
+./.ai-workflow/issue-477/00_planning/output/planning.md
+./.ai-workflow/issue-479/00_planning/output/planning.md
+./.ai-workflow/issue-528/00_planning/output/planning.md
 ```
 
 ## Turn 12: ツール実行
@@ -123,52 +132,180 @@ tests
 ## Turn 13: ツール実行
 
 **種別**: コマンド実行
-**コマンド**: `/bin/bash -lc 'ls .ai-workflow'`
+**コマンド**: `/bin/bash -lc 'cat .ai-workflow/issue-528/00_planning/output/planning.md'`
 **ステータス**: completed (exit_code=0)
 
 ```text
-issue-193
-issue-304
-issue-305
-issue-310
-issue-313
-issue-315
-issue-317
-issue-319
-issue-320
-issue-322
-issue-324
-issue-331
-issue-332
-issue-355
-issue-360
-issue-362
-issue-363
-issue-369
-issue-370
-issue-396
-issue-398
-issue-405
-issue-411
-issue-415
-issue-423
-issue-431
-issue-437
-issue-440
-issue-445
-issue-453
-issue-455
-issue-456
-issue-460
-issue-461
-issue-462
-issue-463
-issue-464
-issue-465
-issue-475
-issue-477
-issue-479
-issue-528
+# プロジェクト計画書: Issue #528
+
+## ファイルサイズの削減: pr_comment_generator.py
+
+---
+
+## 1. Issue分析
+
+### 複雑度: **複雑**
+
+**判定根拠**:
+- 対象ファイルは1985行の大規模単一ファイル
+- 解析ロジック、データモデル生成、OpenAI API連携、プロンプト構築、CLIエントリポイントの5つの責務が混在
+- 既に一部モジュール化が進んでいる（`pr_comment_generator/`パッケージに`models.py`, `token_estimator.py`, `prompt_manager.py`, `statistics.py`, `formatter.py`が存在）が、メインファイルとの統合・移行が未完了
+- 既存テスト（unit/integration/bdd）との互換性維持が必要
+- 外部依存（OpenAI API, GitHub API）との連携部分の切り出しが必要
+
+### 見積もり工数: **32〜48時間**
+
+**内訳**:
+- 現状分析と設計: 4〜6時間
+- OpenAIクライアント分離: 6〜8時間
+- 残りのロジック分離: 8〜12時間
+- CLIエントリポイント分離: 2〜4時間
+- テスト追加・修正: 8〜12時間
+- 統合テスト・回帰確認: 4〜6時間
+
+### リスク評価: **高**
+
+**理由**:
+- 既存の本番パイプラインで使用中のコード
+- OpenAI API連携ロジックが複雑で、エラーハンドリング・リトライロジックが多数
+- 外部インターフェース（CLI引数、出力JSON形式）を維持する必要がある
+
+---
+
+## 2. 実装戦略判断
+
+### 実装戦略: **REFACTOR**
+
+**判断根拠**:
+- 新規機能の追加ではなく、既存コードの構造改善が目的
+- 既に一部のモジュールが`pr_comment_generator/`パッケージに分離されている
+- メインファイル`pr_comment_generator.py`から責務別に機能を抽出し、既存パッケージに統合する
+- 外部インターフェース（CLI、出力形式）は変更しない
+
+### テスト戦略: **UNIT_INTEGRATION**
+
+**判断根拠**:
+- 新規モジュール（`openai_client.py`, `cli.py`等）のユニットテストが必要
+- 既存の統合テスト（`[REDACTED_TOKEN].py`, `[REDACTED_TOKEN].py`）の維持・拡張が必要
+- BDDテストは既存の`[REDACTED_TOKEN].py`で十分カバーされており、追加は不要
+- OpenAI APIとの連携部分はモック化してユニットテストを実施
+
+### テストコード戦略: **BOTH_TEST**
+
+**判断根拠**:
+- **CREATE_TEST**: 新規分離モジュール（`openai_client.py`, `cli.py`, `generator.py`）に対する新規テストファイル作成
+- **EXTEND_TEST**: 既存の統合テスト・互換性レイヤーテストの拡張
+
+---
+
+## 3. 影響範囲分析
+
+### 既存コードへの影響
+
+| ファイル | 影響内容 |
+|---------|---------|
+| `src/pr_comment_generator.py` | 完全リファクタリング（1985行→複数モジュールに分割） |
+| `src/pr_comment_generator/__init__.py` | 新モジュールのエクスポート追加 |
+| `src/github_utils.py` | 変更なし（依存として維持） |
+| `tests/unit/test_*.py` | 新規テスト追加、一部修正 |
+| `tests/integration/test_*.py` | 互換性確認テストの拡張 |
+
+### 新規作成ファイル（予定）
+
+| ファイル | 責務 |
+|---------|------|
+| `src/pr_comment_generator/openai_client.py` | OpenAI API連携（リトライ、トークン管理） |
+| `src/pr_comment_generator/generator.py` | PRコメント生成のコアロジック |
+| `src/pr_comment_generator/cli.py` | CLIエントリポイント |
+| `src/pr_comment_generator/chunk_analyzer.py` | チャンク分析ロジック |
+| `tests/unit/test_openai_client.py` | OpenAIクライアントのユニットテスト |
+| `tests/unit/test_generator.py` | ジェネレーターのユニットテスト |
+| `tests/unit/test_cli.py` | CLIのユニットテスト |
+
+### 依存関係の変更
+
+- **新規依存の追加**: なし
+- **既存依存の変更**:
+  - `pr_comment_generator.py`のmain関数が`cli.py`に移動
+  - `PRCommentGenerator`クラスが`generator.py`に移動
+  - `OpenAIClient`クラスが`openai_client.py`に移動
+
+### マイグレーション要否
+
+- **データベーススキーマ変更**: なし
+- **設定ファイル変更**: なし
+- **環境変数変更**: なし
+- **外部インターフェース変更**: なし（CLI引数、出力JSON形式は維持）
+
+---
+
+## 4. タスク分割
+
+### Phase 1: 要件定義 (見積もり: 2〜3h)
+
+- [x] Task 1-1: 現状コードの詳細分析 (1〜2h)
+  - `pr_comment_generator.py`の責務を関数/クラス単位で分類
+  - 既存`pr_comment_generator/`パッケージとの重複・差分を特定
+  - 依存関係グラフの作成
+- [x] Task 1-2: 分割方針の決定 (0.5〜1h)
+  - モジュール境界の定義
+  - 公開インターフェースの設計
+  - 後方互換性維持方針の確定
+
+### Phase 2: 設計 (見積もり: 3〜4h)
+
+- [x] Task 2-1: モジュール設計書の作成 (2〜3h)
+  - `openai_client.py`: OpenAI API連携クラスの詳細設計
+  - `generator.py`: PRCommentGeneratorの詳細設計
+  - `chunk_analyzer.py`: チャンク分析ロジックの詳細設計
+  - `cli.py`: CLIエントリポイントの詳細設計
+- [x] Task 2-2: インターフェース定義 (1h)
+  - 各モジュール間のインターフェース定義
+  - 型ヒントの設計
+  - エラーハンドリング方針の統一
+
+### Phase 3: テストシナリオ (見積もり: 2〜3h)
+
+- [x] Task 3-1: ユニットテストシナリオ作成 (1〜2h)
+  - `OpenAIClient`のテストケース設計（モック使用）
+  - `PRCommentGenerator`のテストケース設計
+  - `ChunkAnalyzer`のテストケース設計
+  - CLIのテストケース設計
+- [x] Task 3-2: 統合テストシナリオ作成 (1h)
+  - 既存互換性レイヤーテストの拡張方針
+  - エンドツーエンドテストシナリオ
+
+### Phase 4: 実装 (見積もり: 16〜22h)
+
+- [x] Task 4-1: OpenAIClientの分離 (5〜7h)
+  - `openai_client.py`の作成
+  - APIリクエスト、リトライロジック、トークン管理の移行
+  - プロンプト保存機能の移行
+  - 型ヒントの追加
+- [x] Task 4-2: ChunkAnalyzerの分離 (3〜4h)
+  - `chunk_analyzer.py`の作成
+  - チャンク分割、最適化ロジックの移行
+  - 入力サイズ管理ロジックの移行
+- [x] Task 4-3: PRCommentGeneratorのリファクタリング (4〜6h)
+  - `generator.py`の作成
+  - 既存クラスからの責務分離
+  - 新モジュールとの連携実装
+- [x] Task 4-4: CLIエントリポイントの分離 (2〜3h)
+  - `cli.py`の作成
+  - main関数の移行
+  - 引数パーサーの整理
+- [x] Task 4-5: __init__.pyの更新 (1〜2h)
+  - 新モジュールのエクスポート
+  - 互換性レイヤーの維持
+  - 非推奨警告の更新
+
+### Phase 5: テストコード実装 (見積もり: 8〜12h)
+
+- [x] Task 5-1: OpenAIClientのユニットテスト (3〜4h)
+  - モック設定
+  - 正常系テスト
+  - エラーハ
+... (truncated)
 ```
 
 ## Turn 14: ツール実行
@@ -179,18 +316,26 @@ issue-528
 ## Turn 15: ツール実行
 
 **種別**: コマンド実行
-**コマンド**: `/bin/bash -lc 'ls .ai-workflow/issue-528'`
+**コマンド**: `/bin/bash -lc 'cat .ai-workflow/issue-528/06_testing/output/test-result.md'`
 **ステータス**: completed (exit_code=0)
 
 ```text
-00_planning
-01_requirements
-02_design
-03_test_scenario
-04_implementation
-05_test_implementation
-06_testing
-metadata.json
+# テスト実行結果
+
+- 実行日時: 2025-12-25T14:49:06+00:00
+- 実行コマンド: PATH="/tmp/ai-workflow-repos-9-4357d776/[REDACTED_TOKEN]/.python/python/bin:$PATH" pytest jenkins/jobs/pipeline/docs-generator/pull-request-comment-builder/tests
+- Python: 3.11.14 / pytest: 9.0.2
+
+## サマリー
+- 総テスト数: 107
+- 成功: 107
+- 失敗: 0
+- スキップ: 0
+- 警告: 1 (非推奨インポートの警告で動作への影響なし)
+
+## 補足
+- BDDシナリオ `test_scenario_互換性レイヤーを使用したPRコメント生成` を含め全ケースが成功。
+- DeprecationWarning は `pr_comment_generator` の旧インポートパス使用に伴う期待される警告であり、機能は正常に動作することを確認。
 ```
 
 ## Turn 16: ツール実行
@@ -200,164 +345,82 @@ metadata.json
 
 ## Turn 17: ツール実行
 
-**種別**: コマンド実行
-**コマンド**: `/bin/bash -lc 'ls .ai-workflow/issue-528/00_planning'`
-**ステータス**: completed (exit_code=0)
-
-```text
-execute
-output
-review
-revise
-```
+**種別**: reasoning
+**ステータス**: completed
 
 ## Turn 18: ツール実行
 
-**種別**: reasoning
-**ステータス**: completed
-
-## Turn 19: ツール実行
-
 **種別**: コマンド実行
-**コマンド**: `/bin/bash -lc 'find .ai-workflow/issue-528 -name Planning.md'`
-**ステータス**: completed (exit_code=0)
-
-## Turn 20: ツール実行
-
-**種別**: reasoning
-**ステータス**: completed
-
-## Turn 21: ツール実行
-
-**種別**: コマンド実行
-**コマンド**: `/bin/bash -lc "find . -name 'Planning.md'"`
-**ステータス**: completed (exit_code=0)
-
-## Turn 22: ツール実行
-
-**種別**: reasoning
-**ステータス**: completed
-
-## Turn 23: ツール実行
-
-**種別**: コマンド実行
-**コマンド**: `/bin/bash -lc 'ls .ai-workflow/issue-528/00_planning/execute'`
-**ステータス**: completed (exit_code=0)
-
-```text
-agent_log.md
-agent_log_raw.txt
-prompt.txt
-```
-
-## Turn 24: ツール実行
-
-**種別**: reasoning
-**ステータス**: completed
-
-## Turn 25: ツール実行
-
-**種別**: コマンド実行
-**コマンド**: `/bin/bash -lc 'rg -n "Phase 6"'`
+**コマンド**: `/bin/bash -lc 'rg -n "Phase 6" -nPlanning.md'`
 **ステータス**: failed (exit_code=127)
 
 ```text
 /bin/bash: line 1: rg: command not found
 ```
 
-## Turn 26: ツール実行
+## Turn 19: ツール実行
 
 **種別**: reasoning
 **ステータス**: completed
 
-## Turn 27: ツール実行
+## Turn 20: ツール実行
 
 **種別**: コマンド実行
-**コマンド**: `/bin/bash -lc 'grep -R "Phase 6" -n'`
-**ステータス**: failed (exit_code=124)
-
-```text
-.git/logs/refs/heads/ai-workflow/issue-528:20:[REDACTED_TOKEN] [REDACTED_TOKEN] yuto-takashi <[REDACTED_EMAIL]> 1766673773 +0000	commit: [ai-workflow] Phase 6 (testing) - execute completed
-.git/logs/HEAD:22:[REDACTED_TOKEN] [REDACTED_TOKEN] yuto-takashi <[REDACTED_EMAIL]> 1766673773 +0000	commit: [ai-workflow] Phase 6 (testing) - execute completed
-.git/COMMIT_EDITMSG:1:[ai-workflow] Phase 6 (testing) - execute completed
-.ai-workflow/issue-193/00_planning/output/planning.md:129:### Phase 6: テスト実行 (見積もり: 0.25h)
-.ai-workflow/issue-193/00_planning/output/planning.md:164:    P5 --> P6[Phase 6: テスト実行]
-.ai-workflow/issue-193/00_planning/output/planning.md:187:  - Phase 6でチェックリストによる検証を実施
-.ai-workflow/issue-193/00_planning/output/planning.md:201:  - Phase 6で整合性を確認
-.ai-workflow/issue-193/00_planning/output/planning.md:238:### Phase 6: テスト実行
-.ai-workflow/issue-193/02_design/output/design.md:367:| ドキュメント記載ミスによる誤操作 | 中 | **対策**: レビュープロセスでパラメータ名と実行例を確認<br>**Phase 6**: 実装との整合性チェック |
-.ai-workflow/issue-193/02_design/output/design.md:422:### Phase 6（Testing）での推奨テスト順序
-.ai-workflow/issue-193/02_design/output/design.md:473:| FR-004 | ドキュメント間の整合性確保 | Section 10（Phase 6テスト） | ✅ |
-.ai-workflow/issue-193/03_test_scenario/output/test-scenario.md:487:### Phase 6で実施すべきテスト（優先順位順）
-.ai-workflow/issue-193/03_test_scenario/output/test-scenario.md:572:| Phase 6: テスト実行 (0.25h) | 優先順位付けされたテストチェックリストを作成 | ✅ |
-.ai-workflow/issue-193/03_test_scenario/output/test-scenario.md:596:| 10: 実装の順序（Phase 6テスト順序） | Section 5（テスト実施チェックリスト）で対応 | ✅ |
-.ai-workflow/issue-193/04_implementation/output/implementation.md:197:### Phase 6（testing）
-.ai-workflow/issue-193/04_implementation/output/implementation.md:259:Phase 5（test_implementation）では、テストコード実装は不要のため、直接Phase 6（testing）に進みます。Phase 6では、テストシナリオに定義された17個のユニットテスト（ドキュメント検証）を実施します。
-.ai-workflow/issue-193/04_implementation/output/implementation.md:265:**レビュー待ち**: Phase 6（Testing）での検証が必要
-.ai-workflow/issue-193/05_test_implementation/output/test-implementation.md:58:**Phase 6（Testing）は実施が必要です**が、実行するのは「実装テスト」ではなく、「ドキュメント検証テスト」です。
-.ai-workflow/issue-193/05_test_implementation/output/test-implementation.md:60:### Phase 6で実施すべき内容
-.ai-workflow/issue-193/05_test_implementation/output/test-implementation.md:92:### Phase 6での実施方法
-.ai-workflow/issue-193/05_test_implementation/output/test-implementation.md:97:### Phase 6で実施すべきテスト（優先順位順）
-.ai-workflow/issue-193/05_test_implementation/output/test-implementation.md:131:| 既存のドキュメントレビュープロセスに統合 | Phase 6でマニュアル検証 | ✅ |
-.ai-workflow/issue-193/05_test_implementation/output/test-implementation.md:146:### 次フェーズ（Phase 6: Testing）
-.ai-workflow/issue-193/05_test_implementation/output/test-implementation.md:147:Phase 6では、Test Scenarioに定義された17個のユニットテスト（ドキュメント検証）をマニュアルレビューとして実施します。
-.ai-workflow/issue-193/05_test_implementation/output/test-implementation.md:149:**Phase 6をスキップすることは推奨しません**。ドキュメントの正確性を保証するため、高優先度のドキュメント検証テスト（UT-015, UT-004, UT-008, UT-001, UT-012）は必ず実施してください。
-.ai-workflow/issue-193/05_test_implementation/output/test-implementation.md:156:**判定**: テストコード実装スキップ（Phase 6でマニュアル検証を実施）
-.ai-workflow/issue-193/06_testing/output/test-result.md:33:> **Phase 6をスキップすることは推奨しません**。ドキュメントの正確性を保証するため、高優先度のドキュメント検証テスト（UT-015, UT-004, UT-008, UT-001, UT-012）は必ず実施してください。
-.ai-workflow/issue-193/06_testing/output/test-result.md:35:したがって、このPhase 6では**自動テスト実行ではなく、ドキュメント検証テスト（マニュアルレビュー）**を実施しました。
-.ai-workflow/issue-193/06_testing/output/test-result.md:505:**品質ゲート（Phase 6）チェック**:
-.ai-workflow/issue-193/06_testing/output/test-result.md:554:| Phase 6見積もり工数: 0.25h | マニュアルレビューで実施（約20分） | ✅ 見積もり内 |
-.ai-workflow/issue-193/06_testing/output/test-result.md:572:Issue #193のPhase 6（Testing）が正常に完了しました。
-.ai-workflow/issue-193/07_documentation/output/[REDACTED_TOKEN].md:137:### 3ファイル間の整合性（Phase 6テスト結果より）
-.ai-workflow/issue-193/07_documentation/output/[REDACTED_TOKEN].md:139:Phase 6（Testing）で実施されたドキュメント検証テスト（UT-001～UT-01
-... (truncated)
-```
-
-## Turn 28: ツール実行
-
-**種別**: reasoning
-**ステータス**: completed
-
-## Turn 29: ツール実行
-
-**種別**: コマンド実行
-**コマンド**: `/bin/bash -lc 'ls .ai-workflow/issue-528/00_planning/output'`
+**コマンド**: `/bin/bash -lc "sed -n '120,200p' .ai-workflow/issue-528/00_planning/output/planning.md"`
 **ステータス**: completed (exit_code=0)
 
 ```text
-planning.md
-```
+- `openai_client.py`: OpenAI API連携クラスの詳細設計
+  - `generator.py`: PRCommentGeneratorの詳細設計
+  - `chunk_analyzer.py`: チャンク分析ロジックの詳細設計
+  - `cli.py`: CLIエントリポイントの詳細設計
+- [x] Task 2-2: インターフェース定義 (1h)
+  - 各モジュール間のインターフェース定義
+  - 型ヒントの設計
+  - エラーハンドリング方針の統一
 
-## Turn 30: ツール実行
+### Phase 3: テストシナリオ (見積もり: 2〜3h)
 
-**種別**: reasoning
-**ステータス**: completed
+- [x] Task 3-1: ユニットテストシナリオ作成 (1〜2h)
+  - `OpenAIClient`のテストケース設計（モック使用）
+  - `PRCommentGenerator`のテストケース設計
+  - `ChunkAnalyzer`のテストケース設計
+  - CLIのテストケース設計
+- [x] Task 3-2: 統合テストシナリオ作成 (1h)
+  - 既存互換性レイヤーテストの拡張方針
+  - エンドツーエンドテストシナリオ
 
-## Turn 31: ツール実行
+### Phase 4: 実装 (見積もり: 16〜22h)
 
-**種別**: コマンド実行
-**コマンド**: `/bin/bash -lc 'grep -n "Phase 6" -n .ai-workflow/issue-528/00_planning/output/planning.md'`
-**ステータス**: completed (exit_code=0)
+- [x] Task 4-1: OpenAIClientの分離 (5〜7h)
+  - `openai_client.py`の作成
+  - APIリクエスト、リトライロジック、トークン管理の移行
+  - プロンプト保存機能の移行
+  - 型ヒントの追加
+- [x] Task 4-2: ChunkAnalyzerの分離 (3〜4h)
+  - `chunk_analyzer.py`の作成
+  - チャンク分割、最適化ロジックの移行
+  - 入力サイズ管理ロジックの移行
+- [x] Task 4-3: PRCommentGeneratorのリファクタリング (4〜6h)
+  - `generator.py`の作成
+  - 既存クラスからの責務分離
+  - 新モジュールとの連携実装
+- [x] Task 4-4: CLIエントリポイントの分離 (2〜3h)
+  - `cli.py`の作成
+  - main関数の移行
+  - 引数パーサーの整理
+- [x] Task 4-5: __init__.pyの更新 (1〜2h)
+  - 新モジュールのエクスポート
+  - 互換性レイヤーの維持
+  - 非推奨警告の更新
 
-```text
-181:### Phase 6: テスト実行 (見積もり: 3〜4h)
-220:    P5 --> P6[Phase 6: テスト実行]
-309:### Phase 6: テスト実行
-```
+### Phase 5: テストコード実装 (見積もり: 8〜12h)
 
-## Turn 32: ツール実行
-
-**種別**: reasoning
-**ステータス**: completed
-
-## Turn 33: ツール実行
-
-**種別**: コマンド実行
-**コマンド**: `/bin/bash -lc "sed -n '170,260p' .ai-workflow/issue-528/00_planning/output/planning.md"`
-**ステータス**: completed (exit_code=0)
-
-```text
-- リトライロジックテスト
+- [x] Task 5-1: OpenAIClientのユニットテスト (3〜4h)
+  - モック設定
+  - 正常系テスト
+  - エラーハンドリングテスト
+  - リトライロジックテスト
 - [x] Task 5-2: ChunkAnalyzerのユニットテスト (2〜3h)
   - チャンク分割テスト
   - 最適化ロジックテスト
@@ -388,185 +451,24 @@ planning.md
 - [ ] Task 7-2: README/CONTRIBUTION.mdの更新 (1h)
   - 新モジュール構造の説明
   - インポートパスの変更案内
-
-### Phase 8: レポート (見積もり: 1〜2h)
-
-- [ ] Task 8-1: リファクタリング完了レポート作成 (1〜2h)
-  - 変更サマリー
-  - 新モジュール構造の説明
-  - 今後の改善提案
-
----
-
-## 5. 依存関係
-
-```mermaid
-graph TD
-    P1[Phase 1: 要件定義] --> P2[Phase 2: 設計]
-    P2 --> P3[Phase 3: テストシナリオ]
-    P2 --> P4[Phase 4: 実装]
-    P3 --> P5[Phase 5: テストコード実装]
-    P4 --> P5
-    P5 --> P6[Phase 6: テスト実行]
-    P6 --> P7[Phase 7: ドキュメント]
-    P7 --> P8[Phase 8: レポート]
-
-    subgraph Phase 4詳細
-        T41[Task 4-1: OpenAIClient] --> T43[Task 4-3: Generator]
-        T42[Task 4-2: ChunkAnalyzer] --> T43
-        T43 --> T44[Task 4-4: CLI]
-        T44 --> T45[Task 4-5: __init__.py]
-    end
 ```
 
----
-
-## 6. リスクと軽減策
-
-### リスク1: 既存パイプラインの破損
-
-- **影響度**: 高
-- **確率**: 中
-- **軽減策**:
-  - 外部インターフェース（CLI引数、出力JSON形式）を変更しない
-  - 既存の統合テスト・BDDテストで回帰確認
-  - 段階的なリファクタリング（一度に全てを変更しない）
-  - フィーチャーブランチでの開発、十分なテスト後にマージ
-
-### リスク2: OpenAI API連携の複雑性
-
-- **影響度**: 高
-- **確率**: 中
-- **軽減策**:
-  - リトライロジック、エラーハンドリングの単体テストを充実させる
-  - モックを活用したユニットテストで境界条件を網羅
-  - 既存のログ出力を維持し、デバッグ容易性を確保
-
-### リスク3: 互換性レイヤーの破損
-
-- **影響度**: 中
-- **確率**: 低
-- **軽減策**:
-  - 既存の`[REDACTED_TOKEN].py`を拡張
-```
-
-## Turn 34: ツール実行
+## Turn 21: ツール実行
 
 **種別**: reasoning
 **ステータス**: completed
 
-## Turn 35: ツール実行
+## Turn 22: ツール実行
 
-**種別**: コマンド実行
-**コマンド**: `/bin/bash -lc "sed -n '1,200p' .ai-workflow/issue-528/06_testing/output/test-result.md"`
-**ステータス**: completed (exit_code=0)
+**種別**: file_change
+**ステータス**: completed
 
-```text
-# テスト実行結果
-
-## テスト結果サマリー
-- 総テスト数: 104件
-- 成功: 103件
-- 失敗: 1件
-- 成功率: 99%
-
-### `jenkins/jobs/pipeline/docs-generator/pull-request-comment-builder/tests/bdd/test_bdd_pr_comment_generation.py`
-- **エラー**: SyntaxError: expected '('（テスト名に半角スペースが含まれており関数名として無効）
-- **スタックトレース**:
-  ```
-  File "jenkins/jobs/pipeline/docs-generator/pull-request-comment-builder/tests/bdd/test_bdd_pr_comment_generation.py", line 245
-    def test_scenario_互換性レイヤーを使用したPR コメント生成(self, logger, temp_template_dir):
-                                       ^^^^^^
-  SyntaxError: expected '('
-  ```
-```
-
-## Turn 36: ツール実行
+## Turn 23: ツール実行
 
 **種別**: reasoning
 **ステータス**: completed
 
-## Turn 37: ツール実行
-
-**種別**: コマンド実行
-**コマンド**: `/bin/bash -lc "sed -n '200,400p' .ai-workflow/issue-528/06_testing/output/test-result.md"`
-**ステータス**: completed (exit_code=0)
-
-## Turn 38: ツール実行
-
-**種別**: reasoning
-**ステータス**: completed
-
-## Turn 39: ツール実行
-
-**種別**: コマンド実行
-**コマンド**: `/bin/bash -lc 'wc -l .ai-workflow/issue-528/06_testing/output/test-result.md'`
-**ステータス**: completed (exit_code=0)
-
-```text
-17 .ai-workflow/issue-528/06_testing/output/test-result.md
-```
-
-## Turn 40: ツール実行
-
-**種別**: reasoning
-**ステータス**: completed
-
-## Turn 41: ツール実行
-
-**種別**: コマンド実行
-**コマンド**: `/bin/bash -lc 'cat .ai-workflow/issue-528/06_testing/output/test-result.md'`
-**ステータス**: completed (exit_code=0)
-
-```text
-# テスト実行結果
-
-## テスト結果サマリー
-- 総テスト数: 104件
-- 成功: 103件
-- 失敗: 1件
-- 成功率: 99%
-
-### `jenkins/jobs/pipeline/docs-generator/pull-request-comment-builder/tests/bdd/test_bdd_pr_comment_generation.py`
-- **エラー**: SyntaxError: expected '('（テスト名に半角スペースが含まれており関数名として無効）
-- **スタックトレース**:
-  ```
-  File "jenkins/jobs/pipeline/docs-generator/pull-request-comment-builder/tests/bdd/test_bdd_pr_comment_generation.py", line 245
-    def test_scenario_互換性レイヤーを使用したPR コメント生成(self, logger, temp_template_dir):
-                                       ^^^^^^
-  SyntaxError: expected '('
-  ```
-```
-
-## Turn 42: ツール実行
-
-**種別**: reasoning
-**ステータス**: completed
-
-## Turn 43: ツール実行
-
-**種別**: コマンド実行
-**コマンド**: `/bin/bash -lc 'ls .ai-workflow/issue-528/06_testing'`
-**ステータス**: completed (exit_code=0)
-
-```text
-execute
-output
-review
-revise
-```
-
-## Turn 44: ツール実行
-
-**種別**: reasoning
-**ステータス**: completed
-
-## Turn 45: ツール実行
-
-**種別**: reasoning
-**ステータス**: completed
-
-## Turn 46: ツール実行
+## Turn 24: ツール実行
 
 **種別**: コマンド実行
 **コマンド**: `/bin/bash -lc 'nl -ba .ai-workflow/issue-528/06_testing/output/test-result.md'`
@@ -575,59 +477,82 @@ revise
 ```text
 1	# テスト実行結果
      2	
-     3	## テスト結果サマリー
-     4	- 総テスト数: 104件
-     5	- 成功: 103件
-     6	- 失敗: 1件
-     7	- 成功率: 99%
-     8	
-     9	### `jenkins/jobs/pipeline/docs-generator/pull-request-comment-builder/tests/bdd/test_bdd_pr_comment_generation.py`
-    10	- **エラー**: SyntaxError: expected '('（テスト名に半角スペースが含まれており関数名として無効）
-    11	- **スタックトレース**:
-    12	  ```
-    13	  File "jenkins/jobs/pipeline/docs-generator/pull-request-comment-builder/tests/bdd/test_bdd_pr_comment_generation.py", line 245
-    14	    def test_scenario_互換性レイヤーを使用したPR コメント生成(self, logger, temp_template_dir):
-    15	                                       ^^^^^^
-    16	  SyntaxError: expected '('
-    17	  ```
+     3	- 実行日時: 2025-12-25T14:49:06+00:00
+     4	- 実行コマンド: PATH="/tmp/ai-workflow-repos-9-4357d776/[REDACTED_TOKEN]/.python/python/bin:$PATH" pytest jenkins/jobs/pipeline/docs-generator/pull-request-comment-builder/tests
+     5	- Python: 3.11.14 / pytest: 9.0.2
+     6	
+     7	## サマリー
+     8	- 総テスト数: 107
+     9	- 成功: 107
+    10	- 失敗: 0
+    11	- スキップ: 0
+    12	- 警告: 1 (非推奨インポートの警告で動作への影響なし)
+    13	
+    14	## 補足
+    15	- BDDシナリオ `test_scenario_互換性レイヤーを使用したPRコメント生成` を含め全ケースが成功。
+    16	- DeprecationWarning は `pr_comment_generator` の旧インポートパス使用に伴う期待される警告であり、機能は正常に動作することを確認。
 ```
 
-## Turn 47: ツール実行
+## Turn 25: ツール実行
 
 **種別**: reasoning
 **ステータス**: completed
 
-## Turn 48: ツール実行
+## Turn 26: ツール実行
 
 **種別**: コマンド実行
-**コマンド**: `/bin/bash -lc 'grep -n "BDD" .ai-workflow/issue-528/03_test_scenario/output/test-scenario.md'`
+**コマンド**: `/bin/bash -lc "nl -ba .ai-workflow/issue-528/00_planning/output/planning.md | sed -n '140,220p'"`
 **ステータス**: completed (exit_code=0)
 
 ```text
-16:- **BDDテスト不要**: 既存の`test_bdd_pr_comment_generation.py`でエンドツーエンドのシナリオが十分カバーされている
-1271:  - BDDテスト: 既存テストで十分（追加不要）
-```
-
-## Turn 49: ツール実行
-
-**種別**: reasoning
-**ステータス**: completed
-
-## Turn 50: ツール実行
-
-**種別**: コマンド実行
-**コマンド**: `/bin/bash -lc "nl -ba .ai-workflow/issue-528/00_planning/output/planning.md | sed -n '180,210p'"`
-**ステータス**: completed (exit_code=0)
-
-```text
-180	
+140	### Phase 4: 実装 (見積もり: 16〜22h)
+   141	
+   142	- [x] Task 4-1: OpenAIClientの分離 (5〜7h)
+   143	  - `openai_client.py`の作成
+   144	  - APIリクエスト、リトライロジック、トークン管理の移行
+   145	  - プロンプト保存機能の移行
+   146	  - 型ヒントの追加
+   147	- [x] Task 4-2: ChunkAnalyzerの分離 (3〜4h)
+   148	  - `chunk_analyzer.py`の作成
+   149	  - チャンク分割、最適化ロジックの移行
+   150	  - 入力サイズ管理ロジックの移行
+   151	- [x] Task 4-3: PRCommentGeneratorのリファクタリング (4〜6h)
+   152	  - `generator.py`の作成
+   153	  - 既存クラスからの責務分離
+   154	  - 新モジュールとの連携実装
+   155	- [x] Task 4-4: CLIエントリポイントの分離 (2〜3h)
+   156	  - `cli.py`の作成
+   157	  - main関数の移行
+   158	  - 引数パーサーの整理
+   159	- [x] Task 4-5: __init__.pyの更新 (1〜2h)
+   160	  - 新モジュールのエクスポート
+   161	  - 互換性レイヤーの維持
+   162	  - 非推奨警告の更新
+   163	
+   164	### Phase 5: テストコード実装 (見積もり: 8〜12h)
+   165	
+   166	- [x] Task 5-1: OpenAIClientのユニットテスト (3〜4h)
+   167	  - モック設定
+   168	  - 正常系テスト
+   169	  - エラーハンドリングテスト
+   170	  - リトライロジックテスト
+   171	- [x] Task 5-2: ChunkAnalyzerのユニットテスト (2〜3h)
+   172	  - チャンク分割テスト
+   173	  - 最適化ロジックテスト
+   174	- [x] Task 5-3: PRCommentGeneratorのユニットテスト (2〜3h)
+   175	  - コメント生成テスト
+   176	  - エラーハンドリングテスト
+   177	- [x] Task 5-4: CLIのユニットテスト (1〜2h)
+   178	  - 引数パーステスト
+   179	  - 出力フォーマットテスト
+   180	
    181	### Phase 6: テスト実行 (見積もり: 3〜4h)
    182	
-   183	- [ ] Task 6-1: ユニットテストの実行と修正 (1〜2h)
+   183	- [x] Task 6-1: ユニットテストの実行と修正 (1〜2h)
    184	  - 全ユニットテストの実行
    185	  - 失敗テストの修正
    186	  - カバレッジ確認
-   187	- [ ] Task 6-2: 統合テストの実行と修正 (1〜2h)
+   187	- [x] Task 6-2: 統合テストの実行と修正 (1〜2h)
    188	  - 互換性レイヤーテストの実行
    189	  - 回帰テストの確認
    190	  - BDDテストの確認
@@ -650,32 +575,37 @@ revise
    207	  - 今後の改善提案
    208	
    209	---
-   210
+   210	
+   211	## 5. 依存関係
+   212	
+   213	```mermaid
+   214	graph TD
+   215	    P1[Phase 1: 要件定義] --> P2[Phase 2: 設計]
+   216	    P2 --> P3[Phase 3: テストシナリオ]
+   217	    P2 --> P4[Phase 4: 実装]
+   218	    P3 --> P5[Phase 5: テストコード実装]
+   219	    P4 --> P5
+   220	    P5 --> P6[Phase 6: テスト実行]
 ```
 
-## Turn 51: ツール実行
+## Turn 27: ツール実行
 
 **種別**: reasoning
 **ステータス**: completed
 
-## Turn 52: ツール実行
-
-**種別**: reasoning
-**ステータス**: completed
-
-## Turn 53: ツール実行
+## Turn 28: ツール実行
 
 **種別**: agent_message
 **ステータス**: completed
 
-## Turn 54: 実行完了
+## Turn 29: 実行完了
 
 **ステータス**: completed
-**所要時間**: 121815ms
+**所要時間**: 49887ms
 **ターン数**: N/A
 
 ---
 
-**経過時間**: 121815ms
-**開始**: 2025-12-25T14:42:54.438Z
-**終了**: 2025-12-25T14:44:56.253Z
+**経過時間**: 49887ms
+**開始**: 2025-12-25T14:51:05.625Z
+**終了**: 2025-12-25T14:51:55.512Z
