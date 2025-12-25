@@ -19,6 +19,10 @@ from .token_estimator import TokenEstimator
 from .prompt_manager import PromptTemplateManager
 from .statistics import PRCommentStatistics
 from .formatter import CommentFormatter
+from .openai_client import OpenAIClient
+from .generator import PRCommentGenerator
+from .chunk_analyzer import ChunkAnalyzer
+from .cli import create_argument_parser, setup_environment_from_args, main
 
 # 非推奨警告を表示
 def _show_deprecation_warning():
@@ -27,6 +31,8 @@ def _show_deprecation_warning():
         "直接 'from pr_comment_generator import ...' でインポートすることは非推奨です。\n"
         "新しいインポートパスを使用してください:\n"
         "  from pr_comment_generator.generator import PRCommentGenerator\n"
+        "  from pr_comment_generator.openai_client import OpenAIClient\n"
+        "  from pr_comment_generator.chunk_analyzer import ChunkAnalyzer\n"
         "  from pr_comment_generator.models import PRInfo, FileChange\n"
         "このメッセージは将来のバージョンで削除される予定です。",
         DeprecationWarning,
@@ -44,6 +50,12 @@ __all__ = [
     'PromptTemplateManager',
     'PRCommentStatistics',
     'CommentFormatter',
+    'OpenAIClient',
+    'PRCommentGenerator',
+    'ChunkAnalyzer',
+    'create_argument_parser',
+    'setup_environment_from_args',
+    'main',
 ]
 
 # バージョン情報
