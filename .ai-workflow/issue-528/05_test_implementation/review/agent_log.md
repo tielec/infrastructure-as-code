@@ -1,6 +1,6 @@
 # Codex Agent 実行ログ
 
-開始日時: 2025/12/25 14:05:42
+開始日時: 2025/12/25 14:14:16
 
 ---
 
@@ -30,33 +30,10 @@
 
 ## Turn 5: ツール実行
 
-**種別**: コマンド実行
-**コマンド**: `/bin/bash -lc ls`
-**ステータス**: completed (exit_code=0)
-
-```text
-ARCHITECTURE.md
-CLAUDE.md
-CONTRIBUTION.md
-LICENSE
-README.md
-ansible
-bootstrap
-docker
-docs
-jenkins
-pulumi
-run_tests_issue_322.sh
-scripts
-tests
-```
-
-## Turn 6: ツール実行
-
 **種別**: reasoning
 **ステータス**: completed
 
-## Turn 7: ツール実行
+## Turn 6: ツール実行
 
 **種別**: コマンド実行
 **コマンド**: `/bin/bash -lc 'cat .ai-workflow/issue-528/00_planning/output/planning.md'`
@@ -113,7 +90,7 @@ tests
 
 **判断根拠**:
 - 新規モジュール（`openai_client.py`, `cli.py`等）のユニットテストが必要
-- 既存の統合テスト（`test_compatibility_layer.py`, `test_module_integration.py`）の維持・拡張が必要
+- 既存の統合テスト（`[REDACTED_TOKEN].py`, `[REDACTED_TOKEN].py`）の維持・拡張が必要
 - BDDテストは既存の`[REDACTED_TOKEN].py`で十分カバーされており、追加は不要
 - OpenAI APIとの連携部分はモック化してユニットテストを実施
 
@@ -228,19 +205,19 @@ tests
 
 ### Phase 5: テストコード実装 (見積もり: 8〜12h)
 
-- [ ] Task 5-1: OpenAIClientのユニットテスト (3〜4h)
+- [x] Task 5-1: OpenAIClientのユニットテスト (3〜4h)
   - モック設定
   - 正常系テスト
   - エラーハ
 ... (truncated)
 ```
 
-## Turn 8: ツール実行
+## Turn 7: ツール実行
 
 **種別**: reasoning
 **ステータス**: completed
 
-## Turn 9: ツール実行
+## Turn 8: ツール実行
 
 **種別**: コマンド実行
 **コマンド**: `/bin/bash -lc 'cat .ai-workflow/issue-528/05_test_implementation/output/test-implementation.md'`
@@ -265,14 +242,39 @@ tests
 - 統合テスト: 1件
 - BDDテスト: 0件
 - カバレッジ率: 未算出（ローカルでPython環境が無く実行未実施）
+# テスト実装ログ (Issue #528)
+
+## 実装サマリ
+- OpenAIClientのAPI呼び出しで正常系・レート制限からのリトライ成功・最大リトライ超過の挙動を追加検証し、トークン集計と待機時間の記録を確認。
+- チャンクサイズ計算の小規模/大規模/空/単一ファイルの境界ケースを追加し、Phase3のChunkAnalyzerシナリオに対応。
+- CLIの環境変数初期化デフォルトと異常系出力（例外発生時のエラーJSON生成）をカバーし、出力形式の整合性を確認。
+
+## 修正履歴
+### 修正1: APIリトライ/異常系の欠落（ブロッカー）
+- **指摘内容**: Phase3シナリオの`test_call_api_*`が未実装で、リトライとレート制限処理が未検証だった。
+- **修正内容**: `_call_openai_api`の成功・レートリミット後成功・最大リトライ超過を覆う3テストを追加し、トークン集計と待機時間が記録されることを確認。
+- **影響範囲**: `jenkins/jobs/pipeline/docs-generator/pull-request-comment-builder/tests/unit/test_openai_client.py`
+
+### 修正2: ChunkAnalyzer境界ケース不足（ブロッカー）
+- **指摘内容**: チャンクサイズ計算の小規模/大規模/境界値ケースが未検証だった。
+- **修正内容**: 小規模PR・大規模PR・空リスト・単一ファイルのチャンクサイズ期待を追加し、既存の大規模単一ファイルケースと合わせて計算ロジックを網羅。
+- **影響範囲**: `jenkins/jobs/pipeline/docs-generator/pull-request-comment-builder/tests/unit/test_openai_client.py`
+
+### 修正3: CLI異常系出力の未検証（ブロッカー）
+- **指摘内容**: `test_main_*`の異常系やデフォルト環境設定の検証が不足していた。
+- **修正内容**: デフォルトで環境変数を汚染しないことを確認し、`PRCommentGenerator`が例外を投げた際にエラーJSONと`traceback`が出力されるテストを追加。
+- **影響範囲**: `jenkins/jobs/pipeline/docs-generator/pull-request-comment-builder/tests/unit/test_cli.py`
+
+## 実行状況
+- テスト実行: 未実施（指示なしのためローカル実行は省略）
 ```
 
-## Turn 10: ツール実行
+## Turn 9: ツール実行
 
 **種別**: reasoning
 **ステータス**: completed
 
-## Turn 11: ツール実行
+## Turn 10: ツール実行
 
 **種別**: コマンド実行
 **コマンド**: `/bin/bash -lc 'cat .ai-workflow/issue-528/03_test_scenario/output/test-scenario.md'`
@@ -293,7 +295,7 @@ tests
 
 **判断根拠**（設計書より）:
 - **Unitテスト必要**: 新規分離モジュール（`openai_client.py`, `generator.py`, `cli.py`, `chunk_analyzer.py`）に対するユニットテストが必須
-- **Integrationテスト必要**: 既存の統合テスト（`test_compatibility_layer.py`, `test_module_integration.py`）の維持・拡張が必要
+- **Integrationテスト必要**: 既存の統合テスト（`[REDACTED_TOKEN].py`, `[REDACTED_TOKEN].py`）の維持・拡張が必要
 - **BDDテスト不要**: 既存の`[REDACTED_TOKEN].py`でエンドツーエンドのシナリオが十分カバーされている
 - OpenAI APIとの連携部分はモック化してユニットテストを実施
 
@@ -322,7 +324,7 @@ tests
 | 種別 | アクション | 対象ファイル |
 |------|-----------|-------------|
 | CREATE_TEST | 新規作成 | `test_openai_client.py`, `test_generator.py`, `test_cli.py`, `test_chunk_analyzer.py` |
-| EXTEND_TEST | 拡張 | `test_compatibility_layer.py`, `test_module_integration.py` |
+| EXTEND_TEST | 拡張 | `[REDACTED_TOKEN].py`, `[REDACTED_TOKEN].py` |
 
 ---
 
@@ -448,37 +450,40 @@ tests
 ... (truncated)
 ```
 
-## Turn 12: ツール実行
+## Turn 11: ツール実行
 
 **種別**: reasoning
 **ステータス**: completed
 
-## Turn 13: ツール実行
+## Turn 12: ツール実行
 
 **種別**: コマンド実行
-**コマンド**: `/bin/bash -lc 'ls jenkins/jobs/pipeline/docs-generator/pull-request-comment-builder/tests/unit'`
+**コマンド**: `/bin/bash -lc ls`
 **ステータス**: completed (exit_code=0)
 
 ```text
-__init__.py
-test_chunk_analyzer.py
-test_cli.py
-test_facade.py
-test_formatter.py
-test_generator.py
-test_models.py
-test_openai_client.py
-test_prompt_manager.py
-test_statistics.py
-[REDACTED_TOKEN].py
+ARCHITECTURE.md
+CLAUDE.md
+CONTRIBUTION.md
+LICENSE
+README.md
+ansible
+bootstrap
+docker
+docs
+jenkins
+pulumi
+run_tests_issue_322.sh
+scripts
+tests
 ```
 
-## Turn 14: ツール実行
+## Turn 13: ツール実行
 
 **種別**: reasoning
 **ステータス**: completed
 
-## Turn 15: ツール実行
+## Turn 14: ツール実行
 
 **種別**: コマンド実行
 **コマンド**: `/bin/bash -lc 'cat jenkins/jobs/pipeline/docs-generator/pull-request-comment-builder/tests/unit/test_openai_client.py'`
@@ -529,6 +534,14 @@ def [REDACTED_TOKEN](monkeypatch, tmp_path):
     return oc, prompt_manager
 
 
+def [REDACTED_TOKEN](monkeypatch, tmp_path, retry_config=None):
+    """Helper to build OpenAIClient with a stubbed openai module."""
+    oc, prompt_manager = [REDACTED_TOKEN](monkeypatch, tmp_path)
+    monkeypatch.setenv("OPENAI_API_KEY", "test-key")
+    client = oc.OpenAIClient(prompt_manager, retry_config=retry_config)
+    return oc, client
+
+
 def [REDACTED_TOKEN](monkeypatch, tmp_path):
     oc, prompt_manager = [REDACTED_TOKEN](monkeypatch, tmp_path)
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
@@ -568,14 +581,30 @@ def [REDACTED_TOKEN](monkeypatch, tmp_path):
     changes = [FileChange(filename="big.py", status="modified", additions=0, deletions=0, changes=400)]
 
     assert client.[REDACTED_TOKEN](changes) == 1
+
+
+def [REDACTED_TOKEN](monkeypatch, tmp_path):
+    oc, client = [REDACTED_TOKEN](monkeypatch, tmp_path)
+    monkeypatch.setattr(client, "[REDACTED_TOKEN]", lambda *_, **__: None)
+
+    result = client._call_openai_api([{"role": "user", "content": "hello"}], max_tokens=50)
+
+    assert result == "ok"
+    assert client.usage_stats["prompt_tokens"] == 5
+    assert client.usage_stats["completion_tokens"] == 5
+    assert client.usage_stats["retries"] == 0
+
+
+def [REDACTED_TOKEN](monke
+... (truncated)
 ```
 
-## Turn 16: ツール実行
+## Turn 15: ツール実行
 
 **種別**: reasoning
 **ステータス**: completed
 
-## Turn 17: ツール実行
+## Turn 16: ツール実行
 
 **種別**: コマンド実行
 **コマンド**: `/bin/bash -lc 'cat jenkins/jobs/pipeline/docs-generator/pull-request-comment-builder/tests/unit/test_chunk_analyzer.py'`
@@ -647,12 +676,12 @@ def [REDACTED_TOKEN]():
     assert "失敗" in result
 ```
 
-## Turn 18: ツール実行
+## Turn 17: ツール実行
 
 **種別**: reasoning
 **ステータス**: completed
 
-## Turn 19: ツール実行
+## Turn 18: ツール実行
 
 **種別**: コマンド実行
 **コマンド**: `/bin/bash -lc 'cat jenkins/jobs/pipeline/docs-generator/pull-request-comment-builder/tests/unit/test_generator.py'`
@@ -695,12 +724,12 @@ details here"""
     assert "ignored.py" in rebuilt
 ```
 
-## Turn 20: ツール実行
+## Turn 19: ツール実行
 
 **種別**: reasoning
 **ステータス**: completed
 
-## Turn 21: ツール実行
+## Turn 20: ツール実行
 
 **種別**: コマンド実行
 **コマンド**: `/bin/bash -lc 'cat jenkins/jobs/pipeline/docs-generator/pull-request-comment-builder/tests/unit/test_cli.py'`
@@ -769,6 +798,26 @@ def [REDACTED_TOKEN](monkeypatch, tmp_path):
     assert prompt_dir.exists()
 
 
+def [REDACTED_TOKEN](monkeypatch):
+    cli = [REDACTED_TOKEN](monkeypatch)
+    monkeypatch.delenv("PARALLEL_PROCESSING", raising=False)
+    monkeypatch.delenv("SAVE_PROMPTS", raising=False)
+    args = types.SimpleNamespace(
+        pr_diff="d",
+        pr_info="i",
+        output="o",
+        log_level="INFO",
+        parallel=False,
+        save_prompts=False,
+        prompt_output_dir="/tmp/prompts",
+    )
+
+    cli.[REDACTED_TOKEN](args)
+
+    assert os.environ.get("SAVE_PROMPTS") is None
+    assert os.environ.get("PARALLEL_PROCESSING") is None
+
+
 def [REDACTED_TOKEN](monkeypatch, tmp_path):
     cli = [REDACTED_TOKEN](monkeypatch)
 
@@ -825,33 +874,16 @@ def [REDACTED_TOKEN](monkeypatch, tmp_path):
 
     assert output_path.exists()
     data = json.loads(output_path.read_text(encoding="utf-8"))
-    assert data["comment"] == "ok"
+    assert data["comment"] ==
+... (truncated)
 ```
+
+## Turn 21: ツール実行
+
+**種別**: reasoning
+**ステータス**: completed
 
 ## Turn 22: ツール実行
-
-**種別**: reasoning
-**ステータス**: completed
-
-## Turn 23: ツール実行
-
-**種別**: コマンド実行
-**コマンド**: `/bin/bash -lc 'ls jenkins/jobs/pipeline/docs-generator/pull-request-comment-builder/tests/integration'`
-**ステータス**: completed (exit_code=0)
-
-```text
-__init__.py
-test_compatibility_layer.py
-test_generator_flow.py
-test_module_integration.py
-```
-
-## Turn 24: ツール実行
-
-**種別**: reasoning
-**ステータス**: completed
-
-## Turn 25: ツール実行
 
 **種別**: コマンド実行
 **コマンド**: `/bin/bash -lc 'cat jenkins/jobs/pipeline/docs-generator/pull-request-comment-builder/tests/integration/test_generator_flow.py'`
@@ -962,6 +994,26 @@ def [REDACTED_TOKEN](monkeypatch, tmp_path):
     assert result["[REDACTED_TOKEN]"] == 1
 ```
 
+## Turn 23: ツール実行
+
+**種別**: reasoning
+**ステータス**: completed
+
+## Turn 24: ツール実行
+
+**種別**: reasoning
+**ステータス**: completed
+
+## Turn 25: ツール実行
+
+**種別**: コマンド実行
+**コマンド**: `/bin/bash -lc "sed -n '1,200p' pr_comment_generator/chunk_analyzer.py"`
+**ステータス**: failed (exit_code=2)
+
+```text
+sed: can't read pr_comment_generator/chunk_analyzer.py: No such file or directory
+```
+
 ## Turn 26: ツール実行
 
 **種別**: reasoning
@@ -970,154 +1022,11 @@ def [REDACTED_TOKEN](monkeypatch, tmp_path):
 ## Turn 27: ツール実行
 
 **種別**: コマンド実行
-**コマンド**: `/bin/bash -lc 'cat jenkins/jobs/pipeline/docs-generator/pull-request-comment-builder/tests/integration/test_compatibility_layer.py'`
-**ステータス**: completed (exit_code=0)
+**コマンド**: `/bin/bash -lc 'ls src'`
+**ステータス**: failed (exit_code=2)
 
 ```text
-"""
-統合テスト: 互換性レイヤー
-
-テスト対象:
-- Facadeパターンによる旧インポートパスのサポート
-- 新旧インポートパスの動作同一性
-"""
-
-import pytest
-import warnings
-
-
-class [REDACTED_TOKEN]:
-    """互換性レイヤーの統合テスト"""
-
-    def test_旧インポートパスから新インポートパスへの移行(self):
-        """
-        Given: 旧インポートパスと新インポートパスの両方がある
-        When: 同じクラスを使用する
-        Then: 両方とも同じクラスを参照する
-        """
-        # 警告を無視
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore")
-
-            # 旧インポートパス
-            from pr_comment_generator import PRInfo as PRInfo_old
-
-            # 新インポートパス
-            from pr_comment_generator.models import PRInfo as PRInfo_new
-
-            # Then
-            # 両方が同じクラスであることを確認
-            assert PRInfo_old is PRInfo_new
-
-    def test_旧インポートパスでの正常動作(self):
-        """
-        Given: 旧インポートパスを使用する既存コード
-        When: そのコードを実行する
-        Then: 正常に動作する
-        """
-        # 警告を無視
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore")
-
-            # When
-            from pr_comment_generator import PRInfo, FileChange
-
-            # PR情報を作成
-            pr_info = PRInfo.from_json({
-                "title": "Test PR",
-                "number": 999,
-                "body": "Test body",
-                "user": {"login": "testuser"},
-                "base": {"ref": "main", "sha": "abc"},
-                "head": {"ref": "feature", "sha": "def"}
-            })
-
-            # ファイル変更を作成
-            file_change = FileChange.from_json({
-                "filename": "test.py",
-                "status": "modified",
-                "additions": 10,
-                "deletions": 5,
-                "changes": 15,
-                "patch": "diff"
-            })
-
-            # Then
-            # 正常に動作することを確認
-            assert pr_info.title == "Test PR"
-            assert pr_info.number == 999
-            assert file_change.filename == "test.py"
-
-    def test_新インポートパスでの正常動作(self):
-        """
-        Given: 新インポートパスを使用する新規コード
-        When: そのコードを実行する
-        Then: 正常に動作する
-        """
-        # When
-        from pr_comment_generator.models import PRInfo, FileChange
-
-        # PR情報を作成
-        pr_info = PRInfo.from_json({
-            "title": "New PR",
-            "number": 1000,
-            "body": "New body",
-            "user": {"login": "newuser"},
-            "base": {"ref": "develop", "sha": "xyz"},
-            "head": {"ref": "feature/new", "sha": "uvw"}
-        })
-
-        # ファイル変更を作成
-        file_change = FileChange.from_json({
-            "filename": "new.py",
-            "status": "added",
-            "additions": 50,
-            "deletions": 0,
-            "changes": 50,
-            "patch": None
-        })
-
-        # Then
-        # 正常に動作することを確認
-        assert pr_info.title == "New PR"
-        assert pr_info.number == 1000
-        assert file_change.filename == "new.py"
-
-    def test_新旧インポートパスで同じ結果(self):
-        """
-        Given: 旧インポートパスと新インポートパスでそれぞれオブジェクトを作成
-        When: 同じJSONデータから作成する
-        Then: 同じ結果が得られる
-        """
-        # Given
-        json_data = {
-            "title": "Comparison Test",
-            "number": 500,
-            "body": "Comparison body",
-            "user": {"login": "compuser"},
-            "base": {"ref": "main", "sha": "aaa"},
-            "head": {"ref": "feature/comp", "sha": "bbb"}
-        }
-
-        # When
-        # 警告を無視して旧インポートパスを使用
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore")
-            from pr_comment_generator import PRInfo as PRInfo_old
-            pr_info_old = PRInfo_old.from_json(json_data)
-
-        # 新インポートパスを使用
-        from pr_comment_generator.models import PRInfo as PRInfo_new
-        pr_info_new = PRInfo_new.from_json(json_data)
-
-        # Then
-        # 同じ結果が得られることを確認
-        assert pr_info_old.title == pr_info_new.title
-        assert pr_info_old.number == pr_info_new.number
-        assert pr_info_old.body == pr_info_new.body
-        assert pr_info_old.author == pr_info_new.author
-        assert pr_info_old.base_branch == pr_info_new.base_branch
-... (truncated)
+ls: cannot access 'src': No such file or directory
 ```
 
 ## Turn 28: ツール実行
@@ -1128,143 +1037,11 @@ class [REDACTED_TOKEN]:
 ## Turn 29: ツール実行
 
 **種別**: コマンド実行
-**コマンド**: `/bin/bash -lc 'cat jenkins/jobs/pipeline/docs-generator/pull-request-comment-builder/tests/integration/test_module_integration.py'`
-**ステータス**: completed (exit_code=0)
+**コマンド**: `/bin/bash -lc 'ls pr_comment_generator'`
+**ステータス**: failed (exit_code=2)
 
 ```text
-"""
-統合テスト: モジュール間連携
-
-テスト対象:
-- Statistics ↔ TokenEstimator 連携
-- Formatter ↔ Models 連携
-- 複数モジュールの協調動作
-"""
-
-import pytest
-import logging
-import tempfile
-import os
-from pr_comment_generator.models import PRInfo, FileChange
-from pr_comment_generator.statistics import PRCommentStatistics
-from pr_comment_generator.formatter import CommentFormatter
-from pr_comment_generator.token_estimator import TokenEstimator
-from pr_comment_generator.prompt_manager import [REDACTED_TOKEN]
-
-
-class [REDACTED_TOKEN]:
-    """Statistics ↔ TokenEstimator 連携テスト"""
-
-    @pytest.fixture
-    def logger(self):
-        """ロガーをフィクスチャとして提供"""
-        return logging.getLogger("test")
-
-    @pytest.fixture
-    def token_estimator(self, logger):
-        """TokenEstimatorインスタンスを提供"""
-        return TokenEstimator(logger=logger)
-
-    @pytest.fixture
-    def statistics(self, token_estimator, logger):
-        """PRCommentStatisticsインスタンスを提供"""
-        return PRCommentStatistics(token_estimator=token_estimator, logger=logger)
-
-    def test_チャンクサイズ計算とトークン推定の連携(self, statistics, token_estimator):
-        """
-        Given: ファイル変更リストがある
-        When: チャンクサイズを計算し、そのチャンクのトークン数を推定する
-        Then: チャンクのトークン数がmax_tokens以下である
-        """
-        # Given
-        files = [
-            FileChange(
-                filename=f"file{i}.py",
-                status="modified",
-                additions=10,
-                deletions=5,
-                changes=15,
-                patch="test content " * 100
-            )
-            for i in range(10)
-        ]
-        max_tokens = 3000
-
-        # When
-        chunk_size = statistics.[REDACTED_TOKEN](files, max_tokens)
-        chunks = [files[i:i + chunk_size] for i in range(0, len(files), chunk_size)]
-
-        # Then
-        for chunk in chunks:
-            chunk_tokens = statistics.[REDACTED_TOKEN](chunk)
-            # 各チャンクのトークン数がmax_tokensを大きく超えないことを確認
-            # (完全な保証はないが、大幅な超過がないことを確認)
-            assert chunk_tokens < max_tokens * 2
-
-    def test_統計計算とファイル変更データの整合性(self, statistics):
-        """
-        Given: ファイル変更リストがある
-        When: 統計情報を計算する
-        Then: 統計情報がファイル変更データと整合する
-        """
-        # Given
-        files = [
-            FileChange(filename="file1.py", status="modified", additions=10, deletions=5, changes=15, patch=None),
-            FileChange(filename="file2.py", status="added", additions=50, deletions=0, changes=50, patch=None),
-            FileChange(filename="file3.py", status="modified", additions=20, deletions=10, changes=30, patch=None),
-        ]
-
-        # When
-        stats = statistics.[REDACTED_TOKEN](files)
-
-        # Then
-        # 手動計算と一致することを確認
-        assert stats['file_count'] == len(files)
-        assert stats['total_additions'] == sum(f.additions for f in files)
-        assert stats['total_deletions'] == sum(f.deletions for f in files)
-        assert stats['total_changes'] == sum(f.changes for f in files)
-
-
-class [REDACTED_TOKEN]:
-    """Formatter ↔ Models 連携テスト"""
-
-    @pytest.fixture
-    def formatter(self):
-        """CommentFormatterインスタンスを提供"""
-        logger = logging.getLogger("test")
-        return CommentFormatter(logger=logger)
-
-    def test_ファイルリストフォーマットとFileChangeモデルの連携(self, formatter):
-        """
-        Given: FileChangeオブジェクトのリストがある
-        When: format_file_list()を呼び出す
-        Then: FileChangeの各フィールドが正しくフォーマットに反映される
-        """
-        # Given
-        files = [
-            FileChange(
-                filename="src/main.py",
-                status="modified",
-                additions=15,
-                deletions=8,
-                changes=23,
-                patch=None
-            ),
-            FileChange(
-                filename="tests/test_new.py",
-                status="added",
-                additions=100,
-                deletions=0,
-                changes=100,
-                patch=None
-            ),
-        ]
-
-        # When
-        formatted = formatter.format_file_list(files)
-
-        # Then
-... (truncated)
+ls: cannot access 'pr_comment_generator': No such file or directory
 ```
 
 ## Turn 30: ツール実行
@@ -1274,198 +1051,333 @@ class [REDACTED_TOKEN]:
 
 ## Turn 31: ツール実行
 
-**種別**: reasoning
-**ステータス**: completed
-
-## Turn 32: ツール実行
-
 **種別**: コマンド実行
-**コマンド**: `/bin/bash -lc 'rg -n "Task 5" -n .ai-workflow/issue-528/00_planning/output/planning.md'`
+**コマンド**: `/bin/bash -lc "rg --files --iglob '*chunk_analyzer*'"`
 **ステータス**: failed (exit_code=127)
 
 ```text
 /bin/bash: line 1: rg: command not found
 ```
 
-## Turn 33: ツール実行
+## Turn 32: ツール実行
 
 **種別**: reasoning
 **ステータス**: completed
+
+## Turn 33: ツール実行
+
+**種別**: コマンド実行
+**コマンド**: `/bin/bash -lc "find . -name 'chunk_analyzer.py'"`
+**ステータス**: completed (exit_code=0)
+
+```text
+./jenkins/jobs/pipeline/docs-generator/pull-request-comment-builder/src/pr_comment_generator/chunk_analyzer.py
+```
 
 ## Turn 34: ツール実行
 
-**種別**: コマンド実行
-**コマンド**: `/bin/bash -lc 'grep -n "Task 5" -n .ai-workflow/issue-528/00_planning/output/planning.md'`
-**ステータス**: completed (exit_code=0)
-
-```text
-166:- [ ] Task 5-1: OpenAIClientのユニットテスト (3〜4h)
-171:- [ ] Task 5-2: ChunkAnalyzerのユニットテスト (2〜3h)
-174:- [ ] Task 5-3: PRCommentGeneratorのユニットテスト (2〜3h)
-177:- [ ] Task 5-4: CLIのユニットテスト (1〜2h)
-```
+**種別**: reasoning
+**ステータス**: completed
 
 ## Turn 35: ツール実行
 
-**種別**: reasoning
-**ステータス**: completed
-
-## Turn 36: ツール実行
-
 **種別**: コマンド実行
-**コマンド**: `/bin/bash -lc "sed -n '150,190p' .ai-workflow/issue-528/00_planning/output/planning.md"`
+**コマンド**: `/bin/bash -lc "sed -n '1,200p' jenkins/jobs/pipeline/docs-generator/pull-request-comment-builder/src/pr_comment_generator/chunk_analyzer.py"`
 **ステータス**: completed (exit_code=0)
 
 ```text
-- 入力サイズ管理ロジックの移行
-- [x] Task 4-3: PRCommentGeneratorのリファクタリング (4〜6h)
-  - `generator.py`の作成
-  - 既存クラスからの責務分離
-  - 新モジュールとの連携実装
-- [x] Task 4-4: CLIエントリポイントの分離 (2〜3h)
-  - `cli.py`の作成
-  - main関数の移行
-  - 引数パーサーの整理
-- [x] Task 4-5: __init__.pyの更新 (1〜2h)
-  - 新モジュールのエクスポート
-  - 互換性レイヤーの維持
-  - 非推奨警告の更新
+"""ファイル変更をチャンク単位で分析するための補助モジュール。"""
+import logging
+from typing import List
 
-### Phase 5: テストコード実装 (見積もり: 8〜12h)
+from .models import PRInfo, FileChange
+from .openai_client import OpenAIClient
 
-- [ ] Task 5-1: OpenAIClientのユニットテスト (3〜4h)
-  - モック設定
-  - 正常系テスト
-  - エラーハンドリングテスト
-  - リトライロジックテスト
-- [ ] Task 5-2: ChunkAnalyzerのユニットテスト (2〜3h)
-  - チャンク分割テスト
-  - 最適化ロジックテスト
-- [ ] Task 5-3: PRCommentGeneratorのユニットテスト (2〜3h)
-  - コメント生成テスト
-  - エラーハンドリングテスト
-- [ ] Task 5-4: CLIのユニットテスト (1〜2h)
-  - 引数パーステスト
-  - 出力フォーマットテスト
 
-### Phase 6: テスト実行 (見積もり: 3〜4h)
+class ChunkAnalyzer:
+    """チャンク分割と分析のオーケストレーションを担当するクラス"""
 
-- [ ] Task 6-1: ユニットテストの実行と修正 (1〜2h)
-  - 全ユニットテストの実行
-  - 失敗テストの修正
-  - カバレッジ確認
-- [ ] Task 6-2: 統合テストの実行と修正 (1〜2h)
-  - 互換性レイヤーテストの実行
-  - 回帰テストの確認
-  - BDDテストの確認
+    def __init__(self, openai_client: OpenAIClient, log_level: int = logging.INFO):
+        self.openai_client = openai_client
+        self.logger = logging.getLogger("chunk_analyzer")
+        self.logger.setLevel(log_level)
+        if not self.logger.handlers:
+            handler = logging.StreamHandler()
+            formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+            handler.setFormatter(formatter)
+            self.logger.addHandler(handler)
+
+    def [REDACTED_TOKEN](self, changes: List[FileChange]) -> int:
+        """OpenAIクライアントのロジックを利用して最適チャンクサイズを計算"""
+        return self.openai_client.[REDACTED_TOKEN](changes)
+
+    def split_into_chunks(self, changes: List[FileChange], chunk_size: int) -> List[List[FileChange]]:
+        """チャンクサイズに従ってファイルリストを分割"""
+        return self.openai_client.[REDACTED_TOKEN](changes, chunk_size)
+
+    def analyze_all_chunks(self, pr_info: PRInfo, chunks: List[List[FileChange]]) -> List[str]:
+        """チャンク群を順次分析"""
+        analyses: List[str] = []
+        for index, chunk in enumerate(chunks, 1):
+            analyses.append(self.[REDACTED_TOKEN](pr_info, chunk, index))
+        return analyses
+
+    def [REDACTED_TOKEN](self, pr_info: PRInfo, chunk: List[FileChange], chunk_index: int) -> str:
+        """単一チャンクを分析し、失敗時はエラーメッセージを返す"""
+        self.logger.info(f"Analyzing chunk {chunk_index}/{len(chunk)} files: {[c.filename for c in chunk]}")
+        try:
+            return self.openai_client._analyze_chunk(pr_info, chunk, chunk_index)
+        except Exception as exc:  # noqa: BLE001 既存の例外処理方針に合わせる
+            self.logger.error(f"Error analyzing chunk {chunk_index}: {exc}")
+            return f"[チャンク {chunk_index} の分析に失敗しました: {exc}]"
 ```
 
-## Turn 37: ツール実行
+## Turn 36: ツール実行
 
 **種別**: reasoning
 **ステータス**: completed
 
+## Turn 37: ツール実行
+
+**種別**: コマンド実行
+**コマンド**: `/bin/bash -lc "sed -n '1,200p' jenkins/jobs/pipeline/docs-generator/pull-request-comment-builder/src/pr_comment_generator/openai_client.py"`
+**ステータス**: completed (exit_code=0)
+
+```text
+"""OpenAI API連携（リトライ、トークン管理、チャンク分析ロジック）。"""
+import datetime
+import json
+import logging
+import os
+import random
+import re
+import time
+import traceback
+from typing import Any, Dict, List, Optional, Tuple
+
+from openai import OpenAI
+
+from .models import PRInfo, FileChange
+from .prompt_manager import [REDACTED_TOKEN]
+from .token_estimator import TokenEstimator
+class OpenAIClient:
+    """OpenAI APIとのインタラクションを管理するクラス"""
+    
+    # APIレート制限のデフォルト設定
+    DEFAULT_MAX_RETRIES = 5
+    [REDACTED_TOKEN] = 1  # 秒
+    DEFAULT_MAX_BACKOFF = 60  # 秒
+    
+    # トークン制限の管理
+    [REDACTED_TOKEN] = 16000  # GPT-4の一般的な入力制限の安全側
+    MAX_PATCH_TOKENS = 2000  # パッチに割り当てる最大トークン
+    MAX_CONTENT_TOKENS = 3000  # ファイル内容に割り当てる最大トークン
+    
+    def __init__(self, prompt_manager, retry_config=None, log_level=logging.INFO):
+        """
+        環境変数から認証情報を取得してクライアントを初期化
+        
+        Args:
+            prompt_manager: プロンプトテンプレート管理クラスのインスタンス
+            retry_config: 再試行設定
+            log_level: ロギングレベル
+        """
+        # ロガーの設定
+        self._setup_logging(log_level)
+        
+        # 環境変数から認証情報を取得
+        api_key = os.getenv('OPENAI_API_KEY')
+        model_name = os.getenv('OPENAI_MODEL_NAME', 'gpt-4.1')  # デフォルトモデル名
+
+        if not api_key:
+            raise ValueError("Missing required environment variable: OPENAI_API_KEY")
+
+        print(f"Debug: Using OpenAI model {model_name}")
+
+        self.model = model_name
+        self.prompt_manager = prompt_manager
+        
+        # 再試行設定
+        self.retry_config = retry_config or {
+            'max_retries': self.DEFAULT_MAX_RETRIES,
+            'initial_backoff': self.[REDACTED_TOKEN],
+            'max_backoff': self.DEFAULT_MAX_BACKOFF
+        }
+        
+        # OpenAI用のクライアント初期化
+        try:
+            self.client = OpenAI(
+                api_key=api_key,
+            )
+            self.usage_stats = {
+                'prompt_tokens': 0,
+                'completion_tokens': 0,
+                'retries': 0,
+                'skipped_files': 0
+            }
+            
+            print(f"Debug: OpenAI client initialized successfully")
+            
+        except Exception as e:
+            raise ValueError(f"Failed to initialize OpenAI client: {str(e)}")
+
+    def _setup_logging(self, log_level):
+        """ロギングの設定"""
+        self.logger = logging.getLogger('openai_client')
+        self.logger.setLevel(log_level)
+        
+        # ハンドラーがまだ設定されていない場合のみ追加
+        if not self.logger.handlers:
+            handler = logging.StreamHandler()
+            formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+            handler.setFormatter(formatter)
+            self.logger.addHandler(handler)
+
+    def [REDACTED_TOKEN](self, prompt: str, result: str, chunk_index: int = 0, phase: str = "chunk") -> None:
+        """
+        プロンプトとその実行結果を個別のファイルに保存する
+        
+        Args:
+            prompt: OpenAIに送信したプロンプト
+            result: OpenAIからの応答結果
+            chunk_index: チャンク番号（0の場合は最終サマリーなど）
+            phase: 処理フェーズ（chunk, summary, title など）
+        """
+        try:
+            # 環境変数で設定を取得（デフォルトをtrueに変更）
+            save_prompts = os.getenv('SAVE_PROMPTS', 'true').lower() == 'true'
+            if not save_prompts:
+                self.logger.info("Prompt saving is disabled. Set SAVE_PROMPTS=true to enable.")
+                return
+                
+            # 出力ディレクトリの作成
+            timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+            pr_number = getattr(self.pr_info, 'number', 'unknown') if hasattr(self, 'pr_info') else 'unknown'
+            
+            output_dir = os.getenv('PROMPT_OUTPUT_DIR', '/prompts')
+            pr_output_dir = os.path.join(output_dir, f"pr_{pr_number}_{timestamp}")
+            
+            # 出力ディレクトリのチェックと作成
+            if not os.path.exists(pr_output_dir):
+                os.makedirs(pr_output_dir, exist_ok=True)
+                self.logger.info(f"Created prompt output directory: {pr_output_dir}")
+... (truncated)
+```
+
 ## Turn 38: ツール実行
 
-**種別**: file_change
+**種別**: reasoning
 **ステータス**: completed
 
 ## Turn 39: ツール実行
 
-**種別**: reasoning
-**ステータス**: completed
-
-## Turn 40: ツール実行
-
 **種別**: コマンド実行
-**コマンド**: `/bin/bash -lc 'nl -ba jenkins/jobs/pipeline/docs-generator/pull-request-comment-builder/tests/unit/test_openai_client.py'`
+**コマンド**: `/bin/bash -lc "sed -n '1,200p' jenkins/jobs/pipeline/docs-generator/pull-request-comment-builder/src/pr_comment_generator/generator.py"`
 **ステータス**: completed (exit_code=0)
 
 ```text
-1	import importlib
-     2	import sys
-     3	import types
-     4	
-     5	import pytest
-     6	
-     7	from pr_comment_generator.models import FileChange
-     8	from pr_comment_generator.prompt_manager import [REDACTED_TOKEN]
-     9	
-    10	
-    11	def [REDACTED_TOKEN](monkeypatch, tmp_path):
-    12	    """Stub openai module and reload client for isolated tests."""
-    13	    dummy_module = types.ModuleType("openai")
-    14	
-    15	    class DummyChat:
-    16	        def __init__(self):
-    17	            self.completions = self
-    18	
-    19	        def create(self, **kwargs):
-    20	            return types.SimpleNamespace(
-    21	                choices=[types.SimpleNamespace(message=types.SimpleNamespace(content="ok"))],
-    22	                usage=types.SimpleNamespace(prompt_tokens=5, completion_tokens=5, total_tokens=10),
-    23	            )
-    24	
-    25	    class DummyOpenAI:
-    26	        def __init__(self, api_key=None):
-    27	            self.chat = DummyChat()
-    28	
-    29	    dummy_module.OpenAI = DummyOpenAI
-    30	    monkeypatch.setitem(sys.modules, "openai", dummy_module)
-    31	
-    32	    import pr_comment_generator.openai_client as oc
-    33	
-    34	    oc = importlib.reload(oc)
-    35	
-    36	    template_dir = tmp_path / "templates"
-    37	    template_dir.mkdir()
-    38	    (template_dir / "base_template.md").write_text("Base {input_format} {[REDACTED_TOKEN]}", encoding="utf-8")
-    39	    (template_dir / "[REDACTED_TOKEN].md").write_text("chunk extra", encoding="utf-8")
-    40	    (template_dir / "summary_extension.md").write_text("summary extra", encoding="utf-8")
-    41	    prompt_manager = [REDACTED_TOKEN](str(template_dir))
-    42	    return oc, prompt_manager
-    43	
-    44	
-    45	def [REDACTED_TOKEN](monkeypatch, tmp_path):
-    46	    oc, prompt_manager = [REDACTED_TOKEN](monkeypatch, tmp_path)
-    47	    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
-    48	
-    49	    with pytest.raises(ValueError):
-    50	        oc.OpenAIClient(prompt_manager)
-    51	
-    52	
-    53	def [REDACTED_TOKEN](monkeypatch, tmp_path):
-    54	    oc, prompt_manager = [REDACTED_TOKEN](monkeypatch, tmp_path)
-    55	    monkeypatch.setenv("OPENAI_API_KEY", "test-key")
-    56	    retry_config = {"max_retries": 3, "initial_backoff": 2, "max_backoff": 30}
-    57	
-    58	    client = oc.OpenAIClient(prompt_manager, retry_config=retry_config)
-    59	
-    60	    assert client.retry_config == retry_config
-    61	    assert client.usage_stats["retries"] == 0
-    62	
-    63	
-    64	def [REDACTED_TOKEN](monkeypatch, tmp_path):
-    65	    oc, prompt_manager = [REDACTED_TOKEN](monkeypatch, tmp_path)
-    66	    monkeypatch.setenv("OPENAI_API_KEY", "test-key")
-    67	    monkeypatch.setattr(oc.TokenEstimator, "estimate_tokens", staticmethod(lambda text: 10))
-    68	    client = oc.OpenAIClient(prompt_manager)
-    69	
-    70	    payload = {"pr_info": {"title": "t"}, "changes": []}
-    71	    managed = client._manage_input_size(payload, is_single_file=False)
-    72	
-    73	    assert managed == payload
-    74	
-    75	
-    76	def [REDACTED_TOKEN](monkeypatch, tmp_path):
-    77	    oc, prompt_manager = [REDACTED_TOKEN](monkeypatch, tmp_path)
-    78	    monkeypatch.setenv("OPENAI_API_KEY", "test-key")
-    79	    client = oc.OpenAIClient(prompt_manager)
-    80	
-    81	    changes = [FileChange(filename="big.py", status="modified", additions=0, deletions=0, changes=400)]
-    82	
-    83	    assert client.[REDACTED_TOKEN](changes) == 1
+"""PRコメント生成のオーケストレーションを担当するモジュール。"""
+import concurrent.futures
+import json
+import logging
+import os
+import re
+import time
+import traceback
+from typing import Any, Dict, List, Optional, Tuple
+
+from github_utils import GitHubClient
+
+from .prompt_manager import [REDACTED_TOKEN]
+from .models import PRInfo, FileChange
+from .openai_client import OpenAIClient
+from .chunk_analyzer import ChunkAnalyzer
+
+class PRCommentGenerator:
+    """改良版PRコメント生成を管理するクラス"""
+
+    def __init__(self, log_level=logging.INFO):
+        """OpenAIクライアントとGitHubクライアントを初期化"""
+        # ロギングの設定
+        self._setup_logging(log_level)
+        
+        # 現在のディレクトリから1つ上の階層のtemplatesディレクトリを指定
+        current_dir = os.path.dirname(os.path.abspath(__file__))
+        template_dir = os.path.join(os.path.dirname(current_dir), 'templates')
+        
+        self.logger.info(f"Template directory path: {template_dir}")
+        if not os.path.exists(template_dir):
+            self.logger.warning(f"Warning: Template directory not found at {template_dir}")
+
+        # カスタム再試行設定（環境変数から取得可能）
+        retry_config = {
+            'max_retries': int(os.getenv('OPENAI_MAX_RETRIES', '5')),
+            'initial_backoff': float(os.getenv('[REDACTED_TOKEN]', '1')),
+            'max_backoff': float(os.getenv('OPENAI_MAX_BACKOFF', '60'))
+        }
+
+        # 初期化の順序を変更
+        self.prompt_manager = [REDACTED_TOKEN](template_dir)
+        self.openai_client = OpenAIClient(self.prompt_manager, retry_config=retry_config)
+        self.chunk_analyzer = ChunkAnalyzer(self.openai_client, log_level=log_level)
+        self.github_client = GitHubClient(auth_method="app", app_id=os.getenv('GITHUB_APP_ID'), token=[REDACTED_TOKEN]('GITHUB_ACCESS_TOKEN'))
+        
+        # 大きなPR対応の設定
+        self.[REDACTED_TOKEN] = int(os.getenv('[REDACTED_TOKEN]', '50'))  # 最大処理ファイル数
+        self.max_file_size = int(os.getenv('MAX_FILE_SIZE', '10000'))  # 最大ファイルサイズ（行数）
+        self.parallel_processing = os.getenv('PARALLEL_PROCESSING', 'false').lower() == 'true'
+
+    def _setup_logging(self, log_level):
+        """ロギングの設定"""
+        self.logger = logging.getLogger('pr_comment_generator')
+        self.logger.setLevel(log_level)
+        
+        # ハンドラーがまだ設定されていない場合のみ追加
+        if not self.logger.handlers:
+            handler = logging.StreamHandler()
+            formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+            handler.setFormatter(formatter)
+            self.logger.addHandler(handler)
+
+    def load_pr_data(self, pr_info_path: str, pr_diff_path: str) -> tuple[PRInfo, List[FileChange], List[str]]:
+        """PR情報と差分情報を読み込み、必要なコンテキスト情報を追加（スキップファイル検出強化）"""
+        try:
+            # PR情報の読み込み
+            with open(pr_info_path, 'r', encoding='utf-8') as f:
+                pr_data = json.load(f)
+                pr_info = PRInfo.from_json(pr_data)
+
+            # 差分情報の読み込み
+            with open(pr_diff_path, 'r', encoding='utf-8') as f:
+                diff_data = json.load(f)
+                self.logger.info(f"Loaded {len(diff_data)} file changes from diff")
+                
+                # 元のファイルリストを保存
+                original_file_names = [file_data.get('filename') for file_data in diff_data]
+                
+                # ファイル数が多すぎる場合は制限
+                if len(diff_data) > self.[REDACTED_TOKEN]:
+                    self.logger.warning(
+                        f"Too many files ({len(diff_data)}). Limiting to {self.[REDACTED_TOKEN]} files."
+                    )
+                    # 変更が大きいファイル順にソートして重要なものを処理
+                    diff_data.sort(key=lambda x: x.get('changes', 0), reverse=True)
+                    diff_data = diff_data[:self.[REDACTED_TOKEN]]
+                
+                changes = [FileChange.from_json(file_data) for file_data in diff_data]
+
+            # 各ファイル名を追跡（スキップファイル検出用）
+            [REDACTED_TOKEN] = [change.filename for change in changes]
+            
+            # ファイルサイズが大きすぎないかチェック
+            changes, skipped_fr
+... (truncated)
 ```
+
+## Turn 40: ツール実行
+
+**種別**: reasoning
+**ステータス**: completed
 
 ## Turn 41: ツール実行
 
@@ -1473,181 +1385,6 @@ class [REDACTED_TOKEN]:
 **ステータス**: completed
 
 ## Turn 42: ツール実行
-
-**種別**: コマンド実行
-**コマンド**: `/bin/bash -lc 'nl -ba jenkins/jobs/pipeline/docs-generator/pull-request-comment-builder/tests/unit/test_generator.py'`
-**ステータス**: completed (exit_code=0)
-
-```text
-1	import logging
-     2	
-     3	from pr_comment_generator.generator import PRCommentGenerator
-     4	
-     5	
-     6	def _make_generator():
-     7	    gen = PRCommentGenerator.__new__(PRCommentGenerator)
-     8	    gen.logger = logging.getLogger("generator-test")
-     9	    gen.skipped_file_names = []
-    10	    return gen
-    11	
-    12	
-    13	def [REDACTED_TOKEN]():
-    14	    gen = _make_generator()
-    15	    file_paths = ["main.py", "src/utils.py", "src/utils.py"]
-    16	    base_paths = ["src/main.py", "src/utils.py"]
-    17	
-    18	    normalized = gen.[REDACTED_TOKEN](file_paths, base_paths)
-    19	
-    20	    assert normalized == ["src/main.py", "src/utils.py"]
-    21	
-    22	
-    23	def [REDACTED_TOKEN]():
-    24	    gen = _make_generator()
-    25	    gen.skipped_file_names = ["src/ignored.py"]
-    26	    comment = """## 修正されたファイル
-    27	- `src/app.py`: updated
-    28	- `app.py`: duplicate entry
-    29	## その他
-    30	details here"""
-    31	    rebuilt = gen.[REDACTED_TOKEN](comment, ["src/app.py"])
-    32	
-    33	    assert rebuilt.count("src/app.py") == 1
-    34	    assert "ignored.py" in rebuilt
-```
-
-## Turn 43: ツール実行
-
-**種別**: reasoning
-**ステータス**: completed
-
-## Turn 44: ツール実行
-
-**種別**: コマンド実行
-**コマンド**: `/bin/bash -lc 'nl -ba jenkins/jobs/pipeline/docs-generator/pull-request-comment-builder/tests/unit/test_cli.py'`
-**ステータス**: completed (exit_code=0)
-
-```text
-1	import importlib
-     2	import json
-     3	import logging
-     4	import sys
-     5	import types
-     6	import os
-     7	
-     8	import pytest
-     9	
-    10	
-    11	def [REDACTED_TOKEN](monkeypatch):
-    12	    """Reload CLI module with a stubbed openai dependency."""
-    13	    dummy_openai = types.ModuleType("openai")
-    14	
-    15	    class DummyOpenAI:
-    16	        def __init__(self, api_key=None):
-    17	            self.chat = types.SimpleNamespace(completions=types.SimpleNamespace(create=lambda **kwargs: None))
-    18	
-    19	    dummy_openai.OpenAI = DummyOpenAI
-    20	    monkeypatch.setitem(sys.modules, "openai", dummy_openai)
-    21	
-    22	    import pr_comment_generator.openai_client as oc
-    23	    oc = importlib.reload(oc)
-    24	    sys.modules["pr_comment_generator.openai_client"] = oc
-    25	
-    26	    import pr_comment_generator.generator as gen
-    27	    gen = importlib.reload(gen)
-    28	    sys.modules["pr_comment_generator.generator"] = gen
-    29	
-    30	    import pr_comment_generator.cli as cli
-    31	
-    32	    return importlib.reload(cli)
-    33	
-    34	
-    35	def [REDACTED_TOKEN](monkeypatch):
-    36	    cli = [REDACTED_TOKEN](monkeypatch)
-    37	    parser = cli.[REDACTED_TOKEN]()
-    38	
-    39	    with pytest.raises(SystemExit):
-    40	        parser.parse_args([])
-    41	
-    42	
-    43	def [REDACTED_TOKEN](monkeypatch, tmp_path):
-    44	    cli = [REDACTED_TOKEN](monkeypatch)
-    45	    prompt_dir = tmp_path / "prompts"
-    46	    args = types.SimpleNamespace(
-    47	        pr_diff="d",
-    48	        pr_info="i",
-    49	        output="o",
-    50	        log_level="INFO",
-    51	        parallel=True,
-    52	        save_prompts=True,
-    53	        prompt_output_dir=str(prompt_dir),
-    54	    )
-    55	
-    56	    cli.[REDACTED_TOKEN](args)
-    57	
-    58	    assert os.environ["PARALLEL_PROCESSING"] == "true"
-    59	    assert os.environ["SAVE_PROMPTS"] == "true"
-    60	    assert prompt_dir.exists()
-    61	
-    62	
-    63	def [REDACTED_TOKEN](monkeypatch, tmp_path):
-    64	    cli = [REDACTED_TOKEN](monkeypatch)
-    65	
-    66	    class FakeGenerator:
-    67	        def __init__(self, log_level=logging.INFO):
-    68	            self.log_level = log_level
-    69	
-    70	        def generate_comment(self, pr_info, pr_diff):
-    71	            return {
-    72	                "comment": "ok",
-    73	                "suggested_title": "title",
-    74	                "usage": {"total_tokens": 1},
-    75	                "file_count": 1,
-    76	                "total_changes": 1,
-    77	                "skipped_file_count": 0,
-    78	                "[REDACTED_TOKEN]": 1,
-    79	                "skipped_files": [],
-    80	            }
-    81	
-    82	    monkeypatch.setattr(cli, "PRCommentGenerator", FakeGenerator)
-    83	
-    84	    pr_info_path = tmp_path / "pr_info.json"
-    85	    pr_diff_path = tmp_path / "pr_diff.json"
-    86	    output_path = tmp_path / "out.json"
-    87	
-    88	    pr_info_path.write_text(
-    89	        json.dumps(
-    90	            {
-    91	                "title": "T",
-    92	                "number": 1,
-    93	                "body": "B",
-    94	                "user": {"login": "dev"},
-    95	                "base": {"ref": "main", "sha": "1"},
-    96	                "head": {"ref": "feature", "sha": "2"},
-    97	            }
-    98	        ),
-    99	        encoding="utf-8",
-   100	    )
-   101	    pr_diff_path.write_text(json.dumps([{"filename": "f.py", "changes": 1, "status": "modified"}]), encoding="utf-8")
-   102	
-   103	    monkeypatch.setenv("SAVE_PROMPTS", "false")
-   104	    monkeypatch.setenv("PARALLEL_PROCESSING", "false")
-   105	    sys.argv = [
-   106	        "prog",
-   107	        "--pr-diff",
-   108	        str(pr_diff_path),
-   109	        "--pr-info",
-   110	        str(pr_info_path),
-   111	        "--output",
-   112
-... (truncated)
-```
-
-## Turn 45: ツール実行
-
-**種別**: reasoning
-**ステータス**: completed
-
-## Turn 46: ツール実行
 
 **種別**: コマンド実行
 **コマンド**: `/bin/bash -lc 'nl -ba jenkins/jobs/pipeline/docs-generator/pull-request-comment-builder/tests/unit/test_chunk_analyzer.py'`
@@ -1719,6 +1456,237 @@ class [REDACTED_TOKEN]:
     63	    assert "失敗" in result
 ```
 
+## Turn 43: ツール実行
+
+**種別**: reasoning
+**ステータス**: completed
+
+## Turn 44: ツール実行
+
+**種別**: コマンド実行
+**コマンド**: `/bin/bash -lc 'nl -ba jenkins/jobs/pipeline/docs-generator/pull-request-comment-builder/tests/unit/test_openai_client.py'`
+**ステータス**: completed (exit_code=0)
+
+```text
+1	import importlib
+     2	import sys
+     3	import types
+     4	
+     5	import pytest
+     6	
+     7	from pr_comment_generator.models import FileChange
+     8	from pr_comment_generator.prompt_manager import [REDACTED_TOKEN]
+     9	
+    10	
+    11	def [REDACTED_TOKEN](monkeypatch, tmp_path):
+    12	    """Stub openai module and reload client for isolated tests."""
+    13	    dummy_module = types.ModuleType("openai")
+    14	
+    15	    class DummyChat:
+    16	        def __init__(self):
+    17	            self.completions = self
+    18	
+    19	        def create(self, **kwargs):
+    20	            return types.SimpleNamespace(
+    21	                choices=[types.SimpleNamespace(message=types.SimpleNamespace(content="ok"))],
+    22	                usage=types.SimpleNamespace(prompt_tokens=5, completion_tokens=5, total_tokens=10),
+    23	            )
+    24	
+    25	    class DummyOpenAI:
+    26	        def __init__(self, api_key=None):
+    27	            self.chat = DummyChat()
+    28	
+    29	    dummy_module.OpenAI = DummyOpenAI
+    30	    monkeypatch.setitem(sys.modules, "openai", dummy_module)
+    31	
+    32	    import pr_comment_generator.openai_client as oc
+    33	
+    34	    oc = importlib.reload(oc)
+    35	
+    36	    template_dir = tmp_path / "templates"
+    37	    template_dir.mkdir()
+    38	    (template_dir / "base_template.md").write_text("Base {input_format} {[REDACTED_TOKEN]}", encoding="utf-8")
+    39	    (template_dir / "[REDACTED_TOKEN].md").write_text("chunk extra", encoding="utf-8")
+    40	    (template_dir / "summary_extension.md").write_text("summary extra", encoding="utf-8")
+    41	    prompt_manager = [REDACTED_TOKEN](str(template_dir))
+    42	    return oc, prompt_manager
+    43	
+    44	
+    45	def [REDACTED_TOKEN](monkeypatch, tmp_path, retry_config=None):
+    46	    """Helper to build OpenAIClient with a stubbed openai module."""
+    47	    oc, prompt_manager = [REDACTED_TOKEN](monkeypatch, tmp_path)
+    48	    monkeypatch.setenv("OPENAI_API_KEY", "test-key")
+    49	    client = oc.OpenAIClient(prompt_manager, retry_config=retry_config)
+    50	    return oc, client
+    51	
+    52	
+    53	def [REDACTED_TOKEN](monkeypatch, tmp_path):
+    54	    oc, prompt_manager = [REDACTED_TOKEN](monkeypatch, tmp_path)
+    55	    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    56	
+    57	    with pytest.raises(ValueError):
+    58	        oc.OpenAIClient(prompt_manager)
+    59	
+    60	
+    61	def [REDACTED_TOKEN](monkeypatch, tmp_path):
+    62	    oc, prompt_manager = [REDACTED_TOKEN](monkeypatch, tmp_path)
+    63	    monkeypatch.setenv("OPENAI_API_KEY", "test-key")
+    64	    retry_config = {"max_retries": 3, "initial_backoff": 2, "max_backoff": 30}
+    65	
+    66	    client = oc.OpenAIClient(prompt_manager, retry_config=retry_config)
+    67	
+    68	    assert client.retry_config == retry_config
+    69	    assert client.usage_stats["retries"] == 0
+    70	
+    71	
+    72	def [REDACTED_TOKEN](monkeypatch, tmp_path):
+    73	    oc, prompt_manager = [REDACTED_TOKEN](monkeypatch, tmp_path)
+    74	    monkeypatch.setenv("OPENAI_API_KEY", "test-key")
+    75	    monkeypatch.setattr(oc.TokenEstimator, "estimate_tokens", staticmethod(lambda text: 10))
+    76	    client = oc.OpenAIClient(prompt_manager)
+    77	
+    78	    payload = {"pr_info": {"title": "t"}, "changes": []}
+    79	    managed = client._manage_input_size(payload, is_single_file=False)
+    80	
+    81	    assert managed == payload
+    82	
+    83	
+    84	def [REDACTED_TOKEN](monkeypatch, tmp_path):
+    85	    oc, prompt_manager = [REDACTED_TOKEN](monkeypatch, tmp_path)
+    86	    monkeypatch.setenv("OPENAI_API_KEY", "test-key")
+    87	    client = oc.OpenAIClient(prompt_manager)
+    88	
+    89	    changes = [FileChange(filename="big.py", status="modified", additions=0, deletions=0, changes=400)]
+... (truncated)
+```
+
+## Turn 45: ツール実行
+
+**種別**: reasoning
+**ステータス**: completed
+
+## Turn 46: ツール実行
+
+**種別**: コマンド実行
+**コマンド**: `/bin/bash -lc 'nl -ba jenkins/jobs/pipeline/docs-generator/pull-request-comment-builder/tests/unit/test_cli.py'`
+**ステータス**: completed (exit_code=0)
+
+```text
+1	import importlib
+     2	import json
+     3	import logging
+     4	import sys
+     5	import types
+     6	import os
+     7	
+     8	import pytest
+     9	
+    10	
+    11	def [REDACTED_TOKEN](monkeypatch):
+    12	    """Reload CLI module with a stubbed openai dependency."""
+    13	    dummy_openai = types.ModuleType("openai")
+    14	
+    15	    class DummyOpenAI:
+    16	        def __init__(self, api_key=None):
+    17	            self.chat = types.SimpleNamespace(completions=types.SimpleNamespace(create=lambda **kwargs: None))
+    18	
+    19	    dummy_openai.OpenAI = DummyOpenAI
+    20	    monkeypatch.setitem(sys.modules, "openai", dummy_openai)
+    21	
+    22	    import pr_comment_generator.openai_client as oc
+    23	    oc = importlib.reload(oc)
+    24	    sys.modules["pr_comment_generator.openai_client"] = oc
+    25	
+    26	    import pr_comment_generator.generator as gen
+    27	    gen = importlib.reload(gen)
+    28	    sys.modules["pr_comment_generator.generator"] = gen
+    29	
+    30	    import pr_comment_generator.cli as cli
+    31	
+    32	    return importlib.reload(cli)
+    33	
+    34	
+    35	def [REDACTED_TOKEN](monkeypatch):
+    36	    cli = [REDACTED_TOKEN](monkeypatch)
+    37	    parser = cli.[REDACTED_TOKEN]()
+    38	
+    39	    with pytest.raises(SystemExit):
+    40	        parser.parse_args([])
+    41	
+    42	
+    43	def [REDACTED_TOKEN](monkeypatch, tmp_path):
+    44	    cli = [REDACTED_TOKEN](monkeypatch)
+    45	    prompt_dir = tmp_path / "prompts"
+    46	    args = types.SimpleNamespace(
+    47	        pr_diff="d",
+    48	        pr_info="i",
+    49	        output="o",
+    50	        log_level="INFO",
+    51	        parallel=True,
+    52	        save_prompts=True,
+    53	        prompt_output_dir=str(prompt_dir),
+    54	    )
+    55	
+    56	    cli.[REDACTED_TOKEN](args)
+    57	
+    58	    assert os.environ["PARALLEL_PROCESSING"] == "true"
+    59	    assert os.environ["SAVE_PROMPTS"] == "true"
+    60	    assert prompt_dir.exists()
+    61	
+    62	
+    63	def [REDACTED_TOKEN](monkeypatch):
+    64	    cli = [REDACTED_TOKEN](monkeypatch)
+    65	    monkeypatch.delenv("PARALLEL_PROCESSING", raising=False)
+    66	    monkeypatch.delenv("SAVE_PROMPTS", raising=False)
+    67	    args = types.SimpleNamespace(
+    68	        pr_diff="d",
+    69	        pr_info="i",
+    70	        output="o",
+    71	        log_level="INFO",
+    72	        parallel=False,
+    73	        save_prompts=False,
+    74	        prompt_output_dir="/tmp/prompts",
+    75	    )
+    76	
+    77	    cli.[REDACTED_TOKEN](args)
+    78	
+    79	    assert os.environ.get("SAVE_PROMPTS") is None
+    80	    assert os.environ.get("PARALLEL_PROCESSING") is None
+    81	
+    82	
+    83	def [REDACTED_TOKEN](monkeypatch, tmp_path):
+    84	    cli = [REDACTED_TOKEN](monkeypatch)
+    85	
+    86	    class FakeGenerator:
+    87	        def __init__(self, log_level=logging.INFO):
+    88	            self.log_level = log_level
+    89	
+    90	        def generate_comment(self, pr_info, pr_diff):
+    91	            return {
+    92	                "comment": "ok",
+    93	                "suggested_title": "title",
+    94	                "usage": {"total_tokens": 1},
+    95	                "file_count": 1,
+    96	                "total_changes": 1,
+    97	                "skipped_file_count": 0,
+    98	                "[REDACTED_TOKEN]": 1,
+    99	                "skipped_files": [],
+   100	            }
+   101	
+   102	    monkeypatch.setattr(cli, "PRCommentGenerator", FakeGenerator)
+   103	
+   104	    pr_info_path = tmp_path / "pr_info.json"
+   105	    pr_diff_path = tmp_path / "pr_diff.json"
+   106	    output_path = tmp_path / "out.json"
+   107	
+   108	    pr_info_path.write_text(
+   109	        json.dumps(
+   110	            {
+   111	                "title": "T",
+   112	                "number": 1,
+... (truncated)
+```
+
 ## Turn 47: ツール実行
 
 **種別**: reasoning
@@ -1727,199 +1695,7 @@ class [REDACTED_TOKEN]:
 ## Turn 48: ツール実行
 
 **種別**: コマンド実行
-**コマンド**: `/bin/bash -lc 'grep -n "test_call_api" -n .ai-workflow/issue-528/03_test_scenario/output/test-scenario.md'`
-**ステータス**: completed (exit_code=0)
-
-```text
-103:**テストケース名**: `test_call_api_正常系_成功`
-125:**テストケース名**: `test_call_api_正常系_リトライ成功`
-148:**テストケース名**: `test_call_api_異常系_レート制限エラー`
-163:**テストケース名**: `test_call_api_異常系_最大リトライ超過`
-178:**テストケース名**: `test_call_api_境界値_空メッセージ`
-```
-
-## Turn 49: ツール実行
-
-**種別**: reasoning
-**ステータス**: completed
-
-## Turn 50: ツール実行
-
-**種別**: コマンド実行
-**コマンド**: `/bin/bash -lc 'grep -n "[REDACTED_TOKEN]" -n .ai-workflow/issue-528/03_test_scenario/output/test-scenario.md'`
-**ステータス**: completed (exit_code=0)
-
-```text
-390:**テストケース名**: `[REDACTED_TOKEN]正常系_小規模PR`
-409:**テストケース名**: `[REDACTED_TOKEN]正常系_大規模PR`
-421:**テストケース名**: `[REDACTED_TOKEN]境界値_空リスト`
-434:**テストケース名**: `[REDACTED_TOKEN]境界値_単一ファイル`
-894:  5. `[REDACTED_TOKEN]`を呼び出し
-```
-
-## Turn 51: ツール実行
-
-**種別**: reasoning
-**ステータス**: completed
-
-## Turn 52: ツール実行
-
-**種別**: コマンド実行
-**コマンド**: `/bin/bash -lc 'grep -n "test_main" .ai-workflow/issue-528/03_test_scenario/output/test-scenario.md'`
-**ステータス**: completed (exit_code=0)
-
-```text
-825:**テストケース名**: `test_main_正常系`
-840:**テストケース名**: `test_main_異常系_入力ファイル不存在`
-853:**テストケース名**: `test_main_正常系_JSON出力形式`
-865:**テストケース名**: `test_main_異常系_エラー出力形式`
-```
-
-## Turn 53: ツール実行
-
-**種別**: reasoning
-**ステータス**: completed
-
-## Turn 54: ツール実行
-
-**種別**: コマンド実行
-**コマンド**: `/bin/bash -lc "nl -ba jenkins/jobs/pipeline/docs-generator/pull-request-comment-builder/tests/integration/test_compatibility_layer.py | sed -n '1,200p'"`
-**ステータス**: completed (exit_code=0)
-
-```text
-1	"""
-     2	統合テスト: 互換性レイヤー
-     3	
-     4	テスト対象:
-     5	- Facadeパターンによる旧インポートパスのサポート
-     6	- 新旧インポートパスの動作同一性
-     7	"""
-     8	
-     9	import pytest
-    10	import warnings
-    11	
-    12	
-    13	class [REDACTED_TOKEN]:
-    14	    """互換性レイヤーの統合テスト"""
-    15	
-    16	    def test_旧インポートパスから新インポートパスへの移行(self):
-    17	        """
-    18	        Given: 旧インポートパスと新インポートパスの両方がある
-    19	        When: 同じクラスを使用する
-    20	        Then: 両方とも同じクラスを参照する
-    21	        """
-    22	        # 警告を無視
-    23	        with warnings.catch_warnings():
-    24	            warnings.simplefilter("ignore")
-    25	
-    26	            # 旧インポートパス
-    27	            from pr_comment_generator import PRInfo as PRInfo_old
-    28	
-    29	            # 新インポートパス
-    30	            from pr_comment_generator.models import PRInfo as PRInfo_new
-    31	
-    32	            # Then
-    33	            # 両方が同じクラスであることを確認
-    34	            assert PRInfo_old is PRInfo_new
-    35	
-    36	    def test_旧インポートパスでの正常動作(self):
-    37	        """
-    38	        Given: 旧インポートパスを使用する既存コード
-    39	        When: そのコードを実行する
-    40	        Then: 正常に動作する
-    41	        """
-    42	        # 警告を無視
-    43	        with warnings.catch_warnings():
-    44	            warnings.simplefilter("ignore")
-    45	
-    46	            # When
-    47	            from pr_comment_generator import PRInfo, FileChange
-    48	
-    49	            # PR情報を作成
-    50	            pr_info = PRInfo.from_json({
-    51	                "title": "Test PR",
-    52	                "number": 999,
-    53	                "body": "Test body",
-    54	                "user": {"login": "testuser"},
-    55	                "base": {"ref": "main", "sha": "abc"},
-    56	                "head": {"ref": "feature", "sha": "def"}
-    57	            })
-    58	
-    59	            # ファイル変更を作成
-    60	            file_change = FileChange.from_json({
-    61	                "filename": "test.py",
-    62	                "status": "modified",
-    63	                "additions": 10,
-    64	                "deletions": 5,
-    65	                "changes": 15,
-    66	                "patch": "diff"
-    67	            })
-    68	
-    69	            # Then
-    70	            # 正常に動作することを確認
-    71	            assert pr_info.title == "Test PR"
-    72	            assert pr_info.number == 999
-    73	            assert file_change.filename == "test.py"
-    74	
-    75	    def test_新インポートパスでの正常動作(self):
-    76	        """
-    77	        Given: 新インポートパスを使用する新規コード
-    78	        When: そのコードを実行する
-    79	        Then: 正常に動作する
-    80	        """
-    81	        # When
-    82	        from pr_comment_generator.models import PRInfo, FileChange
-    83	
-    84	        # PR情報を作成
-    85	        pr_info = PRInfo.from_json({
-    86	            "title": "New PR",
-    87	            "number": 1000,
-    88	            "body": "New body",
-    89	            "user": {"login": "newuser"},
-    90	            "base": {"ref": "develop", "sha": "xyz"},
-    91	            "head": {"ref": "feature/new", "sha": "uvw"}
-    92	        })
-    93	
-    94	        # ファイル変更を作成
-    95	        file_change = FileChange.from_json({
-    96	            "filename": "new.py",
-    97	            "status": "added",
-    98	            "additions": 50,
-    99	            "deletions": 0,
-   100	            "changes": 50,
-   101	            "patch": None
-   102	        })
-   103	
-   104	        # Then
-   105	        # 正常に動作することを確認
-   106	        assert pr_info.title == "New PR"
-   107	        assert pr_info.number == 1000
-   108	        assert file_change.filename == "new.py"
-   109	
-   110	    def test_新旧インポートパスで同じ結果(self):
-   111	        """
-   112	        Given: 旧インポートパスと新インポートパスでそれぞれオブジェクトを作成
-   113	        When: 同じJSONデータから作成する
-   114	        Then: 同じ結果が得られる
-   115	        """
-   116	        # Given
-   117	        json_data = {
-   118	            "title": "Comparison Test",
-   119	            "number": 500,
-   120	            "body": "Comparison body",
-   121	            "user": {"login": "compuser"},
-... (truncated)
-```
-
-## Turn 55: ツール実行
-
-**種別**: reasoning
-**ステータス**: completed
-
-## Turn 56: ツール実行
-
-**種別**: コマンド実行
-**コマンド**: `/bin/bash -lc "nl -ba jenkins/jobs/pipeline/docs-generator/pull-request-comment-builder/tests/integration/test_generator_flow.py | sed -n '1,200p'"`
+**コマンド**: `/bin/bash -lc 'nl -ba jenkins/jobs/pipeline/docs-generator/pull-request-comment-builder/tests/integration/test_generator_flow.py'`
 **ステータス**: completed (exit_code=0)
 
 ```text
@@ -2020,24 +1796,292 @@ class [REDACTED_TOKEN]:
 ... (truncated)
 ```
 
-## Turn 57: ツール実行
+## Turn 49: ツール実行
 
 **種別**: reasoning
 **ステータス**: completed
 
+## Turn 50: ツール実行
+
+**種別**: コマンド実行
+**コマンド**: `/bin/bash -lc 'python -m pytest jenkins/jobs/pipeline/docs-generator/pull-request-comment-builder/tests/unit -q'`
+**ステータス**: failed (exit_code=127)
+
+```text
+/bin/bash: line 1: python: command not found
+```
+
+## Turn 51: ツール実行
+
+**種別**: reasoning
+**ステータス**: completed
+
+## Turn 52: ツール実行
+
+**種別**: コマンド実行
+**コマンド**: `/bin/bash -lc 'python3 -m pytest jenkins/jobs/pipeline/docs-generator/pull-request-comment-builder/tests/unit -q'`
+**ステータス**: failed (exit_code=127)
+
+```text
+/bin/bash: line 1: python3: command not found
+```
+
+## Turn 53: ツール実行
+
+**種別**: reasoning
+**ステータス**: completed
+
+## Turn 54: ツール実行
+
+**種別**: コマンド実行
+**コマンド**: `/bin/bash -lc 'ls /usr/bin/python*'`
+**ステータス**: failed (exit_code=2)
+
+```text
+ls: cannot access '/usr/bin/python*': No such file or directory
+```
+
+## Turn 55: ツール実行
+
+**種別**: reasoning
+**ステータス**: completed
+
+## Turn 56: ツール実行
+
+**種別**: reasoning
+**ステータス**: completed
+
+## Turn 57: ツール実行
+
+**種別**: コマンド実行
+**コマンド**: `/bin/bash -lc 'grep -n "[REDACTED_TOKEN]正常系_小規模PR" -n .ai-workflow/issue-528/03_test_scenario/output/test-scenario.md'`
+**ステータス**: completed (exit_code=0)
+
+```text
+390:**テストケース名**: `[REDACTED_TOKEN]正常系_小規模PR`
+```
+
 ## Turn 58: ツール実行
+
+**種別**: reasoning
+**ステータス**: completed
+
+## Turn 59: ツール実行
+
+**種別**: コマンド実行
+**コマンド**: `/bin/bash -lc 'grep -n "[REDACTED_TOKEN]" .ai-workflow/issue-528/03_test_scenario/output/test-scenario.md'`
+**ステータス**: completed (exit_code=0)
+
+```text
+448:**テストケース名**: `[REDACTED_TOKEN]正常系`
+462:**テストケース名**: `[REDACTED_TOKEN]正常系_均等分割`
+475:**テストケース名**: `[REDACTED_TOKEN]境界値_チャンクサイズより少ないファイル`
+```
+
+## Turn 60: ツール実行
+
+**種別**: reasoning
+**ステータス**: completed
+
+## Turn 61: ツール実行
+
+**種別**: コマンド実行
+**コマンド**: `/bin/bash -lc 'grep -n "analyze_all_chunks" .ai-workflow/issue-528/03_test_scenario/output/test-scenario.md'`
+**ステータス**: completed (exit_code=0)
+
+```text
+490:**テストケース名**: `[REDACTED_TOKEN]正常系`
+506:**テストケース名**: `[REDACTED_TOKEN]異常系_部分的失敗`
+896:  7. `analyze_all_chunks`を呼び出し
+```
+
+## Turn 62: ツール実行
+
+**種別**: reasoning
+**ステータス**: completed
+
+## Turn 63: ツール実行
+
+**種別**: コマンド実行
+**コマンド**: `/bin/bash -lc 'grep -n "[REDACTED_TOKEN]" .ai-workflow/issue-528/03_test_scenario/output/test-scenario.md'`
+**ステータス**: completed (exit_code=0)
+
+```text
+522:**テストケース名**: `[REDACTED_TOKEN]正常系`
+```
+
+## Turn 64: ツール実行
+
+**種別**: reasoning
+**ステータス**: completed
+
+## Turn 65: ツール実行
+
+**種別**: reasoning
+**ステータス**: completed
+
+## Turn 66: ツール実行
+
+**種別**: コマンド実行
+**コマンド**: `/bin/bash -lc 'nl -ba jenkins/jobs/pipeline/docs-generator/pull-request-comment-builder/tests/unit/test_generator.py'`
+**ステータス**: completed (exit_code=0)
+
+```text
+1	import logging
+     2	
+     3	from pr_comment_generator.generator import PRCommentGenerator
+     4	
+     5	
+     6	def _make_generator():
+     7	    gen = PRCommentGenerator.__new__(PRCommentGenerator)
+     8	    gen.logger = logging.getLogger("generator-test")
+     9	    gen.skipped_file_names = []
+    10	    return gen
+    11	
+    12	
+    13	def [REDACTED_TOKEN]():
+    14	    gen = _make_generator()
+    15	    file_paths = ["main.py", "src/utils.py", "src/utils.py"]
+    16	    base_paths = ["src/main.py", "src/utils.py"]
+    17	
+    18	    normalized = gen.[REDACTED_TOKEN](file_paths, base_paths)
+    19	
+    20	    assert normalized == ["src/main.py", "src/utils.py"]
+    21	
+    22	
+    23	def [REDACTED_TOKEN]():
+    24	    gen = _make_generator()
+    25	    gen.skipped_file_names = ["src/ignored.py"]
+    26	    comment = """## 修正されたファイル
+    27	- `src/app.py`: updated
+    28	- `app.py`: duplicate entry
+    29	## その他
+    30	details here"""
+    31	    rebuilt = gen.[REDACTED_TOKEN](comment, ["src/app.py"])
+    32	
+    33	    assert rebuilt.count("src/app.py") == 1
+    34	    assert "ignored.py" in rebuilt
+```
+
+## Turn 67: ツール実行
+
+**種別**: reasoning
+**ステータス**: completed
+
+## Turn 68: ツール実行
+
+**種別**: コマンド実行
+**コマンド**: `/bin/bash -lc 'grep -n "[REDACTED_TOKEN]" .ai-workflow/issue-528/03_test_scenario/output/test-scenario.md'`
+**ステータス**: completed (exit_code=0)
+
+```text
+661:**テストケース名**: `[REDACTED_TOKEN]正常系`
+677:**テストケース名**: `[REDACTED_TOKEN]正常系_スキップファイルあり`
+692:**テストケース名**: `[REDACTED_TOKEN]境界値_ファイルなし`
+```
+
+## Turn 69: ツール実行
+
+**種別**: reasoning
+**ステータス**: completed
+
+## Turn 70: ツール実行
+
+**種別**: コマンド実行
+**コマンド**: `/bin/bash -lc 'grep -n "test_parse_args_正常系_必須" .ai-workflow/issue-528/03_test_scenario/output/test-scenario.md'`
+**ステータス**: completed (exit_code=0)
+
+```text
+746:**テストケース名**: `test_parse_args_正常系_必須引数のみ`
+```
+
+## Turn 71: ツール実行
+
+**種別**: reasoning
+**ステータス**: completed
+
+## Turn 72: ツール実行
+
+**種別**: コマンド実行
+**コマンド**: `/bin/bash -lc 'grep -n "test_parse_args_正常系_全オプション" .ai-workflow/issue-528/03_test_scenario/output/test-scenario.md'`
+**ステータス**: completed (exit_code=0)
+
+```text
+759:**テストケース名**: `test_parse_args_正常系_全オプション`
+```
+
+## Turn 73: ツール実行
+
+**種別**: reasoning
+**ステータス**: completed
+
+## Turn 74: ツール実行
+
+**種別**: コマンド実行
+**コマンド**: `/bin/bash -lc 'grep -n "test_parse_args_異常系_必須引数不足" .ai-workflow/issue-528/03_test_scenario/output/test-scenario.md'`
+**ステータス**: completed (exit_code=0)
+
+```text
+780:**テストケース名**: `test_parse_args_異常系_必須引数不足`
+```
+
+## Turn 75: ツール実行
+
+**種別**: reasoning
+**ステータス**: completed
+
+## Turn 76: ツール実行
+
+**種別**: コマンド実行
+**コマンド**: `/bin/bash -lc 'grep -n "[REDACTED_TOKEN]" .ai-workflow/issue-528/03_test_scenario/output/test-scenario.md'`
+**ステータス**: completed (exit_code=0)
+
+```text
+795:**テストケース名**: `[REDACTED_TOKEN]正常系`
+810:**テストケース名**: `[REDACTED_TOKEN]正常系_デフォルト`
+```
+
+## Turn 77: ツール実行
+
+**種別**: reasoning
+**ステータス**: completed
+
+## Turn 78: ツール実行
+
+**種別**: コマンド実行
+**コマンド**: `/bin/bash -lc 'grep -n "test_main_" .ai-workflow/issue-528/03_test_scenario/output/test-scenario.md'`
+**ステータス**: completed (exit_code=0)
+
+```text
+825:**テストケース名**: `test_main_正常系`
+840:**テストケース名**: `test_main_異常系_入力ファイル不存在`
+853:**テストケース名**: `test_main_正常系_JSON出力形式`
+865:**テストケース名**: `test_main_異常系_エラー出力形式`
+```
+
+## Turn 79: ツール実行
+
+**種別**: reasoning
+**ステータス**: completed
+
+## Turn 80: ツール実行
 
 **種別**: agent_message
 **ステータス**: completed
 
-## Turn 59: 実行完了
+## Turn 81: ツール実行
+
+**種別**: todo_list
+**ステータス**: completed
+
+## Turn 82: 実行完了
 
 **ステータス**: completed
-**所要時間**: 163454ms
+**所要時間**: 213834ms
 **ターン数**: N/A
 
 ---
 
-**経過時間**: 163454ms
-**開始**: 2025-12-25T14:05:42.819Z
-**終了**: 2025-12-25T14:08:26.273Z
+**経過時間**: 213834ms
+**開始**: 2025-12-25T14:14:16.548Z
+**終了**: 2025-12-25T14:17:50.382Z

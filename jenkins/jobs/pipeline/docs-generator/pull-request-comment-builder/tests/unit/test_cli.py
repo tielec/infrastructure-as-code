@@ -40,6 +40,57 @@ def test_create_argument_parser_requires_arguments(monkeypatch):
         parser.parse_args([])
 
 
+def test_parse_args_with_required_only(monkeypatch):
+    cli = _import_cli_with_stub(monkeypatch)
+    parser = cli.create_argument_parser()
+
+    args = parser.parse_args(["--pr-diff", "diff.json", "--pr-info", "info.json", "--output", "out.json"])
+
+    assert args.pr_diff == "diff.json"
+    assert args.pr_info == "info.json"
+    assert args.output == "out.json"
+    assert args.parallel is False
+    assert args.save_prompts is False
+    assert args.log_level == "INFO"
+
+
+def test_parse_args_with_all_options(monkeypatch):
+    cli = _import_cli_with_stub(monkeypatch)
+    parser = cli.create_argument_parser()
+    args = parser.parse_args(
+        [
+            "--pr-diff",
+            "diff.json",
+            "--pr-info",
+            "info.json",
+            "--output",
+            "out.json",
+            "--save-prompts",
+            "--parallel",
+            "--log-level",
+            "DEBUG",
+            "--prompt-output-dir",
+            "/tmp/prompts",
+        ]
+    )
+
+    assert args.save_prompts is True
+    assert args.parallel is True
+    assert args.log_level == "DEBUG"
+    assert args.prompt_output_dir == "/tmp/prompts"
+
+
+def test_parse_args_missing_required(monkeypatch, capsys):
+    cli = _import_cli_with_stub(monkeypatch)
+    parser = cli.create_argument_parser()
+
+    with pytest.raises(SystemExit) as excinfo:
+        parser.parse_args(["--pr-diff", "diff.json"])
+
+    assert excinfo.value.code != 0
+    assert "pr-info" in capsys.readouterr().err
+
+
 def test_setup_environment_from_args_creates_prompt_dir(monkeypatch, tmp_path):
     cli = _import_cli_with_stub(monkeypatch)
     prompt_dir = tmp_path / "prompts"
@@ -92,6 +143,7 @@ def test_main_writes_output_file(monkeypatch, tmp_path):
                 "comment": "ok",
                 "suggested_title": "title",
                 "usage": {"total_tokens": 1},
+                "pr_number": 99,
                 "file_count": 1,
                 "total_changes": 1,
                 "skipped_file_count": 0,
@@ -137,6 +189,9 @@ def test_main_writes_output_file(monkeypatch, tmp_path):
     assert output_path.exists()
     data = json.loads(output_path.read_text(encoding="utf-8"))
     assert data["comment"] == "ok"
+    assert data["suggested_title"] == "title"
+    assert data["usage"]["total_tokens"] == 1
+    assert data["pr_number"] == 99
 
 
 def test_main_writes_error_json_on_exception(monkeypatch, tmp_path):
