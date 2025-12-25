@@ -139,24 +139,24 @@
 
 ### Phase 4: 実装 (見積もり: 16〜22h)
 
-- [ ] Task 4-1: OpenAIClientの分離 (5〜7h)
+- [x] Task 4-1: OpenAIClientの分離 (5〜7h)
   - `openai_client.py`の作成
   - APIリクエスト、リトライロジック、トークン管理の移行
   - プロンプト保存機能の移行
   - 型ヒントの追加
-- [ ] Task 4-2: ChunkAnalyzerの分離 (3〜4h)
+- [x] Task 4-2: ChunkAnalyzerの分離 (3〜4h)
   - `chunk_analyzer.py`の作成
   - チャンク分割、最適化ロジックの移行
   - 入力サイズ管理ロジックの移行
-- [ ] Task 4-3: PRCommentGeneratorのリファクタリング (4〜6h)
+- [x] Task 4-3: PRCommentGeneratorのリファクタリング (4〜6h)
   - `generator.py`の作成
   - 既存クラスからの責務分離
   - 新モジュールとの連携実装
-- [ ] Task 4-4: CLIエントリポイントの分離 (2〜3h)
+- [x] Task 4-4: CLIエントリポイントの分離 (2〜3h)
   - `cli.py`の作成
   - main関数の移行
   - 引数パーサーの整理
-- [ ] Task 4-5: __init__.pyの更新 (1〜2h)
+- [x] Task 4-5: __init__.pyの更新 (1〜2h)
   - 新モジュールのエクスポート
   - 互換性レイヤーの維持
   - 非推奨警告の更新
