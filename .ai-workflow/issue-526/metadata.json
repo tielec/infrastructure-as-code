@@ -18,9 +18,9 @@
     "test_code_strategy": null
   },
   "cost_tracking": {
-    "total_input_tokens": 0,
-    "total_output_tokens": 0,
-    "total_cost_usd": 0
+    "total_input_tokens": 26,
+    "total_output_tokens": 5013,
+    "total_cost_usd": 0.7602384
   },
   "difficulty_analysis": {
     "level": "simple",
@@ -179,12 +179,12 @@
   },
   "phases": {
     "planning": {
-      "status": "pending",
+      "status": "in_progress",
       "retry_count": 0,
-      "started_at": null,
+      "started_at": "2025-12-25T06:01:53.276Z",
       "completed_at": null,
       "review_result": null,
-      "current_step": null,
+      "current_step": "execute",
       "completed_steps": []
     },
     "requirements": {
@@ -275,9 +275,13 @@
     }
   },
   "created_at": "2025-12-25T05:25:35.484Z",
-  "updated_at": "2025-12-25T06:01:51.191Z",
+  "updated_at": "2025-12-25T06:05:08.041Z",
   "branch_name": "ai-workflow/issue-526",
   "base_commit": "[REDACTED_TOKEN]",
   "pr_number": 527,
-  "pr_url": "https://github.com/tielec/[REDACTED_TOKEN]/pull/527"
+  "pr_url": "https://github.com/tielec/[REDACTED_TOKEN]/pull/527",
+  "github_integration": {
+    "progress_comment_id": 3690978141,
+    "[REDACTED_TOKEN]": "https://__GITHUB_URL_1__/issues/526#[REDACTED_TOKEN]"
+  }
 }
