@@ -116,12 +116,12 @@
 
 ### Phase 2: 設計 (見積もり: 3〜4h)
 
-- [ ] Task 2-1: モジュール設計書の作成 (2〜3h)
+- [x] Task 2-1: モジュール設計書の作成 (2〜3h)
   - `openai_client.py`: OpenAI API連携クラスの詳細設計
   - `generator.py`: PRCommentGeneratorの詳細設計
   - `chunk_analyzer.py`: チャンク分析ロジックの詳細設計
   - `cli.py`: CLIエントリポイントの詳細設計
-- [ ] Task 2-2: インターフェース定義 (1h)
+- [x] Task 2-2: インターフェース定義 (1h)
   - 各モジュール間のインターフェース定義
   - 型ヒントの設計
   - エラーハンドリング方針の統一
