@@ -5,6 +5,8 @@
 - 互換性レイヤー（Facadeパターン）の動作確認
 """
 
+import importlib
+import sys
 import pytest
 import warnings
 
@@ -21,9 +23,11 @@ class TestFacade:
         # 警告をキャッチする
         with warnings.catch_warnings(record=True) as w:
             warnings.simplefilter("always")
+            sys.modules.pop("pr_comment_generator", None)
 
             # When
             import pr_comment_generator
+            importlib.reload(pr_comment_generator)
 
             # Then
             # 警告が発生していることを確認
@@ -117,9 +121,11 @@ class TestFacade:
         # 警告をキャッチする
         with warnings.catch_warnings(record=True) as w:
             warnings.simplefilter("always")
+            sys.modules.pop("pr_comment_generator", None)
 
             # When
             import pr_comment_generator
+            importlib.reload(pr_comment_generator)
 
             # Then
             # 警告メッセージを取得
