@@ -191,11 +191,11 @@
 
 ### Phase 7: ドキュメント (見積もり: 2〜3h)
 
-- [ ] Task 7-1: コード内ドキュメントの整備 (1〜2h)
+- [x] Task 7-1: コード内ドキュメントの整備 (1〜2h)
   - 各モジュールのdocstring
   - 型ヒントの確認
   - コメントの整理
-- [ ] Task 7-2: README/CONTRIBUTION.mdの更新 (1h)
+- [x] Task 7-2: README/CONTRIBUTION.mdの更新 (1h)
   - 新モジュール構造の説明
   - インポートパスの変更案内
 
