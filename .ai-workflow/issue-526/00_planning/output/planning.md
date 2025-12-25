@@ -86,7 +86,7 @@ Jenkins DSLの設定変更に対するテストは、既存のテストファイ
 
 ### Phase 4: 実装 (見積もり: 0.25h)
 
-- [ ] Task 4-1: DSLファイル修正 (15分)
+- [x] Task 4-1: DSLファイル修正 (15分)
   - `infrastructure_shutdown_scheduler_job.groovy`に`disabled(true)`を追加
   - Git差分確認とコミット
 
@@ -193,9 +193,9 @@ graph TD
 - [x] 回帰テストの範囲が定義されている
 
 ### Phase 4: 実装
-- [ ] `disabled(true)`がDSLファイルに追加されている
-- [ ] 構文エラーがない
-- [ ] Git コミットが適切に行われている
+- [x] `disabled(true)`がDSLファイルに追加されている
+- [x] 構文エラーがない
+- [x] Git コミットが適切に行われている
 
 ### Phase 6: テスト実行
 - [ ] シードジョブが正常実行されている
