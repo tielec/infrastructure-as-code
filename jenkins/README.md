@@ -513,10 +513,12 @@ NOHUP_TIMEOUT_MINUTES: 30
 
 **目的**: 開発環境を毎日定時に自動停止してコストを最適化
 
+**現在の状態**: ⚠️ **無効化済み**（Issue #526対応）
+
 **実行タイミング**:
-- 日本時間（JST）午前0時
-- 平日のみ（月曜日〜金曜日）
-- 週末（土日）は実行されません
+- ~~日本時間（JST）午前0時~~（現在無効化中）
+- ~~平日のみ（月曜日〜金曜日）~~
+- ~~週末（土日）は実行されません~~
 
 **動作内容**:
 - `Infrastructure_Management/Shutdown_Jenkins_Environment`ジョブを自動トリガー
@@ -535,18 +537,29 @@ NOHUP_TIMEOUT_MINUTES: 30
 - ビルド履歴は30日間/90ビルド保持
 
 **注意事項**:
-- 本番環境（prod）は対象外
-- dev環境のみが自動停止されます
-- 停止を防ぐには、ジョブを手動で無効化してください
-- 祝日の自動スキップは現在未対応
+- ⚠️ **現在、自動停止機能は無効化されています**
+- dev環境は常時稼働状態となります
+- コスト管理のため、必要に応じて手動で環境停止を行ってください
+- 本番環境（prod）は元々対象外です
+- 再有効化が必要な場合は、DSLファイルで `disabled(false)` に変更してシードジョブを実行してください
 
-**管理方法**:
+**手動環境停止の方法**:
 ```bash
-# スケジュールを一時的に無効化
-Jenkins UI > Infrastructure_Management > Shutdown-Environment-Scheduler > 設定 > ビルドトリガから"Build periodically"のチェックを外す
+# 手動でJenkins環境を停止
+Jenkins UI > Infrastructure_Management > Shutdown_Jenkins_Environment > "Build with Parameters"
 
-# 手動実行
+# または、スケジューラーの手動実行
 Jenkins UI > Infrastructure_Management > Shutdown-Environment-Scheduler > "Build Now"をクリック
+```
+
+**再有効化方法**:
+```bash
+# DSLファイルの修正
+# jenkins/jobs/dsl/infrastructure-management/infrastructure_shutdown_scheduler_job.groovy
+# disabled(true) → disabled(false) に変更
+
+# シードジョブ実行
+Jenkins UI > Admin_Jobs > job-creator > "Build Now"をクリック
 ```
 
 #### AI_Workflow（実行モード別ジョブ）

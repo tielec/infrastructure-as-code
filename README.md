@@ -94,6 +94,8 @@ git checkout archive/ai-workflow-v1-python -- scripts/ai-workflow/
   ```
 - **自動停止の無効化**: 必要に応じてCloudFormationスタックを更新して、Maintenance Windowを無効化できます
 
+**注意**: dev環境の Jenkins インフラ自動停止機能は現在無効化されています。コスト管理のため、必要に応じて手動での環境停止を行ってください。
+
 ### 3. 踏み台サーバーへの接続とセットアップ
 
 1. 以下のコマンドで踏み台サーバーにSSH接続します：

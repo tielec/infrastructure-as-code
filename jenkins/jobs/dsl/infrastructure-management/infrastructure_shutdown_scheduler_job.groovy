@@ -28,6 +28,8 @@ freeStyleJob(fullJobName) {
         |- 土日祝日も含めて毎日自動停止します
     '''.stripMargin())
 
+    disabled(true)  // ジョブを無効化し、スケジュール実行を停止
+
     // トリガー設定
     triggers {
         // 日本時間午前0時に実行（UTC 15:00）
