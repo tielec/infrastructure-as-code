@@ -22,7 +22,11 @@ src/pr_comment_generator/
 ├── statistics.py         # 統計計算とチャンクサイズ最適化
 ├── formatter.py          # Markdownフォーマット処理
 ├── token_estimator.py    # トークン数推定とテキスト切り詰め
-└── prompt_manager.py     # プロンプトテンプレート管理
+├── prompt_manager.py     # プロンプトテンプレート管理
+├── openai_client.py      # OpenAI API連携（リトライ、トークン管理）
+├── generator.py          # PRコメント生成オーケストレーター
+├── chunk_analyzer.py     # チャンク分割・分析調整
+└── cli.py                # CLIエントリポイント
 ```
 
 ### 主要コンポーネント
@@ -60,6 +64,36 @@ PR情報とファイル変更のデータモデルを定義します。
 - テンプレートファイルの読み込み
 - プロンプトのフォーマット
 - チャンク分析・サマリー生成用プロンプトの生成
+
+#### openai_client.py
+OpenAI APIとの通信を管理します。
+
+- API呼び出し（指数バックオフリトライ付き）
+- トークン使用量の追跡
+- プロンプトと結果の保存（デバッグ用）
+- 入力サイズの最適化
+
+#### generator.py
+PRコメント生成のオーケストレーターです。
+
+- 依存コンポーネントの初期化
+- PR情報とDiffの読み込み
+- GitHubからのファイル内容取得
+- コメント生成ワークフローの調整
+
+#### chunk_analyzer.py
+PRファイル変更のチャンク分割と分析を調整します。
+
+- 最適なチャンクサイズの計算
+- ファイル変更のチャンク分割
+- チャンク分析の調整
+
+#### cli.py
+コマンドライン処理を担当します。
+
+- 引数パーサー設定
+- 環境変数オーバーライド
+- エラーハンドリングとJSON出力処理
 
 ## 使用方法
 
@@ -108,10 +142,10 @@ pytest tests/ --cov=pr_comment_generator --cov-report=term --cov-report=html
 
 ### テストカバレッジ
 
-- **ユニットテスト**: 56ケース（6モジュール）
+- **ユニットテスト**: 90ケース（10モジュール）
 - **統合テスト**: 12ケース（モジュール間連携、互換性レイヤー）
-- **BDDテスト**: 4ケース（エンドユーザーシナリオ）
-- **合計**: 72ケース
+- **BDDテスト**: 5ケース（エンドユーザーシナリオ）
+- **合計**: 107ケース
 - **目標カバレッジ**: 80%以上
 
 ## 開発
@@ -126,7 +160,10 @@ from pr_comment_generator import PRCommentGenerator
 
 # 新インポートパス（推奨）
 from pr_comment_generator.generator import PRCommentGenerator
+from pr_comment_generator.openai_client import OpenAIClient
+from pr_comment_generator.chunk_analyzer import ChunkAnalyzer
 from pr_comment_generator.models import PRInfo, FileChange
+from pr_comment_generator.cli import main
 ```
 
 ### コーディング規約
@@ -161,8 +198,17 @@ export PYTHONPATH="/path/to/pull-request-comment-builder/src:$PYTHONPATH"
 
 ## 関連ドキュメント
 
+### Issue #445（初期実装）
 - [要件定義書](.ai-workflow/issue-445/01_requirements/output/requirements.md)
 - [設計書](.ai-workflow/issue-445/02_design/output/design.md)
 - [テストシナリオ](.ai-workflow/issue-445/03_test_scenario/output/test-scenario.md)
 - [実装ログ](.ai-workflow/issue-445/04_implementation/output/implementation.md)
 - [テスト実装ログ](.ai-workflow/issue-445/05_test_implementation/output/test-implementation.md)
+
+### Issue #528（モジュール分割リファクタリング）
+- [計画書](.ai-workflow/issue-528/00_planning/output/planning.md)
+- [要件定義書](.ai-workflow/issue-528/01_requirements/output/requirements.md)
+- [設計書](.ai-workflow/issue-528/02_design/output/design.md)
+- [テストシナリオ](.ai-workflow/issue-528/03_test_scenario/output/test-scenario.md)
+- [実装ログ](.ai-workflow/issue-528/04_implementation/output/implementation.md)
+- [テスト実装ログ](.ai-workflow/issue-528/05_test_implementation/output/test-implementation.md)
