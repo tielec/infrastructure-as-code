@@ -2,21 +2,20 @@
   "issue_number": "526",
   "issue_url": "https://github.com/tielec/[REDACTED_TOKEN]/issues/526",
   "issue_title": "Issue #526",
-  "repository": "tielec/infrastructure-as-code",
+  "repository": "tielec/[REDACTED_TOKEN]",
   "target_repository": {
-    "path": "/tmp/ai-workflow-repos-10-fba0a94c/infrastructure-as-code",
-    "github_name": "tielec/infrastructure-as-code",
-    "remote_url": "https://github.com/tielec/infrastructure-as-code.git",
+    "path": "/tmp/[REDACTED_TOKEN]/[REDACTED_TOKEN]",
+    "github_name": "tielec/[REDACTED_TOKEN]",
+    "remote_url": "https://github.com/tielec/[REDACTED_TOKEN].git",
     "owner": "tielec",
-    "repo": "infrastructure-as-code"
+    "repo": "[REDACTED_TOKEN]"
   },
   "workflow_version": "1.0.0",
   "current_phase": "planning",
   "design_decisions": {
     "[REDACTED_TOKEN]": null,
     "test_strategy": null,
-    "test_code_strategy": null,
-    "[REDACTED_TOKEN]": null
+    "test_code_strategy": null
   },
   "cost_tracking": {
     "total_input_tokens": 0,
@@ -27,13 +26,12 @@
     "level": "simple",
     "confidence": 0.95,
     "factors": {
-      "[REDACTED_TOKEN]": 1,
+      "[REDACTED_TOKEN]": false,
       "scope": "single_file",
       "requires_tests": false,
-      "[REDACTED_TOKEN]": false,
       "complexity_score": 0.1
     },
-    "analyzed_at": "2025-12-25T06:01:43.367Z",
+    "analyzed_at": "2025-12-25T05:25:48.060Z",
     "analyzer_agent": "claude",
     "analyzer_model": "sonnet"
   },
@@ -185,81 +183,63 @@
       "retry_count": 0,
       "started_at": null,
       "completed_at": null,
-      "review_result": null,
-      "current_step": null,
-      "completed_steps": []
+      "review_result": null
     },
     "requirements": {
       "status": "pending",
       "retry_count": 0,
       "started_at": null,
       "completed_at": null,
-      "review_result": null,
-      "current_step": null,
-      "completed_steps": []
+      "review_result": null
     },
     "design": {
       "status": "pending",
       "retry_count": 0,
       "started_at": null,
       "completed_at": null,
-      "review_result": null,
-      "current_step": null,
-      "completed_steps": []
+      "review_result": null
     },
     "test_scenario": {
       "status": "pending",
       "retry_count": 0,
       "started_at": null,
       "completed_at": null,
-      "review_result": null,
-      "current_step": null,
-      "completed_steps": []
+      "review_result": null
     },
     "implementation": {
       "status": "pending",
       "retry_count": 0,
       "started_at": null,
       "completed_at": null,
-      "review_result": null,
-      "current_step": null,
-      "completed_steps": []
+      "review_result": null
     },
     "test_implementation": {
       "status": "pending",
       "retry_count": 0,
       "started_at": null,
       "completed_at": null,
-      "review_result": null,
-      "current_step": null,
-      "completed_steps": []
+      "review_result": null
     },
     "testing": {
       "status": "pending",
       "retry_count": 0,
       "started_at": null,
       "completed_at": null,
-      "review_result": null,
-      "current_step": null,
-      "completed_steps": []
+      "review_result": null
     },
     "documentation": {
       "status": "pending",
       "retry_count": 0,
       "started_at": null,
       "completed_at": null,
-      "review_result": null,
-      "current_step": null,
-      "completed_steps": []
+      "review_result": null
     },
     "report": {
       "status": "pending",
       "retry_count": 0,
       "started_at": null,
       "completed_at": null,
-      "review_result": null,
-      "current_step": null,
-      "completed_steps": []
+      "review_result": null
     },
     "evaluation": {
       "status": "pending",
@@ -271,13 +251,11 @@
       "failed_phase": null,
       "remaining_tasks": [],
       "created_issue_url": null,
-      "abort_reason": null,
-      "current_step": null,
-      "completed_steps": []
+      "abort_reason": null
     }
   },
   "created_at": "2025-12-25T05:25:35.484Z",
-  "updated_at": "2025-12-25T06:01:43.369Z",
+  "updated_at": "2025-12-25T05:25:55.635Z",
   "branch_name": "ai-workflow/issue-526",
   "base_commit": "[REDACTED_TOKEN]",
   "pr_number": 527,
