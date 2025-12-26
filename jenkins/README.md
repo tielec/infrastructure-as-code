@@ -641,7 +641,7 @@ Jenkins UI > Infrastructure_Management > Terminate_Lambda_NAT > 設定 > ビル�
 
 **パラメータ**:
 - `PROJECT_FILTER_CHOICE`: プロジェクト選択（プルダウン形式）
-- `PROJECT_FILTER`: プロジェクト名フィルタ（自由入力、未入力なら選択値を使用）
+- `PROJECT_FILTER`: プロジェクト名フィルタ（自由入力。入力した場合はこちらが優先され、未入力なら選択値を使用）
 - `ACTION`: deploy（デプロイ）またはdestroy（削除）
 - `ENVIRONMENT`: 実行環境
 - `BRANCH`: リポジトリブランチ
