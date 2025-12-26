@@ -145,7 +145,7 @@ class JobConfigYamlTests(unittest.TestCase):
             "Dashboard DSL should show the human-friendly dashboard title",
         )
         self.assertIn(
-            "choiceParam('PROJECT_FILTER'",
+            "choiceParam('PROJECT_FILTER_CHOICE'",
             dashboard_script,
             "Dashboard job must allow filtering projects for display (new entries should be selectable)",
         )

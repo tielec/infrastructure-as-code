@@ -143,6 +143,23 @@ def validateParameters() {
 }
 
 /**
+ * プロジェクトフィルタを選択式と自由入力から決定
+ */
+def resolveProjectFilter() {
+    def textFilter = (params.PROJECT_FILTER ?: '').trim()
+    if (textFilter) {
+        return textFilter
+    }
+
+    def choiceFilter = (params.PROJECT_FILTER_CHOICE ?: '').trim()
+    if (choiceFilter) {
+        return choiceFilter
+    }
+
+    return '*'
+}
+
+/**
  * ワークスペースの準備
  */
 def prepareWorkspace() {
@@ -169,12 +186,16 @@ def checkoutJenkinsRepository() {
  * S3からPulumiステートファイルを収集
  */
 def collectPulumiStates() {
+    def projectFilter = resolveProjectFilter()
+
     echo """
         =============================================
         Pulumiステートファイルの収集
         =============================================
         S3バケット: ${env.S3_BUCKET}
-        フィルタ: ${params.PROJECT_FILTER}
+        選択式フィルタ: ${params.PROJECT_FILTER_CHOICE}
+        自由入力フィルタ: ${params.PROJECT_FILTER}
+        適用フィルタ: ${projectFilter}
         =============================================
     """.stripIndent()
     
@@ -185,7 +206,7 @@ def collectPulumiStates() {
         
         # 環境変数を設定して実行
         export S3_BUCKET="${env.S3_BUCKET}"
-        export PROJECT_FILTER="${params.PROJECT_FILTER}"
+        export PROJECT_FILTER="${projectFilter}"
         export STACK_FILTER="${params.STACK_FILTER}"
         export DATA_DIR="${DATA_DIR}"
         
@@ -298,7 +319,7 @@ def printSummary() {
         総リソース数: ${summary.total_resources ?: 0}
         
         フィルタ:
-        - プロジェクト: ${params.PROJECT_FILTER}
+        - プロジェクト: ${resolveProjectFilter()}
         - スタック: ${params.STACK_FILTER}
         =============================================
     """.stripIndent()

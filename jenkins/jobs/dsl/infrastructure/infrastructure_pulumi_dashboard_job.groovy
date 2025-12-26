@@ -19,6 +19,7 @@ infrastructureProjects.each { projectKey, projectConfig ->
     projectFilterChoices << normalizedName
 }
 projectFilterChoices = projectFilterChoices.unique()
+println "[Pulumi Dashboard] Project filter choices: ${projectFilterChoices.join(', ')}"
 
 pipelineJob(jobPath) {
     displayName("Pulumi Projects Dashboard")
@@ -58,8 +59,8 @@ pipelineJob(jobPath) {
         nonStoredPasswordParam('AWS_SESSION_TOKEN', 'AWS Session Token（オプション） - STS一時認証情報を使用する場合')
         
         // フィルタリングオプション
-        choiceParam('PROJECT_FILTER', projectFilterChoices, 'ダッシュボードに表示するプロジェクトを選択（Jenkins Agent系も含む）')
-        stringParam('PROJECT_FILTER', '', '''プロジェクト名フィルタ（Jenkins Agent 名も含む） - パターン入力で自由に絞り込み'''.stripMargin())
+        choiceParam('PROJECT_FILTER_CHOICE', projectFilterChoices, 'ダッシュボードに表示するプロジェクトを選択（Jenkins Agent系も含む）')
+        stringParam('PROJECT_FILTER', '', '''プロジェクト名フィルタ（Jenkins Agent 名も含む） - パターン入力で自由に絞り込み。入力が空の場合はプルダウンの選択値を使用'''.stripMargin())
 
         stringParam('STACK_FILTER', '*', '''スタックフィルタ - 表示するスタックをフィルタリング
             |* すべて表示: *
