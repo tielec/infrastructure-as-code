@@ -16,7 +16,7 @@
 ## Turn 3: ツール実行
 
 **種別**: コマンド実行
-**コマンド**: `/bin/bash -lc "cd /tmp/ai-workflow-repos-11-00b73f07/infrastructure-as-code && rg --files -g '*.md'"`
+**コマンド**: `/bin/bash -lc "cd /tmp/ai-workflow-repos-11-00b73f07/[REDACTED_TOKEN] && rg --files -g '*.md'"`
 **ステータス**: failed (exit_code=127)
 
 ```text
@@ -31,56 +31,56 @@
 ## Turn 5: ツール実行
 
 **種別**: コマンド実行
-**コマンド**: `/bin/bash -lc "cd /tmp/ai-workflow-repos-11-00b73f07/infrastructure-as-code && find .. -name '*.md'"`
+**コマンド**: `/bin/bash -lc "cd /tmp/ai-workflow-repos-11-00b73f07/[REDACTED_TOKEN] && find .. -name '*.md'"`
 **ステータス**: completed (exit_code=0)
 
 ```text
-../infrastructure-as-code/.ai-workflow/issue-193/00_planning/output/planning.md
-../infrastructure-as-code/.ai-workflow/issue-193/01_requirements/output/requirements.md
-../infrastructure-as-code/.ai-workflow/issue-193/02_design/output/design.md
-../infrastructure-as-code/.ai-workflow/issue-193/03_test_scenario/output/test-scenario.md
-../infrastructure-as-code/.ai-workflow/issue-193/04_implementation/output/implementation.md
-../infrastructure-as-code/.ai-workflow/issue-193/05_test_implementation/output/test-implementation.md
-../infrastructure-as-code/.ai-workflow/issue-193/06_testing/output/test-result.md
-../infrastructure-as-code/.ai-workflow/issue-193/07_documentation/output/[REDACTED_TOKEN].md
-../infrastructure-as-code/.ai-workflow/issue-193/08_report/output/report.md
-../infrastructure-as-code/.ai-workflow/issue-193/09_evaluation/execute/agent_log.md
-../infrastructure-as-code/.ai-workflow/issue-193/09_evaluation/output/evaluation_report.md
-../infrastructure-as-code/.ai-workflow/issue-193/09_evaluation/review/result.md
-../infrastructure-as-code/.ai-workflow/issue-304/01_requirements/output/requirements.md
-../infrastructure-as-code/.ai-workflow/issue-304/02_design/output/design.md
-../infrastructure-as-code/.ai-workflow/issue-304/03_test_scenario/output/test-scenario.md
-../infrastructure-as-code/.ai-workflow/issue-304/04_implementation/output/implementation.md
-../infrastructure-as-code/.ai-workflow/issue-304/05_testing/output/test-result.md
-../infrastructure-as-code/.ai-workflow/issue-304/06_documentation/output/[REDACTED_TOKEN].md
-../infrastructure-as-code/.ai-workflow/issue-304/07_report/output/report.md
-../infrastructure-as-code/.ai-workflow/issue-305/01_requirements/output/requirements.md
-../infrastructure-as-code/.ai-workflow/issue-305/02_design/output/design.md
-../infrastructure-as-code/.ai-workflow/issue-305/03_test_scenario/output/test-scenario.md
-../infrastructure-as-code/.ai-workflow/issue-305/04_implementation/output/implementation.md
-../infrastructure-as-code/.ai-workflow/issue-305/05_testing/output/test-result.md
-../infrastructure-as-code/.ai-workflow/issue-305/06_documentation/output/[REDACTED_TOKEN].md
-../infrastructure-as-code/.ai-workflow/issue-305/07_report/output/report.md
-../infrastructure-as-code/.ai-workflow/issue-310/01_requirements/output/requirements.md
-../infrastructure-as-code/.ai-workflow/issue-310/02_design/output/design.md
-../infrastructure-as-code/.ai-workflow/issue-310/03_test_scenario/output/test-scenario.md
-../infrastructure-as-code/.ai-workflow/issue-310/04_implementation/output/implementation.md
-../infrastructure-as-code/.ai-workflow/issue-310/05_testing/output/[REDACTED_TOKEN].md
-../infrastructure-as-code/.ai-workflow/issue-310/05_testing/output/test-result.md
-../infrastructure-as-code/.ai-workflow/issue-310/06_documentation/output/[REDACTED_TOKEN].md
-../infrastructure-as-code/.ai-workflow/issue-310/07_report/output/report.md
-../infrastructure-as-code/.ai-workflow/issue-313/01_requirements/output/requirements.md
-../infrastructure-as-code/.ai-workflow/issue-313/02_design/output/design.md
-../infrastructure-as-code/.ai-workflow/issue-313/03_test_scenario/output/test-scenario.md
-../infrastructure-as-code/.ai-workflow/issue-313/04_implementation/output/implementation.md
-../infrastructure-as-code/.ai-workflow/issue-313/05_testing/output/test-result.md
-../infrastructure-as-code/.ai-workflow/issue-313/06_documentation/output/[REDACTED_TOKEN].md
-../infrastructure-as-code/.ai-workflow/issue-313/07_report/output/report.md
-../infrastructure-as-code/.ai-workflow/issue-315/01_requirements/output/requirements.md
-../infrastructure-as-code/.ai-workflow/issue-315/02_design/output/design.md
-../infrastructure-as-code/.ai-workflow/issue-315/03_test_scenario/output/test-scenario.md
-../infrastructure-as-code/.ai-workflow/issue-315/04_implementation/output/implementation.md
-../infrastructure-as-code/.ai-workflow/issue-317/01_requirements/output/requirements.md
+../[REDACTED_TOKEN]/.ai-workflow/issue-193/00_planning/output/planning.md
+../[REDACTED_TOKEN]/.ai-workflow/issue-193/01_requirements/output/requirements.md
+../[REDACTED_TOKEN]/.ai-workflow/issue-193/02_design/output/design.md
+../[REDACTED_TOKEN]/.ai-workflow/issue-193/03_test_scenario/output/test-scenario.md
+../[REDACTED_TOKEN]/.ai-workflow/issue-193/04_implementation/output/implementation.md
+../[REDACTED_TOKEN]/.ai-workflow/issue-193/05_test_implementation/output/test-implementation.md
+../[REDACTED_TOKEN]/.ai-workflow/issue-193/06_testing/output/test-result.md
+../[REDACTED_TOKEN]/.ai-workflow/issue-193/07_documentation/output/[REDACTED_TOKEN].md
+../[REDACTED_TOKEN]/.ai-workflow/issue-193/08_report/output/report.md
+../[REDACTED_TOKEN]/.ai-workflow/issue-193/09_evaluation/execute/agent_log.md
+../[REDACTED_TOKEN]/.ai-workflow/issue-193/09_evaluation/output/evaluation_report.md
+../[REDACTED_TOKEN]/.ai-workflow/issue-193/09_evaluation/review/result.md
+../[REDACTED_TOKEN]/.ai-workflow/issue-304/01_requirements/output/requirements.md
+../[REDACTED_TOKEN]/.ai-workflow/issue-304/02_design/output/design.md
+../[REDACTED_TOKEN]/.ai-workflow/issue-304/03_test_scenario/output/test-scenario.md
+../[REDACTED_TOKEN]/.ai-workflow/issue-304/04_implementation/output/implementation.md
+../[REDACTED_TOKEN]/.ai-workflow/issue-304/05_testing/output/test-result.md
+../[REDACTED_TOKEN]/.ai-workflow/issue-304/06_documentation/output/[REDACTED_TOKEN].md
+../[REDACTED_TOKEN]/.ai-workflow/issue-304/07_report/output/report.md
+../[REDACTED_TOKEN]/.ai-workflow/issue-305/01_requirements/output/requirements.md
+../[REDACTED_TOKEN]/.ai-workflow/issue-305/02_design/output/design.md
+../[REDACTED_TOKEN]/.ai-workflow/issue-305/03_test_scenario/output/test-scenario.md
+../[REDACTED_TOKEN]/.ai-workflow/issue-305/04_implementation/output/implementation.md
+../[REDACTED_TOKEN]/.ai-workflow/issue-305/05_testing/output/test-result.md
+../[REDACTED_TOKEN]/.ai-workflow/issue-305/06_documentation/output/[REDACTED_TOKEN].md
+../[REDACTED_TOKEN]/.ai-workflow/issue-305/07_report/output/report.md
+../[REDACTED_TOKEN]/.ai-workflow/issue-310/01_requirements/output/requirements.md
+../[REDACTED_TOKEN]/.ai-workflow/issue-310/02_design/output/design.md
+../[REDACTED_TOKEN]/.ai-workflow/issue-310/03_test_scenario/output/test-scenario.md
+../[REDACTED_TOKEN]/.ai-workflow/issue-310/04_implementation/output/implementation.md
+../[REDACTED_TOKEN]/.ai-workflow/issue-310/05_testing/output/[REDACTED_TOKEN].md
+../[REDACTED_TOKEN]/.ai-workflow/issue-310/05_testing/output/test-result.md
+../[REDACTED_TOKEN]/.ai-workflow/issue-310/06_documentation/output/[REDACTED_TOKEN].md
+../[REDACTED_TOKEN]/.ai-workflow/issue-310/07_report/output/report.md
+../[REDACTED_TOKEN]/.ai-workflow/issue-313/01_requirements/output/requirements.md
+../[REDACTED_TOKEN]/.ai-workflow/issue-313/02_design/output/design.md
+../[REDACTED_TOKEN]/.ai-workflow/issue-313/03_test_scenario/output/test-scenario.md
+../[REDACTED_TOKEN]/.ai-workflow/issue-313/04_implementation/output/implementation.md
+../[REDACTED_TOKEN]/.ai-workflow/issue-313/05_testing/output/test-result.md
+../[REDACTED_TOKEN]/.ai-workflow/issue-313/06_documentation/output/[REDACTED_TOKEN].md
+../[REDACTED_TOKEN]/.ai-workflow/issue-313/07_report/output/report.md
+../[REDACTED_TOKEN]/.ai-workflow/issue-315/01_requirements/output/requirements.md
+../[REDACTED_TOKEN]/.ai-workflow/issue-315/02_design/output/design.md
+../[REDACTED_TOKEN]/.ai-workflow/issue-315/03_test_scenario/output/test-scenario.md
+../[REDACTED_TOKEN]/.ai-workflow/issue-315/04_implementation/output/implementation.md
+../[REDACTED_TOKEN]/.ai-workflow/issue-317/01_requirements/output/requirements.md
 ../inf
 ... (truncated)
 ```
@@ -93,7 +93,7 @@
 ## Turn 7: ツール実行
 
 **種別**: コマンド実行
-**コマンド**: `/bin/bash -lc "cd /tmp/ai-workflow-repos-11-00b73f07/infrastructure-as-code && find .ai-workflow/issue-544 -name '*.md'"`
+**コマンド**: `/bin/bash -lc "cd /tmp/ai-workflow-repos-11-00b73f07/[REDACTED_TOKEN] && find .ai-workflow/issue-544 -name '*.md'"`
 **ステータス**: completed (exit_code=0)
 
 ```text
@@ -137,7 +137,7 @@
 ## Turn 9: ツール実行
 
 **種別**: コマンド実行
-**コマンド**: `/bin/bash -lc 'cd /tmp/ai-workflow-repos-11-00b73f07/infrastructure-as-code && ls'`
+**コマンド**: `/bin/bash -lc 'cd /tmp/ai-workflow-repos-11-00b73f07/[REDACTED_TOKEN] && ls'`
 **ステータス**: completed (exit_code=0)
 
 ```text
@@ -165,7 +165,7 @@ tests
 ## Turn 11: ツール実行
 
 **種別**: コマンド実行
-**コマンド**: `/bin/bash -lc "cd /tmp/ai-workflow-repos-11-00b73f07/infrastructure-as-code && sed -n '1,200p' .ai-workflow/issue-544/00_planning/output/planning.md"`
+**コマンド**: `/bin/bash -lc "cd /tmp/ai-workflow-repos-11-00b73f07/[REDACTED_TOKEN] && sed -n '1,200p' .ai-workflow/issue-544/00_planning/output/planning.md"`
 **ステータス**: completed (exit_code=0)
 
 ```text
@@ -294,7 +294,7 @@ graph TD
 ## Turn 13: ツール実行
 
 **種別**: コマンド実行
-**コマンド**: `/bin/bash -lc "cd /tmp/ai-workflow-repos-11-00b73f07/infrastructure-as-code && sed -n '1,200p' .ai-workflow/issue-544/04_implementation/output/implementation.md"`
+**コマンド**: `/bin/bash -lc "cd /tmp/ai-workflow-repos-11-00b73f07/[REDACTED_TOKEN] && sed -n '1,200p' .ai-workflow/issue-544/04_implementation/output/implementation.md"`
 **ステータス**: completed (exit_code=0)
 
 ```text
@@ -329,7 +329,7 @@ graph TD
 ## Turn 15: ツール実行
 
 **種別**: コマンド実行
-**コマンド**: `/bin/bash -lc "cd /tmp/ai-workflow-repos-11-00b73f07/infrastructure-as-code && sed -n '1,200p' .ai-workflow/issue-544/06_testing/output/test-result.md"`
+**コマンド**: `/bin/bash -lc "cd /tmp/ai-workflow-repos-11-00b73f07/[REDACTED_TOKEN] && sed -n '1,200p' .ai-workflow/issue-544/06_testing/output/test-result.md"`
 **ステータス**: completed (exit_code=0)
 
 ```text
@@ -360,7 +360,7 @@ graph TD
 ## Turn 17: ツール実行
 
 **種別**: コマンド実行
-**コマンド**: `/bin/bash -lc "cd /tmp/ai-workflow-repos-11-00b73f07/infrastructure-as-code && sed -n '1,200p' .ai-workflow/issue-544/02_design/output/design.md"`
+**コマンド**: `/bin/bash -lc "cd /tmp/ai-workflow-repos-11-00b73f07/[REDACTED_TOKEN] && sed -n '1,200p' .ai-workflow/issue-544/02_design/output/design.md"`
 **ステータス**: completed (exit_code=0)
 
 ```text
@@ -448,7 +448,7 @@ graph TD
 ## Turn 19: ツール実行
 
 **種別**: コマンド実行
-**コマンド**: `/bin/bash -lc "cd /tmp/ai-workflow-repos-11-00b73f07/infrastructure-as-code && sed -n '1,160p' .ai-workflow/issue-544/03_test_scenario/output/test-scenario.md"`
+**コマンド**: `/bin/bash -lc "cd /tmp/ai-workflow-repos-11-00b73f07/[REDACTED_TOKEN] && sed -n '1,160p' .ai-workflow/issue-544/03_test_scenario/output/test-scenario.md"`
 **ステータス**: completed (exit_code=0)
 
 ```text
@@ -544,7 +544,7 @@ graph TD
 ## Turn 21: ツール実行
 
 **種別**: コマンド実行
-**コマンド**: `/bin/bash -lc 'cd /tmp/ai-workflow-repos-11-00b73f07/infrastructure-as-code && grep -R "Jenkins Agent" -n README.md ARCHITECTURE.md docs pulumi 2>/dev/null | head'`
+**コマンド**: `/bin/bash -lc 'cd /tmp/ai-workflow-repos-11-00b73f07/[REDACTED_TOKEN] && grep -R "Jenkins Agent" -n README.md ARCHITECTURE.md docs pulumi 2>/dev/null | head'`
 **ステータス**: completed (exit_code=0)
 
 ```text
@@ -568,7 +568,7 @@ pulumi/jenkins-agent-ami/component-arm.yml:48:            - echo "Starting Jenki
 ## Turn 23: ツール実行
 
 **種別**: コマンド実行
-**コマンド**: `/bin/bash -lc "cd /tmp/ai-workflow-repos-11-00b73f07/infrastructure-as-code && find docs -maxdepth 2 -name '*.md'"`
+**コマンド**: `/bin/bash -lc "cd /tmp/ai-workflow-repos-11-00b73f07/[REDACTED_TOKEN] && find docs -maxdepth 2 -name '*.md'"`
 **ステータス**: completed (exit_code=0)
 
 ```text
@@ -595,7 +595,7 @@ docs/troubleshooting.md
 ## Turn 25: ツール実行
 
 **種別**: コマンド実行
-**コマンド**: `/bin/bash -lc "cd /tmp/ai-workflow-repos-11-00b73f07/infrastructure-as-code && find pulumi -maxdepth 2 -name '*.md'"`
+**コマンド**: `/bin/bash -lc "cd /tmp/ai-workflow-repos-11-00b73f07/[REDACTED_TOKEN] && find pulumi -maxdepth 2 -name '*.md'"`
 **ステータス**: completed (exit_code=0)
 
 ```text
@@ -613,7 +613,7 @@ pulumi/lambda-api-gateway/README.md
 ## Turn 27: ツール実行
 
 **種別**: コマンド実行
-**コマンド**: `/bin/bash -lc "cd /tmp/ai-workflow-repos-11-00b73f07/infrastructure-as-code && sed -n '1,200p' docs/operations/[REDACTED_TOKEN].md"`
+**コマンド**: `/bin/bash -lc "cd /tmp/ai-workflow-repos-11-00b73f07/[REDACTED_TOKEN] && sed -n '1,200p' docs/operations/[REDACTED_TOKEN].md"`
 **ステータス**: completed (exit_code=0)
 
 ```text
@@ -653,7 +653,7 @@ Jenkins Agent AMI へ追加した CloudWatch Agent の CPU メトリクスを活
 ## Turn 29: ツール実行
 
 **種別**: コマンド実行
-**コマンド**: `/bin/bash -lc 'cd /tmp/ai-workflow-repos-11-00b73f07/infrastructure-as-code && grep -n "Jenkins Agent" -n README.md'`
+**コマンド**: `/bin/bash -lc 'cd /tmp/ai-workflow-repos-11-00b73f07/[REDACTED_TOKEN] && grep -n "Jenkins Agent" -n README.md'`
 **ステータス**: failed (exit_code=1)
 
 ## Turn 30: ツール実行
@@ -664,7 +664,7 @@ Jenkins Agent AMI へ追加した CloudWatch Agent の CPU メトリクスを活
 ## Turn 31: ツール実行
 
 **種別**: コマンド実行
-**コマンド**: `/bin/bash -lc "cd /tmp/ai-workflow-repos-11-00b73f07/infrastructure-as-code && sed -n '1,200p' README.md"`
+**コマンド**: `/bin/bash -lc "cd /tmp/ai-workflow-repos-11-00b73f07/[REDACTED_TOKEN] && sed -n '1,200p' README.md"`
 **ステータス**: completed (exit_code=0)
 
 ```text
@@ -718,7 +718,7 @@ AWS上にJenkinsベースのCI/CD環境を段階的に構築・運用するた�
 ## Turn 33: ツール実行
 
 **種別**: コマンド実行
-**コマンド**: `/bin/bash -lc "cd /tmp/ai-workflow-repos-11-00b73f07/infrastructure-as-code && sed -n '1,200p' docs/architecture/infrastructure.md"`
+**コマンド**: `/bin/bash -lc "cd /tmp/ai-workflow-repos-11-00b73f07/[REDACTED_TOKEN] && sed -n '1,200p' docs/architecture/infrastructure.md"`
 **ステータス**: completed (exit_code=0)
 
 ```text
@@ -745,7 +745,7 @@ Jenkins基盤で利用するAWSリソース、リポジトリのディレクト�
 ## ディレクトリ構造
 
 ```
-infrastructure-as-code/
+[REDACTED_TOKEN]/
 ├─ ansible/                    # Ansible設定とプレイブック
 │  ├─ inventory/              # インベントリと変数定義
 │  ├─ playbooks/              # 各種プレイブック
@@ -839,7 +839,7 @@ infrastructure-as-code/
 ## Turn 35: ツール実行
 
 **種別**: コマンド実行
-**コマンド**: `/bin/bash -lc 'cd /tmp/ai-workflow-repos-11-00b73f07/infrastructure-as-code && grep -R "CloudWatch Agent" -n docs pulumi README.md ARCHITECTURE.md'`
+**コマンド**: `/bin/bash -lc 'cd /tmp/ai-workflow-repos-11-00b73f07/[REDACTED_TOKEN] && grep -R "CloudWatch Agent" -n docs pulumi README.md ARCHITECTURE.md'`
 **ステータス**: completed (exit_code=0)
 
 ```text
@@ -884,7 +884,7 @@ pulumi/jenkins-agent/index.ts:226:// CloudWatch Agent用のマネージドポリ
 ## Turn 37: ツール実行
 
 **種別**: コマンド実行
-**コマンド**: `/bin/bash -lc "cd /tmp/ai-workflow-repos-11-00b73f07/infrastructure-as-code && sed -n '1,200p' docs/changelog.md"`
+**コマンド**: `/bin/bash -lc "cd /tmp/ai-workflow-repos-11-00b73f07/[REDACTED_TOKEN] && sed -n '1,200p' docs/changelog.md"`
 **ステータス**: completed (exit_code=0)
 
 ```text
@@ -954,7 +954,7 @@ git checkout archive/ai-workflow-v1-python -- scripts/ai-workflow/
 ## Turn 39: ツール実行
 
 **種別**: コマンド実行
-**コマンド**: `/bin/bash -lc 'cd /tmp/ai-workflow-repos-11-00b73f07/infrastructure-as-code && grep -R "cloudwatch" -ni docs | head'`
+**コマンド**: `/bin/bash -lc 'cd /tmp/ai-workflow-repos-11-00b73f07/[REDACTED_TOKEN] && grep -R "cloudwatch" -ni docs | head'`
 **ステータス**: completed (exit_code=0)
 
 ```text
@@ -978,7 +978,7 @@ docs/issues/497/current-analysis.md:147:- `-Djenkins.websocket.enforceKeepAlive=
 ## Turn 41: ツール実行
 
 **種別**: コマンド実行
-**コマンド**: `/bin/bash -lc "cd /tmp/ai-workflow-repos-11-00b73f07/infrastructure-as-code && sed -n '1,200p' pulumi/README.md"`
+**コマンド**: `/bin/bash -lc "cd /tmp/ai-workflow-repos-11-00b73f07/[REDACTED_TOKEN] && sed -n '1,200p' pulumi/README.md"`
 **ステータス**: completed (exit_code=0)
 
 ```text
@@ -1141,7 +1141,7 @@ pulumi/
 ## Turn 43: ツール実行
 
 **種別**: コマンド実行
-**コマンド**: `/bin/bash -lc 'cd /tmp/ai-workflow-repos-11-00b73f07/infrastructure-as-code && grep -R "Translator" -n docs'`
+**コマンド**: `/bin/bash -lc 'cd /tmp/ai-workflow-repos-11-00b73f07/[REDACTED_TOKEN] && grep -R "Translator" -n docs'`
 **ステータス**: completed (exit_code=0)
 
 ```text
@@ -1156,7 +1156,7 @@ docs/operations/[REDACTED_TOKEN].md:25:- CloudWatch Agent 設定ファイルは 
 ## Turn 45: ツール実行
 
 **種別**: コマンド実行
-**コマンド**: `/bin/bash -lc "cd /tmp/ai-workflow-repos-11-00b73f07/infrastructure-as-code && sed -n '60,160p' docs/operations/jenkins-deploy.md"`
+**コマンド**: `/bin/bash -lc "cd /tmp/ai-workflow-repos-11-00b73f07/[REDACTED_TOKEN] && sed -n '60,160p' docs/operations/jenkins-deploy.md"`
 **ステータス**: completed (exit_code=0)
 
 ```text
@@ -1243,7 +1243,7 @@ graph TD
 ## Turn 47: ツール実行
 
 **種別**: コマンド実行
-**コマンド**: `/bin/bash -lc 'cd /tmp/ai-workflow-repos-11-00b73f07/infrastructure-as-code && cat pulumi/jenkins-agent-ami/templates/cloudwatch-agent-config.json'`
+**コマンド**: `/bin/bash -lc 'cd /tmp/ai-workflow-repos-11-00b73f07/[REDACTED_TOKEN] && cat pulumi/jenkins-agent-ami/templates/cloudwatch-agent-config.json'`
 **ステータス**: completed (exit_code=0)
 
 ```text
@@ -1300,7 +1300,7 @@ graph TD
 ## Turn 51: ツール実行
 
 **種別**: コマンド実行
-**コマンド**: `/bin/bash -lc 'cd /tmp/ai-workflow-repos-11-00b73f07/infrastructure-as-code && grep -n "agent-ami" -n docs | head'`
+**コマンド**: `/bin/bash -lc 'cd /tmp/ai-workflow-repos-11-00b73f07/[REDACTED_TOKEN] && grep -n "agent-ami" -n docs | head'`
 **ステータス**: completed (exit_code=0)
 
 ```text
@@ -1310,7 +1310,7 @@ grep: docs: Is a directory
 ## Turn 52: ツール実行
 
 **種別**: コマンド実行
-**コマンド**: `/bin/bash -lc 'cd /tmp/ai-workflow-repos-11-00b73f07/infrastructure-as-code && grep -R "agent-ami" -n docs | head'`
+**コマンド**: `/bin/bash -lc 'cd /tmp/ai-workflow-repos-11-00b73f07/[REDACTED_TOKEN] && grep -R "agent-ami" -n docs | head'`
 **ステータス**: completed (exit_code=0)
 
 ```text
@@ -1328,7 +1328,7 @@ docs/operations/jenkins-deploy.md:101:    S --> AMI[jenkins-agent-ami<br/>カス
 ## Turn 54: ツール実行
 
 **種別**: コマンド実行
-**コマンド**: `/bin/bash -lc "cd /tmp/ai-workflow-repos-11-00b73f07/infrastructure-as-code && sed -n '1,220p' tests/integration/[REDACTED_TOKEN].py"`
+**コマンド**: `/bin/bash -lc "cd /tmp/ai-workflow-repos-11-00b73f07/[REDACTED_TOKEN] && sed -n '1,220p' tests/integration/[REDACTED_TOKEN].py"`
 **ステータス**: completed (exit_code=0)
 
 ```text
@@ -1446,7 +1446,7 @@ class [REDACTED_TOKEN](unittest.TestCase):
 ## Turn 57: ツール実行
 
 **種別**: コマンド実行
-**コマンド**: `/bin/bash -lc 'cd /tmp/ai-workflow-repos-11-00b73f07/infrastructure-as-code && ls .ai-workflow/issue-544'`
+**コマンド**: `/bin/bash -lc 'cd /tmp/ai-workflow-repos-11-00b73f07/[REDACTED_TOKEN] && ls .ai-workflow/issue-544'`
 **ステータス**: completed (exit_code=0)
 
 ```text
@@ -1469,7 +1469,7 @@ metadata.json
 ## Turn 59: ツール実行
 
 **種別**: コマンド実行
-**コマンド**: `/bin/bash -lc 'cd /tmp/ai-workflow-repos-11-00b73f07/infrastructure-as-code && ls .ai-workflow/issue-544/07_documentation'`
+**コマンド**: `/bin/bash -lc 'cd /tmp/ai-workflow-repos-11-00b73f07/[REDACTED_TOKEN] && ls .ai-workflow/issue-544/07_documentation'`
 **ステータス**: completed (exit_code=0)
 
 ```text
@@ -1487,7 +1487,7 @@ revise
 ## Turn 61: ツール実行
 
 **種別**: コマンド実行
-**コマンド**: `/bin/bash -lc 'cd /tmp/ai-workflow-repos-11-00b73f07/infrastructure-as-code && ls .ai-workflow/issue-544/07_documentation/output'`
+**コマンド**: `/bin/bash -lc 'cd /tmp/ai-workflow-repos-11-00b73f07/[REDACTED_TOKEN] && ls .ai-workflow/issue-544/07_documentation/output'`
 **ステータス**: completed (exit_code=0)
 
 ## Turn 62: ツール実行
