@@ -11,6 +11,7 @@ Jenkins基盤で利用するAWSリソース、リポジトリのディレクト�
 - VPC、サブネット、ルートテーブル、セキュリティグループなどのネットワークリソース
 - Jenkinsコントローラー用のEC2インスタンス（ブルー/グリーン環境）
 - Jenkinsエージェント用のEC2 SpotFleet（自動スケーリング対応）
+- Jenkinsエージェント用のECS Fargateクラスタ、ECRリポジトリ、Task Definition、CloudWatch Logs
 - Jenkinsエージェント用のカスタムAMI（EC2 Image Builder）
 - Jenkinsデータ永続化のためのEFSファイルシステム
 - ブルーグリーンデプロイ用のALB（Application Load Balancer）
@@ -61,6 +62,11 @@ infrastructure-as-code/
 │      ├─ jobs/                # ジョブXML定義
 │      └─ shell/               # シェルスクリプト
 │
+├─ docker/                      # Jenkinsエージェントコンテナ定義
+│  └─ jenkins-agent-ecs/       # ECS Fargateエージェントイメージ
+│      ├─ Dockerfile           # ECS専用Jenkinsエージェントイメージ
+│      └─ entrypoint.sh        # amazon-ecsプラグイン互換のエントリーポイント
+
 └─ docs/                       # ドキュメント
 ```
 
@@ -71,6 +77,7 @@ infrastructure-as-code/
 - **jenkins/**: Jenkinsジョブ定義とパイプライン。Job DSLとJenkinsfileによるジョブ管理
 - **pulumi/**: インフラストラクチャのコード。各コンポーネントを独立したスタックとして管理
 - **scripts/**: 各種ユーティリティスクリプト。AWS操作、Jenkins設定、初期化処理など
+- **docker/**: ECS Fargateエージェントイメージの定義。`docker/jenkins-agent-ecs/`でDockerfile・entrypoint.shを管理
 
 ## 主な機能
 
@@ -84,6 +91,72 @@ infrastructure-as-code/
 - **アプリケーション設定管理**: Jenkinsバージョン更新、プラグイン管理、再起動処理の自動化
 - **Jenkins CLIユーザー管理**: APIトークンを使用したCLIアクセスの自動設定
 - **シードジョブによるジョブ管理**: Infrastructure as Codeによるジョブの自動作成・更新・削除
+
+## Jenkinsエージェント構成
+
+本番環境では、Jenkins コントローラーから接続するエージェントを SpotFleet（EC2）と ECS Fargate の双方で運用しています。SpotFleet は既存のバッチ/長時間ジョブに対して安定したキャパシティを提供し、ECS Fargate は短時間かつ高い並列性が求められるジョブを高速に処理します。どちらの構成も `pulumi/jenkins-agent/index.ts` 内で定義されたリソース群と SSM パラメータを通じて Jenkins に公開されます。
+
+### SpotFleet vs ECS Fargate 比較
+
+| 観点 | SpotFleet | ECS Fargate |
+|------|-----------|-------------|
+| コスト | スポットインスタンスによる低コスト | オンデマンド課金のためやや高価だが必要な分だけ課金 |
+| 起動速度 | EC2 の起動を伴うため中程度 | コンテナ起動のため高速 |
+| スケーラビリティ | 数百台まで拡張可能 | 数千タスクの並行実行が可能 |
+| 管理負荷 | AMI と Launch Template の管理が必要 | コンテナ定義のみで運用 |
+| リソース効率 | 固定サイズのインスタンス | 必要なリソースに応じたスケール |
+| 適用場面 | 長時間バッチ処理やツールチェーン依存 | 短時間・並列処理、CI ファーストパーティタスク |
+
+#### 使い分けの指針
+
+- 長時間実行を前提にした大容量やレガシーツールチェーンは SpotFleet を維持
+- 短時間かつスケールが必要なタスク、たとえば並列ビルド/テストは ECS Fargate エージェントへ切り替え
+- Jenkins からは両方のエージェントを amazon-ecs プラグインと SpotFleet プラグインで個別に管理し、SSM パラメータ経由で接続情報を取得
+
+## ECS Fargateエージェント詳細
+
+`pulumi/jenkins-agent/index.ts` の 739 行以降では、ECS Fargate エージェント用の Cluster、ECR、Task Definition、IAM Role、CloudWatch Logs が定義され、各リソースは SSM パラメータとして Jenkins に提供されます。
+
+### ECS Cluster
+
+専用の ECS Cluster を作成し、Fargate タスクの実行環境を分離しています。クラスタ名・ARN は SSM パラメータ `/jenkins-infra/{environment}/agent/ecs-cluster-*` で公開され、amazon-ecs プラグインのクラスタ設定にそのまま流し込めるようにしています。
+
+### ECR Repository
+
+`docker/jenkins-agent-ecs` でビルドした Jenkins エージェントイメージは専用の ECR リポジトリに格納され、Fargate タスクはこのリポジトリからイメージを取得します。リポジトリ URL も SSM パラメータとして公開し、タスク定義の `image` フィールドへ埋め込みます。
+
+### Task Definition
+
+タスク定義では利用するコンテナの CPU/Mem、実行ロール（`ecs-task-role`）、実行時ロール（`ecs-execution-role`）、ログドライバ（CloudWatch Logs）、必要な環境変数・ボリュームなどを包括的に定義しています。定義の ARN は SSM パラメータ `/jenkins-infra/{environment}/agent/ecs-task-definition-arn` で管理され、Jenkins から amazon-ecs プラグイン経由で参照します。
+
+### IAM Roles
+
+Fargate タスクには Execution Role（ECR へのプル、CloudWatch へのログ送信）と Task Role（Jenkins 内での操作権限）の 2 つの IAM Role を割り当てています。Task Role は AdministratorAccess ポリシーを継承し、SpotFleet とは異なる最小権限の境界を維持しつつも必要なリソースへアクセスできるようにしています。
+
+### CloudWatch Logs
+
+タスクのコンテナログは CloudWatch Logs に送信し、Log Group 名も SSM パラメータ `/jenkins-infra/{environment}/agent/ecs-log-group-name` で管理しています。S3 やログフィルタは必要に応じて追加できますが、基本は Pulumi 定義内でリテンションとストリームポリシーを維持しています。
+
+## docker/jenkins-agent-ecs
+
+`docker/jenkins-agent-ecs` 以下には、ECS Fargate で動作する Jenkins エージェントコンテナの定義が集約されています。主なファイルは次の通りです：
+
+- `Dockerfile`: Multi-stage build を採用し、OpenJDK、AWS CLI、Pulumi、Ansible、Jenkins Remoting など必要なツールを含む軽量イメージを構築します。ビルド後は不要ファイルを削ぎ落とし、最終ステージでは実行に必要なファイルのみを残します。
+- `entrypoint.sh`: amazon-ecs プラグイン互換のエントリーポイントで、引数の変換や環境変数の整備、動作ログの出力を行います。古い形式の引数をサポートしつつ新しい ECS タスクからの実行も可能なように調整されています。
+
+## ECSエージェント用SSMパラメータ
+
+ECS エージェントに必要な接続情報は全て SSM Parameter Store で管理され、`/jenkins-infra/{environment}/agent/` プレフィックスに集約されています。SpotFleet で利用しているパラメータと同様に Pulumi の `pulumi/jenkins-agent/index.ts` から出力され、Jenkins の amazon-ecs プラグインや運用手順でそのまま参照されます。
+
+| パラメータ名 | 説明 | 用途 |
+|-------------|------|------|
+| `/jenkins-infra/{environment}/agent/ecs-cluster-arn` | ECS Cluster ARN | amazon-ecs プラグインのクラスタ指定 |
+| `/jenkins-infra/{environment}/agent/ecs-cluster-name` | ECS Cluster 名 | 管理者がクラスタを識別するため |
+| `/jenkins-infra/{environment}/agent/ecs-task-definition-arn` | Task Definition ARN | Task Definition のリビジョンを Jenkins から指定 |
+| `/jenkins-infra/{environment}/agent/ecr-repository-url` | ECR リポジトリ URL | ECS タスクの `image` フィールドに設定 |
+| `/jenkins-infra/{environment}/agent/ecs-execution-role-arn` | ECS Execution Role ARN | ECR へのアクセスやログ送信権限 |
+| `/jenkins-infra/{environment}/agent/ecs-task-role-arn` | ECS Task Role ARN | Jenkins 内処理用ロール（AdministratorAccess） |
+| `/jenkins-infra/{environment}/agent/ecs-log-group-name` | CloudWatch Logs Group 名 | タスクログの送信先 |
 
 ## Jenkins環境構築後の管理機能
 
