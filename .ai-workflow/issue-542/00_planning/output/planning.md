@@ -121,11 +121,11 @@ SpotFleetは以下の動作で更新される:
 
 ### Phase 1: 要件定義 (見積もり: 0.25h)
 
-- [ ] Task 1-1: 対象インスタンスタイプの確認 (0.15h)
+- [x] Task 1-1: 対象インスタンスタイプの確認 (0.15h)
   - t3/t3a系（x86_64）の確認: t3a.medium, t3.medium, t3a.small, t3.small, t3a.micro, t3.micro
   - t4g系（ARM64）の確認: t4g.medium, t4g.small, t4g.micro
   - すべてがT系バースタブルインスタンスであることを確認
-- [ ] Task 1-2: 受け入れ基準の明確化 (0.1h)
+- [x] Task 1-2: 受け入れ基準の明確化 (0.1h)
   - `creditSpecification.cpuCredits="unlimited"`が両LaunchTemplateに設定されていること
   - `pulumi preview`で差分が期待通りであること
   - 高負荷ジョブ実行時にスロットリングが発生しないこと
