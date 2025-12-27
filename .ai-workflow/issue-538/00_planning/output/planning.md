@@ -190,35 +190,35 @@ docs/
 
 ### Phase 4: 実装 (見積もり: 4-6h)
 
-- [ ] Task 4-1: docs/ディレクトリ構造の作成 (0.5h)
+- [x] Task 4-1: docs/ディレクトリ構造の作成 (0.5h)
   - docs/setup/, docs/operations/, docs/architecture/, docs/development/ の作成
   - 既存のdocs/issues/は維持
 
-- [ ] Task 4-2: セットアップ関連ドキュメントの分割 (1.5h)
+- [x] Task 4-2: セットアップ関連ドキュメントの分割 (1.5h)
   - docs/setup/prerequisites.md の作成（前提条件 + EC2キーペア）
   - docs/setup/bootstrap.md の作成（ブートストラップ構築手順）
   - docs/setup/pulumi-backend.md の作成（Pulumiバックエンド設定）
 
-- [ ] Task 4-3: 運用関連ドキュメントの分割 (1.5h)
+- [x] Task 4-3: 運用関連ドキュメントの分割 (1.5h)
   - docs/operations/jenkins-deploy.md の作成
   - docs/operations/jenkins-management.md の作成
   - docs/operations/bootstrap-management.md の作成
   - docs/operations/infrastructure-teardown.md の作成
   - docs/operations/parameters.md の作成
 
-- [ ] Task 4-4: その他ドキュメントの分割 (1h)
+- [x] Task 4-4: その他ドキュメントの分割 (1h)
   - docs/changelog.md の作成（変更履歴）
   - docs/troubleshooting.md の作成
   - docs/architecture/infrastructure.md の作成
   - docs/development/extension.md の作成
 
-- [ ] Task 4-5: README.mdの縮小・再構成 (1h)
+- [x] Task 4-5: README.mdの縮小・再構成 (1h)
   - 概要セクションの維持
   - 目次（クイックナビゲーション）の作成
   - 各分割ドキュメントへのリンク追加
   - 重要なドキュメントセクションの更新
 
-- [ ] Task 4-6: 参照元ドキュメントの更新 (0.5h)
+- [x] Task 4-6: 参照元ドキュメントの更新 (0.5h)
   - CLAUDE.mdのREADME.md参照箇所の確認・更新
   - 必要に応じて相対パスの修正
 
