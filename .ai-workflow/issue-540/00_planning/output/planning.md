@@ -89,14 +89,14 @@
 
 ### Phase 4: 実装 (見積もり: 3~4h)
 
-- [ ] Task 4-1: infrastructure.mdの基本構造更新 (1~1.5h)
+- [x] Task 4-1: infrastructure.mdの基本構造更新 (1~1.5h)
   - 概要セクションへのECS Fargateエージェント追記
   - ディレクトリ構造でのdocker/jenkins-agent-ecs説明追加
-- [ ] Task 4-2: ECS Fargateエージェント専用セクション作成 (1.5~2h)
+- [x] Task 4-2: ECS Fargateエージェント専用セクション作成 (1.5~2h)
   - ECS Cluster、ECR Repository、Task Definition等の詳細説明
   - SpotFleetエージェントとの併存関係および使い分け指針
   - docker/jenkins-agent-ecsディレクトリの役割と利用手順
-- [ ] Task 4-3: SSMパラメータ一覧の整備 (0.5~0.5h)
+- [x] Task 4-3: SSMパラメータ一覧の整備 (0.5~0.5h)
   - ECS関連SSM出力パラメータの一覧化
   - 既存SpotFleet関連パラメータとの整理統合
 
