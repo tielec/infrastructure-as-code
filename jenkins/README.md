@@ -685,7 +685,7 @@ Jenkins UI > Infrastructure_Management > Terminate_Lambda_NAT > 設定 > ビル�
 ## 関連ドキュメント
 
 ### プロジェクトドキュメント
-- [メインREADME](../README.md) - プロジェクト全体の概要
+- [メインREADME](../README.md) - プロジェクト全体の概要とクイックナビゲーション
 - [INITIAL_SETUP.md](INITIAL_SETUP.md) - Jenkins初期セットアップ手順
 - [CONTRIBUTION.md](CONTRIBUTION.md) - Jenkinsジョブ開発規約
 - [Ansible README](../ansible/README.md) - インフラのデプロイ方法

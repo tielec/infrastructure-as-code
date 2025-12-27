@@ -23,6 +23,11 @@ infrastructure-as-code/
 │   ├── playbooks/        # 実行可能なプレイブック
 │   └── roles/           # 再利用可能なロール
 ├── bootstrap/           # 初期セットアップ（CloudFormation）
+├── docs/                # プロジェクトドキュメント（詳細手順）
+│   ├── setup/           # セットアップ関連
+│   ├── operations/      # 運用関連
+│   ├── architecture/    # アーキテクチャ関連
+│   └── development/     # 開発関連
 ├── jenkins/             # Jenkins設定とジョブ定義
 │   ├── config/          # Jenkins設定ファイル
 │   └── jobs/           # ジョブ定義（DSL/Pipeline）

@@ -714,7 +714,7 @@ ansible-playbook playbook.yml --ask-vault-pass
 ## 関連ドキュメント
 
 ### プロジェクトドキュメント
-- [メインREADME](../README.md) - プロジェクト全体の概要
+- [メインREADME](../README.md) - プロジェクト全体の概要とクイックナビゲーション
 - [CONTRIBUTION.md](CONTRIBUTION.md) - Ansibleプレイブック開発規約
 - [Pulumi README](../pulumi/README.md) - Pulumiスタックの詳細
 - [Bootstrap README](../bootstrap/README.md) - Bootstrap環境の構築手順
@@ -728,7 +728,7 @@ ansible-playbook playbook.yml --ask-vault-pass
 問題が発生した場合は、以下を確認してください：
 
 1. このREADMEのトラブルシューティングセクション
-2. [メインREADME](../README.md)のFAQ
+2. [メインREADME](../README.md)とdocs/配下の詳細ドキュメント
 3. 各ロールのREADME（`roles/*/README.md`）
 4. Ansibleの公式ドキュメント
 
