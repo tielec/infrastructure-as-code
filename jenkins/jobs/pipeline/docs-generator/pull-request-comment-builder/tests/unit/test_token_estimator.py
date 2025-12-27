@@ -169,3 +169,83 @@ class TestTokenEstimator:
         # Then
         assert estimator.estimate_tokens(truncated) <= max_tokens
         assert len(truncated) < len(text)
+
+    def test_estimator_初期化_ロガー共有(self):
+        """
+        Given: Loggerを渡す
+        When: TokenEstimatorを初期化する
+        Then: 同じLoggerインスタンスが利用される
+        """
+        logger = logging.getLogger("shared")
+        estimator = TokenEstimator(logger=logger)
+
+        assert estimator.logger is logger
+
+    def test_estimate_tokens_異常系_None値(self, estimator):
+        """
+        Given: Noneが渡された場合
+        When: estimate_tokens()を呼び出す
+        Then: TypeErrorが発生することで入力値の検証が担保される
+        """
+        with pytest.raises(TypeError):
+            estimator.estimate_tokens(None)
+
+    def test_estimate_tokens_境界値_超大テキスト(self, estimator):
+        """
+        Given: 非常に長いテキスト（100KB以上）
+        When: estimate_tokens()を呼び出す
+        Then: メモリエラーなく正のトークン数が返される
+        """
+        long_text = "A" * 100_000
+        tokens = estimator.estimate_tokens(long_text)
+
+        assert isinstance(tokens, int)
+        assert tokens > 0
+
+    def test_estimate_tokens_正常系_絵文字混在(self, estimator):
+        """
+        Given: 絵文字や特殊文字を含むテキスト
+        When: estimate_tokens()を呼び出す
+        Then: エラーなく正のトークン数が算出される
+        """
+        text = "Hello 👋 World 🌍 Test 🧪"
+        tokens = estimator.estimate_tokens(text)
+
+        assert tokens >= 1
+
+    def test_truncate_text_正常系_UTF8文字列(self, estimator):
+        """
+        Given: UTF-8文字列（絵文字含む）と最大トークン数
+        When: truncate_text()を呼び出す
+        Then: トークン数が制限内に収まり、絵文字が保持される
+        """
+        text = "こんにちは 🌍 " * 100
+        max_tokens = 10
+
+        truncated = estimator.truncate_text(text, max_tokens)
+
+        assert estimator.estimate_tokens(truncated) <= max_tokens
+        assert "🌍" in truncated
+        assert len(truncated) < len(text)
+
+    def test_truncate_text_異常系_負のトークン数(self, estimator):
+        """
+        Given: 負のトークン数
+        When: truncate_text()を呼び出す
+        Then: 文字列が空になり、トークン数が0であることが保証される
+        """
+        truncated = estimator.truncate_text("Test text", -5)
+
+        assert truncated == ""
+        assert estimator.estimate_tokens(truncated) == 0
+
+    def test_truncate_text_境界値_ゼロトークン(self, estimator):
+        """
+        Given: max_tokens=0
+        When: truncate_text()を呼び出す
+        Then: 空文字列が返ってくる
+        """
+        truncated = estimator.truncate_text("Test text", 0)
+
+        assert truncated == ""
+        assert estimator.estimate_tokens(truncated) == 0
