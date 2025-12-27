@@ -2,6 +2,21 @@
 
 > 📖 **親ドキュメント**: [README.md](../README.md)
 
+## 2025-01-20: SpotFleetエージェントのCPUクレジットUnlimited設定適用完了
+
+Jenkins Agent SpotFleetで利用するt3/t3a/t4g系インスタンスにCPUクレジットUnlimited設定を適用しました。
+
+- **対象Issue**: [#542](https://github.com/tielec/infrastructure-as-code/issues/542)
+- **変更ファイル**:
+  - `pulumi/jenkins-agent/index.ts`: x86_64/ARM64 LaunchTemplateに`creditSpecification.cpuCredits="unlimited"`を追加
+  - `docs/architecture/infrastructure.md`: CPUクレジット設定の詳細説明を追記
+- **効果**: CI/CD高負荷時のCPUスロットリング防止により、ビルド/テスト時間の安定化とタイムアウト回避を実現
+- **コスト影響**: ベースライン超過分の追加課金が発生するため、CloudWatch `CPUSurplusCreditBalance`監視を推奨
+- **適用方法**: Pulumiスタック更新でLaunchTemplate新バージョンを作成し、新規インスタンスからローリング適用
+- **テスト結果**: 統合テスト 7件すべて成功（成功率100%）
+
+これにより、Jenkins CI/CDパイプラインの信頼性と性能が向上し、開発者の待ち時間短縮が実現されました。
+
 ## 2024-01-23: ECS Fargateエージェント構成のドキュメント化完了
 
 Jenkins Agent infrastructure の ECS Fargate 構成に関するドキュメントを整備しました。
