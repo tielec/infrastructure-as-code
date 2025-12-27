@@ -50,10 +50,10 @@
   - 失敗時に詳細を出力するロギングを追加
 
 ### Phase 6: テスト実行 (見積もり: 1.5h)
-- [ ] Task 6-1: 自動検証実行 (1h)
+- [x] Task 6-1: 自動検証実行 (1h)
   - Translatorによる設定構文チェック（ARM/x86）
   - Pulumi previewで設定差分確認
-- [ ] Task 6-2: 手動スポット確認 (0.5h)
+- [x] Task 6-2: 手動スポット確認 (0.5h)
   - 生成されたCloudWatch Agent JSON/YAMLのCPUメトリクス有無を目視確認
 
 ### Phase 7: ドキュメント (見積もり: 1h)
