@@ -1,0 +1,262 @@
+{
+  "issue_number": "544",
+  "issue_url": "https://__GITHUB_URL_0__/issues/544",
+  "issue_title": "Issue #544",
+  "repository": "tielec/infrastructure-as-code",
+  "target_repository": {
+    "path": "/tmp/ai-workflow-repos-11-00b73f07/infrastructure-as-code",
+    "github_name": "tielec/infrastructure-as-code",
+    "remote_url": "https://github.com/tielec/infrastructure-as-code.git",
+    "owner": "tielec",
+    "repo": "infrastructure-as-code"
+  },
+  "workflow_version": "1.0.0",
+  "current_phase": "planning",
+  "design_decisions": {
+    "[REDACTED_TOKEN]": null,
+    "test_strategy": null,
+    "test_code_strategy": null
+  },
+  "cost_tracking": {
+    "total_input_tokens": 0,
+    "total_output_tokens": 0,
+    "total_cost_usd": 0
+  },
+  "difficulty_analysis": {
+    "level": "complex",
+    "confidence": 0,
+    "factors": {
+      "[REDACTED_TOKEN]": 0,
+      "scope": "cross_cutting",
+      "requires_tests": true,
+      "[REDACTED_TOKEN]": true,
+      "complexity_score": 1
+    },
+    "analyzed_at": "2025-12-27T22:31:12.614Z",
+    "analyzer_agent": "codex",
+    "analyzer_model": "fallback"
+  },
+  "model_config": {
+    "planning": {
+      "execute": {
+        "claudeModel": "opus",
+        "codexModel": "max"
+      },
+      "review": {
+        "claudeModel": "sonnet",
+        "codexModel": "mini"
+      },
+      "revise": {
+        "claudeModel": "opus",
+        "codexModel": "max"
+      }
+    },
+    "requirements": {
+      "execute": {
+        "claudeModel": "opus",
+        "codexModel": "max"
+      },
+      "review": {
+        "claudeModel": "sonnet",
+        "codexModel": "mini"
+      },
+      "revise": {
+        "claudeModel": "opus",
+        "codexModel": "max"
+      }
+    },
+    "design": {
+      "execute": {
+        "claudeModel": "opus",
+        "codexModel": "max"
+      },
+      "review": {
+        "claudeModel": "sonnet",
+        "codexModel": "mini"
+      },
+      "revise": {
+        "claudeModel": "opus",
+        "codexModel": "max"
+      }
+    },
+    "test_scenario": {
+      "execute": {
+        "claudeModel": "opus",
+        "codexModel": "max"
+      },
+      "review": {
+        "claudeModel": "sonnet",
+        "codexModel": "mini"
+      },
+      "revise": {
+        "claudeModel": "opus",
+        "codexModel": "max"
+      }
+    },
+    "implementation": {
+      "execute": {
+        "claudeModel": "opus",
+        "codexModel": "max"
+      },
+      "review": {
+        "claudeModel": "sonnet",
+        "codexModel": "mini"
+      },
+      "revise": {
+        "claudeModel": "opus",
+        "codexModel": "max"
+      }
+    },
+    "test_implementation": {
+      "execute": {
+        "claudeModel": "opus",
+        "codexModel": "max"
+      },
+      "review": {
+        "claudeModel": "sonnet",
+        "codexModel": "mini"
+      },
+      "revise": {
+        "claudeModel": "opus",
+        "codexModel": "max"
+      }
+    },
+    "testing": {
+      "execute": {
+        "claudeModel": "opus",
+        "codexModel": "max"
+      },
+      "review": {
+        "claudeModel": "sonnet",
+        "codexModel": "mini"
+      },
+      "revise": {
+        "claudeModel": "opus",
+        "codexModel": "max"
+      }
+    },
+    "documentation": {
+      "execute": {
+        "claudeModel": "opus",
+        "codexModel": "max"
+      },
+      "review": {
+        "claudeModel": "sonnet",
+        "codexModel": "mini"
+      },
+      "revise": {
+        "claudeModel": "opus",
+        "codexModel": "max"
+      }
+    },
+    "report": {
+      "execute": {
+        "claudeModel": "opus",
+        "codexModel": "max"
+      },
+      "review": {
+        "claudeModel": "sonnet",
+        "codexModel": "mini"
+      },
+      "revise": {
+        "claudeModel": "opus",
+        "codexModel": "max"
+      }
+    },
+    "evaluation": {
+      "execute": {
+        "claudeModel": "opus",
+        "codexModel": "max"
+      },
+      "review": {
+        "claudeModel": "sonnet",
+        "codexModel": "mini"
+      },
+      "revise": {
+        "claudeModel": "opus",
+        "codexModel": "max"
+      }
+    }
+  },
+  "phases": {
+    "planning": {
+      "status": "pending",
+      "retry_count": 0,
+      "started_at": null,
+      "completed_at": null,
+      "review_result": null
+    },
+    "requirements": {
+      "status": "pending",
+      "retry_count": 0,
+      "started_at": null,
+      "completed_at": null,
+      "review_result": null
+    },
+    "design": {
+      "status": "pending",
+      "retry_count": 0,
+      "started_at": null,
+      "completed_at": null,
+      "review_result": null
+    },
+    "test_scenario": {
+      "status": "pending",
+      "retry_count": 0,
+      "started_at": null,
+      "completed_at": null,
+      "review_result": null
+    },
+    "implementation": {
+      "status": "pending",
+      "retry_count": 0,
+      "started_at": null,
+      "completed_at": null,
+      "review_result": null
+    },
+    "test_implementation": {
+      "status": "pending",
+      "retry_count": 0,
+      "started_at": null,
+      "completed_at": null,
+      "review_result": null
+    },
+    "testing": {
+      "status": "pending",
+      "retry_count": 0,
+      "started_at": null,
+      "completed_at": null,
+      "review_result": null
+    },
+    "documentation": {
+      "status": "pending",
+      "retry_count": 0,
+      "started_at": null,
+      "completed_at": null,
+      "review_result": null
+    },
+    "report": {
+      "status": "pending",
+      "retry_count": 0,
+      "started_at": null,
+      "completed_at": null,
+      "review_result": null
+    },
+    "evaluation": {
+      "status": "pending",
+      "retry_count": 0,
+      "started_at": null,
+      "completed_at": null,
+      "review_result": null,
+      "decision": null,
+      "failed_phase": null,
+      "remaining_tasks": [],
+      "created_issue_url": null,
+      "abort_reason": null
+    }
+  },
+  "created_at": "2025-12-27T22:31:06.385Z",
+  "updated_at": "2025-12-27T22:31:12.616Z",
+  "branch_name": "ai-workflow/issue-544",
+  "base_commit": "[REDACTED_TOKEN]"
+}
