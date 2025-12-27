@@ -4,7 +4,7 @@
   "issue_title": "Issue #544",
   "repository": "tielec/infrastructure-as-code",
   "target_repository": {
-    "path": "/tmp/ai-workflow-repos-4-71206cee/infrastructure-as-code",
+    "path": "/tmp/ai-workflow-repos-11-00b73f07/infrastructure-as-code",
     "github_name": "tielec/infrastructure-as-code",
     "remote_url": "https://github.com/tielec/infrastructure-as-code.git",
     "owner": "tielec",
@@ -15,8 +15,7 @@
   "design_decisions": {
     "[REDACTED_TOKEN]": null,
     "test_strategy": null,
-    "test_code_strategy": null,
-    "[REDACTED_TOKEN]": null
+    "test_code_strategy": null
   },
   "cost_tracking": {
     "total_input_tokens": 12973214,
@@ -305,7 +304,7 @@
           "priority": "Medium"
         },
         {
-          "task": "CI/AMIビルド前段で`[REDACTED_TOKEN]`バイナリの配備/パス検証を自動化し、欠落時に取得するステップを追加する。",
+          "task": "CI/AMIビルド前段で`amazon-cloudwatch-agent-config-translator`バイナリの配備/パス検証を自動化し、欠落時に取得するステップを追加する。",
           "phase": "general",
           "priority": "Medium"
         },
@@ -315,7 +314,7 @@
           "priority": "Medium"
         }
       ],
-      "created_issue_url": "https://__GITHUB_URL_1__/issues/546",
+      "created_issue_url": "https://github.com/tielec/infrastructure-as-code/issues/546",
       "abort_reason": null,
       "current_step": null,
       "completed_steps": [
@@ -325,13 +324,13 @@
     }
   },
   "created_at": "2025-12-27T22:31:06.385Z",
-  "updated_at": "2025-12-27T23:49:00.940Z",
+  "updated_at": "2025-12-27T23:42:15.263Z",
   "branch_name": "ai-workflow/issue-544",
   "base_commit": "[REDACTED_TOKEN]",
   "pr_number": 545,
   "pr_url": "https://__GITHUB_URL_2__/pull/545",
   "github_integration": {
     "progress_comment_id": 3694267086,
-    "[REDACTED_TOKEN]": "https://__GITHUB_URL_2__/issues/544#[REDACTED_TOKEN]"
+    "progress_comment_url": "https://github.com/tielec/infrastructure-as-code/issues/544#issuecomment-3694267086"
   }
 }
