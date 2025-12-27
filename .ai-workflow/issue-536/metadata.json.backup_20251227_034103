@@ -4,7 +4,7 @@
   "issue_title": "Issue #536",
   "repository": "tielec/infrastructure-as-code",
   "target_repository": {
-    "path": "/tmp/ai-workflow-repos-4-99cc341f/infrastructure-as-code",
+    "path": "/tmp/ai-workflow-repos-9-c05f9883/infrastructure-as-code",
     "github_name": "tielec/infrastructure-as-code",
     "remote_url": "https://github.com/tielec/infrastructure-as-code.git",
     "owner": "tielec",
@@ -15,8 +15,7 @@
   "design_decisions": {
     "[REDACTED_TOKEN]": null,
     "test_strategy": null,
-    "test_code_strategy": null,
-    "[REDACTED_TOKEN]": null
+    "test_code_strategy": null
   },
   "cost_tracking": {
     "total_input_tokens": 11316788,
@@ -308,13 +307,13 @@
     }
   },
   "created_at": "2025-12-27T01:54:29.417Z",
-  "updated_at": "2025-12-27T03:41:03.876Z",
+  "updated_at": "2025-12-27T02:54:02.712Z",
   "branch_name": "ai-workflow/issue-536",
   "base_commit": "[REDACTED_TOKEN]",
   "pr_number": 537,
   "pr_url": "https://__GITHUB_URL_2__/pull/537",
   "github_integration": {
     "progress_comment_id": 3693562512,
-    "[REDACTED_TOKEN]": "https://__GITHUB_URL_1__/issues/536#[REDACTED_TOKEN]"
+    "progress_comment_url": "https://github.com/tielec/infrastructure-as-code/issues/536#issuecomment-3693562512"
   }
 }
