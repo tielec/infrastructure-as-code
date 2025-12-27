@@ -1,0 +1,143 @@
+{
+  "version": "1.0.0",
+  "pr": {
+    "number": 523,
+    "url": "https://github.com/tielec/infrastructure-as-code/pull/523",
+    "title": "[Sub-Issue] ansible-lintのGitHub Actions CI追加 (#520)",
+    "branch": "ai-workflow/issue-522",
+    "base_branch": "main",
+    "state": "open"
+  },
+  "repository": {
+    "owner": "tielec",
+    "repo": "infrastructure-as-code",
+    "path": "/tmp/ai-workflow-repos-1-3dbc2e17/infrastructure-as-code",
+    "remote_url": "https://github.com/tielec/infrastructure-as-code.git"
+  },
+  "comments": {
+    "2638556073": {
+      "comment": {
+        "id": 2638556073,
+        "node_id": "PRRC_kwDOOFhF986dRSup",
+        "path": "jenkins/jobs/dsl/infrastructure/infrastructure_pulumi_dashboard_job.groovy",
+        "line": 63,
+        "start_line": 61,
+        "end_line": null,
+        "body": "今回の対応範囲じゃない修正がされています。直してください。",
+        "user": "yuto-takashi",
+        "created_at": "2025-12-22T03:55:49Z",
+        "updated_at": "2025-12-22T03:56:12Z",
+        "diff_hunk": "",
+        "thread_id": "PRRT_kwDOOFhF985m8kLG",
+        "pr_number": 523
+      },
+      "status": "completed",
+      "started_at": "2025-12-22T03:59:34.082Z",
+      "completed_at": "2025-12-22T03:59:35.254Z",
+      "retry_count": 0,
+      "resolution": {
+        "type": "discussion",
+        "confidence": "medium",
+        "reply": "ご指摘ありがとうございます。このPRの目的外の差分が混ざっていそうなので、該当箇所を特定して既存状態に戻します。特に気になっている部分があれば教えてください。",
+        "changes": [],
+        "analysis_notes": "The reviewer notes scope creep but no diff is shown, so we need to confirm which unintended change to revert before making a safe edit."
+      },
+      "reply_comment_id": 2638559437,
+      "resolved_at": null,
+      "error": null
+    },
+    "2638559437": {
+      "comment": {
+        "id": 2638559437,
+        "node_id": "PRRC_kwDOOFhF986dRTjN",
+        "path": "jenkins/jobs/dsl/infrastructure/infrastructure_pulumi_dashboard_job.groovy",
+        "line": 63,
+        "start_line": 61,
+        "end_line": null,
+        "body": "ご指摘ありがとうございます。このPRの目的外の差分が混ざっていそうなので、該当箇所を特定して既存状態に戻します。特に気になっている部分があれば教えてください。",
+        "user": "yuto-takashi",
+        "created_at": "2025-12-22T03:59:34Z",
+        "updated_at": "2025-12-22T03:59:34Z",
+        "diff_hunk": "",
+        "thread_id": "PRRT_kwDOOFhF985m8kLG",
+        "pr_number": 523
+      },
+      "status": "completed",
+      "started_at": "2025-12-22T12:16:43.302Z",
+      "completed_at": "2025-12-22T12:16:44.683Z",
+      "retry_count": 0,
+      "resolution": {
+        "type": "discussion",
+        "confidence": "high",
+        "reply": "PR目的外の差分を洗い出して既存状態に戻します。特に気になる箇所があれば教えてください。",
+        "changes": [],
+        "analysis_notes": "Reviewer flagged potential out-of-scope changes and asked to revert; the appropriate action is to confirm investigation/cleanup rather than prescribe a specific code edit yet."
+      },
+      "reply_comment_id": 2639690591,
+      "resolved_at": null,
+      "error": null
+    },
+    "2638566475": {
+      "comment": {
+        "id": 2638566475,
+        "node_id": "PRRC_kwDOOFhF986dRVRL",
+        "path": "jenkins/jobs/dsl/infrastructure/infrastructure_pulumi_dashboard_job.groovy",
+        "line": 63,
+        "start_line": 61,
+        "end_line": null,
+        "body": "まだ、jenkins/jobs/dsl/infrastructure/infrastructure_pulumi_dashboard_job.groovy　に変更差分が表示されています。なにか状況がおかしいです。",
+        "user": "yuto-takashi",
+        "created_at": "2025-12-22T04:05:45Z",
+        "updated_at": "2025-12-22T04:05:52Z",
+        "diff_hunk": "",
+        "thread_id": "PRRT_kwDOOFhF985m8kLG",
+        "pr_number": 523
+      },
+      "status": "completed",
+      "started_at": "2025-12-22T12:16:44.684Z",
+      "completed_at": "2025-12-22T12:16:45.668Z",
+      "retry_count": 0,
+      "resolution": {
+        "type": "discussion",
+        "confidence": "high",
+        "reply": "再度差分を確認し、意図しない変更を取り除いた上で改めてpushします。進捗が分かり次第共有します。",
+        "changes": [],
+        "analysis_notes": "Reviewer still sees diffs in the file and reports something is off; we need to re-check and clean unintended changes before proposing a concrete edit."
+      },
+      "reply_comment_id": 2639690647,
+      "resolved_at": null,
+      "error": null
+    }
+  },
+  "summary": {
+    "total": 3,
+    "by_status": {
+      "pending": 0,
+      "in_progress": 0,
+      "completed": 3,
+      "skipped": 0,
+      "failed": 0
+    },
+    "by_type": {
+      "code_change": 0,
+      "reply": 0,
+      "discussion": 3,
+      "skip": 0
+    }
+  },
+  "cost_tracking": {
+    "total_input_tokens": 0,
+    "total_output_tokens": 0,
+    "total_cost_usd": 0
+  },
+  "created_at": "2025-12-22T03:58:49.191Z",
+  "updated_at": "2025-12-22T12:16:45.668Z",
+  "analyze_completed_at": "2025-12-22T12:16:35.847Z",
+  "execute_completed_at": null,
+  "response_plan_path": "/tmp/ai-workflow-repos-57-44fbb4e1/infrastructure-as-code/.ai-workflow/pr-523/output/response-plan.md",
+  "execution_result_path": null,
+  "analyzer_agent": "codex",
+  "analyzer_error": null,
+  "analyzer_error_type": null,
+  "base_commit": "6d62f2ac2b4b7472598a9810db0ed5b97069b939"
+}

@@ -1,5 +1,7 @@
 # Jenkins CI/CD インフラストラクチャ構築
 
+[![Ansible Lint](https://github.com/tielec/infrastructure-as-code/actions/workflows/ansible-lint.yml/badge.svg)](https://github.com/tielec/infrastructure-as-code/actions/workflows/ansible-lint.yml)
+
 このリポジトリは、AWSクラウド上にJenkinsベースのCI/CD環境をAnsibleとPulumiを組み合わせて段階的に構築するためのコードを管理します。ブルーグリーンデプロイに対応したJenkinsコントローラー環境を実現し、効率的なCI/CDパイプラインを提供します。
 
 ## 📚 重要なドキュメント
@@ -7,6 +9,25 @@
 - **[ARCHITECTURE.md](ARCHITECTURE.md)** - Platform Engineeringのアーキテクチャ設計思想
 - **[CLAUDE.md](CLAUDE.md)** - Claude Code向けガイダンス
 - **[CONTRIBUTION.md](CONTRIBUTION.md)** - 開発者向けコントリビューションガイド
+
+## Ansibleコードの品質チェック
+
+ローカル環境でAnsibleコードのlintを実行する場合は以下を参考にしてください。
+
+```bash
+# 仮想環境のセットアップ（必要に応じて）
+python3 -m venv venv
+source venv/bin/activate
+
+# Lintツールのインストール
+pip install ansible-lint yamllint
+
+# ansible-lintの実行
+ansible-lint ansible/
+
+# yamllintの実行
+yamllint ansible/
+```
 
 ## 📝 変更履歴
 

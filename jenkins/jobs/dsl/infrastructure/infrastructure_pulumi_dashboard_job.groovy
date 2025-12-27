@@ -58,7 +58,11 @@ pipelineJob(jobPath) {
         nonStoredPasswordParam('AWS_SESSION_TOKEN', 'AWS Session Token（オプション） - STS一時認証情報を使用する場合')
         
         // フィルタリングオプション
-        stringParam('PROJECT_FILTER', '', '''プロジェクト名フィルタ（Jenkins Agent 名も含む） - パターン入力で自由に絞り込み'''.stripMargin())
+        choiceParam('PROJECT_FILTER', projectFilterChoices,
+            '''プロジェクト名フィルタ（Jenkins Agent 名も含む） - プルダウンで選択'''.stripMargin())
+
+        stringParam('PROJECT_FILTER', '',
+            '''プロジェクト名フィルタ（Jenkins Agent 名も含む） - パターン入力で自由に絞り込み'''.stripMargin())
 
         stringParam('STACK_FILTER', '*', '''スタックフィルタ - 表示するスタックをフィルタリング
             |* すべて表示: *

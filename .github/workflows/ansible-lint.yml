@@ -1,0 +1,38 @@
+---
+# ansible-lint CI ワークフロー
+#
+# PRでAnsibleファイル変更時にansible-lintとyamllintを自動実行
+
+name: Ansible Lint
+
+'on':
+  pull_request:
+    paths:
+      - 'ansible/**/*.yml'
+      - 'ansible/**/*.yaml'
+      - '.ansible-lint'
+      - '.yamllint'
+
+jobs:
+  ansible-lint:
+    name: Ansible Lint Check
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install lint tools
+        run: |
+          pip install ansible-lint yamllint
+
+      - name: Run ansible-lint
+        run: ansible-lint ansible/
+
+      - name: Run yamllint
+        run: yamllint ansible/
