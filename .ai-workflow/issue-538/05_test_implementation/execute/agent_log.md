@@ -611,7 +611,7 @@ Planning Documentで策定された戦略を以下に確認・踏襲します。
 ### 1.1 システム全体図
 
 ```
-infrastructure-as-code/
+[REDACTED_TOKEN]/
 ├── README.md                    # 概要 + 目次（約100行に縮小）
 ├── ARCHITECTURE.md              # 既存（変更なし）
 ├── CLAUDE.md                    # 参照更新が必要
@@ -909,18 +909,18 @@ class JobConfigYamlTests(unittest.TestCase):
         )
         # Re-use nested sections for scenario-specific checks.
         cls.projects = (
-            cls.config["pulumi-projects"]["infrastructure-as-code"]["projects"]
+            cls.config["pulumi-projects"]["[REDACTED_TOKEN]"]["projects"]
         )
         cls.ansible_playbooks = (
-            cls.config["ansible-playbooks"]["infrastructure-as-code"]["playbooks"]
+            cls.config["ansible-playbooks"]["[REDACTED_TOKEN]"]["playbooks"]
         )
 
     def [REDACTED_TOKEN](self):
         pulumi_projects = self.config.get("pulumi-projects")
         self.assertIsInstance(pulumi_projects, dict, "pulumi-projects section must exist")
 
-        infra = pulumi_projects.get("infrastructure-as-code")
-        self.assertIsInstance(infra, dict, "infrastructure-as-code section must exist")
+        infra = pulumi_projects.get("[REDACTED_TOKEN]")
+        self.assertIsInstance(infra, dict, "[REDACTED_TOKEN] section must exist")
 
         projects = infra.get("projects")
         self.assertIsInstance(projects, dict, "projects section must exist")
@@ -929,7 +929,7 @@ class JobConfigYamlTests(unittest.TestCase):
 
     def [REDACTED_TOKEN](self):
         projects = (
-            self.config["pulumi-projects"]["infrastructure-as-code"]["projects"]
+            self.config["pulumi-projects"]["[REDACTED_TOKEN]"]["projects"]
         )
         agent = projects["jenkins_agent"]
         self.assertEqual(agent.get("project_path"), "pulumi/jenkins-agent")
@@ -940,7 +940,7 @@ class JobConfigYamlTests(unittest.TestCase):
 
     def [REDACTED_TOKEN](self):
         projects = (
-            self.config["pulumi-projects"]["infrastructure-as-code"]["projects"]
+            self.config["pulumi-projects"]["[REDACTED_TOKEN]"]["projects"]
         )
         ami = projects["jenkins_agent_ami"]
         self.assertEqual(ami.get("project_path"), "pulumi/jenkins-agent-ami")
