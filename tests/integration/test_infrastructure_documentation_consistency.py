@@ -55,6 +55,16 @@ class InfrastructureDocumentationConsistencyTests(unittest.TestCase):
             doc_text,
             "The guidance section should explain when to prefer each agent type",
         )
+        self.assertIn(
+            "| コスト |",
+            doc_text,
+            "The comparison table should describe the cost tradeoffs between SpotFleet and ECS",
+        )
+        self.assertIn(
+            "| 起動速度 |",
+            doc_text,
+            "The comparison table should describe the startup speed differences between the agent types",
+        )
 
     def test_docker_agent_ecs_section_matches_artifacts(self):
         """Verify docker/jenkins-agent-ecs documentation describes actual files."""
@@ -91,6 +101,33 @@ class InfrastructureDocumentationConsistencyTests(unittest.TestCase):
                 f"agent/{param_name}",
                 pulumi_text,
                 f"{param_name} should be exported in pulumi/jenkins-agent/index.ts",
+            )
+
+    def test_readme_and_infrastructure_links_are_consistent(self):
+        """Ensure README and infrastructure.md links/reference targets remain valid."""
+        readme_text = (self.repo_root / "README.md").read_text(encoding="utf-8")
+        self.assertIn(
+            "[インフラ構成](docs/architecture/infrastructure.md)",
+            readme_text,
+            "README should link to the infrastructure documentation",
+        )
+
+        doc_text = self.infrastructure_doc.read_text(encoding="utf-8")
+        link_targets = [
+            ("README.md", "../../README.md"),
+            ("Jenkinsインフラデプロイ", "../operations/jenkins-deploy.md"),
+            ("Jenkins環境運用管理", "../operations/jenkins-management.md"),
+        ]
+        for label, rel_path in link_targets:
+            self.assertIn(
+                f"[{label}]({rel_path})",
+                doc_text,
+                f"{label} link text should remain in infrastructure.md",
+            )
+            target = (self.infrastructure_doc.parent / rel_path).resolve()
+            self.assertTrue(
+                target.exists(),
+                f"The documentation link target {target} must exist for {label}",
             )
 
 
