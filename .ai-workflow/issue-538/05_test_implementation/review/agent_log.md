@@ -20,7 +20,7 @@
 **ステータス**: completed (exit_code=0)
 
 ```text
-/tmp/ai-workflow-repos-7-77d6b70d/infrastructure-as-code
+/tmp/ai-workflow-repos-7-77d6b70d/[REDACTED_TOKEN]
 ```
 
 ## Turn 4: ツール実行
