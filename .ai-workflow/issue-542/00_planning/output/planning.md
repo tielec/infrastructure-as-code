@@ -163,9 +163,8 @@ SpotFleetは以下の動作で更新される:
 
 ### Phase 5: テストコード実装 (見積もり: 0h)
 
-- [ ] Task 5-1: 該当なし
-  - Pulumiインフラコードのため、専用テストコードは作成しない
-  - 検証はPhase 6の手動テストで実施
+- [x] Task 5-1: LaunchTemplateとドキュメント確認テストの追加
+  - `tests/integration/test_cpu_credit_unlimited.py`を作成し、x86_64/ARM64 LaunchTemplateの`creditSpecification`と`docs/architecture/infrastructure.md`のUnlimited設定記載を検証
 
 ### Phase 6: テスト実行 (見積もり: 0.5h)
 
