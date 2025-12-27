@@ -50,13 +50,20 @@ class OpenAIClient:
 
         self.model = model_name
         self.prompt_manager = prompt_manager
-        
+       
         # 再試行設定
         self.retry_config = retry_config or {
             'max_retries': self.DEFAULT_MAX_RETRIES,
             'initial_backoff': self.DEFAULT_INITIAL_BACKOFF,
             'max_backoff': self.DEFAULT_MAX_BACKOFF
         }
+        
+        try:
+            self.token_estimator = TokenEstimator(logger=self.logger)
+            self.logger.info("TokenEstimator initialized successfully")
+        except Exception as e:
+            self.logger.error(f"Failed to initialize TokenEstimator: {str(e)}")
+            raise ValueError(f"TokenEstimator initialization failed: {str(e)}")
         
         # OpenAI用のクライアント初期化
         try:
@@ -604,18 +611,18 @@ class OpenAIClient:
         """大きなファイルの内容を切り詰める"""
         # パッチの切り詰め
         if change.patch:
-            change.patch = TokenEstimator.truncate_to_token_limit(
+            change.patch = self.token_estimator.truncate_text(
                 change.patch, self.MAX_PATCH_TOKENS
             )
         
         # ファイル内容の切り詰め
         if change.content_before:
-            change.content_before = TokenEstimator.truncate_to_token_limit(
+            change.content_before = self.token_estimator.truncate_text(
                 change.content_before, self.MAX_CONTENT_TOKENS
             )
             
         if change.content_after:
-            change.content_after = TokenEstimator.truncate_to_token_limit(
+            change.content_after = self.token_estimator.truncate_text(
                 change.content_after, self.MAX_CONTENT_TOKENS
             )
 
@@ -803,7 +810,7 @@ class OpenAIClient:
         """入力サイズをトークン制限内に調整"""
         # 初回のトークン数推定
         input_json_text = json.dumps(input_json, ensure_ascii=False, indent=2)
-        estimated_tokens = TokenEstimator.estimate_tokens(input_json_text)
+        estimated_tokens = self.token_estimator.estimate_tokens(input_json_text)
         
         # 80%のマージンを超えている場合は削減
         if estimated_tokens > self.MAX_TOKENS_PER_REQUEST * 0.8:
@@ -812,7 +819,7 @@ class OpenAIClient:
             
             # 再度サイズを確認
             input_json_text = json.dumps(input_json, ensure_ascii=False, indent=2)
-            new_estimated_tokens = TokenEstimator.estimate_tokens(input_json_text)
+            new_estimated_tokens = self.token_estimator.estimate_tokens(input_json_text)
             self.logger.info(f"Reduced input size to {new_estimated_tokens} est. tokens")
             
             # それでも大きすぎる場合はさらに削減
@@ -822,14 +829,14 @@ class OpenAIClient:
                 
                 # 最終チェック
                 input_json_text = json.dumps(input_json, ensure_ascii=False, indent=2)
-                final_tokens = TokenEstimator.estimate_tokens(input_json_text)
+                final_tokens = self.token_estimator.estimate_tokens(input_json_text)
                 
                 if final_tokens > self.MAX_TOKENS_PER_REQUEST * 0.95:
                     input_json = self._reduce_input_size_final(input_json, is_single_file)
                     
                     # 最終的なトークン数確認
                     input_json_text = json.dumps(input_json, ensure_ascii=False, indent=2)
-                    very_final_tokens = TokenEstimator.estimate_tokens(input_json_text)
+                    very_final_tokens = self.token_estimator.estimate_tokens(input_json_text)
                     
                     if very_final_tokens > self.MAX_TOKENS_PER_REQUEST * 0.98:
                         raise ValueError(f"Input still too large for API ({very_final_tokens} est. tokens) even after maximum reduction")
@@ -997,7 +1004,7 @@ class OpenAIClient:
         if pr_info.body:
             pr_info_str += pr_info.body[:500]
         
-        pr_tokens = TokenEstimator.estimate_tokens(pr_info_str)
+        pr_tokens = self.token_estimator.estimate_tokens(pr_info_str)
         
         # ファイル変更の概算トークン数
         changes_tokens = 0
@@ -1015,7 +1022,7 @@ class OpenAIClient:
                 content_sample = change.content_after[:500] if len(change.content_after) > 500 else change.content_after
                 file_str += content_sample
             
-            changes_tokens += TokenEstimator.estimate_tokens(file_str)
+            changes_tokens += self.token_estimator.estimate_tokens(file_str)
         
         # 固定オーバーヘッドの追加（JSONフォーマット、プロンプトなど）
         overhead_tokens = 1000
@@ -1131,7 +1138,7 @@ class OpenAIClient:
     def _manage_analyses_token_size(self, analyses_text: str, kept_analyses: List[str], 
                                   all_files: set, skipped_files: List[FileChange]) -> str:
         """分析テキストのトークンサイズを管理"""
-        est_tokens = TokenEstimator.estimate_tokens(analyses_text)
+        est_tokens = self.token_estimator.estimate_tokens(analyses_text)
         token_limit = self.MAX_TOKENS_PER_REQUEST * 0.7
         
         if est_tokens <= token_limit:
@@ -1154,7 +1161,7 @@ class OpenAIClient:
         truncated_analyses = []
         
         for analysis in kept_analyses:
-            truncated = TokenEstimator.truncate_to_token_limit(
+            truncated = self.token_estimator.truncate_text(
                 analysis, int(max_tokens_per_chunk)
             )
             truncated_analyses.append(truncated)
@@ -1265,4 +1272,3 @@ class OpenAIClient:
             'retries': self.usage_stats['retries'],
             'skipped_files': self.usage_stats['skipped_files']
         }
-
