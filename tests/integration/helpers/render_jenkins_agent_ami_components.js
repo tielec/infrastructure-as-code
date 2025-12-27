@@ -92,6 +92,7 @@ async function main() {
       const program = await import(compiledIndexPath);
       programExports = Object.keys(program || {}).filter((key) => key !== "default" && key !== "__esModule");
     });
+    await runtime.waitForRPCs();
   } catch (error) {
     console.error("Pulumi synthesis failed", error);
     throw error;
