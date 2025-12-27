@@ -321,6 +321,9 @@ const agentLaunchTemplate = new aws.ec2.LaunchTemplate(`agent-lt`, {
         ipv6AddressCount: 1,  // IPv6アドレスを1つ割り当て
         securityGroups: [jenkinsAgentSecurityGroupId],
     }],
+    creditSpecification: {
+        cpuCredits: "unlimited",
+    },
     tagSpecifications: [{
         resourceType: "instance",
         tags: {
@@ -421,6 +424,9 @@ const agentLaunchTemplateArm = new aws.ec2.LaunchTemplate(`agent-lt-arm`, {
         ipv6AddressCount: 1,  // IPv6アドレスを1つ割り当て
         securityGroups: [jenkinsAgentSecurityGroupId],
     }],
+    creditSpecification: {
+        cpuCredits: "unlimited",
+    },
     tagSpecifications: [{
         resourceType: "instance",
         tags: {

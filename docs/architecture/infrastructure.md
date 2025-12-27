@@ -113,6 +113,39 @@ infrastructure-as-code/
 - 短時間かつスケールが必要なタスク、たとえば並列ビルド/テストは ECS Fargate エージェントへ切り替え
 - Jenkins からは両方のエージェントを amazon-ecs プラグインと SpotFleet プラグインで個別に管理し、SSM パラメータ経由で接続情報を取得
 
+### CPUクレジット設定
+
+SpotFleet エージェントで利用する t3/t3a/t4g 系インスタンスには、CPU クレジットの Unlimited モードを適用しています。
+
+#### 設定概要
+
+| 設定項目 | 値 |
+|---------|-----|
+| creditSpecification.cpuCredits | "unlimited" |
+| 対象 LaunchTemplate | agent-lt (x86_64), agent-lt-arm (ARM64) |
+| 対象インスタンスタイプ | t3a.medium/small/micro, t3.medium/small/micro, t4g.medium/small/micro |
+
+#### モード比較
+
+| モード | 動作 | コスト |
+|--------|------|--------|
+| standard | クレジット枯渇時にベースライン CPU へ制限（スロットリング） | 追加コストなし |
+| unlimited | クレジット枯渇後も高い CPU 使用率を維持 | 超過分が追加課金 |
+
+#### 適用理由
+
+- CI/CD の高負荷ジョブで CPU クレジット枯渇によるスロットリングを回避
+- ビルド/テスト時間の予期せぬ延伸やタイムアウトを防止
+- Jenkins エージェント性能の安定化によるパイプライン信頼性向上
+
+#### コスト注意事項
+
+Unlimited モードではベースライン超過分が課金対象となるため、CloudWatch の `CPUSurplusCreditBalance` を監視し、Billing アラートで追加コストを捕捉することを推奨します。
+
+#### 適用とローリング更新
+
+Pulumi で LaunchTemplate を更新すると新しいバージョンが作成され、SpotFleet は `latestVersion` を参照するため新規起動インスタンスから自動的に Unlimited 設定が適用されます。既存インスタンスは終了時に順次置き換わります。
+
 ## ECS Fargateエージェント詳細
 
 `pulumi/jenkins-agent/index.ts` の 739 行以降では、ECS Fargate エージェント用の Cluster、ECR、Task Definition、IAM Role、CloudWatch Logs が定義され、各リソースは SSM パラメータとして Jenkins に提供されます。
