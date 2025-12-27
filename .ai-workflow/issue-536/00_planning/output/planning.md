@@ -162,10 +162,10 @@ jenkins/jobs/pipeline/docs-generator/pull-request-comment-builder/
 
 ### Phase 7: ドキュメント (見積もり: 0.5h)
 
-- [ ] Task 7-1: 修正内容ドキュメント作成 (0.3h)
+- [x] Task 7-1: 修正内容ドキュメント作成 (0.3h)
   - TokenEstimatorの正しい使用方法の説明
   - 修正したメソッド呼び出しの一覧
-- [ ] Task 7-2: トラブルシューティング情報更新 (0.2h)
+- [x] Task 7-2: トラブルシューティング情報更新 (0.2h)
   - 同様のエラーの解決方法の記載
   - 開発者向けベストプラクティスの追加
 
@@ -253,9 +253,9 @@ graph TD
 - [x] エラーログに"TokenEstimator.estimate_tokens() missing 1 required positional argument"が出現しない
 
 ### Phase 7: ドキュメント
-- [ ] 修正内容が明確にドキュメント化されている
-- [ ] TokenEstimatorの正しい使用方法が説明されている
-- [ ] トラブルシューティング情報が更新されている
+- [x] 修正内容が明確にドキュメント化されている
+- [x] TokenEstimatorの正しい使用方法が説明されている
+- [x] トラブルシューティング情報が更新されている
 
 ### Phase 8: レポート
 - [ ] 修正完了レポートが作成されている
