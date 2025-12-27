@@ -39,6 +39,9 @@ class TokenEstimator:
         Returns:
             int: 推定トークン数
         """
+        if text is None:
+            raise TypeError("text must not be None")
+
         if not text:
             return 0
 
@@ -67,6 +70,9 @@ class TokenEstimator:
         Returns:
             str: 切り詰められたテキスト
         """
+        if max_tokens <= 0:
+            return ""
+
         if self.estimate_tokens(text) <= max_tokens:
             return text
 
