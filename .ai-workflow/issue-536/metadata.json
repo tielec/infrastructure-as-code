@@ -11,16 +11,16 @@
     "repo": "infrastructure-as-code"
   },
   "workflow_version": "1.0.0",
-  "current_phase": "design",
+  "current_phase": "test_scenario",
   "design_decisions": {
     "[REDACTED_TOKEN]": null,
     "test_strategy": null,
     "test_code_strategy": null
   },
   "cost_tracking": {
-    "total_input_tokens": 133,
-    "total_output_tokens": 31422,
-    "total_cost_usd": 2.2677055
+    "total_input_tokens": 201,
+    "total_output_tokens": 47386,
+    "total_cost_usd": 2.8124059
   },
   "difficulty_analysis": {
     "level": "simple",
@@ -203,22 +203,24 @@
       ]
     },
     "design": {
-      "status": "in_progress",
+      "status": "completed",
       "retry_count": 0,
       "started_at": "2025-12-27T02:01:33.358Z",
-      "completed_at": null,
+      "completed_at": "2025-12-27T02:05:55.604Z",
       "review_result": null,
-      "current_step": "review",
+      "current_step": null,
       "completed_steps": [
-        "execute"
+        "execute",
+        "review"
       ]
     },
     "test_scenario": {
-      "status": "pending",
+      "status": "in_progress",
       "retry_count": 0,
-      "started_at": null,
+      "started_at": "2025-12-27T02:05:56.146Z",
       "completed_at": null,
-      "review_result": null
+      "review_result": null,
+      "current_step": "execute"
     },
     "implementation": {
       "status": "pending",
@@ -269,7 +271,7 @@
     }
   },
   "created_at": "2025-12-27T01:54:29.417Z",
-  "updated_at": "2025-12-27T02:05:52.551Z",
+  "updated_at": "2025-12-27T02:09:52.418Z",
   "branch_name": "ai-workflow/issue-536",
   "base_commit": "[REDACTED_TOKEN]",
   "pr_number": 537,
