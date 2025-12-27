@@ -167,7 +167,7 @@ phases:
                 echo "ERROR: Translator not found at $TRANSLATOR"
                 exit 1
               fi
-              "$TRANSLATOR" -input "$CONFIG_PATH" -format json -output "$OUTPUT_PATH"
+              "$TRANSLATOR" -input /opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json -format json -output /tmp/cwagent.translated.json
             - cat /tmp/cwagent.translated.json
 
       - name: EnableCloudWatchAgent

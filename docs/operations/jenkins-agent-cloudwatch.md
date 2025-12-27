@@ -11,7 +11,7 @@ Jenkins Agent AMI へ追加した CloudWatch Agent の CPU メトリクスを活
 - フィルタ例: `jenkins-agent-*-asg` をワイルドカード指定し、ARM/x86 混在を許容
 
 ## アラーム初期値（例）
-- 条件: CPU 使用率が **80% 超過** の状態が **5 分間** 継続
+- 条件: CPU 使用率が **80% 超過** の状態が 5 分 (約 5 minutes) 継続
 - ディメンション: `AutoScalingGroupName`（Auto Scaling グループ単位で通知）
 - 推奨アクション: Slack/PagerDuty 等の通知トピックへ連携
 - 備考: Translate 済み設定で 60 秒間隔収集を前提としています
