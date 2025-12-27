@@ -151,13 +151,13 @@ SpotFleetは以下の動作で更新される:
 
 ### Phase 4: 実装 (見積もり: 0.5h)
 
-- [ ] Task 4-1: x86_64用LaunchTemplateの修正 (0.2h)
+- [x] Task 4-1: x86_64用LaunchTemplateの修正 (0.2h)
   - `agentLaunchTemplate`に`creditSpecification`プロパティを追加
   - `cpuCredits: "unlimited"`を設定
-- [ ] Task 4-2: ARM64用LaunchTemplateの修正 (0.2h)
+- [x] Task 4-2: ARM64用LaunchTemplateの修正 (0.2h)
   - `agentLaunchTemplateArm`に`creditSpecification`プロパティを追加
   - `cpuCredits: "unlimited"`を設定
-- [ ] Task 4-3: コード品質確認 (0.1h)
+- [x] Task 4-3: コード品質確認 (0.1h)
   - TypeScriptの型エラーがないことを確認
   - 既存のコードスタイルとの整合性確認
 
