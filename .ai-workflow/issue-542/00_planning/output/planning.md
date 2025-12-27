@@ -132,11 +132,11 @@ SpotFleetは以下の動作で更新される:
 
 ### Phase 2: 設計 (見積もり: 0.25h)
 
-- [ ] Task 2-1: 変更箇所の特定と設計 (0.15h)
+- [x] Task 2-1: 変更箇所の特定と設計 (0.15h)
   - `agentLaunchTemplate`（293行目付近）への追加位置決定
   - `agentLaunchTemplateArm`（393行目付近）への追加位置決定
   - プロパティ追加の構文確認（Pulumi AWS provider）
-- [ ] Task 2-2: コスト影響の確認 (0.1h)
+- [x] Task 2-2: コスト影響の確認 (0.1h)
   - Unlimited設定によるCPUクレジット追加料金の理解
   - ドキュメントへの注意事項記載内容の検討
 
