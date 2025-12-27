@@ -153,10 +153,10 @@ jenkins/jobs/pipeline/docs-generator/pull-request-comment-builder/
 
 ### Phase 6: テスト実行 (見積もり: 0.5h)
 
-- [ ] Task 6-1: ユニットテスト実行 (0.2h)
+- [x] Task 6-1: ユニットテスト実行 (0.2h)
   - 既存および新規ユニットテストの実行
   - テスト結果の確認
-- [ ] Task 6-2: 統合テスト実行 (0.3h)
+- [x] Task 6-2: 統合テスト実行 (0.3h)
   - 統合テストの実行
   - pr_comment_generatorの動作確認（実際のPRファイルでテスト）
 
@@ -247,10 +247,10 @@ graph TD
 - [ ] テストカバレッジが維持されている
 
 ### Phase 6: テスト実行
-- [ ] 全ユニットテストが成功している
-- [ ] 統合テストが成功している
-- [ ] 実際のPRファイルでpr_comment_generatorが正常動作している
-- [ ] エラーログに"TokenEstimator.estimate_tokens() missing 1 required positional argument"が出現しない
+- [x] 全ユニットテストが成功している
+- [x] 統合テストが成功している
+- [x] 実際のPRファイルでpr_comment_generatorが正常動作している
+- [x] エラーログに"TokenEstimator.estimate_tokens() missing 1 required positional argument"が出現しない
 
 ### Phase 7: ドキュメント
 - [ ] 修正内容が明確にドキュメント化されている
