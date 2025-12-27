@@ -2127,7 +2127,7 @@ git checkout archive/ai-workflow-v1-python -- scripts/ai-workflow/
 ## Turn 112: ツール実行
 
 **種別**: コマンド実行
-**コマンド**: `/bin/bash -lc 'cd /tmp/ai-workflow-repos-11-00b73f07/infrastructure-as-code && python -m unittest tests/integration/[REDACTED_TOKEN].py'`
+**コマンド**: `/bin/bash -lc 'cd /tmp/ai-workflow-repos-11-00b73f07/[REDACTED_TOKEN] && python -m unittest tests/integration/[REDACTED_TOKEN].py'`
 **ステータス**: failed (exit_code=127)
 
 ```text
@@ -2286,7 +2286,7 @@ revise
 ## Turn 134: ツール実行
 
 **種別**: コマンド実行
-**コマンド**: `/bin/bash -lc 'cd /tmp/ai-workflow-repos-11-00b73f07/infrastructure-as-code && git status --short'`
+**コマンド**: `/bin/bash -lc 'cd /tmp/ai-workflow-repos-11-00b73f07/[REDACTED_TOKEN] && git status --short'`
 **ステータス**: completed (exit_code=0)
 
 ```text

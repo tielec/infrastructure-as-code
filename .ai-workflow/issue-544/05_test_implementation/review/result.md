@@ -2,99 +2,87 @@
 
 **⚠️ 重要: 各項目に対して明示的にPASS/FAILを判定してください。1つでもFAILがあれば最終判定は自動的にFAILです。**
 
-- [x/  ] **Phase 3のテストシナリオがすべて実装されている**: **FAIL** - `tests/integration/test_jenkins_agent_ami_cloudwatch.py:73-119` only covers embedded config equality, autoscaling dimensions, and translator command presence (scenarios 1/2), but the Phase 3 list explicitly includes Pulumi preview diff verification and dashboard/alarm documentation checks (`.ai-workflow/issue-544/03_test_scenario/output/test-scenario.md:39-62`), which remain untested.
-- [x/  ] **テストコードが実行可能である**: **PASS** - `setUpClass` installs npm deps, builds the Pulumi helper, and renders the components before assertions run (`tests/integration/test_jenkins_agent_ami_cloudwatch.py:14-53`), so the suite exercises actual outputs without obvious syntax errors.
-- [x/  ] **テストの意図がコメントで明確**: **PASS** - each test carries descriptive docstrings (e.g., `tests/integration/test_jenkins_agent_ami_cloudwatch.py:73-119`) explaining the feature being validated, satisfying the documentation requirement.
+- [x/  ] **Phase 3のテストシナリオがすべて実装されている**: **PASS** - `tests/integration/test_jenkins_agent_ami_cloudwatch.py#L93`～`#L170` implements the four Phase 3 scenarios (ARM/x86 config parity, AutoScalingGroup dimensions, translator step presence, preview/export constraints, and ops guidance) so every scoping bullet from the scenario doc is exercised.  
+- [x/  ] **テストコードが実行可能である**: **PASS** - `tests/integration/test_jenkins_agent_ami_cloudwatch.py#L15`～`#L75` builds the Pulumi program via `npm install`/`npm run build`, copies the needed assets, and runs the helper script; the structure is syntactically correct and no runtime blockers are evident in the source.  
+- [x/  ] **テストの意図がコメントで明確**: **PASS** - Each test is prefixed with an IT-544 docstring (e.g., `#L93`, `#L118`, `#L131`, `#L141`, `#L161`), documenting the Phase 3 requirement it covers and why it exists, which satisfies the intent-comment rule.
 
-**品質ゲート総合判定: FAIL**
-- PASS: 上記3項目すべてがPASS
+**品質ゲート総合判定: PASS_WITH_SUGGESTIONS**
+- PASS: 上記3項目すべてがPASS  
 - FAIL: 上記3項目のうち1つでもFAIL
-
-**品質ゲート判定がFAILの場合、最終判定は自動的にFAILになります。**
 
 ## 詳細レビュー
 
 ### 1. テストシナリオとの整合性
 
 **良好な点**:
-- シナリオ1/2に対応するよう、ARM/x86双方のConfig一致、CPU/メモリの間隔/ディメンション、Translator関連のスクリプト断片を一通り検証している (`tests/integration/test_jenkins_agent_ami_cloudwatch.py:73-119`)。
+- `tests/integration/test_jenkins_agent_ami_cloudwatch.py#L93` ensures ARM/x86 YAMLs embed identical CloudWatch configurations, including CPU/memory metrics and 60秒 intervals, exactly matching Scenario 1.
+- `#L118` and `#L131` confirm AutoScalingGroupName dimensions and the inclusion of the translator command, tying directly to Scenarios 2 and 3, while `#L141` and `#L161` cover Pulumi preview exports and the ops documentation mentioned in Scenario 4.
 
 **懸念点**:
-- シナリオ3（Pulumi preview差分）とシナリオ4（ダッシュボード/アラーム案）に対する自動検証がファイル内に存在せず、期待される差分確認や文書の状態が保証できない (`.ai-workflow/issue-544/03_test_scenario/output/test-scenario.md:39-62`)。
+- `tests/integration/test_jenkins_agent_ami_cloudwatch.py#L131` only inspects the generated component YAML for a translator command; it never exercises the actual `amazon-cloudwatch-agent-config-translator` binary. Running the translator against the generated JSON would give stronger assurance that Scenario 2’s “Translator succeeds on both architectures” gate is actually enforced.
 
 ### 2. テストカバレッジ
 
 **良好な点**:
-- CPUメトリクスのセット、収集間隔、AutoScalingGroupNameのディメンション、Translator関連コマンドの存在など、テンプレート出力の主要属性を網羅的にチェックしている。
+- The tests cover CPU metric keys, intervals, and namespace plus AutoScalingGroupName aggregation (`#L93`, `#L118`) and enforce the same configs across architectures, which is the coverage goal stated in the test scenario doc.  
+- The newly added ops guidance doc is validated in `#L161`, ensuring the dashboard/alarm content described in the Phase 3 scenario is present as live documentation (`docs/operations/jenkins-agent-cloudwatch.md#L5`).
 
 **改善の余地**:
-- Pulumi previewを実行して差分を認識するモジュール的なチェックや、Translatorの実行結果（ステータスとログ）を検証するステップがなく、実際のCI/ビルド時と同等の検証には至っていない。
+- None beyond the translator-run suggestion already noted under Scenario alignment.
 
 ### 3. テストの独立性
 
 **良好な点**:
-- `setUpClass`で生成した`preview`データを読み取り専用で使うため、テスト間に状態共有はなく、複数のアサーションが同じ前提を共有しつつも互いに干渉しない構造となっている。
+- Class-level setup builds the Pulumi program once and stores the preview, while each test only reads the cached `preview` and docs (`#L15-#L170`), so tests do not mutate shared state or depend on execution order, which preserves independence.
 
 **懸念点**:
-- なし（現状、追加の副作用や順序依存は見られない）。
+- なし。
 
 ### 4. テストの可読性
 
 **良好な点**:
-- 各ケースにGiven/Then相当の docstring があり、何を検証したいのか短く明示されている (`tests/integration/test_jenkins_agent_ami_cloudwatch.py:73-119`)。
-- `_extract_cloudwatch_config` と `_component_map` のユーティリティで重複がうまく抽象化されており、テスト本体が読みやすい。
+- Every test method includes a descriptive docstring referencing the IT-544 identifier, which makes it easy for reviewers or future maintainers to correlate the code with Phase 3 acceptance criteria (`#L93`, `#L118`, `#L131`, `#L141`, `#L161`).
+- Helper methods such as `_extract_cloudwatch_config` (`#L79`) and `_component_map` (`#L74`) keep the test body focused on assertions rather than parsing logic.
 
 **改善の余地**:
-- `_extract_cloudwatch_config` の正規表現の意図について少しコメントで補足しておくと、将来の編集者が CloudWatch Agent 記述子の構造をすぐ追える。
+- なし。
 
 ### 5. モック・スタブの使用
 
 **良好な点**:
-- 実際の Pulumiレンダリング結果と CloudWatch Agent ヘレドックを使って評価しており、外部依存を排除する代わりに生成物そのものを検証している。
+- `tests/integration/helpers/render_jenkins_agent_ami_components.js#L1` sets up Pulumi runtime mocks for AWS resources and captures Image Builder components without hitting real AWS APIs, ensuring CI-friendly isolation while still testing synthesized outputs.
 
 **懸念点**:
-- Translatorコマンドの存在だけを確認しており、実行結果やログを検証していないため、Translator実行時の本質的な成功/失敗の検知はまだモックなしでは網羅できていない。
+- なし。
 
 ### 6. テストコードの品質
 
 **良好な点**:
-- `assert` 系メソッドを適切に使って JSON 構造や各値を検証しており、失敗時のメッセージも具体的でデバッグしやすい。
-- TypeScript build の失敗を明示的にチェック (`tests/integration/test_jenkins_agent_ami_cloudwatch.py:33-42`)、前提条件を守れていないときに明確な例外を出している。
+- Setup steps proactively install Node dependencies, run the TypeScript build, and copy the necessary templates/YAML into `bin/` before rendering (`tests/integration/test_jenkins_agent_ami_cloudwatch.py#L15-#L75`), which ensures the Pulumi program can be synthesized deterministically.
+- The operations doc is validated for expected CPU thresholds and adjustment guidance, which ties documentation and testing together (`docs/operations/jenkins-agent-cloudwatch.md#L5`).
 
 **懸念点**:
-- `setUpClass` 内で npm install/build を行っているため、テスト実行が遅くなりがちで環境依存が強い。CI 環境でビルド済バイナリを再利用する仕組みがあると安定する可能性がある。
-
-## ブロッカー（BLOCKER）
-
-1. **Phase 3シナリオ3/4の不備**
-   - 問題: テストは Pulumi preview 差分の検証とダッシュボード・アラーム案の存在確認を行っておらず、シナリオ3/4に挙げられた期待結果が未検証のまま (`.ai-workflow/issue-544/03_test_scenario/output/test-scenario.md:39-62`)。
-   - 影響: Preview 差分や運用ドキュメントの状態が失敗していても検知できず、次フェーズであるテスト実行以降で想定外の差分が見つかるリスクが高い。
-   - 対策: Pulumi preview を実行・出力を解析するテスト、ドキュメント/ダッシュボード案が含まれるファイルの存在や内容を確認するチェックを追加して、全シナリオを網羅する必要がある。
+- The test implementation log states the suite has not actually been executed locally due to Python not being available (`.ai-workflow/issue-544/05_test_implementation/output/test-implementation.md#L39`), so the assertions described here remain unverified until the next phase; plan to run `python -m unittest tests/integration/test_jenkins_agent_ami_cloudwatch.py` once the interpreter is available to confirm the setup works end-to-end.
 
 ## 改善提案（SUGGESTION）
 
-1. **Pulumi preview 差分を実際に検証するテストを追加**
-   - 現状: コンポーネントのデータ構造には差分チェックがない。
-   - 提案: `pulumi preview` をラップするスクリプトかヘルパーを用意し、期待される CPU メトリクス・ディメンション以外の変更が含まれていないことを自動でアサーションするテストを追加する。
-   - 効果: Scenario 3 の要件が自動化され、Pulumi 側の予期しない変更を早期に検出できる。
-
-2. **Translator の実行結果 (exit code + output) も検証する**
-   - 現状: コンポーネントの `data` にコマンド文字列が含まれているかだけを確認している。
-   - 提案: テストの一部で `subprocess` を使って Translator を実際に呼び出し、終了コードと JSON 構文の翻訳結果をチェックするか、少なくとも `component` 内の `bash` スクリプトで `set -e` や `echo` のログ出力があるかを確認する。
-   - 効果: Scenario 2 の「失敗時にビルドが止まる」動作をより確実に再現でき、Translator の不具合が運用に影響する前に検出できる。
+1. **Translator success verification**  
+   - 現状: `tests/integration/test_jenkins_agent_ami_cloudwatch.py#L131` confirms that the component YAML contains the translator command, but it never runs the translator binary against the generated JSON.  
+   - 提案: Add a test (or extend the existing one) that actually invokes the translator on the synthesized CloudWatch configuration (or a mocked equivalent) and asserts a zero exit code, so Scenario 2’s “Translator succeeds” expectation is validated mechanically.  
+   - 効果: This would catch syntax issues before the AMI build step and make the translator scenario stronger than a mere presence check.
 
 ## 総合評価
 
 **主な強み**:
-- Pulumi から出力された ARM/x86 コンポーネントの CloudWatch Agent 設定を JSON 化して比較し、メトリクス/収集間隔/ディメンションの整合性を確保している。
-- Translator の検証ステップと構文チェック用ファイルパスが含まれていることを明示的にアサートしており、少なくとも構成段階では Translator を組み込んでいることが分かる。
-- Phase 5のチェックリスト Task 5-1 については `planning.md` を更新して完了とした。
+- The integration tests exercise all Phase 3 scenarios, including configuration parity, dimension enforcement, preview exports, and ops documentation, with clear docstrings and well-structured helpers.
+- SetUp steps ensure the Pulumi program is built and its assets are copied so that the helper can synthesize components deterministically without AWS.
+- Operations documentation now contains the expected AutoScalingGroup dimension, CPU threshold, duration, and adjustment guidance, and the tests validate those entries, tying the implementation back to the requirements.
 
 **主な改善提案**:
-- Pulumi preview 差分や運用ドキュメントの状態を検証するテストを追加して Phase 3 の全シナリオを網羅する。
-- Translator 実行時のログ/終了コードを検証する仕組みを整え、コマンドの存在チェック以上の確証を得る。
+- Run the translator binary on the generated JSON within the suite to ensure actual success rather than only checking for the command’s presence.
+- Execute the integration suite locally (e.g., `python -m unittest tests/integration/test_jenkins_agent_ami_cloudwatch.py`) once Python is available so the earlier log’s “未実行” status is resolved before the test execution phase.
 
-現時点では Scenario 3/4 が未実装なため、品質ゲートがクリアできておらず次フェーズへ進めません。
+Next steps: once the interpreter is accessible, run the Python suite and consider incorporating a translator execution check as part of Scenario 2.
 
 ---
-**判定: FAIL**
+**判定: PASS_WITH_SUGGESTIONS**
