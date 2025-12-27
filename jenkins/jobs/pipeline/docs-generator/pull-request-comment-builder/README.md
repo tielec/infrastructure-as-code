@@ -57,6 +57,7 @@ PR情報とファイル変更のデータモデルを定義します。
 
 - 日本語・英語混在テキストのトークン数推定
 - バイナリサーチによる効率的なテキスト切り詰め
+- インスタンスベース設計により、ロガーを保持してデバッグ情報を出力
 
 #### prompt_manager.py
 プロンプトテンプレートの管理を行います。
@@ -69,7 +70,7 @@ PR情報とファイル変更のデータモデルを定義します。
 OpenAI APIとの通信を管理します。
 
 - API呼び出し（指数バックオフリトライ付き）
-- トークン使用量の追跡
+- トークン使用量の追跡（TokenEstimatorインスタンスを内部で使用）
 - プロンプトと結果の保存（デバッグ用）
 - 入力サイズの最適化
 
@@ -196,6 +197,19 @@ pip install -r requirements.txt
 export PYTHONPATH="/path/to/pull-request-comment-builder/src:$PYTHONPATH"
 ```
 
+### TokenEstimator関連エラー
+
+```bash
+# エラー例: TokenEstimator.estimate_tokens() missing 1 required positional argument: 'text'
+# 原因: TokenEstimatorの使用方法が間違っている
+
+# 修正済み（Issue #536で解決）
+# 旧形式（エラー）: TokenEstimator.estimate_tokens(text)
+# 新形式（正常）: token_estimator_instance.estimate_tokens(text)
+```
+
+TokenEstimatorクラスはインスタンスベースで使用する設計になっています。詳細は[Issue #536](.ai-workflow/issue-536/02_design/output/design.md)の設計書を参照してください。
+
 ## 関連ドキュメント
 
 ### Issue #445（初期実装）
@@ -212,3 +226,12 @@ export PYTHONPATH="/path/to/pull-request-comment-builder/src:$PYTHONPATH"
 - [テストシナリオ](.ai-workflow/issue-528/03_test_scenario/output/test-scenario.md)
 - [実装ログ](.ai-workflow/issue-528/04_implementation/output/implementation.md)
 - [テスト実装ログ](.ai-workflow/issue-528/05_test_implementation/output/test-implementation.md)
+
+### Issue #536（TokenEstimator使用方法修正）
+- [計画書](.ai-workflow/issue-536/00_planning/output/planning.md)
+- [要件定義書](.ai-workflow/issue-536/01_requirements/output/requirements.md)
+- [設計書](.ai-workflow/issue-536/02_design/output/design.md)
+- [テストシナリオ](.ai-workflow/issue-536/03_test_scenario/output/test-scenario.md)
+- [実装ログ](.ai-workflow/issue-536/04_implementation/output/implementation.md)
+- [テスト実装ログ](.ai-workflow/issue-536/05_test_implementation/output/test-implementation.md)
+- [テスト実行結果](.ai-workflow/issue-536/06_testing/output/test-result.md)
