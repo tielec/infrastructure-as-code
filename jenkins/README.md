@@ -273,11 +273,13 @@ Jenkins設定は以下の方法で管理されています：
 
 ### ECS Fargateエージェント
 
-- Pulumi `jenkins-agent`スタックでECS Cluster/Task Definition/ECR/Log Groupを作成し、SSM `/jenkins-infra/{env}/agent/ecs-*` にARN/URLを公開
-- JCasCで`ecs-fargate`クラウドと`fargate-agent`テンプレートを登録（ラベル: `ecs-agent fargate-agent`）
-- 事前に `docker/jenkins-agent-ecs` イメージをビルドしてECRへプッシュ（Task Definitionは`latest`タグを参照）
-- ネットワークは既存の`jenkins-agent-sg`とプライベートサブネットA/Bを使用し、assignPublicIp=false（JNLP:50000）
+- **構成**: Pulumi `jenkins-agent`スタックでECS Cluster/Task Definition/ECR Repository/CloudWatch Logs Groupを作成
+- **SSMパラメータ**: `/jenkins-infra/{env}/agent/ecs-*` にリソースARN/URLを公開（詳細は[インフラ構成](../docs/architecture/infrastructure.md)を参照）
+- **エージェントラベル**: `ecs-agent fargate-agent`（JCasCで自動設定）
+- **Dockerイメージ**: `docker/jenkins-agent-ecs`ディレクトリで管理、ECRにプッシュしてTask Definitionで参照
+- **ネットワーク**: 既存の`jenkins-agent-sg`とプライベートサブネットA/Bを使用、assignPublicIp=false（JNLP:50000）
 - **VPC内部接続**: Route 53プライベートホストゾーン（`jenkins.internal`）でWebSocket接続を安定化（Issue #497対応）
+- **SpotFleetとの併存**: 用途に応じて使い分け可能（起動速度重視はECS、コスト重視はSpotFleet）
 
 ## セキュリティ
 
