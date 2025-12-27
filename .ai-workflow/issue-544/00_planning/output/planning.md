@@ -25,10 +25,10 @@
   - CloudWatch料金影響の範囲と許容値を合意
 
 ### Phase 2: 設計 (見積もり: 3h)
-- [ ] Task 2-1: 共通テンプレート設計 (2h)
+- [x] Task 2-1: 共通テンプレート設計 (2h)
   - CPU/メモリメトリクス共通ブロックの定義方式（YAMLアンカー/Here-doc等）を決定
   - ARM/x86生成パイプラインへの適用方針を策定
-- [ ] Task 2-2: 検証手順設計 (1h)
+- [x] Task 2-2: 検証手順設計 (1h)
   - `amazon-cloudwatch-agent-config-translator`利用手順をARM/x86両方で定義
   - Pulumi preview/plan での差分確認項目を明文化
 
