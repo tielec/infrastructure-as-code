@@ -17,10 +17,10 @@
 
 ## 4. タスク分割
 ### Phase 1: 要件定義 (見積もり: 2h)
-- [ ] Task 1-1: CPUメトリクス要件精査 (1h)
+- [x] Task 1-1: CPUメトリクス要件精査 (1h)
   - 収集対象メトリクス（active/user/system/iowait）と収集間隔60秒を確認
   - aggregation_dimensionsをAutoScalingGroupName単一に固定する要件の確定
-- [ ] Task 1-2: 対象範囲と除外条件の明確化 (1h)
+- [x] Task 1-2: 対象範囲と除外条件の明確化 (1h)
   - ARM/x86双方の対象確認
   - CloudWatch料金影響の範囲と許容値を合意
 
