@@ -181,10 +181,10 @@ SpotFleetは以下の動作で更新される:
 
 ### Phase 7: ドキュメント (見積もり: 0.5h)
 
-- [ ] Task 7-1: インフラ構成ドキュメント更新 (0.3h)
+- [x] Task 7-1: インフラ構成ドキュメント更新 (0.3h)
   - `docs/architecture/infrastructure.md`にUnlimited設定の説明追加
   - コスト影響に関する注意事項の記載
-- [ ] Task 7-2: pulumi/README.md確認 (0.2h)
+- [x] Task 7-2: pulumi/README.md確認 (0.2h)
   - jenkins-agentスタックに関する説明の確認
   - 必要に応じて変更点を追記
 
@@ -282,9 +282,9 @@ graph TD
 - [ ] AWSコンソールでLaunchTemplateの設定が反映されている
 
 ### Phase 7: ドキュメント
-- [ ] `docs/architecture/infrastructure.md`にUnlimited設定の説明が追加されている
-- [ ] コスト注意事項が記載されている
-- [ ] 関連するREADMEが必要に応じて更新されている
+- [x] `docs/architecture/infrastructure.md`にUnlimited設定の説明が追加されている
+- [x] コスト注意事項が記載されている
+- [x] 関連するREADMEが必要に応じて更新されている
 
 ### Phase 8: レポート
 - [ ] 変更内容のサマリーが作成されている
