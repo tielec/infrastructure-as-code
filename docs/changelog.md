@@ -2,6 +2,21 @@
 
 > 📖 **親ドキュメント**: [README.md](../README.md)
 
+## 2024-01-23: ECS Fargateエージェント構成のドキュメント化完了
+
+Jenkins Agent infrastructure の ECS Fargate 構成に関するドキュメントを整備しました。
+
+- **対象ドキュメント**: `docs/architecture/infrastructure.md`
+- **追加内容**:
+  - ECS Fargate エージェント専用セクション（構成詳細、SSMパラメータ一覧）
+  - SpotFleet と ECS Fargate の併存関係および使い分け指針
+  - `docker/jenkins-agent-ecs` ディレクトリの役割と利用手順
+- **更新ドキュメント**: `jenkins/README.md` - ECS Fargateエージェント情報の詳細化
+- **関連Issue**: [#540](https://github.com/tielec/infrastructure-as-code/issues/540)
+- **実装との整合性**: 統合テストで検証済み（100%成功率）
+
+これにより、エージェント管理やトラブルシューティング時の正確な手順参照が可能となり、運用効率が向上しました。
+
 ## 2025-10-16: AI Workflow V1 (Python版) の削除完了
 
 AI Workflow V2 (TypeScript版) への移行が完了し、V1 (Python版) を削除しました。
