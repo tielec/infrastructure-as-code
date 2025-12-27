@@ -31,9 +31,8 @@
 - [x] Task 2-2: 検証手順設計 (1h)
   - `amazon-cloudwatch-agent-config-translator`利用手順をARM/x86両方で定義
   - Pulumi preview/plan での差分確認項目を明文化
-
 ### Phase 3: テストシナリオ (見積もり: 2h)
-- [ ] Task 3-1: 検証ケース作成 (2h)
+- [x] Task 3-1: 検証ケース作成 (2h)
   - CPUメトリクスがAutoScalingGroupName単一ディメンションで出力されることを確認する手順
   - ARM/x86の生成ファイル差分がないことを確認する比較手順
 
