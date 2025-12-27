@@ -18,8 +18,8 @@
     "test_code_strategy": null
   },
   "cost_tracking": {
-    "total_input_tokens": 0,
-    "total_output_tokens": 0,
+    "total_input_tokens": 51192,
+    "total_output_tokens": 3701,
     "total_cost_usd": 0
   },
   "difficulty_analysis": {
@@ -179,11 +179,12 @@
   },
   "phases": {
     "planning": {
-      "status": "pending",
+      "status": "in_progress",
       "retry_count": 0,
-      "started_at": null,
+      "started_at": "2025-12-27T22:31:20.904Z",
       "completed_at": null,
-      "review_result": null
+      "review_result": null,
+      "current_step": "execute"
     },
     "requirements": {
       "status": "pending",
@@ -255,9 +256,13 @@
     }
   },
   "created_at": "2025-12-27T22:31:06.385Z",
-  "updated_at": "2025-12-27T22:31:18.825Z",
+  "updated_at": "2025-12-27T22:32:26.727Z",
   "branch_name": "ai-workflow/issue-544",
   "base_commit": "[REDACTED_TOKEN]",
   "pr_number": 545,
-  "pr_url": "https://__GITHUB_URL_2__/pull/545"
+  "pr_url": "https://__GITHUB_URL_2__/pull/545",
+  "github_integration": {
+    "progress_comment_id": 3694267086,
+    "[REDACTED_TOKEN]": "https://__GITHUB_URL_1__/issues/544#[REDACTED_TOKEN]"
+  }
 }
