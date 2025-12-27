@@ -9,6 +9,24 @@ import * as aws from "@pulumi/aws";
 import * as fs from "fs";
 import * as path from "path";
 
+const cloudWatchConfigTemplatePath = path.join(__dirname, "templates", "cloudwatch-agent-config.json");
+const cloudWatchConfigTemplate = fs.readFileSync(cloudWatchConfigTemplatePath, "utf8");
+
+const injectCloudWatchConfig = (componentYaml: string): string => {
+    const placeholderRegex = /^(\s*)__CWAGENT_CONFIG__/m;
+    const match = componentYaml.match(placeholderRegex);
+    if (!match) {
+        return componentYaml;
+    }
+    const indent = match[1];
+    const renderedConfig = cloudWatchConfigTemplate
+        .trim()
+        .split("\n")
+        .map((line) => `${indent}${line}`)
+        .join("\n");
+    return componentYaml.replace("__CWAGENT_CONFIG__", renderedConfig);
+};
+
 // 環境名をスタック名から取得
 const environment = pulumi.getStack();
 const ssmPrefix = `/jenkins-infra/${environment}`;
@@ -110,8 +128,8 @@ const imageBuilderInstanceProfile = new aws.iam.InstanceProfile(`imagebuilder-pr
 });
 
 // コンポーネント定義YAMLファイルを読み込み
-const componentX86Yaml = fs.readFileSync(path.join(__dirname, "component-x86.yml"), "utf8");
-const componentArmYaml = fs.readFileSync(path.join(__dirname, "component-arm.yml"), "utf8");
+const componentX86Yaml = injectCloudWatchConfig(fs.readFileSync(path.join(__dirname, "component-x86.yml"), "utf8"));
+const componentArmYaml = injectCloudWatchConfig(fs.readFileSync(path.join(__dirname, "component-arm.yml"), "utf8"));
 
 // Jenkins Agent用コンポーネント（x86_64）
 const jenkinsAgentComponentX86 = new aws.imagebuilder.Component(`agent-component-x86`, {
