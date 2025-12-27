@@ -26,10 +26,9 @@
     "level": "moderate",
     "confidence": 0.8,
     "factors": {
-      "[REDACTED_TOKEN]": 3,
+      "[REDACTED_TOKEN]": false,
       "scope": "single_module",
       "requires_tests": true,
-      "[REDACTED_TOKEN]": false,
       "complexity_score": 0.6
     },
     "analyzed_at": "2025-12-27T14:57:10.075Z",
@@ -256,7 +255,7 @@
     }
   },
   "created_at": "2025-12-27T14:56:55.850Z",
-  "updated_at": "2025-12-27T14:57:12.791Z",
+  "updated_at": "2025-12-27T14:57:17.408Z",
   "branch_name": "ai-workflow/issue-542",
   "base_commit": "[REDACTED_TOKEN]",
   "pr_number": 543,
