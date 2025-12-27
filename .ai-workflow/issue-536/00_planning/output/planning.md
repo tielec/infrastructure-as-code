@@ -131,14 +131,14 @@ jenkins/jobs/pipeline/docs-generator/pull-request-comment-builder/
 
 ### Phase 4: 実装 (見積もり: 1.5h)
 
-- [ ] Task 4-1: openai_clientクラス修正 (0.8h)
+- [x] Task 4-1: openai_clientクラス修正 (0.8h)
   - TokenEstimatorインスタンスの追加（__init__メソッド）
   - 11箇所のメソッド呼び出しを修正（クラスメソッド → インスタンスメソッド）
   - truncate_to_token_limit → truncate_textメソッド名修正
-- [ ] Task 4-2: エラーハンドリング追加 (0.4h)
+- [x] Task 4-2: エラーハンドリング追加 (0.4h)
   - TokenEstimatorインスタンス化時のエラーハンドリング
   - メソッド呼び出し時のnone チェック追加
-- [ ] Task 4-3: ログ出力改善 (0.3h)
+- [x] Task 4-3: ログ出力改善 (0.3h)
   - TokenEstimator関連のログ出力を明確化
   - デバッグ用ログの追加
 
@@ -236,10 +236,10 @@ graph TD
 - [x] エラー再現テストが準備されている
 
 ### Phase 4: 実装
-- [ ] 11箇所全てのメソッド呼び出しが修正されている
-- [ ] truncate_to_token_limit → truncate_textの名前修正が完了している
-- [ ] TokenEstimatorインスタンスが適切に初期化されている
-- [ ] エラーハンドリングが追加されている
+- [x] 11箇所全てのメソッド呼び出しが修正されている
+- [x] truncate_to_token_limit → truncate_textの名前修正が完了している
+- [x] TokenEstimatorインスタンスが適切に初期化されている
+- [x] エラーハンドリングが追加されている
 
 ### Phase 5: テストコード実装
 - [ ] ユニットテストのエッジケースが追加されている
