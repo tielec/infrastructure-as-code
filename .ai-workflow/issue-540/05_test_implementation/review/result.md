@@ -2,38 +2,37 @@
 
 **⚠️ 重要: 各項目に対して明示的にPASS/FAILを判定してください。1つでもFAILがあれば最終判定は自動的にFAILです。**
 
-- [x/  ] **Phase 3のテストシナリオがすべて実装されている**: **FAIL** - `tests/integration/test_infrastructure_documentation_consistency.py` の4つのテスト（ECSセクション: `:28`, SpotFleet/ECS表: `:45`, docker/jenkins-agent-ecs: `:59`, SSMパラメータ: `:79`） cover most scenarios but there is no automated check for Scenario 5 (README・infrastructure.mdへのリンク整合性), so one of the Phase 3 scenarios remains unimplemented.
-- [x/  ] **テストコードが実行可能である**: **PASS** - The unittest harness under `tests/integration/...` uses only the standard library and well-formed `Path` handling, so the test file can be run via `python3 -m pytest`; the implementation log notes (`.ai-workflow/issue-540/05_test_implementation/output/test-implementation.md:1`) that Python3 is missing, which is an environment gap rather than a syntax issue.
-- [x/  ] **テストの意図がコメントで明確**: **PASS** - Module/class/method docstrings describe the purpose of each check (`tests/integration/test_infrastructure_documentation_consistency.py:1-94`), satisfying the requirement for clear intent.
+- [x/  ] **Phase 3のテストシナリオがすべて実装されている**: **PASS** - ECSセクション存在チェック (`tests/integration/test_infrastructure_documentation_consistency.py#L28`)、SpotFleet／ECS比較表と方針 (`#L45`)、docker/jenkins-agent-ecs の記述とファイル存在 (`#L69`)、SSMパラメータのドキュメント＆Pulumi出力照合 (`#L90`)、README と infrastructure.md のリンク整合性 (`#L106`) がすべてカバーされています。
+- [x/  ] **テストコードが実行可能である**: **PASS** - テストは標準ライブラリ `unittest` と `pathlib` だけを使っており、構文的にも実行可能です（実行せずとも静的に問題は見受けられません）；ただし、実行ログに「この環境では Python3 が入っていないため未実施」の記載があるので、Python3を入れて `python3 -m pytest tests/integration/test_infrastructure_documentation_consistency.py` を走らせてください（`.ai-workflow/issue-540/05_test_implementation/output/test-implementation.md#L30`）。
+- [x/  ] **テストの意図がコメントで明確**: **PASS** - 各テストメソッドに日本語と英語の説明を兼ねた docstring があり (`#L28`, `#L45`, `#L69`, `#L89`, `#L106`)、期待される振る舞いが読み手に伝わります。
 
-**品質ゲート総合判定: FAIL**
-- PASS: 上記3項目すべてがPASS
-- FAIL: 上記3項目のうち1つでもFAIL
-
-**品質ゲート判定がFAILの場合、最終判定は自動的にFAILになります。**
+**品質ゲート総合判定: PASS**
 
 ## 詳細レビュー
 
 ### 1. テストシナリオとの整合性
 
 **良好な点**:
-- 主要なインテグレーション観点（ECSセクション、SpotFleet/ECS表、docker/jenkins-agent-ecs、SSMパラメータ）がそれぞれ独立したテストメソッドで確認されており、Phase 3シナリオ1～4の骨格は実装済み（`tests/integration/test_infrastructure_documentation_consistency.py:28`, `:45`, `:59`, `:79`）。
+- Scenario 1〜5 に対応するテストが一通りそろっており、対象ファイルや比較ポイントの存在を確認するコードが `tests/integration/test_infrastructure_documentation_consistency.py` で一貫して記述されている（それぞれ `#L28`, `#L45`, `#L69`, `#L90`, `#L106` を参照）。
+- SSM パラメータと Pulumi のエクスポートの両方を検証するループが実装されているため、ドキュメントと実装の整合性を双方向で担保している（`#L18`〜`#L105`）。
 
 **懸念点**:
-- READMEと`infrastructure.md`間のリンクや内部アンカーの整合性を検証するScenario 5がテストに登場しておらず、リンク切れに起因する運用上の誤認を捕まえられない状態。
+- ECS リソースの検証が「ヘッダーが存在する」レベルにとどまっており、実際の名前・CPU/Mem の値・IAMポリシーの記述と実装との正確な一致までは追えていない（`#L28`〜`#L43`）。Scenario 1 で期待されている設定詳細への言及を補強するとさらなる安心感が得られます。
 
 ### 2. テストカバレッジ
 
 **良好な点**:
-- ECSセクションの有無、SpotFleet/ECS比較表、docker/jenkins-agent-ecsのファイル存在、SSMパラメータの記載とPulumi出力の両方を押さえており、ドキュメント–実装の整合性の主要ポイントを広くカバー。
+- 比較表のヘッダだけでなく「コスト」や「起動速度」の行まで明示的にアサートしており、SpotFleet/ECS の使い分け観点まで確認している（`#L45`〜`#L67`）。
+- SSM パラメータリストを列挙し、ドキュメント上と Pulumi の両方で出現をチェックすることで、主要な正/異常ケースをカバーしている（`#L18`〜`#L105`）。
 
 **改善の余地**:
-- ECSリソースやSpotFleet/ECSの使い分けに関する記載は存在確認のみで、名前・設定値・説明の詳細一致がチェックされていない（Scenario 1/4の期待結果）。例えば比較表の内容やタスク定義の設定値などを文字列や構造的に検証するアサーションがあると、意図したカバレッジにより近づく。
+- docker/jenkins-agent-ecs に関するテストはファイル名の記載とファイル存在をチェックするにとどまり、記述内容（entrypoint の amazon-ecs 互換性など）が実際のファイルに即しているかまでは確かめていない（`#L69`〜`#L87`）。ドキュメントに書かれた役割説明と実ファイルのコメント・構成の一致を確認するアサートを追加するとカバレッジが強化されます。
 
 ### 3. テストの独立性
 
 **良好な点**:
-- 各テストメソッドはファイルを再読み込みし、共有状態を持たずに実行可能で、他のテストとの順序依存性はない。
+- 各テストは `infrastructure.md` や `README.md` を即座に読み込み、共有状態を持たずに完結するため、実行順序に依存しない（`#L28`〜`#L131`）。
+- `setUpClass` でパスのみを共有しており、ファイル読取操作は各テストで再度行っているのでクロステストの干渉がない。
 
 **懸念点**:
 - なし
@@ -41,15 +40,16 @@
 ### 4. テストの可読性
 
 **良好な点**:
-- クラス/メソッドのdocstringsでテスト意図が明示され、名前も振る舞いをそのまま表しているためレビューしやすい。
+- 各テストに目的を説明する docstring があり、何を検証しているかすぐに把握できる（`#L28`, `#L45`, `#L69`, `#L89`, `#L106`）。
+- アサーションメッセージが具体的で、失敗時に期待値が明示されるためトラブルシューティングが容易。
 
 **改善の余地**:
-- Given/When/Then を明示的にコメントとして補うか、docstringsにもう少し細かいステップを追加すると、レビュー時に「何が期待されているか」がさらに明確になる。
+- なし
 
 ### 5. モック・スタブの使用
 
 **良好な点**:
-- 外部依存を持たない静的チェックなので、モックは不要であり、実ファイルを直接読むことで実装との整合性をシンプルに捕まえている。
+- 外部依存やモックは使わず、実際のドキュメント・Pulumi・Docker ファイルをそのまま読み込んでいるため、テストの信頼性が高い（全メソッドで `Path.read_text` や `Path.is_file` を使用）。
 
 **懸念点**:
 - なし
@@ -57,45 +57,39 @@
 ### 6. テストコードの品質
 
 **良好な点**:
-- `pathlib` や標準的な `unittest` のアサーションを利用しており、可搬性も高い。
+- `pathlib` を使った path 管理で OS に依存せず立ち上がり、`unittest` で標準的な形で構成されているため導入障壁が低い（`tests/integration/test_infrastructure_documentation_consistency.py` 全体）。
 
 **懸念点**:
-- 実行記録（`.ai-workflow/issue-540/05_test_implementation/output/test-implementation.md:1`）で「Python3 がないため実行していない」とあるので、ローカル環境で再実行して手元で確認できるようにする必要がある。
-
-## ブロッカー（BLOCKER）
-
-**次フェーズに進めない重大な問題**
-
-1. **README/infrastructure.mdのリンク整合性チェック欠如**
-   - 問題: Phase 3シナリオ5（README と `infrastructure.md`、内部アンカーのリンク整合性）をテストが実装しておらず、リンク切れや参照不整合の検出ルートがない。
-   - 影響: 最も基本的なドキュメント参照が壊れていると、運用者が新情報に到達できず手順が破綻するリスクがあるため、本質的な品質ゲートが満たせない。
-   - 対策: 参照されるすべての主要リンクについて Markdown に存在するかを確認するテスト（例えば README から infrastructure.md へのリンクと、infrastructure.md 内の新しいセクションの内部リンクが存在することをアサート）を追加。
+- この環境では Python3 がインストールされておらず統合テストをまだ実行できていない（`.ai-workflow/issue-540/05_test_implementation/output/test-implementation.md#L30`）。実行済みの結果がないため、今後 Python3 を導入してコマンドを通すことが必要です。
 
 ## 改善提案（SUGGESTION）
 
-1. **SpotFleet/ECS 比較表の内容も具体的に検証**
-   - 現状: 表のヘッダ (`tests/integration/...:45`) とガイダンス見出しが存在することをチェックしているのみで、列ごとの技術的記載内容（コスト、起動速度等）が実装ベースで妥当かは未検証。
-   - 提案: 表の行/列の具体的なキーワードや例をアサートし、比較表全体が意図した使い分け指針の妥当性を示していることを確認する。
-   - 効果: 技術的な説明が途中で削除・変更された場合でも早期に検出できる。
+1. **ECS リソース設定の内容検証**
+   - 現状: `test_ecs_resource_sections_exist` はヘッダーの存在にとどまっており、Pulumi の設定名／CPU・メモリ・ポリシーなどの記載内容とは直接照合していない（`tests/integration/test_infrastructure_documentation_consistency.py#L28`）。
+   - 提案: ドキュメントの該当セクションから名前や値の文字列を抽出し、Pulumi コードに記載されたリソース名や設定値と比較するロジックを追加する。
+   - 効果: Scenario 1 における整合性の深さが増し、実装変更時の齟齬を早期に検出できます。
 
-2. **SSMパラメータの記載だけでなく、Pulumiコードのコメントや近接コードと一致していることも確認**
-   - 現状: `agent/{param_name}` の出力が含まれているかを確認（`tests/...:79`）。
-   - 提案: SSM パラメータの出力が期待値と完全一致する箇所（例: `export` 直後の文字列）を正規表現で検証し、パラメータ名の typos を防止する。
-   - 効果: ドキュメントの文字列と実装の文字列の間でずれが生じた場合でも、より粒度の高い検出が可能になる。
+2. **docker/jenkins-agent-ecs の役割記述への内容検証**
+   - 現状: テストは `Dockerfile` や `entrypoint.sh` の存在とドキュメント内のファイル名の言及だけを確認している（`tests/integration/test_infrastructure_documentation_consistency.py#L69`）。
+   - 提案: 該当ファイルのコメントや特定キーワード（例: amazon-ecs プラグインとの互換性に触れる行）を読み取り、ドキュメント内で説明された役割と一致するかをチェックする。
+   - 効果: Scenario 3 の信頼性が上がり、ファイル構成の説明と実装の誤差を防げます。
+
+3. **Python 3 環境での実行確認**
+   - 現状: まだ実行しておらず、品質ゲートも通過していない（`.ai-workflow/issue-540/05_test_implementation/output/test-implementation.md#L30`）。
+   - 提案: Python3 を用意して `python3 -m pytest tests/integration/test_infrastructure_documentation_consistency.py` を実行し、失敗があれば修正する。
+   - 効果: 実行済みのログが得られ、テストコード自体の静的検証に加えて動作確認が完了します。
 
 ## 総合評価
 
-テストコードはドキュメントと実装の整合性を狙った統合的なチェックをしっかり形にしており、SSMパラメータやdockerディレクトリなど重要な要素の存在確認は良好です。ただし、Planning/Scenario に含まれるリンク整合性の検証が欠けているため、品質ゲートを満たすにはもう一歩の補完が必要です。
-
 **主な強み**:
-- ECS/SSM/docker 内容を個別メソッドで網羅し、意図がドキュメント化されている。
-- `Path` を使ったファイル定義や標準的な unittest の構造で、環境移植性が高い。
+- Phase 3 の全シナリオ横断で、ドキュメントと Pulumi コード／README／Docker ディレクトリとの一致をチェックする統合テストが一本化されており、可読性・保守性ともに高い（`tests/integration/test_infrastructure_documentation_consistency.py`）。
+- SSM パラメータの双方向検証とスポットフリート比較表の詳細チェックにより、正確性と運用の判断材料が担保されている。
 
 **主な改善提案**:
-- README / infrastructure のリンク整合性をテストに追加して Scenario 5 をカバーする。
-- 比較表や Pulumi コードの値の一致をより詳細に検証し、Scenario 1/4 の期待を深める。
+- ECS リソースの詳細値や docker/jenkins-agent-ecs の記述内容の一致を検証することで更なる精度が得られる。
+- Python3 環境でテストを実際に実行し、成功ログを残すこと。
 
-計画に従って比較的コンパクトなテストスイートが整っている一方で、リンクの整合性を担保できていないため、現状では品質ゲートをクリアできません。必要なカバーを追加して再提出してください。
+ドキュメント整合性を目的にした統合テストがまとまっており、Phase 5 を次のテスト実行フェーズへ進めるうえで十分な基盤になっています。上記の改善点を取り込めば、さらに信頼性が増します。
 
 ---
-**判定: FAIL**
+**判定: PASS_WITH_SUGGESTIONS**

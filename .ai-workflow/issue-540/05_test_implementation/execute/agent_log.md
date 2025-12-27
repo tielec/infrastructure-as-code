@@ -20,7 +20,7 @@
 **ステータス**: completed (exit_code=0)
 
 ```text
-/tmp/ai-workflow-repos-7-9513efb4/infrastructure-as-code
+/tmp/ai-workflow-repos-7-9513efb4/[REDACTED_TOKEN]
 ```
 
 ## Turn 4: ツール実行
@@ -1205,7 +1205,7 @@ Jenkins基盤で利用するAWSリソース、リポジトリのディレクト�
 ## ディレクトリ構造
 
 ```
-infrastructure-as-code/
+[REDACTED_TOKEN]/
 ├─ ansible/                    # Ansible設定とプレイブック
 │  ├─ inventory/              # インベントリと変数定義
 │  ├─ playbooks/              # 各種プレイブック
