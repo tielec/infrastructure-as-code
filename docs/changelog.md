@@ -2,6 +2,18 @@
 
 > 📖 **親ドキュメント**: [README.md](../README.md)
 
+## 2025-12-27: Jenkins Agent AMI の CloudWatch Agent CPU メトリクス共通化
+
+Jenkins Agent AMI に CloudWatch Agent 設定テンプレートを追加し、CPU/メモリメトリクスを AutoScalingGroup 単位で 60 秒間隔収集するよう ARM/x86 間で統一しました。
+
+- **対象Issue**: [#544](https://github.com/tielec/infrastructure-as-code/issues/544)
+- **変更ファイル**:
+  - `pulumi/jenkins-agent-ami/templates/cloudwatch-agent-config.json`: CPU（active/user/system/iowait）とメモリ（used/available）を共通定義し ASG ディメンションを付与
+  - `pulumi/jenkins-agent-ami/component-arm.yml` / `pulumi/jenkins-agent-ami/component-x86.yml`: テンプレートをインライン展開し Translator 検証ステップを追加
+  - `pulumi/jenkins-agent-ami/index.ts`: テンプレート読み込みとインデント保持の置換処理を実装
+- **効果**: CloudWatch Agent 設定の差分を排除し、Translator による構文検証で AMI ビルド失敗を早期検知。ASG 単位のダッシュボード/アラームが即時利用可能に
+- **テスト結果**: `pytest tests/integration/test_jenkins_agent_ami_cloudwatch.py -q` を実行し 5 件すべて成功
+
 ## 2025-01-20: SpotFleetエージェントのCPUクレジットUnlimited設定適用完了
 
 Jenkins Agent SpotFleetで利用するt3/t3a/t4g系インスタンスにCPUクレジットUnlimited設定を適用しました。
