@@ -113,10 +113,10 @@ jenkins/jobs/pipeline/docs-generator/pull-request-comment-builder/
 
 ### Phase 2: 設計 (見積もり: 0.5h)
 
-- [ ] Task 2-1: TokenEstimatorインスタンス設計 (0.3h)
+- [x] Task 2-1: TokenEstimatorインスタンス設計 (0.3h)
   - openai_clientクラスでのTokenEstimatorインスタンス保持方法の設計
   - 初期化タイミングの決定（__init__メソッドまたは遅延初期化）
-- [ ] Task 2-2: メソッド呼び出しパターン設計 (0.2h)
+- [x] Task 2-2: メソッド呼び出しパターン設計 (0.2h)
   - クラスメソッド → インスタンスメソッドの変更パターンの明確化
   - truncate_to_token_limit → truncate_textメソッド名変更の影響確認
 
@@ -225,10 +225,10 @@ graph TD
 - [x] 修正が必要な具体的ファイル・行番号がリスト化されている
 
 ### Phase 2: 設計
-- [ ] 実装戦略（REFACTOR）の判断根拠が明記されている
-- [ ] テスト戦略（UNIT_INTEGRATION）の判断根拠が明記されている
-- [ ] テストコード戦略（EXTEND_TEST）の判断根拠が明記されている
-- [ ] TokenEstimatorインスタンスの保持方法が設計されている
+- [x] 実装戦略（REFACTOR）の判断根拠が明記されている
+- [x] テスト戦略（UNIT_INTEGRATION）の判断根拠が明記されている
+- [x] テストコード戦略（EXTEND_TEST）の判断根拠が明記されている
+- [x] TokenEstimatorインスタンスの保持方法が設計されている
 
 ### Phase 3: テストシナリオ
 - [ ] 既存テストが正常実行されることが確認されている
