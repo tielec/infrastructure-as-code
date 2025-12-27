@@ -142,10 +142,10 @@ SpotFleetは以下の動作で更新される:
 
 ### Phase 3: テストシナリオ (見積もり: 0.25h)
 
-- [ ] Task 3-1: Pulumi preview検証シナリオ作成 (0.15h)
+- [x] Task 3-1: Pulumi preview検証シナリオ作成 (0.15h)
   - 期待される差分内容の定義
   - 差分確認手順の文書化
-- [ ] Task 3-2: 動作確認シナリオ作成 (0.1h)
+- [x] Task 3-2: 動作確認シナリオ作成 (0.1h)
   - CloudWatch CPUCreditBalanceメトリクス監視手順
   - 高負荷ジョブの実行手順
 
@@ -265,8 +265,8 @@ graph TD
 - [x] Pulumiリソースの構文が確認されている
 
 ### Phase 3: テストシナリオ
-- [ ] Pulumi preview検証シナリオが作成されている
-- [ ] CloudWatchメトリクス確認手順が文書化されている
+- [x] Pulumi preview検証シナリオが作成されている
+- [x] CloudWatchメトリクス確認手順が文書化されている
 
 ### Phase 4: 実装
 - [ ] `agentLaunchTemplate`に`creditSpecification`が追加されている
