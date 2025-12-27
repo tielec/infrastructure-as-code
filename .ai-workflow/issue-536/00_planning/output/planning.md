@@ -144,10 +144,10 @@ jenkins/jobs/pipeline/docs-generator/pull-request-comment-builder/
 
 ### Phase 5: テストコード実装 (見積もり: 0.5h)
 
-- [ ] Task 5-1: ユニットテスト追加 (0.3h)
+- [x] Task 5-1: ユニットテスト追加 (0.3h)
   - test_token_estimator.pyにエッジケースのテスト追加
   - 空文字列、大きなテキスト、特殊文字のテストケース
-- [ ] Task 5-2: 統合テスト追加 (0.2h)
+- [x] Task 5-2: 統合テスト追加 (0.2h)
   - openai_clientとTokenEstimatorの統合テスト
   - テスト用モックの活用
 
@@ -242,8 +242,8 @@ graph TD
 - [x] エラーハンドリングが追加されている
 
 ### Phase 5: テストコード実装
-- [ ] ユニットテストのエッジケースが追加されている
-- [ ] openai_clientとTokenEstimatorの統合テストが作成されている
+- [x] ユニットテストのエッジケースが追加されている
+- [x] openai_clientとTokenEstimatorの統合テストが作成されている
 - [ ] テストカバレッジが維持されている
 
 ### Phase 6: テスト実行
