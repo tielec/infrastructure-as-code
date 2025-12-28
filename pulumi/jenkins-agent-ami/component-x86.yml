@@ -149,29 +149,26 @@ phases:
             - mkdir -p /opt/aws/amazon-cloudwatch-agent/etc
             - |
               cat > /opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json << 'EOF'
-              {
-                "metrics": {
-                  "namespace": "CWAgent",
-                  "metrics_collected": {
-                    "mem": {
-                      "measurement": [
-                        {"name": "mem_used_percent"},
-                        {"name": "mem_used"},
-                        {"name": "mem_available"}
-                      ],
-                      "metrics_collection_interval": 60
-                    }
-                  },
-                  "append_dimensions": {
-                    "AutoScalingGroupName": "${aws:AutoScalingGroupName}"
-                  },
-                  "aggregation_dimensions": [
-                    ["AutoScalingGroupName"]
-                  ]
-                }
-              }
+              __CWAGENT_CONFIG__
               EOF
             - cat /opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json
+
+      - name: ValidateCloudWatchAgentConfig
+        action: ExecuteBash
+        inputs:
+          commands:
+            - echo "Validating CloudWatch Agent configuration with Translator..."
+            - |
+              set -e
+              CONFIG_PATH="/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json"
+              TRANSLATOR="/opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-config-translator"
+              OUTPUT_PATH="/tmp/cwagent.translated.json"
+              if [ ! -x "$TRANSLATOR" ]; then
+                echo "ERROR: Translator not found at $TRANSLATOR"
+                exit 1
+              fi
+              "$TRANSLATOR" -input /opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json -format json -output /tmp/cwagent.translated.json
+            - cat /tmp/cwagent.translated.json
 
       - name: EnableCloudWatchAgent
         action: ExecuteBash

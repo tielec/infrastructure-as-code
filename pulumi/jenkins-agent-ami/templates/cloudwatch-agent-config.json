@@ -1,0 +1,33 @@
+{
+  "metrics": {
+    "namespace": "CWAgent",
+    "metrics_collected": {
+      "cpu": {
+        "resources": [
+          "*"
+        ],
+        "measurement": [
+          {"name": "cpu_usage_active"},
+          {"name": "cpu_usage_user"},
+          {"name": "cpu_usage_system"},
+          {"name": "cpu_usage_iowait"}
+        ],
+        "metrics_collection_interval": 60
+      },
+      "mem": {
+        "measurement": [
+          {"name": "mem_used_percent"},
+          {"name": "mem_used"},
+          {"name": "mem_available"}
+        ],
+        "metrics_collection_interval": 60
+      }
+    },
+    "append_dimensions": {
+      "AutoScalingGroupName": "${aws:AutoScalingGroupName}"
+    },
+    "aggregation_dimensions": [
+      ["AutoScalingGroupName"]
+    ]
+  }
+}
