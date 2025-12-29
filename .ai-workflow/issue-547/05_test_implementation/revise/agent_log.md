@@ -1,6 +1,6 @@
 # Codex Agent 実行ログ
 
-開始日時: 2025/12/29 8:44:20
+開始日時: 2025/12/29 8:51:58
 
 ---
 
@@ -44,54 +44,32 @@ tests
 ## Turn 5: ツール実行
 
 **種別**: コマンド実行
-**コマンド**: `/bin/bash -lc 'ls -a .ai-workflow'`
+**コマンド**: `/bin/bash -lc 'ls -a'`
 **ステータス**: completed (exit_code=0)
 
 ```text
 .
 ..
-issue-193
-issue-304
-issue-305
-issue-310
-issue-313
-issue-315
-issue-317
-issue-319
-issue-320
-issue-322
-issue-324
-issue-331
-issue-332
-issue-355
-issue-360
-issue-362
-issue-363
-issue-369
-issue-370
-issue-396
-issue-398
-issue-405
-issue-411
-issue-415
-issue-423
-issue-431
-issue-437
-issue-440
-issue-445
-issue-453
-issue-455
-issue-456
-issue-460
-issue-461
-issue-462
-issue-463
-issue-464
-issue-465
-issue-475
-issue-477
-issue-479
-issue-547
+.ai-workflow
+.claude
+.coverage
+.git
+.github
+.gitignore
+ARCHITECTURE.md
+CLAUDE.md
+CONTRIBUTION.md
+LICENSE
+README.md
+ansible
+bootstrap
+docker
+docs
+jenkins
+pulumi
+run_tests_issue_322.sh
+scripts
+tests
 ```
 
 ## Turn 6: ツール実行
@@ -102,484 +80,46 @@ issue-547
 ## Turn 7: ツール実行
 
 **種別**: コマンド実行
-**コマンド**: `/bin/bash -lc "sed -n '1,240p' .ai-workflow/issue-547/03_test_scenario/output/test-scenario.md"`
+**コマンド**: `/bin/bash -lc 'cat .ai-workflow/issue-547/05_test_implementation/output/test-implementation.md'`
 **ステータス**: completed (exit_code=0)
 
 ```text
-# テストシナリオ: Issue #547
+# テスト実装ログ (Issue #547)
 
-## Jenkins Agent AMI ビルド失敗: CloudWatch Agent Translator が見つからない
+## 実施概要
+- `tests/integration/[REDACTED_TOKEN].py` を更新し、Image Builder の [REDACTED_TOKEN] ステップを bash+jq で再生するランタイム統合テストを追加。
+- ARM/x86 両アーキテクチャの正常系に加え、設定ファイル不存在・JSON構文エラー・metrics欠落の異常/警告系シナリオを自動化。
+- CloudWatch Agent 設定抽出時のエラーメッセージにアーキテクチャ名を含め、デバッグ容易性を向上。
 
----
+## シナリオ対応状況
+- シナリオ1（正常系）、シナリオ2（設定ファイル不存在）、シナリオ3（JSON構文エラー）、シナリオ4（metrics欠落警告）を新規テストで自動実行。
+- シナリオ5/6 は x86/ARM 両方の検証ステップを再生することで成功パスを確認。
+- シナリオ7 は実AMIでのサービス稼働確認が必要なため、テストでは systemctl シムで起動コマンドが呼ばれることを検証し、実環境での最終確認を前提とする。
 
-## 1. テスト戦略サマリー
+## 実行結果
+- 実行コマンド: `python3 -m pytest tests/integration/[REDACTED_TOKEN].py -q`
+- 結果: 実行不可（環境に python3 が見つからず）。python3 を用意した環境で再実行してください。
 
-### 1.1 選択されたテスト戦略
-
-**テスト戦略: INTEGRATION_ONLY**
-
-Phase 2（設計フェーズ）で決定された通り、本修正はEC2 Image BuilderのコンポーネントYAMLファイルの修正であり、プログラムコードではないため、インテグレーションテストのみを実施します。
-
-### 1.2 戦略選択の根拠
-
-| 根拠 | 説明 |
-|------|------|
-| 対象がインフラ定義コード | 修正対象はEC2 Image BuilderのコンポーネントYAMLファイルであり、TypeScript/プログラムコードではない |
-| ユニットテスト不可 | YAMLファイル内のシェルスクリプトは、EC2 Image Builder実行環境でのみ動作検証可能 |
-| BDDテスト非該当 | ユーザーストーリーベースの機能ではなく、インフラビルドプロセスの修正 |
-| インテグレーションテストが適切 | AMIビルドパイプラインの実行によって、修正内容が正しく動作するかを検証 |
-| 静的解析で補完 | YAMLシンタックスチェック（yamllint等）による事前検証が可能 |
-
-### 1.3 テスト対象の範囲
-
-| 対象 | ファイルパス | 修正箇所 |
-|------|-------------|---------|
-| x86版コンポーネント | `pulumi/jenkins-agent-ami/component-x86.yml` | 156-172行目（[REDACTED_TOKEN]ステップ） |
-| ARM版コンポーネント | `pulumi/jenkins-agent-ami/component-arm.yml` | 156-172行目（[REDACTED_TOKEN]ステップ） |
-
-### 1.4 テストの目的
-
-1. **主目的**: 修正後の[REDACTED_TOKEN]ステップがAL2023環境で正常に動作することを確認
-2. **副目的**: CloudWatch Agent設定ファイルの検証が適切に機能することを確認
-3. **品質確認**: AMIビルドプロセス全体が正常に完了することを確認
-
----
-
-## 2. 静的解析テストシナリオ
-
-インテグレーションテストの前提として、YAMLファイルの静的解析を実施します。
-
-### 2.1 YAMLシンタックスチェック
-
-**シナリオ名**: YAML構文の妥当性検証
-
-| 項目 | 内容 |
-|------|------|
-| **目的** | 修正後のYAMLファイルが構文的に正しいことを確認 |
-| **前提条件** | yamllintまたは同等のYAML構文チェックツールがインストールされている |
-| **対象ファイル** | `component-x86.yml`, `component-arm.yml` |
-| **実行コマンド** | `yamllint component-x86.yml component-arm.yml` |
-| **合格基準** | エラーなし（警告は許容） |
-
-**テスト手順**:
-
-```bash
-# 1. yamllintのインストール（必要に応じて）
-pip install yamllint
-
-# 2. x86版の構文チェック
-yamllint pulumi/jenkins-agent-ami/component-x86.yml
-
-# 3. ARM版の構文チェック
-yamllint pulumi/jenkins-agent-ami/component-arm.yml
-```
-
-**期待結果**:
-- 両ファイルともYAML構文エラーなし
-- EC2 Image Builderのスキーマに準拠した構造であること
-
-### 2.2 差分確認
-
-**シナリオ名**: 修正箇所の意図確認
-
-| 項目 | 内容 |
-|------|------|
-| **目的** | 修正が意図した箇所のみに限定されていることを確認 |
-| **前提条件** | gitリポジトリでの変更追跡が有効 |
-| **実行コマンド** | `git diff pulumi/jenkins-agent-ami/component-*.yml` |
-| **合格基準** | [REDACTED_TOKEN]ステップのみに変更が限定されている |
-
-**確認項目チェックリスト**:
-- [ ] `component-x86.yml`の156-172行目のみが変更されている
-- [ ] `component-arm.yml`の156-172行目のみが変更されている
-- [ ] 他のステップ（[REDACTED_TOKEN], [REDACTED_TOKEN], [REDACTED_TOKEN]）に変更がない
-- [ ] x86版とARM版の修正内容が同一である
-
----
-
-## 3. インテグレーションテストシナリオ
-
-### 3.1 シナリオ1: 正常系 - CloudWatch Agent設定検証成功
-
-**シナリオ名**: [REDACTED_TOKEN]正常系_設定ファイル存在_JSON構文正常
-
-| 項目 | 内容 |
-|------|------|
-| **目的** | 有効な設定ファイルが存在する場合、検証ステップが正常終了することを確認 |
-| **テスト種別** | インテグレーションテスト |
-| **アーキテクチャ** | x86_64, arm64（両方で実施） |
-| **優先度** | 高（必須） |
-
-**前提条件**:
-- CloudWatch Agentがインストール済み（[REDACTED_TOKEN]ステップ完了）
-- 設定ファイル（`/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json`）が配置済み（[REDACTED_TOKEN]ステップ完了）
-- 設定ファイルの内容が有効なJSON形式である
-- `jq`コマンドがインストール済み（[REDACTED_TOKEN]ステップ完了）
-
-**テスト手順**:
-
-1. EC2 Image BuilderでAMIビルドパイプラインを実行
-2. [REDACTED_TOKEN]ステップの実行を監視
-3. ステップの完了ステータスとログ出力を確認
-
-**期待結果**:
-
-| 確認項目 | 期待値 |
-|---------|--------|
-| ステップ終了コード | 0（成功） |
-| ログ出力: 開始メッセージ | "Validating CloudWatch Agent configuration..." |
-| ログ出力: JSON構文チェック | "Checking JSON syntax..." |
-| ログ出力: 成功メッセージ | "CloudWatch Agent configuration validation passed." |
-| ログ出力: 設定ファイル内容 | JSON形式の設定内容が表示される |
-| 後続ステップ | [REDACTED_TOKEN]ステップが開始される |
-
-**検証コマンド（ログ確認）**:
-
-```bash
-# EC2 Image Builderのビルドログで以下を確認
-grep -E "Validating CloudWatch Agent|Checking JSON syntax|validation passed" <build_log>
-```
-
----
-
-### 3.2 シナリオ2: 異常系 - 設定ファイル不存在
-
-**シナリオ名**: [REDACTED_TOKEN]異常系_設定ファイル不存在
-
-| 項目 | 内容 |
-|------|------|
-| **目的** | 設定ファイルが存在しない場合、検証ステップが適切にエラー終了することを確認 |
-| **テスト種別** | インテグレーションテスト（手動シミュレーション） |
-| **アーキテクチャ** | x86_64（代表として実施） |
-| **優先度** | 中（[REDACTED_TOKEN]ステップの失敗をシミュレート） |
-
-**前提条件**:
-- [REDACTED_TOKEN]ステップを意図的にスキップまたは失敗させた状態
-- または、設定ファイルを手動で削除した状態
-
-**テスト手順**:
-
-1. テスト用に修正したコンポーネントYAMLを用意（[REDACTED_TOKEN]ステップを無効化）
-2. AMIビルドを実行
-3. [REDACTED_TOKEN]ステップの実行を監視
-
-**期待結果**:
-
-| 確認項目 | 期待値 |
-|---------|--------
-... (truncated)
+## 修正履歴
+### 修正1: [REDACTED_TOKEN] ランタイム検証の自動化
+- **指摘内容**: Phase 3 のシナリオに沿ったランタイム検証が欠落し、[REDACTED_TOKEN] の正常/異常/警告パスを網羅できていない。
+- **修正内容**: コンポーネントYAMLから検証スクリプトを抽出して bash+jq で実行する統合テストを追加。設定ファイル不存在・JSON構文エラー・metrics欠落・x86/ARM 両アーキテクチャの正常系、および [REDACTED_TOKEN] ステップの実行をシムで確認。
+- **影響範囲**: tests/integration/[REDACTED_TOKEN].py
 ```
 
 ## Turn 8: ツール実行
 
-**種別**: コマンド実行
-**コマンド**: `/bin/bash -lc "sed -n '240,520p' .ai-workflow/issue-547/03_test_scenario/output/test-scenario.md"`
-**ステータス**: completed (exit_code=0)
-
-```text
-|---------|--------|
-| ステップ終了コード | 0（成功） |
-| ログ出力: 警告メッセージ | "WARNING: 'metrics' section not found in configuration" |
-| ログ出力: 成功メッセージ | "CloudWatch Agent configuration validation passed." |
-| 後続ステップ | [REDACTED_TOKEN]ステップが開始される（ビルド継続） |
-
----
-
-### 3.5 シナリオ5: x86アーキテクチャAMIビルド成功
-
-**シナリオ名**: AMIビルド_x86_64_正常系_全ステップ成功
-
-| 項目 | 内容 |
-|------|------|
-| **目的** | x86アーキテクチャでAMIビルド全体が正常に完了することを確認 |
-| **テスト種別** | インテグレーションテスト（End-to-End） |
-| **アーキテクチャ** | x86_64 |
-| **優先度** | 高（必須） |
-
-**前提条件**:
-- component-x86.ymlが修正済み
-- EC2 Image Builderパイプラインが設定済み
-- 必要なIAMロール、セキュリティグループが設定済み
-
-**テスト手順**:
-
-1. Pulumiでx86用のImage Builderパイプラインをデプロイ
-2. AMIビルドパイプラインを手動またはスケジュールトリガーで実行
-3. ビルドの完了を待機（約20-40分）
-4. ビルドステータスを確認
-
-**期待結果**:
-
-| 確認項目 | 期待値 |
-|---------|--------|
-| ビルドステータス | AVAILABLE（成功） |
-| 全ステップステータス | 全ステップがSUCCESS |
-| [REDACTED_TOKEN]ステップ | SUCCESS（旧実装では FAILED だった） |
-| 作成されたAMI | AMI IDが取得できる |
-
-**確認コマンド（AWS CLI）**:
-
-```bash
-# ビルドステータスの確認
-aws imagebuilder get-image-pipeline --image-pipeline-arn <pipeline-arn>
-
-# 最新ビルドの確認
-aws imagebuilder [REDACTED_TOKEN] --image-version-arn <image-arn>
-```
-
----
-
-### 3.6 シナリオ6: ARMアーキテクチャAMIビルド成功
-
-**シナリオ名**: AMIビルド_arm64_正常系_全ステップ成功
-
-| 項目 | 内容 |
-|------|------|
-| **目的** | ARMアーキテクチャでAMIビルド全体が正常に完了することを確認 |
-| **テスト種別** | インテグレーションテスト（End-to-End） |
-| **アーキテクチャ** | arm64 |
-| **優先度** | 高（必須） |
-
-**前提条件**:
-- component-arm.ymlが修正済み
-- EC2 Image Builderパイプラインが設定済み
-- 必要なIAMロール、セキュリティグループが設定済み
-
-**テスト手順**:
-
-1. Pulumiでarm64用のImage Builderパイプラインをデプロイ
-2. AMIビルドパイプラインを手動またはスケジュールトリガーで実行
-3. ビルドの完了を待機（約20-40分）
-4. ビルドステータスを確認
-
-**期待結果**:
-
-| 確認項目 | 期待値 |
-|---------|--------|
-| ビルドステータス | AVAILABLE（成功） |
-| 全ステップステータス | 全ステップがSUCCESS |
-| [REDACTED_TOKEN]ステップ | SUCCESS |
-| 作成されたAMI | AMI IDが取得できる |
-
----
-
-### 3.7 シナリオ7: CloudWatch Agent動作確認
-
-**シナリオ名**: CloudWatchAgent_動作確認_作成AMIでのメトリクス収集
-
-| 項目 | 内容 |
-|------|------|
-| **目的** | 作成されたAMIでCloudWatch Agentが正常に動作することを確認 |
-| **テスト種別** | インテグレーションテスト（機能検証） |
-| **アーキテクチャ** | x86_64, arm64（両方で実施） |
-| **優先度** | 高（必須） |
-
-**前提条件**:
-- シナリオ5, 6で作成されたAMIが利用可能
-- EC2インスタンスを起動するためのVPC、サブネット、IAMロールが設定済み
-
-**テスト手順**:
-
-1. 作成されたAMIからEC2インスタンスを起動
-2. インスタンスの起動完了を待機
-3. CloudWatch Agentサービスの状態を確認
-4. CloudWatchメトリクスを確認
-
-**期待結果**:
-
-| 確認項目 | 期待値 |
-|---------|--------|
-| インスタンス起動 | 正常に起動 |
-| CloudWatch Agentサービス状態 | active (running) |
-| 設定ファイルの存在 | `/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json` が存在 |
-| CloudWatchメトリクス | CWAgent名前空間にcpu_*, mem_*メトリクスが送信されている |
-
-**確認コマンド（EC2インスタンス内）**:
-
-```bash
-# CloudWatch Agentサービスの状態確認
-systemctl status amazon-cloudwatch-agent
-
-# 設定ファイルの確認
-cat /opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json
-
-# CloudWatch Agentのログ確認
-tail -f /opt/aws/amazon-cloudwatch-agent/logs/amazon-cloudwatch-agent.log
-```
-
-**確認コマンド（AWS CLI）**:
-
-```bash
-# CloudWatchメトリクスの確認
-aws cloudwatch list-metrics --namespace CWAgent
-
-# 特定のメトリクスデータの取得
-aws cloudwatch [REDACTED_TOKEN] \
-  --namespace CWAgent \
-  --metric-name cpu_usage_active \
-  --start-time $(date -u -d '10 minutes ago' +%Y-%m-%dT%H:%M:%SZ) \
-  --end-time $(date -u +%Y-%m-%dT%H:%M:%SZ) \
-  --period 60 \
-  --statistics Average
-```
-
----
-
-## 4. テストデータ
-
-### 4.1 正常系テストデータ
-
-**CloudWatch Agent設定ファイル（有効なJSON）**:
-
-```json
-{
-  "metrics": {
-    "namespace": "CWAgent",
-    "metrics_collected": {
-      "cpu": {
-        "resources": ["*"],
-        "measurement": [
-          {"name": "cpu_usage_active"},
-          {"name": "cpu_usage_user"},
-          {"name": "cpu_usage_system"},
-          {"name": "cpu_usage_iowait"}
-        ],
-        "[REDACTED_TOKEN]": 60
-      },
-      "mem": {
-        "measurement": [
-          {"name": "mem_used_percent"},
-          {"name": "mem_used"},
-          {"name": "mem_available"}
-        ],
-        "[REDACTED_TOKEN]": 60
-      }
-    },
-    "append_dimensions": {
-      "[REDACTED_TOKEN]": "${aws:[REDACTED_TOKEN]}"
-    },
-    "[REDACTED_TOKEN]": [
-      ["[REDACTED_TOKEN]"]
-    ]
-  }
-}
-```
-
-### 4.2 異常系テストデータ
-
-**JSON構文エラーを含む設定
-... (truncated)
-```
+**種別**: reasoning
+**ステータス**: completed
 
 ## Turn 9: ツール実行
 
 **種別**: コマンド実行
-**コマンド**: `/bin/bash -lc "sed -n '520,960p' .ai-workflow/issue-547/03_test_scenario/output/test-scenario.md"`
-**ステータス**: completed (exit_code=0)
+**コマンド**: `/bin/bash -lc 'python3 -V'`
+**ステータス**: failed (exit_code=127)
 
 ```text
-│   └── 2-2-1. [REDACTED_TOKEN]成功確認（シナリオ1）
-   │
-   └── 2-3. CloudWatch Agent動作確認（シナリオ7）
-       ├── 2-3-1. x86インスタンスでの確認
-       └── 2-3-2. ARMインスタンスでの確認
-
-3. 異常系テスト（オプション・手動シミュレーション）
-   │
-   ├── 3-1. 設定ファイル不存在テスト（シナリオ2）
-   ├── 3-2. JSON構文エラーテスト（シナリオ3）
-   └── 3-3. metricsセクション不存在テスト（シナリオ4）
-```
-
-### 6.2 実行タイムライン（見積もり）
-
-| フェーズ | テスト内容 | 所要時間 | 並行可否 |
-|---------|-----------|---------|---------|
-| Phase 1 | 静的解析 | 5分 | N/A |
-| Phase 2a | x86 AMIビルド | 20-40分 | ✓ |
-| Phase 2b | ARM AMIビルド | 20-40分 | ✓（2aと並行可能） |
-| Phase 3a | x86 CloudWatch Agent確認 | 10分 | ✓ |
-| Phase 3b | ARM CloudWatch Agent確認 | 10分 | ✓（3aと並行可能） |
-| Phase 4 | 異常系テスト（オプション） | 60-120分 | - |
-
-**合計見積もり**: 約1時間（異常系テスト除く）
-
----
-
-## 7. 合格基準と判定
-
-### 7.1 必須合格基準
-
-| ID | 基準 | 判定方法 |
-|----|------|---------|
-| AC-001 | YAMLシンタックスチェックがエラーなしで完了 | yamllintの終了コード = 0 |
-| AC-002 | x86 AMIビルドが成功 | Image Builderステータス = AVAILABLE |
-| AC-003 | ARM AMIビルドが成功 | Image Builderステータス = AVAILABLE |
-| AC-004 | [REDACTED_TOKEN]ステップが成功 | ステップステータス = SUCCESS |
-| AC-005 | 作成AMIでCloudWatch Agentが動作 | systemctl status = active (running) |
-
-### 7.2 推奨合格基準
-
-| ID | 基準 | 判定方法 |
-|----|------|---------|
-| RC-001 | CloudWatchメトリクスが送信されている | aws cloudwatch list-metricsでメトリクス存在確認 |
-| RC-002 | 異常系テストで適切なエラーハンドリング | エラーメッセージとビルド中断の確認 |
-
-### 7.3 総合判定
-
-| 判定 | 条件 |
-|------|------|
-| **PASS** | AC-001〜AC-005がすべて合格 |
-| **CONDITIONAL PASS** | AC-001〜AC-004が合格、AC-005が未確認 |
-| **FAIL** | AC-001〜AC-004のいずれかが不合格 |
-
----
-
-## 8. 品質ゲートチェックリスト
-
-### Phase 3: テストシナリオ
-
-- [x] **Phase 2の戦略に沿ったテストシナリオである**: INTEGRATION_ONLY戦略に基づき、インテグレーションテストシナリオのみを作成
-- [x] **主要な正常系がカバーされている**: シナリオ1, 5, 6, 7で正常系をカバー
-- [x] **主要な異常系がカバーされている**: シナリオ2, 3, 4で異常系をカバー
-- [x] **期待結果が明確である**: 各シナリオに具体的な期待結果を記載
-
----
-
-## 9. 参考情報
-
-### 9.1 関連ドキュメント
-
-- Planning Document: `.ai-workflow/issue-547/00_planning/output/planning.md`
-- Requirements Document: `.ai-workflow/issue-547/01_requirements/output/requirements.md`
-- Design Document: `.ai-workflow/issue-547/02_design/output/design.md`
-
-### 9.2 関連ファイル
-
-| ファイル | 説明 |
-|---------|------|
-| `pulumi/jenkins-agent-ami/component-x86.yml` | x86版コンポーネント定義（修正対象） |
-| `pulumi/jenkins-agent-ami/component-arm.yml` | ARM版コンポーネント定義（修正対象） |
-| `pulumi/jenkins-agent-ami/templates/cloudwatch-agent-config.json` | CloudWatch Agent設定テンプレート |
-| `pulumi/jenkins-agent-ami/index.ts` | Pulumiスタック定義 |
-
-### 9.3 CloudWatch Agentインストールフロー
-
-| ステップ | 行番号 | 内容 | テストでの確認 |
-|---------|-------|------|---------------|
-| [REDACTED_TOKEN] | 51-56 | jqを含む基本パッケージのインストール | jqコマンドの前提確認 |
-| [REDACTED_TOKEN] | 136-142 | CloudWatch Agentのインストール | ステップ成功確認 |
-| [REDACTED_TOKEN] | 144-154 | 設定ファイルの配置 | ステップ成功確認 |
-| [REDACTED_TOKEN] | 156-172 | 設定検証 | **本テストの主対象** |
-| [REDACTED_TOKEN] | 173-179 | サービス有効化 | ステップ成功確認 |
-
----
-
-## 改訂履歴
-
-| バージョン | 日付 | 変更内容 |
-|-----------|------|---------|
-| 1.0 | 作成日 | 初版作成 |
+/bin/bash: line 1: python3: command not found
 ```
 
 ## Turn 10: ツール実行
@@ -590,7 +130,293 @@ aws cloudwatch [REDACTED_TOKEN] \
 ## Turn 11: ツール実行
 
 **種別**: コマンド実行
-**コマンド**: `/bin/bash -lc "sed -n '1,260p' tests/integration/[REDACTED_TOKEN].py"`
+**コマンド**: `/bin/bash -lc 'python -V'`
+**ステータス**: failed (exit_code=127)
+
+```text
+/bin/bash: line 1: python: command not found
+```
+
+## Turn 12: ツール実行
+
+**種別**: reasoning
+**ステータス**: completed
+
+## Turn 13: ツール実行
+
+**種別**: コマンド実行
+**コマンド**: `/bin/bash -lc whoami`
+**ステータス**: completed (exit_code=0)
+
+```text
+node
+```
+
+## Turn 14: ツール実行
+
+**種別**: reasoning
+**ステータス**: completed
+
+## Turn 15: ツール実行
+
+**種別**: コマンド実行
+**コマンド**: `/bin/bash -lc 'apt-get --version'`
+**ステータス**: completed (exit_code=0)
+
+```text
+apt 2.6.1 (amd64)
+Supported modules:
+*Ver: Standard .deb
+*Pkg:  Debian dpkg interface (Priority 30)
+ Pkg:  Debian APT solver interface (Priority -1000)
+ Pkg:  Debian APT planner interface (Priority -1000)
+ S.L: 'deb' Debian binary tree
+ S.L: 'deb-src' Debian source tree
+ Idx: Debian Source Index
+ Idx: Debian Package Index
+ Idx: Debian Translation Index
+ Idx: Debian dpkg status file
+ Idx: Debian deb file
+ Idx: Debian dsc file
+ Idx: Debian control file
+ Idx: EDSP scenario file
+ Idx: EIPP scenario file
+```
+
+## Turn 16: ツール実行
+
+**種別**: reasoning
+**ステータス**: completed
+
+## Turn 17: ツール実行
+
+**種別**: コマンド実行
+**コマンド**: `/bin/bash -lc 'sudo apt-get update'`
+**ステータス**: failed (exit_code=127)
+
+```text
+/bin/bash: line 1: sudo: command not found
+```
+
+## Turn 18: ツール実行
+
+**種別**: reasoning
+**ステータス**: completed
+
+## Turn 19: ツール実行
+
+**種別**: コマンド実行
+**コマンド**: `/bin/bash -lc id`
+**ステータス**: completed (exit_code=0)
+
+```text
+uid=1000(node) gid=1000(node) groups=1000(node)
+```
+
+## Turn 20: ツール実行
+
+**種別**: reasoning
+**ステータス**: completed
+
+## Turn 21: ツール実行
+
+**種別**: コマンド実行
+**コマンド**: `/bin/bash -lc 'uv --version'`
+**ステータス**: failed (exit_code=127)
+
+```text
+/bin/bash: line 1: uv: command not found
+```
+
+## Turn 22: ツール実行
+
+**種別**: reasoning
+**ステータス**: completed
+
+## Turn 23: ツール実行
+
+**種別**: コマンド実行
+**コマンド**: `/bin/bash -lc 'docker --version'`
+**ステータス**: failed (exit_code=127)
+
+```text
+/bin/bash: line 1: docker: command not found
+```
+
+## Turn 24: ツール実行
+
+**種別**: reasoning
+**ステータス**: completed
+
+## Turn 25: ツール実行
+
+**種別**: コマンド実行
+**コマンド**: `/bin/bash -lc 'podman --version'`
+**ステータス**: failed (exit_code=127)
+
+```text
+/bin/bash: line 1: podman: command not found
+```
+
+## Turn 26: ツール実行
+
+**種別**: reasoning
+**ステータス**: completed
+
+## Turn 27: ツール実行
+
+**種別**: コマンド実行
+**コマンド**: `/bin/bash -lc 'rg "pytest"'`
+**ステータス**: failed (exit_code=127)
+
+```text
+/bin/bash: line 1: rg: command not found
+```
+
+## Turn 28: ツール実行
+
+**種別**: reasoning
+**ステータス**: completed
+
+## Turn 29: ツール実行
+
+**種別**: コマンド実行
+**コマンド**: `/bin/bash -lc 'find . -maxdepth 4 -name "requirements*.txt"'`
+**ステータス**: completed (exit_code=0)
+
+## Turn 30: ツール実行
+
+**種別**: reasoning
+**ステータス**: completed
+
+## Turn 31: ツール実行
+
+**種別**: コマンド実行
+**コマンド**: `/bin/bash -lc 'curl -L -o /tmp/miniforge.sh https://__GITHUB_URL_0__/releases/latest/download/[REDACTED_TOKEN].sh'`
+**ステータス**: completed (exit_code=0)
+
+```text
+% Total    % Received % Xferd  Average Speed   Time    Time     Time  Current
+                                 Dload  Upload   Total   Spent    Left  Speed
+  0     0    0     0    0     0      0      0 --:--:-- --:--:-- --:--:--     0  0     0    0     0    0     0      0      0 --:--:-- --:--:-- --:--:--     0
+  0     0    0     0    0     0      0      0 --:--:-- --:--:-- --:--:--     0
+  3 81.7M    3 2830k    0     0  3637k      0  0:00:23 --:--:--  0:00:23 3637k100 81.7M  100 81.7M    0     0  56.7M      0  0:00:01  0:00:01 --:--:--  119M
+```
+
+## Turn 32: ツール実行
+
+**種別**: reasoning
+**ステータス**: completed
+
+## Turn 33: ツール実行
+
+**種別**: コマンド実行
+**コマンド**: `/bin/bash -lc 'bash /tmp/miniforge.sh -b -p /tmp/miniforge'`
+**ステータス**: completed (exit_code=0)
+
+```text
+PREFIX=/tmp/miniforge
+Unpacking bootstrapper...
+Unpacking payload...
+Extracting _libgcc_mutex-0.1-conda_forge.tar.bz2
+Extracting [REDACTED_TOKEN].11.12-hbd8a1cb_0.conda
+Extracting libgomp-15.2.0-he0feb66_15.conda
+Extracting nlohmann_json-abi-3.12.0-h0f90c79_1.conda
+Extracting [REDACTED_TOKEN].conda
+Extracting python_abi-3.12-8_cp312.conda
+Extracting [REDACTED_TOKEN].conda
+Extracting _openmp_mutex-4.5-2_gnu.tar.bz2
+Extracting libgcc-15.2.0-he0feb66_15.conda
+Extracting bzip2-1.0.8-hda65f42_8.conda
+Extracting c-ares-1.34.5-hb9d3cd8_0.conda
+Extracting keyutils-1.6.3-hb9d3cd8_0.conda
+Extracting libexpat-2.7.3-hecca717_0.conda
+Extracting libffi-3.5.2-h9ec8514_0.conda
+Extracting libgcc-ng-15.2.0-h69a702a_15.conda
+Extracting libiconv-1.18-h3b78370_2.conda
+Extracting liblzma-5.8.1-hb9d3cd8_2.conda
+Extracting libnsl-2.0.1-hb9d3cd8_1.conda
+Extracting libstdcxx-15.2.0-h934c35e_15.conda
+Extracting libuuid-2.41.2-h5347b49_1.conda
+Extracting libzlib-1.3.1-hb9d3cd8_2.conda
+Extracting lzo-2.10-h280c20c_1002.conda
+Extracting ncurses-6.5-h2d0b736_3.conda
+Extracting openssl-3.6.0-h26f9b46_0.conda
+Extracting reproc-14.2.5.post0-hb9d3cd8_0.conda
+Extracting cpp-expected-1.3.1-h171cf75_0.conda
+Extracting fmt-12.0.0-h2b0788b_0.conda
+Extracting libedit-3.1.[REDACTED_TOKEN].conda
+Extracting libev-4.33-hd590300_2.conda
+Extracting libsolv-0.7.35-h9463b59_0.conda
+Extracting libsqlite-3.51.1-h0c1763c_0.conda
+Extracting libssh2-1.11.1-hcf80075_0.conda
+Extracting libstdcxx-ng-15.2.0-hdf11a46_15.conda
+Extracting libxcrypt-4.4.36-hd590300_1.conda
+Extracting libxml2-16-2.15.1-hf2a90c1_0.conda
+Extracting lz4-c-1.10.0-h5888daf_1.conda
+Extracting readline-8.2-h8c095d6_2.conda
+Extracting reproc-cpp-14.2.5.post0-h5888daf_0.conda
+Extracting simdjson-4.2.2-hb700be7_0.conda
+Extracting tk-8.6.[REDACTED_TOKEN].conda
+Extracting yaml-cpp-0.8.0-h3f2d84a_0.conda
+Extracting zstd-1.5.7-hb78ec9c_6.conda
+Extracting krb5-1.21.3-h659f571_0.conda
+Extracting ld_impl_linux-64-2.[REDACTED_TOKEN].conda
+Extracting libnghttp2-1.67.0-had1ee68_0.conda
+Extracting libxml2-2.15.1-h031cc0b_0.conda
+Extracting libarchive-3.8.2-gpl_h7be2006_100.conda
+Extracting libcurl-8.17.0-h4e3cde8_0.conda
+Extracting python-3.12.[REDACTED_TOKEN].conda
+Extracting libmamba-2.4.0-hed7d790_1.conda
+Extracting menuinst-2.4.1-py312h7900ff3_0.conda
+Extracting archspec-0.2.5-pyhd8ed1ab_0.conda
+Extracting boltons-25.0.0-pyhd8ed1ab_0.conda
+Extracting brotli-python-1.2.0-py312hdb49522_1.conda
+Extracting certifi-2025.11.12-pyhd8ed1ab_0.conda
+Extracting [REDACTED_TOKEN].4.4-pyhd8ed1ab_0.conda
+Extracting colorama-0.4.6-pyhd8ed1ab_1.conda
+Extracting distro-1.9.0-pyhd8ed1ab_1.conda
+Extracting frozendict-2.4.7-py312h4c3975b_0.conda
+Extracting hpack-4.1.0-pyhd8ed1ab_0.conda
+Extracting hyperframe-6.1.0-pyhd8ed1ab_0.conda
+Extracting idna-3.11-pyhd8ed1ab_0.conda
+Extracting jsonpointer-3.0.0-py312h7900ff3_2.conda
+Extracting libmambapy-2.4.0-py312h17091a9_1.conda
+Extracting mamba-2.4.0-h7ae174a_1.conda
+Extracting msgpack-python-1.1.2-py312hd9148b4_1.conda
+Extracting packaging-25.0-pyh29332c3_1.conda
+Extracting platformdirs-4.5.0-pyhcf101f3_0.conda
+Extracting pluggy-1.6.0-pyhf9edf01_1.conda
+Extracting pycosat-0.6.6-py312h4c3975b_3.conda
+Extracting pycparser-2.22-pyh29332c3_1.conda
+Extracting pysocks-1.7.1-pyha55dd90_7.conda
+Extracting ruamel.yaml.clib-0.2.14-py312h4c3975b_0.conda
+Extracting setuptools-80.9.0-pyhff2d567_0.conda
+Extracting truststore-0.10.3-pyhe01879c_0.conda
+Extracting wheel-0.45.1-pyhd8ed1ab_1.conda
+Extracting cffi-2.0.0-py312h460c074_1.conda
+Extracting h2-4.3.0-pyhcf101f3_0.conda
+Extracting jsonpatch-1.33-pyhd8ed1ab_1.conda
+Extracting pip-25.3-pyh8b19718_0.conda
+Extracting ruamel.yaml-0.18.16-py312h4c3975b_0.conda
+Extracting tqdm-4.67.1-pyhd8ed1ab_1.conda
+Extracting zstandard-0.25.0-py312h5253ce2_1.conda
+Extracting [REDACTED_TOKEN].12.0-pyhd8ed1ab_0.conda
+Extracting urllib3-2.5.0-pyhd8ed1ab_0.conda
+Extracting requests-2.32.5-pyhd8ed1ab_0.conda
+Extracting cond
+... (truncated)
+```
+
+## Turn 34: ツール実行
+
+**種別**: reasoning
+**ステータス**: completed
+
+## Turn 35: ツール実行
+
+**種別**: コマンド実行
+**コマンド**: `/bin/bash -lc "sed -n '1,240p' tests/integration/[REDACTED_TOKEN].py"`
 **ステータス**: completed (exit_code=0)
 
 ```text
@@ -601,6 +427,8 @@ import os
 import re
 import shutil
 import subprocess
+import tempfile
+import textwrap
 import unittest
 from pathlib import Path
 
@@ -612,7 +440,7 @@ class [REDACTED_TOKEN](unittest.TestCase):
     def setUpClass(cls):
         cls.repo_root = Path(__file__).resolve().parents[2]
         cls.ami_dir = cls.repo_root / "pulumi" / "jenkins-agent-ami"
-        cls.helper_script = cls.repo_root / "tests" / "integration" / "helpers" / "render_jenkins_agent_ami_components.js"
+        cls.helper_script = cls.repo_root / "tests" / "integration" / "helpers" / "[REDACTED_TOKEN].js"
         cls.compiled_index = cls.ami_dir / "bin" / "index.js"
         cls.[REDACTED_TOKEN]()
         cls._build_typescript()
@@ -644,8 +472,8 @@ class [REDACTED_TOKEN](unittest.TestCase):
         """Copy CloudWatch template and component YAMLs next to the compiled index for synthesis."""
         assets = [
             (
-                cls.ami_dir / "templates" / "cloudwatch-agent-config.json",
-                cls.compiled_index.parent / "templates" / "cloudwatch-agent-config.json",
+                cls.ami_dir / "templates" / "[REDACTED_TOKEN].json",
+                cls.compiled_index.parent / "templates" / "[REDACTED_TOKEN].json",
             ),
             (cls.ami_dir / "component-arm.yml", cls.compiled_index.parent / "component-arm.yml"),
             (cls.ami_dir / "component-x86.yml", cls.compiled_index.parent / "component-x86.yml"),
@@ -672,7 +500,7 @@ class [REDACTED_TOKEN](unittest.TestCase):
         self.assertGreaterEqual(len(components), 2, "Both ARM/x86 components should be synthesized")
         return {c["name"]: c for c in components}
 
-    def [REDACTED_TOKEN](self, component_data: str) -> dict:
+    def [REDACTED_TOKEN](self, component_data: str, component_name: str) -> dict:
         self.assertNotIn("__CWAGENT_CONFIG__", component_data, "Template placeholder must be replaced")
         # Pull the CloudWatch Agent heredoc body out of the component YAML for JSON decoding.
         match = re.search(
@@ -680,430 +508,74 @@ class [REDACTED_TOKEN](unittest.TestCase):
             component_data,
             re.DOTALL,
         )
-        self.assertIsNotNone(match, "CloudWatch Agent config heredoc should be embedded in component data")
+        self.assertIsNotNone(
+            match, f"CloudWatch Agent config heredoc should be embedded in component data ({component_name})"
+        )
         try:
             return json.loads(match.group("body").strip())
         except json.JSONDecodeError as exc:
-            self.fail(f"Embedded CloudWatch Agent config is not valid JSON: {exc}")
+            self.fail(f"[{component_name}] Embedded CloudWatch Agent config is not valid JSON: {exc}")
 
-    def [REDACTED_TOKEN](self):
-        """IT-544-01: ARM/x86 components should share identical CloudWatch Agent CPU/Mem config."""
-        components = self._component_map()
-        self.assertSetEqual(set(components.keys()), {"agent-component-x86", "agent-component-arm"})
-
-        configs = {name: self.[REDACTED_TOKEN](comp["data"]) for name, comp in
+    def [REDACTED_TOKEN](self, component_data: str, config_path: Path) -> str:
+        match = re.search(
+            r"- name: [REDACTED_TOKEN][\s\S]*?- \|\n(?P<body>[\s\S]*?)\n\s*- cat /opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json",
+            component_data,
 ... (truncated)
 ```
-
-## Turn 12: ツール実行
-
-**種別**: reasoning
-**ステータス**: completed
-
-## Turn 13: ツール実行
-
-**種別**: コマンド実行
-**コマンド**: `/bin/bash -lc "sed -n '1,260p' tests/integration/helpers/render_jenkins_agent_ami_components.js"`
-**ステータス**: completed (exit_code=0)
-
-```text
-// Helper script to synthesize the jenkins-agent-ami Pulumi program with mocks.
-// Captures Image Builder components so integration tests can assert on the
-// embedded CloudWatch Agent configuration without AWS credentials.
-
-const path = require("path");
-const Module = require("module");
-
-// Ensure Pulumi dependencies resolve from the jenkins-agent-ami package.
-const amiNodeModules = path.resolve(__dirname, "..", "..", "..", "pulumi", "jenkins-agent-ami", "node_modules");
-if (!Module.globalPaths.includes(amiNodeModules)) {
-  Module.globalPaths.push(amiNodeModules);
-}
-process.env.NODE_PATH = [amiNodeModules, process.env.NODE_PATH || ""].filter(Boolean).join(path.delimiter);
-Module._initPaths();
-
-// Silence program-level console output so stdout stays JSON-only unless
-// debugging is explicitly enabled.
-const originalConsoleLog = console.log;
-console.log = process.env.PULUMI_MOCK_DEBUG ? originalConsoleLog : () => {};
-
-const runtime = require("@pulumi/pulumi/runtime");
-
-const DEFAULT_STACK = "test";
-const capturedComponents = [];
-let resourceCount = 0;
-let programExports = [];
-
-const ssmValueBySuffix = {
-  "config/project-name": "jenkins-infra",
-  "network/vpc-id": "vpc-123456",
-  "network/public-subnet-a-id": "subnet-public-a",
-  "network/public-subnet-b-id": "subnet-public-b",
-  "security/jenkins-agent-sg-id": "sg-jenkins-agent",
-};
-
-const mockIdFor = (name) => `${name}-id`;
-
-runtime.setMocks(
-  {
-    newResource: function (args) {
-      if (process.env.PULUMI_MOCK_DEBUG) {
-        console.error("newResource", args.type, args.name);
-      }
-      resourceCount += 1;
-      if (args.type === "aws:imagebuilder/component:Component") {
-        capturedComponents.push({
-          urn: args.urn,
-          name: args.name,
-          state: { ...args.inputs },
-        });
-      }
-      return {
-        id: mockIdFor(args.name),
-        state: {
-          ...args.inputs,
-          arn: args.inputs.arn || `${args.name}-arn`,
-        },
-      };
-    },
-    call: function (args) {
-      const callArgs = args?.args || args?.inputs || {};
-      if (process.env.PULUMI_MOCK_DEBUG) {
-        console.error("call", args.token, callArgs);
-      }
-      if (args.token === "aws:ssm/getParameter:getParameter") {
-        const name = callArgs.name || "";
-        const suffix = name.split("/").slice(-2).join("/");
-        const value = ssmValueBySuffix[suffix] || "mock-value";
-        return { value };
-      }
-      if (args.token === "aws:ec2/getAmi:getAmi") {
-        return {
-          id: "ami-1234567890",
-          name: "mock-ami",
-        };
-      }
-      return {
-        id: mockIdFor(args.token.replace(/[:/]/g, "-")),
-        ...callArgs,
-      };
-    },
-  },
-  "jenkins-agent-ami",
-  DEFAULT_STACK,
-  true
-);
-
-async function main() {
-  const compiledIndexPath = path.resolve(__dirname, "..", "..", "..", "pulumi", "jenkins-agent-ami", "bin", "index.js");
-  try {
-    await runtime.runInPulumiStack(async () => {
-      const program = await import(compiledIndexPath);
-      programExports = Object.keys(program || {}).filter((key) => key !== "default" && key !== "__esModule");
-    });
-    await runtime.waitForRPCs();
-  } catch (error) {
-    console.error("Pulumi synthesis failed", error);
-    throw error;
-  }
-
-  const summary = {
-    components: capturedComponents.map((res) => ({
-      urn: res.urn,
-      name: res.name,
-      data: res.state.data,
-      platform: res.state.platform,
-      version: res.state.version,
-      description: res.state.description,
-    })),
-    exports: programExports,
-    resourceCount,
-  };
-
-  process.stdout.write(JSON.stringify(summary, null, 2));
-}
-
-main().catch((err) => {
-  console.error(err);
-  process.exit(1);
-});
-```
-
-## Turn 14: ツール実行
-
-**種別**: reasoning
-**ステータス**: completed
-
-## Turn 15: ツール実行
-
-**種別**: コマンド実行
-**コマンド**: `/bin/bash -lc "sed -n '120,220p' pulumi/jenkins-agent-ami/component-x86.yml"`
-**ステータス**: completed (exit_code=0)
-
-```text
-- name: InstallAnsible
-        action: ExecuteBash
-        inputs:
-          commands:
-            - echo "Installing Ansible..."
-            - pip3 install ansible ansible-core
-            - ansible --version
-
-      - name: InstallMitogen
-        action: ExecuteBash
-        inputs:
-          commands:
-            - echo "Installing Mitogen for Ansible..."
-            - pip3 install mitogen
-            - python3 -c "import ansible_mitogen" && echo "Mitogen installed successfully"
-
-      - name: [REDACTED_TOKEN]
-        action: ExecuteBash
-        inputs:
-          commands:
-            - echo "Installing CloudWatch Agent..."
-            - dnf install -y amazon-cloudwatch-agent
-            - rpm -q amazon-cloudwatch-agent
-
-      - name: [REDACTED_TOKEN]
-        action: ExecuteBash
-        inputs:
-          commands:
-            - echo "Configuring CloudWatch Agent..."
-            - mkdir -p /opt/aws/amazon-cloudwatch-agent/etc
-            - |
-              cat > /opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json << 'EOF'
-              __CWAGENT_CONFIG__
-              EOF
-            - cat /opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json
-
-      - name: [REDACTED_TOKEN]
-        action: ExecuteBash
-        inputs:
-          commands:
-            - echo "Validating CloudWatch Agent configuration..."
-            - |
-              set -e
-              CONFIG_PATH="/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json"
-              # 設定ファイルの存在確認
-              if [ ! -f "$CONFIG_PATH" ]; then
-                echo "ERROR: Configuration file not found at $CONFIG_PATH"
-                exit 1
-              fi
-              # JSONシンタックスチェック（jqを使用）
-              echo "Checking JSON syntax..."
-              if ! jq empty "$CONFIG_PATH" 2>/dev/null; then
-                echo "ERROR: Invalid JSON syntax in $CONFIG_PATH"
-                jq . "$CONFIG_PATH" 2>&1 || true
-                exit 1
-              fi
-              # 基本的な構造チェック（metricsセクションの存在確認）
-              if ! jq -e '.metrics' "$CONFIG_PATH" >/dev/null 2>&1; then
-                echo "WARNING: 'metrics' section not found in configuration"
-              fi
-              echo "CloudWatch Agent configuration validation passed."
-            - cat /opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json
-
-      - name: [REDACTED_TOKEN]
-        action: ExecuteBash
-        inputs:
-          commands:
-            - echo "Enabling CloudWatch Agent service..."
-            - systemctl enable amazon-cloudwatch-agent
-            - echo "CloudWatch Agent will start automatically on instance boot"
-
-      - name: PullDockerImages
-        action: ExecuteBash
-        inputs:
-          commands:
-            - echo "===== Docker Image Pre-pulling for faster job startup ====="
-            - echo "Starting Docker daemon..."
-            - systemctl start docker
-            - sleep 5
-            - 'systemctl is-active docker || (echo "ERROR: Docker daemon is not running" && exit 1)'
-            - echo "Docker daemon is running. Starting image pull..."
-            - echo "Pulling Python images..."
-            - 'docker pull python:3.11-slim || echo "WARNING: Failed to pull python:3.11-slim"'
-            - echo "Pulling Node.js images..."
-            - 'docker pull node:18-slim || echo "WARNING: Failed to pull node:18-slim"'
-            - 'docker pull node:20-slim || echo "WARNING: Failed to pull node:20-slim"'
-            - echo "Pulling Rust images..."
-            - 'docker pull rust:1.76-slim || echo "WARNING: Failed to pull rust:1.76-slim"'
-            - 'docker pull rust:slim || echo "WARNING: Failed to pull rust:slim"'
-            - echo "Pulling AWS CLI image..."
-            - 'docker pull amazon/aws-cli:latest || echo "WARNING: Failed to pull amazon/aws-cli:latest"'
-            - echo "Pulling Pulumi image..."
-            - 'docker pull pulumi/pulumi:latest || echo "WARNING: Failed to pull pulumi/pulumi:latest"'
-... (truncated)
-```
-
-## Turn 16: ツール実行
-
-**種別**: reasoning
-**ステータス**: completed
-
-## Turn 17: ツール実行
-
-**種別**: コマンド実行
-**コマンド**: `/bin/bash -lc 'ls tests/integration'`
-**ステータス**: completed (exit_code=0)
-
-```text
-__init__.py
-ecs-fargate
-helpers
-[REDACTED_TOKEN].py
-[REDACTED_TOKEN].py
-[REDACTED_TOKEN].py
-[REDACTED_TOKEN].py
-[REDACTED_TOKEN].py
-[REDACTED_TOKEN].py
-[REDACTED_TOKEN].py
-[REDACTED_TOKEN].py
-[REDACTED_TOKEN].py
-[REDACTED_TOKEN].py
-```
-
-## Turn 18: ツール実行
-
-**種別**: reasoning
-**ステータス**: completed
-
-## Turn 19: ツール実行
-
-**種別**: コマンド実行
-**コマンド**: `/bin/bash -lc 'rg "Image Builder" tests/integration -g"*.py"'`
-**ステータス**: failed (exit_code=127)
-
-```text
-/bin/bash: line 1: rg: command not found
-```
-
-## Turn 20: ツール実行
-
-**種別**: reasoning
-**ステータス**: completed
-
-## Turn 21: ツール実行
-
-**種別**: コマンド実行
-**コマンド**: `/bin/bash -lc 'grep -R "Image Builder" -n tests/integration'`
-**ステータス**: completed (exit_code=0)
-
-```text
-tests/integration/helpers/render_jenkins_agent_ami_components.js:2:// Captures Image Builder components so integration tests can assert on the
-tests/integration/[REDACTED_TOKEN].py:13:    """INTEGRATION_ONLY checks for Image Builder components and CloudWatch Agent config."""
-tests/integration/[REDACTED_TOKEN].py:168:            "Preview should only synthesize the known Image Builder resources after CPU metric addition",
-tests/integration/[REDACTED_TOKEN].py:100:            ami.get("description"), "Jenkins Agent AMI builder using EC2 Image Builder"
-```
-
-## Turn 22: ツール実行
-
-**種別**: reasoning
-**ステータス**: completed
-
-## Turn 23: ツール実行
-
-**種別**: コマンド実行
-**コマンド**: `/bin/bash -lc 'jq --version'`
-**ステータス**: completed (exit_code=0)
-
-```text
-jq-1.6
-```
-
-## Turn 24: ツール実行
-
-**種別**: reasoning
-**ステータス**: completed
-
-## Turn 25: ツール実行
-
-**種別**: reasoning
-**ステータス**: completed
-
-## Turn 26: ツール実行
-
-**種別**: コマンド実行
-**コマンド**: `/bin/bash -lc 'cat .ai-workflow/issue-547/05_test_implementation/output/test-implementation.md'`
-**ステータス**: completed (exit_code=0)
-
-```text
-# テスト実装完了レポート
-
-## テストファイル一覧
-
-| ファイル | テスト数 | カバー対象 |
-|---------|---------|-----------|
-| `tests/integration/[REDACTED_TOKEN].py` | 5 | Jenkins Agent AMIのCloudWatch Agent設定検証（component-x86.yml/component-arm.yml） |
-
-## テストカバレッジ
-
-- ユニットテスト: 0件
-- 統合テスト: 5件
-- BDDテスト: 0件
-- カバレッジ率: N/A（静的検証ベースのため未算出）
-```
-
-## Turn 27: ツール実行
-
-**種別**: reasoning
-**ステータス**: completed
-
-## Turn 28: ツール実行
-
-**種別**: file_change
-**ステータス**: completed
-
-## Turn 29: ツール実行
-
-**種別**: reasoning
-**ステータス**: completed
-
-## Turn 30: ツール実行
-
-**種別**: reasoning
-**ステータス**: completed
-
-## Turn 31: ツール実行
-
-**種別**: コマンド実行
-**コマンド**: `/bin/bash -lc 'python -m pytest tests/integration/[REDACTED_TOKEN].py -q'`
-**ステータス**: failed (exit_code=127)
-
-```text
-/bin/bash: line 1: python: command not found
-```
-
-## Turn 32: ツール実行
-
-**種別**: reasoning
-**ステータス**: completed
-
-## Turn 33: ツール実行
-
-**種別**: コマンド実行
-**コマンド**: `/bin/bash -lc 'python3 -m pytest tests/integration/[REDACTED_TOKEN].py -q'`
-**ステータス**: failed (exit_code=127)
-
-```text
-/bin/bash: line 1: python3: command not found
-```
-
-## Turn 34: ツール実行
-
-**種別**: reasoning
-**ステータス**: completed
-
-## Turn 35: ツール実行
-
-**種別**: reasoning
-**ステータス**: completed
 
 ## Turn 36: ツール実行
 
-**種別**: file_change
-**ステータス**: completed
+**種別**: コマンド実行
+**コマンド**: `/bin/bash -lc "sed -n '240,520p' tests/integration/[REDACTED_TOKEN].py"`
+**ステータス**: completed (exit_code=0)
+
+```text
+self.assertIn("WARNING: 'metrics' section not found in configuration", output)
+        self.assertIn("CloudWatch Agent configuration validation passed.", output)
+
+    def [REDACTED_TOKEN](self):
+        """IT-547-10: [REDACTED_TOKEN] should trigger service enablement when validation passes."""
+        for component_name in ("agent-component-x86", "agent-component-arm"):
+            code, output = self._run_enable_step(component_name=component_name)
+            self.assertEqual(0, code, f"{component_name} enable step should succeed with stub systemctl")
+            self.assertIn("Enabling CloudWatch Agent service...", output)
+            self.assertIn("systemctl enable amazon-cloudwatch-agent", output)
+            self.assertIn("CloudWatch Agent will start automatically on instance boot", output)
+
+    def [REDACTED_TOKEN](self):
+        """IT-544-04: Pulumi preview (mocked) should surface only expected resources/exports."""
+        expected_exports = {
+            "imagePipelineX86Arn",
+            "imagePipelineArmArn",
+            "imageBuilderRoleArn",
+            "[REDACTED_TOKEN]",
+            "[REDACTED_TOKEN]",
+            "[REDACTED_TOKEN]",
+            "[REDACTED_TOKEN]",
+            "[REDACTED_TOKEN]",
+            "[REDACTED_TOKEN]",
+        }
+        self.assertEqual(
+            21,
+            self.preview.get("resourceCount"),
+            "Preview should only synthesize the known Image Builder resources after CPU metric addition",
+        )
+        self.assertSetEqual(expected_exports, set(self.preview.get("exports", [])))
+
+    def [REDACTED_TOKEN](self):
+        """IT-544-05: CPU dashboard/alarm initial values should be recorded for ops handoff."""
+        doc_path = self.repo_root / "docs" / "operations" / "[REDACTED_TOKEN].md"
+        self.assertTrue(doc_path.exists(), "Operations doc for CPU dashboards/alarms must exist")
+        content = doc_path.read_text(encoding="utf-8")
+        self.assertIn("[REDACTED_TOKEN]", content, "ASG dimension must be documented for dashboards/alarms")
+        self.assertRegex(content, r"(CPU.*80%|80%.*CPU)", "CPU high-usage threshold guidance should be present")
+        self.assertRegex(content, r"(5 ?minutes|5\\s*分)", "Sustained high-usage period guidance should be present")
+        self.assertIn("adjust", content.lower(), "Operators should be instructed that thresholds are tunable")
+
+
+if __name__ == "__main__":  # pragma: no cover
+    unittest.main()
+```
 
 ## Turn 37: ツール実行
 
@@ -1113,30 +585,12 @@ jq-1.6
 ## Turn 38: ツール実行
 
 **種別**: コマンド実行
-**コマンド**: `/bin/bash -lc "cat <<'EOF' > .ai-workflow/issue-547/05_test_implementation/output/test-implementation.md
-# テスト実装ログ (Issue #547)
-
-## 実施概要
-- "'`tests/integration/[REDACTED_TOKEN].py` を更新し、Image Builder の [REDACTED_TOKEN] ステップを bash+jq で再生するランタイム統合テストを追加。
-- ARM/x86 両アーキテクチャの正常系に加え、設定ファイル不存在・JSON構文エラー・metrics欠落の異常/警告系シナリオを自動化。
-- CloudWatch Agent 設定抽出時のエラーメッセージにアーキテクチャ名を含め、デバッグ容易性を向上。
-
-## シナリオ対応状況
-- シナリオ1（正常系）、シナリオ2（設定ファイル不存在）、シナリオ3（JSON構文エラー）、シナリオ4（metrics欠落警告）を新規テストで自動実行。
-- シナリオ5/6 は x86/ARM 両方の検証ステップを再生することで成功パスを確認。
-- シナリオ7 は実AMIでのサービス稼働確認が必要なため、テストでは systemctl シムで起動コマンドが呼ばれることを検証し、実環境での最終確認を前提とする。
-
-## 実行結果
-- 実行コマンド: `python3 -m pytest tests/integration/[REDACTED_TOKEN].py -q`
-- 結果: 実行不可（環境に python3 が見つからず）。python3 を用意した環境で再実行してください。
-
-## 修正履歴
-### 修正1: [REDACTED_TOKEN] ランタイム検証の自動化
-- **指摘内容**: Phase 3 のシナリオに沿ったランタイム検証が欠落し、[REDACTED_TOKEN] の正常/異常/警告パスを網羅できていない。
-- **修正内容**: コンポーネントYAMLから検証スクリプトを抽出して bash+jq で実行する統合テストを追加。設定ファイル不存在・JSON構文エラー・metrics欠落・x86/ARM 両アーキテクチャの正常系、および [REDACTED_TOKEN] ステップの実行をシムで確認。
-- **影響範囲**: tests/integration/[REDACTED_TOKEN].py
-EOF'`
+**コマンド**: `/bin/bash -lc 'node -v'`
 **ステータス**: completed (exit_code=0)
+
+```text
+v20.19.5
+```
 
 ## Turn 39: ツール実行
 
@@ -1145,27 +599,149 @@ EOF'`
 
 ## Turn 40: ツール実行
 
-**種別**: reasoning
-**ステータス**: completed
+**種別**: コマンド実行
+**コマンド**: `/bin/bash -lc 'npm -v'`
+**ステータス**: completed (exit_code=0)
+
+```text
+10.8.2
+```
 
 ## Turn 41: ツール実行
 
-**種別**: agent_message
+**種別**: reasoning
 **ステータス**: completed
 
 ## Turn 42: ツール実行
 
-**種別**: todo_list
+**種別**: コマンド実行
+**コマンド**: `/bin/bash -lc '/tmp/miniforge/bin/pip install pytest'`
+**ステータス**: completed (exit_code=0)
+
+```text
+Collecting pytest
+  Downloading pytest-9.0.2-py3-none-any.whl.metadata (7.6 kB)
+Collecting iniconfig>=1.0.1 (from pytest)
+  Downloading iniconfig-2.3.0-py3-none-any.whl.metadata (2.5 kB)
+Requirement already satisfied: packaging>=22 in /tmp/miniforge/lib/python3.12/site-packages (from pytest) (25.0)
+Requirement already satisfied: pluggy<2,>=1.5 in /tmp/miniforge/lib/python3.12/site-packages (from pytest) (1.6.0)
+Collecting pygments>=2.7.2 (from pytest)
+  Downloading pygments-2.19.2-py3-none-any.whl.metadata (2.5 kB)
+Downloading pytest-9.0.2-py3-none-any.whl (374 kB)
+Downloading iniconfig-2.3.0-py3-none-any.whl (7.5 kB)
+Downloading pygments-2.19.2-py3-none-any.whl (1.2 MB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 1.2/1.2 MB 38.9 MB/s  0:00:00
+Installing collected packages: pygments, iniconfig, pytest
+
+Successfully installed iniconfig-2.3.0 pygments-2.19.2 pytest-9.0.2
+```
+
+## Turn 43: ツール実行
+
+**種別**: reasoning
 **ステータス**: completed
 
-## Turn 43: 実行完了
+## Turn 44: ツール実行
+
+**種別**: コマンド実行
+**コマンド**: `/bin/bash -lc 'PATH="/tmp/miniforge/bin:$PATH" python3 -m pytest tests/integration/[REDACTED_TOKEN].py -q'`
+**ステータス**: completed (exit_code=0)
+
+```text
+..........                                                               [100%]
+10 passed in 62.16s (0:01:02)
+```
+
+## Turn 45: ツール実行
+
+**種別**: reasoning
+**ステータス**: completed
+
+## Turn 46: ツール実行
+
+**種別**: コマンド実行
+**コマンド**: `/bin/bash -lc "cat <<'EOF' > .ai-workflow/issue-547/05_test_implementation/output/test-implementation.md
+# テスト実装ログ (Issue #547)
+
+## 実施概要
+- 既存の統合テスト "'`tests/integration/[REDACTED_TOKEN].py` を再確認し、Phase 3 の正常系・異常系・警告系・[REDACTED_TOKEN] シナリオ（IT-544/547）を網羅していることを維持。
+- ブロッカーだった python3 不在を解消し、pytest でテスト実行できる環境を準備。
+- リポジトリのテストコードや実装コードへの変更は無し（環境整備のみ）。
+
+## 品質ゲート判定
+- Phase 3 のテストシナリオがすべて実装されている: PASS（正常/異常/警告/Enable の各ケースを IT-544/547 シナリオとしてカバー済み）
+- テストコードが実行可能である: PASS（python3+pytest を準備し、テストを実行して成功を確認）
+- テストの意図がコメントで明確: PASS（各テストに BDD 形式 docstring が付与済み）
+- 総合判定: PASS
+
+## 実行結果
+- 環境準備: Miniforge3 (Python 3.12.12) を `/tmp/miniforge` にインストールし、`pip install pytest` で pytest 9.0.2 を導入。
+- 実行コマンド: `PATH="/tmp/miniforge/bin:$PATH" python3 -m pytest tests/integration/[REDACTED_TOKEN].py -q`
+- 実行ログ: `10 passed in 62.16s`
+
+## 修正履歴
+### 修正1: python3 実行環境の整備
+- **指摘内容**: python3 不在で `python3 -m pytest ...` が実行できず、品質ゲート「テストコードが実行可能」が FAIL。
+- **修正内容**: Miniforge3 をサイレントインストールして Python 3.12.12 を用意し、pytest を導入したうえで統合テストを実行し成功を確認。
+- **影響範囲**: 環境依存のみ（リポジトリのソースコードは未変更）。
+EOF'`
+**ステータス**: completed (exit_code=0)
+
+## Turn 47: ツール実行
+
+**種別**: reasoning
+**ステータス**: completed
+
+## Turn 48: ツール実行
+
+**種別**: コマンド実行
+**コマンド**: `/bin/bash -lc 'cat .ai-workflow/issue-547/05_test_implementation/output/test-implementation.md'`
+**ステータス**: completed (exit_code=0)
+
+```text
+# テスト実装ログ (Issue #547)
+
+## 実施概要
+- 既存の統合テスト `tests/integration/[REDACTED_TOKEN].py` を再確認し、Phase 3 の正常系・異常系・警告系・[REDACTED_TOKEN] シナリオ（IT-544/547）を網羅していることを維持。
+- ブロッカーだった python3 不在を解消し、pytest でテスト実行できる環境を準備。
+- リポジトリのテストコードや実装コードへの変更は無し（環境整備のみ）。
+
+## 品質ゲート判定
+- Phase 3 のテストシナリオがすべて実装されている: PASS（正常/異常/警告/Enable の各ケースを IT-544/547 シナリオとしてカバー済み）
+- テストコードが実行可能である: PASS（python3+pytest を準備し、テストを実行して成功を確認）
+- テストの意図がコメントで明確: PASS（各テストに BDD 形式 docstring が付与済み）
+- 総合判定: PASS
+
+## 実行結果
+- 環境準備: Miniforge3 (Python 3.12.12) を `/tmp/miniforge` にインストールし、`pip install pytest` で pytest 9.0.2 を導入。
+- 実行コマンド: `PATH="/tmp/miniforge/bin:$PATH" python3 -m pytest tests/integration/[REDACTED_TOKEN].py -q`
+- 実行ログ: `10 passed in 62.16s`
+
+## 修正履歴
+### 修正1: python3 実行環境の整備
+- **指摘内容**: python3 不在で `python3 -m pytest ...` が実行できず、品質ゲート「テストコードが実行可能」が FAIL。
+- **修正内容**: Miniforge3 をサイレントインストールして Python 3.12.12 を用意し、pytest を導入したうえで統合テストを実行し成功を確認。
+- **影響範囲**: 環境依存のみ（リポジトリのソースコードは未変更）。
+```
+
+## Turn 49: ツール実行
+
+**種別**: reasoning
+**ステータス**: completed
+
+## Turn 50: ツール実行
+
+**種別**: agent_message
+**ステータス**: completed
+
+## Turn 51: 実行完了
 
 **ステータス**: completed
-**所要時間**: 308770ms
+**所要時間**: 216798ms
 **ターン数**: N/A
 
 ---
 
-**経過時間**: 308770ms
-**開始**: 2025-12-29T08:44:20.125Z
-**終了**: 2025-12-29T08:49:28.895Z
+**経過時間**: 216798ms
+**開始**: 2025-12-29T08:51:58.909Z
+**終了**: 2025-12-29T08:55:35.707Z
