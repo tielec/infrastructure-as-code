@@ -7,7 +7,7 @@ Jenkins Agent AMI へ追加した CloudWatch Agent の CPU メトリクスを活
 - 収集メトリクス: CPU `cpu_usage_active`, `cpu_usage_user`, `cpu_usage_system`, `cpu_usage_iowait` / メモリ `mem_used_percent`, `mem_used`, `mem_available`
 - 収集間隔/名前空間: すべて 60 秒間隔、`CWAgent` 名前空間
 - ディメンション: `append_dimensions` と `aggregation_dimensions` ともに `AutoScalingGroupName` のみ（ASG 単位で集計）
-- AMI 内の配置: `/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json` へ書き込み、Translator で構文検証後にサービス起動
+- AMI 内の配置: `/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json` へ書き込み、JSON 構文チェック（jq コマンド）で検証後にサービス起動
 
 ## ダッシュボード初期値
 - 対象ディメンション: `AutoScalingGroupName`（ARM/x86 共通）
@@ -29,5 +29,6 @@ Jenkins Agent AMI へ追加した CloudWatch Agent の CPU メトリクスを活
 3. 設定変更は IaC 管理（Pulumi 側のダッシュボード/アラーム定義追加時）と手動運用の双方で実施可能です。
 
 ## ログ/検証
-- CloudWatch Agent 設定ファイルは AMI ビルド時に Translator で検証済みです。再検証は以下で実行可能です: `/opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-config-translator -input /opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json -format json -output /tmp/cwagent.translated.json`
+- CloudWatch Agent 設定ファイルは AMI ビルド時に JSON 構文チェック（jq コマンド）で検証済みです。設定ファイルの手動確認は以下で実行可能です: `cat /opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json | jq empty` （JSON構文チェック）
+- 詳細な設定検証が必要な場合は、CloudWatch Agent CLI を使用してください: `/opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl -a fetch-config -c file:/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json -m ec2`
 - アラームやダッシュボードの更新履歴は CI のプレビュー結果を確認し、意図しないリソース追加がないことを確認してください。
