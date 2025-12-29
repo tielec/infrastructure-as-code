@@ -4,7 +4,7 @@
   "issue_title": "Issue #547",
   "repository": "tielec/infrastructure-as-code",
   "target_repository": {
-    "path": "/tmp/ai-workflow-repos-11-9efb979b/infrastructure-as-code",
+    "path": "/tmp/ai-workflow-repos-3-3fe323cb/infrastructure-as-code",
     "github_name": "tielec/infrastructure-as-code",
     "remote_url": "https://github.com/tielec/infrastructure-as-code.git",
     "owner": "tielec",
@@ -15,8 +15,7 @@
   "design_decisions": {
     "[REDACTED_TOKEN]": null,
     "test_strategy": null,
-    "test_code_strategy": null,
-    "[REDACTED_TOKEN]": null
+    "test_code_strategy": null
   },
   "cost_tracking": {
     "total_input_tokens": 64,
@@ -24,24 +23,23 @@
     "total_cost_usd": 7.14619805
   },
   "difficulty_analysis": {
-    "level": "moderate",
+    "level": "simple",
     "confidence": 0.8,
     "factors": {
-      "[REDACTED_TOKEN]": 3,
+      "[REDACTED_TOKEN]": false,
       "scope": "single_module",
       "requires_tests": true,
-      "[REDACTED_TOKEN]": false,
-      "complexity_score": 0.4
+      "complexity_score": 0.3
     },
-    "analyzed_at": "2025-12-29T08:31:48.876Z",
+    "analyzed_at": "2025-12-29T08:23:49.299Z",
     "analyzer_agent": "claude",
     "analyzer_model": "sonnet"
   },
   "model_config": {
     "planning": {
       "execute": {
-        "claudeModel": "opus",
-        "codexModel": "max"
+        "claudeModel": "sonnet",
+        "codexModel": "mini"
       },
       "review": {
         "claudeModel": "sonnet",
@@ -54,8 +52,8 @@
     },
     "requirements": {
       "execute": {
-        "claudeModel": "opus",
-        "codexModel": "max"
+        "claudeModel": "sonnet",
+        "codexModel": "mini"
       },
       "review": {
         "claudeModel": "sonnet",
@@ -68,8 +66,8 @@
     },
     "design": {
       "execute": {
-        "claudeModel": "opus",
-        "codexModel": "max"
+        "claudeModel": "sonnet",
+        "codexModel": "mini"
       },
       "review": {
         "claudeModel": "sonnet",
@@ -82,8 +80,8 @@
     },
     "test_scenario": {
       "execute": {
-        "claudeModel": "opus",
-        "codexModel": "max"
+        "claudeModel": "sonnet",
+        "codexModel": "mini"
       },
       "review": {
         "claudeModel": "sonnet",
@@ -96,44 +94,44 @@
     },
     "implementation": {
       "execute": {
-        "claudeModel": "opus",
-        "codexModel": "max"
+        "claudeModel": "sonnet",
+        "codexModel": "mini"
       },
       "review": {
         "claudeModel": "sonnet",
         "codexModel": "mini"
       },
       "revise": {
-        "claudeModel": "opus",
-        "codexModel": "max"
+        "claudeModel": "sonnet",
+        "codexModel": "mini"
       }
     },
     "test_implementation": {
       "execute": {
-        "claudeModel": "opus",
-        "codexModel": "max"
+        "claudeModel": "sonnet",
+        "codexModel": "mini"
       },
       "review": {
         "claudeModel": "sonnet",
         "codexModel": "mini"
       },
       "revise": {
-        "claudeModel": "opus",
-        "codexModel": "max"
+        "claudeModel": "sonnet",
+        "codexModel": "mini"
       }
     },
     "testing": {
       "execute": {
-        "claudeModel": "opus",
-        "codexModel": "max"
+        "claudeModel": "sonnet",
+        "codexModel": "mini"
       },
       "review": {
         "claudeModel": "sonnet",
         "codexModel": "mini"
       },
       "revise": {
-        "claudeModel": "opus",
-        "codexModel": "max"
+        "claudeModel": "sonnet",
+        "codexModel": "mini"
       }
     },
     "documentation": {
@@ -166,8 +164,8 @@
     },
     "evaluation": {
       "execute": {
-        "claudeModel": "opus",
-        "codexModel": "max"
+        "claudeModel": "sonnet",
+        "codexModel": "mini"
       },
       "review": {
         "claudeModel": "sonnet",
@@ -286,13 +284,14 @@
     }
   },
   "created_at": "2025-12-29T08:01:33.527Z",
-  "updated_at": "2025-12-29T08:31:48.877Z",
+  "updated_at": "2025-12-29T08:24:47.578Z",
   "branch_name": "ai-workflow/issue-547",
   "base_commit": "[REDACTED_TOKEN]",
   "pr_number": 548,
   "pr_url": "https://__GITHUB_URL_2__/pull/548",
   "github_integration": {
     "progress_comment_id": 3695778227,
+    "[REDACTED_TOKEN]": "https://__GITHUB_URL_1__/issues/547#[REDACTED_TOKEN]",
     "[REDACTED_TOKEN]": "https://__GITHUB_URL_1__/issues/547#[REDACTED_TOKEN]"
   }
 }
