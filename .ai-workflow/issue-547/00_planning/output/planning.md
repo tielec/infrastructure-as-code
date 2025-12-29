@@ -164,7 +164,7 @@ Jenkins Agent AMIのイメージビルダーが、CloudWatch Agentの設定検�
 
 ### Phase 7: ドキュメント (見積もり: 0.5h)
 
-- [ ] Task 7-1: ドキュメント更新 (0.5h)
+- [x] Task 7-1: ドキュメント更新 (0.5h)
   - 修正内容のコード内コメント追加
   - pulumi/README.mdまたはCONTRIBUTION.mdへの注意事項追記（必要に応じて）
   - AL2023でのCloudWatch Agent検証に関する注意点の記載
@@ -277,8 +277,8 @@ graph TD
 
 ### Phase 7: ドキュメント
 
-- [ ] 必要に応じてpulumi/README.mdまたはCONTRIBUTION.mdが更新されている
-- [ ] コード内のコメントが適切に追加されている
+- [x] 必要に応じてpulumi/README.mdまたはCONTRIBUTION.mdが更新されている
+- [x] コード内のコメントが適切に追加されている
 
 ### Phase 8: レポート
 
