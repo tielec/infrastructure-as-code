@@ -1,4 +1,4 @@
-"""Integration tests for Issue #544: CloudWatch Agent CPU metrics on Jenkins Agent AMI."""
+"""Integration tests for Issue #547: CloudWatch Agent validation on Jenkins Agent AMI."""
 
 import json
 import os
@@ -128,15 +128,26 @@ class JenkinsAgentAmiCloudWatchTests(unittest.TestCase):
         self.assertEqual([["AutoScalingGroupName"]], agg_dims)
         self.assertEqual("CWAgent", config["metrics"]["namespace"])
 
-    def test_translator_validation_step_present_in_components(self):
-        """IT-544-03: Components should run amazon-cloudwatch-agent-config-translator to fail fast."""
+    def test_validation_step_uses_jq_and_rejects_translator_dependency(self):
+        """IT-547-03: Components should validate CloudWatch Agent config with jq instead of the translator binary."""
+        required_snippets = [
+            "ValidateCloudWatchAgentConfig",
+            'CONFIG_PATH="/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json"',
+            "jq empty \"$CONFIG_PATH\"",
+            "Invalid JSON syntax",
+            "'metrics' section not found in configuration",
+            "CloudWatch Agent configuration validation passed.",
+            "set -e",
+        ]
         for name, comp in self._component_map().items():
             data = comp["data"]
-            self.assertIn("ValidateCloudWatchAgentConfig", data, f"{name} should validate the agent config")
-            self.assertIn("amazon-cloudwatch-agent-config-translator", data)
-            self.assertIn("-input /opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json", data)
-            self.assertIn("-output /tmp/cwagent.translated.json", data)
-            self.assertIn("Translator not found", data, "Translator presence check should protect the build")
+            for snippet in required_snippets:
+                self.assertIn(snippet, data, f"{name} validation step should include '{snippet}'")
+            self.assertNotIn(
+                "amazon-cloudwatch-agent-config-translator",
+                data,
+                f"{name} must not rely on the deprecated translator binary",
+            )
 
     def test_pulumi_preview_diff_is_constrained(self):
         """IT-544-04: Pulumi preview (mocked) should surface only expected resources/exports."""
