@@ -139,11 +139,11 @@ Jenkins Agent AMIのイメージビルダーが、CloudWatch Agentの設定検�
 
 ### Phase 4: 実装 (見積もり: 1h)
 
-- [ ] Task 4-1: component-x86.ymlの修正 (0.5h)
+- [x] Task 4-1: component-x86.ymlの修正 (0.5h)
   - `ValidateCloudWatchAgentConfig`ステップの修正（156-172行目）
   - translator依存を削除し、代替の検証方法を実装
 
-- [ ] Task 4-2: component-arm.ymlの修正 (0.5h)
+- [x] Task 4-2: component-arm.ymlの修正 (0.5h)
   - `ValidateCloudWatchAgentConfig`ステップの修正（156-172行目）
   - x86版と同一の修正を適用
 
@@ -262,9 +262,9 @@ graph TD
 
 ### Phase 4: 実装
 
-- [ ] component-x86.ymlの`ValidateCloudWatchAgentConfig`ステップが修正されている
-- [ ] component-arm.ymlの`ValidateCloudWatchAgentConfig`ステップが修正されている
-- [ ] 修正内容がコーディング規約（日本語コメント）に準拠している
+- [x] component-x86.ymlの`ValidateCloudWatchAgentConfig`ステップが修正されている
+- [x] component-arm.ymlの`ValidateCloudWatchAgentConfig`ステップが修正されている
+- [x] 修正内容がコーディング規約（日本語コメント）に準拠している
 
 ### Phase 5: テストコード実装
 
