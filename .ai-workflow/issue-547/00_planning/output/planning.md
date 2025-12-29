@@ -125,7 +125,7 @@ Jenkins Agent AMIのイメージビルダーが、CloudWatch Agentの設定検�
 
 ### Phase 2: 設計 (見積もり: 0.5h)
 
-- [ ] Task 2-1: 修正設計 (0.5h)
+- [x] Task 2-1: 修正設計 (0.5h)
   - 新しい`ValidateCloudWatchAgentConfig`ステップの設計
   - x86/ARM両アーキテクチャでの動作確認ポイントの整理
   - 既存ステップ（ConfigureCloudWatchAgent, EnableCloudWatchAgent）との整合性確認
