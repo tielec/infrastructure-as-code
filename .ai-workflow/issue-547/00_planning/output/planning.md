@@ -114,12 +114,12 @@ Jenkins Agent AMIのイメージビルダーが、CloudWatch Agentの設定検�
 
 ### Phase 1: 要件定義 (見積もり: 0.5h)
 
-- [ ] Task 1-1: 問題の再現確認と分析 (0.25h)
+- [x] Task 1-1: 問題の再現確認と分析 (0.25h)
   - Issueで報告されたエラーメッセージの確認
   - `ValidateCloudWatchAgentConfig`ステップの現状コード確認
   - AL2023でのCloudWatch Agentパッケージ構造の調査
 
-- [ ] Task 1-2: 対応方法の決定 (0.25h)
+- [x] Task 1-2: 対応方法の決定 (0.25h)
   - 方法1（translator検索）、方法2（JSONシンタックスチェック）、方法3（CloudWatch Agent CLI）、方法4（スキップ可能化）の比較検討
   - 推奨対応方法の決定と理由の文書化
 
