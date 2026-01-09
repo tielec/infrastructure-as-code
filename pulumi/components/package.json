@@ -8,7 +8,10 @@
     "build": "tsc",
     "clean": "rm -rf dist",
     "lint": "eslint . --ext .ts",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "node --max-old-space-size=4096 ./node_modules/.bin/jest --runInBand",
+    "test:coverage": "node --max-old-space-size=4096 ./node_modules/.bin/jest --runInBand --coverage",
+    "test:watch": "node --max-old-space-size=4096 ./node_modules/.bin/jest --runInBand --watch"
   },
   "dependencies": {
     "@pulumi/pulumi": "^3.0.0",
@@ -23,7 +26,10 @@
     "@types/node": "^20.0.0",
     "@typescript-eslint/eslint-plugin": "^6.0.0",
     "@typescript-eslint/parser": "^6.0.0",
+    "@types/jest": "^29.0.0",
     "eslint": "^8.0.0",
+    "jest": "^29.0.0",
+    "ts-jest": "^29.0.0",
     "typescript": "^5.0.0"
   }
 }

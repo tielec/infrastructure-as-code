@@ -10,7 +10,9 @@
   - `sudo less +F /var/log/cloud-init-output.log`でuser data実行ログを確認
   - `Bootstrap setup complete!`が表示されていない場合は、エラー内容を確認
   - よくあるエラー：インターネット接続不可、IAMロール権限不足
-- **Pulumiデプロイエラー**: `pulumi logs`でエラー詳細を確認
+- **Pulumiデプロイエラー**:
+  - `pulumi logs`でエラー詳細を確認
+  - Lambda パッケージ作成時のハング: zip出力ストリームエラー（権限不足・ディスク枯渇等）が適切にログ出力されるようになりました（Issue #549で修正済み）
 - **Ansibleエラー**: `-vvv`オプションを追加して詳細なログを確認（例: `ansible-playbook -vvv playbooks/jenkins_setup_pipeline.yml`）
 - **AWS認証エラー**: `source scripts/aws/setup-aws-credentials.sh`を実行して認証情報を更新
 - **Pulumiバックエンドエラー**: 

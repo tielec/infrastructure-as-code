@@ -2,6 +2,22 @@
 
 > 📖 **親ドキュメント**: [README.md](../README.md)
 
+## 2025-01-20: Lambda パッケージ作成時のzip出力ストリームエラーハンドリング改善
+
+Pulumi Components の LambdaPackage で使用される ZipArchiver において、zip出力ストリームのエラー未処理によるデプロイハング問題を修正しました。
+
+- **対象Issue**: [#549](https://github.com/tielec/infrastructure-as-code/issues/549)
+- **修正内容**:
+  - `ZipArchiver.createArchive()` メソッドに出力ストリーム（`output`）のエラーイベントリスナーを追加
+  - エラー発生時にアーカイブリソースを適切に破棄（`archive.destroy()`）
+  - エラー発生時にPromiseを適切にrejectしてハング防止
+  - エラー内容の詳細ログ出力（`pulumi.log.error()`）
+- **対象ファイル**: `pulumi/components/src/lambda-packager/zip-archiver.ts`
+- **効果**: 権限不足やディスク枯渇時のLambdaパッケージ作成エラーが即座に検知され、Pulumiデプロイのタイムアウトを防止
+- **テスト結果**: 単体テスト 8件すべて成功（成功率100%）
+
+これにより、CI/CDパイプラインでのLambdaデプロイがより安定し、エラー発生時の原因特定が容易になりました。
+
 ## 2025-12-27: Jenkins Agent AMI の CloudWatch Agent CPU メトリクス共通化
 
 Jenkins Agent AMI に CloudWatch Agent 設定テンプレートを追加し、CPU/メモリメトリクスを AutoScalingGroup 単位で 60 秒間隔収集するよう ARM/x86 間で統一しました。

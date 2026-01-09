@@ -25,6 +25,12 @@ export class ZipArchiver {
       const archive = this.setupArchive();
 
       // イベントハンドラの設定
+      output.on("error", (err: Error) => {
+        pulumi.log.error(`Output stream error: ${err.message}`);
+        archive.destroy();
+        reject(err);
+      });
+
       output.on("close", () => {
         const result = this.createPackageResult(outputPath);
         resolve(result);
@@ -66,7 +72,7 @@ export class ZipArchiver {
     excludePatterns: string[]
   ): void {
     const allExcludes = this.mergeExcludePatterns(excludePatterns);
-    
+
     pulumi.log.info(`Adding files from ${sourcePath}`);
     pulumi.log.info(`Include patterns: ${includePatterns.join(", ")}`);
     pulumi.log.info(`Exclude patterns: ${allExcludes.join(", ")}`);
