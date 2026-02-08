@@ -1,0 +1,294 @@
+@Library('jenkins-shared-lib') _
+
+pipeline {
+
+    agent {
+        label params.AGENT_LABEL ?: 'ec2-fleet-micro'
+    }
+
+    environment {
+        BASELINE_REPORT_FILE = 'baseline-report.json'
+    }
+
+    stages {
+        stage('Validation') {
+            steps {
+                script {
+                    echo "=== GitHub Repository Baseline 適用パイプライン ==="
+                    echo "Action: ${params.ACTION}"
+                    echo "Template: ${params.TEMPLATE}"
+
+                    // 必須パラメータのチェック
+                    if (!params.REPO_URL?.trim()) {
+                        error "リポジトリURLは必須です"
+                    }
+
+                    // リポジトリURLリストの解析
+                    def repoUrls = parseRepoUrls(params.REPO_URL)
+                    env.REPO_COUNT = repoUrls.size().toString()
+                    echo "対象リポジトリ数: ${env.REPO_COUNT}"
+
+                    // バッチサイズチェック
+                    if (repoUrls.size() > 10) {
+                        echo "警告: 10以上のリポジトリを処理します。Rate Limitに注意してください。"
+                    }
+
+                    // 最初のリポジトリ情報を抽出（ログ表示用）
+                    def firstRepoInfo = gitUtils.extractRepoInfo(repoUrls[0])
+                    env.FIRST_REPO_OWNER = firstRepoInfo[0]
+                    env.FIRST_REPO_NAME = firstRepoInfo[1]
+
+                    // GitHub接続テスト
+                    def connectionTest = gitUtils.testGitHubAppConnection()
+                    if (connectionTest.success) {
+                        echo "GitHub接続テスト: 成功"
+                        echo "Rate Limit: ${connectionTest.rate_limit.remaining}/${connectionTest.rate_limit.limit}"
+                        env.RATE_LIMIT_REMAINING = connectionTest.rate_limit.remaining.toString()
+                    } else {
+                        error "GitHub接続テスト: 失敗 - ${connectionTest.message}"
+                    }
+
+                    // DRY_RUNモードの場合は警告表示
+                    if (params.ACTION == 'DRY_RUN') {
+                        echo "=== DRY_RUNモード: 実際の変更は行いません ==="
+                    } else {
+                        echo "=== APPLYモード: 実際に設定を適用します ==="
+                    }
+                }
+            }
+        }
+
+        stage('Load Baseline Config') {
+            steps {
+                script {
+                    echo "=== ベースライン設定の読み込み ==="
+
+                    // ベースライン設定ファイルの読み込み
+                    def configPath = "jenkins/jobs/pipeline/admin/github-repo-baseline/config/baseline-config.yaml"
+                    def baselineConfigFile = readYaml file: configPath
+
+                    // テンプレート選択
+                    def template = baselineConfigFile.templates[params.TEMPLATE]
+                    if (!template) {
+                        error "テンプレート '${params.TEMPLATE}' が見つかりません"
+                    }
+
+                    // グローバル変数に保持
+                    env.BASELINE_CONFIG_JSON = writeJSON(returnText: true, json: template)
+                    echo "ベースライン設定を読み込みました: ${params.TEMPLATE}"
+
+                    // 適用対象の表示
+                    echo "適用対象設定:"
+                    echo "  Rulesets: ${params.APPLY_RULESETS}"
+                    echo "  Branch Protection: ${params.APPLY_BRANCH_PROTECTION}"
+                    echo "  Security Settings: ${params.APPLY_SECURITY}"
+                    echo "  Labels: ${params.APPLY_LABELS}"
+                }
+            }
+        }
+
+        stage('Process Repositories') {
+            steps {
+                script {
+                    echo "=== リポジトリ処理開始 ==="
+
+                    def repoUrls = parseRepoUrls(params.REPO_URL)
+                    def baselineConfig = readJSON text: env.BASELINE_CONFIG_JSON
+                    def dryRun = params.ACTION == 'DRY_RUN'
+
+                    // 適用対象のフィルタリング
+                    def filteredConfig = filterBaselineConfig(baselineConfig)
+
+                    def allResults = []
+                    def successCount = 0
+                    def failureCount = 0
+
+                    repoUrls.eachWithIndex { repoUrl, index ->
+                        echo "--- Repository ${index + 1}/${repoUrls.size()}: ${repoUrl} ---"
+
+                        try {
+                            def repoInfo = gitUtils.extractRepoInfo(repoUrl)
+                            def repoOwner = repoInfo[0]
+                            def repoName = repoInfo[1]
+
+                            def config = [
+                                repoOwner: repoOwner,
+                                repoName: repoName,
+                                dryRun: dryRun,
+                                forceUpdate: params.FORCE_UPDATE
+                            ]
+
+                            // ターゲットブランチの設定
+                            if (params.TARGET_BRANCH?.trim()) {
+                                filteredConfig.branchProtection?.branch = params.TARGET_BRANCH
+                            }
+
+                            // ベースライン適用
+                            def result = gitUtils.applyRepoBaseline(filteredConfig, config)
+
+                            allResults << [
+                                repository: "${repoOwner}/${repoName}",
+                                success: true,
+                                result: result
+                            ]
+                            successCount++
+
+                            // 結果の表示
+                            displayResult(result, dryRun)
+
+                        } catch (Exception e) {
+                            allResults << [
+                                repository: repoUrl,
+                                success: false,
+                                error: e.message
+                            ]
+                            failureCount++
+                            echo "エラー: ${e.message}"
+                        }
+
+                        // Rate Limit対策: リポジトリ間で待機
+                        if (index < repoUrls.size() - 1) {
+                            echo "Rate Limit対策: 1秒待機..."
+                            sleep(time: 1, unit: 'SECONDS')
+                        }
+                    }
+
+                    // 結果サマリの保存
+                    env.SUCCESS_COUNT = successCount.toString()
+                    env.FAILURE_COUNT = failureCount.toString()
+
+                    // レポートをアーティファクトとして保存
+                    def report = [
+                        action: params.ACTION,
+                        template: params.TEMPLATE,
+                        dryRun: dryRun,
+                        totalRepositories: repoUrls.size(),
+                        successCount: successCount,
+                        failureCount: failureCount,
+                        results: allResults,
+                        timestamp: new Date().format("yyyy-MM-dd HH:mm:ss")
+                    ]
+
+                    writeJSON file: env.BASELINE_REPORT_FILE, json: report, pretty: 2
+                    archiveArtifacts artifacts: env.BASELINE_REPORT_FILE, fingerprint: true
+                }
+            }
+        }
+    }
+
+    post {
+        success {
+            script {
+                echo "=== 操作完了 ==="
+                echo "Action: ${params.ACTION}"
+                echo "Template: ${params.TEMPLATE}"
+                echo "処理リポジトリ数: ${env.REPO_COUNT}"
+                echo "成功: ${env.SUCCESS_COUNT}, 失敗: ${env.FAILURE_COUNT}"
+
+                if (params.ACTION == 'DRY_RUN') {
+                    echo "=== DRY_RUNモードで実行しました（実際の変更は行われていません）==="
+                    echo "実際に適用する場合は ACTION=APPLY で再実行してください"
+                } else {
+                    echo "=== ベースライン設定を適用しました ==="
+                }
+            }
+        }
+
+        failure {
+            script {
+                echo "=== 操作が失敗しました ==="
+                echo "Action: ${params.ACTION}"
+                echo "詳細はログを確認してください"
+            }
+        }
+    }
+}
+
+/**
+ * リポジトリURLリストを解析する
+ * @param repoUrlString カンマまたは改行区切りのリポジトリURL文字列
+ * @return リポジトリURLのリスト
+ */
+def parseRepoUrls(String repoUrlString) {
+    def urls = []
+
+    // カンマと改行で分割
+    repoUrlString.split(/[,\n\r]+/).each { url ->
+        def trimmedUrl = url.trim()
+        if (trimmedUrl) {
+            urls << trimmedUrl
+        }
+    }
+
+    return urls
+}
+
+/**
+ * パラメータに基づいてベースライン設定をフィルタリングする
+ * @param baselineConfig 元のベースライン設定
+ * @return フィルタリングされたベースライン設定
+ */
+def filterBaselineConfig(Map baselineConfig) {
+    def filtered = [:]
+
+    if (params.APPLY_RULESETS && baselineConfig.rulesets) {
+        filtered.rulesets = baselineConfig.rulesets
+    }
+
+    if (params.APPLY_BRANCH_PROTECTION && baselineConfig.branchProtection) {
+        filtered.branchProtection = baselineConfig.branchProtection
+    }
+
+    if (params.APPLY_SECURITY && baselineConfig.security) {
+        filtered.security = baselineConfig.security
+    }
+
+    if (params.APPLY_LABELS && baselineConfig.labels) {
+        filtered.labels = baselineConfig.labels
+    }
+
+    return filtered
+}
+
+/**
+ * 適用結果を表示する
+ * @param result 適用結果
+ * @param dryRun DRY_RUNモードかどうか
+ */
+def displayResult(Map result, boolean dryRun) {
+    def prefix = dryRun ? "[DRY_RUN] " : ""
+
+    // Rulesets結果
+    if (result.rulesets) {
+        echo "${prefix}Rulesets:"
+        result.rulesets.each { ruleset ->
+            echo "  - ${ruleset.action}: ${ruleset.name}"
+        }
+    }
+
+    // Branch Protection結果
+    if (result.branchProtection) {
+        echo "${prefix}Branch Protection:"
+        echo "  - ${result.branchProtection.action}: ${result.branchProtection.branch}"
+    }
+
+    // Security結果
+    if (result.security) {
+        echo "${prefix}Security Settings:"
+        result.security.each { setting ->
+            echo "  - ${setting.action}: ${setting.setting}"
+        }
+    }
+
+    // Labels結果
+    if (result.labels) {
+        echo "${prefix}Labels:"
+        result.labels.each { label ->
+            if (label instanceof Map) {
+                echo "  - ${label.action}: ${label.name}"
+            } else {
+                echo "  - ${label}"
+            }
+        }
+    }
+}

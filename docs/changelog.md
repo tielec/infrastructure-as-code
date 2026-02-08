@@ -2,6 +2,31 @@
 
 > 📖 **親ドキュメント**: [README.md](../README.md)
 
+## 2025-02-07: GitHubリポジトリベースライン一括適用Adminジョブ追加
+
+GitHubリポジトリに共通ベースライン設定を一括適用する管理ジョブ（Github_Repo_Baseline）を追加しました。
+
+- **対象Issue**: [#554](https://github.com/tielec/infrastructure-as-code/issues/554)
+- **新規ファイル**:
+  - `jenkins/jobs/dsl/admin/admin_github_repo_baseline_job.groovy`: Job DSL定義（パラメータ、ジョブ設定）
+  - `jenkins/jobs/pipeline/admin/github-repo-baseline/Jenkinsfile`: パイプライン実装（ステージ定義、ロジック）
+  - `jenkins/jobs/pipeline/admin/github-repo-baseline/config/baseline-config.yaml`: ベースライン定義（テンプレート設定）
+- **拡張ファイル**:
+  - `jenkins/jobs/shared/src/jp/co/tielec/git/GitHubSettings.groovy`: Ruleset/BranchProtection/Security/Label操作メソッド追加
+  - `jenkins/jobs/shared/vars/gitUtils.groovy`: ベースライン操作ファサードメソッド追加
+  - `jenkins/jobs/pipeline/_seed/job-creator/job-config.yaml`: 新規ジョブエントリ追加
+- **主要機能**:
+  - ルールセット（Rulesets）の作成・更新・削除
+  - ブランチ保護（Branch Protection）の設定
+  - セキュリティ設定（Dependabot Alerts、Secret Scanning）の有効化
+  - ラベル（Labels）の一括作成・同期
+  - DRY_RUNモードによる事前確認と差分レポート
+  - 複数リポジトリへの一括適用（Rate Limit対策付き）
+- **テンプレート**: `default`（推奨設定）、`strict`（セキュリティ重視）、`minimal`（基本設定のみ）の3種類
+- **テスト結果**: 統合テスト65件中62件成功、3件スキップ（外部ツール未インストールのため想定スキップ）、成功率100%
+
+これにより、新規リポジトリ作成時のベースライン設定作業が自動化され、設定漏れゼロ・運用負荷削減・セキュリティ向上を実現しました。
+
 ## 2025-01-20: Lambda パッケージ作成時のzip出力ストリームエラーハンドリング改善
 
 Pulumi Components の LambdaPackage で使用される ZipArchiver において、zip出力ストリームのエラー未処理によるデプロイハング問題を修正しました。

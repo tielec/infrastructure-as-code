@@ -1,0 +1,362 @@
+@Library('jenkins-shared-lib') _
+
+// リポジトリベースライン機能の統合テスト用パイプライン
+pipeline {
+    agent { label params.AGENT_LABEL ?: 'ec2-fleet-micro' }
+    options {
+        ansiColor('xterm')
+        skipDefaultCheckout()
+        timestamps()
+    }
+
+    parameters {
+        choice(name: 'AGENT_LABEL', choices: ['ec2-fleet-micro', 'ec2-fleet-small', 'ec2-fleet-medium'], description: 'Jenkinsエージェントのラベル')
+        choice(name: 'TEST_TYPE', choices: ['ALL', 'RULESETS', 'BRANCH_PROTECTION', 'SECURITY', 'LABELS', 'FACADE', 'PIPELINE', 'ERROR', 'IDEMPOTENT'], description: '実行するテストカテゴリ')
+        choice(name: 'TEMPLATE', choices: ['default', 'strict', 'minimal'], description: '使用するベースラインテンプレート')
+        choice(name: 'ACTION', choices: ['DRY_RUN', 'APPLY'], description: 'ベースライン適用の動作モード')
+        string(name: 'REPO_URL', defaultValue: 'https://github.com/tielec/infrastructure-as-code', description: 'テスト対象のGitHubリポジトリURL（単一）')
+        string(name: 'ADDITIONAL_REPOS', defaultValue: '', description: '追加でテストするリポジトリのowner/nameをカンマ区切りで指定（複数リポジトリ差分検証用）')
+        string(name: 'TARGET_BRANCH', defaultValue: '', description: 'ブランチ保護対象（未指定の場合はデフォルトブランチ）')
+        booleanParam(name: 'CLEANUP_AFTER_TEST', defaultValue: true, description: 'テスト後に作成したリソースを削除する')
+        string(name: 'RATE_LIMIT_THRESHOLD', defaultValue: '10', description: 'Rate Limit残量がこの値未満なら待機してから再開（INT-ERROR-004用）')
+        booleanParam(name: 'FORCE_RATE_LIMIT_WAIT', defaultValue: false, description: 'Rate Limit待機を強制発火させるテストスイッチ')
+        string(name: 'JENKINSFILE_BRANCH', defaultValue: 'main', description: 'このJenkinsfileを取得するブランチ')
+    }
+
+    environment {
+        BASELINE_CONFIG_JSON = ''
+        TEST_LABEL_NAME = ''
+        TEST_RULESET_ID = ''
+        TARGET_BRANCH_NAME = ''
+        ADDITIONAL_REPO_JSON = '[]'
+    }
+
+    stages {
+        stage('Setup') {
+            steps {
+                script {
+                    echo "=== Repo Baseline Integration Test ==="
+                    if (!params.REPO_URL?.trim()) {
+                        error 'REPO_URLは必須です'
+                    }
+
+                    def repoInfo = gitUtils.extractRepoInfo(params.REPO_URL)
+                    env.REPO_OWNER = repoInfo[0]
+                    env.REPO_NAME = repoInfo[1]
+                    echo "Repository: ${env.REPO_OWNER}/${env.REPO_NAME}"
+
+                    env.ADDITIONAL_REPO_JSON = writeJSON(returnText: true, json: parseAdditionalRepos(params.ADDITIONAL_REPOS))
+                    echo "Additional Repos: ${env.ADDITIONAL_REPO_JSON}"
+
+                    def connectionTest = gitUtils.testGitHubAppConnection()
+                    if (!connectionTest.success) {
+                        error "GitHub接続テストに失敗: ${connectionTest.message}"
+                    }
+                    echo "Rate Limit: ${connectionTest.rate_limit.remaining}/${connectionTest.rate_limit.limit}"
+
+                    def baselineFile = readYaml file: 'jenkins/jobs/pipeline/admin/github-repo-baseline/config/baseline-config.yaml'
+                    def template = baselineFile.templates[params.TEMPLATE]
+                    if (!template) {
+                        error "テンプレート ${params.TEMPLATE} が見つかりません"
+                    }
+                    env.BASELINE_CONFIG_JSON = writeJSON(returnText: true, json: template)
+
+                    def repoCfg = baseRepoConfig()
+                    def defaultBranch = gitUtils.getDefaultBranch(repoCfg)
+                    env.TARGET_BRANCH_NAME = params.TARGET_BRANCH?.trim() ? params.TARGET_BRANCH.trim() : defaultBranch
+
+                    echo "Default Branch: ${defaultBranch} / Target Branch: ${env.TARGET_BRANCH_NAME}"
+                    echo "Action: ${params.ACTION}, TestType: ${params.TEST_TYPE}, Template: ${params.TEMPLATE}"
+
+                    // テスト専用リソース名を生成
+                    env.TEST_LABEL_NAME = "baseline-it-label-${env.BUILD_ID}"
+                }
+            }
+        }
+
+        stage('Rate Limit Guard') {
+            when { expression { shouldRun('ERROR') || params.FORCE_RATE_LIMIT_WAIT } }
+            steps {
+                script {
+                    // INT-ERROR-004: Rate Limit到達時に一時停止し、リセット後に再開できることを検証
+                    def threshold = (params.RATE_LIMIT_THRESHOLD ?: '0') as Integer
+                    def status = gitUtils.testGitHubAppConnection()
+                    def remaining = status.rate_limit.remaining as Integer
+                    def limit = status.rate_limit.limit as Integer
+                    def resetAt = (status.rate_limit.reset ?: 0) as Long
+                    if (params.FORCE_RATE_LIMIT_WAIT || remaining < threshold) {
+                        def nowSec = (System.currentTimeMillis() / 1000L) as Long
+                        def waitSeconds = Math.max(resetAt - nowSec, 0) + 5
+                        echo "⏳ Rate Limit残量 ${remaining}/${limit} (<${threshold}) のため ${waitSeconds}s 待機してから再開"
+                        sleep time: waitSeconds, unit: 'SECONDS'
+                        def after = gitUtils.testGitHubAppConnection()
+                        echo "再開後の残量: ${after.rate_limit.remaining}/${after.rate_limit.limit}"
+                    } else {
+                        echo "Rate Limit残量十分: ${remaining}/${limit}; 待機不要"
+                    }
+                }
+            }
+        }
+
+        stage('Ruleset Tests') {
+            when { expression { shouldRun('RULESETS') } }
+            steps {
+                script {
+                    def cfg = baseRepoConfig()
+                    def baseline = loadBaseline()
+                    def rulesets = baseline.rulesets ?: []
+                    def createdRuleId = ''
+
+                    echo "既存Ruleset件数: ${gitUtils.listRulesets(cfg)?.size() ?: 0}"
+
+                    if (params.ACTION == 'DRY_RUN') {
+                        def diff = gitUtils.generateBaselineDiff(baseline, cfg)
+                        echo "[DRY_RUN] 作成予定: ${diff.rulesets.toCreate}, 更新予定: ${diff.rulesets.toUpdate.collect{it.name}}"
+                        return
+                    }
+
+                    try {
+                        if (rulesets) {
+                            def testRule = cloneMap(rulesets[0])
+                            testRule.name = "${testRule.name}-it-${env.BUILD_ID}"
+
+                            def created = gitUtils.createRuleset(testRule, cfg)
+                            createdRuleId = created.id as String
+                            env.TEST_RULESET_ID = createdRuleId
+                            echo "✅ ルールセット作成: ${created.name} (${created.id})"
+
+                            def fetched = gitUtils.getRuleset(created.id, cfg)
+                            echo "取得確認(Given→When→Then): enforcement=${fetched.enforcement}"
+
+                            def updated = gitUtils.updateRuleset(created.id, testRule + [enforcement: 'evaluate'], cfg)
+                            echo "更新確認(Then): enforcement=${updated.enforcement}"
+                        } else {
+                            echo "⚠️ テンプレートにrulesetsが定義されていないためスキップ"
+                        }
+                    } finally {
+                        if (params.CLEANUP_AFTER_TEST && createdRuleId) {
+                            gitUtils.deleteRuleset(createdRuleId, cfg)
+                            echo "🧹 テストで作成したルールセットを削除 (${createdRuleId})"
+                        }
+                    }
+                }
+            }
+        }
+
+        stage('Branch Protection Tests') {
+            when { expression { shouldRun('BRANCH_PROTECTION') } }
+            steps {
+                script {
+                    def cfg = baseRepoConfig()
+                    def baseline = loadBaseline()
+                    def protectionData = baseline.branchProtection?.settings ?: baseline.branchProtection
+
+                    def current = gitUtils.getBranchProtection(env.TARGET_BRANCH_NAME, cfg)
+                    echo "現在の保護状態 (Given): ${current ? '設定あり' : '未設定'}"
+
+                    if (params.ACTION == 'DRY_RUN') {
+                        echo "[DRY_RUN] ブランチ保護を適用予定 (${env.TARGET_BRANCH_NAME})"
+                        return
+                    }
+
+                    gitUtils.updateBranchProtection(env.TARGET_BRANCH_NAME, protectionData, cfg)
+                    def after = gitUtils.getBranchProtection(env.TARGET_BRANCH_NAME, cfg)
+                    echo "✅ ブランチ保護適用後 (Then): reviews=${after.required_pull_request_reviews?.required_approving_review_count ?: 'N/A'}"
+
+                    if (params.CLEANUP_AFTER_TEST && current == null) {
+                        gitUtils.deleteBranchProtection(env.TARGET_BRANCH_NAME, cfg)
+                        echo "🧹 テストで追加したブランチ保護を削除"
+                    }
+                }
+            }
+        }
+
+        stage('Security Tests') {
+            when { expression { shouldRun('SECURITY') } }
+            steps {
+                script {
+                    def cfg = baseRepoConfig()
+                    def before = gitUtils.getSecuritySettings(cfg)
+                    echo "現在のセキュリティ: dependabot=${before.dependabotAlerts}, secret_scanning=${before.secretScanning}"
+
+                    if (params.ACTION == 'DRY_RUN') {
+                        echo "[DRY_RUN] セキュリティ有効化を検証"
+                        return
+                    }
+
+                    gitUtils.enableDependabotAlerts(cfg)
+                    gitUtils.enableDependabotSecurityUpdates(cfg)
+                    gitUtils.enableSecretScanning(cfg)
+
+                    def after = gitUtils.getSecuritySettings(cfg)
+                    echo "✅ セキュリティ有効化後: dependabot=${after.dependabotAlerts}, secret_scanning=${after.secretScanning}"
+                }
+            }
+        }
+
+        stage('Label Tests') {
+            when { expression { shouldRun('LABELS') } }
+            steps {
+                script {
+                    def cfg = baseRepoConfig()
+                    def baseline = loadBaseline()
+
+                    def labels = gitUtils.listLabels(cfg)
+                    echo "既存ラベル数: ${labels?.size() ?: 0}"
+
+                    if (params.ACTION == 'DRY_RUN') {
+                        echo "[DRY_RUN] ラベル同期予定: ${baseline.labels?.size() ?: 0}件"
+                        return
+                    }
+
+                    // ラベル作成
+                    def created = gitUtils.createLabel([
+                        name: env.TEST_LABEL_NAME,
+                        color: '0e8a16',
+                        description: 'integration test label'
+                    ], cfg)
+                    echo "✅ ラベル作成: ${created.name} (${created.color})"
+
+                    // ラベル更新
+                    def updated = gitUtils.updateLabel(env.TEST_LABEL_NAME, [color: 'b60205', description: 'updated by integration test'], cfg)
+                    echo "更新後: color=${updated.color}"
+
+                    // ラベル同期（基準設定に合わせる）
+                    def syncResult = gitUtils.syncLabels(baseline.labels, cfg)
+                    echo "同期結果: 作成=${syncResult.count { it.action == 'created' }}, 更新=${syncResult.count { it.action == 'updated' }}"
+
+                    if (params.CLEANUP_AFTER_TEST) {
+                        gitUtils.deleteLabel(env.TEST_LABEL_NAME, cfg)
+                        echo "🧹 テスト用ラベルを削除"
+                    }
+                }
+            }
+        }
+
+        stage('Facade Tests') {
+            when { expression { shouldRun('FACADE') } }
+            steps {
+                script {
+                    def cfg = baseRepoConfig()
+                    def baseline = loadBaseline()
+                    def repoList = [[owner: env.REPO_OWNER, name: env.REPO_NAME]] + parseAdditionalRepos(env.ADDITIONAL_REPO_JSON)
+
+                    def status = gitUtils.getRepoBaselineStatus(baseline, cfg)
+                    echo "ステータス: rulesets=${status.rulesets}, branch=${status.branchProtection?.status}"
+
+                    def diff = gitUtils.generateBaselineDiff(baseline, cfg)
+                    echo "差分: toCreate=${diff.rulesets.toCreate}, toUpdate=${diff.rulesets.toUpdate.collect{it.name}}"
+
+                    def applyResult = gitUtils.applyRepoBaseline(baseline, cfg + [dryRun: params.ACTION == 'DRY_RUN'])
+                    echo "適用結果(dryRun=${applyResult.dryRun}): rulesets=${applyResult.rulesets.size()}, labels=${applyResult.labels.size()}"
+
+                    def batchResult = gitUtils.batchApplyRepoBaseline(repoList, baseline, cfg + [dryRun: true])
+                    echo "バッチ適用(ドライラン)結果件数: ${batchResult.size()} / 対象リポジトリ: ${repoList}"
+                }
+            }
+        }
+
+        stage('Pipeline Smoke') {
+            when { expression { shouldRun('PIPELINE') } }
+            steps {
+                script {
+                    def cfg = baseRepoConfig()
+                    def baseline = loadBaseline()
+                    def filtered = filterBaselineForSmoke(baseline)
+
+                    def result = gitUtils.applyRepoBaseline(filtered, cfg + [dryRun: params.ACTION == 'DRY_RUN'])
+                    echo "スモーク適用完了: rulesets=${result.rulesets.size()}, branch=${result.branchProtection?.action ?: 'none'}"
+                }
+            }
+        }
+
+        stage('Error Handling') {
+            when { expression { shouldRun('ERROR') } }
+            steps {
+                script {
+                    def cfg = [repoOwner: 'invalid', repoName: 'repo']
+                    try {
+                        gitUtils.listRulesets(cfg)
+                        error '想定外: 無効リポジトリで例外が発生しませんでした'
+                    } catch (Exception e) {
+                        echo "✅ 無効リポジトリで例外を検知: ${e.message}"
+                    }
+                }
+            }
+        }
+
+        stage('Idempotent Check') {
+            when { expression { shouldRun('IDEMPOTENT') } }
+            steps {
+                script {
+                    def cfg = baseRepoConfig()
+                    def baseline = loadBaseline()
+                    def first = gitUtils.applyRepoBaseline(baseline, cfg + [dryRun: params.ACTION == 'DRY_RUN'])
+                    def second = gitUtils.applyRepoBaseline(baseline, cfg + [dryRun: params.ACTION == 'DRY_RUN'])
+
+                    if (first.toString() == second.toString()) {
+                        echo '✅ 2回目の実行でも差分なし（冪等性確認）'
+                    } else {
+                        echo '⚠️ 冪等性に差分を検知'
+                    }
+                }
+            }
+        }
+    }
+
+    post {
+        always {
+            script {
+                echo "=== テストサマリー ==="
+                echo "Repo: ${env.REPO_OWNER}/${env.REPO_NAME}"
+                echo "TestType: ${params.TEST_TYPE} / Action: ${params.ACTION}"
+            }
+        }
+    }
+}
+
+// ---- ヘルパー関数 ----
+
+def shouldRun(String category) {
+    return params.TEST_TYPE == 'ALL' || params.TEST_TYPE == category
+}
+
+def loadBaseline() {
+    return readJSON text: env.BASELINE_CONFIG_JSON
+}
+
+def baseRepoConfig() {
+    return [repoOwner: env.REPO_OWNER, repoName: env.REPO_NAME]
+}
+
+def cloneMap(Map src) {
+    return src ? new groovy.json.JsonSlurperClassic().parseText(groovy.json.JsonOutput.toJson(src)) as Map : [:]
+}
+
+def filterBaselineForSmoke(Map baseline) {
+    def filtered = [:]
+    if (baseline.rulesets) { filtered.rulesets = baseline.rulesets.take(1) }
+    if (baseline.branchProtection) { filtered.branchProtection = baseline.branchProtection }
+    if (baseline.security) { filtered.security = baseline.security }
+    if (baseline.labels) { filtered.labels = baseline.labels.take(3) }
+    return filtered
+}
+
+// 追加リポジトリ指定を owner/name のカンマ区切り or JSON文字列からリストへ正規化
+def parseAdditionalRepos(String raw) {
+    if (!raw?.trim()) { return [] }
+    try {
+        // JSON配列が渡された場合を優先
+        def parsed = new groovy.json.JsonSlurperClassic().parseText(raw)
+        if (parsed instanceof List) { return parsed.collect { [owner: it.owner, name: it.name] } }
+    } catch (Exception ignore) {
+        // JSONでなければカンマ区切りとして処理
+    }
+    return raw.split(',').collect { item ->
+        def parts = item.trim().split('/')
+        if (parts.size() == 2) {
+            return [owner: parts[0], name: parts[1]]
+        }
+        error "ADDITIONAL_REPOSの形式が不正です: ${item}"
+    }
+}

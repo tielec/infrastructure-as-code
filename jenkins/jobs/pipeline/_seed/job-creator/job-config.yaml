@@ -35,6 +35,12 @@ jenkins-jobs:
     dslfile: jenkins/jobs/dsl/admin/admin_github_webhooks_setting_job.groovy
     jenkinsfile: jenkins/jobs/pipeline/admin/github-webhooks-setting/Jenkinsfile
 
+  admin_github_repo_baseline_job:
+    name: 'Github_Repo_Baseline'
+    displayName: 'GitHub Repository Baseline Setting Job'
+    dslfile: jenkins/jobs/dsl/admin/admin_github_repo_baseline_job.groovy
+    jenkinsfile: jenkins/jobs/pipeline/admin/github-repo-baseline/Jenkinsfile
+
   admin_restore_config_job:
     name: 'Restore_Config'
     displayName: 'Restore Jenkins Configurations'
@@ -231,6 +237,12 @@ jenkins-jobs:
     displayName: 'Test Git Webhook Operations'
     dslfile: jenkins/jobs/dsl/shared-library/shared_library_git_webhook_operation_test_job.groovy
     jenkinsfile: jenkins/jobs/pipeline/shared-library/test-git-utils/webhook-operation/Jenkinsfile
+
+  shared_library_git_repo_baseline_operation_test_job:
+    name: 'Repo_Baseline_Operation_Test'
+    displayName: 'Test Git Repository Baseline Operations'
+    dslfile: jenkins/jobs/dsl/shared-library/shared_library_git_repo_baseline_operation_test_job.groovy
+    jenkinsfile: jenkins/jobs/pipeline/shared-library/test-git-utils/repo-baseline-operation/Jenkinsfile
 
   shared_library_github_apps_basic_operation_test_job:
     name: 'GitHub_Apps_Basic_Operation_Test'

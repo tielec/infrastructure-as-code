@@ -134,7 +134,7 @@ cat ~/.ssh/id_rsa.pub
 - 入力した場合はSSMに暗号化保存
 
 **事前準備**:
-- [OpenAI Platform](https://platform.openai.com/api-keys)でAPIキーを生成
+- [OpenAI Platform Quickstart](https://github.com/openai/openai-quickstart-python#setup)でAPIキーを生成
 - `sk-`で始まる形式のキーを用意
 
 **SSMパラメータ**:

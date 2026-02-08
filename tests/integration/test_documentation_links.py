@@ -45,7 +45,7 @@ class DocumentationIntegrationTests(unittest.TestCase):
         cls.external_links = [
             "https://github.com/tielec/infrastructure-as-code/issues/411",
             "https://github.com/tielec/infrastructure-as-code/issues/415",
-            "https://platform.openai.com/api-keys",
+            "https://github.com/openai/openai-quickstart-python#setup",
             "https://github.com/settings/apps",
         ]
 
