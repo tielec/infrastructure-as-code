@@ -1,0 +1,181 @@
+# GitHubリポジトリ ベースライン設定テンプレート
+# このファイルは、複数のGitHubリポジトリに適用する共通設定を定義します
+
+templates:
+  # デフォルトテンプレート（推奨設定）
+  default:
+    rulesets:
+      - name: "default-branch-protection"
+        target: branch
+        enforcement: active
+        conditions:
+          ref_name:
+            include:
+              - "~DEFAULT_BRANCH"
+            exclude: []
+        rules:
+          - type: pull_request
+            parameters:
+              required_approving_review_count: 1
+              dismiss_stale_reviews_on_push: true
+              require_code_owner_review: false
+              require_last_push_approval: false
+          - type: required_status_checks
+            parameters:
+              strict_required_status_checks_policy: true
+              required_status_checks: []
+          - type: non_fast_forward
+
+    branchProtection:
+      settings:
+        required_status_checks:
+          strict: true
+          contexts: []
+        enforce_admins: false
+        required_pull_request_reviews:
+          dismiss_stale_reviews: true
+          require_code_owner_reviews: false
+          required_approving_review_count: 1
+        restrictions: null
+        required_linear_history: false
+        allow_force_pushes: false
+        allow_deletions: false
+
+    security:
+      dependabotAlerts: true
+      dependabotSecurityUpdates: true
+      secretScanning: true
+
+    labels:
+      - name: "bug"
+        color: "d73a4a"
+        description: "Something isn't working"
+      - name: "enhancement"
+        color: "a2eeef"
+        description: "New feature or request"
+      - name: "documentation"
+        color: "0075ca"
+        description: "Improvements or additions to documentation"
+      - name: "good first issue"
+        color: "7057ff"
+        description: "Good for newcomers"
+      - name: "help wanted"
+        color: "008672"
+        description: "Extra attention is needed"
+      - name: "question"
+        color: "d876e3"
+        description: "Further information is requested"
+      - name: "wontfix"
+        color: "ffffff"
+        description: "This will not be worked on"
+      - name: "priority:high"
+        color: "b60205"
+        description: "High priority"
+      - name: "priority:medium"
+        color: "fbca04"
+        description: "Medium priority"
+      - name: "priority:low"
+        color: "0e8a16"
+        description: "Low priority"
+
+  # 厳格テンプレート（セキュリティ重視）
+  strict:
+    rulesets:
+      - name: "strict-branch-protection"
+        target: branch
+        enforcement: active
+        conditions:
+          ref_name:
+            include:
+              - "~DEFAULT_BRANCH"
+              - "refs/heads/release/*"
+            exclude: []
+        rules:
+          - type: pull_request
+            parameters:
+              required_approving_review_count: 2
+              dismiss_stale_reviews_on_push: true
+              require_code_owner_review: true
+              require_last_push_approval: true
+          - type: required_status_checks
+            parameters:
+              strict_required_status_checks_policy: true
+              required_status_checks: []
+          - type: non_fast_forward
+          - type: required_signatures
+
+    branchProtection:
+      settings:
+        required_status_checks:
+          strict: true
+          contexts: []
+        enforce_admins: true
+        required_pull_request_reviews:
+          dismiss_stale_reviews: true
+          require_code_owner_reviews: true
+          required_approving_review_count: 2
+        restrictions: null
+        required_linear_history: true
+        allow_force_pushes: false
+        allow_deletions: false
+
+    security:
+      dependabotAlerts: true
+      dependabotSecurityUpdates: true
+      secretScanning: true
+
+    labels:
+      - name: "bug"
+        color: "d73a4a"
+        description: "Something isn't working"
+      - name: "enhancement"
+        color: "a2eeef"
+        description: "New feature or request"
+      - name: "documentation"
+        color: "0075ca"
+        description: "Improvements or additions to documentation"
+      - name: "good first issue"
+        color: "7057ff"
+        description: "Good for newcomers"
+      - name: "help wanted"
+        color: "008672"
+        description: "Extra attention is needed"
+      - name: "question"
+        color: "d876e3"
+        description: "Further information is requested"
+      - name: "wontfix"
+        color: "ffffff"
+        description: "This will not be worked on"
+      - name: "priority:high"
+        color: "b60205"
+        description: "High priority"
+      - name: "priority:medium"
+        color: "fbca04"
+        description: "Medium priority"
+      - name: "priority:low"
+        color: "0e8a16"
+        description: "Low priority"
+      - name: "security"
+        color: "d73a4a"
+        description: "Security related issue"
+
+  # 最小テンプレート（基本設定のみ）
+  minimal:
+    rulesets: []
+
+    branchProtection:
+      settings:
+        required_status_checks: null
+        enforce_admins: false
+        required_pull_request_reviews:
+          required_approving_review_count: 1
+        restrictions: null
+        allow_force_pushes: false
+        allow_deletions: false
+
+    security:
+      dependabotAlerts: true
+      dependabotSecurityUpdates: false
+      secretScanning: true
+
+    labels: []

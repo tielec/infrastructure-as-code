@@ -646,3 +646,565 @@ def findDeployKeysByTitle(String title, Map config = [:]) {
     initClients()
     return settingsClient.findDeployKeysByTitle(title, config)
 }
+
+// ==================== Ruleset操作 ====================
+
+/**
+ * Rulesetの一覧を取得する
+ * @param config 設定（オプション）
+ *        - repoOwner: リポジトリオーナー
+ *        - repoName: リポジトリ名
+ * @return Rulesetの一覧
+ * @throws GitOperationException API呼び出しに失敗した場合
+ */
+def listRulesets(Map config = [:]) {
+    initClients()
+    return settingsClient.listRulesets(config)
+}
+
+/**
+ * 特定のRulesetを取得する
+ * @param rulesetId Ruleset ID
+ * @param config 設定（オプション）
+ * @return Rulesetの情報
+ * @throws GitOperationException API呼び出しに失敗した場合
+ */
+def getRuleset(def rulesetId, Map config = [:]) {
+    initClients()
+    return settingsClient.getRuleset(rulesetId, config)
+}
+
+/**
+ * Rulesetを作成する
+ * @param rulesetData Ruleset設定
+ *        - name: Ruleset名（必須）
+ *        - target: ターゲット（'branch' または 'tag'）
+ *        - enforcement: 適用レベル（'active', 'evaluate', 'disabled'）
+ *        - conditions: 適用条件
+ *        - rules: ルールのリスト
+ * @param config 設定（オプション）
+ * @return 作成されたRulesetの情報
+ * @throws IllegalArgumentException 必須パラメータが不足している場合
+ * @throws GitOperationException API呼び出しに失敗した場合
+ */
+def createRuleset(Map rulesetData, Map config = [:]) {
+    initClients()
+    return settingsClient.createRuleset(rulesetData, config)
+}
+
+/**
+ * Rulesetを更新する
+ * @param rulesetId Ruleset ID
+ * @param rulesetData 更新内容
+ * @param config 設定（オプション）
+ * @return 更新されたRulesetの情報
+ * @throws IllegalArgumentException 必須パラメータが不足している場合
+ * @throws GitOperationException API呼び出しに失敗した場合
+ */
+def updateRuleset(def rulesetId, Map rulesetData, Map config = [:]) {
+    initClients()
+    return settingsClient.updateRuleset(rulesetId, rulesetData, config)
+}
+
+/**
+ * Rulesetを削除する
+ * @param rulesetId Ruleset ID
+ * @param config 設定（オプション）
+ * @return 削除結果
+ * @throws IllegalArgumentException 必須パラメータが不足している場合
+ * @throws GitOperationException API呼び出しに失敗した場合
+ */
+def deleteRuleset(def rulesetId, Map config = [:]) {
+    initClients()
+    return settingsClient.deleteRuleset(rulesetId, config)
+}
+
+// ==================== Branch Protection操作 ====================
+
+/**
+ * ブランチ保護設定を取得する
+ * @param branch ブランチ名
+ * @param config 設定（オプション）
+ * @return ブランチ保護設定（設定がない場合はnull）
+ * @throws GitOperationException API呼び出しに失敗した場合
+ */
+def getBranchProtection(String branch, Map config = [:]) {
+    initClients()
+    return settingsClient.getBranchProtection(branch, config)
+}
+
+/**
+ * ブランチ保護設定を更新する
+ * @param branch ブランチ名
+ * @param protectionData 保護設定
+ *        - required_status_checks: 必須ステータスチェック
+ *        - enforce_admins: 管理者にも適用するか
+ *        - required_pull_request_reviews: PRレビュー要件
+ *        - restrictions: プッシュ制限
+ *        - required_linear_history: リニアヒストリー要求
+ *        - allow_force_pushes: 強制プッシュ許可
+ *        - allow_deletions: 削除許可
+ * @param config 設定（オプション）
+ * @return 更新されたブランチ保護設定
+ * @throws IllegalArgumentException 必須パラメータが不足している場合
+ * @throws GitOperationException API呼び出しに失敗した場合
+ */
+def updateBranchProtection(String branch, Map protectionData, Map config = [:]) {
+    initClients()
+    return settingsClient.updateBranchProtection(branch, protectionData, config)
+}
+
+/**
+ * ブランチ保護設定を削除する
+ * @param branch ブランチ名
+ * @param config 設定（オプション）
+ * @return 削除結果
+ * @throws IllegalArgumentException 必須パラメータが不足している場合
+ * @throws GitOperationException API呼び出しに失敗した場合
+ */
+def deleteBranchProtection(String branch, Map config = [:]) {
+    initClients()
+    return settingsClient.deleteBranchProtection(branch, config)
+}
+
+// ==================== Security Settings操作 ====================
+
+/**
+ * セキュリティ設定のステータスを取得する
+ * @param config 設定（オプション）
+ * @return セキュリティ設定のステータス
+ * @throws GitOperationException API呼び出しに失敗した場合
+ */
+def getSecuritySettings(Map config = [:]) {
+    initClients()
+    return settingsClient.getSecuritySettings(config)
+}
+
+/**
+ * Dependabotアラートを有効化する
+ * @param config 設定（オプション）
+ * @return 有効化結果
+ * @throws GitOperationException API呼び出しに失敗した場合
+ */
+def enableDependabotAlerts(Map config = [:]) {
+    initClients()
+    return settingsClient.enableDependabotAlerts(config)
+}
+
+/**
+ * Dependabotセキュリティアップデートを有効化する
+ * @param config 設定（オプション）
+ * @return 有効化結果
+ * @throws GitOperationException API呼び出しに失敗した場合
+ */
+def enableDependabotSecurityUpdates(Map config = [:]) {
+    initClients()
+    return settingsClient.enableDependabotSecurityUpdates(config)
+}
+
+/**
+ * Secret Scanningを有効化する
+ * @param config 設定（オプション）
+ * @return 有効化結果
+ * @throws GitOperationException API呼び出しに失敗した場合
+ */
+def enableSecretScanning(Map config = [:]) {
+    initClients()
+    return settingsClient.enableSecretScanning(config)
+}
+
+// ==================== Label操作 ====================
+
+/**
+ * ラベルの一覧を取得する
+ * @param config 設定（オプション）
+ * @return ラベルの一覧
+ * @throws GitOperationException API呼び出しに失敗した場合
+ */
+def listLabels(Map config = [:]) {
+    initClients()
+    return settingsClient.listLabels(config)
+}
+
+/**
+ * 特定のラベルを取得する
+ * @param labelName ラベル名
+ * @param config 設定（オプション）
+ * @return ラベルの情報（存在しない場合はnull）
+ * @throws GitOperationException API呼び出しに失敗した場合
+ */
+def getLabel(String labelName, Map config = [:]) {
+    initClients()
+    return settingsClient.getLabel(labelName, config)
+}
+
+/**
+ * ラベルを作成する
+ * @param labelData ラベル設定
+ *        - name: ラベル名（必須）
+ *        - color: カラーコード（6桁の16進数、#なし）
+ *        - description: 説明（オプション）
+ * @param config 設定（オプション）
+ * @return 作成されたラベルの情報
+ * @throws IllegalArgumentException 必須パラメータが不足している場合
+ * @throws GitOperationException API呼び出しに失敗した場合
+ */
+def createLabel(Map labelData, Map config = [:]) {
+    initClients()
+    return settingsClient.createLabel(labelData, config)
+}
+
+/**
+ * ラベルを更新する
+ * @param labelName ラベル名
+ * @param labelData 更新内容
+ * @param config 設定（オプション）
+ * @return 更新されたラベルの情報
+ * @throws IllegalArgumentException 必須パラメータが不足している場合
+ * @throws GitOperationException API呼び出しに失敗した場合
+ */
+def updateLabel(String labelName, Map labelData, Map config = [:]) {
+    initClients()
+    return settingsClient.updateLabel(labelName, labelData, config)
+}
+
+/**
+ * ラベルを削除する
+ * @param labelName ラベル名
+ * @param config 設定（オプション）
+ * @return 削除結果
+ * @throws IllegalArgumentException 必須パラメータが不足している場合
+ * @throws GitOperationException API呼び出しに失敗した場合
+ */
+def deleteLabel(String labelName, Map config = [:]) {
+    initClients()
+    return settingsClient.deleteLabel(labelName, config)
+}
+
+/**
+ * ラベルを同期する（不足しているラベルを作成、既存のラベルを更新）
+ * @param labels ラベル設定のリスト
+ * @param config 設定（オプション）
+ *        - deleteUnmanaged: 管理対象外のラベルを削除するか（デフォルト: false）
+ * @return 同期結果
+ * @throws GitOperationException API呼び出しに失敗した場合
+ */
+def syncLabels(List<Map> labels, Map config = [:]) {
+    initClients()
+    return settingsClient.syncLabels(labels, config)
+}
+
+// ==================== Repository Baseline操作 ====================
+
+/**
+ * リポジトリのデフォルトブランチを取得する
+ * @param config 設定（オプション）
+ * @return デフォルトブランチ名
+ * @throws GitOperationException API呼び出しに失敗した場合
+ */
+def getDefaultBranch(Map config = [:]) {
+    initClients()
+
+    def repoOwner = config.repoOwner
+    def repoName = config.repoName
+
+    if (!repoOwner || !repoName) {
+        def (owner, name) = settingsClient.apiClient.getCurrentRepoInfo()
+        repoOwner = repoOwner ?: owner
+        repoName = repoName ?: name
+    }
+
+    def url = "https://api.github.com/repos/${repoOwner}/${repoName}"
+    def response = settingsClient.apiClient.callGitHubApi(url, 'GET', null, config)
+    return response.default_branch
+}
+
+/**
+ * リポジトリのベースライン設定ステータスを取得する
+ * @param baselineConfig ベースライン設定
+ * @param config 設定（オプション）
+ * @return ステータス情報（rulesets, branchProtection, security, labels）
+ * @throws GitOperationException API呼び出しに失敗した場合
+ */
+def getRepoBaselineStatus(Map baselineConfig, Map config = [:]) {
+    initClients()
+
+    def status = [
+        rulesets: [:],
+        branchProtection: [:],
+        security: [:],
+        labels: [:]
+    ]
+
+    // Ruleset status
+    if (baselineConfig.rulesets) {
+        def existingRulesets = settingsClient.listRulesets(config)
+        def existingNames = existingRulesets.collect { it.name }
+        baselineConfig.rulesets.each { ruleset ->
+            status.rulesets[ruleset.name] = existingNames.contains(ruleset.name) ? 'exists' : 'missing'
+        }
+    }
+
+    // Branch Protection status
+    if (baselineConfig.branchProtection) {
+        def defaultBranch = getDefaultBranch(config)
+        def targetBranch = baselineConfig.branchProtection.branch ?: defaultBranch
+        def protection = settingsClient.getBranchProtection(targetBranch, config)
+        status.branchProtection = [
+            branch: targetBranch,
+            status: protection ? 'configured' : 'not_configured',
+            current: protection
+        ]
+    }
+
+    // Security status
+    if (baselineConfig.security) {
+        status.security = settingsClient.getSecuritySettings(config)
+    }
+
+    // Labels status
+    if (baselineConfig.labels) {
+        def existingLabels = settingsClient.listLabels(config)
+        def existingNames = existingLabels.collect { it.name.toLowerCase() }
+        baselineConfig.labels.each { label ->
+            status.labels[label.name] = existingNames.contains(label.name.toLowerCase()) ? 'exists' : 'missing'
+        }
+    }
+
+    return status
+}
+
+/**
+ * ベースライン設定と現在の設定の差分を生成する
+ * @param baselineConfig ベースライン設定
+ * @param config 設定（オプション）
+ * @return 差分情報
+ * @throws GitOperationException API呼び出しに失敗した場合
+ */
+def generateBaselineDiff(Map baselineConfig, Map config = [:]) {
+    initClients()
+
+    def diff = [
+        rulesets: [toCreate: [], toUpdate: []],
+        branchProtection: [toUpdate: false],
+        security: [toEnable: []],
+        labels: [toCreate: [], toUpdate: []]
+    ]
+
+    // Ruleset diff
+    if (baselineConfig.rulesets) {
+        def existingRulesets = settingsClient.listRulesets(config)
+        def existingByName = existingRulesets.collectEntries { [(it.name): it] }
+
+        baselineConfig.rulesets.each { ruleset ->
+            if (existingByName.containsKey(ruleset.name)) {
+                diff.rulesets.toUpdate << [name: ruleset.name, id: existingByName[ruleset.name].id]
+            } else {
+                diff.rulesets.toCreate << ruleset.name
+            }
+        }
+    }
+
+    // Branch Protection diff
+    if (baselineConfig.branchProtection) {
+        def defaultBranch = getDefaultBranch(config)
+        def targetBranch = baselineConfig.branchProtection.branch ?: defaultBranch
+        def protection = settingsClient.getBranchProtection(targetBranch, config)
+        diff.branchProtection = [
+            branch: targetBranch,
+            toUpdate: protection == null || baselineConfig.branchProtection.forceUpdate == true,
+            current: protection
+        ]
+    }
+
+    // Security diff
+    if (baselineConfig.security) {
+        def currentSecurity = settingsClient.getSecuritySettings(config)
+        if (baselineConfig.security.dependabotAlerts && !currentSecurity.dependabotAlerts) {
+            diff.security.toEnable << 'dependabotAlerts'
+        }
+        if (baselineConfig.security.dependabotSecurityUpdates && !currentSecurity.dependabotSecurityUpdates) {
+            diff.security.toEnable << 'dependabotSecurityUpdates'
+        }
+        if (baselineConfig.security.secretScanning && !currentSecurity.secretScanning) {
+            diff.security.toEnable << 'secretScanning'
+        }
+    }
+
+    // Labels diff
+    if (baselineConfig.labels) {
+        def existingLabels = settingsClient.listLabels(config)
+        def existingByName = existingLabels.collectEntries { [(it.name.toLowerCase()): it] }
+
+        baselineConfig.labels.each { label ->
+            def existing = existingByName[label.name.toLowerCase()]
+            if (existing) {
+                if (existing.color != label.color || existing.description != label.description) {
+                    diff.labels.toUpdate << label.name
+                }
+            } else {
+                diff.labels.toCreate << label.name
+            }
+        }
+    }
+
+    return diff
+}
+
+/**
+ * リポジトリにベースライン設定を適用する
+ * @param baselineConfig ベースライン設定
+ * @param config 設定（オプション）
+ *        - dryRun: ドライランモード（デフォルト: true）
+ * @return 適用結果
+ * @throws GitOperationException API呼び出しに失敗した場合
+ */
+def applyRepoBaseline(Map baselineConfig, Map config = [:]) {
+    initClients()
+
+    def dryRun = config.dryRun != null ? config.dryRun : true
+    def results = [
+        dryRun: dryRun,
+        rulesets: [],
+        branchProtection: null,
+        security: [],
+        labels: []
+    ]
+
+    // Apply Rulesets
+    if (baselineConfig.rulesets) {
+        def existingRulesets = settingsClient.listRulesets(config)
+        def existingByName = existingRulesets.collectEntries { [(it.name): it] }
+
+        baselineConfig.rulesets.each { ruleset ->
+            def existing = existingByName[ruleset.name]
+            if (existing) {
+                if (dryRun) {
+                    results.rulesets << [action: 'would_update', name: ruleset.name, id: existing.id]
+                } else {
+                    def updated = settingsClient.updateRuleset(existing.id, ruleset, config)
+                    results.rulesets << [action: 'updated', name: ruleset.name, id: existing.id]
+                }
+            } else {
+                if (dryRun) {
+                    results.rulesets << [action: 'would_create', name: ruleset.name]
+                } else {
+                    def created = settingsClient.createRuleset(ruleset, config)
+                    results.rulesets << [action: 'created', name: ruleset.name, id: created.id]
+                }
+            }
+        }
+    }
+
+    // Apply Branch Protection
+    if (baselineConfig.branchProtection) {
+        def defaultBranch = getDefaultBranch(config)
+        def targetBranch = baselineConfig.branchProtection.branch ?: defaultBranch
+        def protectionData = baselineConfig.branchProtection.settings ?: baselineConfig.branchProtection
+
+        if (dryRun) {
+            results.branchProtection = [action: 'would_update', branch: targetBranch]
+        } else {
+            settingsClient.updateBranchProtection(targetBranch, protectionData, config)
+            results.branchProtection = [action: 'updated', branch: targetBranch]
+        }
+    }
+
+    // Apply Security Settings
+    if (baselineConfig.security) {
+        if (baselineConfig.security.dependabotAlerts) {
+            if (dryRun) {
+                results.security << [action: 'would_enable', setting: 'dependabotAlerts']
+            } else {
+                settingsClient.enableDependabotAlerts(config)
+                results.security << [action: 'enabled', setting: 'dependabotAlerts']
+            }
+        }
+        if (baselineConfig.security.dependabotSecurityUpdates) {
+            if (dryRun) {
+                results.security << [action: 'would_enable', setting: 'dependabotSecurityUpdates']
+            } else {
+                settingsClient.enableDependabotSecurityUpdates(config)
+                results.security << [action: 'enabled', setting: 'dependabotSecurityUpdates']
+            }
+        }
+        if (baselineConfig.security.secretScanning) {
+            if (dryRun) {
+                results.security << [action: 'would_enable', setting: 'secretScanning']
+            } else {
+                settingsClient.enableSecretScanning(config)
+                results.security << [action: 'enabled', setting: 'secretScanning']
+            }
+        }
+    }
+
+    // Apply Labels
+    if (baselineConfig.labels) {
+        if (dryRun) {
+            baselineConfig.labels.each { label ->
+                def existing = settingsClient.getLabel(label.name, config)
+                if (existing) {
+                    results.labels << [action: 'would_update', name: label.name]
+                } else {
+                    results.labels << [action: 'would_create', name: label.name]
+                }
+            }
+        } else {
+            def syncResult = settingsClient.syncLabels(baselineConfig.labels, config)
+            results.labels = syncResult
+        }
+    }
+
+    return results
+}
+
+/**
+ * 複数のリポジトリにベースライン設定を一括適用する
+ * @param repositories リポジトリのリスト（[owner: 'xxx', name: 'yyy']形式）
+ * @param baselineConfig ベースライン設定
+ * @param config 設定（オプション）
+ *        - dryRun: ドライランモード（デフォルト: true）
+ *        - sleepBetweenRepos: リポジトリ間の待機時間（ミリ秒、デフォルト: 1000）
+ *        - continueOnError: エラー時も続行するか（デフォルト: true）
+ * @return 適用結果のリスト
+ */
+def batchApplyRepoBaseline(List<Map> repositories, Map baselineConfig, Map config = [:]) {
+    initClients()
+
+    def dryRun = config.dryRun != null ? config.dryRun : true
+    def sleepBetweenRepos = config.sleepBetweenRepos ?: 1000
+    def continueOnError = config.continueOnError != null ? config.continueOnError : true
+
+    def results = []
+
+    repositories.eachWithIndex { repo, index ->
+        def repoConfig = [:] + config
+        repoConfig.repoOwner = repo.owner
+        repoConfig.repoName = repo.name
+
+        try {
+            def result = applyRepoBaseline(baselineConfig, repoConfig)
+            results << [
+                repository: "${repo.owner}/${repo.name}",
+                success: true,
+                result: result
+            ]
+        } catch (Exception e) {
+            results << [
+                repository: "${repo.owner}/${repo.name}",
+                success: false,
+                error: e.message
+            ]
+            if (!continueOnError) {
+                throw e
+            }
+        }
+
+        // Rate limit対策: リポジトリ間で待機
+        if (index < repositories.size() - 1) {
+            sleep(sleepBetweenRepos)
+        }
+    }
+
+    return results
+}

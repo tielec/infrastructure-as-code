@@ -125,7 +125,7 @@ aws ssm get-parameter --name /jenkins-infra/dev/jenkins/admin-password \
 
 | カテゴリ | 説明 | 主要ジョブ |
 |---------|------|-----------|
-| **Admin_Jobs** | システム管理 | job-creator（全ジョブ生成）<br>backup-config（設定バックアップ）<br>restore-config（設定リストア）<br>ssm-parameter-backup（SSMパラメータバックアップ）<br>ssm-parameter-restore（SSMパラメータリストア）<br>github-webhooks-setting（GitHub Webhook設定）<br>github-deploykeys-setting（デプロイキー設定）<br>user-management（ユーザー管理） |
+| **Admin_Jobs** | システム管理 | job-creator（全ジョブ生成）<br>backup-config（設定バックアップ）<br>restore-config（設定リストア）<br>ssm-parameter-backup（SSMパラメータバックアップ）<br>ssm-parameter-restore（SSMパラメータリストア）<br>github-webhooks-setting（GitHub Webhook設定）<br>github-repo-baseline（GitHubリポジトリベースライン設定）<br>github-deploykeys-setting（デプロイキー設定）<br>user-management（ユーザー管理） |
 | **Account_Setup** | アカウント管理 | account-self-activation（アカウント自己有効化） |
 | **AI_Workflow** | AI駆動開発自動化 | **[ai-workflow-agentリポジトリに移行](https://github.com/tielec/ai-workflow-agent/tree/main/jenkins)**<br>詳細はai-workflow-agentリポジトリを参照してください |
 | **Code_Quality_Checker** | コード品質分析 | pr-complexity-analyzer（PR複雑度分析）<br>rust-code-analysis（Rustコード解析） |
@@ -347,6 +347,53 @@ Jenkins全体で使用される環境変数（JCaSCで定義）：
 - `ENVIRONMENT`: リストア対象の環境（dev/prod）
 - `DRY_RUN`: 実際のリストアを行わず確認のみ（デフォルト: true）
 - `FORCE_OVERWRITE`: 既存パラメータの強制上書き
+
+#### Admin_Jobs/Github_Repo_Baseline
+
+**目的**: GitHubリポジトリに共通ベースライン設定を一括適用
+
+**機能**:
+- ルールセット（Rulesets）の適用
+- ブランチ保護（Branch Protection）の設定
+- セキュリティ設定（Dependabot、Secret Scanning）の有効化
+- ラベル（Labels）の一括設定
+- 複数リポジトリへの一括適用
+- DRY_RUNモードによる事前確認
+
+**パラメータ**:
+- `REPO_URL`: GitHubリポジトリのURL（必須、複数指定時はカンマまたは改行区切り）
+- `ACTION`: 実行操作（DRY_RUN: 差分表示のみ、APPLY: 実際に適用）
+- `TEMPLATE`: ベースラインテンプレート（default/strict/minimal）
+- `APPLY_RULESETS`: ルールセットを適用する（デフォルト: true）
+- `APPLY_BRANCH_PROTECTION`: ブランチ保護を適用する（デフォルト: true）
+- `APPLY_SECURITY`: セキュリティ設定を適用する（デフォルト: true）
+- `APPLY_LABELS`: ラベルを適用する（デフォルト: true）
+- `TARGET_BRANCH`: 保護対象のブランチ名（空の場合はデフォルトブランチ）
+- `FORCE_UPDATE`: 既存設定を上書きする（デフォルト: false）
+
+**テンプレート説明**:
+- `default`: 推奨設定（1人のレビュー必須、Dependabot有効、標準ラベル）
+- `strict`: セキュリティ重視（2人のレビュー必須、CODEOWNERS必須、署名必須）
+- `minimal`: 基本設定のみ（1人のレビュー必須、ルールセットなし）
+
+**使用例**:
+```bash
+# 単一リポジトリにDRY_RUNで確認
+REPO_URL: https://github.com/org/repo
+ACTION: DRY_RUN
+TEMPLATE: default
+
+# 複数リポジトリに一括適用
+REPO_URL: https://github.com/org/repo1,https://github.com/org/repo2
+ACTION: APPLY
+TEMPLATE: default
+```
+
+**注意事項**:
+- ⚠️ 初回実行時はDRY_RUNモードで差分を確認することを推奨
+- ⚠️ FORCE_UPDATE=trueの場合、既存設定が上書きされます
+- Rate Limit対策として、複数リポジトリ処理時は1秒間隔で実行
+- 適用結果はJSONレポートとしてアーティファクトに保存
 
 #### Lambda Teardown Pipeline
 

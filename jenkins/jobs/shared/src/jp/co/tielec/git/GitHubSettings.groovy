@@ -504,8 +504,706 @@ class GitHubSettings implements Serializable {
         }
     }
     
+    // ==================== Ruleset操作 ====================
+
+    /**
+     * リポジトリのルールセット一覧を取得する
+     * @param config 設定（repoUrl必須）
+     * @return ルールセットの一覧
+     * @throws GitOperationException API呼び出しに失敗した場合
+     */
+    def listRulesets(Map config = [:]) {
+        try {
+            def (repoOwner, repoName) = apiClient.getRepositoryInfo(config)
+
+            return apiClient.callGitHubApi(
+                "https://api.github.com/repos/${repoOwner}/${repoName}/rulesets",
+                'GET',
+                null,
+                config
+            )
+        } catch (Exception e) {
+            throw new GitOperationException("ルールセット一覧の取得に失敗しました: ${e.message}", e)
+        }
+    }
+
+    /**
+     * 特定のルールセットを取得する
+     * @param rulesetId ルールセットID
+     * @param config 設定
+     * @return ルールセット情報
+     * @throws GitOperationException API呼び出しに失敗した場合
+     */
+    def getRuleset(def rulesetId, Map config = [:]) {
+        try {
+            if (!rulesetId) {
+                throw new IllegalArgumentException("ルールセットIDは必須です")
+            }
+
+            def (repoOwner, repoName) = apiClient.getRepositoryInfo(config)
+
+            return apiClient.callGitHubApi(
+                "https://api.github.com/repos/${repoOwner}/${repoName}/rulesets/${rulesetId}",
+                'GET',
+                null,
+                config
+            )
+        } catch (IllegalArgumentException e) {
+            throw e
+        } catch (Exception e) {
+            throw new GitOperationException("ルールセット情報の取得に失敗しました: ${e.message}", e)
+        }
+    }
+
+    /**
+     * ルールセットを作成する
+     * @param rulesetConfig ルールセット設定
+     * @param config 設定
+     * @return 作成されたルールセット
+     * @throws GitOperationException API呼び出しに失敗した場合
+     */
+    def createRuleset(Map rulesetConfig, Map config = [:]) {
+        try {
+            if (!rulesetConfig.name?.trim()) {
+                throw new IllegalArgumentException("ルールセット名は必須です")
+            }
+
+            def (repoOwner, repoName) = apiClient.getRepositoryInfo(config)
+
+            // ルールセット設定の構築
+            def payload = [
+                name: rulesetConfig.name,
+                target: rulesetConfig.target ?: 'branch',
+                enforcement: rulesetConfig.enforcement ?: 'active'
+            ]
+
+            // 条件の設定
+            if (rulesetConfig.conditions) {
+                payload.conditions = rulesetConfig.conditions
+            }
+
+            // ルールの設定
+            if (rulesetConfig.rules) {
+                payload.rules = rulesetConfig.rules
+            }
+
+            // bypass_actorsの設定（オプション）
+            if (rulesetConfig.bypass_actors) {
+                payload.bypass_actors = rulesetConfig.bypass_actors
+            }
+
+            return apiClient.callGitHubApi(
+                "https://api.github.com/repos/${repoOwner}/${repoName}/rulesets",
+                'POST',
+                payload,
+                config
+            )
+        } catch (IllegalArgumentException e) {
+            throw e
+        } catch (Exception e) {
+            throw new GitOperationException("ルールセットの作成に失敗しました: ${e.message}", e)
+        }
+    }
+
+    /**
+     * ルールセットを更新する
+     * @param rulesetId ルールセットID
+     * @param updates 更新内容
+     * @param config 設定
+     * @return 更新されたルールセット
+     * @throws GitOperationException API呼び出しに失敗した場合
+     */
+    def updateRuleset(def rulesetId, Map updates, Map config = [:]) {
+        try {
+            if (!rulesetId) {
+                throw new IllegalArgumentException("ルールセットIDは必須です")
+            }
+
+            if (!updates || updates.isEmpty()) {
+                throw new IllegalArgumentException("更新内容は必須です")
+            }
+
+            def (repoOwner, repoName) = apiClient.getRepositoryInfo(config)
+
+            return apiClient.callGitHubApi(
+                "https://api.github.com/repos/${repoOwner}/${repoName}/rulesets/${rulesetId}",
+                'PUT',
+                updates,
+                config
+            )
+        } catch (IllegalArgumentException e) {
+            throw e
+        } catch (Exception e) {
+            throw new GitOperationException("ルールセットの更新に失敗しました: ${e.message}", e)
+        }
+    }
+
+    /**
+     * ルールセットを削除する
+     * @param rulesetId ルールセットID
+     * @param config 設定
+     * @return 削除結果
+     * @throws GitOperationException API呼び出しに失敗した場合
+     */
+    def deleteRuleset(def rulesetId, Map config = [:]) {
+        try {
+            if (!rulesetId) {
+                throw new IllegalArgumentException("ルールセットIDは必須です")
+            }
+
+            def (repoOwner, repoName) = apiClient.getRepositoryInfo(config)
+
+            return apiClient.callGitHubApi(
+                "https://api.github.com/repos/${repoOwner}/${repoName}/rulesets/${rulesetId}",
+                'DELETE',
+                null,
+                config
+            )
+        } catch (IllegalArgumentException e) {
+            throw e
+        } catch (Exception e) {
+            throw new GitOperationException("ルールセットの削除に失敗しました: ${e.message}", e)
+        }
+    }
+
+    // ==================== Branch Protection操作 ====================
+
+    /**
+     * ブランチ保護設定を取得する
+     * @param branch ブランチ名
+     * @param config 設定
+     * @return ブランチ保護設定（保護されていない場合はnull）
+     * @throws GitOperationException API呼び出しに失敗した場合
+     */
+    def getBranchProtection(String branch, Map config = [:]) {
+        try {
+            if (!branch?.trim()) {
+                throw new IllegalArgumentException("ブランチ名は必須です")
+            }
+
+            def (repoOwner, repoName) = apiClient.getRepositoryInfo(config)
+            def encodedBranch = java.net.URLEncoder.encode(branch, 'UTF-8')
+
+            return apiClient.callGitHubApi(
+                "https://api.github.com/repos/${repoOwner}/${repoName}/branches/${encodedBranch}/protection",
+                'GET',
+                null,
+                config
+            )
+        } catch (IllegalArgumentException e) {
+            throw e
+        } catch (GitOperationException e) {
+            // 404の場合は保護が設定されていないので、nullを返す
+            if (e.message?.contains('404')) {
+                return null
+            }
+            throw e
+        } catch (Exception e) {
+            throw new GitOperationException("ブランチ保護設定の取得に失敗しました: ${e.message}", e)
+        }
+    }
+
+    /**
+     * ブランチ保護を設定する
+     * @param branch ブランチ名
+     * @param protectionConfig 保護設定
+     * @param config 設定
+     * @return 設定結果
+     * @throws GitOperationException API呼び出しに失敗した場合
+     */
+    def updateBranchProtection(String branch, Map protectionConfig, Map config = [:]) {
+        try {
+            if (!branch?.trim()) {
+                throw new IllegalArgumentException("ブランチ名は必須です")
+            }
+
+            def (repoOwner, repoName) = apiClient.getRepositoryInfo(config)
+            def encodedBranch = java.net.URLEncoder.encode(branch, 'UTF-8')
+
+            // ブランチ保護設定の構築
+            def payload = [
+                enforce_admins: protectionConfig.enforce_admins ?: false,
+                required_pull_request_reviews: null,
+                required_status_checks: null,
+                restrictions: protectionConfig.restrictions ?: null
+            ]
+
+            // 必須プルリクエストレビュー設定
+            if (protectionConfig.required_pull_request_reviews) {
+                payload.required_pull_request_reviews = [
+                    dismiss_stale_reviews: protectionConfig.required_pull_request_reviews.dismiss_stale_reviews ?: false,
+                    require_code_owner_reviews: protectionConfig.required_pull_request_reviews.require_code_owner_reviews ?: false,
+                    required_approving_review_count: protectionConfig.required_pull_request_reviews.required_approving_review_count ?: 1
+                ]
+            }
+
+            // 必須ステータスチェック設定
+            if (protectionConfig.required_status_checks) {
+                payload.required_status_checks = [
+                    strict: protectionConfig.required_status_checks.strict ?: false,
+                    contexts: protectionConfig.required_status_checks.contexts ?: []
+                ]
+            }
+
+            // 追加オプション
+            if (protectionConfig.allow_force_pushes != null) {
+                payload.allow_force_pushes = protectionConfig.allow_force_pushes
+            }
+
+            if (protectionConfig.allow_deletions != null) {
+                payload.allow_deletions = protectionConfig.allow_deletions
+            }
+
+            if (protectionConfig.required_signatures != null) {
+                payload.required_signatures = protectionConfig.required_signatures
+            }
+
+            return apiClient.callGitHubApi(
+                "https://api.github.com/repos/${repoOwner}/${repoName}/branches/${encodedBranch}/protection",
+                'PUT',
+                payload,
+                config
+            )
+        } catch (IllegalArgumentException e) {
+            throw e
+        } catch (Exception e) {
+            throw new GitOperationException("ブランチ保護設定の更新に失敗しました: ${e.message}", e)
+        }
+    }
+
+    /**
+     * ブランチ保護を削除する
+     * @param branch ブランチ名
+     * @param config 設定
+     * @return 削除結果
+     * @throws GitOperationException API呼び出しに失敗した場合
+     */
+    def deleteBranchProtection(String branch, Map config = [:]) {
+        try {
+            if (!branch?.trim()) {
+                throw new IllegalArgumentException("ブランチ名は必須です")
+            }
+
+            def (repoOwner, repoName) = apiClient.getRepositoryInfo(config)
+            def encodedBranch = java.net.URLEncoder.encode(branch, 'UTF-8')
+
+            return apiClient.callGitHubApi(
+                "https://api.github.com/repos/${repoOwner}/${repoName}/branches/${encodedBranch}/protection",
+                'DELETE',
+                null,
+                config
+            )
+        } catch (IllegalArgumentException e) {
+            throw e
+        } catch (Exception e) {
+            throw new GitOperationException("ブランチ保護の削除に失敗しました: ${e.message}", e)
+        }
+    }
+
+    // ==================== Security設定操作 ====================
+
+    /**
+     * リポジトリのセキュリティ設定を取得する
+     * @param config 設定
+     * @return セキュリティ設定（dependabot_alerts, secret_scanning等）
+     * @throws GitOperationException API呼び出しに失敗した場合
+     */
+    def getSecuritySettings(Map config = [:]) {
+        try {
+            def (repoOwner, repoName) = apiClient.getRepositoryInfo(config)
+
+            // リポジトリ情報を取得してセキュリティ設定を確認
+            def repoInfo = apiClient.callGitHubApi(
+                "https://api.github.com/repos/${repoOwner}/${repoName}",
+                'GET',
+                null,
+                config
+            )
+
+            // Dependabot alerts の状態を取得
+            def vulnerabilityAlertsEnabled = false
+            try {
+                apiClient.callGitHubApi(
+                    "https://api.github.com/repos/${repoOwner}/${repoName}/vulnerability-alerts",
+                    'GET',
+                    null,
+                    config
+                )
+                vulnerabilityAlertsEnabled = true
+            } catch (Exception e) {
+                // 404の場合は無効、その他のエラーは無視
+                vulnerabilityAlertsEnabled = false
+            }
+
+            return [
+                vulnerability_alerts: vulnerabilityAlertsEnabled,
+                secret_scanning: repoInfo.security_and_analysis?.secret_scanning?.status == 'enabled',
+                secret_scanning_push_protection: repoInfo.security_and_analysis?.secret_scanning_push_protection?.status == 'enabled',
+                dependabot_security_updates: repoInfo.security_and_analysis?.dependabot_security_updates?.status == 'enabled'
+            ]
+        } catch (Exception e) {
+            throw new GitOperationException("セキュリティ設定の取得に失敗しました: ${e.message}", e)
+        }
+    }
+
+    /**
+     * Dependabot alertsを有効化する
+     * @param config 設定
+     * @return 設定結果
+     * @throws GitOperationException API呼び出しに失敗した場合
+     */
+    def enableDependabotAlerts(Map config = [:]) {
+        try {
+            def (repoOwner, repoName) = apiClient.getRepositoryInfo(config)
+
+            return apiClient.callGitHubApi(
+                "https://api.github.com/repos/${repoOwner}/${repoName}/vulnerability-alerts",
+                'PUT',
+                null,
+                config
+            )
+        } catch (Exception e) {
+            throw new GitOperationException("Dependabot alertsの有効化に失敗しました: ${e.message}", e)
+        }
+    }
+
+    /**
+     * Dependabot security updatesを有効化する
+     * @param config 設定
+     * @return 設定結果
+     * @throws GitOperationException API呼び出しに失敗した場合
+     */
+    def enableDependabotSecurityUpdates(Map config = [:]) {
+        try {
+            def (repoOwner, repoName) = apiClient.getRepositoryInfo(config)
+
+            def payload = [
+                security_and_analysis: [
+                    dependabot_security_updates: [
+                        status: 'enabled'
+                    ]
+                ]
+            ]
+
+            return apiClient.callGitHubApi(
+                "https://api.github.com/repos/${repoOwner}/${repoName}",
+                'PATCH',
+                payload,
+                config
+            )
+        } catch (Exception e) {
+            throw new GitOperationException("Dependabot security updatesの有効化に失敗しました: ${e.message}", e)
+        }
+    }
+
+    /**
+     * Secret Scanningを有効化する
+     * @param enablePushProtection Push Protectionも有効化するか
+     * @param config 設定
+     * @return 設定結果
+     * @throws GitOperationException API呼び出しに失敗した場合
+     */
+    def enableSecretScanning(boolean enablePushProtection = true, Map config = [:]) {
+        try {
+            def (repoOwner, repoName) = apiClient.getRepositoryInfo(config)
+
+            def securityConfig = [
+                secret_scanning: [
+                    status: 'enabled'
+                ]
+            ]
+
+            if (enablePushProtection) {
+                securityConfig.secret_scanning_push_protection = [
+                    status: 'enabled'
+                ]
+            }
+
+            def payload = [
+                security_and_analysis: securityConfig
+            ]
+
+            return apiClient.callGitHubApi(
+                "https://api.github.com/repos/${repoOwner}/${repoName}",
+                'PATCH',
+                payload,
+                config
+            )
+        } catch (Exception e) {
+            throw new GitOperationException("Secret Scanningの有効化に失敗しました: ${e.message}", e)
+        }
+    }
+
+    // ==================== Label操作 ====================
+
+    /**
+     * ラベル一覧を取得する
+     * @param config 設定
+     * @return ラベル一覧
+     * @throws GitOperationException API呼び出しに失敗した場合
+     */
+    def listLabels(Map config = [:]) {
+        try {
+            def (repoOwner, repoName) = apiClient.getRepositoryInfo(config)
+
+            return apiClient.callGitHubApi(
+                "https://api.github.com/repos/${repoOwner}/${repoName}/labels",
+                'GET',
+                null,
+                config
+            )
+        } catch (Exception e) {
+            throw new GitOperationException("ラベル一覧の取得に失敗しました: ${e.message}", e)
+        }
+    }
+
+    /**
+     * ラベルを取得する
+     * @param labelName ラベル名
+     * @param config 設定
+     * @return ラベル情報（存在しない場合はnull）
+     * @throws GitOperationException API呼び出しに失敗した場合
+     */
+    def getLabel(String labelName, Map config = [:]) {
+        try {
+            if (!labelName?.trim()) {
+                throw new IllegalArgumentException("ラベル名は必須です")
+            }
+
+            def (repoOwner, repoName) = apiClient.getRepositoryInfo(config)
+            def encodedName = java.net.URLEncoder.encode(labelName, 'UTF-8')
+
+            return apiClient.callGitHubApi(
+                "https://api.github.com/repos/${repoOwner}/${repoName}/labels/${encodedName}",
+                'GET',
+                null,
+                config
+            )
+        } catch (IllegalArgumentException e) {
+            throw e
+        } catch (GitOperationException e) {
+            // 404の場合はラベルが存在しないので、nullを返す
+            if (e.message?.contains('404')) {
+                return null
+            }
+            throw e
+        } catch (Exception e) {
+            throw new GitOperationException("ラベル情報の取得に失敗しました: ${e.message}", e)
+        }
+    }
+
+    /**
+     * ラベルを作成する
+     * @param name ラベル名
+     * @param color 色（6桁のHex、#なし）
+     * @param description 説明
+     * @param config 設定
+     * @return 作成されたラベル
+     * @throws GitOperationException API呼び出しに失敗した場合
+     */
+    def createLabel(String name, String color, String description = '', Map config = [:]) {
+        try {
+            if (!name?.trim()) {
+                throw new IllegalArgumentException("ラベル名は必須です")
+            }
+
+            if (!color?.trim()) {
+                throw new IllegalArgumentException("色は必須です")
+            }
+
+            // 色のバリデーション（#を除去して6桁のHexかどうか確認）
+            def cleanColor = color.replaceAll(/^#/, '')
+            if (!cleanColor.matches(/^[0-9a-fA-F]{6}$/)) {
+                throw new IllegalArgumentException("無効なカラーコードです: ${color}")
+            }
+
+            def (repoOwner, repoName) = apiClient.getRepositoryInfo(config)
+
+            def payload = [
+                name: name.trim(),
+                color: cleanColor,
+                description: description ?: ''
+            ]
+
+            return apiClient.callGitHubApi(
+                "https://api.github.com/repos/${repoOwner}/${repoName}/labels",
+                'POST',
+                payload,
+                config
+            )
+        } catch (IllegalArgumentException e) {
+            throw e
+        } catch (Exception e) {
+            throw new GitOperationException("ラベルの作成に失敗しました: ${e.message}", e)
+        }
+    }
+
+    /**
+     * ラベルを更新する
+     * @param labelName 現在のラベル名
+     * @param updates 更新内容（new_name, color, description）
+     * @param config 設定
+     * @return 更新されたラベル
+     * @throws GitOperationException API呼び出しに失敗した場合
+     */
+    def updateLabel(String labelName, Map updates, Map config = [:]) {
+        try {
+            if (!labelName?.trim()) {
+                throw new IllegalArgumentException("ラベル名は必須です")
+            }
+
+            if (!updates || updates.isEmpty()) {
+                throw new IllegalArgumentException("更新内容は必須です")
+            }
+
+            def (repoOwner, repoName) = apiClient.getRepositoryInfo(config)
+            def encodedName = java.net.URLEncoder.encode(labelName, 'UTF-8')
+
+            def payload = [:]
+
+            if (updates.new_name?.trim()) {
+                payload.new_name = updates.new_name.trim()
+            }
+
+            if (updates.color?.trim()) {
+                def cleanColor = updates.color.replaceAll(/^#/, '')
+                if (!cleanColor.matches(/^[0-9a-fA-F]{6}$/)) {
+                    throw new IllegalArgumentException("無効なカラーコードです: ${updates.color}")
+                }
+                payload.color = cleanColor
+            }
+
+            if (updates.description != null) {
+                payload.description = updates.description
+            }
+
+            return apiClient.callGitHubApi(
+                "https://api.github.com/repos/${repoOwner}/${repoName}/labels/${encodedName}",
+                'PATCH',
+                payload,
+                config
+            )
+        } catch (IllegalArgumentException e) {
+            throw e
+        } catch (Exception e) {
+            throw new GitOperationException("ラベルの更新に失敗しました: ${e.message}", e)
+        }
+    }
+
+    /**
+     * ラベルを削除する
+     * @param labelName ラベル名
+     * @param config 設定
+     * @return 削除結果
+     * @throws GitOperationException API呼び出しに失敗した場合
+     */
+    def deleteLabel(String labelName, Map config = [:]) {
+        try {
+            if (!labelName?.trim()) {
+                throw new IllegalArgumentException("ラベル名は必須です")
+            }
+
+            def (repoOwner, repoName) = apiClient.getRepositoryInfo(config)
+            def encodedName = java.net.URLEncoder.encode(labelName, 'UTF-8')
+
+            return apiClient.callGitHubApi(
+                "https://api.github.com/repos/${repoOwner}/${repoName}/labels/${encodedName}",
+                'DELETE',
+                null,
+                config
+            )
+        } catch (IllegalArgumentException e) {
+            throw e
+        } catch (Exception e) {
+            throw new GitOperationException("ラベルの削除に失敗しました: ${e.message}", e)
+        }
+    }
+
+    /**
+     * ラベルを一括作成・更新する
+     * @param labels ラベル設定のリスト
+     * @param config 設定
+     * @return 処理結果のリスト
+     */
+    def syncLabels(List<Map> labels, Map config = [:]) {
+        def results = []
+
+        if (!labels || labels.isEmpty()) {
+            script.echo "同期するラベルが指定されていません"
+            return results
+        }
+
+        script.echo "ラベルを同期しています: ${labels.size()}件"
+
+        labels.each { labelConfig ->
+            try {
+                // 既存のラベルを確認
+                def existingLabel = getLabel(labelConfig.name, config)
+
+                if (existingLabel) {
+                    // 既存ラベルを更新
+                    def updates = [:]
+                    if (labelConfig.color) {
+                        def cleanColor = labelConfig.color.replaceAll(/^#/, '')
+                        if (existingLabel.color != cleanColor) {
+                            updates.color = cleanColor
+                        }
+                    }
+                    if (labelConfig.description != null && existingLabel.description != labelConfig.description) {
+                        updates.description = labelConfig.description
+                    }
+
+                    if (!updates.isEmpty()) {
+                        def result = updateLabel(labelConfig.name, updates, config)
+                        results << [
+                            success: true,
+                            action: 'updated',
+                            label: labelConfig.name,
+                            result: result
+                        ]
+                        script.echo "ラベル更新成功: ${labelConfig.name}"
+                    } else {
+                        results << [
+                            success: true,
+                            action: 'unchanged',
+                            label: labelConfig.name
+                        ]
+                        script.echo "ラベル変更なし: ${labelConfig.name}"
+                    }
+                } else {
+                    // 新規ラベルを作成
+                    def result = createLabel(
+                        labelConfig.name,
+                        labelConfig.color,
+                        labelConfig.description ?: '',
+                        config
+                    )
+                    results << [
+                        success: true,
+                        action: 'created',
+                        label: labelConfig.name,
+                        result: result
+                    ]
+                    script.echo "ラベル作成成功: ${labelConfig.name}"
+                }
+            } catch (Exception e) {
+                results << [
+                    success: false,
+                    label: labelConfig.name,
+                    error: e.message
+                ]
+                script.echo "ラベル同期失敗: ${labelConfig.name} - ${e.message}"
+            }
+        }
+
+        def successCount = results.count { it.success }
+        script.echo "ラベル同期完了: 成功 ${successCount}件 / 全体 ${labels.size()}件"
+
+        return results
+    }
+
     // ==================== ヘルパーメソッド ====================
-    
+
     /**
      * URLの形式を検証する
      * @param url 検証するURL
