@@ -1,14 +1,20 @@
 ---
 # Main tasks file for cleanup_image_builder_amis
 
+- name: Normalize cleanup variables so older callers keep working
+  ansible.builtin.set_fact:
+    jenkins_cleanup_agent_amis_retention_count: "{{ retention_count | default(jenkins_cleanup_agent_amis_retention_count | default(1)) }}"
+    jenkins_cleanup_agent_amis_dry_run: "{{ dry_run | default(jenkins_cleanup_agent_amis_dry_run | default(false)) }}"
+  tags: normalization
+
 - name: Validate required variables
   ansible.builtin.assert:
     that:
       - env_name is defined
       - aws_region is defined
-      - retention_count is defined
-      - retention_count | int >= safety_checks.minimum_retention | int
-    fail_msg: "Required variables are not defined or retention_count is too low"
+      - jenkins_cleanup_agent_amis_retention_count is defined
+      - jenkins_cleanup_agent_amis_retention_count | int >= jenkins_cleanup_agent_amis_safety_checks.minimum_retention | int
+    fail_msg: "Required variables are not defined or jenkins_cleanup_agent_amis_retention_count is too low"
 
 - name: Display cleanup configuration
   ansible.builtin.debug:
@@ -18,31 +24,33 @@
       - "=========================================="
       - "Environment: {{ env_name }}"
       - "Region: {{ aws_region }}"
-      - "Retention Count: {{ retention_count }}"
-      - "Dry Run: {{ dry_run }}"
+      - "Retention Count: {{ jenkins_cleanup_agent_amis_retention_count }}"
+      - "Dry Run: {{ jenkins_cleanup_agent_amis_dry_run }}"
       - "Cleanup Targets:"
-      - "  - AMIs: {{ cleanup_targets.amis }}"
-      - "  - Snapshots: {{ cleanup_targets.snapshots }}"
-      - "  - Image Builder Versions: {{ cleanup_targets.image_builder_versions }}"
-      - "  - Image Builder Pipelines: {{ cleanup_targets.image_builder_pipelines }}"
+      - "  - AMIs: {{ jenkins_cleanup_agent_amis_cleanup_targets.amis }}"
+      - "  - Snapshots: {{ jenkins_cleanup_agent_amis_cleanup_targets.snapshots }}"
+      - "  - Image Builder Versions: {{ jenkins_cleanup_agent_amis_cleanup_targets.image_builder_versions }}"
+      - "  - Image Builder Pipelines: {{ jenkins_cleanup_agent_amis_cleanup_targets.image_builder_pipelines }}"
       - "=========================================="
 
 # AMIのクリーンアップ
 - name: Cleanup AMIs and Snapshots
   ansible.builtin.include_tasks: cleanup_amis.yml
-  when: cleanup_targets.amis or cleanup_targets.snapshots
+  when: >
+    (jenkins_cleanup_agent_amis_cleanup_targets.amis | default(false) | bool) or
+    (jenkins_cleanup_agent_amis_cleanup_targets.snapshots | default(false) | bool)
 
 # Image Builderイメージバージョンのクリーンアップ
 - name: Cleanup Image Builder Versions
   ansible.builtin.include_tasks: cleanup_image_versions.yml
-  when: cleanup_targets.image_builder_versions
+  when: jenkins_cleanup_agent_amis_cleanup_targets.image_builder_versions | default(false) | bool
 
 # Image Builderパイプライン出力のクリーンアップ
 - name: Cleanup Image Builder Pipeline Outputs
   ansible.builtin.include_tasks: cleanup_pipeline_outputs.yml
-  when: cleanup_targets.image_builder_pipelines
+  when: jenkins_cleanup_agent_amis_cleanup_targets.image_builder_pipelines | default(false) | bool
 
 # レポート生成
 - name: Generate cleanup report
   ansible.builtin.include_tasks: generate_report.yml
-  when: generate_report
+  when: jenkins_cleanup_agent_amis_generate_report | default(false) | bool

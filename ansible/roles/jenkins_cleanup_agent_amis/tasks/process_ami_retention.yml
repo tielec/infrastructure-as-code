@@ -1,7 +1,7 @@
 ---
 # 特定パターンのAMIに対して世代管理を実施
 
-- name: Process retention for pattern {{ pattern }}
+- name: Process retention for pattern
   block:
     # デバッグ: 処理中のパターンを表示
     - name: Debug - Processing pattern
@@ -37,8 +37,8 @@
     # 保持するAMIと削除するAMIを分離
     - name: Identify AMIs to keep and delete
       ansible.builtin.set_fact:
-        amis_to_keep: "{{ sorted_amis[:retention_count | int] | default([]) }}"
-        amis_to_delete: "{{ sorted_amis[retention_count | int:] | default([]) }}"
+        amis_to_keep: "{{ sorted_amis[: jenkins_cleanup_agent_amis_retention_count | int] | default([]) }}"
+        amis_to_delete: "{{ sorted_amis[jenkins_cleanup_agent_amis_retention_count | int:] | default([]) }}"
       when: sorted_amis is defined
 
     # 安全チェック：猶予期間内のAMIを除外
@@ -46,7 +46,7 @@
       ansible.builtin.set_fact:
         filtered_amis_to_delete: >-
           {%- set result = [] -%}
-          {%- set grace_date = (ansible_date_time.epoch | int - (safety_checks.grace_period_days | int * 86400)) -%}
+          {%- set grace_date = (ansible_date_time.epoch | int - (jenkins_cleanup_agent_amis_safety_checks.grace_period_days | int * 86400)) -%}
           {%- for ami in amis_to_delete | default([]) -%}
             {%- set ami_epoch = ami.CreationDate | to_datetime('%Y-%m-%dT%H:%M:%S.%fZ') | int -%}
             {%- if ami_epoch < grace_date -%}

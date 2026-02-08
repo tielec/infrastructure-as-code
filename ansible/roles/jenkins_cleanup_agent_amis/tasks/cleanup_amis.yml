@@ -8,7 +8,7 @@
       ansible.builtin.include_tasks: find_amis_by_pattern.yml
       vars:
         pattern: "{{ item }}"
-      loop: "{{ ami_name_patterns }}"
+      loop: "{{ jenkins_cleanup_agent_amis_ami_name_patterns }}"
       register: ami_search_results
 
     # デバッグ: ami_pattern_resultsの内容確認
@@ -33,7 +33,7 @@
       ansible.builtin.include_tasks: process_ami_retention.yml
       vars:
         pattern: "{{ item }}"
-      loop: "{{ ami_name_patterns }}"
+      loop: "{{ jenkins_cleanup_agent_amis_ami_name_patterns }}"
 
     # 削除対象AMIの集約
     - name: Aggregate AMIs to delete
@@ -75,7 +75,7 @@
     - name: Dry run mode - skip actual deletion
       ansible.builtin.debug:
         msg: "DRY RUN MODE - No resources will be deleted"
-      when: dry_run | bool
+      when: jenkins_cleanup_agent_amis_dry_run | bool
 
     # AMIの削除
     - name: Deregister AMIs
@@ -90,8 +90,8 @@
       loop_control:
         label: "{{ item.Name }} ({{ item.ImageId }})"
       when: 
-        - not dry_run | bool
-        - cleanup_targets.amis
+        - not (jenkins_cleanup_agent_amis_dry_run | bool)
+        - jenkins_cleanup_agent_amis_cleanup_targets.amis | default(false) | bool
         - all_amis_to_delete | length > 0
       register: ami_deregister_results
 
@@ -99,8 +99,8 @@
     - name: Delete associated snapshots
       ansible.builtin.include_tasks: delete_snapshots.yml
       when: 
-        - not dry_run | bool
-        - cleanup_targets.snapshots
+        - not (jenkins_cleanup_agent_amis_dry_run | bool)
+        - jenkins_cleanup_agent_amis_cleanup_targets.snapshots | default(false) | bool
         - all_amis_to_delete | length > 0
 
     # 削除検証の準備
@@ -109,14 +109,14 @@
         amis_to_verify: "{{ all_amis_to_delete }}"
         snapshots_to_verify: "{{ all_snapshot_ids | default([]) }}"
       when: 
-        - not dry_run | bool
+        - not (jenkins_cleanup_agent_amis_dry_run | bool)
         - all_amis_to_delete | length > 0
 
     # 削除後の検証（非ドライランモードのみ）
     - name: Verify deletion
       ansible.builtin.include_tasks: verify_deletion.yml
       when: 
-        - not dry_run | bool
+        - not (jenkins_cleanup_agent_amis_dry_run | bool)
         - (all_amis_to_delete | length > 0 or all_snapshot_ids | default([]) | length > 0)
 
     # 結果の記録
@@ -124,9 +124,9 @@
       ansible.builtin.set_fact:
         ami_cleanup_results:
           total_found: "{{ all_found_amis | length }}"
-          total_deleted: "{{ all_amis_to_delete | length if not dry_run else 0 }}"
-          deleted_amis: "{{ all_amis_to_delete if not dry_run else [] }}"
-          dry_run: "{{ dry_run }}"
+          total_deleted: "{{ all_amis_to_delete | length if not (jenkins_cleanup_agent_amis_dry_run | bool) else 0 }}"
+          deleted_amis: "{{ all_amis_to_delete if not (jenkins_cleanup_agent_amis_dry_run | bool) else [] }}"
+          dry_run: "{{ jenkins_cleanup_agent_amis_dry_run }}"
           timestamp: "{{ ansible_date_time.iso8601 }}"
           verification: "{{ deletion_verification_summary | default({}) }}"
 

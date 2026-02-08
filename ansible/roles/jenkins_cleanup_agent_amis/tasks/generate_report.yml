@@ -11,13 +11,13 @@
             timestamp: "{{ ansible_date_time.iso8601 }}"
             environment: "{{ env_name }}"
             region: "{{ aws_region }}"
-            dry_run: "{{ dry_run }}"
-            retention_count: "{{ retention_count }}"
+            dry_run: "{{ jenkins_cleanup_agent_amis_dry_run }}"
+            retention_count: "{{ jenkins_cleanup_agent_amis_retention_count }}"
           configuration:
-            ami_patterns: "{{ ami_name_patterns }}"
-            image_builder_patterns: "{{ image_builder_name_patterns }}"
-            cleanup_targets: "{{ cleanup_targets }}"
-            safety_checks: "{{ safety_checks }}"
+            ami_patterns: "{{ jenkins_cleanup_agent_amis_ami_name_patterns }}"
+            image_builder_patterns: "{{ jenkins_cleanup_agent_amis_image_builder_name_patterns }}"
+            cleanup_targets: "{{ jenkins_cleanup_agent_amis_cleanup_targets }}"
+            safety_checks: "{{ jenkins_cleanup_agent_amis_safety_checks }}"
           results:
             amis:
               success: "{{ not (ami_cleanup_failed | default(false)) }}"
@@ -37,7 +37,7 @@
             total_image_versions_deleted: "{{ image_builder_cleanup_results.total_versions_deleted | default(0) }}"
             total_pipeline_outputs_processed: "{{ pipeline_cleanup_results.processed_pipelines | default(0) }}"
           verification:
-            performed: "{{ not dry_run }}"
+            performed: "{{ not (jenkins_cleanup_agent_amis_dry_run | bool) }}"
             summary: "{{ deletion_verification_summary | default({}) }}"
             ami_failures: "{{ deletion_verification_summary.ami_failures | default(0) }}"
             snapshot_failures: "{{ deletion_verification_summary.snapshot_failures | default(0) }}"
@@ -48,15 +48,15 @@
     - name: Write JSON report
       ansible.builtin.copy:
         content: "{{ cleanup_report | to_nice_json }}"
-        dest: "{{ report_path }}"
-      when: report_format == 'json'
+        dest: "{{ jenkins_cleanup_agent_amis_report_path }}"
+      when: jenkins_cleanup_agent_amis_report_format == 'json'
 
     # YAMLレポートの生成
     - name: Write YAML report
       ansible.builtin.copy:
         content: "{{ cleanup_report | to_nice_yaml }}"
-        dest: "{{ report_path | regex_replace('\\.json$', '.yaml') }}"
-      when: report_format == 'yaml'
+        dest: "{{ jenkins_cleanup_agent_amis_report_path | regex_replace('\\.json$', '.yaml') }}"
+      when: jenkins_cleanup_agent_amis_report_format == 'yaml'
 
     # コンソールサマリーの表示
     - name: Display cleanup summary
@@ -66,7 +66,7 @@
           - "Image Builder AMI Cleanup Complete"
           - "=========================================="
           - "Environment: {{ env_name }}"
-          - "Dry Run: {{ dry_run }}"
+          - "Dry Run: {{ jenkins_cleanup_agent_amis_dry_run }}"
           - ""
           - "Results:"
           - "  AMIs deleted: {{ ami_cleanup_results.total_deleted | default(0) }}"
@@ -75,10 +75,10 @@
           - "  Pipeline outputs processed: {{ pipeline_cleanup_results.processed_pipelines | default(0) }}"
           - ""
           - "Verification Status:"
-          - "  {% if not dry_run %}✅ Deletion verification performed{% else %}⏭️  Verification skipped (dry run){% endif %}"
-          - "  {% if deletion_verification_summary.all_successful | default(false) %}✅ All deletions verified{% elif not dry_run %}⚠️  Some deletions could not be verified{% endif %}"
+          - "  {% if not (jenkins_cleanup_agent_amis_dry_run | bool) %}✅ Deletion verification performed{% else %}⏭️  Verification skipped (dry run){% endif %}"
+          - "  {% if deletion_verification_summary.all_successful | default(false) %}✅ All deletions verified{% elif not (jenkins_cleanup_agent_amis_dry_run | bool) %}⚠️  Some deletions could not be verified{% endif %}"
           - ""
-          - "Report saved to: {{ report_path }}"
+          - "Report saved to: {{ jenkins_cleanup_agent_amis_report_path }}"
           - "=========================================="
 
     # エラーがあった場合の警告
