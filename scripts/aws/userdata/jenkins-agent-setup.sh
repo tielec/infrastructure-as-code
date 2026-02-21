@@ -37,11 +37,57 @@ usermod -aG docker jenkins
 mkdir -p /home/jenkins/agent
 chown -R jenkins:jenkins /home/jenkins
 
+# ===== ECR credential-helper のインストールと設定 =====
+echo "Installing ECR credential-helper..."
+dnf install -y amazon-ecr-credential-helper || echo "WARNING: amazon-ecr-credential-helper のインストールに失敗しました"
+
+# IMDSv2トークンを使用してAWSアカウントIDを取得
+echo "Retrieving AWS Account ID via IMDSv2..."
+TOKEN=$(curl -s -X PUT "http://169.254.169.254/latest/api/token" -H "X-aws-ec2-metadata-token-ttl-seconds: 21600" || echo "")
+if [ -n "$TOKEN" ]; then
+  ACCOUNT_ID=$(curl -s -H "X-aws-ec2-metadata-token: $TOKEN" http://169.254.169.254/latest/dynamic/instance-identity/document | jq -r .accountId)
+else
+  ACCOUNT_ID=""
+fi
+
+if [ -z "$ACCOUNT_ID" ] || [ "$ACCOUNT_ID" = "null" ]; then
+  echo "WARNING: ACCOUNT_IDの取得に失敗しました。ワイルドカード形式を使用します。"
+  ECR_ENDPOINT="*.dkr.ecr.*.amazonaws.com"
+else
+  echo "AWS Account ID: $ACCOUNT_ID"
+  ECR_ENDPOINT="${ACCOUNT_ID}.dkr.ecr.ap-northeast-1.amazonaws.com"
+fi
+
+# jenkinsユーザー用 Docker config.json
+mkdir -p /home/jenkins/.docker
+cat > /home/jenkins/.docker/config.json << EOF
+{
+  "credHelpers": {
+    "${ECR_ENDPOINT}": "ecr-login"
+  }
+}
+EOF
+chown jenkins:jenkins /home/jenkins/.docker
+chown jenkins:jenkins /home/jenkins/.docker/config.json
+
+# rootユーザー用 Docker config.json
+mkdir -p /root/.docker
+cat > /root/.docker/config.json << EOF
+{
+  "credHelpers": {
+    "${ECR_ENDPOINT}": "ecr-login"
+  }
+}
+EOF
+echo "ECR credential-helper の設定が完了しました"
+# ===== ECR credential-helper 設定完了 =====
+
 # 環境情報の保存
 echo "PROJECT_NAME=${PROJECT_NAME}" > /etc/jenkins-agent-env
 echo "ENVIRONMENT=${ENVIRONMENT}" >> /etc/jenkins-agent-env
 echo "AGENT_ROOT=/home/jenkins/agent" >> /etc/jenkins-agent-env
-${ARCHITECTURE_ENV}chmod 644 /etc/jenkins-agent-env
+${ARCHITECTURE_ENV}
+chmod 644 /etc/jenkins-agent-env
 
 # SSMエージェントの起動
 systemctl enable amazon-ssm-agent

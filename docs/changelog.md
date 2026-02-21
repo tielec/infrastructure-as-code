@@ -2,6 +2,30 @@
 
 > 📖 **親ドキュメント**: [README.md](../README.md)
 
+## 2025-02-21: Jenkins Agent EC2 Fleet への Amazon ECR Credential Helper 導入
+
+Jenkins Agent EC2 Fleet インスタンスに Amazon ECR Credential Helper を導入し、ECR 認証を自動化しました。
+
+- **対象Issue**: [#556](https://github.com/tielec/infrastructure-as-code/issues/556)
+- **変更ファイル**:
+  - `pulumi/jenkins-agent-ami/component-x86.yml`: ECR Credential Helper インストールステップ、config.json 生成、バリデーションを追加
+  - `pulumi/jenkins-agent-ami/component-arm.yml`: x86版と同様の変更を ARM64 版に適用
+  - `scripts/aws/userdata/jenkins-agent-setup.sh`: デフォルトAMI向けに credential-helper 導入と config.json 生成を追加
+  - `scripts/aws/userdata/jenkins-agent-custom-ami.sh`: カスタムAMI向けに config.json のフォールバック生成を追加
+  - `jenkins/DOCKER_IMAGES.md`: ECR credential-helper の利用方法と EC2 Fleet/ECS Fargate の認証方式の違いを追記
+- **主要機能**:
+  - AMI ビルド時に `amazon-ecr-credential-helper` パッケージをインストール
+  - AWS アカウント ID を動的取得し `/home/jenkins/.docker/config.json` と `/root/.docker/config.json` を生成（`credHelpers` 設定）
+  - IMDSv2 を使用したセキュアなメタデータアクセス
+  - AMI ビルド時とEC2起動時の二重保護メカニズム（フォールバック設計）
+- **効果**:
+  - Jenkinsfile での `aws ecr get-login-password` による認証ボイラープレートが不要に
+  - ECR トークン（有効期限12時間）の自動取得・更新により運用負荷を削減
+  - EC2 Fleet Agent でのみ有効（ECS Fargate Agent は従来の認証方式を継続）
+- **テスト結果**: 統合テスト 27件すべて成功（Python 18件 + ShellCheck 2件 + config.json バリデーション 7件）、成功率100%
+
+これにより、EC2 Fleet 上での Docker イメージ操作が透過的に行えるようになり、開発者の生産性向上と保守コストの削減を実現しました。
+
 ## 2025-02-07: GitHubリポジトリベースライン一括適用Adminジョブ追加
 
 GitHubリポジトリに共通ベースライン設定を一括適用する管理ジョブ（Github_Repo_Baseline）を追加しました。

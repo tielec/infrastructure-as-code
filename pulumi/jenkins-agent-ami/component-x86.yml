@@ -64,6 +64,16 @@ phases:
             - groupadd -f docker
             - chmod 666 /var/run/docker.sock || true
 
+      - name: InstallEcrCredentialHelper
+        action: ExecuteBash
+        inputs:
+          commands:
+            - echo "Installing amazon-ecr-credential-helper..."
+            - dnf install -y amazon-ecr-credential-helper
+            - echo "Verifying docker-credential-ecr-login installation..."
+            - which docker-credential-ecr-login
+            - docker-credential-ecr-login version || echo "Version command not supported, but binary exists"
+
       - name: InstallJava
         action: ExecuteBash
         inputs:
@@ -227,6 +237,42 @@ phases:
             - newgrp docker || true
             - mkdir -p /home/jenkins/agent
             - mkdir -p /home/jenkins/.docker
+            - |
+              # ECR credential-helper の設定
+              # AWSアカウントIDを動的取得
+              ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text 2>/dev/null || echo "")
+              if [ -z "$ACCOUNT_ID" ]; then
+                echo "WARNING: aws sts get-caller-identity に失敗しました。ワイルドカード形式を使用します。"
+                # フォールバック: 全リージョン・全アカウント対応のワイルドカード
+                ECR_ENDPOINT="*.dkr.ecr.*.amazonaws.com"
+              else
+                echo "AWS Account ID: $ACCOUNT_ID"
+                ECR_ENDPOINT="${ACCOUNT_ID}.dkr.ecr.ap-northeast-1.amazonaws.com"
+              fi
+
+              # jenkinsユーザー用 config.json
+              cat > /home/jenkins/.docker/config.json << EOF
+              {
+                "credHelpers": {
+                  "${ECR_ENDPOINT}": "ecr-login"
+                }
+              }
+              EOF
+              chown jenkins:jenkins /home/jenkins/.docker/config.json
+              echo "Created /home/jenkins/.docker/config.json:"
+              cat /home/jenkins/.docker/config.json
+
+              # rootユーザー用 config.json
+              mkdir -p /root/.docker
+              cat > /root/.docker/config.json << EOF
+              {
+                "credHelpers": {
+                  "${ECR_ENDPOINT}": "ecr-login"
+                }
+              }
+              EOF
+              echo "Created /root/.docker/config.json:"
+              cat /root/.docker/config.json
             - mkdir -p /home/jenkins/.pulumi/plugins
             - |
               # Pulumiプラグインをjenkinsユーザーにもコピー
@@ -284,3 +330,19 @@ phases:
             - echo "CloudWatch Agent configuration:"
             - cat /opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json
             - systemctl is-enabled amazon-cloudwatch-agent
+            - echo "===== ECR Credential Helper Validation ====="
+            - echo "Checking docker-credential-ecr-login binary..."
+            - which docker-credential-ecr-login
+            - echo "Checking Jenkins user config.json..."
+            - test -f /home/jenkins/.docker/config.json
+            - echo "Jenkins user Docker config:"
+            - cat /home/jenkins/.docker/config.json
+            - jq . /home/jenkins/.docker/config.json
+            - jq -e '.credHelpers' /home/jenkins/.docker/config.json
+            - echo "Checking config.json ownership..."
+            - ls -la /home/jenkins/.docker/config.json
+            - echo "Checking root config.json..."
+            - test -f /root/.docker/config.json
+            - jq . /root/.docker/config.json
+            - jq -e '.credHelpers' /root/.docker/config.json
+            - echo "===== ECR Credential Helper Validation Complete ====="
