@@ -303,4 +303,6 @@ phases:
                 echo "Validating $CFG"
                 test -f "$CFG" && jq -e '.credHelpers' "$CFG" && ls -la "$CFG"
               done
+            - echo "Checking ec2-user config.json..."
+            - test -f /home/ec2-user/.docker/config.json
             - echo "===== ECR Credential Helper Validation Complete ====="
