@@ -5,7 +5,7 @@
 /**
  * デフォルトのランタイム
  */
-export const DEFAULT_RUNTIME = "nodejs18.x";
+export const DEFAULT_RUNTIME = "nodejs22.x";
 
 /**
  * Lambda ZIPパッケージから除外するファイルパターン

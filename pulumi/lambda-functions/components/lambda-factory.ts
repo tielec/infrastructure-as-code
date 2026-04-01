@@ -42,7 +42,7 @@ export function createLambdaFunction(
 ) {
     // デフォルト値
     const handler = config.handler || "dist/index.handler";
-    const runtime = config.runtime || "nodejs20.x";
+    const runtime = config.runtime || "nodejs22.x";
     const description = config.description || `${name} Lambda function`;
     
     // ========================================

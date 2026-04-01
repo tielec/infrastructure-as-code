@@ -90,7 +90,7 @@ const githubRepoAndPackage = pulumi.all([repoUrl, repoBranch, githubToken, deplo
         // Lambdaパッケージを作成
         const lambdaPackage = new LambdaPackage("lambda-package", {
             sourcePath: githubRepo.outputPath,
-            runtime: "nodejs20.x",
+            runtime: "nodejs22.x",
         });
         
         // S3バケットにアップロード
@@ -206,7 +206,7 @@ const mainLambda = createLambdaFunction(
         // オプションパラメータ
         description: "Main API handler for bubble.io integration",
         handler: "dist/index.handler",
-        runtime: "nodejs20.x",
+        runtime: "nodejs22.x",
         memorySize: memorySize,
         timeout: timeout,
         environmentVariables: {
@@ -244,4 +244,3 @@ export const outputs = {
     codeObjectKey: lambdaCodeObject.apply(o => o.key),
     commitHash: githubRepo.apply(r => r.commitHash),
 };
-
