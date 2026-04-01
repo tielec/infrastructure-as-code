@@ -2,6 +2,27 @@
 
 > 📖 **親ドキュメント**: [README.md](../README.md)
 
+## 2025-02-08: Lambda関数のNode.jsランタイムをnodejs22.xに更新
+
+Lambda関数のNode.jsランタイム指定を最新LTSバージョンである`nodejs22.x`に統一的に更新しました。
+
+- **対象Issue**: [#561](https://github.com/tielec/infrastructure-as-code/issues/561)
+- **変更ファイル**:
+  - `pulumi/components/src/lambda-packager/constants.ts`: `DEFAULT_RUNTIME`を`nodejs18.x`から`nodejs22.x`に更新
+  - `pulumi/lambda-functions/components/lambda-factory.ts`: デフォルトランタイムを`nodejs20.x`から`nodejs22.x`に更新
+  - `pulumi/lambda-functions/index.ts`: ランタイム指定2箇所を`nodejs20.x`から`nodejs22.x`に更新
+  - `pulumi/components/src/lambda-packager/types.ts`: JSDocコメント内のランタイム例示を`nodejs18.x`から`nodejs22.x`に更新
+  - `pulumi/components/README.md`: サンプルコード11箇所のランタイム指定を`nodejs18.x`から`nodejs22.x`に更新
+- **主要な効果**:
+  - Node.js 20.xのEOL（サポート終了）リスクを排除し、セキュリティパッチの継続的な提供を確保
+  - プロジェクト内で混在していたランタイムバージョン（nodejs18.x/nodejs20.x）を`nodejs22.x`に統一し、バージョン不整合を解消
+  - Node.js 22.x LTSは2027年4月までサポートされ、長期的な安定運用が可能
+  - V8エンジンの改善によるパフォーマンス向上とWebSocket API改善等の最新機能を活用可能
+- **互換性**: 使用中の全依存パッケージ（archiver v6.0.1, simple-git v3.20.0, @pulumi/aws v7.0.0等）はNode.js 22.xに対応済み
+- **テスト結果**: ユニットテスト20件すべて成功、TypeScriptコンパイル成功、テストカバレッジ100%達成
+
+これにより、Lambda関数のセキュリティと保守性が向上し、将来のNode.jsバージョン更新作業も容易になりました。
+
 ## 2025-02-07: GitHubリポジトリベースライン一括適用Adminジョブ追加
 
 GitHubリポジトリに共通ベースライン設定を一括適用する管理ジョブ（Github_Repo_Baseline）を追加しました。
