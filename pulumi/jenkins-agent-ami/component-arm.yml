@@ -273,6 +273,19 @@ phases:
               EOF
               echo "Created /root/.docker/config.json:"
               cat /root/.docker/config.json
+
+              # ec2-userユーザー用 config.json（Jenkins SSH接続ユーザー）
+              mkdir -p /home/ec2-user/.docker
+              cat > /home/ec2-user/.docker/config.json << EOF
+              {
+                "credHelpers": {
+                  "${ECR_ENDPOINT}": "ecr-login"
+                }
+              }
+              EOF
+              chown ec2-user:ec2-user /home/ec2-user/.docker/config.json
+              echo "Created /home/ec2-user/.docker/config.json:"
+              cat /home/ec2-user/.docker/config.json
             - mkdir -p /home/jenkins/.pulumi/plugins
             - |
               # Pulumiプラグインをjenkinsユーザーにもコピー
@@ -345,4 +358,12 @@ phases:
             - test -f /root/.docker/config.json
             - jq . /root/.docker/config.json
             - jq -e '.credHelpers' /root/.docker/config.json
+            - echo "Checking ec2-user config.json..."
+            - test -f /home/ec2-user/.docker/config.json
+            - echo "ec2-user Docker config:"
+            - cat /home/ec2-user/.docker/config.json
+            - jq . /home/ec2-user/.docker/config.json
+            - jq -e '.credHelpers' /home/ec2-user/.docker/config.json
+            - echo "Checking ec2-user config.json ownership..."
+            - ls -la /home/ec2-user/.docker/config.json
             - echo "===== ECR Credential Helper Validation Complete ====="
