@@ -119,6 +119,42 @@
             name: nodejs
             state: present
           become: yes
+
+    # AI Coding Toolsのインストール（npm経由）
+    - name: Install AI Coding Tools
+      block:
+        - name: Check if Claude Code is installed
+          ansible.builtin.shell: claude --version
+          register: claude_check
+          changed_when: false
+          failed_when: false
+
+        - name: Install Claude Code via npm
+          ansible.builtin.shell: npm install -g @anthropic-ai/claude-code
+          become: yes
+          when: claude_check.rc != 0
+
+        - name: Check if Codex CLI is installed
+          ansible.builtin.shell: codex --version
+          register: codex_check
+          changed_when: false
+          failed_when: false
+
+        - name: Install Codex CLI via npm
+          ansible.builtin.shell: npm install -g @openai/codex
+          become: yes
+          when: codex_check.rc != 0
+
+        - name: Display AI tools installation status
+          ansible.builtin.debug:
+            msg: |
+              AI Coding Tools:
+              - Claude Code: {{ 'Already installed' if claude_check.rc == 0 else 'Newly installed' }}
+              - Codex CLI: {{ 'Already installed' if codex_check.rc == 0 else 'Newly installed' }}
+              Note: Authentication is handled via user subscription (interactive login)
+              - Claude Code: Run 'claude login' to authenticate
+              - Codex CLI: Run 'codex login' to authenticate
+      ignore_errors: yes  # AIツールのインストール失敗時もセットアップを続行
             
     # Java 21のインストール (Amazon Corretto - ARM64対応)
     - name: Check if Java {{ java_version }} is installed
@@ -404,6 +440,8 @@
           - Pulumi (latest)
           - Docker
           - Git
+          - Claude Code (AI coding assistant)
+          - Codex CLI (AI coding assistant)
           
           Python Packages (latest versions):
           - boto3 (AWS SDK for Python)
@@ -417,6 +455,11 @@
           - community.general (11.x)
           - ansible.posix (2.x)
           - community.docker (4.x)
+
+          AI Coding Tools:
+          - Claude Code: サブスクリプション認証（`claude login` で対話的にログイン）
+          - Codex CLI: サブスクリプション認証（`codex login` で対話的にログイン）
+          - Note: APIキー設定は不要です。各ユーザーが対話的にログインしてください。
           
           === Quick Start ===
           
@@ -518,6 +561,10 @@
           - Latest Ansible Collections (7.0+)
           - Mitogen for Ansible (高速化)
           - Latest Python packages
+          - Claude Code (AI coding assistant)
+          - Codex CLI (AI coding assistant)
+          
+          AI tools authentication: Run 'claude login' / 'codex login' for subscription-based auth.
           
           Run './verify-installation.sh' to check the installation.
           
