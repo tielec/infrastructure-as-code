@@ -84,6 +84,19 @@ cat > /root/.docker/config.json << EOF
   }
 }
 EOF
+
+# ec2-userユーザー用 Docker config.json（Jenkins SSH接続ユーザー）
+mkdir -p /home/ec2-user/.docker
+cat > /home/ec2-user/.docker/config.json << EOF
+{
+  "credHelpers": {
+    "${ECR_ENDPOINT}": "ecr-login"
+  }
+}
+EOF
+chown ec2-user:ec2-user /home/ec2-user/.docker
+chown ec2-user:ec2-user /home/ec2-user/.docker/config.json
+
 echo "ECR credential-helper の設定が完了しました"
 # ===== ECR credential-helper 設定完了 =====
 

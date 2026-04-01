@@ -68,11 +68,8 @@ phases:
         action: ExecuteBash
         inputs:
           commands:
-            - echo "Installing amazon-ecr-credential-helper..."
             - dnf install -y amazon-ecr-credential-helper
-            - echo "Verifying docker-credential-ecr-login installation..."
             - which docker-credential-ecr-login
-            - docker-credential-ecr-login version || echo "Version command not supported, but binary exists"
 
       - name: InstallJava
         action: ExecuteBash
@@ -202,31 +199,20 @@ phases:
         action: ExecuteBash
         inputs:
           commands:
-            - echo "===== Docker Image Pre-pulling for faster job startup ====="
-            - echo "Starting Docker daemon..."
+            - echo "===== Docker Image Pre-pulling ====="
             - systemctl start docker
             - sleep 5
-            - 'systemctl is-active docker || (echo "ERROR: Docker daemon is not running" && exit 1)'
-            - echo "Docker daemon is running. Starting image pull..."
-            - echo "Pulling Python images..."
-            - 'docker pull python:3.11-slim || echo "WARNING: Failed to pull python:3.11-slim"'
-            - echo "Pulling Node.js images..."
-            - 'docker pull node:18-slim || echo "WARNING: Failed to pull node:18-slim"'
-            - 'docker pull node:20-slim || echo "WARNING: Failed to pull node:20-slim"'
-            - echo "Pulling Rust images..."
-            - 'docker pull rust:1.76-slim || echo "WARNING: Failed to pull rust:1.76-slim"'
-            - 'docker pull rust:slim || echo "WARNING: Failed to pull rust:slim"'
-            - echo "Pulling AWS CLI image..."
-            - 'docker pull amazon/aws-cli:latest || echo "WARNING: Failed to pull amazon/aws-cli:latest"'
-            - echo "Pulling Pulumi image..."
-            - 'docker pull pulumi/pulumi:latest || echo "WARNING: Failed to pull pulumi/pulumi:latest"'
-            - echo "Pulling Ubuntu image..."
-            - 'docker pull ubuntu:22.04 || echo "WARNING: Failed to pull ubuntu:22.04"'
-            - echo "Pulling Python + Node.js combined image..."
-            - 'docker pull nikolaik/python-nodejs:python3.11-nodejs20 || echo "WARNING: Failed to pull nikolaik/python-nodejs:python3.11-nodejs20"'
-            - echo "===== Verifying pulled images ====="
+            - 'systemctl is-active docker || (echo "ERROR: Docker not running" && exit 1)'
+            - 'docker pull python:3.11-slim || echo "WARN: python:3.11-slim"'
+            - 'docker pull node:18-slim || echo "WARN: node:18-slim"'
+            - 'docker pull node:20-slim || echo "WARN: node:20-slim"'
+            - 'docker pull rust:1.76-slim || echo "WARN: rust:1.76-slim"'
+            - 'docker pull rust:slim || echo "WARN: rust:slim"'
+            - 'docker pull amazon/aws-cli:latest || echo "WARN: amazon/aws-cli"'
+            - 'docker pull pulumi/pulumi:latest || echo "WARN: pulumi/pulumi"'
+            - 'docker pull ubuntu:22.04 || echo "WARN: ubuntu:22.04"'
+            - 'docker pull nikolaik/python-nodejs:python3.11-nodejs20 || echo "WARN: python-nodejs"'
             - docker images
-            - echo "===== Docker image pre-pulling completed successfully ====="
 
       - name: CreateJenkinsUser
         action: ExecuteBash
@@ -238,41 +224,21 @@ phases:
             - mkdir -p /home/jenkins/agent
             - mkdir -p /home/jenkins/.docker
             - |
-              # ECR credential-helper の設定
-              # AWSアカウントIDを動的取得
+              # ECR credential-helper: AWSアカウントIDを動的取得しconfig.json生成
               ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text 2>/dev/null || echo "")
               if [ -z "$ACCOUNT_ID" ]; then
-                echo "WARNING: aws sts get-caller-identity に失敗しました。ワイルドカード形式を使用します。"
-                # フォールバック: 全リージョン・全アカウント対応のワイルドカード
                 ECR_ENDPOINT="*.dkr.ecr.*.amazonaws.com"
               else
-                echo "AWS Account ID: $ACCOUNT_ID"
                 ECR_ENDPOINT="${ACCOUNT_ID}.dkr.ecr.ap-northeast-1.amazonaws.com"
               fi
-
-              # jenkinsユーザー用 config.json
-              cat > /home/jenkins/.docker/config.json << EOF
-              {
-                "credHelpers": {
-                  "${ECR_ENDPOINT}": "ecr-login"
-                }
-              }
-              EOF
+              CONFIG="{\"credHelpers\":{\"${ECR_ENDPOINT}\":\"ecr-login\"}}"
+              for DIR in /home/jenkins/.docker /root/.docker /home/ec2-user/.docker; do
+                mkdir -p "$DIR"
+                echo "$CONFIG" | jq . > "$DIR/config.json"
+                echo "Created $DIR/config.json"
+              done
               chown jenkins:jenkins /home/jenkins/.docker/config.json
-              echo "Created /home/jenkins/.docker/config.json:"
-              cat /home/jenkins/.docker/config.json
-
-              # rootユーザー用 config.json
-              mkdir -p /root/.docker
-              cat > /root/.docker/config.json << EOF
-              {
-                "credHelpers": {
-                  "${ECR_ENDPOINT}": "ecr-login"
-                }
-              }
-              EOF
-              echo "Created /root/.docker/config.json:"
-              cat /root/.docker/config.json
+              chown ec2-user:ec2-user /home/ec2-user/.docker/config.json
             - mkdir -p /home/jenkins/.pulumi/plugins
             - |
               # Pulumiプラグインをjenkinsユーザーにもコピー
@@ -331,18 +297,10 @@ phases:
             - cat /opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json
             - systemctl is-enabled amazon-cloudwatch-agent
             - echo "===== ECR Credential Helper Validation ====="
-            - echo "Checking docker-credential-ecr-login binary..."
             - which docker-credential-ecr-login
-            - echo "Checking Jenkins user config.json..."
-            - test -f /home/jenkins/.docker/config.json
-            - echo "Jenkins user Docker config:"
-            - cat /home/jenkins/.docker/config.json
-            - jq . /home/jenkins/.docker/config.json
-            - jq -e '.credHelpers' /home/jenkins/.docker/config.json
-            - echo "Checking config.json ownership..."
-            - ls -la /home/jenkins/.docker/config.json
-            - echo "Checking root config.json..."
-            - test -f /root/.docker/config.json
-            - jq . /root/.docker/config.json
-            - jq -e '.credHelpers' /root/.docker/config.json
+            - |
+              for CFG in /home/jenkins/.docker/config.json /root/.docker/config.json /home/ec2-user/.docker/config.json; do
+                echo "Validating $CFG"
+                test -f "$CFG" && jq -e '.credHelpers' "$CFG" && ls -la "$CFG"
+              done
             - echo "===== ECR Credential Helper Validation Complete ====="
