@@ -15,7 +15,13 @@ systemctl start docker
 chmod 666 /var/run/docker.sock || true
 usermod -aG docker jenkins || true
 
-# ===== ECR credential-helper config.json のフォールバック設定 =====
+# ===== ECR credential-helper のフォールバック設定 =====
+# docker-credential-ecr-login がない場合はインストール（古いAMIからの起動時の保護）
+if ! command -v docker-credential-ecr-login &>/dev/null; then
+  echo "docker-credential-ecr-login が未インストールです。インストールします..."
+  dnf install -y amazon-ecr-credential-helper || echo "WARNING: amazon-ecr-credential-helper のインストールに失敗しました"
+fi
+
 # カスタムAMIにconfig.jsonが含まれている場合はスキップ（冪等性の確保）
 if [ -f /home/jenkins/.docker/config.json ] && jq -e '.credHelpers' /home/jenkins/.docker/config.json >/dev/null 2>&1; then
   echo "ECR credential-helper config.json は既に設定済みです（スキップ）"

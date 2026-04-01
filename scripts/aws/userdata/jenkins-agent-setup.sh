@@ -38,8 +38,13 @@ mkdir -p /home/jenkins/agent
 chown -R jenkins:jenkins /home/jenkins
 
 # ===== ECR credential-helper のインストールと設定 =====
-echo "Installing ECR credential-helper..."
-dnf install -y amazon-ecr-credential-helper || echo "WARNING: amazon-ecr-credential-helper のインストールに失敗しました"
+# docker-credential-ecr-login がない場合のみインストール（冪等性の確保）
+if ! command -v docker-credential-ecr-login &>/dev/null; then
+  echo "Installing ECR credential-helper..."
+  dnf install -y amazon-ecr-credential-helper || echo "WARNING: amazon-ecr-credential-helper のインストールに失敗しました"
+else
+  echo "ECR credential-helper は既にインストール済みです（スキップ）"
+fi
 
 # IMDSv2トークンを使用してAWSアカウントIDを取得
 echo "Retrieving AWS Account ID via IMDSv2..."
