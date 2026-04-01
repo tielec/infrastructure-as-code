@@ -58,7 +58,7 @@ jenkins:
         executorScaler: "noScaler"
         initOnlineCheckIntervalSec: 15
         initOnlineTimeoutSec: 900
-        maxTotalUses: -1
+        maxTotalUses: 1
         minSpareSize: 0
         noDelayProvision: false
         restrictUsage: false
@@ -89,7 +89,7 @@ jenkins:
         executorScaler: "noScaler"
         initOnlineCheckIntervalSec: 15
         initOnlineTimeoutSec: 900
-        maxTotalUses: -1
+        maxTotalUses: 1
         minSpareSize: 0
         noDelayProvision: false
         restrictUsage: false
@@ -120,7 +120,7 @@ jenkins:
         executorScaler: "noScaler"
         initOnlineCheckIntervalSec: 15
         initOnlineTimeoutSec: 900
-        maxTotalUses: -1
+        maxTotalUses: 1
         minSpareSize: 0
         noDelayProvision: false
         restrictUsage: false
@@ -200,7 +200,7 @@ unclassified:
             clone: true
             libraryPath: "${SHARED_LIBRARY_PATH}"
             scm:
-              git:
+              gitSource:
                 remote: "${SHARED_LIBRARY_REPO}"
                 traits:
                   - "gitBranchDiscovery"

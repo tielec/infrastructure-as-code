@@ -113,7 +113,18 @@
             ssm_parameters: "ProjectName={{ project_name }},Environment={{ env_name }},GitBranch={{ git_branch }},GitRepo={{ git_repo }}"
             ssm_comment: "Updating Git repository"
             instance_id: "{{ jenkins_instance_id }}"
-    
+
+    # 1.5. 古いJCasC設定ファイルの削除（再起動前に必須）
+    # Jenkinsバージョン更新やプラグインインストール後の再起動時に、
+    # 古いJCasC設定が読み込まれて起動失敗することを防止する
+    - name: Remove old JCasC configuration files before any restart
+      ansible.builtin.include_tasks: execute_ssm_command.yml
+      vars:
+        ssm_document_name: "{{ execute_script_document_name }}"
+        ssm_parameters: "ScriptPath=scripts/jenkins/shell/application-cleanup-old-casc.sh"
+        ssm_comment: "Removing old JCasC configuration to prevent boot failure"
+        instance_id: "{{ jenkins_instance_id }}"
+
     # 2. Jenkinsバージョン更新（プラグインインストール前に実行）
     - name: Update Jenkins version if required
       when: update_jenkins | default(false) | bool
