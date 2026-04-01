@@ -224,7 +224,7 @@ const agentMediumMinCapacityParam = new aws.ssm.Parameter("agent-medium-min-capa
 const agentMediumMaxCapacityParam = new aws.ssm.Parameter("agent-medium-max-capacity", {
     name: `${ssmPrefix}/config/agent-medium-max-capacity`,
     type: "String",
-    value: "1",
+    value: "10",
     overwrite: true,
     description: "Maximum number of Jenkins agents (medium instances)",
     tags: {
@@ -251,7 +251,7 @@ const agentSmallMinCapacityParam = new aws.ssm.Parameter("agent-small-min-capaci
 const agentSmallMaxCapacityParam = new aws.ssm.Parameter("agent-small-max-capacity", {
     name: `${ssmPrefix}/config/agent-small-max-capacity`,
     type: "String",
-    value: "2",
+    value: "10",
     overwrite: true,
     description: "Maximum number of Jenkins agents (small instances)",
     tags: {
@@ -278,7 +278,7 @@ const agentMicroMinCapacityParam = new aws.ssm.Parameter("agent-micro-min-capaci
 const agentMicroMaxCapacityParam = new aws.ssm.Parameter("agent-micro-max-capacity", {
     name: `${ssmPrefix}/config/agent-micro-max-capacity`,
     type: "String",
-    value: "4",
+    value: "10",
     overwrite: true,
     description: "Maximum number of Jenkins agents (micro instances)",
     tags: {
@@ -349,7 +349,7 @@ const agentSpotPriceMicroParam = new aws.ssm.Parameter("agent-spot-price-micro",
 const agentIdleMinutesMediumParam = new aws.ssm.Parameter("agent-idle-minutes-medium", {
     name: `${ssmPrefix}/config/agent-idle-minutes-medium`,
     type: "String",
-    value: "15",
+    value: "5",
     overwrite: true,
     description: "Idle minutes before scaledown for Jenkins agent (medium instances)",
     tags: {
@@ -363,7 +363,7 @@ const agentIdleMinutesMediumParam = new aws.ssm.Parameter("agent-idle-minutes-me
 const agentIdleMinutesSmallParam = new aws.ssm.Parameter("agent-idle-minutes-small", {
     name: `${ssmPrefix}/config/agent-idle-minutes-small`,
     type: "String",
-    value: "10",
+    value: "5",
     overwrite: true,
     description: "Idle minutes before scaledown for Jenkins agent (small instances)",
     tags: {
@@ -392,7 +392,7 @@ const agentIdleMinutesMicroParam = new aws.ssm.Parameter("agent-idle-minutes-mic
 const agentNumExecutorsMediumParam = new aws.ssm.Parameter("agent-num-executors-medium", {
     name: `${ssmPrefix}/config/agent-num-executors-medium`,
     type: "String",
-    value: "3",
+    value: "1",
     overwrite: true,
     description: "Number of executors per Jenkins agent (medium instances)",
     tags: {
@@ -406,7 +406,7 @@ const agentNumExecutorsMediumParam = new aws.ssm.Parameter("agent-num-executors-
 const agentNumExecutorsSmallParam = new aws.ssm.Parameter("agent-num-executors-small", {
     name: `${ssmPrefix}/config/agent-num-executors-small`,
     type: "String",
-    value: "2",
+    value: "1",
     overwrite: true,
     description: "Number of executors per Jenkins agent (small instances)",
     tags: {

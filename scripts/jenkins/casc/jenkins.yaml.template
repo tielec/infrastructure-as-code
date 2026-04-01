@@ -125,34 +125,6 @@ jenkins:
         noDelayProvision: false
         restrictUsage: false
         scaleExecutorsByWeight: false
-    - ecs:
-        name: "ecs-fargate"
-        credentialsId: ""
-        cluster: "${ECS_CLUSTER_ARN}"
-        regionName: "${AWS_REGION}"
-        # VPC内部URL使用（Issue #497対応）- NAT Instance経由せずALBに直接接続
-        jenkinsUrl: "${JENKINS_INTERNAL_URL}"
-        templates:
-          - label: "ecs-agent fargate-agent ecs-fargate"
-            taskDefinitionOverride: "${ECS_TASK_DEFINITION_ARN}"
-            remoteFSRoot: "/home/jenkins"
-            launchType: "FARGATE"
-            platformVersion: "LATEST"
-            networkMode: "awsvpc"
-            assignPublicIp: false
-            securityGroups: "${JENKINS_AGENT_SG_ID}"
-            subnets: "${PRIVATE_SUBNET_A_ID},${PRIVATE_SUBNET_B_ID}"
-            executionRole: "${ECS_EXECUTION_ROLE_ARN}"
-            cpu: 512
-            memory: 0
-            memoryReservation: 1024
-            cpuArchitecture: "X86_64"
-            operatingSystemFamily: "LINUX"
-            defaultCapacityProvider: false
-            enableExecuteCommand: false
-            privileged: false
-            sharedMemorySize: 0
-            containerUser: "jenkins"
   nodes:
     - permanent:
         name: "bootstrap-workterminal"
