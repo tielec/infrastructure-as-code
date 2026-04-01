@@ -404,6 +404,25 @@ dockerfile {
 
 ---
 
+## ECR credential-helper
+
+EC2 Fleet Agent では Amazon ECR Credential Helper を利用し、`aws ecr get-login-password` を実行せずに ECR 認証を自動化します。  
+Docker の `credHelpers` に `ecr-login` を設定することで、ECR エンドポイントへの認証が透明化されます。
+
+### 認証方式の比較（EC2 Fleet vs ECS Fargate）
+
+| 実行環境 | 認証方式 | 備考 |
+|---|---|---|
+| EC2 Fleet Agent | ECR credential-helper（`credHelpers` + `ecr-login`） | 事前に config.json を生成し自動認証 |
+| ECS Fargate Agent | 従来の `aws ecr get-login-password` を使用 | Fargate タスク内で明示的にログインが必要 |
+
+### 重要ポイント
+
+- EC2 Fleet は AMI ビルド時と起動時の二重保護で `credHelpers` を設定
+- ECS Fargate は Credential Helper を前提としないため、従来のログイン手順が必要
+
+---
+
 ## ECS Fargateエージェントイメージ
 
 ### `jenkins-agent-ecs` (カスタムビルド)
