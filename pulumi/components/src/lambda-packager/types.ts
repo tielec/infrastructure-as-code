@@ -7,7 +7,7 @@ export interface LambdaPackageArgs {
   /** Lambda関数のソースコードがあるディレクトリパス */
   sourcePath: pulumi.Input<string>;
   
-  /** Lambdaランタイム (例: nodejs18.x, python3.9) */
+  /** Lambdaランタイム (例: nodejs22.x, python3.9) */
   runtime?: pulumi.Input<string>;
   
   /** 依存関係を自動インストールするか (デフォルト: true) */

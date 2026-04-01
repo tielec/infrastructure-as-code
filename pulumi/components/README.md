@@ -98,7 +98,7 @@ import * as aws from "@pulumi/aws";
 // Node.js Lambda関数のパッケージング
 const nodePackage = new LambdaPackage("node-lambda", {
   sourcePath: "./lambda-functions/api-handler",
-  runtime: "nodejs18.x",
+  runtime: "nodejs22.x",
   installDependencies: true, // package.jsonから依存関係をインストール
 });
 
@@ -140,7 +140,7 @@ const enrichedPackage = new LambdaPackage("enriched-lambda", {
 const lambdaFunction = new aws.lambda.Function("my-function", {
   code: nodePackage.createAsset(),
   handler: "index.handler",
-  runtime: "nodejs18.x",
+  runtime: "nodejs22.x",
   role: lambdaRole.arn,
   sourceCodeHash: nodePackage.zipHash,
   environment: {
@@ -159,7 +159,7 @@ export const packageSize = nodePackage.sizeBytes;
 #### パラメータ
 
 - `sourcePath` (必須): ソースコードのパス
-- `runtime` (オプション): Lambdaランタイム（デフォルト: nodejs18.x）
+- `runtime` (オプション): Lambdaランタイム（デフォルト: nodejs22.x）
 - `installDependencies` (オプション): 依存関係をインストールするか（デフォルト: true）
 - `excludePatterns` (オプション): 除外するファイルパターンの配列
 - `includePatterns` (オプション): 含めるファイルパターンの配列（デフォルト: ["**"]）
@@ -205,7 +205,7 @@ const deploymentBucket = new LambdaDeploymentBucket("deployment", {
 // Lambdaパッケージを作成してS3にアップロード
 const lambdaPackage = new LambdaPackage("api-handler", {
   sourcePath: "./lambda-functions/api",
-  runtime: "nodejs18.x",
+  runtime: "nodejs22.x",
   installDependencies: true,
 });
 
@@ -222,7 +222,7 @@ const lambdaFunction = new aws.lambda.Function("api-function", {
   s3Bucket: deploymentBucket.bucketName,
   s3Key: s3Object.key,
   handler: "index.handler",
-  runtime: "nodejs18.x",
+  runtime: "nodejs22.x",
   role: lambdaRole.arn,
   sourceCodeHash: lambdaPackage.zipHash,
 });
@@ -233,7 +233,7 @@ const functions = ["api", "worker", "scheduler"];
 functions.forEach((funcName) => {
   const pkg = new LambdaPackage(`${funcName}-package`, {
     sourcePath: `./lambda-functions/${funcName}`,
-    runtime: "nodejs18.x",
+    runtime: "nodejs22.x",
   });
 
   const s3Obj = deploymentBucket.uploadLambdaPackage(
@@ -246,7 +246,7 @@ functions.forEach((funcName) => {
     s3Bucket: deploymentBucket.bucketName,
     s3Key: s3Obj.key,
     handler: "index.handler",
-    runtime: "nodejs18.x",
+    runtime: "nodejs22.x",
     role: lambdaRole.arn,
     sourceCodeHash: pkg.zipHash,
   });
@@ -317,7 +317,7 @@ const lambdaRepo = new GitHubRepoCheckout("lambda-repo", {
 // チェックアウトしたコードをパッケージ化
 const lambdaPackage = new LambdaPackage("lambda-package", {
   sourcePath: pulumi.interpolate`${lambdaRepo.localPath}/api-handler`,
-  runtime: "nodejs18.x",
+  runtime: "nodejs22.x",
   installDependencies: true,
 });
 
@@ -333,7 +333,7 @@ const apiFunction = new aws.lambda.Function("api-function", {
   s3Bucket: deploymentBucket.bucketName,
   s3Key: s3Object.key,
   handler: "index.handler",
-  runtime: "nodejs18.x",
+  runtime: "nodejs22.x",
   role: lambdaRole.arn,
   sourceCodeHash: lambdaPackage.zipHash,
   timeout: 30,
@@ -356,14 +356,14 @@ const lambdaFunctions = [
 lambdaFunctions.forEach(({ name, path }) => {
   const package = new LambdaPackage(`${name}-package`, {
     sourcePath: path,
-    runtime: "nodejs18.x",
+    runtime: "nodejs22.x",
     installDependencies: true,
   });
 
   new aws.lambda.Function(name, {
     code: package.createAsset(),
     handler: "index.handler",
-    runtime: "nodejs18.x",
+    runtime: "nodejs22.x",
     role: lambdaRole.arn,
     sourceCodeHash: package.zipHash,
   });
