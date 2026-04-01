@@ -10,13 +10,21 @@ REPO_ROOT="$(dirname "$SCRIPT_DIR")"
 LIB_DIR="$SCRIPT_DIR/lib"
 
 # 共通ライブラリの読み込み
+# shellcheck disable=SC1091
 source "$LIB_DIR/common.sh"
+# shellcheck disable=SC1091
 source "$LIB_DIR/script-permissions.sh"
+# shellcheck disable=SC1091
 source "$LIB_DIR/ssh-manager.sh"
+# shellcheck disable=SC1091
 source "$LIB_DIR/pulumi-config.sh"
+# shellcheck disable=SC1091
 source "$LIB_DIR/systemd-service.sh"
+# shellcheck disable=SC1091
 source "$LIB_DIR/openai-config.sh"
+# shellcheck disable=SC1091
 source "$LIB_DIR/github-app-config.sh"
+# shellcheck disable=SC1091
 source "$LIB_DIR/aws-account-config.sh"
 
 # Ansibleプレイブックの格納場所
@@ -26,7 +34,7 @@ readonly PLAYBOOK_PATH="$ANSIBLE_DIR/playbooks/bootstrap-setup.yml"
 # OS情報を表示
 show_os_info() {
     log_info "OS情報:"
-    cat /etc/os-release | grep -E "^(NAME|VERSION)" | sed 's/^/  /'
+    grep -E "^(NAME|VERSION)" /etc/os-release | sed 's/^/  /'
     echo
 }
 
@@ -58,6 +66,7 @@ prepare_ansible_environment() {
     
     # bashrcから環境変数を読み込み（エラーを無視）
     if [ -f ~/.bashrc ]; then
+        # shellcheck disable=SC1090
         source ~/.bashrc 2>/dev/null || true
     fi
     
@@ -71,7 +80,8 @@ prepare_ansible_environment() {
     fi
     
     # ansible-playbookのパスを確認
-    local ansible_playbook_path=$(which ansible-playbook)
+    local ansible_playbook_path
+    ansible_playbook_path=$(command -v ansible-playbook)
     if [ -z "$ansible_playbook_path" ]; then
         error_exit "ansible-playbook コマンドが見つかりません"
     fi
@@ -91,7 +101,8 @@ run_ansible_playbook() {
     fi
     
     # ansible-playbookを実行
-    local ansible_cmd=$(which ansible-playbook)
+    local ansible_cmd
+    ansible_cmd=$(command -v ansible-playbook)
     $ansible_cmd "$PLAYBOOK_PATH" -i "$ANSIBLE_DIR/inventory/hosts" -v || {
         log_error "Ansibleプレイブックの実行に失敗しました"
         return 1
@@ -114,6 +125,7 @@ check_aws_credentials() {
         local setup_script="$REPO_ROOT/scripts/aws/setup-aws-credentials.sh"
         if [ -f "$setup_script" ]; then
             log_info "認証情報設定スクリプトを実行します..."
+            # shellcheck disable=SC1090
             source "$setup_script"
         else
             log_warn "EC2インスタンスのIAMロールを使用している場合は、追加設定は不要です"
@@ -151,6 +163,8 @@ show_completion_message() {
     echo -e "  - Ansible with AWS collections (7.0+)"
     echo -e "  - Pulumi (最新版)"
     echo -e "  - Docker"
+    echo -e "  - Claude Code (AIコーディングアシスタント)"
+    echo -e "  - Codex CLI (AIコーディングアシスタント)"
     
     echo -e "\n${YELLOW}次のステップ:${NC}"
     echo -e "1. インストール確認:"
@@ -172,7 +186,8 @@ main() {
     local DEFAULT_REGION
 
     # IMDSv2を使用してEC2インスタンスメタデータからリージョンを取得
-    local TOKEN=$(curl -s -X PUT "http://169.254.169.254/latest/api/token" -H "X-aws-ec2-metadata-token-ttl-seconds: 21600" 2>/dev/null || echo "")
+    local TOKEN
+    TOKEN=$(curl -s -X PUT "http://169.254.169.254/latest/api/token" -H "X-aws-ec2-metadata-token-ttl-seconds: 21600" 2>/dev/null || echo "")
     if [ -n "$TOKEN" ]; then
         DEFAULT_REGION=$(curl -s -H "X-aws-ec2-metadata-token: $TOKEN" http://169.254.169.254/latest/dynamic/instance-identity/document | grep region | cut -d'"' -f4 || echo "")
     fi

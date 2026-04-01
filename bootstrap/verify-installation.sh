@@ -19,14 +19,16 @@ echo
 
 # 環境変数を読み込み
 if [ -f /etc/profile.d/bootstrap-env.sh ]; then
+    # shellcheck disable=SC1091
     source /etc/profile.d/bootstrap-env.sh
 fi
+# shellcheck disable=SC1090
 source ~/.bashrc 2>/dev/null || true
 
 # システム情報
 echo -e "${YELLOW}=== System Information ===${NC}"
 echo "Architecture: $(uname -m)"
-echo "OS: $(cat /etc/os-release | grep PRETTY_NAME | cut -d= -f2 | tr -d '"')"
+echo "OS: $(grep PRETTY_NAME /etc/os-release | cut -d= -f2 | tr -d '"')"
 echo "Kernel: $(uname -r)"
 echo
 
@@ -127,6 +129,26 @@ else
 fi
 echo
 
+# AI Coding Tools（オプション）
+echo -e "${YELLOW}=== AI Coding Tools ===${NC}"
+
+# Claude Code
+if command -v claude &> /dev/null; then
+    claude_version=$(claude --version 2>&1 | head -n 1)
+    echo -e "${GREEN}${CHECK_MARK}${NC} Claude Code: ${claude_version}"
+else
+    echo -e "${YELLOW}!${NC} Claude Code: Not installed (optional)"
+fi
+
+# Codex CLI
+if command -v codex &> /dev/null; then
+    codex_version=$(codex --version 2>&1 | head -n 1)
+    echo -e "${GREEN}${CHECK_MARK}${NC} Codex CLI: ${codex_version}"
+else
+    echo -e "${YELLOW}!${NC} Codex CLI: Not installed (optional)"
+fi
+echo
+
 # Python AWS Libraries
 echo -e "${YELLOW}=== Python AWS Libraries ===${NC}"
 for lib in boto3 botocore jmespath; do
@@ -146,9 +168,7 @@ if command -v ansible-galaxy &> /dev/null; then
     export ANSIBLE_COLLECTIONS_PATH="/usr/share/ansible/collections"
     
     # 重複チェック
-    user_collections=false
     if [ -d "$HOME/.local/lib/python3.9/site-packages/ansible_collections" ]; then
-        user_collections=true
         echo -e "${YELLOW}⚠️  警告: ユーザー空間にもCollectionsが見つかりました${NC}"
         echo -e "${YELLOW}   場所: ~/.local/lib/python3.9/site-packages/ansible_collections${NC}"
         echo -e "${YELLOW}   推奨: cleanup-ansible-collections.shを実行してクリーンアップ${NC}"
