@@ -80,4 +80,5 @@ Thumbs.db
 Desktop.ini
 
 # Claude
-.claude/
+.claude/*
+!.claude/skills/
