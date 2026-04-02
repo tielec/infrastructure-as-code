@@ -79,6 +79,12 @@ EOF
 fi
 # ===== ECR credential-helper フォールバック設定完了 =====
 
+# Docker起動後に.dockerディレクトリの所有権を再設定
+# Dockerデーモンが起動時に.dockerディレクトリをroot所有で再作成する場合があるため、
+# config.jsonの有無に関わらず常にchownを実行する
+chown -R jenkins:jenkins /home/jenkins/.docker 2>/dev/null || true
+chown -R ec2-user:ec2-user /home/ec2-user/.docker 2>/dev/null || true
+
 # 環境情報の保存
 echo "PROJECT_NAME=${PROJECT_NAME}" > /etc/jenkins-agent-env
 echo "ENVIRONMENT=${ENVIRONMENT}" >> /etc/jenkins-agent-env
