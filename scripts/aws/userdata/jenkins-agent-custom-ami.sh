@@ -53,7 +53,7 @@ else
   }
 }
 EOF
-  chown jenkins:jenkins /home/jenkins/.docker/config.json
+  chown -R jenkins:jenkins /home/jenkins/.docker
 
   mkdir -p /root/.docker
   cat > /root/.docker/config.json << EOF
@@ -73,7 +73,7 @@ EOF
   }
 }
 EOF
-  chown ec2-user:ec2-user /home/ec2-user/.docker /home/ec2-user/.docker/config.json
+  chown -R ec2-user:ec2-user /home/ec2-user/.docker
 
   echo "ECR credential-helper config.json を動的生成しました"
 fi

@@ -72,8 +72,7 @@ cat > /home/jenkins/.docker/config.json << EOF
   }
 }
 EOF
-chown jenkins:jenkins /home/jenkins/.docker
-chown jenkins:jenkins /home/jenkins/.docker/config.json
+chown -R jenkins:jenkins /home/jenkins/.docker
 
 # rootユーザー用 Docker config.json
 mkdir -p /root/.docker
@@ -94,8 +93,7 @@ cat > /home/ec2-user/.docker/config.json << EOF
   }
 }
 EOF
-chown ec2-user:ec2-user /home/ec2-user/.docker
-chown ec2-user:ec2-user /home/ec2-user/.docker/config.json
+chown -R ec2-user:ec2-user /home/ec2-user/.docker
 
 echo "ECR credential-helper の設定が完了しました"
 # ===== ECR credential-helper 設定完了 =====
