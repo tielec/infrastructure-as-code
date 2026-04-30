@@ -2,6 +2,29 @@
 
 > 📖 **親ドキュメント**: [README.md](../README.md)
 
+## 2026-04-30: Jenkins Controller インスタンスタイプ t4g.large 化 + JavaMelody 導入
+
+Jenkins Controller の CPU クレジット枯渇対策として、インスタンスタイプを `t4g.large` に変更し、JavaMelody（monitoring プラグイン）を導入しました。
+
+- **対象Issue**: [#568](https://github.com/tielec/infrastructure-as-code/issues/568)
+- **変更ファイル**:
+  - `pulumi/jenkins-ssm-init/index.ts`: SSM パラメータ `controller-instance-type` のデフォルト値を `t4g.medium` から `t4g.large` に変更
+  - `scripts/jenkins/groovy/install-plugins.groovy`: `monitoring`（JavaMelody）プラグインをプラグインリストに追加
+  - `jenkins/README.md`: JavaMelody モニタリングセクションおよびデプロイ反映手順を追加
+  - `tests/integration/test_jenkins_controller_monitoring.py`: 変更内容を検証する統合テスト（18件）を新規作成
+  - `tests/issue-568/verify-instance-type.sh`: インスタンスタイプ値検証スクリプトを新規作成
+  - `tests/issue-568/verify-plugins.sh`: プラグインリスト検証スクリプトを新規作成
+- **主要機能**:
+  - `t4g.large`（CPU ベースライン 60%）への変更により、平均 CPU 使用率 53% がベースライン内に収まり CPU クレジット課金をゼロ化
+  - JavaMelody の `/monitoring` エンドポイントで CPU 内訳・JVM メモリ・GC・スレッド情報をリアルタイム可視化
+  - Pulumi スタック依存関係（jenkins-ssm-init → jenkins-controller → jenkins-application）を考慮した段階的デプロイ手順を整備
+- **コスト効果**:
+  - CPU クレジット課金: $19/月 → $0/月（見込み）
+  - Savings Plan による純削減効果: $5/月 → $24/月（見込み）
+- **テスト結果**: 統合テスト 18 件すべて成功、検証スクリプト（verify-instance-type.sh: 3件 PASS、verify-plugins.sh: 4件 PASS）、TypeScript ビルド成功
+
+これにより、Jenkins Controller の CPU コスト構造が健全化され、JavaMelody によるメトリクスを活用した継続的な効果検証基盤が整備されました。
+
 ## 2026-04-01: Jenkins Agent EC2 Fleet への Amazon ECR Credential Helper 導入
 
 Jenkins Agent EC2 Fleet インスタンスに Amazon ECR Credential Helper を導入し、ECR 認証を自動化しました。
