@@ -113,10 +113,35 @@ if ! id jenkins &>/dev/null; then
   useradd -m -d $JENKINS_HOME_DIR -g jenkins jenkins
 fi
 
-# 所有権とパーミッションを設定
-chown -R jenkins:jenkins $JENKINS_HOME_DIR
-find $JENKINS_HOME_DIR -type d -exec chmod 755 {} \;
-find $JENKINS_HOME_DIR -type f -exec chmod 644 {} \; 2>/dev/null || true
+# 必須トップレベルディレクトリの所有権は常に確実に設定する
+# mkdirで新規作成されたサブディレクトリ（root所有）に対応するため、浅い処理として実施
+# EFS上でも一階層のみなので高速
+chown jenkins:jenkins "$JENKINS_HOME_DIR" 2>/dev/null || true
+chown jenkins:jenkins "$JENKINS_HOME_DIR"/{plugins,jobs,secrets,nodes,logs,init.groovy.d} 2>/dev/null || true
+
+# 配下の所有権・パーミッションの再帰処理は冪等化する
+# EFS（NFS）上の再帰chown/chmodはファイル数に比例して数十分以上かかるため、
+# トップレベルが既に正しい状態の場合は再帰処理をスキップする
+# 強制実行が必要な場合（リカバリ等）は環境変数 FORCE_CHOWN=true を指定する
+CURRENT_OWNER=$(stat -c '%U:%G' "$JENKINS_HOME_DIR" 2>/dev/null || echo "")
+CURRENT_MODE=$(stat -c '%a' "$JENKINS_HOME_DIR" 2>/dev/null || echo "")
+
+if [ "$CURRENT_OWNER" = "jenkins:jenkins" ] && [ "$CURRENT_MODE" = "755" ] && [ "${FORCE_CHOWN:-false}" != "true" ]; then
+  log "所有権・パーミッションは既に正しい状態（owner=$CURRENT_OWNER, mode=$CURRENT_MODE）"
+  log "再帰処理をスキップしてEFSパフォーマンスを確保します"
+  log "強制再実行が必要な場合は FORCE_CHOWN=true を指定してください"
+else
+  if [ "${FORCE_CHOWN:-false}" = "true" ]; then
+    log "FORCE_CHOWN=true により所有権・パーミッションの再帰処理を強制実行します"
+  else
+    log "所有権・パーミッションを再帰設定中（current owner=$CURRENT_OWNER, mode=$CURRENT_MODE）..."
+    log "注意: EFS上ではファイル数に応じて時間がかかります"
+  fi
+  chown -R jenkins:jenkins "$JENKINS_HOME_DIR"
+  find "$JENKINS_HOME_DIR" -type d -exec chmod 755 {} \;
+  find "$JENKINS_HOME_DIR" -type f -exec chmod 644 {} \; 2>/dev/null || true
+  log "再帰処理が完了しました"
+fi
 
 # シンボリックリンクの設定
 SYSTEM_JENKINS_HOME="/var/lib/jenkins"
