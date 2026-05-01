@@ -313,6 +313,7 @@ ansible-playbook playbooks/lambda_setup_pipeline.yml -e "env=dev"
 | `JENKINS_VERSION` | Jenkinsバージョン | 2.426.1 |
 | `JENKINS_PORT` | Jenkinsポート | 8080 |
 | `JENKINS_ADMIN_USER` | 管理者ユーザー | admin |
+| `FORCE_CHOWN` | `controller-mount-efs.sh` の所有権・パーミッション再帰処理を強制実行 | false |
 
 ### Lambda関連環境変数
 
