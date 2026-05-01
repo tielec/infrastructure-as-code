@@ -98,10 +98,12 @@ const natInstanceTypeParam = new aws.ssm.Parameter("nat-instance-type", {
 });
 
 // Jenkins設定
+// Issue #576: デプロイ時の意図しない自動アップグレードを防ぐため LTS バージョンを固定する
+// バージョン変更時は必ず docs/jenkins-upgrade-runbook.md の手順に従うこと
 const jenkinsVersionParam = new aws.ssm.Parameter("jenkins-version", {
     name: `${ssmPrefix}/config/jenkins-version`,
     type: "String",
-    value: "latest",
+    value: "2.555.1",
     overwrite: true,
     description: "Jenkins version to install",
     tags: {
