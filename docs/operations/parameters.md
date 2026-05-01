@@ -29,7 +29,7 @@ ansible-playbook playbooks/jenkins/jenkins_setup_pipeline.yml -e "env=dev" --che
 - AWS認証情報は定期的に更新が必要です。セッションが切れた場合は`source scripts/aws/setup-aws-credentials.sh`を実行してください
 - Pulumiパスフレーズは安全に管理してください。SSMパラメータストアから取得した値は他のユーザーに見えないように注意してください
 - **削除操作は取り消せません**。本番環境での削除操作は特に注意して実行してください
-- Jenkinsバージョン更新前には必ずバックアップを取得してください
+- Jenkinsバージョン更新前には必ずバックアップを取得してください。バージョン更新の詳細手順は [Jenkins アップグレード Runbook](../jenkins-upgrade-runbook.md) を参照してください
 - シードジョブで管理されるジョブは、手動で変更しても次回シードジョブ実行時に上書きされます
 
 ## 関連ドキュメント

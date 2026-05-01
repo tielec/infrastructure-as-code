@@ -798,6 +798,7 @@ ansible-playbook playbooks/jenkins/deploy/deploy_jenkins_controller.yml -e "env=
 - [メインREADME](../README.md) - プロジェクト全体の概要とクイックナビゲーション
 - [INITIAL_SETUP.md](INITIAL_SETUP.md) - Jenkins初期セットアップ手順
 - [CONTRIBUTION.md](CONTRIBUTION.md) - Jenkinsジョブ開発規約
+- [JenkinsアップグレードRunbook](../docs/jenkins-upgrade-runbook.md) - Jenkins の LTS バージョン更新手順とロールバック手順
 - [Ansible README](../ansible/README.md) - インフラのデプロイ方法
 - [Pulumi README](../pulumi/README.md) - インフラストラクチャ定義
 

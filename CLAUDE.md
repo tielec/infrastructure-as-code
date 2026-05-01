@@ -55,6 +55,7 @@
 ### 重要な注意事項
 
 - **Jenkins開発時**: Jenkins設定、ジョブ定義、パイプラインを修正・追加した場合、必ず `jenkins/README.md` の更新が必要かチェックすること
+- **Jenkinsバージョン変更時**: `latest` は使用せず LTS 固定バージョンを指定し、必ず `docs/jenkins-upgrade-runbook.md` の手順に従うこと
 - **ドキュメント更新対象**:
   - 新しいジョブの追加
   - パイプラインの変更

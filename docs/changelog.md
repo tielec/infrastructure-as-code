@@ -2,6 +2,29 @@
 
 > 📖 **親ドキュメント**: [README.md](../README.md)
 
+## 2026-05-01: Jenkins バージョン LTS 固定 + アップグレード Runbook 整備
+
+Jenkins のバージョン指定を `latest` から LTS 固定バージョン `2.555.1` に変更し、計画的なアップグレード運用を実現するための Runbook を整備しました。Issue #574（JCasC `excludeClientIPFromCrumb` 互換性事故）の根本原因対策として、「デプロイのたびに予期せずバージョンが上がる」問題を解消します。
+
+- **対象Issue**: [#576](https://github.com/tielec/infrastructure-as-code/issues/576)
+- **変更ファイル**:
+  - `pulumi/jenkins-ssm-init/index.ts`: SSM パラメータ `jenkins-version` の値を `latest` から LTS 固定バージョン `2.555.1` に変更し、変更理由と Runbook 参照コメントを追加
+  - `docs/jenkins-upgrade-runbook.md`: Jenkins アップグレード手順を7セクション（事前準備・dev/staging/prod 環境展開・ロールバック・CVE 対応特例・運用方針）でまとめた Runbook を新規作成
+  - `jenkins/README.md`: 関連ドキュメントセクションにアップグレード Runbook へのリンクを追加
+  - `CLAUDE.md`: Jenkins ベストプラクティスセクションにバージョン変更時の Runbook 参照ガイダンスを追加
+  - `docs/operations/jenkins-management.md`: バージョン更新コマンド例付近と管理タスクテーブルに Runbook へのリンクを追加
+  - `tests/issue-576/verify-version-format.sh`: バージョン文字列フォーマット（`X.Y.Z` 形式）を検証するスクリプトを新規作成
+  - `tests/issue-576/verify-docs-integrity.sh`: Runbook 必須セクション存在と既存ドキュメントからのリンク有効性を検証するスクリプトを新規作成
+  - `tests/integration/test_jenkins_version_pinning.py`: 上記すべての変更を静的検証する統合テスト（13件）を新規作成
+- **主要な効果**:
+  - SSM パラメータ `jenkins-version` を固定値にすることで、デプロイタイミングによるバージョン差異を排除し再現可能なデプロイを実現
+  - dev → staging → prod の段階展開フローと1週間/3〜5日/24時間の安定稼働観察期間を Runbook として標準化
+  - CVE 対応の特例フロー（Critical/High かつ exploitable の場合に同日対応を許容）を明文化
+  - 既存の `controller-install.sh` は固定バージョン対応済みのため、コードの構造変更は不要
+- **テスト結果**: TypeScript 構文チェック成功、統合テスト 13 件成功、バージョン文字列フォーマット検証成功、ドキュメント整合性検証成功
+
+これにより、Jenkins バージョン管理が計画的・透明性の高い運用プロセスとなり、予期しないアップグレードに起因するインシデントを防止する基盤が整備されました。
+
 ## 2026-04-30: Jenkins Controller インスタンスタイプ t4g.large 化 + JavaMelody 導入
 
 Jenkins Controller の CPU クレジット枯渇対策として、インスタンスタイプを `t4g.large` に変更し、JavaMelody（monitoring プラグイン）を導入しました。

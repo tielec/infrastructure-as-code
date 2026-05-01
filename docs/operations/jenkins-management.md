@@ -18,7 +18,7 @@ ansible-playbook playbooks/jenkins/deploy/deploy_jenkins_application.yml -e "env
 
 # Jenkinsバージョンのみ更新
 ansible-playbook playbooks/jenkins/deploy/deploy_jenkins_application.yml \
-  -e "env=dev version=2.426.1 plugins=false setup_cli_user=false setup_seed_job=false"
+  -e "env=dev version=2.555.1 plugins=false setup_cli_user=false setup_seed_job=false"
 
 # プラグインのみ更新
 ansible-playbook playbooks/jenkins/deploy/deploy_jenkins_application.yml \
@@ -28,6 +28,8 @@ ansible-playbook playbooks/jenkins/deploy/deploy_jenkins_application.yml \
 ansible-playbook playbooks/jenkins/deploy/deploy_jenkins_application.yml \
   -e "env=dev jenkins_version=latest install_plugins=false setup_cli_user=false"
 ```
+
+詳細な段階的更新手順は [Jenkins アップグレード Runbook](../jenkins-upgrade-runbook.md) を参照してください。
 
 #### シードジョブによるジョブ管理
 
@@ -51,10 +53,12 @@ ansible-playbook playbooks/jenkins/deploy/deploy_jenkins_application.yml \
 
 | タスク | 推奨頻度 | 実行時間 |
 |--------|----------|----------|
-| Jenkinsバージョン更新 | 月1回 | 5-10分 |
+| Jenkinsバージョン更新 | 月1回（詳細手順は [Runbook](../jenkins-upgrade-runbook.md) を参照） | 5-10分 |
 | プラグイン更新 | 週1回 | 3-5分 |
 | シードジョブ実行 | ジョブ定義変更時 | 1-3分 |
 | 全体再デプロイ | 大規模変更時のみ | 1-2時間 |
+
+詳細な更新手順、段階的な検証、ロールバック条件は [Jenkins アップグレード Runbook](../jenkins-upgrade-runbook.md) を参照してください。
 
 ## 関連ドキュメント
 
