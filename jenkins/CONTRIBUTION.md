@@ -1202,10 +1202,11 @@ def password = 'hardcoded-password'  // 絶対NG！
 
 ```groovy
 // JCasC設定
+// Jenkins 2.452前後で excludeClientIPFromCrumb 属性は削除済み
+// 現行版ではクライアントIP除外がデフォルト動作
 jenkins:
   crumbIssuer:
     standard:
-      excludeClientIPFromCrumb: false
 ```
 
 #### 3.1.3 権限管理
