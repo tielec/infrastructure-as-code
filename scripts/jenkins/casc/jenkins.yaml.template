@@ -10,7 +10,7 @@ jenkins:
       allowsSignup: false
       enableCaptcha: false
   crumbIssuer:
-    standard:
+    standard: {}
   markupFormatter:
     markdownFormatter:
       disableSyntaxHighlighting: false
