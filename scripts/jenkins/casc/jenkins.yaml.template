@@ -11,7 +11,6 @@ jenkins:
       enableCaptcha: false
   crumbIssuer:
     standard:
-      excludeClientIPFromCrumb: true
   markupFormatter:
     markdownFormatter:
       disableSyntaxHighlighting: false
