@@ -89,7 +89,10 @@ def plugins = [
     "http_request",
     "ssh-agent",
     "markdown-formatter",
-    "file-parameters"
+    "file-parameters",
+
+    // モニタリングプラグイン（JavaMelody: CPU/メモリ監視）
+    "monitoring"
 ]
 
 // アップデートセンターの初期化を待機

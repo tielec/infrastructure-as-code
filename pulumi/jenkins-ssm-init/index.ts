@@ -156,7 +156,7 @@ const keyNameParam = new aws.ssm.Parameter("key-name", {
 const controllerInstanceTypeParam = new aws.ssm.Parameter("controller-instance-type", {
     name: `${ssmPrefix}/config/controller-instance-type`,
     type: "String",
-    value: "t4g.medium",  // ARM64 instance type
+    value: "t4g.large",  // ARM64 instance type
     overwrite: true,
     description: "Jenkins controller EC2 instance type",
     tags: {
