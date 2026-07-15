@@ -43,11 +43,11 @@ export function loadConfig() {
     const application = {
         aiApi: {
             claudeApiKey: config.get("claudeApiKey") || "PLACEHOLDER_PLEASE_UPDATE_WITH_ACTUAL_API_KEY",
-            claudeSpeedModel: config.get("claudeSpeedModel") || "claude-3-haiku-20240307",
-            claudeQualityModel: config.get("claudeQualityModel") || "claude-3-5-sonnet-20240620",
+            claudeSpeedModel: config.get("claudeSpeedModel") || "claude-haiku-4-5",
+            claudeQualityModel: config.get("claudeQualityModel") || "claude-sonnet-5",
             openaiApiKey: config.get("openaiApiKey") || "PLACEHOLDER_PLEASE_UPDATE_WITH_ACTUAL_API_KEY",
-            openaiSpeedModel: config.get("openaiSpeedModel") || "gpt-4.1-mini",
-            openaiQualityModel: config.get("openaiQualityModel") || "gpt-4.1",
+            openaiSpeedModel: config.get("openaiSpeedModel") || "gpt-5.6-luna",
+            openaiQualityModel: config.get("openaiQualityModel") || "gpt-5.6-terra",
         }
     };
     
