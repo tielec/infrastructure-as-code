@@ -135,6 +135,38 @@ const dlq = new aws.sqs.Queue("dlq", {
 });
 
 // ========================================
+// 4.5. アプリデータ用S3バケットを作成
+// （生成画像・回答プール・監査ログなどの永続化先。BUCKET_NAME経由でLambdaが利用）
+// ========================================
+// アカウント番号とリージョンを含めて一意性を確保（lambda-shipment-s3と同じ命名規則）
+const region = aws.config.region || "ap-northeast-1";
+const accountId = aws.getCallerIdentity().then(identity => identity.accountId);
+
+const appDataBucket = new aws.s3.BucketV2("app-data-bucket", {
+    bucket: pulumi.interpolate`tielec-${projectName}-app-data-${environment}-${accountId}-${region}`,
+    tags: commonTags,
+});
+
+// メンタルヘルス関連データを含むため公開アクセスは全面ブロック
+// （画像の配信はLambdaが発行する署名付きURLで行う）
+new aws.s3.BucketPublicAccessBlock("app-data-bucket-pab", {
+    bucket: appDataBucket.id,
+    blockPublicAcls: true,
+    blockPublicPolicy: true,
+    ignorePublicAcls: true,
+    restrictPublicBuckets: true,
+});
+
+// バケット名をSSMに登録（他スタック・運用からの参照用）
+new aws.ssm.Parameter("app-data-bucket-name", {
+    name: `/lambda-api/${environment}/storage/app-data-bucket-name`,
+    type: "String",
+    value: appDataBucket.bucket,
+    description: "アプリデータ用S3バケット名（生成画像・回答プール・監査ログ）",
+    tags: commonTags,
+});
+
+// ========================================
 // 5. IAMロールを作成
 // ========================================
 const lambdaRole = new aws.iam.Role("lambda-role", {
@@ -154,7 +186,7 @@ const lambdaRole = new aws.iam.Role("lambda-role", {
 // その他の権限
 new aws.iam.RolePolicy("lambda-policy", {
     role: lambdaRole.id,
-    policy: pulumi.all([dlq.arn, projectName]).apply(([dlqArn, proj]) => JSON.stringify({
+    policy: pulumi.all([dlq.arn, projectName, appDataBucket.arn]).apply(([dlqArn, proj, appBucketArn]) => JSON.stringify({
         Version: "2012-10-17",
         Statement: [
             {
@@ -170,6 +202,19 @@ new aws.iam.RolePolicy("lambda-policy", {
                 Effect: "Allow",
                 Action: ["sqs:SendMessage"],
                 Resource: dlqArn,
+            },
+            {
+                Effect: "Allow",
+                Action: [
+                    "s3:GetObject",
+                    "s3:PutObject",
+                ],
+                Resource: `${appBucketArn}/*`,
+            },
+            {
+                Effect: "Allow",
+                Action: ["s3:ListBucket"],
+                Resource: appBucketArn,
             },
             {
                 Effect: "Allow",
@@ -213,6 +258,7 @@ const mainLambda = createLambdaFunction(
             NODE_ENV: environment,
             LOG_LEVEL: environment === "prod" ? "ERROR" : "INFO",
             DEPLOYMENT_VERSION: githubRepo.apply(r => r.commitHash),
+            BUCKET_NAME: appDataBucket.bucket,
         },
         logRetentionDays: logRetentionDays,
         tags: commonTags,
@@ -243,4 +289,8 @@ export const outputs = {
     deploymentBucket: deploymentBucket.apply(b => b.bucketName),
     codeObjectKey: lambdaCodeObject.apply(o => o.key),
     commitHash: githubRepo.apply(r => r.commitHash),
+
+    // アプリデータバケット情報
+    appDataBucketName: appDataBucket.bucket,
+    appDataBucketArn: appDataBucket.arn,
 };
