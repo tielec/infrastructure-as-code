@@ -441,10 +441,11 @@ class GitClientBase implements Serializable {
             git stash push -u || echo "退避する変更がないか退避操作に失敗しました (続行します)"
             
             # ベースブランチを最新に更新
+            # Jenkinsのワークスペースはdetached HEADかつfetch refspecが狭い場合があるため、
+            # 明示的なrefspecでフェッチし、checkout -B でローカルブランチを作成/リセットする
             echo "originからフェッチし、ベースブランチ '${baseBranchEsc}' を最新の状態にします..."
-            git fetch origin --prune
-            git checkout '${baseBranchEsc}'
-            git reset --hard origin/'${baseBranchEsc}'
+            git fetch origin --prune '+refs/heads/${baseBranchEsc}:refs/remotes/origin/${baseBranchEsc}'
+            git checkout -B '${baseBranchEsc}' origin/'${baseBranchEsc}'
         """
     }
 
