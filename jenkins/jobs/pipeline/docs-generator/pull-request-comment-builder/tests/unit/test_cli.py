@@ -52,6 +52,7 @@ def test_parse_args_with_required_only(monkeypatch):
     assert args.parallel is False
     assert args.save_prompts is False
     assert args.log_level == "INFO"
+    assert args.template_dir is None
 
 
 def test_parse_args_with_all_options(monkeypatch):
@@ -71,6 +72,8 @@ def test_parse_args_with_all_options(monkeypatch):
             "DEBUG",
             "--prompt-output-dir",
             "/tmp/prompts",
+            "--template-dir",
+            "/tmp/templates",
         ]
     )
 
@@ -78,6 +81,7 @@ def test_parse_args_with_all_options(monkeypatch):
     assert args.parallel is True
     assert args.log_level == "DEBUG"
     assert args.prompt_output_dir == "/tmp/prompts"
+    assert args.template_dir == "/tmp/templates"
 
 
 def test_parse_args_missing_required(monkeypatch, capsys):
@@ -135,8 +139,9 @@ def test_main_writes_output_file(monkeypatch, tmp_path):
     cli = _import_cli_with_stub(monkeypatch)
 
     class FakeGenerator:
-        def __init__(self, log_level=logging.INFO):
+        def __init__(self, log_level=logging.INFO, template_dir=None):
             self.log_level = log_level
+            self.template_dir = template_dir
 
         def generate_comment(self, pr_info, pr_diff):
             return {
@@ -198,8 +203,9 @@ def test_main_writes_error_json_on_exception(monkeypatch, tmp_path):
     cli = _import_cli_with_stub(monkeypatch)
 
     class ExplodingGenerator:
-        def __init__(self, log_level=logging.INFO):
+        def __init__(self, log_level=logging.INFO, template_dir=None):
             self.log_level = log_level
+            self.template_dir = template_dir
 
         def generate_comment(self, pr_info, pr_diff):
             raise ValueError("missing input files")

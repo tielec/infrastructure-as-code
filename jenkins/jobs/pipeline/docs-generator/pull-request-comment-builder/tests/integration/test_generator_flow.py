@@ -65,6 +65,13 @@ def test_generate_comment_happy_path(monkeypatch, tmp_path):
     class FakePromptTemplateManager:
         def __init__(self, template_dir):
             self.template_dir = template_dir
+            # 実クラスと同様にテンプレートを保持する
+            # （空だとPRCommentGeneratorの検証でRuntimeErrorになる）
+            self.templates = {
+                "base": "base template",
+                "chunk": "chunk template",
+                "summary": "summary template",
+            }
 
     import pr_comment_generator.generator as gen
 

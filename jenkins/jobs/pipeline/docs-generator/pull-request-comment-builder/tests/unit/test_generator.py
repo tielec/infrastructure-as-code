@@ -1,11 +1,13 @@
 import json
 import logging
+import os
 import types
 
 import pytest
 
 from pr_comment_generator.generator import PRCommentGenerator
 from pr_comment_generator.models import FileChange, PRInfo
+from pr_comment_generator.prompt_manager import PromptTemplateManager
 
 
 def _make_generator():
@@ -283,3 +285,51 @@ def test_generate_comment_returns_message_when_no_changes(tmp_path):
     assert result["error"] == "No valid files to analyze"
     assert result["processed_file_count"] == 0
     assert result["file_count"] == 0
+
+
+class TestTemplateDirResolution:
+    """テンプレートディレクトリの解決と検証のテスト
+
+    テンプレートが読み込めないとプロンプトが空のままAPIに送信され、
+    変更内容と無関係なコメントが生成されるため、リグレッションを防ぐ。
+    """
+
+    def test_既定のテンプレートディレクトリが実在しテンプレートが揃っている(self):
+        template_dir = PRCommentGenerator._resolve_template_dir()
+
+        assert os.path.isdir(template_dir), (
+            f"テンプレートディレクトリが見つかりません: {template_dir}"
+        )
+
+        for filename in ('base_template.md', 'chunk_analysis_extension.md', 'summary_extension.md'):
+            path = os.path.join(template_dir, filename)
+            assert os.path.isfile(path), f"テンプレートが見つかりません: {path}"
+            assert os.path.getsize(path) > 0, f"テンプレートが空です: {path}"
+
+    def test_環境変数でテンプレートディレクトリを指定できる(self, tmp_path, monkeypatch):
+        monkeypatch.setenv('PR_COMMENT_TEMPLATE_DIR', str(tmp_path))
+
+        assert PRCommentGenerator._resolve_template_dir() == os.path.abspath(str(tmp_path))
+
+    def test_既定のディレクトリで実際にテンプレートを読み込める(self):
+        manager = PromptTemplateManager(PRCommentGenerator._resolve_template_dir())
+
+        assert manager.templates['base'] != ""
+        assert manager.templates['chunk'] != ""
+        assert manager.templates['summary'] != ""
+
+    def test_テンプレートが空の場合はエラーになる(self, tmp_path):
+        gen = _make_generator()
+        gen.prompt_manager = PromptTemplateManager(str(tmp_path))
+
+        with pytest.raises(RuntimeError) as exc_info:
+            gen._validate_templates(str(tmp_path))
+
+        assert 'プロンプトテンプレートを読み込めませんでした' in str(exc_info.value)
+
+    def test_テンプレートが揃っていればエラーにならない(self):
+        gen = _make_generator()
+        template_dir = PRCommentGenerator._resolve_template_dir()
+        gen.prompt_manager = PromptTemplateManager(template_dir)
+
+        gen._validate_templates(template_dir)

@@ -18,18 +18,22 @@ from .chunk_analyzer import ChunkAnalyzer
 class PRCommentGenerator:
     """改良版PRコメント生成を管理するクラス"""
 
-    def __init__(self, log_level=logging.INFO):
-        """OpenAIクライアントとGitHubクライアントを初期化"""
+    def __init__(self, log_level=logging.INFO, template_dir: Optional[str] = None):
+        """OpenAIクライアントとGitHubクライアントを初期化
+
+        Args:
+            log_level: ロギングレベル
+            template_dir: テンプレートディレクトリ（未指定時は自動解決）
+        """
         # ロギングの設定
         self._setup_logging(log_level)
-        
-        # 現在のディレクトリから1つ上の階層のtemplatesディレクトリを指定
-        current_dir = os.path.dirname(os.path.abspath(__file__))
-        template_dir = os.path.join(os.path.dirname(current_dir), 'templates')
-        
+
+        # テンプレートディレクトリを解決する
+        # 配置: pull-request-comment-builder/templates/
+        #       pull-request-comment-builder/src/pr_comment_generator/generator.py（このファイル）
+        # のため、このファイルから2階層上がテンプレートの親ディレクトリとなる
+        template_dir = os.path.abspath(template_dir) if template_dir else self._resolve_template_dir()
         self.logger.info(f"Template directory path: {template_dir}")
-        if not os.path.exists(template_dir):
-            self.logger.warning(f"Warning: Template directory not found at {template_dir}")
 
         # カスタム再試行設定（環境変数から取得可能）
         retry_config = {
@@ -40,6 +44,7 @@ class PRCommentGenerator:
 
         # 初期化の順序を変更
         self.prompt_manager = PromptTemplateManager(template_dir)
+        self._validate_templates(template_dir)
         self.openai_client = OpenAIClient(self.prompt_manager, retry_config=retry_config)
         self.chunk_analyzer = ChunkAnalyzer(self.openai_client, log_level=log_level)
         self.github_client = GitHubClient(auth_method="app", app_id=os.getenv('GITHUB_APP_ID'), token=os.getenv('GITHUB_ACCESS_TOKEN'))
@@ -48,6 +53,61 @@ class PRCommentGenerator:
         self.max_files_to_process = int(os.getenv('MAX_FILES_TO_PROCESS', '50'))  # 最大処理ファイル数
         self.max_file_size = int(os.getenv('MAX_FILE_SIZE', '10000'))  # 最大ファイルサイズ（行数）
         self.parallel_processing = os.getenv('PARALLEL_PROCESSING', 'false').lower() == 'true'
+
+    @staticmethod
+    def _resolve_template_dir() -> str:
+        """テンプレートディレクトリのパスを解決する
+
+        環境変数 PR_COMMENT_TEMPLATE_DIR が設定されている場合はそれを優先する。
+        設定されていない場合は、このモジュールの位置を基準に探索する。
+
+        Returns:
+            str: テンプレートディレクトリの絶対パス（見つからない場合は既定の候補パス）
+        """
+        env_dir = os.getenv('PR_COMMENT_TEMPLATE_DIR')
+        if env_dir:
+            return os.path.abspath(env_dir)
+
+        package_dir = os.path.dirname(os.path.abspath(__file__))
+
+        # 候補1: pull-request-comment-builder/templates（正規の配置）
+        # 候補2: src/templates（過去のディレクトリ構成との互換用）
+        candidates = [
+            os.path.join(os.path.dirname(os.path.dirname(package_dir)), 'templates'),
+            os.path.join(os.path.dirname(package_dir), 'templates'),
+        ]
+
+        for candidate in candidates:
+            if os.path.isdir(candidate):
+                return candidate
+
+        # 見つからない場合は正規の配置を返し、後続の検証でエラーにする
+        return candidates[0]
+
+    def _validate_templates(self, template_dir: str) -> None:
+        """テンプレートが正しく読み込めているかを検証する
+
+        テンプレートが読み込めていない場合、プロンプトが空のままAPIに送信され、
+        無関係な内容のコメントが生成されてしまうため、ここで明示的に失敗させる。
+
+        Args:
+            template_dir: テンプレートディレクトリのパス
+
+        Raises:
+            RuntimeError: テンプレートが存在しない、または内容が空の場合
+        """
+        missing = [key for key, content in self.prompt_manager.templates.items() if not content]
+
+        if missing:
+            raise RuntimeError(
+                f"プロンプトテンプレートを読み込めませんでした: {', '.join(sorted(missing))}\n"
+                f"探索したディレクトリ: {template_dir}\n"
+                "テンプレートが読み込めない場合、空のプロンプトがAPIに送信され、"
+                "変更内容と無関係なコメントが生成されるため処理を中断します。\n"
+                "環境変数 PR_COMMENT_TEMPLATE_DIR でディレクトリを明示的に指定することもできます。"
+            )
+
+        self.logger.info(f"Loaded {len(self.prompt_manager.templates)} prompt templates from {template_dir}")
 
     def _setup_logging(self, log_level):
         """ロギングの設定"""
@@ -403,7 +463,11 @@ class PRCommentGenerator:
             # クラス属性として保存（他のメソッドから参照できるように）
             self.pr_info = pr_info
             self.skipped_file_names = skipped_file_names
-            
+
+            # OpenAIクライアントにもPR情報を渡す
+            # （プロンプト保存先のディレクトリ名に使用され、未設定だと pr_unknown になる）
+            self.openai_client.pr_info = pr_info
+
             # 読み込んだファイルの一覧を取得
             with open(pr_diff_path, 'r', encoding='utf-8') as f:
                 original_files = json.load(f)
