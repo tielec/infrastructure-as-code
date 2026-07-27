@@ -33,30 +33,54 @@ source "$SCRIPT_DIR/setup-aws-credentials.sh"
 # 共通関数
 # =====================================================
 
-# スタックロックを確認し、必要に応じて解除する
+# ログにスタックロックのエラーが含まれるかを判定する
+# Pulumiのロックエラーメッセージ例:
+#   error: the stack is currently locked by 1 lock(s). Either wait for the other
+#   process(es) to end or delete the lock file with `pulumi cancel`.
+contains_lock_error() {
+    local target=$1
+
+    if [ ! -f "$target" ]; then
+        return 1
+    fi
+
+    grep -qE "currently locked|delete the lock file" "$target"
+}
+
+# スタックのロックを解除する
+unlock_stack() {
+    echo "ロックを解除します（pulumi cancel）..."
+
+    if pulumi cancel --yes 2>&1; then
+        echo "✅ ロック解除に成功しました"
+        sleep 5
+        return 0
+    fi
+
+    echo "⚠️ ロック解除に失敗しました"
+    sleep 3
+    return 1
+}
+
+# スタックロックを事前確認し、検出された場合は解除する
+# 注意: pulumi stack はロックを取得しないため、ここでロックを検出できない場合がある。
+#       実際のロック検出は各コマンド実行後の retry_on_lock_error が担う。
 check_and_unlock_stack() {
-    echo "スタックロックの確認..."
+    echo "スタックロックの事前確認..."
 
-    # スタック状態の取得
+    # スタック状態の取得（失敗してもここでは中断しない）
     local stack_status
-    stack_status=$(pulumi stack 2>&1)
+    stack_status=$(pulumi stack 2>&1 || true)
 
-    if echo "$stack_status" | grep -q "currently locked"; then
+    if echo "$stack_status" | grep -qE "currently locked|delete the lock file"; then
         echo "警告: スタックがロックされています。"
 
         # ロック情報の詳細を表示
         echo "$stack_status" | grep -E "(locked|pid|created by)" || true
 
-        echo "ロックを解除します..."
-        if pulumi cancel --yes 2>&1; then
-            echo "✅ ロック解除に成功しました"
-            sleep 5
-        else
-            echo "⚠️ ロック解除に失敗しました。続行を試みます..."
-            sleep 3
-        fi
+        unlock_stack || echo "続行を試みます..."
     else
-        echo "✅ スタックはロックされていません"
+        echo "事前確認ではロックを検出しませんでした（実行時に検出された場合は自動で解除を試みます）"
     fi
 }
 
@@ -68,9 +92,15 @@ retry_on_lock_error() {
     local log_file=$2
     local exit_code=$3
 
-    if [ "${exit_code}" -eq 255 ] && grep -q "currently locked" "$log_file"; then
-        echo "ロックエラーが検出されました。再度ロック解除を試みます..."
-        pulumi cancel --yes || true
+    # ロックエラー時の終了コードはPulumiのバージョンや実行経路により異なる（1 や 255 など）ため、
+    # 終了コードでは判定せず、ログの内容でロックエラーを判定する
+    if [ "${exit_code}" -ne 0 ] && contains_lock_error "$log_file"; then
+        echo "========================================"
+        echo "ロックエラーを検出しました（終了コード: ${exit_code}）"
+        grep -E "created by|pid|locks/" "$log_file" || true
+        echo "========================================"
+
+        unlock_stack || true
         sleep 10
 
         echo "再実行を試みます..."
@@ -89,6 +119,18 @@ retry_on_lock_error() {
                 ;;
         esac
         local retry_exit_code=${PIPESTATUS[0]}
+
+        # 再実行でもロックが解消しない場合は、手動対応が必要なため案内を出す
+        if [ ${retry_exit_code} -ne 0 ] && contains_lock_error "${log_file}.retry"; then
+            echo "========================================"
+            echo "⚠️ 再実行後もロックが解消されませんでした"
+            echo "他のプロセスが実行中の可能性があります。以下を確認してください:"
+            echo "  1. 同じスタックを操作している他のJenkinsジョブが実行中でないか"
+            echo "  2. 上記のロック情報（作成者・PID・作成時刻）"
+            echo "実行中のプロセスがない場合は、手動で 'pulumi cancel' を実行してください"
+            echo "========================================"
+        fi
+
         return ${retry_exit_code}
     fi
     return ${exit_code}
