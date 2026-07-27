@@ -254,3 +254,97 @@ def test_save_prompt_and_result_skips_when_disabled(monkeypatch, tmp_path):
     client._save_prompt_and_result("prompt text", "result text", chunk_index=0, phase="chunk")
 
     assert not output_dir.exists()
+
+
+class TestRequestParameters:
+    """モデルの種類に応じたリクエストパラメータ組み立てのテスト
+
+    reasoningモデルにレガシー用のサンプリングパラメータを渡すと
+    リクエストが拒否されるため、切り替えが正しく行われることを保証する。
+    """
+
+    def test_既定のモデルはgpt_5_6_terra(self, monkeypatch, tmp_path):
+        monkeypatch.delenv("OPENAI_MODEL_NAME", raising=False)
+        _, client = _create_openai_client(monkeypatch, tmp_path)
+
+        assert client.model == "gpt-5.6-terra"
+        assert client._is_reasoning_model() is True
+
+    @pytest.mark.parametrize("model", ["gpt-5.6-terra", "gpt-5.6-sol", "gpt-5.6-luna", "gpt-5", "o3-mini"])
+    def test_reasoningモデルと判定される(self, monkeypatch, tmp_path, model):
+        monkeypatch.setenv("OPENAI_MODEL_NAME", model)
+        _, client = _create_openai_client(monkeypatch, tmp_path)
+
+        assert client._is_reasoning_model() is True
+
+    @pytest.mark.parametrize("model", ["gpt-4.1", "gpt-4.1-mini", "gpt-4o"])
+    def test_レガシーモデルと判定される(self, monkeypatch, tmp_path, model):
+        monkeypatch.setenv("OPENAI_MODEL_NAME", model)
+        _, client = _create_openai_client(monkeypatch, tmp_path)
+
+        assert client._is_reasoning_model() is False
+
+    def test_reasoningモデルはサンプリングパラメータを送らない(self, monkeypatch, tmp_path):
+        monkeypatch.setenv("OPENAI_MODEL_NAME", "gpt-5.6-terra")
+        monkeypatch.delenv("OPENAI_REASONING_EFFORT", raising=False)
+        _, client = _create_openai_client(monkeypatch, tmp_path)
+
+        params = client._build_request_params([{"role": "user", "content": "hi"}], 2000)
+
+        assert "max_tokens" not in params
+        assert "temperature" not in params
+        assert "top_p" not in params
+        assert "frequency_penalty" not in params
+        assert "presence_penalty" not in params
+        assert "reasoning_effort" not in params
+        assert params["max_completion_tokens"] == 8000
+        assert params["model"] == "gpt-5.6-terra"
+
+    def test_reasoningモデルの出力トークンには下限がある(self, monkeypatch, tmp_path):
+        monkeypatch.setenv("OPENAI_MODEL_NAME", "gpt-5.6-terra")
+        _, client = _create_openai_client(monkeypatch, tmp_path)
+
+        # タイトル生成時の max_tokens=100 でも推論トークン分の余裕を確保する
+        params = client._build_request_params([{"role": "user", "content": "hi"}], 100)
+
+        assert params["max_completion_tokens"] == 4000
+
+    def test_reasoning_effortは明示指定時のみ送信される(self, monkeypatch, tmp_path):
+        monkeypatch.setenv("OPENAI_MODEL_NAME", "gpt-5.6-terra")
+        monkeypatch.setenv("OPENAI_REASONING_EFFORT", "low")
+        _, client = _create_openai_client(monkeypatch, tmp_path)
+
+        params = client._build_request_params([{"role": "user", "content": "hi"}], 2000)
+
+        assert params["reasoning_effort"] == "low"
+
+    def test_レガシーモデルは従来のパラメータを送る(self, monkeypatch, tmp_path):
+        monkeypatch.setenv("OPENAI_MODEL_NAME", "gpt-4.1")
+        _, client = _create_openai_client(monkeypatch, tmp_path)
+
+        params = client._build_request_params([{"role": "user", "content": "hi"}], 2000)
+
+        assert params["max_tokens"] == 2000
+        assert "max_completion_tokens" not in params
+        assert params["temperature"] == 0.0
+        assert params["top_p"] == 0.1
+        assert params["frequency_penalty"] == 0.0
+        assert params["presence_penalty"] == 0.0
+
+    def test_空応答はエラーになる(self, monkeypatch, tmp_path):
+        monkeypatch.setenv("OPENAI_MODEL_NAME", "gpt-5.6-terra")
+        _, client = _create_openai_client(monkeypatch, tmp_path)
+
+        response = types.SimpleNamespace(
+            choices=[types.SimpleNamespace(
+                message=types.SimpleNamespace(content=None),
+                finish_reason="length",
+            )],
+            usage=types.SimpleNamespace(prompt_tokens=5, completion_tokens=5, total_tokens=10),
+        )
+
+        with pytest.raises(RuntimeError) as exc_info:
+            client._process_successful_response(response, "prompt")
+
+        assert "空の応答" in str(exc_info.value)
+        assert "length" in str(exc_info.value)

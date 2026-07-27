@@ -136,9 +136,34 @@ python pr_comment_generator.py \
 ### 環境変数
 
 - `OPENAI_API_KEY`: OpenAI APIキー（必須）
-- `OPENAI_MODEL_NAME`: 使用するモデル名（デフォルト: `gpt-4-turbo`）
+- `OPENAI_MODEL_NAME`: 使用するモデル名（デフォルト: `gpt-5.6-terra`）
+- `OPENAI_REASONING_EFFORT`: reasoningモデルの推論強度（未指定時は送信しない）
 - `SAVE_PROMPTS`: プロンプト保存フラグ（デフォルト: `true`）
 - `PR_COMMENT_TEMPLATE_DIR`: テンプレートディレクトリ（`--template-dir` 未指定時に使用）
+
+### 使用モデル
+
+デフォルトは `gpt-5.6-terra`（能力とコストのバランス型）です。
+変更する場合は Jenkinsfile の `OPENAI_MODEL_NAME` を設定してください。
+
+| モデル | 用途 |
+| --- | --- |
+| `gpt-5.6-sol` | 最も高精度。複雑な変更の分析向け |
+| `gpt-5.6-terra` | バランス型（デフォルト） |
+| `gpt-5.6-luna` | 低コスト・高速。大量処理向け |
+
+#### reasoningモデルとレガシーモデルの違い
+
+`gpt-5` 系および `o` 系は reasoning モデルであり、リクエストパラメータの扱いが異なります。
+`OpenAIClient._build_request_params()` がモデルIDから判別して自動的に切り替えます。
+
+| | reasoningモデル | レガシーモデル（`gpt-4.1` 等） |
+| --- | --- | --- |
+| 出力トークン指定 | `max_completion_tokens` | `max_tokens` |
+| `temperature` / `top_p` | 送信しない | `0.0` / `0.1` |
+| `frequency_penalty` / `presence_penalty` | 送信しない | `0.0` |
+
+reasoningモデルでは推論トークンも出力枠を消費するため、指定値を4倍（最低4000）に拡大して送信します。
 
 ## テスト
 
