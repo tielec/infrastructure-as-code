@@ -109,16 +109,36 @@ python pr_comment_generator.py \
 
 ### オプション
 
-- `--template-dir`: テンプレートディレクトリパス（デフォルト: `templates`）
+- `--template-dir`: テンプレートディレクトリパス（デフォルト: 自動解決）
 - `--save-prompts`: プロンプトと結果を保存
 - `--prompt-output-dir`: プロンプト保存ディレクトリ（デフォルト: `/prompts`）
 - `--log-level`: ログレベル（デフォルト: `INFO`）
+
+### プロンプトテンプレート
+
+プロンプトテンプレートは `pull-request-comment-builder/templates/` に配置します。
+
+| ファイル | 用途 |
+| --- | --- |
+| `base_template.md` | 全プロンプト共通のベース |
+| `chunk_analysis_extension.md` | チャンク分析時の追加指示 |
+| `summary_extension.md` | サマリー生成時の追加指示 |
+
+ディレクトリは以下の優先順位で解決されます。
+
+1. `--template-dir` オプション
+2. 環境変数 `PR_COMMENT_TEMPLATE_DIR`
+3. モジュールの位置から自動解決（`pull-request-comment-builder/templates/`）
+
+テンプレートが読み込めない場合、空のプロンプトがAPIに送信され変更内容と無関係なコメントが生成されるため、
+起動時にエラーとして処理を中断します。
 
 ### 環境変数
 
 - `OPENAI_API_KEY`: OpenAI APIキー（必須）
 - `OPENAI_MODEL_NAME`: 使用するモデル名（デフォルト: `gpt-4-turbo`）
 - `SAVE_PROMPTS`: プロンプト保存フラグ（デフォルト: `true`）
+- `PR_COMMENT_TEMPLATE_DIR`: テンプレートディレクトリ（`--template-dir` 未指定時に使用）
 
 ## テスト
 

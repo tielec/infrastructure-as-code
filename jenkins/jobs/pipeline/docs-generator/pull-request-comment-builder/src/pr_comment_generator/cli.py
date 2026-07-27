@@ -19,6 +19,8 @@ def create_argument_parser() -> argparse.ArgumentParser:
     parser.add_argument('--parallel', action='store_true', help='Use parallel processing for file fetching')
     parser.add_argument('--save-prompts', action='store_true', help='Save prompts and results to files')
     parser.add_argument('--prompt-output-dir', default='/prompts', help='Directory to save prompts and results')
+    parser.add_argument('--template-dir', default=None,
+                       help='Prompt template directory (default: auto-detected)')
     return parser
 
 
@@ -45,7 +47,7 @@ def main() -> None:
     log_level = getattr(logging, args.log_level)
 
     try:
-        generator = PRCommentGenerator(log_level=log_level)
+        generator = PRCommentGenerator(log_level=log_level, template_dir=args.template_dir)
         result = generator.generate_comment(args.pr_info, args.pr_diff)
 
         with open(args.output, 'w', encoding='utf-8') as f:
