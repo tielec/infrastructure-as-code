@@ -38,6 +38,13 @@ pipeline {
                 script {
                     currentBuild.displayName = "#${env.BUILD_NUMBER} - ${params.ENVIRONMENT} ${params.ACTION}"
 
+                    // Pulumiアクションのエラー状態を初期化
+                    // 注意: stage の environment{} ブロックで宣言すると、そのブロック配下では
+                    //       environment{} 側の値が優先されて env への書き込みが読み取れなくなるため、
+                    //       ここでグローバルな env として初期化する
+                    env.PULUMI_ACTION_ERROR = 'false'
+                    env.PULUMI_ACTION_ERROR_MESSAGE = ''
+
                     // SSMパラメータから必要な設定を取得
                     def s3BucketName = ssmParameter.get('/bootstrap/pulumi/s3bucket-name', params.AWS_REGION)
                     // SecureStringパラメータは自動的に復号化される
@@ -72,7 +79,6 @@ pipeline {
                 PULUMI_BACKEND_URL       = "${env.PULUMI_BACKEND_URL}"
                 PULUMI_CONFIG_PASSPHRASE = "${env.PULUMI_CONFIG_PASSPHRASE}"
                 PULUMI_SKIP_UPDATE_CHECK = 'true'
-                PULUMI_ACTION_ERROR = 'false'
             }
             stages {
                 stage('Setup Environment') {
@@ -138,21 +144,11 @@ pipeline {
                                         "AWS_SECRET_ACCESS_KEY=${params.AWS_SECRET_ACCESS_KEY}",
                                         "AWS_SESSION_TOKEN=${params.AWS_SESSION_TOKEN ?: ''}"
                                     ]) {
-                                        try {
-                                            executePulumiAction(params.ACTION)
-                                        } catch (Exception e) {
-                                            echo "警告: Pulumiアクション実行中にエラーが発生しました: ${e.message}"
-                                            env.PULUMI_ACTION_ERROR = 'true'
-                                        }
+                                        executePulumiActionSafely(params.ACTION)
                                     }
                                 } else {
                                     // IAMロール使用時
-                                    try {
-                                        executePulumiAction(params.ACTION)
-                                    } catch (Exception e) {
-                                        echo "警告: Pulumiアクション実行中にエラーが発生しました: ${e.message}"
-                                        env.PULUMI_ACTION_ERROR = 'true'
-                                    }
+                                    executePulumiActionSafely(params.ACTION)
                                 }
                             }
                         }
@@ -197,12 +193,19 @@ pipeline {
                                     processStackOutputs()
                                 }
                             }
-                            
-                            // Pulumiアクションでエラーがあった場合、最終的にUNSTABLEに設定
-                            if (env.PULUMI_ACTION_ERROR == 'true') {
-                                echo "Pulumiアクション実行中にエラーが発生したため、ビルドをUNSTABLEに設定します"
-                                currentBuild.result = 'UNSTABLE'
-                            }
+                        }
+                    }
+                }
+
+                /*
+                 * Pulumiアクションの実行結果を評価する
+                 * レポート生成・アーティファクト収集を先に行うため、判定は最後のステージで実施する。
+                 * when条件を付けないことで、preview を含む全アクションで必ず評価される。
+                 */
+                stage('Evaluate Pulumi Result') {
+                    steps {
+                        script {
+                            evaluatePulumiResult()
                         }
                     }
                 }
@@ -633,6 +636,38 @@ def generateDependencyGraph(actionType) {
             echo "警告: 空のグラフファイルが生成されました"
         fi
     """
+}
+
+/**
+ * Pulumiアクションを実行し、失敗しても後続のレポート生成を継続できるようにエラーを記録する
+ * 記録したエラーは 'Evaluate Pulumi Result' ステージで評価され、ビルドをFAILUREにする
+ * @param action 実行するアクション
+ */
+def executePulumiActionSafely(action) {
+    try {
+        executePulumiAction(action)
+    } catch (org.jenkinsci.plugins.workflow.steps.FlowInterruptedException e) {
+        // ビルドの中断（Abort/タイムアウト）はエラーとして握り潰さず、そのまま伝播させる
+        throw e
+    } catch (Exception e) {
+        echo "❌ Pulumiアクション実行中にエラーが発生しました: ${e.message}"
+        echo "   レポート生成のため処理は継続しますが、ビルドは失敗として扱われます"
+        env.PULUMI_ACTION_ERROR = 'true'
+        env.PULUMI_ACTION_ERROR_MESSAGE = e.message ?: '詳細不明のエラー'
+    }
+}
+
+/**
+ * Pulumiアクションの実行結果を評価し、失敗していればビルドを失敗させる
+ */
+def evaluatePulumiResult() {
+    if (env.PULUMI_ACTION_ERROR == 'true') {
+        error """Pulumiアクション（${params.ACTION}）が失敗しました。
+エラー内容: ${env.PULUMI_ACTION_ERROR_MESSAGE}
+詳細はコンソールログおよびアーカイブされたPulumi実行ログを確認してください。"""
+    }
+
+    echo "✅ Pulumiアクション（${params.ACTION}）は正常に完了しました"
 }
 
 /**

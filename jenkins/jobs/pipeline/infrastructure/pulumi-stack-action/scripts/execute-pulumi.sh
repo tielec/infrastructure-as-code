@@ -61,18 +61,19 @@ check_and_unlock_stack() {
 }
 
 # ロックエラーの場合に再試行する
+# 注意: errexit（set -e）は呼び出し側で無効化しておくこと。
+#       また、戻り値で結果を返すため、コマンド置換ではなく直接呼び出して $? を参照すること。
 retry_on_lock_error() {
     local action=$1
     local log_file=$2
     local exit_code=$3
 
-    if [ ${exit_code} -eq 255 ] && grep -q "currently locked" "$log_file"; then
+    if [ "${exit_code}" -eq 255 ] && grep -q "currently locked" "$log_file"; then
         echo "ロックエラーが検出されました。再度ロック解除を試みます..."
         pulumi cancel --yes || true
         sleep 10
 
         echo "再実行を試みます..."
-        set +e
         case "$action" in
             refresh)
                 pulumi refresh --yes --diff 2>&1 | tee "${log_file}.retry"
@@ -88,7 +89,6 @@ retry_on_lock_error() {
                 ;;
         esac
         local retry_exit_code=${PIPESTATUS[0]}
-        set -e
         return ${retry_exit_code}
     fi
     return ${exit_code}
@@ -108,7 +108,11 @@ case "$ACTION" in
         set -e
 
         # ロックエラーの場合は再試行
-        PULUMI_EXIT_CODE=$(retry_on_lock_error "preview" "${WORKSPACE}/${ARTIFACTS_DIR}/pulumi-preview.log" ${PULUMI_EXIT_CODE})
+        # 注意: コマンド置換で呼び出すと戻り値ではなく標準出力を取得してしまうため、直接呼び出して $? を使う
+        set +e
+        retry_on_lock_error "preview" "${WORKSPACE}/${ARTIFACTS_DIR}/pulumi-preview.log" ${PULUMI_EXIT_CODE}
+        PULUMI_EXIT_CODE=$?
+        set -e
 
         if [ ${PULUMI_EXIT_CODE} -ne 0 ]; then
             echo "Pulumiプレビューが失敗しました（終了コード: ${PULUMI_EXIT_CODE}）"
@@ -128,7 +132,11 @@ case "$ACTION" in
         set -e
 
         # ロックエラーの場合は再試行
-        PULUMI_EXIT_CODE=$(retry_on_lock_error "deploy" "${WORKSPACE}/${ARTIFACTS_DIR}/pulumi-up.log" ${PULUMI_EXIT_CODE})
+        # 注意: コマンド置換で呼び出すと戻り値ではなく標準出力を取得してしまうため、直接呼び出して $? を使う
+        set +e
+        retry_on_lock_error "deploy" "${WORKSPACE}/${ARTIFACTS_DIR}/pulumi-up.log" ${PULUMI_EXIT_CODE}
+        PULUMI_EXIT_CODE=$?
+        set -e
 
         if [ ${PULUMI_EXIT_CODE} -ne 0 ]; then
             echo "Pulumiデプロイが失敗しました（終了コード: ${PULUMI_EXIT_CODE}）"
@@ -156,7 +164,11 @@ case "$ACTION" in
         set -e
 
         # ロックエラーの場合は再試行
-        PULUMI_EXIT_CODE=$(retry_on_lock_error "refresh" "${WORKSPACE}/${ARTIFACTS_DIR}/pulumi-refresh.log" ${PULUMI_EXIT_CODE})
+        # 注意: コマンド置換で呼び出すと戻り値ではなく標準出力を取得してしまうため、直接呼び出して $? を使う
+        set +e
+        retry_on_lock_error "refresh" "${WORKSPACE}/${ARTIFACTS_DIR}/pulumi-refresh.log" ${PULUMI_EXIT_CODE}
+        PULUMI_EXIT_CODE=$?
+        set -e
 
         if [ ${PULUMI_EXIT_CODE} -ne 0 ]; then
             echo "Pulumi refreshが失敗しました（終了コード: ${PULUMI_EXIT_CODE}）"
@@ -184,7 +196,11 @@ case "$ACTION" in
         set -e
 
         # ロックエラーの場合は再試行
-        PULUMI_EXIT_CODE=$(retry_on_lock_error "destroy" "${WORKSPACE}/${ARTIFACTS_DIR}/pulumi-destroy.log" ${PULUMI_EXIT_CODE})
+        # 注意: コマンド置換で呼び出すと戻り値ではなく標準出力を取得してしまうため、直接呼び出して $? を使う
+        set +e
+        retry_on_lock_error "destroy" "${WORKSPACE}/${ARTIFACTS_DIR}/pulumi-destroy.log" ${PULUMI_EXIT_CODE}
+        PULUMI_EXIT_CODE=$?
+        set -e
 
         if [ ${PULUMI_EXIT_CODE} -ne 0 ]; then
             echo "Pulumi削除が失敗しました（終了コード: ${PULUMI_EXIT_CODE}）"
