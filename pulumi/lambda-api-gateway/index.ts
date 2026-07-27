@@ -165,8 +165,17 @@ const proxyIntegration = new aws.apigateway.Integration("proxy-integration", {
 // 8. デプロイメントとステージ
 // ========================================
 // デプロイメント
+// 注意: REST APIはリソース設定（統合タイムアウト等）を変更しても、新しい
+// デプロイメントをステージに発行しない限り反映されない。triggersに設定値を
+// 含めることで、対象の設定変更時にデプロイメントを自動で再発行する
+// （2026-07: 統合タイムアウト120秒化がステージ未発行で反映されない事故の再発防止）。
 const deployment = new aws.apigateway.Deployment("deployment", {
     restApi: api.id,
+    triggers: {
+        redeployment: pulumi
+            .all([apiIntegration.timeoutMilliseconds, proxyIntegration.timeoutMilliseconds])
+            .apply(([apiTimeout, proxyTimeout]) => `timeouts:${apiTimeout}:${proxyTimeout}`),
+    },
 }, {
     dependsOn: [
         healthMethod, healthIntegration,
