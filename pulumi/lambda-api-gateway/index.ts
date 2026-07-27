@@ -119,6 +119,9 @@ const apiIntegration = new aws.apigateway.Integration("api-integration", {
     httpMethod: apiMethod.httpMethod,
     type: "AWS_PROXY",
     integrationHttpMethod: "POST",
+    // 生成系API（物語・画像）は40〜60秒かかるため、デフォルト29秒では504になる。
+    // Lambda側の応答上限（WALLCLOCK 85秒）+ 余裕で120秒とする
+    timeoutMilliseconds: 120000,
     uri: pulumi.interpolate`arn:aws:apigateway:${aws.config.region}:lambda:path/2015-03-31/functions/${lambdaFunctionArn}/invocations`,
 }, {
     dependsOn: [lambdaPermission],
@@ -150,6 +153,9 @@ const proxyIntegration = new aws.apigateway.Integration("proxy-integration", {
     httpMethod: proxyMethod.httpMethod,
     type: "AWS_PROXY",
     integrationHttpMethod: "POST",
+    // 生成系API（物語・画像）は40〜60秒かかるため、デフォルト29秒では504になる。
+    // Lambda側の応答上限（WALLCLOCK 85秒）+ 余裕で120秒とする
+    timeoutMilliseconds: 120000,
     uri: pulumi.interpolate`arn:aws:apigateway:${aws.config.region}:lambda:path/2015-03-31/functions/${lambdaFunctionArn}/invocations`,
 }, {
     dependsOn: [lambdaPermission],
