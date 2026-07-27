@@ -26,7 +26,21 @@ class OpenAIClient:
     MAX_TOKENS_PER_REQUEST = 16000  # GPT-4の一般的な入力制限の安全側
     MAX_PATCH_TOKENS = 2000  # パッチに割り当てる最大トークン
     MAX_CONTENT_TOKENS = 3000  # ファイル内容に割り当てる最大トークン
-    
+
+    # 既定のモデル
+    DEFAULT_MODEL_NAME = 'gpt-5.6-terra'
+
+    # reasoningモデルの判定に使用するモデルID接頭辞
+    # これらのモデルはサンプリングパラメータに制約があり、
+    # max_tokens ではなく max_completion_tokens を使用する
+    REASONING_MODEL_PREFIXES = ('gpt-5', 'o1', 'o3', 'o4')
+
+    # reasoningモデルでは推論トークンも出力トークン枠を消費するため、
+    # 従来のmax_tokensをそのまま使うと本文が出力されずに打ち切られる可能性がある
+    REASONING_TOKEN_MULTIPLIER = 4
+    REASONING_MIN_COMPLETION_TOKENS = 4000
+
+
     def __init__(self, prompt_manager, retry_config=None, log_level=logging.INFO):
         """
         環境変数から認証情報を取得してクライアントを初期化
@@ -41,7 +55,7 @@ class OpenAIClient:
         
         # 環境変数から認証情報を取得
         api_key = os.getenv('OPENAI_API_KEY')
-        model_name = os.getenv('OPENAI_MODEL_NAME', 'gpt-4.1')  # デフォルトモデル名
+        model_name = os.getenv('OPENAI_MODEL_NAME', self.DEFAULT_MODEL_NAME)
 
         if not api_key:
             raise ValueError("Missing required environment variable: OPENAI_API_KEY")
@@ -214,44 +228,100 @@ class OpenAIClient:
             for msg in messages
         ])
     
+    def _is_reasoning_model(self) -> bool:
+        """現在のモデルがreasoningモデルかどうかを判定する
+
+        Returns:
+            bool: reasoningモデルの場合True
+        """
+        return self.model.lower().startswith(self.REASONING_MODEL_PREFIXES)
+
+    def _build_request_params(self, messages: List[Dict[str, str]], max_tokens: int) -> Dict[str, Any]:
+        """モデルの種類に応じたAPIリクエストパラメータを組み立てる
+
+        reasoningモデル（gpt-5系、o系）は temperature / top_p / penalty 系の
+        サンプリングパラメータをサポートせず、max_tokens ではなく
+        max_completion_tokens を使用する。従来のパラメータをそのまま渡すと
+        リクエストが拒否されるため、モデルごとに切り替える。
+
+        Args:
+            messages: 送信するメッセージリスト
+            max_tokens: 生成する最大トークン数
+
+        Returns:
+            Dict[str, Any]: chat.completions.create に渡すパラメータ
+        """
+        params: Dict[str, Any] = {
+            'model': self.model,
+            'messages': messages,
+            'response_format': {"type": "text"},
+        }
+
+        if self._is_reasoning_model():
+            # 推論トークンも枠を消費するため、余裕を持たせる
+            params['max_completion_tokens'] = max(
+                max_tokens * self.REASONING_TOKEN_MULTIPLIER,
+                self.REASONING_MIN_COMPLETION_TOKENS
+            )
+
+            # reasoning_effort は明示指定された場合のみ送信する
+            # （モデルによってサポート状況が異なるため、既定では送らない）
+            reasoning_effort = os.getenv('OPENAI_REASONING_EFFORT')
+            if reasoning_effort:
+                params['reasoning_effort'] = reasoning_effort
+        else:
+            params['max_tokens'] = max_tokens
+            params['temperature'] = 0.0
+            params['top_p'] = 0.1
+            params['frequency_penalty'] = 0.0
+            params['presence_penalty'] = 0.0
+
+        return params
+
     def _make_api_request(self, messages: List[Dict[str, str]], max_tokens: int) -> Any:
         """OpenAI APIリクエストを実行する"""
+        params = self._build_request_params(messages, max_tokens)
+
         # リクエスト情報をログ出力
         self.logger.info(f"Making API request to model: {self.model}")
         self.logger.info(f"Request parameters:")
-        self.logger.info(f"  - Max tokens: {max_tokens}")
-        self.logger.info(f"  - Temperature: 0.0")
-        self.logger.info(f"  - Top-p: 0.1")
+        self.logger.info(f"  - Reasoning model: {self._is_reasoning_model()}")
+        for key in ('max_tokens', 'max_completion_tokens', 'temperature', 'top_p', 'reasoning_effort'):
+            if key in params:
+                self.logger.info(f"  - {key}: {params[key]}")
         self.logger.info(f"  - Messages count: {len(messages)}")
-        
+
         # メッセージの概要をログ出力（長すぎる場合は省略）
         for i, msg in enumerate(messages):
             role = msg['role']
             content_preview = msg['content'][:100] + "..." if len(msg['content']) > 100 else msg['content']
             self.logger.info(f"  - Message {i+1} [{role}]: {content_preview}")
-        
+
         # API呼び出し
         self.logger.info("Sending request to OpenAI API...")
-        
-        return self.client.chat.completions.create(
-            model=self.model,
-            messages=messages,
-            temperature=0.0,
-            max_tokens=max_tokens,
-            top_p=0.1,
-            frequency_penalty=0.0,
-            presence_penalty=0.0,
-            response_format={"type": "text"}
-        )
+
+        return self.client.chat.completions.create(**params)
     
     def _process_successful_response(self, response: Any, prompt_content: str) -> str:
         """成功したレスポンスを処理する"""
         # トークン使用量を記録
         self._record_token_usage(response.usage)
-        
+
         # レスポンス内容を取得
-        generated_content = response.choices[0].message.content.strip()
-        
+        choice = response.choices[0]
+        content = getattr(choice.message, 'content', None)
+
+        # reasoningモデルでは推論トークンが出力枠を使い切ると本文が空になることがある
+        if not content:
+            finish_reason = getattr(choice, 'finish_reason', 'unknown')
+            raise RuntimeError(
+                f"モデル {self.model} から空の応答が返されました（finish_reason: {finish_reason}）。"
+                "reasoningモデルで出力トークンが不足している可能性があります。"
+            )
+
+        generated_content = content.strip()
+
+
         # ログ出力
         self._log_response_info(response, generated_content)
         
