@@ -6,7 +6,7 @@ config:
   lambda-ssm-init:lambdaRepoBranch: develop
   lambda-ssm-init:lambdaVersionRetention: 3
   lambda-ssm-init:lambdaMemory: 512
-  lambda-ssm-init:lambdaTimeout: 30
+  lambda-ssm-init:lambdaTimeout: 120
   lambda-ssm-init:logLevel: DEBUG
   lambda-ssm-init:logRetentionDays: 3
   # ネットワーク設定
