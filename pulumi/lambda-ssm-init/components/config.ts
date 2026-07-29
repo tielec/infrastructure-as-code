@@ -48,6 +48,9 @@ export function loadConfig() {
             openaiApiKey: config.get("openaiApiKey") || "PLACEHOLDER_PLEASE_UPDATE_WITH_ACTUAL_API_KEY",
             openaiSpeedModel: config.get("openaiSpeedModel") || "gpt-5.6-luna",
             openaiQualityModel: config.get("openaiQualityModel") || "gpt-5.6-terra",
+            // ElevenLabs（物語朗読用TTS）
+            elevenLabsApiKey: config.get("elevenLabsApiKey") || "PLACEHOLDER_PLEASE_UPDATE_WITH_ACTUAL_API_KEY",
+            elevenLabsVoiceId: config.get("elevenLabsVoiceId") || "GxxMAMfQkDlnqjpzjLHH",
         }
     };
     

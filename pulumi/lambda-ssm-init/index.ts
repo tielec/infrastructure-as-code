@@ -50,6 +50,8 @@ export const outputs = {
             openaiApiKeyParameterName: applicationParams.openaiApiKey?.name,
             openaiSpeedModelParameterName: applicationParams.openaiSpeedModel?.name,
             openaiQualityModelParameterName: applicationParams.openaiQualityModel?.name,
+            elevenLabsApiKeyParameterName: applicationParams.elevenLabsApiKey?.name,
+            elevenLabsVoiceIdParameterName: applicationParams.elevenLabsVoiceId?.name,
         }
     }
 };
