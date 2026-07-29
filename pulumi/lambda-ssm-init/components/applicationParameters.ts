@@ -19,6 +19,8 @@ interface AIApiConfig {
     openaiApiKey?: string;
     openaiSpeedModel?: string;
     openaiQualityModel?: string;
+    elevenLabsApiKey?: string;
+    elevenLabsVoiceId?: string;
 }
 
 /**
@@ -95,6 +97,25 @@ export function createApplicationParameters(
             value: config.aiApi.openaiQualityModel,
             type: "String",
             description: "高品質処理用のOpenAIモデル名",
+        });
+    }
+
+    // ElevenLabs API設定（物語朗読用TTS）
+    if (config.aiApi.elevenLabsApiKey !== undefined) {
+        parameters.elevenLabsApiKey = ssmHelper.createParameter('/app/settings/elevenlabs-api-key', {
+            paramType: 'init-only',
+            value: config.aiApi.elevenLabsApiKey,
+            type: "SecureString",
+            description: "ElevenLabs APIのAPIキー",
+        });
+    }
+
+    if (config.aiApi.elevenLabsVoiceId !== undefined) {
+        parameters.elevenLabsVoiceId = ssmHelper.createParameter('/app/settings/elevenlabs-voice-id', {
+            paramType: 'managed',
+            value: config.aiApi.elevenLabsVoiceId,
+            type: "String",
+            description: "物語朗読に使うElevenLabsのVoice ID",
         });
     }
 
