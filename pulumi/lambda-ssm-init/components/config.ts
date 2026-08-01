@@ -51,6 +51,8 @@ export function loadConfig() {
             // ElevenLabs（物語朗読用TTS）
             elevenLabsApiKey: config.get("elevenLabsApiKey") || "PLACEHOLDER_PLEASE_UPDATE_WITH_ACTUAL_API_KEY",
             elevenLabsVoiceId: config.get("elevenLabsVoiceId") || "GxxMAMfQkDlnqjpzjLHH",
+            // 英語朗読用（任意・既定なし。未設定ならSSMパラメータ自体を作らない）
+            elevenLabsVoiceIdEn: config.get("elevenLabsVoiceIdEn"),
         }
     };
     

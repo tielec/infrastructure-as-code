@@ -33,3 +33,5 @@ config:
   # AI API設定（ElevenLabs API・物語朗読用TTS）
   lambda-ssm-init:elevenLabsApiKey: PLACEHOLDER_PLEASE_UPDATE_WITH_ACTUAL_API_KEY
   lambda-ssm-init:elevenLabsVoiceId: "GxxMAMfQkDlnqjpzjLHH"
+  # 英語朗読用ボイス（任意）。英語圏開放時にボイスIDを設定して pulumi up する
+  # lambda-ssm-init:elevenLabsVoiceIdEn: "REPLACE_WITH_ENGLISH_VOICE_ID"

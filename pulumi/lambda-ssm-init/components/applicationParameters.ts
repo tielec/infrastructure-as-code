@@ -21,6 +21,7 @@ interface AIApiConfig {
     openaiQualityModel?: string;
     elevenLabsApiKey?: string;
     elevenLabsVoiceId?: string;
+    elevenLabsVoiceIdEn?: string;
 }
 
 /**
@@ -116,6 +117,16 @@ export function createApplicationParameters(
             value: config.aiApi.elevenLabsVoiceId,
             type: "String",
             description: "物語朗読に使うElevenLabsのVoice ID",
+        });
+    }
+
+    // 英語朗読用ボイス（任意。未設定ならパラメータを作らず、API側は既存ボイスへフォールバック）
+    if (config.aiApi.elevenLabsVoiceIdEn !== undefined) {
+        parameters.elevenLabsVoiceIdEn = ssmHelper.createParameter('/app/settings/elevenlabs-voice-id-en', {
+            paramType: 'managed',
+            value: config.aiApi.elevenLabsVoiceIdEn,
+            type: "String",
+            description: "英語の物語朗読に使うElevenLabsのVoice ID",
         });
     }
 

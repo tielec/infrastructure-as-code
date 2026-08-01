@@ -332,11 +332,18 @@ Lambda API環境では、Claude APIとOpenAI APIを利用するための設定�
 - `/lambda-api/{env}/app/settings/openai-speed-model` - 高速処理用モデル（デフォルト: gpt-4.1-mini）
 - `/lambda-api/{env}/app/settings/openai-quality-model` - 高品質処理用モデル（デフォルト: gpt-4.1）
 
+**ElevenLabs設定（物語朗読用TTS）:**
+- `/lambda-api/{env}/app/settings/elevenlabs-api-key` - APIキー（SecureString）
+- `/lambda-api/{env}/app/settings/elevenlabs-voice-id` - 朗読ボイスID（デフォルト: GxxMAMfQkDlnqjpzjLHH）
+- `/lambda-api/{env}/app/settings/elevenlabs-voice-id-en` - 英語朗読ボイスID（**任意**。設定キー `elevenLabsVoiceIdEn` を設定した場合のみ作成。未設定時はAPI側が既存ボイスへフォールバック）
+
 ```bash
 # AI APIキーの設定（初回デプロイ後、AWSコンソールで実際のキーに更新）
 cd pulumi/lambda-ssm-init
 pulumi config set --secret claudeApiKey "your-actual-claude-api-key"
 pulumi config set --secret openaiApiKey "your-actual-openai-api-key"
+# 英語朗読を有効にする場合（英語圏開放時）
+pulumi config set elevenLabsVoiceIdEn "english-voice-id"
 pulumi up
 ```
 
